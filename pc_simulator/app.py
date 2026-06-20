@@ -451,6 +451,16 @@ def render_dashboard() -> str:
         "'": '&#39;'
       }[ch]));
     }
+    function eventDetail(e) {
+      if (e.event_type === 'sensor_sample') {
+        const parts = [];
+        if (e.sensor_kind) parts.push(e.sensor_kind);
+        if (e.wifi_rssi !== undefined) parts.push('RSSI ' + e.wifi_rssi);
+        if (e.free_heap_bytes !== undefined) parts.push('heap ' + e.free_heap_bytes);
+        return parts.join(' / ');
+      }
+      return e.text || e.keyword || e.cmd_id || e.status || e.source || e.hw_target || e.mqtt_topic || '';
+    }
     async function post(path) {
       await fetch(path, { method: 'POST' });
       await refresh();
@@ -472,7 +482,7 @@ def render_dashboard() -> str:
       last_command.textContent = d.last_command || 'none';
       events.innerHTML = data.events.map(e => {
         const priority = e.priority || (e.event_type === 'command_sent' ? 'downlink' : 'normal');
-        const detail = e.text || e.keyword || e.cmd_id || e.status || e.source || e.hw_target || e.mqtt_topic || '';
+        const detail = eventDetail(e);
         const time = e.received_at || e.ts || '';
         return `<tr>
           <td>${escapeHtml(e.seq)}</td>

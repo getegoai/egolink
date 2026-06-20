@@ -23,14 +23,22 @@ Stage 0：单智能体、单任务、低风险开发模式。
 - T016：PC Simulator MQTT worker 完成。`pc_simulator/mqtt_worker.py` 可订阅 `ego/link/+/status`，接收开发板 status JSON，并写入 `pc_simulator/runtime/events.jsonl`。
 - T017：PC Simulator Dashboard 读取 MQTT 事件日志完成。`/api/state` 可合并 JSONL 事件日志，并用最新 MQTT status 更新设备状态；网页看板展示 RSSI、最后在线时间和来源。
 - T018：MQTT event / ack 闭环完成。worker 默认订阅 `status` / `event` / `ack` 三类 topic，Dashboard 事件流可展示 `mqtt_ack`、`wake_detected` 等上报与确认事件。
+- T019：固件传感器数据上报完成。`firmware/mqtt_heartbeat` 已新增 `sensor_sample` / `device_health` event，上报 uptime、Wi-Fi RSSI、free heap、minimum free heap 等 ESP32 设备健康数据；已刷写 ESP32-S3 `COM4`，PC Simulator 收到真实 `sensor_sample`，Dashboard 可展示 sensor sample 的 RSSI/heap 详情。
 
 ## 当前建议任务
 
-下一项建议任务 T019：扩展固件 MQTT smoke，在现有 heartbeat 基础上增加可触发的 `event` 上报，用开发板真实发布 SOS / wake / location 示例事件。
+下一项建议任务 T020：修复 `egolink_board_probe.py` 对 Windows PnP 中 CH343 串口的识别，并开始接入 SIM7670G GNSS / 定位数据上报。
 
 ## 最近验证
 
-- `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`：通过，26 个测试全部成功。
+- `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`：通过，30 个测试全部成功。
+- `python -m unittest quality_tests.test_mqtt_heartbeat_firmware -v`：通过，3 个固件静态测试全部成功。
+- `& "C:\Espressif\tools\ninja\1.12.1\ninja.exe" -C build`：通过，`firmware/mqtt_heartbeat` 增量编译成功，生成 `egolink_mqtt_heartbeat.bin`。
+- `Get-PnpDevice -PresentOnly`：通过，找到 `USB-Enhanced-SERIAL CH343 (COM4)`，InstanceId 为 `USB\VID_1A86&PID_55D3\5B91047400`。
+- `idf.py -p COM4 flash`：通过，识别芯片 `ESP32-S3`，写入 `egolink_mqtt_heartbeat.bin` 并 hard reset。
+- `python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/event --max-messages 1 --wait-seconds 90`：通过，收到真实固件 `sensor_sample`。
+- Dashboard API：通过，`/api/state` 最新事件为 `event_type=sensor_sample`、`sensor_kind=device_health`、`wifi_rssi=-53`、`free_heap_bytes=265332`、`min_free_heap_bytes=256308`。
+- `python scripts/egolink_board_probe.py --skip-esp-log --probe-all-sim-ports`：未通过完整质量门，报告见 `reports/board_validation/20260620-211839/probe.md`；SIM7670G 串口 `COM5/COM6/COM7/COM8` 可见，`COM6/COM7` AT 身份识别正常，CSQ 为 `28,0`。注意：该脚本当前漏识别 PnP 中已存在的 CH343 `COM4`，需后续修复探测逻辑。
 - `python -m unittest quality_tests.test_mqtt_worker -v`：通过，8 个 MQTT worker 测试全部成功。
 - `python -m unittest quality_tests.test_pc_simulator -v`：通过，5 个 PC Simulator 测试全部成功。
 - T018 broker smoke test：通过，worker 限定订阅 `ego/link/+/event` 和 `ego/link/+/ack` 后，经 Mosquitto 发布模拟 `sos_pressed` 与 `ack`，成功写入 JSONL；Dashboard API 事件流显示 `mqtt_ack`、`wake_detected`、`mqtt_status`。

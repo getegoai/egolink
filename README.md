@@ -5,7 +5,7 @@ Ego Link P0 是“AI 主动守护定位器”的第一阶段验证项目。当�
 ## 当前阶段
 
 - 硬件：Waveshare ESP32-S3-SIM7670G-4G 开发板。
-- 固件：已验证摄像头拍照 smoke test 与 Wi-Fi MQTT 心跳 smoke test。
+- 固件：已验证摄像头拍照 smoke test 与 Wi-Fi MQTT 心跳 smoke test；`mqtt_heartbeat` 已支持设备健康 `sensor_sample` 事件上报。
 - 本机服务：Windows Mosquitto 已安装，用户态 LAN broker 可供开发板连接，PC Simulator 可订阅 MQTT status、写入事件日志并在 Dashboard 展示。
 - 开发模式：采用 GitHub Flow，第一阶段保持单智能体、单任务、可验证迭代。
 

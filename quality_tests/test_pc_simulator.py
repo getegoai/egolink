@@ -125,6 +125,14 @@ class PcSimulatorTests(unittest.TestCase):
         self.assertEqual(data["events"][0]["cmd_id"], "cmd-0001")
         self.assertEqual(data["events"][1]["keyword"], "Ego")
 
+    def test_dashboard_renders_sensor_sample_detail_logic(self) -> None:
+        html = app.render_dashboard()
+
+        self.assertIn("eventDetail(e)", html)
+        self.assertIn("sensor_sample", html)
+        self.assertIn("wifi_rssi", html)
+        self.assertIn("free_heap_bytes", html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,6 +13,7 @@
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
+#include "freertos/portmacro.h"
 #include "freertos/task.h"
 #include "mqtt_client.h"
 #include "nvs_flash.h"
@@ -28,6 +29,7 @@ static EventGroupHandle_t s_event_group;
 static esp_mqtt_client_handle_t s_mqtt_client;
 static int s_wifi_retry_count;
 static uint32_t s_seq;
+static portMUX_TYPE s_seq_mux = portMUX_INITIALIZER_UNLOCKED;
 static int s_last_rssi = -127;
 
 static int64_t uptime_ms(void)
@@ -35,8 +37,26 @@ static int64_t uptime_ms(void)
     return esp_timer_get_time() / 1000;
 }
 
+static uint32_t next_seq(void)
+{
+    portENTER_CRITICAL(&s_seq_mux);
+    uint32_t seq = ++s_seq;
+    portEXIT_CRITICAL(&s_seq_mux);
+    return seq;
+}
+
+static int refresh_wifi_rssi(void)
+{
+    wifi_ap_record_t ap_info;
+    if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+        s_last_rssi = ap_info.rssi;
+    }
+    return s_last_rssi;
+}
+
 static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
 {
+    int rssi = refresh_wifi_rssi();
     snprintf(
         buffer,
         buffer_size,
@@ -58,13 +78,49 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
         CONFIG_EGOLINK_DEVICE_ID,
         uptime_ms(),
         seq,
-        s_last_rssi);
+        rssi);
+}
+
+static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
+{
+    int64_t now_ms = uptime_ms();
+    int rssi = refresh_wifi_rssi();
+    uint32_t free_heap = esp_get_free_heap_size();
+    uint32_t min_free_heap = esp_get_minimum_free_heap_size();
+    snprintf(
+        buffer,
+        buffer_size,
+        "{\"protocol_version\":\"egolink.p0.v1\","
+        "\"device_id\":\"%s\","
+        "\"ts\":\"uptime_ms:%" PRId64 "\","
+        "\"seq\":%" PRIu32 ","
+        "\"message_type\":\"event\","
+        "\"event_type\":\"sensor_sample\","
+        "\"priority\":\"normal\","
+        "\"source\":\"esp32_runtime\","
+        "\"sensor_kind\":\"device_health\","
+        "\"uptime_ms\":%" PRId64 ","
+        "\"wifi_rssi\":%d,"
+        "\"free_heap_bytes\":%" PRIu32 ","
+        "\"min_free_heap_bytes\":%" PRIu32 ","
+        "\"battery\":87,"
+        "\"charging\":false,"
+        "\"link_type\":\"mock_4g_over_wifi\","
+        "\"modem_state\":\"mock_data_ready\","
+        "\"gnss_state\":\"mock_fix\"}",
+        CONFIG_EGOLINK_DEVICE_ID,
+        now_ms,
+        seq,
+        now_ms,
+        rssi,
+        free_heap,
+        min_free_heap);
 }
 
 static void publish_heartbeat(void)
 {
     char payload[512];
-    uint32_t seq = ++s_seq;
+    uint32_t seq = next_seq();
     build_status_payload(payload, sizeof(payload), seq);
 
     int msg_id = esp_mqtt_client_publish(
@@ -87,6 +143,32 @@ static void publish_heartbeat(void)
     }
 }
 
+static void publish_sensor_sample(void)
+{
+    char payload[768];
+    uint32_t seq = next_seq();
+    build_sensor_payload(payload, sizeof(payload), seq);
+
+    int msg_id = esp_mqtt_client_publish(
+        s_mqtt_client,
+        CONFIG_EGOLINK_EVENT_TOPIC,
+        payload,
+        0,
+        1,
+        0);
+    if (msg_id >= 0) {
+        ESP_LOGI(
+            TAG,
+            "MQTT_SENSOR_PUBLISH_OK seq=%" PRIu32 " msg_id=%d topic=%s payload=%s",
+            seq,
+            msg_id,
+            CONFIG_EGOLINK_EVENT_TOPIC,
+            payload);
+    } else {
+        ESP_LOGE(TAG, "MQTT_SENSOR_PUBLISH_FAIL seq=%" PRIu32 " rc=%d", seq, msg_id);
+    }
+}
+
 static void heartbeat_task(void *arg)
 {
     (void)arg;
@@ -101,6 +183,23 @@ static void heartbeat_task(void *arg)
             publish_heartbeat();
         }
         vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_HEARTBEAT_INTERVAL_SEC * 1000));
+    }
+}
+
+static void sensor_task(void *arg)
+{
+    (void)arg;
+    while (true) {
+        EventBits_t bits = xEventGroupWaitBits(
+            s_event_group,
+            MQTT_CONNECTED_BIT,
+            pdFALSE,
+            pdTRUE,
+            portMAX_DELAY);
+        if (bits & MQTT_CONNECTED_BIT) {
+            publish_sensor_sample();
+        }
+        vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_SENSOR_EVENT_INTERVAL_SEC * 1000));
     }
 }
 
@@ -199,7 +298,12 @@ static void start_mqtt(void)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "MQTT_HEARTBEAT_BOOT device_id=%s topic=%s", CONFIG_EGOLINK_DEVICE_ID, CONFIG_EGOLINK_STATUS_TOPIC);
+    ESP_LOGI(
+        TAG,
+        "MQTT_HEARTBEAT_BOOT device_id=%s status_topic=%s event_topic=%s",
+        CONFIG_EGOLINK_DEVICE_ID,
+        CONFIG_EGOLINK_STATUS_TOPIC,
+        CONFIG_EGOLINK_EVENT_TOPIC);
 
     esp_err_t nvs_ret = nvs_flash_init();
     if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -214,4 +318,5 @@ void app_main(void)
     ESP_ERROR_CHECK(start_wifi());
     start_mqtt();
     xTaskCreate(heartbeat_task, "heartbeat_task", 4096, NULL, 5, NULL);
+    xTaskCreate(sensor_task, "sensor_task", 4096, NULL, 5, NULL);
 }
