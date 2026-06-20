@@ -20,14 +20,18 @@ Stage 0：单智能体、单任务、低风险开发模式。
 - T013：ESP32-S3 MQTT 心跳 smoke test 通过。开发板已烧录 `firmware/mqtt_heartbeat`，通过 Wi-Fi 连接本机 Mosquitto 并发布 status JSON。
 - T014：项目目录清理与版本化迭代模式完成。已删除可再生构建产物和运行缓存，新增 `.gitignore`、`docs/DEVELOPMENT_WORKFLOW.md`、`scripts/start_mosquitto_lan.ps1`，并明确采用 GitHub Flow。
 - T015：SIM 卡与 4G 数据链路基础验证通过。SIM7670G 可识别 SIM，注册 LTE，分组数据附着成功，并可通过模块 AT TCP/IP 栈访问公网 IP。
+- T016：PC Simulator MQTT worker 完成。`pc_simulator/mqtt_worker.py` 可订阅 `ego/link/+/status`，接收开发板 status JSON，并写入 `pc_simulator/runtime/events.jsonl`。
 
 ## 当前建议任务
 
-下一项建议任务 T016：实现 PC Simulator MQTT worker，订阅 `ego/link/+/status` 并写入事件日志。
+下一项建议任务 T017：让 PC Simulator Dashboard / API 读取 MQTT worker 写入的事件日志，展示最新设备状态和外部上报事件。
 
 ## 最近验证
 
-- `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`：通过，11 个测试全部成功。
+- `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`：通过，21 个测试全部成功。
+- `python -m unittest quality_tests.test_mqtt_worker -v`：通过，5 个 MQTT worker 单元测试全部成功。
+- `python pc_simulator\app.py --help` / `python pc_simulator\mqtt_worker.py --help`：通过，两个本地 CLI 入口均可直接运行。
+- `python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/status --max-messages 1 --wait-seconds 20`：通过，worker 收到 1 条真实开发板 status 并写入 `pc_simulator/runtime/events.jsonl`，样例字段包括 `device_id=ego-link-001`、`seq=2446`、`rssi=-56`、`event_type=mqtt_status`。
 - `powershell -ExecutionPolicy Bypass -File scripts/start_mosquitto_lan.ps1 -BrokerIp 192.168.31.250 -Restart`：通过，用户态 LAN broker 监听 `192.168.31.250:1883`，PID `20100`。
 - `Get-NetTCPConnection -LocalAddress 192.168.31.250 -LocalPort 1883`：通过，确认 broker 处于 `Listen` 状态，并存在开发板连接。
 - `mosquitto_sub -h 192.168.31.250 -p 1883 -t ego/link/ego-link-001/status -C 1 -W 35`：通过，收到 `device_id=ego-link-001`、`message_type=status`、`seq=234` 的 JSON 心跳。
