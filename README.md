@@ -6,7 +6,7 @@ Ego Link P0 是“AI 主动守护定位器”的第一阶段验证项目。当�
 
 - 硬件：Waveshare ESP32-S3-SIM7670G-4G 开发板。
 - 固件：已验证摄像头拍照 smoke test 与 Wi-Fi MQTT 心跳 smoke test。
-- 本机服务：Windows Mosquitto 已安装，用户态 LAN broker 可供开发板连接，PC Simulator 可订阅 MQTT status 并写入事件日志。
+- 本机服务：Windows Mosquitto 已安装，用户态 LAN broker 可供开发板连接，PC Simulator 可订阅 MQTT status、写入事件日志并在 Dashboard 展示。
 - 开发模式：采用 GitHub Flow，第一阶段保持单智能体、单任务、可验证迭代。
 
 详细约定见 `docs/DEVELOPMENT_WORKFLOW.md`。
@@ -36,6 +36,8 @@ python pc_simulator/app.py --port 8787
 ```powershell
 python pc_simulator/mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/status
 ```
+
+Dashboard 会读取 `pc_simulator/runtime/events.jsonl` 中的最新事件；worker 和 Dashboard 可以在两个终端同时运行。
 
 打开：
 

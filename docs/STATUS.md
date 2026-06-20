@@ -21,14 +21,17 @@ Stage 0：单智能体、单任务、低风险开发模式。
 - T014：项目目录清理与版本化迭代模式完成。已删除可再生构建产物和运行缓存，新增 `.gitignore`、`docs/DEVELOPMENT_WORKFLOW.md`、`scripts/start_mosquitto_lan.ps1`，并明确采用 GitHub Flow。
 - T015：SIM 卡与 4G 数据链路基础验证通过。SIM7670G 可识别 SIM，注册 LTE，分组数据附着成功，并可通过模块 AT TCP/IP 栈访问公网 IP。
 - T016：PC Simulator MQTT worker 完成。`pc_simulator/mqtt_worker.py` 可订阅 `ego/link/+/status`，接收开发板 status JSON，并写入 `pc_simulator/runtime/events.jsonl`。
+- T017：PC Simulator Dashboard 读取 MQTT 事件日志完成。`/api/state` 可合并 JSONL 事件日志，并用最新 MQTT status 更新设备状态；网页看板展示 RSSI、最后在线时间和来源。
 
 ## 当前建议任务
 
-下一项建议任务 T017：让 PC Simulator Dashboard / API 读取 MQTT worker 写入的事件日志，展示最新设备状态和外部上报事件。
+下一项建议任务 T018：扩展 MQTT worker 与 Dashboard 事件闭环，支持 `ego/link/+/event` 和 `ego/link/+/ack`，为 SOS / 唤醒 / 定位上报做准备。
 
 ## 最近验证
 
-- `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`：通过，21 个测试全部成功。
+- `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`：通过，22 个测试全部成功。
+- `python -m unittest quality_tests.test_pc_simulator -v`：通过，4 个 PC Simulator 测试全部成功。
+- PC Simulator API smoke test：通过，`/api/state` 读取事件日志并返回真实 MQTT status，样例字段包括 `device_id=ego-link-001`、`seq=2515`、`rssi=-56`、`event_type=mqtt_status`、`source=mqtt`。
 - `python -m unittest quality_tests.test_mqtt_worker -v`：通过，5 个 MQTT worker 单元测试全部成功。
 - `python pc_simulator\app.py --help` / `python pc_simulator\mqtt_worker.py --help`：通过，两个本地 CLI 入口均可直接运行。
 - `python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/status --max-messages 1 --wait-seconds 20`：通过，worker 收到 1 条真实开发板 status 并写入 `pc_simulator/runtime/events.jsonl`，样例字段包括 `device_id=ego-link-001`、`seq=2446`、`rssi=-56`、`event_type=mqtt_status`。

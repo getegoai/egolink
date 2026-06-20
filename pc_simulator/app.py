@@ -41,12 +41,14 @@ class DeviceState:
     battery: int = 87
     guard_mode: str = "child_safety"
     link_type: str = "mock_4g_over_wifi"
+    rssi: int = -61
     modem_state: str = "mock_data_ready"
     gnss_state: str = "mock_fix"
     lat: float = 22.543096
     lon: float = 114.057865
     queue_size: int = 0
     last_seen_at: str = ""
+    last_seen_source: str = "simulator"
     last_command: str = ""
 
 
@@ -236,8 +238,59 @@ def write_event(event: dict[str, Any]) -> None:
     event_store.append_jsonl(EVENT_LOG, event)
 
 
+def recent_events(limit: int = 20) -> list[dict[str, Any]]:
+    candidates = EVENTS[:] + event_store.load_recent(EVENT_LOG, limit=limit * 2)
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for event in candidates:
+        key = json.dumps(event, ensure_ascii=False, sort_keys=True, default=str)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(event)
+    merged.sort(key=event_time, reverse=True)
+    return merged[:limit]
+
+
+def event_time(event: dict[str, Any]) -> str:
+    return str(event.get("received_at") or event.get("ts") or "")
+
+
+def device_snapshot(events: list[dict[str, Any]]) -> dict[str, Any]:
+    device = asdict(STATE)
+    for event in events:
+        if event.get("message_type") == "status":
+            apply_status_event(device, event)
+            break
+    return device
+
+
+def apply_status_event(device: dict[str, Any], event: dict[str, Any]) -> None:
+    if "seq" in event:
+        try:
+            device["seq"] = max(int(device.get("seq", 0)), int(event["seq"]))
+        except (TypeError, ValueError):
+            device["seq"] = event["seq"]
+    for field in [
+        "device_id",
+        "battery",
+        "guard_mode",
+        "link_type",
+        "rssi",
+        "modem_state",
+        "gnss_state",
+        "queue_size",
+    ]:
+        if field in event:
+            device[field] = event[field]
+    device["online"] = True
+    device["last_seen_at"] = event_time(event)
+    device["last_seen_source"] = "mqtt" if event.get("ingest_source") else "simulator"
+
+
 def snapshot() -> dict[str, Any]:
-    return {"device": asdict(STATE), "events": EVENTS[:20]}
+    events = recent_events(limit=20)
+    return {"device": device_snapshot(events), "events": events}
 
 
 def render_dashboard() -> str:
@@ -362,8 +415,11 @@ def render_dashboard() -> str:
         <div class="metric"><span>Battery</span><span id="battery"></span></div>
         <div class="metric"><span>Mode</span><span id="guard_mode"></span></div>
         <div class="metric"><span>Link</span><span id="link_type"></span></div>
+        <div class="metric"><span>RSSI</span><span id="rssi"></span></div>
         <div class="metric"><span>Position</span><span id="position"></span></div>
         <div class="metric"><span>Queue</span><span id="queue_size"></span></div>
+        <div class="metric"><span>Last Seen</span><span id="last_seen_at"></span></div>
+        <div class="metric"><span>Source</span><span id="last_seen_source"></span></div>
         <div class="metric"><span>Last Command</span><span id="last_command"></span></div>
       </section>
       <section style="margin-top: 16px;">
@@ -386,6 +442,15 @@ def render_dashboard() -> str:
     </section>
   </main>
   <script>
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[ch]));
+    }
     async function post(path) {
       await fetch(path, { method: 'POST' });
       await refresh();
@@ -399,18 +464,22 @@ def render_dashboard() -> str:
       battery.textContent = d.battery + '%';
       guard_mode.textContent = d.guard_mode;
       link_type.textContent = d.link_type;
+      rssi.textContent = d.rssi;
       position.textContent = Number(d.lat).toFixed(6) + ', ' + Number(d.lon).toFixed(6);
       queue_size.textContent = d.queue_size;
+      last_seen_at.textContent = d.last_seen_at || 'none';
+      last_seen_source.textContent = d.last_seen_source || 'simulator';
       last_command.textContent = d.last_command || 'none';
       events.innerHTML = data.events.map(e => {
         const priority = e.priority || (e.event_type === 'command_sent' ? 'downlink' : 'normal');
-        const detail = e.text || e.keyword || e.source || e.hw_target || '';
+        const detail = e.text || e.keyword || e.source || e.hw_target || e.mqtt_topic || '';
+        const time = e.received_at || e.ts || '';
         return `<tr>
-          <td>${e.seq}</td>
-          <td>${e.event_type}</td>
-          <td class="${priority}">${priority}</td>
-          <td>${detail}</td>
-          <td>${e.ts}</td>
+          <td>${escapeHtml(e.seq)}</td>
+          <td>${escapeHtml(e.event_type || e.message_type || '')}</td>
+          <td class="${escapeHtml(priority)}">${escapeHtml(priority)}</td>
+          <td>${escapeHtml(detail)}</td>
+          <td>${escapeHtml(time)}</td>
         </tr>`;
       }).join('');
     }
