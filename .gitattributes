@@ -1,0 +1,22 @@
+* text=auto
+
+.gitattributes text eol=lf
+
+*.c text eol=lf
+*.h text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.lock text eol=lf
+CMakeLists.txt text eol=lf
+sdkconfig text eol=lf
+sdkconfig.defaults text eol=lf
+
+*.ps1 text eol=crlf
+
+*.bin binary
+*.jpg binary
+*.jpeg binary
+*.png binary

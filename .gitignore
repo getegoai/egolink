@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Runtime data
+pc_simulator/runtime/
+reports/
+
+# ESP-IDF generated output
+firmware/**/build/
+firmware/**/managed_components/
+firmware/**/sdkconfig.old
+
+# Hardware smoke-test captures
+firmware/**/captures/
+
+# Local editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

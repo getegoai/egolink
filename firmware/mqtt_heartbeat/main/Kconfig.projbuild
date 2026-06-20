@@ -1,0 +1,28 @@
+menu "Ego Link MQTT Heartbeat"
+
+config EGOLINK_WIFI_SSID
+    string "Wi-Fi SSID"
+    default "home"
+
+config EGOLINK_WIFI_PASSWORD
+    string "Wi-Fi password"
+    default ""
+
+config EGOLINK_MQTT_BROKER_URI
+    string "MQTT broker URI"
+    default "mqtt://192.168.31.250:1883"
+
+config EGOLINK_DEVICE_ID
+    string "Device ID"
+    default "ego-link-001"
+
+config EGOLINK_STATUS_TOPIC
+    string "Status topic"
+    default "ego/link/ego-link-001/status"
+
+config EGOLINK_HEARTBEAT_INTERVAL_SEC
+    int "Heartbeat interval seconds"
+    default 10
+    range 1 3600
+
+endmenu
