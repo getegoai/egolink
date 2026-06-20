@@ -1,0 +1,137 @@
+{
+  "schema_version": 1,
+  "project": "Ego Link P0",
+  "description": "Initial three-task autonomous-development smoke test. Tasks are deliberately low-risk and use only the Python standard library.",
+  "default_branch": "autodev/egolink-p0",
+  "tasks": [
+    {
+      "id": "AUTO-001",
+      "title": "Create an evidence-based repository baseline",
+      "description": "Inspect the current repository and create a concise factual baseline document. Do not invent commands or features. Record only entry points, build/test commands, modules, and gaps that are evidenced by files in the repository.",
+      "status": "todo",
+      "depends_on": [],
+      "allowed_paths": [
+        "docs/repository_baseline.md"
+      ],
+      "forbidden_paths": [
+        "firmware/**",
+        "pc_simulator/**",
+        "quality_tests/**",
+        "scripts/**",
+        "autodev/**",
+        "README.md",
+        "AGENTS.md"
+      ],
+      "requirements": [
+        "Create docs/repository_baseline.md.",
+        "Use the exact top-level heading '# Ego Link Repository Baseline'.",
+        "Include the exact section headings '## Current Structure', '## Verified Commands', '## P0 Boundary', and '## Risks and Gaps'.",
+        "Describe the actual repository as found; distinguish verified facts from unknowns.",
+        "Do not modify source code or configuration."
+      ],
+      "verification": [
+        [
+          "{python}",
+          "scripts/autodev_bootstrap_check.py",
+          "AUTO-001"
+        ]
+      ],
+      "verification_timeout_seconds": 120,
+      "max_repair_attempts": 1,
+      "human_gate": false,
+      "allow_network": false,
+      "commit_message": "docs(AUTO-001): record repository baseline"
+    },
+    {
+      "id": "AUTO-002",
+      "title": "Add a repository layout contract test",
+      "description": "Add a standalone Python standard-library unittest that protects the repository's current top-level layout. The test should be readable, deterministic, and runnable directly without installing dependencies.",
+      "status": "todo",
+      "depends_on": [
+        "AUTO-001"
+      ],
+      "allowed_paths": [
+        "quality_tests/test_repository_contract.py"
+      ],
+      "forbidden_paths": [
+        "firmware/**",
+        "pc_simulator/**",
+        "docs/**",
+        "scripts/**",
+        "autodev/**",
+        "README.md",
+        "AGENTS.md"
+      ],
+      "requirements": [
+        "Create quality_tests/test_repository_contract.py using only the Python standard library.",
+        "The test must determine the repository root from the test file location rather than the current working directory.",
+        "Check that docs, firmware, pc_simulator, quality_tests, and scripts exist as directories.",
+        "Check that README.md exists as a file.",
+        "Provide clear assertion messages.",
+        "The file must run successfully with 'python quality_tests/test_repository_contract.py'."
+      ],
+      "verification": [
+        [
+          "{python}",
+          "quality_tests/test_repository_contract.py"
+        ]
+      ],
+      "verification_timeout_seconds": 120,
+      "max_repair_attempts": 1,
+      "human_gate": false,
+      "allow_network": false,
+      "commit_message": "test(AUTO-002): add repository layout contract"
+    },
+    {
+      "id": "AUTO-003",
+      "title": "Add a tested Ego Link project doctor CLI",
+      "description": "Create a small local diagnostic CLI for the Ego Link repository. It must report structural/tool checks in human-readable or JSON form and remain fully testable with temporary directories.",
+      "status": "todo",
+      "depends_on": [
+        "AUTO-002"
+      ],
+      "allowed_paths": [
+        "scripts/egolink_doctor.py",
+        "quality_tests/test_egolink_doctor.py"
+      ],
+      "forbidden_paths": [
+        "firmware/**",
+        "pc_simulator/**",
+        "docs/**",
+        "autodev/**",
+        "README.md",
+        "AGENTS.md"
+      ],
+      "requirements": [
+        "Create scripts/egolink_doctor.py using only the Python standard library.",
+        "Support '--root PATH' and '--json'.",
+        "Return a JSON object containing at least: ok, root, checks, and summary.",
+        "Each check must contain name, ok, and detail.",
+        "Check the five required top-level directories, README.md, whether the root is inside a Git work tree, and availability of Python, Git, and Codex commands.",
+        "Do not require a clean Git worktree: the doctor is executed before the supervisor commits the current task.",
+        "Exit with code 0 when all required checks pass and nonzero when a required check fails.",
+        "Keep check logic in importable functions so it can be tested without subprocess recursion.",
+        "Create quality_tests/test_egolink_doctor.py with temporary-directory tests for both passing and failing structures.",
+        "Do not install packages or change project configuration."
+      ],
+      "verification": [
+        [
+          "{python}",
+          "quality_tests/test_egolink_doctor.py"
+        ],
+        [
+          "{python}",
+          "scripts/egolink_doctor.py",
+          "--root",
+          ".",
+          "--json"
+        ]
+      ],
+      "verification_timeout_seconds": 180,
+      "max_repair_attempts": 1,
+      "human_gate": false,
+      "allow_network": false,
+      "commit_message": "feat(AUTO-003): add Ego Link project doctor"
+    }
+  ]
+}
