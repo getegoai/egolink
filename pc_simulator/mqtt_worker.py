@@ -1,4 +1,4 @@
-"""MQTT status ingester for the Ego Link P0 PC Simulator.
+"""MQTT ingester for the Ego Link P0 PC Simulator.
 
 The worker intentionally shells out to the Mosquitto CLI that is already used
 by the project, so Stage 0 does not need an extra Python MQTT dependency.
@@ -24,7 +24,7 @@ from pc_simulator import event_store, protocol
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 1883
-DEFAULT_TOPIC = "ego/link/+/status"
+DEFAULT_TOPICS = ["ego/link/+/status", "ego/link/+/event", "ego/link/+/ack"]
 RUNTIME_DIR = Path(__file__).resolve().parent / "runtime"
 DEFAULT_EVENT_LOG = RUNTIME_DIR / "events.jsonl"
 WINDOWS_MOSQUITTO_SUB = Path("C:/Program Files/mosquitto/mosquitto_sub.exe")
@@ -53,7 +53,7 @@ def build_subscribe_command(
     *,
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
-    topic: str = DEFAULT_TOPIC,
+    topics: list[str] | None = None,
     executable: str | None = None,
     max_messages: int | None = None,
     wait_seconds: int | None = None,
@@ -64,10 +64,10 @@ def build_subscribe_command(
         host,
         "-p",
         str(port),
-        "-t",
-        topic,
         "-v",
     ]
+    for topic in topics or DEFAULT_TOPICS:
+        command.extend(["-t", topic])
     if max_messages is not None:
         command.extend(["-C", str(max_messages)])
     if wait_seconds is not None:
@@ -85,7 +85,7 @@ def parse_verbose_line(line: str) -> tuple[str, str]:
     return topic, payload
 
 
-def status_event_from_payload(topic: str, payload: str, *, received_at: str | None = None) -> dict[str, Any]:
+def event_from_payload(topic: str, payload: str, *, received_at: str | None = None) -> dict[str, Any]:
     try:
         message = json.loads(payload)
     except json.JSONDecodeError as exc:
@@ -93,9 +93,26 @@ def status_event_from_payload(topic: str, payload: str, *, received_at: str | No
 
     if not isinstance(message, dict):
         raise MqttWorkerError("MQTT payload must be a JSON object")
-    if message.get("message_type") != "status":
-        raise MqttWorkerError("only status messages are accepted by this worker")
+    message_type = str(message.get("message_type", ""))
+    try:
+        if message_type == "status":
+            event = status_event_from_message(message)
+        elif message_type == "event":
+            event = telemetry_event_from_message(message)
+        elif message_type == "ack":
+            event = ack_event_from_message(message)
+        else:
+            raise MqttWorkerError(f"unsupported message_type: {message_type or '<missing>'}")
+    except ValueError as exc:
+        raise MqttWorkerError(str(exc)) from exc
 
+    event["mqtt_topic"] = topic
+    event["ingest_source"] = "pc_simulator.mqtt_worker"
+    event["received_at"] = received_at or utc_now()
+    return event
+
+
+def status_event_from_message(message: dict[str, Any]) -> dict[str, Any]:
     event = dict(message)
     event.setdefault("protocol_version", protocol.PROTOCOL_VERSION)
     protocol.require_fields(
@@ -113,9 +130,53 @@ def status_event_from_payload(topic: str, payload: str, *, received_at: str | No
         ],
     )
     event["event_type"] = "mqtt_status"
-    event["mqtt_topic"] = topic
-    event["ingest_source"] = "pc_simulator.mqtt_worker"
-    event["received_at"] = received_at or utc_now()
+    return event
+
+
+def telemetry_event_from_message(message: dict[str, Any]) -> dict[str, Any]:
+    event = dict(message)
+    event.setdefault("protocol_version", protocol.PROTOCOL_VERSION)
+    protocol.require_fields(
+        event,
+        [
+            "protocol_version",
+            "device_id",
+            "ts",
+            "seq",
+            "message_type",
+            "event_type",
+            "priority",
+        ],
+    )
+    event.setdefault("direction", "uplink")
+    return event
+
+
+def ack_event_from_message(message: dict[str, Any]) -> dict[str, Any]:
+    event = dict(message)
+    event.setdefault("protocol_version", protocol.PROTOCOL_VERSION)
+    protocol.require_fields(
+        event,
+        [
+            "protocol_version",
+            "device_id",
+            "ts",
+            "seq",
+            "message_type",
+            "cmd_id",
+            "status",
+        ],
+    )
+    event["event_type"] = "mqtt_ack"
+    event.setdefault("priority", "normal")
+    event.setdefault("direction", "uplink")
+    return event
+
+
+def status_event_from_payload(topic: str, payload: str, *, received_at: str | None = None) -> dict[str, Any]:
+    event = event_from_payload(topic, payload, received_at=received_at)
+    if event.get("message_type") != "status":
+        raise MqttWorkerError("payload is not a status message")
     return event
 
 
@@ -130,7 +191,7 @@ def consume_lines(
     for line in lines:
         try:
             topic, payload = parse_verbose_line(line)
-            event = status_event_from_payload(topic, payload, received_at=now())
+            event = event_from_payload(topic, payload, received_at=now())
         except MqttWorkerError as exc:
             if errors is not None:
                 print(f"mqtt_worker skipped line: {exc}", file=errors)
@@ -144,7 +205,7 @@ def run_worker(
     *,
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
-    topic: str = DEFAULT_TOPIC,
+    topics: list[str] | None = None,
     event_log: Path = DEFAULT_EVENT_LOG,
     executable: str | None = None,
     max_messages: int | None = None,
@@ -153,7 +214,7 @@ def run_worker(
     command = build_subscribe_command(
         host=host,
         port=port,
-        topic=topic,
+        topics=topics,
         executable=executable,
         max_messages=max_messages,
         wait_seconds=wait_seconds,
@@ -184,10 +245,15 @@ def run_worker(
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Ingest Ego Link status MQTT messages into the PC Simulator event log.")
+    parser = argparse.ArgumentParser(description="Ingest Ego Link MQTT messages into the PC Simulator event log.")
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    parser.add_argument("--topic", default=DEFAULT_TOPIC)
+    parser.add_argument(
+        "--topic",
+        action="append",
+        dest="topics",
+        help="MQTT topic filter to subscribe. May be repeated. Defaults to status/event/ack.",
+    )
     parser.add_argument("--event-log", type=Path, default=DEFAULT_EVENT_LOG)
     parser.add_argument("--mosquitto-sub", default=None, help="Path to mosquitto_sub. Defaults to PATH or Windows install path.")
     parser.add_argument("--max-messages", type=int, default=None, help="Exit after this many received MQTT messages.")
@@ -197,13 +263,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    print(f"Listening mqtt://{args.host}:{args.port} {args.topic}")
+    topics = args.topics or DEFAULT_TOPICS
+    print(f"Listening mqtt://{args.host}:{args.port} {', '.join(topics)}")
     print(f"Writing events to {args.event_log}")
     try:
         stored = run_worker(
             host=args.host,
             port=args.port,
-            topic=args.topic,
+            topics=topics,
             event_log=args.event_log,
             executable=args.mosquitto_sub,
             max_messages=args.max_messages,
@@ -215,7 +282,7 @@ def main(argv: list[str] | None = None) -> int:
     except (FileNotFoundError, RuntimeError) as exc:
         print(f"mqtt_worker failed: {exc}", file=sys.stderr)
         return 1
-    print(f"Stored {stored} MQTT status event(s).")
+    print(f"Stored {stored} MQTT event(s).")
     return 0
 
 

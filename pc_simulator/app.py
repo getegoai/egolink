@@ -472,7 +472,7 @@ def render_dashboard() -> str:
       last_command.textContent = d.last_command || 'none';
       events.innerHTML = data.events.map(e => {
         const priority = e.priority || (e.event_type === 'command_sent' ? 'downlink' : 'normal');
-        const detail = e.text || e.keyword || e.source || e.hw_target || e.mqtt_topic || '';
+        const detail = e.text || e.keyword || e.cmd_id || e.status || e.source || e.hw_target || e.mqtt_topic || '';
         const time = e.received_at || e.ts || '';
         return `<tr>
           <td>${escapeHtml(e.seq)}</td>

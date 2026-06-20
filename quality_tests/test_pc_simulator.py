@@ -82,6 +82,49 @@ class PcSimulatorTests(unittest.TestCase):
         self.assertEqual(data["device"]["last_seen_source"], "mqtt")
         self.assertEqual(data["events"][0]["event_type"], "mqtt_status")
 
+    def test_snapshot_includes_mqtt_event_and_ack_from_event_log(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "events.jsonl"
+            app.event_store.append_jsonl(
+                log_path,
+                {
+                    "protocol_version": "egolink.p0.v1",
+                    "device_id": "ego-link-001",
+                    "ts": "2026-06-20T10:01:00+00:00",
+                    "seq": 50,
+                    "message_type": "event",
+                    "event_type": "wake_detected",
+                    "priority": "normal",
+                    "keyword": "Ego",
+                    "mqtt_topic": "ego/link/ego-link-001/event",
+                    "ingest_source": "pc_simulator.mqtt_worker",
+                    "received_at": "2026-06-20T10:01:01+00:00",
+                },
+            )
+            app.event_store.append_jsonl(
+                log_path,
+                {
+                    "protocol_version": "egolink.p0.v1",
+                    "device_id": "ego-link-001",
+                    "ts": "2026-06-20T10:01:02+00:00",
+                    "seq": 51,
+                    "message_type": "ack",
+                    "event_type": "mqtt_ack",
+                    "cmd_id": "cmd-0001",
+                    "status": "ok",
+                    "mqtt_topic": "ego/link/ego-link-001/ack",
+                    "ingest_source": "pc_simulator.mqtt_worker",
+                    "received_at": "2026-06-20T10:01:03+00:00",
+                },
+            )
+
+            with patch.object(app, "EVENT_LOG", log_path), patch.object(app, "RUNTIME_DIR", Path(tmp)):
+                data = app.snapshot()
+
+        self.assertEqual([event["event_type"] for event in data["events"][:2]], ["mqtt_ack", "wake_detected"])
+        self.assertEqual(data["events"][0]["cmd_id"], "cmd-0001")
+        self.assertEqual(data["events"][1]["keyword"], "Ego")
+
 
 if __name__ == "__main__":
     unittest.main()
