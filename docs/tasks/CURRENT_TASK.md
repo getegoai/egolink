@@ -1,56 +1,58 @@
-# CURRENT_TASK：T014 项目清理与版本化迭代模式
+# CURRENT_TASK：T015 SIM 卡与 4G 数据链路验证
 
 ## 任务目标
 
-清理仓库中的生成物和临时运行文件，初始化 Git 版本管理，并确定 Ego Link 的轻量迭代开发模式。
+确认插入手机 SIM 卡后，SIM7670G 是否能识别 SIM、注册蜂窝网络、附着分组数据，并完成最小公网连通性验证。
 
 ## 范围
 
-- 删除可再生的构建产物、缓存、运行日志和 smoke-test 输出；
-- 增加 `.gitignore`；
-- 初始化 Git 仓库；
-- 判断 Git Flow / GitLab Flow / GitHub Flow 中最适合当前阶段的分支模式；
-- 写入版本化迭代和智能体开发模式约定；
-- 保持第一阶段为单智能体，不引入 LangGraph、AutoGen、CrewAI 等复杂框架。
+- 枚举 SIM7670G USB 串口和 RNDIS 网卡；
+- 查询 SIM 状态、信号、运营商、注册状态和分组数据附着状态；
+- 必要时执行 SIM7670G 软重启，让热插入 SIM 后重新检测卡状态；
+- 使用模块 AT TCP/IP 栈进行公网 ping 验证；
+- 记录 Windows RNDIS 路径是否可直接上网。
 
 ## 不做
 
-- 不实现新业务功能；
-- 不引入远端 Git 托管；
-- 不接入复杂多智能体编排框架；
-- 不改变当前 P0 技术主线。
+- 不拨打电话或发送短信；
+- 不改写长期 APN 配置；
+- 不刷写固件；
+- 不把完整 ICCID/IMEI 写入状态文档。
 
 ## 允许修改路径
 
-- `.gitignore`
-- `README.md`
-- `docs/**`
-- `scripts/**`
-- `firmware/**/build/**`
-- `firmware/**/managed_components/**`
-- `firmware/**/captures/**`
-- `pc_simulator/runtime/**`
-- `**/__pycache__/**`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
 
-## 建议验证
+## 验证命令
 
-- `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`
-- `git status --short`
-- 确认生成目录已被删除或被 `.gitignore` 忽略。
-
-## 完成标准
-
-- 仓库目录只保留源码、配置、文档和必要脚本；
-- Git 仓库初始化完成；
-- 明确采用 GitHub Flow；
-- 智能体开发模式仍保持单智能体、单任务、可验证、可停止。
+- `python scripts/egolink_board_probe.py --skip-esp-log --probe-all-sim-ports`
+- `AT+CPIN?`
+- `AT+COPS?`
+- `AT+CEREG?`
+- `AT+CGATT?`
+- `AT+CGDCONT?`
+- `AT+NETOPEN`
+- `AT+IPADDR`
+- `AT+CPING="8.8.8.8",1,4,64,1000,10000,255`
+- `ping -S 192.168.0.100 -n 4 8.8.8.8`
 
 ## 执行结果
 
-- 已清理 ESP-IDF build、managed components、camera captures、runtime logs 和 Python cache 等可再生目录；
-- 已新增 `.gitignore`，后续构建和运行生成物默认不进入版本管理；
-- 已写入 `docs/DEVELOPMENT_WORKFLOW.md`，当前采用 GitHub Flow；
-- 已确认第一阶段采用单智能体开发模式，不引入 LangGraph、AutoGen、CrewAI 等额外框架；
-- 已新增 `scripts/start_mosquitto_lan.ps1`，用于启动本机用户态 LAN Mosquitto；
-- 已运行 `scripts/verify.ps1`，11 个测试全部通过；
-- 已通过 `mosquitto_sub` 收到开发板 MQTT status 心跳。
+- SIM7670G 在 `COM6` / `COM7` 均响应 AT 命令；
+- 初次查询返回 `SIM not inserted`，执行 `AT+CFUN=1,1` 软重启后恢复；
+- `AT+CPIN?` 返回 `+CPIN: READY`；
+- `AT+COPS?` 返回 `460-00` LTE；
+- `AT+CEREG?` 返回 `0,1`，表示 EPS/LTE 已注册；
+- `AT+CGATT?` 返回 `1`，表示分组数据已附着；
+- APN 为 `CMNET`，模块侧 IPv4 地址为 `10.36.158.99`；
+- `AT+CPING` 到 `8.8.8.8` 4/4 成功；
+- Windows RNDIS 网卡能获得 `192.168.0.100`，但指定该源地址 ping/curl 外网仍超时，RNDIS 直接上网路径后续单独处理。
+
+## 完成标准
+
+- SIM 卡识别成功；
+- LTE 注册成功；
+- 分组数据附着成功；
+- 模块 AT TCP/IP 栈公网连通成功；
+- RNDIS 限制已记录。
