@@ -46,6 +46,25 @@ HEARTBEAT_SECONDS = 30
 DEFAULT_IDLE_WARNING_SECONDS = 120
 
 
+def configure_standard_streams() -> None:
+    """Prefer UTF-8 console output so Codex event text cannot crash on Windows."""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            try:
+                reconfigure(errors="replace")
+            except Exception:
+                pass
+
+
+configure_standard_streams()
+
+
 class AutoDevError(RuntimeError):
     """Expected supervisor error with a concise user-facing message."""
 
@@ -1343,6 +1362,18 @@ def backlog_progress_summary() -> tuple[int, int, int, int]:
     return total, len(completed), len(blocked), ready
 
 
+def seconds_since_iso_timestamp(value: Any) -> int | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        timestamp = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=dt.timezone.utc)
+    return max(0, int((dt.datetime.now(dt.timezone.utc) - timestamp).total_seconds()))
+
+
 def infer_live_status_from_latest_run() -> dict[str, Any] | None:
     """Best-effort monitor support for a run started by AutoDev v0.1."""
     if not RUNS_DIR.is_dir():
@@ -1451,6 +1482,15 @@ def render_live_dashboard(*, event_limit: int, clear: bool) -> None:
         print("Start AutoDev in another terminal, then keep this monitor open.")
         print("\nCommand: python scripts/autodev.py run --max-tasks 3")
         return
+    live = dict(live)
+    live_age_seconds = seconds_since_iso_timestamp(live.get("updated_at"))
+    if (
+        live.get("state") == "running"
+        and live_age_seconds is not None
+        and live_age_seconds > HEARTBEAT_SECONDS * 2
+    ):
+        live["state"] = "stale"
+        live["stale_seconds"] = live_age_seconds
 
     total, completed, blocked, ready = backlog_progress_summary()
     print("\nRUN")
@@ -1460,7 +1500,7 @@ def render_live_dashboard(*, event_limit: int, clear: bool) -> None:
     print(f"  Attempt   : {live.get('attempt', '?')} / {live.get('max_attempts', '?')}")
     print(f"  Elapsed   : {format_duration(live.get('elapsed_seconds', 0))}")
     print(f"  Idle      : {format_duration(live.get('idle_seconds', 0))} since last observable event")
-    print(f"  Last event: {live.get('last_event', 'unknown')}")
+    print(f"  Last event: {compact_text(live.get('last_event', 'unknown'), 220)}")
     print(f"  Run dir   : {live.get('run_dir', '?')}")
     print(f"  Thread    : {live.get('thread_id') or 'not reported'}")
     print(
@@ -1474,6 +1514,10 @@ def render_live_dashboard(*, event_limit: int, clear: bool) -> None:
     )
     if live.get("inferred"):
         print("  Source    : inferred from the latest v0.1 run log; stage/process liveness is approximate")
+    if live.get("state") == "stale":
+        print(
+            "  Source    : live_status.json is stale; the supervisor may have exited, crashed, or been stopped"
+        )
     print(f"\nBACKLOG   : total={total} completed={completed} blocked={blocked} ready={ready}")
 
     status_lines = live.get("status_lines") or []
@@ -1511,6 +1555,12 @@ def render_live_dashboard(*, event_limit: int, clear: bool) -> None:
         print(
             f"\nNOTICE: {prefix}, and no externally observable event has arrived for "
             f"{format_duration(idle_seconds)}. This may be model reasoning or a stalled tool."
+        )
+    if live.get("state") == "stale":
+        stale_seconds = int(live.get("stale_seconds") or 0)
+        print(
+            f"\nNOTICE: live_status.json has not been updated for {format_duration(stale_seconds)}. "
+            "Check the run terminal/logs; the AutoDev process is probably no longer active."
         )
     print("\nThis monitor shows operational evidence, not private chain-of-thought.")
     print("Press Ctrl+C to stop the monitor; AutoDev in the other terminal continues.")

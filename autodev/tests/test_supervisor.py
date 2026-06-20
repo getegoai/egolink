@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import datetime as dt
 import json
 import tempfile
 import unittest
@@ -88,6 +89,12 @@ class MonitoringTests(unittest.TestCase):
             AUTODEV.clean_git_output(output).splitlines(),
             ["scripts/autodev.py", "docs/AUTODEV_GUIDE.md"],
         )
+
+    def test_seconds_since_iso_timestamp_handles_utc_values(self) -> None:
+        old = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)).isoformat()
+        age = AUTODEV.seconds_since_iso_timestamp(old)
+        self.assertIsNotNone(age)
+        self.assertGreaterEqual(age, 0)
 
     def test_mcp_tool_event_includes_available_operation(self) -> None:
         event = {
