@@ -1,4 +1,4 @@
-# Ego Link AutoDev v0.1
+# Ego Link AutoDev v0.2
 
 This package adds a small, local supervisor around `codex exec`. It runs backlog tasks sequentially, streams the execution process in the VS Code terminal, verifies each task independently, commits successful work on a dedicated Git branch, and stops on failure or a human/hardware gate.
 
@@ -17,6 +17,7 @@ scripts/
   autodev.py
   autodev_bootstrap_check.py
   run_autodev.ps1
+  watch_autodev.ps1
 docs/
   AUTODEV_GUIDE.md
 ```
@@ -81,6 +82,8 @@ The terminal shows:
 - Git diff summary;
 - commit hash;
 - stop/block reason.
+
+A second terminal can show the live dashboard with `python scripts/autodev.py watch`. The supervisor also maintains `autodev/runtime/LIVE_STATUS.md`.
 
 The complete raw JSONL event stream and readable logs remain in:
 
@@ -169,3 +172,8 @@ python scripts/autodev.py run --until-blocked
 ```
 
 Keep real SIM7670G registration, GNSS fix, calling, firmware flashing, serial observation, and power measurement behind human/hardware gates.
+
+
+## 10. Live monitoring
+
+See `docs/AUTODEV_MONITORING.md` for the dual-terminal workflow, live status files, idle detection, raw event tailing, and interpretation of observable progress.

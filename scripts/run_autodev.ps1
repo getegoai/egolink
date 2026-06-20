@@ -5,6 +5,7 @@ param(
     [ValidateSet("low", "medium", "high", "xhigh")]
     [string]$ReasoningEffort = "medium",
     [int]$TaskTimeoutSeconds = 5400,
+    [int]$IdleWarningSeconds = 120,
     [switch]$DryRun,
     [switch]$KeepFailedChanges,
     [switch]$VerboseEvents
@@ -20,7 +21,8 @@ $ArgsList = @(
     "--max-tasks", $MaxTasks,
     "--branch", $Branch,
     "--reasoning-effort", $ReasoningEffort,
-    "--task-timeout", $TaskTimeoutSeconds
+    "--task-timeout", $TaskTimeoutSeconds,
+    "--idle-warning", $IdleWarningSeconds
 )
 
 if ($Model) {

@@ -10,6 +10,7 @@ on the first unresolved failure or human gate.
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import dataclasses
 import datetime as dt
 import fnmatch
@@ -35,11 +36,14 @@ RESULT_SCHEMA_PATH = AUTODEV_DIR / "result.schema.json"
 RUNTIME_DIR = AUTODEV_DIR / "runtime"
 RUNS_DIR = AUTODEV_DIR / "runs"
 STATE_PATH = RUNTIME_DIR / "state.json"
+LIVE_STATUS_PATH = RUNTIME_DIR / "live_status.json"
+LIVE_STATUS_MD_PATH = RUNTIME_DIR / "LIVE_STATUS.md"
 REQUIRED_DIRS = ("docs", "firmware", "pc_simulator", "quality_tests", "scripts")
 REQUIRED_FILES = ("README.md", "AGENTS.md", "autodev/backlog.json", "autodev/result.schema.json")
 DEFAULT_BRANCH = "autodev/egolink-p0"
 DEFAULT_TASK_TIMEOUT_SECONDS = 90 * 60
 HEARTBEAT_SECONDS = 30
+DEFAULT_IDLE_WARNING_SECONDS = 120
 
 
 class AutoDevError(RuntimeError):
@@ -113,6 +117,7 @@ class CodexRunResult:
     run_dir: Path
     timed_out: bool
     thread_id: str | None
+    reporter: LiveStatusReporter | None = None
 
 
 @dataclasses.dataclass
@@ -120,6 +125,215 @@ class VerificationResult:
     ok: bool
     output: str
     failed_command: list[str] | None = None
+
+
+def format_duration(seconds: float | int) -> str:
+    try:
+        total = max(0, int(seconds or 0))
+    except (TypeError, ValueError):
+        total = 0
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(path.suffix + ".tmp")
+    temp.write_text(text, encoding="utf-8")
+    temp.replace(path)
+
+
+def compact_text(value: Any, limit: int = 280) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        text = value
+    else:
+        try:
+            text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        except TypeError:
+            text = str(value)
+    text = " ".join(text.split())
+    if len(text) > limit:
+        return text[: limit - 3] + "..."
+    return text
+
+
+def is_git_noise_line(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith("warning: in the working copy of ")
+
+
+def clean_git_output(output: str) -> str:
+    lines = [line for line in output.splitlines() if not is_git_noise_line(line)]
+    return "\n".join(lines).strip()
+
+
+def current_git_snapshot() -> dict[str, Any]:
+    """Return a best-effort, read-only view of observable repository changes."""
+    changed: list[str] = []
+    diff_stat = ""
+    status_lines: list[str] = []
+    try:
+        changed = get_changed_paths()
+        diff_stat = clean_git_output(git("diff", "--stat", "HEAD", check=False, timeout=30).output)
+        status_lines = clean_git_output(
+            git("status", "--short", "--untracked-files=all", check=False, timeout=30).output
+        ).splitlines()
+    except Exception as exc:  # Monitoring must never stop the build.
+        return {"changed_files": [], "status_lines": [], "diff_stat": "", "git_error": str(exc)}
+    return {
+        "changed_files": changed,
+        "status_lines": status_lines,
+        "diff_stat": diff_stat,
+        "git_error": None,
+    }
+
+
+class LiveStatusReporter:
+    """Persist a small observable state file that another terminal can watch.
+
+    This reporter intentionally records operational evidence only: task, stage,
+    commands, file changes, verification, elapsed/idle time, and Git state. It
+    does not expose or attempt to reconstruct private model reasoning.
+    """
+
+    def __init__(
+        self,
+        *,
+        task: dict[str, Any],
+        attempt: int,
+        run_dir: Path,
+        max_attempts: int,
+    ) -> None:
+        self.task = task
+        self.attempt = attempt
+        self.max_attempts = max_attempts
+        self.run_dir = run_dir
+        self.started_monotonic = time.monotonic()
+        self.last_activity_monotonic = self.started_monotonic
+        self.last_git_snapshot_monotonic = 0.0
+        self.event_count = 0
+        self.command_count = 0
+        self.file_event_count = 0
+        self.tool_count = 0
+        self.last_event = "Codex process starting"
+        self.stage = "codex"
+        self.state = "running"
+        self.thread_id: str | None = None
+        self.git_snapshot: dict[str, Any] = {
+            "changed_files": [],
+            "status_lines": [],
+            "diff_stat": "",
+            "git_error": None,
+        }
+        self.write(force_git=True)
+
+    def mark_activity(self, summary: str) -> None:
+        self.last_activity_monotonic = time.monotonic()
+        self.last_event = compact_text(summary, 500) or self.last_event
+
+    def on_codex_event(
+        self,
+        event: dict[str, Any],
+        formatted: tuple[str, str] | None,
+    ) -> None:
+        self.event_count += 1
+        event_type = str(event.get("type", "event"))
+        if event_type == "thread.started":
+            self.thread_id = str(event.get("thread_id") or "") or None
+        item = event.get("item") if isinstance(event.get("item"), dict) else {}
+        item_type = str(item.get("type", ""))
+        if item_type == "command_execution" and event_type == "item.started":
+            self.command_count += 1
+        if item_type in {"file_change", "file_changes"}:
+            self.file_event_count += 1
+        if item_type in {"mcp_tool_call", "web_search"}:
+            self.tool_count += 1
+        if formatted:
+            tag, message = formatted
+            self.mark_activity(f"{tag}: {message}")
+        else:
+            self.mark_activity(event_type)
+        self.write()
+
+    def set_stage(self, stage: str, message: str | None = None) -> None:
+        self.stage = stage
+        if message:
+            self.mark_activity(message)
+        self.write(force_git=True)
+
+    def finish(self, state: str, message: str) -> None:
+        self.state = state
+        self.stage = state
+        self.mark_activity(message)
+        self.write(force_git=True)
+
+    def write(self, *, force_git: bool = False) -> None:
+        now = time.monotonic()
+        if force_git or now - self.last_git_snapshot_monotonic >= 10:
+            self.git_snapshot = current_git_snapshot()
+            self.last_git_snapshot_monotonic = now
+        elapsed = now - self.started_monotonic
+        idle = now - self.last_activity_monotonic
+        payload = {
+            "schema_version": 1,
+            "updated_at": iso_now(),
+            "state": self.state,
+            "stage": self.stage,
+            "task_id": self.task.get("id"),
+            "task_title": self.task.get("title"),
+            "attempt": self.attempt,
+            "max_attempts": self.max_attempts,
+            "run_dir": normalize_relpath(self.run_dir.relative_to(REPO_ROOT)),
+            "thread_id": self.thread_id,
+            "elapsed_seconds": int(elapsed),
+            "idle_seconds": int(idle),
+            "last_event": self.last_event,
+            "event_count": self.event_count,
+            "command_count": self.command_count,
+            "file_event_count": self.file_event_count,
+            "tool_count": self.tool_count,
+            **self.git_snapshot,
+        }
+        atomic_write_text(
+            LIVE_STATUS_PATH,
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        )
+        status_lines = payload.get("status_lines") or []
+        changed_lines = payload.get("changed_files") or []
+        if status_lines:
+            changed_text = "\n".join(f"- `{line}`" for line in status_lines)
+        else:
+            changed_text = "\n".join(f"- `{path}`" for path in changed_lines) or "- None observed"
+        diff_stat = payload.get("diff_stat") or "No diff stat available."
+        md = f"""# Ego Link AutoDev Live Status
+
+- **State:** `{payload['state']}`
+- **Stage:** `{payload['stage']}`
+- **Task:** `{payload['task_id']}` - {payload['task_title']}
+- **Attempt:** {payload['attempt']} / {payload['max_attempts']}
+- **Elapsed:** {format_duration(payload['elapsed_seconds'])}
+- **Idle since last observable event:** {format_duration(payload['idle_seconds'])}
+- **Last observable event:** {payload['last_event']}
+- **Events / commands / file events / tools:** {payload['event_count']} / {payload['command_count']} / {payload['file_event_count']} / {payload['tool_count']}
+- **Run directory:** `{payload['run_dir']}`
+- **Updated:** `{payload['updated_at']}`
+
+## Changed Files
+
+{changed_text}
+
+## Current Diff Summary
+
+```text
+{diff_stat}
+```
+"""
+        atomic_write_text(LIVE_STATUS_MD_PATH, md)
 
 
 def iso_now() -> str:
@@ -221,8 +435,10 @@ def assert_clean_worktree() -> None:
 
 
 def get_changed_paths() -> list[str]:
-    tracked = git("diff", "--name-only", "HEAD", check=True).output.splitlines()
-    untracked = git("ls-files", "--others", "--exclude-standard", check=True).output.splitlines()
+    tracked = clean_git_output(git("diff", "--name-only", "HEAD", check=True).output).splitlines()
+    untracked = clean_git_output(
+        git("ls-files", "--others", "--exclude-standard", check=True).output
+    ).splitlines()
     paths = {normalize_relpath(p.strip()) for p in (*tracked, *untracked) if p.strip()}
     return sorted(paths)
 
@@ -383,7 +599,7 @@ def format_codex_event(event: dict[str, Any], verbose: bool = False) -> tuple[st
         if isinstance(usage, dict) and usage:
             return (
                 "CODEX",
-                "Turn completed — input {input_tokens}, output {output_tokens}, reasoning {reasoning_output_tokens}".format(
+                "Turn completed - input {input_tokens}, output {output_tokens}, reasoning {reasoning_output_tokens}".format(
                     input_tokens=usage.get("input_tokens", "?"),
                     output_tokens=usage.get("output_tokens", "?"),
                     reasoning_output_tokens=usage.get("reasoning_output_tokens", "?"),
@@ -419,9 +635,9 @@ def format_codex_event(event: dict[str, Any], verbose: bool = False) -> tuple[st
         if output:
             compact = str(output).strip()
             if len(compact) > 1200:
-                compact = compact[:1200] + " …"
+                compact = compact[:1200] + "..."
             suffix += f"\n{compact}"
-        return "CMD", f"{command} — {suffix}"
+        return "CMD", f"{command} - {suffix}"
 
     if item_type in {"file_change", "file_changes"}:
         changes = item.get("changes") or item.get("files") or item.get("path") or "file changes"
@@ -438,8 +654,25 @@ def format_codex_event(event: dict[str, Any], verbose: bool = False) -> tuple[st
         return None
 
     if item_type in {"mcp_tool_call", "web_search"}:
-        name = item.get("name") or item.get("query") or item_type
-        return "TOOL", f"{phase}: {name}"
+        server = item.get("server") or item.get("server_name") or ""
+        name = (
+            item.get("name")
+            or item.get("tool_name")
+            or item.get("method")
+            or item.get("query")
+            or item_type
+        )
+        qualified = f"{server}/{name}" if server else str(name)
+        detail = (
+            item.get("arguments")
+            or item.get("input")
+            or item.get("params")
+            or item.get("result")
+            or item.get("output")
+        )
+        detail_text = compact_text(detail, 360)
+        suffix = f" - {detail_text}" if detail_text else ""
+        return "TOOL", f"{phase}: {qualified}{suffix}"
 
     if verbose:
         return "ITEM", f"{phase}: {item_type}"
@@ -470,11 +703,15 @@ def stream_process(
     timeout_seconds: int,
     event_mode: bool,
     verbose_events: bool = False,
+    reporter: LiveStatusReporter | None = None,
+    idle_warning_seconds: int = DEFAULT_IDLE_WARNING_SECONDS,
 ) -> ProcessResult:
     line_queue: queue.Queue[str | None] = queue.Queue()
     started = time.monotonic()
     output_parts: list[str] = []
     timed_out = False
+    last_observable_activity = started
+    event_count = 0
 
     def reader() -> None:
         assert process.stdout is not None
@@ -516,8 +753,16 @@ def stream_process(
                         event = json.loads(stripped)
                     except json.JSONDecodeError:
                         CONSOLE.line("CODEX", stripped, "blue")
+                        last_observable_activity = time.monotonic()
+                        if reporter:
+                            reporter.mark_activity(f"CODEX: {stripped}")
+                            reporter.write()
                     else:
+                        event_count += 1
+                        last_observable_activity = time.monotonic()
                         formatted = format_codex_event(event, verbose=verbose_events)
+                        if reporter:
+                            reporter.on_codex_event(event, formatted)
                         if formatted:
                             tag, message = formatted
                             color = {
@@ -531,12 +776,25 @@ def stream_process(
                             CONSOLE.line(tag, message, color)
                 else:
                     CONSOLE.line("OUTPUT", stripped, "blue")
+                    last_observable_activity = time.monotonic()
+                    if reporter:
+                        reporter.mark_activity(f"OUTPUT: {stripped}")
+                        reporter.write()
 
             now = time.monotonic()
             if now - last_heartbeat >= HEARTBEAT_SECONDS and process.poll() is None:
-                minutes = int((now - started) // 60)
-                seconds = int((now - started) % 60)
-                CONSOLE.line("ACTIVE", f"Still running — elapsed {minutes:02d}:{seconds:02d}", "yellow")
+                elapsed_text = format_duration(now - started)
+                idle_text = format_duration(now - last_observable_activity)
+                changed = current_git_snapshot().get("changed_files", [])
+                last_summary = reporter.last_event if reporter else "no classified event"
+                msg = (
+                    f"elapsed {elapsed_text} | idle {idle_text} | events {event_count} | "
+                    f"changed {len(changed)} | last: {compact_text(last_summary, 160)}"
+                )
+                tag = "IDLE" if now - last_observable_activity >= idle_warning_seconds else "ACTIVE"
+                CONSOLE.line(tag, msg, "yellow")
+                if reporter:
+                    reporter.write(force_git=True)
                 last_heartbeat = now
 
     if process.poll() is None:
@@ -594,7 +852,7 @@ The previous implementation did not pass external verification. Fix only the cur
         3. relevant existing files for this task
         4. docs/EGO_LINK_P0_CONTEXT.md if it exists
 
-        Complete exactly one task: {task['id']} — {task['title']}.
+        Complete exactly one task: {task['id']} - {task['title']}.
 
         Non-negotiable rules:
         - Modify only files matching allowed_paths in the task object.
@@ -630,11 +888,13 @@ def run_codex_task(
     task: dict[str, Any],
     *,
     attempt: int,
+    max_attempts: int,
     timeout_seconds: int,
     repair_context: str | None,
     model: str | None,
     reasoning_effort: str | None,
     verbose_events: bool,
+    idle_warning_seconds: int,
 ) -> CodexRunResult:
     codex = locate_codex()
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -688,6 +948,13 @@ def run_codex_task(
         encoding="utf-8",
     )
 
+    reporter = LiveStatusReporter(
+        task=task,
+        attempt=attempt,
+        run_dir=run_dir,
+        max_attempts=max_attempts,
+    )
+
     CONSOLE.line("LAUNCH", f"Codex attempt {attempt}; logs: {run_dir.relative_to(REPO_ROOT)}", "magenta")
     process = create_process(command, stdin_pipe=True)
     assert process.stdin is not None
@@ -700,6 +967,8 @@ def run_codex_task(
         timeout_seconds=timeout_seconds,
         event_mode=True,
         verbose_events=verbose_events,
+        reporter=reporter,
+        idle_warning_seconds=idle_warning_seconds,
     )
 
     structured: dict[str, Any] | None = None
@@ -728,6 +997,7 @@ def run_codex_task(
         run_dir=run_dir,
         timed_out=process_result.timed_out,
         thread_id=thread_id,
+        reporter=reporter,
     )
 
 
@@ -741,19 +1011,34 @@ def expand_verification_command(command: Sequence[str]) -> list[str]:
     return expanded
 
 
-def run_command_live(command: Sequence[str], *, timeout_seconds: int, log_path: Path) -> ProcessResult:
+def run_command_live(
+    command: Sequence[str],
+    *,
+    timeout_seconds: int,
+    log_path: Path,
+    reporter: LiveStatusReporter | None = None,
+) -> ProcessResult:
     CONSOLE.line("VERIFY", display_command(command), "cyan")
+    if reporter:
+        reporter.set_stage("verification", f"VERIFY: {display_command(command)}")
     process = create_process(command, stdin_pipe=False)
     return stream_process(
         process,
         raw_log_path=log_path,
         timeout_seconds=timeout_seconds,
         event_mode=False,
+        reporter=reporter,
     )
 
 
-def verify_task(task: dict[str, Any], run_dir: Path) -> VerificationResult:
+def verify_task(
+    task: dict[str, Any],
+    run_dir: Path,
+    reporter: LiveStatusReporter | None = None,
+) -> VerificationResult:
     all_output: list[str] = []
+    if reporter:
+        reporter.set_stage("verification", "Running external verification")
     diff_check = run_capture(("git", "diff", "--check"), check=False, timeout=60)
     all_output.append(f"$ git diff --check\n{diff_check.output}")
     if diff_check.returncode != 0:
@@ -769,7 +1054,12 @@ def verify_task(task: dict[str, Any], run_dir: Path) -> VerificationResult:
             )
         command = expand_verification_command(raw_command)
         log_path = run_dir / f"verification-{index}.log"
-        result = run_command_live(command, timeout_seconds=timeout_seconds, log_path=log_path)
+        result = run_command_live(
+            command,
+            timeout_seconds=timeout_seconds,
+            log_path=log_path,
+            reporter=reporter,
+        )
         all_output.append(f"$ {display_command(command)}\n{result.output}")
         if result.returncode != 0 or result.timed_out:
             return VerificationResult(False, "\n".join(all_output), command)
@@ -827,28 +1117,32 @@ def execute_task(
     state: dict[str, Any],
     *,
     task_timeout_seconds: int,
+    idle_warning_seconds: int,
     model: str | None,
     reasoning_effort: str | None,
     keep_failed_changes: bool,
     verbose_events: bool,
 ) -> bool:
-    CONSOLE.header(f"{task['id']} — {task['title']}")
+    CONSOLE.header(f"{task['id']} - {task['title']}")
     CONSOLE.task(task.get("description", ""))
     CONSOLE.info("Allowed paths: " + ", ".join(task.get("allowed_paths", [])))
 
     max_repairs = int(task.get("max_repair_attempts", 1))
+    max_attempts = max_repairs + 1
     verification_failure: str | None = None
     last_run: CodexRunResult | None = None
 
-    for attempt in range(1, max_repairs + 2):
+    for attempt in range(1, max_attempts + 1):
         last_run = run_codex_task(
             task,
             attempt=attempt,
+            max_attempts=max_attempts,
             timeout_seconds=task_timeout_seconds,
             repair_context=verification_failure,
             model=model,
             reasoning_effort=reasoning_effort,
             verbose_events=verbose_events,
+            idle_warning_seconds=idle_warning_seconds,
         )
 
         result = last_run.structured_result
@@ -873,6 +1167,8 @@ def execute_task(
 
         if reason:
             CONSOLE.error(reason)
+            if last_run.reporter:
+                last_run.reporter.finish("blocked", reason)
             patch = save_failure_patch(last_run.run_dir)
             if not keep_failed_changes:
                 rollback_to_head()
@@ -883,9 +1179,11 @@ def execute_task(
             return False
 
         CONSOLE.info("Changed files: " + (", ".join(changed_paths) if changed_paths else "none"))
-        verification = verify_task(task, last_run.run_dir)
+        verification = verify_task(task, last_run.run_dir, reporter=last_run.reporter)
         if verification.ok:
             CONSOLE.success("External verification passed.")
+            if last_run.reporter:
+                last_run.reporter.set_stage("commit", "External verification passed; preparing Git commit")
             if changed_paths:
                 stat = git("diff", "--stat", "HEAD", check=True).output.strip()
                 if stat:
@@ -896,6 +1194,11 @@ def execute_task(
                 commit_hash = ""
                 CONSOLE.warning("Task already satisfied; no repository change was required.")
             mark_completed(state, task, commit_hash)
+            if last_run.reporter:
+                last_run.reporter.finish(
+                    "completed",
+                    f"Task completed{f' and committed as {commit_hash}' if commit_hash else ' with no change'}",
+                )
             return True
 
         verification_failure = verification.output
@@ -905,9 +1208,16 @@ def execute_task(
         )
         if attempt <= max_repairs:
             CONSOLE.warning(f"Starting repair attempt {attempt + 1} of {max_repairs + 1}.")
+            if last_run.reporter:
+                last_run.reporter.finish(
+                    "repair_pending",
+                    f"Verification failed; starting repair attempt {attempt + 1}",
+                )
             continue
 
         reason = "Verification failed after all permitted repair attempts."
+        if last_run.reporter:
+            last_run.reporter.finish("blocked", reason)
         patch = save_failure_patch(last_run.run_dir)
         if not keep_failed_changes:
             rollback_to_head()
@@ -983,6 +1293,241 @@ def doctor() -> int:
     return 0
 
 
+def read_recent_event_summaries(run_dir_text: str | None, limit: int) -> list[str]:
+    if not run_dir_text or limit <= 0:
+        return []
+    events_path = REPO_ROOT / normalize_relpath(run_dir_text) / "events.jsonl"
+    if not events_path.is_file():
+        return []
+    recent: deque[str] = deque(maxlen=max(limit * 4, limit))
+    try:
+        with events_path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    event = json.loads(stripped)
+                except json.JSONDecodeError:
+                    recent.append(compact_text(stripped, 180))
+                    continue
+                formatted = format_codex_event(event, verbose=True)
+                if not formatted:
+                    continue
+                tag, message = formatted
+                # Private reasoning text is never rendered; the formatter emits
+                # only operational reasoning start/completion markers.
+                recent.append(f"[{tag}] {compact_text(message, 180)}")
+    except OSError as exc:
+        return [f"[ERROR] Could not read event log: {exc}"]
+    return list(recent)[-limit:]
+
+
+def backlog_progress_summary() -> tuple[int, int, int, int]:
+    try:
+        backlog = load_backlog()
+        state = load_state()
+    except AutoDevError:
+        return (0, 0, 0, 0)
+    tasks = backlog.get("tasks", [])
+    completed = set(state.get("completed", []))
+    blocked = set(state.get("blocked", {}).keys())
+    total = len(tasks)
+    ready = 0
+    for task in tasks:
+        task_id = task.get("id")
+        if task_id in completed or task_id in blocked:
+            continue
+        if set(task.get("depends_on", [])).issubset(completed):
+            ready += 1
+    return total, len(completed), len(blocked), ready
+
+
+def infer_live_status_from_latest_run() -> dict[str, Any] | None:
+    """Best-effort monitor support for a run started by AutoDev v0.1."""
+    if not RUNS_DIR.is_dir():
+        return None
+    candidates = [path for path in RUNS_DIR.iterdir() if path.is_dir()]
+    if not candidates:
+        return None
+    run_dir = max(candidates, key=lambda path: path.stat().st_mtime)
+
+    metadata: dict[str, Any] = {}
+    metadata_path = run_dir / "metadata.json"
+    if metadata_path.is_file():
+        try:
+            parsed = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if isinstance(parsed, dict):
+                metadata = parsed
+        except (OSError, json.JSONDecodeError):
+            metadata = {}
+
+    task_id = str(metadata.get("task_id") or "unknown")
+    task_title = ""
+    try:
+        backlog = load_backlog()
+        for task in backlog.get("tasks", []):
+            if task.get("id") == task_id:
+                task_title = str(task.get("title") or "")
+                break
+    except AutoDevError:
+        pass
+
+    attempt = metadata.get("attempt") or 1
+    started_at = metadata.get("started_at")
+    elapsed = 0
+    if isinstance(started_at, str):
+        try:
+            started_dt = dt.datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+            now_dt = dt.datetime.now(started_dt.tzinfo or dt.timezone.utc)
+            elapsed = max(0, int((now_dt - started_dt).total_seconds()))
+        except ValueError:
+            elapsed = 0
+
+    events_path = run_dir / "events.jsonl"
+    event_count = 0
+    idle = elapsed
+    last_event = "No observable event"
+    if events_path.is_file():
+        try:
+            with events_path.open("r", encoding="utf-8", errors="replace") as handle:
+                event_count = sum(1 for line in handle if line.strip())
+            idle = max(0, int(time.time() - events_path.stat().st_mtime))
+            summaries = read_recent_event_summaries(
+                normalize_relpath(run_dir.relative_to(REPO_ROOT)),
+                1,
+            )
+            if summaries:
+                last_event = summaries[-1]
+        except OSError:
+            pass
+
+    snapshot = current_git_snapshot()
+    return {
+        "schema_version": 1,
+        "updated_at": iso_now(),
+        "state": "inferred",
+        "stage": "codex (legacy run; inferred)",
+        "task_id": task_id,
+        "task_title": task_title,
+        "attempt": attempt,
+        "max_attempts": "?",
+        "run_dir": normalize_relpath(run_dir.relative_to(REPO_ROOT)),
+        "thread_id": None,
+        "elapsed_seconds": elapsed,
+        "idle_seconds": idle,
+        "last_event": last_event,
+        "event_count": event_count,
+        "command_count": 0,
+        "file_event_count": 0,
+        "tool_count": 0,
+        **snapshot,
+        "inferred": True,
+    }
+
+
+def render_live_dashboard(*, event_limit: int, clear: bool) -> None:
+    if clear and sys.stdout.isatty():
+        print("\033[2J\033[H", end="")
+
+    print("=" * 88)
+    print("EGO LINK AUTODEV - LIVE OPERATIONAL MONITOR")
+    print("=" * 88)
+    print(f"Repository : {REPO_ROOT}")
+    print(f"Refreshed  : {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    live: dict[str, Any] | None = None
+    if LIVE_STATUS_PATH.exists():
+        try:
+            loaded = load_json(LIVE_STATUS_PATH)
+            if isinstance(loaded, dict):
+                live = loaded
+        except AutoDevError as exc:
+            print(f"\nLive status unavailable: {exc}")
+    if live is None:
+        live = infer_live_status_from_latest_run()
+    if live is None:
+        print("\nNo live or previous run was found.")
+        print("Start AutoDev in another terminal, then keep this monitor open.")
+        print("\nCommand: python scripts/autodev.py run --max-tasks 3")
+        return
+
+    total, completed, blocked, ready = backlog_progress_summary()
+    print("\nRUN")
+    print(f"  State     : {live.get('state', '?')}")
+    print(f"  Stage     : {live.get('stage', '?')}")
+    print(f"  Task      : {live.get('task_id', '?')} - {live.get('task_title', '')}")
+    print(f"  Attempt   : {live.get('attempt', '?')} / {live.get('max_attempts', '?')}")
+    print(f"  Elapsed   : {format_duration(live.get('elapsed_seconds', 0))}")
+    print(f"  Idle      : {format_duration(live.get('idle_seconds', 0))} since last observable event")
+    print(f"  Last event: {live.get('last_event', 'unknown')}")
+    print(f"  Run dir   : {live.get('run_dir', '?')}")
+    print(f"  Thread    : {live.get('thread_id') or 'not reported'}")
+    print(
+        "  Counters  : events={event_count} commands={command_count} "
+        "file-events={file_event_count} tools={tool_count}".format(
+            event_count=live.get("event_count", 0),
+            command_count=live.get("command_count", 0),
+            file_event_count=live.get("file_event_count", 0),
+            tool_count=live.get("tool_count", 0),
+        )
+    )
+    if live.get("inferred"):
+        print("  Source    : inferred from the latest v0.1 run log; stage/process liveness is approximate")
+    print(f"\nBACKLOG   : total={total} completed={completed} blocked={blocked} ready={ready}")
+
+    status_lines = live.get("status_lines") or []
+    changed = live.get("changed_files") or []
+    print("\nOBSERVABLE FILE CHANGES")
+    if status_lines:
+        for line in status_lines:
+            print(f"  {line}")
+    elif changed:
+        for path in changed:
+            print(f"  {path}")
+    else:
+        print("  None observed")
+
+    print("\nCURRENT DIFF SUMMARY")
+    diff_stat = str(live.get("diff_stat") or "No diff stat available.")
+    for line in diff_stat.splitlines() or [diff_stat]:
+        print(f"  {line}")
+
+    print(f"\nRECENT OBSERVABLE EVENTS (last {event_limit})")
+    summaries = read_recent_event_summaries(live.get("run_dir"), event_limit)
+    if summaries:
+        for summary in summaries:
+            print(f"  {summary}")
+    else:
+        print("  No classified events yet")
+
+    idle_seconds = int(live.get("idle_seconds") or 0)
+    if live.get("state") in {"running", "inferred"} and idle_seconds >= DEFAULT_IDLE_WARNING_SECONDS:
+        prefix = (
+            "The Codex process is alive"
+            if live.get("state") == "running"
+            else "The latest run log has not changed"
+        )
+        print(
+            f"\nNOTICE: {prefix}, and no externally observable event has arrived for "
+            f"{format_duration(idle_seconds)}. This may be model reasoning or a stalled tool."
+        )
+    print("\nThis monitor shows operational evidence, not private chain-of-thought.")
+    print("Press Ctrl+C to stop the monitor; AutoDev in the other terminal continues.")
+
+
+def watch_live_status(*, interval: float, event_limit: int, once: bool, no_clear: bool) -> int:
+    try:
+        while True:
+            render_live_dashboard(event_limit=event_limit, clear=not no_clear)
+            if once:
+                return 0
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\nMonitor stopped. The AutoDev process, if running elsewhere, was not stopped.")
+        return 0
+
+
 def show_status() -> int:
     backlog = load_backlog()
     state = load_state()
@@ -993,18 +1538,18 @@ def show_status() -> int:
         task_id = task["id"]
         if task_id in completed:
             commit = state.get("commits", {}).get(task_id, "no-change")
-            CONSOLE.success(f"{task_id}: done ({commit}) — {task['title']}")
+            CONSOLE.success(f"{task_id}: done ({commit}) - {task['title']}")
         elif task_id in blocked:
-            CONSOLE.error(f"{task_id}: blocked — {blocked[task_id].get('reason', 'unknown')}")
+            CONSOLE.error(f"{task_id}: blocked - {blocked[task_id].get('reason', 'unknown')}")
         elif task.get("human_gate"):
-            CONSOLE.warning(f"{task_id}: human gate — {task['title']}")
+            CONSOLE.warning(f"{task_id}: human gate - {task['title']}")
         else:
             deps = task.get("depends_on", [])
             waiting = [dep for dep in deps if dep not in completed]
             if waiting:
-                CONSOLE.info(f"{task_id}: waiting for {', '.join(waiting)} — {task['title']}")
+                CONSOLE.info(f"{task_id}: waiting for {', '.join(waiting)} - {task['title']}")
             else:
-                CONSOLE.task(f"{task_id}: ready — {task['title']}")
+                CONSOLE.task(f"{task_id}: ready - {task['title']}")
     if state.get("last_updated"):
         CONSOLE.info(f"State last updated: {state['last_updated']}")
     return 0
@@ -1065,6 +1610,7 @@ def run_loop(args: argparse.Namespace) -> int:
             next_task,
             state,
             task_timeout_seconds=args.task_timeout,
+            idle_warning_seconds=args.idle_warning,
             model=args.model,
             reasoning_effort=args.reasoning_effort,
             keep_failed_changes=args.keep_failed_changes,
@@ -1092,6 +1638,15 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("doctor", help="Validate workspace, tools, Git identity, and control files.")
     subparsers.add_parser("status", help="Show backlog and runtime task state.")
 
+    watch_parser = subparsers.add_parser(
+        "watch",
+        help="Continuously display live task, stage, idle time, file changes, and recent events.",
+    )
+    watch_parser.add_argument("--interval", type=float, default=2.0, help="Refresh interval in seconds (default: 2).")
+    watch_parser.add_argument("--events", type=int, default=12, help="Recent observable events to display (default: 12).")
+    watch_parser.add_argument("--once", action="store_true", help="Render one snapshot and exit.")
+    watch_parser.add_argument("--no-clear", action="store_true", help="Append snapshots instead of clearing the terminal.")
+
     reset_parser = subparsers.add_parser("reset", help="Reset ignored AutoDev runtime state only.")
     reset_parser.add_argument("--yes", action="store_true", help="Confirm state reset.")
 
@@ -1115,6 +1670,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Per-Codex-attempt timeout in seconds (default: {DEFAULT_TASK_TIMEOUT_SECONDS}).",
     )
     run_parser.add_argument(
+        "--idle-warning",
+        type=int,
+        default=DEFAULT_IDLE_WARNING_SECONDS,
+        help=(
+            "Seconds without an observable event before heartbeat lines are labelled IDLE "
+            f"(default: {DEFAULT_IDLE_WARNING_SECONDS})."
+        ),
+    )
+    run_parser.add_argument(
         "--keep-failed-changes",
         action="store_true",
         help="Keep failed uncommitted changes instead of saving a patch and rolling back.",
@@ -1135,6 +1699,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             return doctor()
         if args.command == "status":
             return show_status()
+        if args.command == "watch":
+            if args.interval < 0.2:
+                raise AutoDevError("--interval must be at least 0.2 seconds.")
+            if args.events < 1:
+                raise AutoDevError("--events must be at least 1.")
+            return watch_live_status(
+                interval=args.interval,
+                event_limit=args.events,
+                once=args.once,
+                no_clear=args.no_clear,
+            )
         if args.command == "reset":
             return reset_state(args.yes)
         if args.command == "run":
@@ -1142,6 +1717,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise AutoDevError("--max-tasks must be at least 1.")
             if args.task_timeout < 60:
                 raise AutoDevError("--task-timeout must be at least 60 seconds.")
+            if args.idle_warning < 30:
+                raise AutoDevError("--idle-warning must be at least 30 seconds.")
             return run_loop(args)
         parser.error(f"Unknown command: {args.command}")
         return 2

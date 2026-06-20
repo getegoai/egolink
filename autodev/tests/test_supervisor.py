@@ -71,5 +71,49 @@ class ResultSchemaTests(unittest.TestCase):
         self.assertEqual(schema["type"], "object")
 
 
+class MonitoringTests(unittest.TestCase):
+    def test_duration_format(self) -> None:
+        self.assertEqual(AUTODEV.format_duration(65), "01:05")
+        self.assertEqual(AUTODEV.format_duration(3661), "01:01:01")
+
+    def test_git_warning_lines_are_filtered_from_monitor_output(self) -> None:
+        output = "\n".join(
+            [
+                "warning: in the working copy of 'scripts/run_autodev.ps1', LF will be replaced by CRLF the next time Git touches it",
+                "scripts/autodev.py",
+                "docs/AUTODEV_GUIDE.md",
+            ]
+        )
+        self.assertEqual(
+            AUTODEV.clean_git_output(output).splitlines(),
+            ["scripts/autodev.py", "docs/AUTODEV_GUIDE.md"],
+        )
+
+    def test_mcp_tool_event_includes_available_operation(self) -> None:
+        event = {
+            "type": "item.started",
+            "item": {
+                "type": "mcp_tool_call",
+                "server": "sandbox",
+                "name": "read_file",
+                "arguments": {"path": "README.md"},
+            },
+        }
+        formatted = AUTODEV.format_codex_event(event)
+        self.assertIsNotNone(formatted)
+        tag, message = formatted
+        self.assertEqual(tag, "TOOL")
+        self.assertIn("sandbox/read_file", message)
+        self.assertIn("README.md", message)
+
+    def test_reasoning_event_does_not_render_reasoning_text(self) -> None:
+        event = {
+            "type": "item.completed",
+            "item": {"type": "reasoning", "text": "private details"},
+        }
+        formatted = AUTODEV.format_codex_event(event)
+        self.assertEqual(formatted, ("THINK", "Analysis step completed"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
