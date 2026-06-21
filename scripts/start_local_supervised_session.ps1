@@ -12,6 +12,7 @@ param(
     [switch]$NoBroker,
     [switch]$NoDashboard,
     [switch]$NoWorker,
+    [switch]$NoRecorder,
     [switch]$Watch,
     [int]$WatchIntervalSeconds = 5
 )
@@ -74,6 +75,22 @@ function Write-SessionSummary {
         $summaryArgs += @("--worker-pid", $WorkerPid)
     }
     & python @summaryArgs | Out-Null
+}
+
+function Write-SessionRecording {
+    $recordingDir = Join-Path $SessionDir "recording"
+    $recordingLog = Join-Path $SessionDir "session_recorder.log"
+    $recordingArgs = @(
+        "scripts\session_recorder.py",
+        "--event-log", $EventLog,
+        "--limit", $SummaryLimit,
+        "--session-id", $SessionId,
+        "--output-dir", $recordingDir
+    )
+    & python @recordingArgs *> $recordingLog
+    if ($LASTEXITCODE -ne 0) {
+        throw "session_recorder.py failed. See $recordingLog"
+    }
 }
 
 New-Item -ItemType Directory -Path $SessionDir -Force | Out-Null
@@ -173,9 +190,17 @@ if ($NoWorker) {
 
 Write-SessionSummary -DashboardPid $dashboardPid -WorkerPid $workerPid
 
+if ($NoRecorder) {
+    Write-SessionLine "Session recorder skipped by -NoRecorder."
+} else {
+    Write-SessionLine "Writing M1 session recording."
+    Write-SessionRecording
+}
+
 Write-SessionLine "Dashboard URL: http://$DashboardHost`:$DashboardPort"
 Write-SessionLine "Session summary: $(Join-Path $SessionDir 'session_summary.md')"
 Write-SessionLine "Session JSON: $(Join-Path $SessionDir 'session_summary.json')"
+Write-SessionLine "Session recording: $(Join-Path $SessionDir 'recording\session_recording.md')"
 Write-SessionLine "Session log: $(Join-Path $SessionDir 'session.log')"
 
 if ($Watch) {

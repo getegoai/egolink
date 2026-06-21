@@ -36,14 +36,18 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T029：本地监督会话入口完成。新增 `scripts/start_local_supervised_session.ps1` 和 `scripts/local_session_summary.py`，可一条命令建立 session 目录，启动或复用 broker / Dashboard / live MQTT Safety worker，并输出 `session.log`、`session_summary.json`、`session_summary.md`。
 - T030：AutoDev 与设备状态统一监控完成。`scripts/autodev.py watch` 和 `scripts/watch_autodev.ps1` 已同屏显示 AutoDev 任务进度与本地设备 / Safety session 摘要；`status` 也会显示本地 Safety 快照。
 - T031：M1-001 硬件传感器矩阵完成。新增 `docs/modeling/HARDWARE_SENSOR_MATRIX.md`，把当前开发板、SIM7670G、Wi-Fi/MQTT、摄像头、SD、IMU、麦克风、物理 SOS、电源/电量和 PC 侧探测链路按 `verified` / `semi_verified` / `pc_side_verified` / `mock_only` / `not_verified` / `missing_or_unknown` 标明边界，并明确 M1-002 recorder 的最小字段和阻塞项。
+- T032：M1-002 session recorder 骨架完成。新增 `pc_simulator/session_recorder.py` 和 `scripts/session_recorder.py`，可从 PC Simulator `events.jsonl` 派生 `session_manifest.json`、`sensor_frames.jsonl`、`events.jsonl`、`annotations.jsonl` 和 `session_recording.md`；本地监督会话脚本默认生成 `recording/`，且 manifest 显式标注未验证传感器不可用。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
 
-下一项建议任务 T032 / M1-002：建立 session recorder 最小骨架，先记录真实 `sensor_sample/device_health`、PC AT GNSS no-fix、模拟 SOS、安全评估和 session manifest；IMU、音频、真实按键和 SD 卡继续保持显式未接入状态。
+下一项建议任务 T033 / M1-004-pre：建立 PC session inspector / quality gate，导入 `recording/` 目录，校验 manifest、JSONL、seq、时间戳、传感源 availability、隐私字段和记录计数，并输出质量报告；先不进入 IMU 环形缓冲，直到 IMU 硬件事实确认。
 
 ## 最近验证
 
+- `python -m unittest quality_tests.test_session_recorder quality_tests.test_local_session_summary -v`：通过，6 个测试全部成功；覆盖 recorder manifest、sensor frame/event 输出、CLI 写入和本地监督会话脚本契约。
+- `powershell -ExecutionPolicy Bypass -File scripts\start_local_supervised_session.ps1 -NoBroker -NoDashboard -NoWorker`：通过，生成 `pc_simulator/runtime/sessions/20260621-201911/recording/session_recording.md`，最近 40 条 event log 派生出 11 条 sensor frames、27 条关键事件、0 条 annotations，未启动新的后台进程。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，97 个测试全部成功。
 - `python -m unittest quality_tests.test_hardware_sensor_matrix -v`：通过，4 个硬件传感器矩阵测试全部成功；覆盖 M1 范围、关键传感器状态、Mock/未知边界和证据路径。
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，94 个测试全部成功。
 - `python -m unittest autodev.tests.test_supervisor -v`：通过，15 个 AutoDev supervisor 测试全部成功；覆盖本地 session summary 读取、event-log fallback 和既有监控行为。
@@ -85,6 +89,7 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T026 是纯模拟 replay 闭环，只验证协议、记录、展示和无副作用命令，不验证真实事故/跌倒/呼救识别准确率。
 - T030 的统一监控仍是只读观察入口，不负责启动、停止、重启或修复设备侧进程；长期运行守护、日志轮转和自动恢复仍未实现。
 - M1 数据基础已开始于硬件传感器矩阵；当前没有真实 MotionNet、AudioGate、VisionGate，也没有可用于训练的正式 session 数据集。
+- T032 recorder 是 PC event-log 派生骨架，不是固件内 `safety_recorder`；它尚未实现掉电恢复、哈希校验、窗口完整率、采样率统计或回放。
 - 当前 IMU、麦克风、真实物理 SOS GPIO、SD 挂载、真实电量/充电和 ESP32 侧 SIM7670G 控制链路仍未验证，不能作为 M1 recorder 的真实传感源声明。
 - 当前 T021 是 PC 侧通过 USB AT 口探测 SIM7670G GNSS，尚未把 ESP32 固件切换为直接控制 SIM7670G GNSS。
 - SD 卡挂载曾失败，需要单独确认格式、接线、引脚、供电和固件挂载参数。

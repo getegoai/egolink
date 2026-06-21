@@ -19,6 +19,7 @@
 - [x] M0-INT-003 firmware model interface
 - [x] M0-INT-004 simulated end-to-end flow
 - [x] M1-001 hardware sensor matrix
+- [x] M1-002 session recorder skeleton
 
 ## Changed files
 
@@ -126,7 +127,45 @@ T031 M1 hardware sensor matrix updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+T032 M1 session recorder skeleton updates:
+
+- `pc_simulator/session_recorder.py`
+- `scripts/session_recorder.py`
+- `scripts/start_local_supervised_session.ps1`
+- `quality_tests/test_session_recorder.py`
+- `quality_tests/test_local_session_summary.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
+
+```powershell
+python -m unittest quality_tests.test_session_recorder quality_tests.test_local_session_summary -v
+```
+
+Result: passed. The recorder and local session tests ran 6 tests successfully,
+covering manifest availability flags, sensor frame extraction, key event
+extraction, JSONL/annotation/summary writing, CLI output, and the PowerShell
+session runner contract.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start_local_supervised_session.ps1 -NoBroker -NoDashboard -NoWorker
+```
+
+Result: passed. The no-start session command created
+`pc_simulator/runtime/sessions/20260621-201911/`, wrote the existing session
+summary files, and generated
+`pc_simulator/runtime/sessions/20260621-201911/recording/session_recording.md`.
+The derived recording scanned the latest 40 event-log entries and wrote 11
+sensor frames, 27 key events, and 0 annotations without starting broker,
+Dashboard, worker, modem, camera, or firmware operations.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed. The repository test suite ran 97 tests successfully.
 
 ```powershell
 python -m unittest quality_tests.test_hardware_sensor_matrix -v
@@ -312,6 +351,13 @@ SIM7670G LTE/GNSS evidence as PC-side verified, camera single-frame capture as
 semi-verified, and IMU, microphone, physical SOS GPIO, SD, battery, and
 ESP32-side SIM7670G control gaps as not verified, mock-only, or unknown.
 
+T032 did not perform new hardware I/O. It added a PC-side session recorder that
+derives M1 recording files from the existing `pc_simulator/runtime/events.jsonl`.
+The recorder writes a manifest, structure-only sensor frames, key safety/events,
+an empty annotations file, and a Markdown summary. It does not start raw audio,
+camera capture, modem dialing, serial probing, firmware flashing, or any new
+device process.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -335,6 +381,11 @@ had already been validated before this overlay package verification.
 - IMU, microphone, physical SOS GPIO, SD mount, true battery/charging telemetry,
   and ESP32-side SIM7670G GNSS/LTE control remain unverified. M1-002 must keep
   these sources explicitly disabled or marked `not_available` until validated.
+- T032 recorder is a PC event-log derived skeleton, not an ESP32 firmware
+  `safety_recorder`. It does not yet provide power-loss recovery, per-file
+  hashing, sampling-rate statistics, event-window completeness, or replay.
+- Annotations are only an empty `annotations.jsonl` placeholder until M1-005
+  adds user feedback or human labeling.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -361,7 +412,8 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Next, start M1-002 by adding a minimal session recorder skeleton and manifest
-writer. It should record verified `sensor_sample/device_health`, PC-side GNSS
-no-fix reports, simulated SOS events, safety evaluations, and source
-availability flags while keeping unverified sensors out of the real-data path.
+Next, start T033 / M1-004-pre by adding a PC session inspector and quality gate
+for `recording/` directories. It should validate the manifest, JSONL files,
+source availability flags, privacy fields, seq/timestamp consistency, and record
+counts, then write a quality report before any IMU ring-buffer or model-training
+work begins.
