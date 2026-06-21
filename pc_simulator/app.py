@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from pc_simulator import event_store, protocol
+from pc_simulator import event_store, protocol, safety_companion
 
 
 DEVICE_ID = protocol.DEVICE_ID
@@ -312,7 +312,12 @@ def event_source_label(event: dict[str, Any]) -> str:
 
 def snapshot() -> dict[str, Any]:
     events = recent_events(limit=20)
-    return {"device": device_snapshot(events), "events": events}
+    device = device_snapshot(events)
+    return {
+        "device": device,
+        "events": events,
+        "safety_companion": safety_companion.evaluate(events, device),
+    }
 
 
 def render_dashboard() -> str:
@@ -445,6 +450,13 @@ def render_dashboard() -> str:
         <div class="metric"><span>Last Command</span><span id="last_command"></span></div>
       </section>
       <section style="margin-top: 16px;">
+        <h2>Safety</h2>
+        <div class="metric"><span>Risk</span><span id="safety_risk"></span></div>
+        <div class="metric"><span>Score</span><span id="safety_score"></span></div>
+        <div class="metric"><span>Action</span><span id="safety_action"></span></div>
+        <div class="metric"><span>Reasons</span><span id="safety_reasons"></span></div>
+      </section>
+      <section style="margin-top: 16px;">
         <h2>Actions</h2>
         <div class="actions">
           <button onclick="post('/api/mock/heartbeat')">Heartbeat</button>
@@ -510,6 +522,11 @@ def render_dashboard() -> str:
       last_seen_at.textContent = d.last_seen_at || 'none';
       last_seen_source.textContent = d.last_seen_source || 'simulator';
       last_command.textContent = d.last_command || 'none';
+      const safety = data.safety_companion?.model_output || {};
+      safety_risk.textContent = safety.risk_type || 'none';
+      safety_score.textContent = safety.risk_score !== undefined ? Number(safety.risk_score).toFixed(2) : '0.00';
+      safety_action.textContent = safety.recommended_action || 'ignore';
+      safety_reasons.textContent = (safety.reason_codes || []).join(', ') || 'none';
       events.innerHTML = data.events.map(e => {
         const priority = e.priority || (e.event_type === 'command_sent' ? 'downlink' : 'normal');
         const detail = eventDetail(e);

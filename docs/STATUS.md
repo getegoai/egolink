@@ -27,18 +27,21 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T020：板级探测 CH343 / RNDIS 识别修复完成。`egolink_board_probe.py` 已合并 Windows CIM 与 PnP 设备发现，真实探测可识别 ESP32-S3 `COM4`、SIM7670G 串口和 Remote NDIS 网卡。
 - T021：SIM7670G GNSS 探测与 `location_report` 写入完成。新增 `scripts/sim7670_gnss_probe.py`，可自动探测 SIM7670G AT 口，打开/查询 GNSS，解析 `CGNSSINFO` / `CGPSINFO`，并写入 PC Simulator 事件日志；当前室内无 fix，但 `location_report` 已进入 Dashboard/API 闭环。
 - T022：Safety Companion M0 契约基线完成。已将 `模型架构.md` 的“版本化模型包 + 明确接口契约”路线整合为 `docs/modeling/` 文档、`shared/contracts/` JSON Schema 和 `quality_tests/model_contract/` 契约测试；当前只做契约和边界，不引入训练代码或推理运行时。
+- T023：PC Simulator Safety Companion adapter 完成。新增 `pc_simulator/safety_companion.py`，可将最近事件和设备状态转换为 `model_input`，并返回确定性 mock `model_output`；`/api/state` 和 Dashboard 已展示 Safety Companion 风险、分数、建议动作和 reason codes。
 
 ## 当前建议任务
 
-下一项建议任务 T023：实现 PC Simulator Safety Companion adapter，将现有 `sos_pressed`、`wake_detected`、`location_report`、`sensor_sample` 和设备风险事件转换为 `shared/contracts/model_input.schema.json`，并返回确定性的 mock `model_output`，先跑通模型接口闭环。
+下一项建议任务 T024：把 Safety Companion mock `model_output` 写成显式 PC Simulator 事件或下行命令建议，让事件流能展示 `ask_user`、`upload_summary`、`escalate_emergency` 等推荐动作。
 
 ## 最近验证
 
-- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，48 个测试全部成功。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，54 个测试全部成功。
+- `python -m unittest quality_tests.test_safety_companion -v`：通过，5 个 Safety Companion adapter 测试全部成功。
+- `python -m unittest quality_tests.test_pc_simulator -v`：通过，9 个 PC Simulator 测试全部成功。
 - `python -m unittest quality_tests.model_contract.test_contract_schemas -v`：通过，5 个 Safety Companion M0 契约测试全部成功。
 - `python -m unittest quality_tests.test_repository_contract -v`：通过，3 个仓库结构契约测试全部成功。
 - `python -m unittest quality_tests.test_sim7670_gnss_probe -v`：通过，6 个 GNSS probe 测试全部成功。
-- `python -m unittest quality_tests.test_pc_simulator -v`：通过，8 个 PC Simulator 测试全部成功。
+- Dashboard API：通过，`http://127.0.0.1:8787/api/state` 当前 `safety_companion.model_input.active_event=location_report`，`model_output.risk_type=device_risk`，`recommended_action=upload_summary`，`reason_codes=gnss_no_fix`。
 - `python scripts\sim7670_gnss_probe.py --warmup-seconds 5 --poll-count 3 --poll-interval-seconds 2`：通过，首次报告见 `reports/gnss_validation/20260621-100651/gnss_probe.md`；`COM6/COM7` AT 可达，型号 `SIM7670G-MNGV`。
 - `python scripts\sim7670_gnss_probe.py --no-power-on --warmup-seconds 0 --poll-count 1 --poll-interval-seconds 0`：通过，最终报告见 `reports/gnss_validation/20260621-101143/gnss_probe.md`；`gnss_power_state=1`，当前返回 no-fix，事件已写入 `pc_simulator/runtime/events.jsonl`。
 - Dashboard API：通过，`http://127.0.0.1:8787/api/state` 最新事件为 `event_type=location_report`、`source=sim7670g_gnss`、`fix=false`、`gnss_power_state=1`、`device.gnss_state=no_fix`。
@@ -47,7 +50,7 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - `python -m unittest quality_tests.test_mqtt_heartbeat_firmware -v`：通过，3 个固件静态测试全部成功。
 - `idf.py -p COM4 flash`：通过，识别芯片 `ESP32-S3`，写入 `egolink_mqtt_heartbeat.bin` 并 hard reset。
 - `python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/event --max-messages 1 --wait-seconds 90`：通过，收到真实固件 `sensor_sample`。
-- 本机 Dashboard 当前运行在 `http://127.0.0.1:8787`，进程 PID `44632`。
+- 本机 Dashboard 当前运行在 `http://127.0.0.1:8787`，进程 PID `18808`。
 
 ## 已知限制
 

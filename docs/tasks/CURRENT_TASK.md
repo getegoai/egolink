@@ -1,75 +1,70 @@
-# CURRENT_TASK: T022 Safety Companion M0 契约基线
+# CURRENT_TASK: T023 PC Simulator Safety Companion Adapter
 
 ## 任务目标
 
-把 `模型架构.md` 的“版本化模型包 + 明确接口契约”思路整合进 Ego Link，并落成 Safety Companion M0 的文档、共享契约和契约测试。
-
-## 可行性判断
-
-该思路可行，但应从 M0 契约基线开始，而不是直接引入神经网络、训练代码或端侧推理框架。
-
-当前 P0 已有 MQTT、Dashboard、SOS / wake / location / sensor 事件闭环，正适合先建立稳定的 `shared/contracts/`，再用 adapter 把现有事件转换为统一 `model_input`。这样模型侧可以独立演进，Codex 侧只负责固件、PC Simulator、采集、通信和运行时适配。
+实现 PC Simulator 侧 Safety Companion adapter，把现有事件转换为 `model_input`，并用确定性的 mock router 返回 `model_output`，先跑通模型接口闭环。
 
 ## 范围
 
-- 新增 Safety Companion M0 架构文档。
-- 新增模型交付 handoff、集成任务和问题记录文档。
-- 新增 `shared/contracts/` 下的五个 JSON Schema：
-  - `sensor_frame.schema.json`
-  - `safety_event.schema.json`
-  - `model_input.schema.json`
-  - `model_output.schema.json`
-  - `base_command.schema.json`
-- 新增模型契约测试。
-- 扩展仓库结构测试，保护 `docs/modeling`、`shared/contracts`、`quality_tests/model_contract`。
-- 更新项目状态和下一步任务。
+- 新增 `pc_simulator/safety_companion.py`。
+- 将 `sos_pressed`、`wake_detected`、`location_report`、`sensor_sample` 等事件映射为 `shared/contracts/model_input.schema.json` 兼容结构。
+- 增加确定性 mock `model_output`：
+  - SOS -> `manual_sos` / `escalate_emergency`
+  - GNSS no-fix -> `device_risk` / `upload_summary`
+  - 低电量 -> `device_risk` / `local_reminder`
+  - wake -> `none` / `ask_user`
+- `/api/state` 返回 `safety_companion.model_input` 和 `safety_companion.model_output`。
+- Dashboard 显示风险类型、分数、建议动作和 reason codes。
+- 新增 adapter 单元测试和 PC Simulator 回归测试。
+- 更新集成报告和状态记录。
 
 ## 不做
 
-- 不引入 `model_lab/` 或 `model_artifacts/` 空目录。
-- 不实现模型训练。
-- 不引入 ESP-DL、ESP-SR、TFLite Micro 或其他推理运行时。
+- 不引入真实模型。
+- 不引入模型训练代码。
+- 不引入 ESP-DL、ESP-SR、TFLite Micro。
 - 不改变固件运行行为。
-- 不改变现有 MQTT 协议。
-- 不把单元测试通过解释为模型效果验证通过。
+- 不改变 MQTT topic 或设备上报格式。
+- 不把 mock router 的输出解释为模型准确率。
 
 ## 允许修改路径
 
-- `模型架构.md`
-- `docs/modeling/**`
-- `shared/contracts/**`
-- `quality_tests/model_contract/**`
-- `quality_tests/test_repository_contract.py`
+- `pc_simulator/safety_companion.py`
+- `pc_simulator/app.py`
+- `quality_tests/test_safety_companion.py`
+- `quality_tests/test_pc_simulator.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
 ## 验证命令
 
 ```powershell
-python -m unittest quality_tests.model_contract.test_contract_schemas -v
-python -m unittest quality_tests.test_repository_contract -v
+python -m unittest quality_tests.test_safety_companion -v
+python -m unittest quality_tests.test_pc_simulator -v
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
 ## 执行结果
 
-- 已确认 `模型架构.md` 的路线与当前 P0 兼容：先契约、后采集、再模型。
-- 已新增 Safety Companion M0 文档：
-  - `docs/modeling/SAFETY_COMPANION_ARCHITECTURE.md`
-  - `docs/modeling/MODEL_HANDOFF.md`
-  - `docs/modeling/INTEGRATION_TASKS.md`
-  - `docs/modeling/INTEGRATION_ISSUES.md`
-- 已新增 `shared/contracts/` 五个 schema，统一契约版本为 `safety-companion.contract.v0.1`。
-- 已新增 `quality_tests/model_contract/test_contract_schemas.py`，保护 schema 文件存在、JSON 合法、版本一致、关键 required 字段稳定、P0 风险事件覆盖。
-- 已扩展 `quality_tests/test_repository_contract.py`，把模型契约目录纳入仓库结构契约。
-- `python -m unittest quality_tests.model_contract.test_contract_schemas -v` 通过，5 个测试成功。
-- `python -m unittest quality_tests.test_repository_contract -v` 通过，3 个测试成功。
-- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` 通过，48 个测试全部成功。
+- 已新增 `pc_simulator/safety_companion.py`，输出契约版本 `safety-companion.contract.v0.1`。
+- 已将 `/api/state` 扩展为返回 `safety_companion` 字段。
+- 已在 Dashboard 增加 Safety 区块，展示 risk、score、action、reasons。
+- 已新增 `quality_tests/test_safety_companion.py`，覆盖 SOS、GNSS no-fix、wake、低电量和时间戳转换。
+- 已扩展 `quality_tests/test_pc_simulator.py`，确认 snapshot 包含 Safety Companion 输出。
+- `python -m unittest quality_tests.test_safety_companion -v` 通过，5 个测试成功。
+- `python -m unittest quality_tests.test_pc_simulator -v` 通过，9 个测试成功。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` 通过，54 个测试全部成功。
+- 已重启 Dashboard，当前 `http://127.0.0.1:8787/api/state` 返回：
+  - `active_event=location_report`
+  - `safety_risk=device_risk`
+  - `safety_action=upload_summary`
+  - `reasons=gnss_no_fix`
 
 ## 完成标准
 
-- [x] 模型协作路线被记录为可执行的 M0 契约基线。
-- [x] 模型包与 Codex 集成边界明确。
-- [x] 共享 JSON 契约存在且有测试保护。
-- [x] 当前 P0 验证命令全部通过。
-- [x] 下一步任务可以围绕 PC Simulator adapter 继续推进。
+- [x] 现有 PC Simulator 事件可转换为 `model_input`。
+- [x] mock router 可返回 `model_output`。
+- [x] `/api/state` 和 Dashboard 可看到 Safety Companion 输出。
+- [x] 单元测试和全量验证通过。
+- [x] 明确记录该结果只验证接口闭环，不验证模型准确率。

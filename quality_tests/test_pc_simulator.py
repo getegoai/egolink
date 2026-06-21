@@ -173,6 +173,15 @@ class PcSimulatorTests(unittest.TestCase):
         self.assertEqual(data["device"]["gnss_state"], "fix")
         self.assertEqual(data["device"]["last_seen_source"], "sim7670g_gnss")
 
+    def test_snapshot_includes_safety_companion_output(self) -> None:
+        event = app.sos_pressed()
+        data = app.snapshot()
+
+        self.assertEqual(event["event_type"], "sos_pressed")
+        self.assertEqual(data["safety_companion"]["model_input"]["active_event"], "sos_pressed")
+        self.assertEqual(data["safety_companion"]["model_output"]["risk_type"], "manual_sos")
+        self.assertEqual(data["safety_companion"]["model_output"]["recommended_action"], "escalate_emergency")
+
     def test_dashboard_renders_sensor_sample_detail_logic(self) -> None:
         html = app.render_dashboard()
 
@@ -180,6 +189,7 @@ class PcSimulatorTests(unittest.TestCase):
         self.assertIn("sensor_sample", html)
         self.assertIn("wifi_rssi", html)
         self.assertIn("free_heap_bytes", html)
+        self.assertIn("safety_risk", html)
 
     def test_dashboard_renders_location_report_detail_logic(self) -> None:
         html = app.render_dashboard()
