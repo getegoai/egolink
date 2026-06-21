@@ -35,14 +35,17 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T028：live MQTT 监督式 Safety 处理完成。`pc_simulator/mqtt_worker.py` 新增 `--process-safety` / `--safety-process-limit`，可在真实 MQTT 消息入库后立即触发 Safety flow；默认入库行为保持不变，Safety 处理异常只写诊断、不阻断 MQTT 采集。
 - T029：本地监督会话入口完成。新增 `scripts/start_local_supervised_session.ps1` 和 `scripts/local_session_summary.py`，可一条命令建立 session 目录，启动或复用 broker / Dashboard / live MQTT Safety worker，并输出 `session.log`、`session_summary.json`、`session_summary.md`。
 - T030：AutoDev 与设备状态统一监控完成。`scripts/autodev.py watch` 和 `scripts/watch_autodev.ps1` 已同屏显示 AutoDev 任务进度与本地设备 / Safety session 摘要；`status` 也会显示本地 Safety 快照。
+- T031：M1-001 硬件传感器矩阵完成。新增 `docs/modeling/HARDWARE_SENSOR_MATRIX.md`，把当前开发板、SIM7670G、Wi-Fi/MQTT、摄像头、SD、IMU、麦克风、物理 SOS、电源/电量和 PC 侧探测链路按 `verified` / `semi_verified` / `pc_side_verified` / `mock_only` / `not_verified` / `missing_or_unknown` 标明边界，并明确 M1-002 recorder 的最小字段和阻塞项。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
 
-下一项建议任务 T031 / M1-001：创建 `docs/modeling/HARDWARE_SENSOR_MATRIX.md`，基于当前开发板和已有验证事实记录 IMU、麦克风、摄像头、GNSS、4G、按键、存储、电源能力，标明真实驱动、Mock 和缺失项。
+下一项建议任务 T032 / M1-002：建立 session recorder 最小骨架，先记录真实 `sensor_sample/device_health`、PC AT GNSS no-fix、模拟 SOS、安全评估和 session manifest；IMU、音频、真实按键和 SD 卡继续保持显式未接入状态。
 
 ## 最近验证
 
+- `python -m unittest quality_tests.test_hardware_sensor_matrix -v`：通过，4 个硬件传感器矩阵测试全部成功；覆盖 M1 范围、关键传感器状态、Mock/未知边界和证据路径。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，94 个测试全部成功。
 - `python -m unittest autodev.tests.test_supervisor -v`：通过，15 个 AutoDev supervisor 测试全部成功；覆盖本地 session summary 读取、event-log fallback 和既有监控行为。
 - `python scripts\autodev.py watch --once --no-clear --events 4`：通过，同屏显示 AutoDev 最近任务状态和 `LOCAL DEVICE / SAFETY SESSION`，其中最新 Safety 风险为 `manual_sos`，动作为 `urgent_escalation`。
 - `powershell -ExecutionPolicy Bypass -File scripts\watch_autodev.ps1 -Once -NoClear -RecentEvents 4`：通过，PowerShell wrapper 可显示统一监控。
@@ -81,7 +84,8 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - 当前 shell 未加载 ESP-IDF，`idf.py --version` 不可用；T025 只完成固件接口和主机侧静态测试，尚未进行 ESP-IDF build、flash 或真实串口 CLI 验证。
 - T026 是纯模拟 replay 闭环，只验证协议、记录、展示和无副作用命令，不验证真实事故/跌倒/呼救识别准确率。
 - T030 的统一监控仍是只读观察入口，不负责启动、停止、重启或修复设备侧进程；长期运行守护、日志轮转和自动恢复仍未实现。
-- M1 数据基础尚未开始；当前没有真实 MotionNet、AudioGate、VisionGate，也没有可用于训练的正式 session 数据集。
+- M1 数据基础已开始于硬件传感器矩阵；当前没有真实 MotionNet、AudioGate、VisionGate，也没有可用于训练的正式 session 数据集。
+- 当前 IMU、麦克风、真实物理 SOS GPIO、SD 挂载、真实电量/充电和 ESP32 侧 SIM7670G 控制链路仍未验证，不能作为 M1 recorder 的真实传感源声明。
 - 当前 T021 是 PC 侧通过 USB AT 口探测 SIM7670G GNSS，尚未把 ESP32 固件切换为直接控制 SIM7670G GNSS。
 - SD 卡挂载曾失败，需要单独确认格式、接线、引脚、供电和固件挂载参数。
 - 用户已确认当前 Wi-Fi 凭据可以在本机项目中明文保存，固件 `sdkconfig` 可保留 SSID/password。

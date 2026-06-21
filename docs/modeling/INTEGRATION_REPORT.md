@@ -18,6 +18,7 @@
 - [x] M0-INT-002 PC Simulator adapter
 - [x] M0-INT-003 firmware model interface
 - [x] M0-INT-004 simulated end-to-end flow
+- [x] M1-001 hardware sensor matrix
 
 ## Changed files
 
@@ -117,7 +118,29 @@ T030 unified AutoDev and device monitor updates:
 - `docs/tasks/CURRENT_TASK.md`
 - `README.md`
 
+T031 M1 hardware sensor matrix updates:
+
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `quality_tests/test_hardware_sensor_matrix.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
+
+```powershell
+python -m unittest quality_tests.test_hardware_sensor_matrix -v
+```
+
+Result: passed. The hardware sensor matrix tests ran 4 tests successfully,
+covering the M1 scope, key sensor statuses, explicit unknown/mock boundaries,
+and traceable evidence paths.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed. The repository test suite ran 94 tests successfully.
 
 ```powershell
 python scripts\verify_safety_companion_m0.py
@@ -282,6 +305,13 @@ event-log fallback. The observed local session summary reported recent
 `manual_sos` / `urgent_escalation` rule-baseline activity from prior simulated
 and semi-real events.
 
+T031 did not perform new hardware I/O. It consolidated existing hardware,
+firmware, runtime, and report evidence into `HARDWARE_SENSOR_MATRIX.md`. The
+matrix marks ESP32-S3 MQTT health samples and Wi-Fi RSSI as verified, the
+SIM7670G LTE/GNSS evidence as PC-side verified, camera single-frame capture as
+semi-verified, and IMU, microphone, physical SOS GPIO, SD, battery, and
+ESP32-side SIM7670G control gaps as not verified, mock-only, or unknown.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -300,6 +330,11 @@ had already been validated before this overlay package verification.
 - T030 adds a unified read-only monitor, but it does not start, stop, restart,
   or repair device-side processes. The local supervised session runner is still
   an explicitly launched CLI script rather than a Windows service.
+- T031 is a documentation and quality-gate step. It does not add a recorder,
+  firmware driver, data importer, or training dataset.
+- IMU, microphone, physical SOS GPIO, SD mount, true battery/charging telemetry,
+  and ESP32-side SIM7670G GNSS/LTE control remain unverified. M1-002 must keep
+  these sources explicitly disabled or marked `not_available` until validated.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -326,5 +361,7 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Next, start M1-001 by creating `docs/modeling/HARDWARE_SENSOR_MATRIX.md` from
-verified board facts and current mock/real sensor boundaries.
+Next, start M1-002 by adding a minimal session recorder skeleton and manifest
+writer. It should record verified `sensor_sample/device_health`, PC-side GNSS
+no-fix reports, simulated SOS events, safety evaluations, and source
+availability flags while keeping unverified sensors out of the real-data path.
