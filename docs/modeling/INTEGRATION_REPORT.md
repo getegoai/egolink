@@ -20,6 +20,7 @@
 - [x] M0-INT-004 simulated end-to-end flow
 - [x] M1-001 hardware sensor matrix
 - [x] M1-002 session recorder skeleton
+- [x] M1-004-pre session inspector quality gate
 
 ## Changed files
 
@@ -138,7 +139,48 @@ T032 M1 session recorder skeleton updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+T033 M1 session inspector quality gate updates:
+
+- `pc_simulator/session_inspector.py`
+- `pc_simulator/session_recorder.py`
+- `scripts/inspect_session_recording.py`
+- `quality_tests/test_session_inspector.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
+
+```powershell
+python -m unittest quality_tests.test_session_inspector quality_tests.test_session_recorder -v
+```
+
+Result: passed. The session inspector and recorder tests ran 8 tests
+successfully, covering pass/fail quality gates, manifest count mismatches,
+unverified sensor sources marked real, duplicate source keys, report writing,
+CLI behavior, and the recorder source-event key format.
+
+```powershell
+python scripts\session_recorder.py --event-log pc_simulator\runtime\events.jsonl --session-id t033-quality-smoke --output-dir pc_simulator\runtime\recordings\t033-quality-smoke
+```
+
+Result: passed. The smoke recording wrote 19 sensor frames, 41 key events, and
+0 annotations into `pc_simulator/runtime/recordings/t033-quality-smoke/`.
+
+```powershell
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\t033-quality-smoke
+```
+
+Result: passed. The quality gate returned PASS with `quality_score=0.85`,
+`errors=0`, and `warnings=5`. Current warnings are expected for this M1 stage:
+unknown firmware version, empty annotations, and seq resets in historical
+Safety-derived event streams.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed. The repository test suite ran 102 tests successfully.
 
 ```powershell
 python -m unittest quality_tests.test_session_recorder quality_tests.test_local_session_summary -v
@@ -358,6 +400,11 @@ an empty annotations file, and a Markdown summary. It does not start raw audio,
 camera capture, modem dialing, serial probing, firmware flashing, or any new
 device process.
 
+T033 did not perform new hardware I/O. It added a PC-side quality gate for T032
+recordings and fixed recorder source-event keys to include timestamps so seq
+resets across MQTT, Dashboard, and Safety-derived streams do not collide. The
+quality gate only reads local recording files and writes report files.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -386,6 +433,9 @@ had already been validated before this overlay package verification.
   hashing, sampling-rate statistics, event-window completeness, or replay.
 - Annotations are only an empty `annotations.jsonl` placeholder until M1-005
   adds user feedback or human labeling.
+- T033 quality gate does not yet run automatically from the local supervised
+  session script or AutoDev monitor. It also does not compute file hashes,
+  rebuild model inputs, or replay sessions.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -412,8 +462,7 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Next, start T033 / M1-004-pre by adding a PC session inspector and quality gate
-for `recording/` directories. It should validate the manifest, JSONL files,
-source availability flags, privacy fields, seq/timestamp consistency, and record
-counts, then write a quality report before any IMU ring-buffer or model-training
-work begins.
+Next, start T034 by wiring the session inspector into
+`start_local_supervised_session.ps1` and the AutoDev/local monitor. Each local
+session should show the latest quality gate PASS/FAIL, score, errors, and
+warnings without starting new hardware activity.

@@ -37,14 +37,19 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T030：AutoDev 与设备状态统一监控完成。`scripts/autodev.py watch` 和 `scripts/watch_autodev.ps1` 已同屏显示 AutoDev 任务进度与本地设备 / Safety session 摘要；`status` 也会显示本地 Safety 快照。
 - T031：M1-001 硬件传感器矩阵完成。新增 `docs/modeling/HARDWARE_SENSOR_MATRIX.md`，把当前开发板、SIM7670G、Wi-Fi/MQTT、摄像头、SD、IMU、麦克风、物理 SOS、电源/电量和 PC 侧探测链路按 `verified` / `semi_verified` / `pc_side_verified` / `mock_only` / `not_verified` / `missing_or_unknown` 标明边界，并明确 M1-002 recorder 的最小字段和阻塞项。
 - T032：M1-002 session recorder 骨架完成。新增 `pc_simulator/session_recorder.py` 和 `scripts/session_recorder.py`，可从 PC Simulator `events.jsonl` 派生 `session_manifest.json`、`sensor_frames.jsonl`、`events.jsonl`、`annotations.jsonl` 和 `session_recording.md`；本地监督会话脚本默认生成 `recording/`，且 manifest 显式标注未验证传感器不可用。
+- T033：M1-004-pre PC session inspector / quality gate 完成。新增 `pc_simulator/session_inspector.py` 和 `scripts/inspect_session_recording.py`，可校验 T032 `recording/` 目录的必需文件、manifest、JSONL、record counts、privacy、sensor source 边界、source key 唯一性和 seq/timestamp warning，并输出 `session_quality_report.json` / `.md`。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
 
-下一项建议任务 T033 / M1-004-pre：建立 PC session inspector / quality gate，导入 `recording/` 目录，校验 manifest、JSONL、seq、时间戳、传感源 availability、隐私字段和记录计数，并输出质量报告；先不进入 IMU 环形缓冲，直到 IMU 硬件事实确认。
+下一项建议任务 T034 / M1-004-pre：把 session inspector 接入本地监督会话脚本和 AutoDev watch，让每次 `recording/` 生成后自动显示 quality gate 摘要；仍不进入 IMU 环形缓冲，直到 IMU 硬件事实确认。
 
 ## 最近验证
 
+- `python -m unittest quality_tests.test_session_inspector quality_tests.test_session_recorder -v`：通过，8 个测试全部成功；覆盖 quality gate pass/fail、record count mismatch、未验证 source 标记 real、重复 source key、报告写入和 CLI。
+- `python scripts\session_recorder.py --event-log pc_simulator\runtime\events.jsonl --session-id t033-quality-smoke --output-dir pc_simulator\runtime\recordings\t033-quality-smoke`：通过，生成 smoke recording，包含 19 条 sensor frames、41 条关键 events、0 条 annotations。
+- `python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\t033-quality-smoke`：通过，质量门 PASS；`quality_score=0.85`、`errors=0`、`warnings=5`，warning 暴露 firmware version unknown、annotations empty 和历史 Safety 派生事件 seq 回退。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，102 个测试全部成功。
 - `python -m unittest quality_tests.test_session_recorder quality_tests.test_local_session_summary -v`：通过，6 个测试全部成功；覆盖 recorder manifest、sensor frame/event 输出、CLI 写入和本地监督会话脚本契约。
 - `powershell -ExecutionPolicy Bypass -File scripts\start_local_supervised_session.ps1 -NoBroker -NoDashboard -NoWorker`：通过，生成 `pc_simulator/runtime/sessions/20260621-201911/recording/session_recording.md`，最近 40 条 event log 派生出 11 条 sensor frames、27 条关键事件、0 条 annotations，未启动新的后台进程。
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，97 个测试全部成功。
@@ -90,6 +95,7 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T030 的统一监控仍是只读观察入口，不负责启动、停止、重启或修复设备侧进程；长期运行守护、日志轮转和自动恢复仍未实现。
 - M1 数据基础已开始于硬件传感器矩阵；当前没有真实 MotionNet、AudioGate、VisionGate，也没有可用于训练的正式 session 数据集。
 - T032 recorder 是 PC event-log 派生骨架，不是固件内 `safety_recorder`；它尚未实现掉电恢复、哈希校验、窗口完整率、采样率统计或回放。
+- T033 quality gate 只校验 T032 recording 包的结构和边界；它尚未接入本地监督会话自动执行、AutoDev watch、文件哈希、回放或模型输入重建。
 - 当前 IMU、麦克风、真实物理 SOS GPIO、SD 挂载、真实电量/充电和 ESP32 侧 SIM7670G 控制链路仍未验证，不能作为 M1 recorder 的真实传感源声明。
 - 当前 T021 是 PC 侧通过 USB AT 口探测 SIM7670G GNSS，尚未把 ESP32 固件切换为直接控制 SIM7670G GNSS。
 - SD 卡挂载曾失败，需要单独确认格式、接线、引脚、供电和固件挂载参数。

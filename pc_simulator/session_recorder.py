@@ -111,9 +111,11 @@ def source_event_key(event: dict[str, Any]) -> str:
     event_type = str(event.get("event_type") or event.get("message_type") or "unknown")
     device_id = str(event.get("device_id") or protocol.DEVICE_ID)
     seq = event.get("seq")
-    if seq not in (None, ""):
-        return f"{device_id}:{event_type}:{seq}"
     timestamp = str(event.get("received_at") or event.get("ts") or "")
+    if seq not in (None, ""):
+        if timestamp:
+            return f"{device_id}:{event_type}:{seq}:{timestamp}"
+        return f"{device_id}:{event_type}:{seq}"
     return f"{device_id}:{event_type}:{timestamp}"
 
 
