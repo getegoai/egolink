@@ -17,6 +17,7 @@
 #include "freertos/task.h"
 #include "mqtt_client.h"
 #include "nvs_flash.h"
+#include "safety_model.h"
 
 static const char *TAG = "egolink_mqtt_heartbeat";
 
@@ -31,6 +32,104 @@ static int s_wifi_retry_count;
 static uint32_t s_seq;
 static portMUX_TYPE s_seq_mux = portMUX_INITIALIZER_UNLOCKED;
 static int s_last_rssi = -127;
+
+static safety_model_mock_state_t default_safety_mock_state(void)
+{
+    return (safety_model_mock_state_t){
+        .mode = EGO_SC_MODE_CHILD_SAFETY,
+        .sos_pressed = false,
+        .cancel_pressed = false,
+        .wake_detected = false,
+        .impact_detected = false,
+        .gnss_fix_valid = true,
+        .base_online = true,
+        .upload_available = true,
+        .signal_level = 3,
+        .offline_seconds = 0.0f,
+        .battery_percent = 87.0f,
+        .charging = false,
+        .privacy_mode = false,
+        .camera_available = true,
+        .microphone_available = true,
+    };
+}
+
+static void log_safety_output(const char *label, const ego_sc_model_output_t *output)
+{
+    ESP_LOGI(
+        TAG,
+        "SAFETY_MODEL_%s version=%s risk=%s score=%.2f confidence=%.2f priority=%d action=%s evidence_mask=0x%08" PRIx32,
+        label,
+        safety_model_version(),
+        safety_model_risk_type_name(output->risk_type),
+        (double)output->risk_score,
+        (double)output->confidence,
+        output->priority,
+        safety_model_action_name(output->recommended_action),
+        output->evidence_mask);
+}
+
+static void run_safety_demo(const char *demo_name)
+{
+    safety_model_mock_state_t state = default_safety_mock_state();
+    ego_sc_model_input_t input;
+    ego_sc_model_output_t output;
+
+    if (strcmp(demo_name, "sos") == 0) {
+        state.sos_pressed = true;
+    } else if (strcmp(demo_name, "impact") == 0) {
+        state.impact_detected = true;
+    } else if (strcmp(demo_name, "normal") != 0) {
+        ESP_LOGW(TAG, "SAFETY_MODEL_CLI_UNKNOWN_DEMO name=%s", demo_name);
+        return;
+    }
+
+    if (!safety_model_input_from_mock_state(&state, &input) || !safety_model_evaluate(&input, &output)) {
+        ESP_LOGE(TAG, "SAFETY_MODEL_DEMO_FAIL name=%s", demo_name);
+        return;
+    }
+    log_safety_output(demo_name, &output);
+}
+
+static void handle_safety_cli_line(const char *line)
+{
+    if (strcmp(line, "safety status") == 0) {
+        ESP_LOGI(TAG, "SAFETY_MODEL_STATUS version=%s mock=true", safety_model_version());
+    } else if (strcmp(line, "safety demo normal") == 0) {
+        run_safety_demo("normal");
+    } else if (strcmp(line, "safety demo sos") == 0) {
+        run_safety_demo("sos");
+    } else if (strcmp(line, "safety demo impact") == 0) {
+        run_safety_demo("impact");
+    } else if (strncmp(line, "safety", 6) == 0) {
+        ESP_LOGW(TAG, "SAFETY_MODEL_CLI_UNKNOWN command=%s", line);
+    }
+}
+
+static void safety_cli_task(void *arg)
+{
+    (void)arg;
+    char line[64];
+    size_t pos = 0;
+    while (true) {
+        int ch = getchar();
+        if (ch < 0) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+        if (ch == '\r' || ch == '\n') {
+            if (pos > 0) {
+                line[pos] = '\0';
+                handle_safety_cli_line(line);
+                pos = 0;
+            }
+        } else if ((ch == '\b' || ch == 127) && pos > 0) {
+            pos--;
+        } else if (pos + 1 < sizeof(line)) {
+            line[pos++] = (char)ch;
+        }
+    }
+}
 
 static int64_t uptime_ms(void)
 {
@@ -314,9 +413,12 @@ void app_main(void)
 
     s_event_group = xEventGroupCreate();
     ESP_ERROR_CHECK(s_event_group == NULL ? ESP_ERR_NO_MEM : ESP_OK);
+    ESP_ERROR_CHECK(safety_model_init() ? ESP_OK : ESP_FAIL);
+    ESP_LOGI(TAG, "SAFETY_MODEL_INIT_OK version=%s mock=true", safety_model_version());
 
     ESP_ERROR_CHECK(start_wifi());
     start_mqtt();
     xTaskCreate(heartbeat_task, "heartbeat_task", 4096, NULL, 5, NULL);
     xTaskCreate(sensor_task, "sensor_task", 4096, NULL, 5, NULL);
+    xTaskCreate(safety_cli_task, "safety_cli_task", 4096, NULL, 3, NULL);
 }

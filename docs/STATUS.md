@@ -29,14 +29,16 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T022：Safety Companion M0 契约基线完成。已将 `模型架构.md` 的“版本化模型包 + 明确接口契约”路线整合为 `docs/modeling/` 文档、`shared/contracts/` JSON Schema 和 `quality_tests/model_contract/` 契约测试；当前只做契约和边界，不引入训练代码或推理运行时。
 - T023：PC Simulator Safety Companion adapter 完成。新增 `pc_simulator/safety_companion.py`，可将最近事件和设备状态转换为 `model_input`，并返回确定性 mock `model_output`；`/api/state` 和 Dashboard 已展示 Safety Companion 风险、分数、建议动作和 reason codes。
 - T024：Safety Companion M0 PC Simulator adapter 完成。`pc_simulator/safety_companion.py` 已从本地 mock router 切换为调用模型包 `RuleRouter` / `build_model_input`；新增 `POST /api/safety/evaluate`，支持标准 `sensor_frame` / `model_input` 评估，并可将非 `none` 输出转换为 `safety_event`。
+- T025：Safety Companion M0 固件模型接口完成。新增 `firmware/mqtt_heartbeat/components/safety_model`，围绕 `shared/embedded/safety_model_contract.h` 暴露 `safety_model_init/evaluate/version`，当前为明确标识的 deterministic mock；SOS 路径固定输出 `MANUAL_SOS + URGENT_ESCALATION`，并提供 mock 状态 adapter 与串口测试命令。
 
 ## 当前建议任务
 
-下一项建议任务 T025 / M0-INT-003：在固件侧建立 `safety_model` 调用边界，围绕 `shared/embedded/safety_model_contract.h` 提供 deterministic mock 实现，先固定接口，不声明真实模型准确率。
+下一项建议任务 T026 / M0-INT-004：跑通模拟端到端安全事件闭环：场景输入 -> `model_output` -> `safety_event` -> PC Simulator 记录/展示 -> 模拟 base command，全流程不触发真实紧急动作、拍照、录音或外网依赖。
 
 ## 最近验证
 
-- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，71 个测试全部成功。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，76 个测试全部成功。
+- `python -m unittest quality_tests.test_safety_model_firmware quality_tests.test_mqtt_heartbeat_firmware -v`：通过，8 个固件侧静态测试全部成功。
 - `python scripts\verify_safety_companion_m0.py`：通过，模型包自检、12 个合成场景、契约测试、包内测试和 C threshold header 比对全部成功。
 - `python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v`：通过，19 个 PC Simulator / Safety Companion adapter 测试全部成功。
 - `python -m unittest quality_tests.model_contract.test_contract_schemas -v`：通过，5 个 Safety Companion M0 契约测试全部成功。
@@ -57,6 +59,7 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 
 - 当前 GNSS 在室内未获得卫星 fix，`location_report` 已可上报 no-fix 状态；后续需要户外或靠窗长时间冷启动验证真实经纬度。
 - Safety Companion M0 官方规则包当前不把 GNSS no-fix 作为模型风险；PC Simulator adapter 只保留 `fix_valid=false` 输入，不再沿用旧 mock 的 `device_risk/upload_summary` 输出。
+- 当前 shell 未加载 ESP-IDF，`idf.py --version` 不可用；T025 只完成固件接口和主机侧静态测试，尚未进行 ESP-IDF build、flash 或真实串口 CLI 验证。
 - 当前 T021 是 PC 侧通过 USB AT 口探测 SIM7670G GNSS，尚未把 ESP32 固件切换为直接控制 SIM7670G GNSS。
 - SD 卡挂载曾失败，需要单独确认格式、接线、引脚、供电和固件挂载参数。
 - 用户已确认当前 Wi-Fi 凭据可以在本机项目中明文保存，固件 `sdkconfig` 可保留 SSID/password。

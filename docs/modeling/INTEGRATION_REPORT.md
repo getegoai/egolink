@@ -16,7 +16,7 @@
 
 - [x] M0-INT-001 package verification
 - [x] M0-INT-002 PC Simulator adapter
-- [ ] M0-INT-003 firmware model interface
+- [x] M0-INT-003 firmware model interface
 - [ ] M0-INT-004 simulated end-to-end flow
 
 ## Changed files
@@ -56,6 +56,17 @@ M0-INT-002 PC Simulator adapter updates:
 - `quality_tests/test_safety_companion.py`
 - `quality_tests/test_pc_simulator.py`
 
+M0-INT-003 firmware model interface updates:
+
+- `firmware/mqtt_heartbeat/components/safety_model/CMakeLists.txt`
+- `firmware/mqtt_heartbeat/components/safety_model/include/safety_model.h`
+- `firmware/mqtt_heartbeat/components/safety_model/safety_model.c`
+- `firmware/mqtt_heartbeat/main/CMakeLists.txt`
+- `firmware/mqtt_heartbeat/main/app_main.c`
+- `quality_tests/test_safety_model_firmware.py`
+- `docs/tasks/CURRENT_TASK.md`
+- `docs/STATUS.md`
+
 ## Verification commands and results
 
 ```powershell
@@ -77,7 +88,7 @@ decision.
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
-Result: passed. The repository test suite ran 71 tests successfully.
+Result: passed. The repository test suite ran 76 tests successfully.
 
 ```powershell
 python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v
@@ -87,6 +98,21 @@ Result: passed. The PC Simulator adapter tests ran 19 tests successfully,
 including packaged scenario inputs, sensor frame evaluation, safety event
 conversion, privacy evidence filtering, and `POST /api/safety/evaluate`.
 
+```powershell
+python -m unittest quality_tests.test_safety_model_firmware quality_tests.test_mqtt_heartbeat_firmware -v
+```
+
+Result: passed. Firmware-side static tests ran 8 tests successfully, covering
+the `safety_model` component, required public API, mock SOS rule, mock-state
+adapter fields, and serial CLI command registration.
+
+```powershell
+idf.py --version
+```
+
+Result: not run successfully. `idf.py` is not available in this shell, so
+firmware build/flash validation was not performed in M0-INT-003.
+
 Manifest validation:
 
 - Result: passed. `PACKAGE_MANIFEST.json` matched 55 files by SHA-256 and byte
@@ -95,7 +121,7 @@ Manifest validation:
 ## Hardware validation status
 
 No new firmware flashing, GNSS probing, camera capture, MQTT broker test, or SIM
-test was performed for M0-INT-001.
+test was performed for M0-INT-001, M0-INT-002, or M0-INT-003.
 
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
@@ -105,8 +131,11 @@ had already been validated before this overlay package verification.
 
 - `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
   `build_model_input`; it no longer copies local decision rules.
-- Firmware does not yet expose the `shared/embedded/safety_model_contract.h`
-  model boundary.
+- Firmware now exposes a `safety_model` component boundary around
+  `shared/embedded/safety_model_contract.h`, but it has only been statically
+  tested in this shell.
+- M0-INT-003 did not perform ESP-IDF build, flash, or serial CLI hardware
+  validation because `idf.py` is not available on the current `PATH`.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The earlier T023 adapter treated GNSS no-fix as a device risk. The official
@@ -130,6 +159,7 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Start M0-INT-003 only: add the firmware-side `safety_model` boundary around
-`shared/embedded/safety_model_contract.h` with a deterministic mock
-implementation, then verify it without claiming real model accuracy.
+Start M0-INT-004 only: run the simulated end-to-end flow from scenario input to
+`model_output`, `safety_event`, PC Simulator recording/display, and simulated
+base command generation. Keep the flow replayable and free of real emergency,
+camera, recording, or network side effects.
