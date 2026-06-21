@@ -95,6 +95,15 @@ T028 supervised live MQTT safety processing updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+T029 local supervised session updates:
+
+- `scripts/start_local_supervised_session.ps1`
+- `scripts/local_session_summary.py`
+- `quality_tests/test_local_session_summary.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
 
 ```powershell
@@ -116,7 +125,32 @@ decision.
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
-Result: passed. The repository test suite ran 87 tests successfully.
+Result: passed. The repository test suite ran 90 tests successfully.
+
+```powershell
+python -m unittest quality_tests.test_local_session_summary -v
+```
+
+Result: passed. The local supervised session tests ran 3 tests successfully,
+covering event summary counts, JSON/Markdown report writing, and the
+PowerShell session runner contract.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start_local_supervised_session.ps1 -NoBroker -NoDashboard -NoWorker
+```
+
+Result: passed. The command created a new
+`pc_simulator/runtime/sessions/<timestamp>/` directory, wrote `session.log`,
+`session_summary.json`, and `session_summary.md`, and did not start new
+background processes.
+
+```powershell
+python scripts\local_session_summary.py --event-log pc_simulator\runtime\events.jsonl --limit 8 --markdown
+```
+
+Result: passed. The summary reported the latest Safety risk as `manual_sos`,
+the latest action as `urgent_escalation`, and counted recent
+`safety_evaluation`, `safety_event`, and simulated command records.
 
 ```powershell
 python -m unittest quality_tests.test_mqtt_worker -v
@@ -203,6 +237,10 @@ were AT-reachable, `gnss_power_state=1`, and the probe wrote a
 Dashboard-simulated SOS wrote 2 `safety_evaluation`, 1 `safety_event`, and 1
 no-side-effect simulated command.
 
+T029 did not perform new hardware I/O. It added a local session runner and
+validated it in no-start mode so it can generate a session health summary
+without changing broker, Dashboard, worker, modem, camera, or firmware state.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -218,9 +256,9 @@ had already been validated before this overlay package verification.
   validation because `idf.py` is not available on the current `PATH`.
 - M0-INT-004 is a simulated replay flow only. It validates message shape,
   routing, logging, and display behavior, not real-world incident detection.
-- T028 adds supervised live MQTT auto-processing, but it is still an explicitly
-  launched CLI mode rather than a Windows service with restart policy, log
-  rotation, or a unified local session monitor.
+- T029 adds a one-command local supervised session runner, but it is still an
+  explicitly launched CLI script rather than a Windows service with restart
+  policy, log rotation, or long-running health supervision.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The earlier T023 adapter treated GNSS no-fix as a device risk. The official
@@ -244,6 +282,6 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Next, package Dashboard, Mosquitto, the live MQTT Safety worker, and status
-observation into a one-command local supervised session that writes session
-logs and a concise health summary.
+Next, connect the local supervised session summary with the AutoDev progress
+monitor so development status and device/safety-flow status can be viewed in
+one place.

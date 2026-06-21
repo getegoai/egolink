@@ -1,30 +1,32 @@
-# CURRENT_TASK: T028 Supervised Live MQTT Safety Processing
+# CURRENT_TASK: T029 Local Supervised Session Runner
 
 ## 任务目标
 
-为 PC Simulator MQTT worker 增加可开关的监督式 Safety 处理模式：收到真实/半真实 MQTT 消息并写入事件日志后，可立即扫描最近事件并执行 Safety Companion flow，生成 `safety_evaluation`、必要的 `safety_event` 和无副作用模拟 command。
+把本地调试时需要分别打开的 Mosquitto LAN broker、PC Simulator Dashboard、live MQTT Safety worker 和状态摘要整理成一个可显式启动的监督式会话入口，降低多终端运行的黑箱感，并为每次会话留下可追踪日志和摘要报告。
 
 ## 范围
 
-- 在 `pc_simulator/mqtt_worker.py` 增加 `--process-safety` 开关。
-- 增加 `--safety-process-limit`，控制每次 MQTT 入库后扫描的最近事件数量。
-- 保持默认 MQTT ingester 行为不变：不开开关时只写事件日志。
-- Safety 处理失败时只写入 stderr 诊断，不阻塞后续 MQTT 消息入库。
-- 增加单元测试覆盖 after-store hook、失败隔离、参数解析和处理进度输出。
+- 新增 `scripts/start_local_supervised_session.ps1`，统一启动或复用 broker、Dashboard 和 live MQTT Safety worker。
+- 新增 `scripts/local_session_summary.py`，从 `pc_simulator/runtime/events.jsonl` 生成会话 JSON / Markdown 摘要。
+- 会话输出写入 `pc_simulator/runtime/sessions/<timestamp>/`，包括 `session.log`、进程日志和 summary 文件。
+- 支持 `-NoBroker`、`-NoDashboard`、`-NoWorker`，便于只生成摘要或复用已有进程。
+- 支持 `-Watch` 周期刷新 summary，方便运行时观察。
+- 增加测试覆盖摘要统计、文件输出和 PowerShell 脚本关键契约。
 - 更新状态文档和集成报告。
 
 ## 不做
 
-- 不修改 Safety Companion M0 模型包规则。
-- 不把 GNSS no-fix 私自提升为模型风险。
+- 不把会话脚本注册为 Windows 服务。
+- 不实现进程自动重启、日志轮转或长期守护。
+- 不修改 MQTT 协议、Safety Companion M0 模型规则或固件。
 - 不真实拨号、拍照、录音或访问外网。
-- 不把 worker 做成 Windows 服务或长期后台守护；本轮只提供可显式启动的监督式处理模式。
 - 不引入 LangGraph、AutoGen、CrewAI 等额外智能体框架。
 
 ## 允许修改路径
 
-- `pc_simulator/mqtt_worker.py`
-- `quality_tests/test_mqtt_worker.py`
+- `scripts/start_local_supervised_session.ps1`
+- `scripts/local_session_summary.py`
+- `quality_tests/test_local_session_summary.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
@@ -32,29 +34,25 @@
 ## 验证命令
 
 ```powershell
-python -m unittest quality_tests.test_mqtt_worker -v
+python -m unittest quality_tests.test_local_session_summary -v
+powershell -ExecutionPolicy Bypass -File scripts\start_local_supervised_session.ps1 -NoBroker -NoDashboard -NoWorker
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
-python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/event --max-messages 1 --wait-seconds 90 --process-safety --safety-process-limit 20
 ```
 
 ## 执行结果
 
-- `pc_simulator/mqtt_worker.py` 新增 `--process-safety` 和 `--safety-process-limit`。
-- `consume_lines()` 新增 after-store hook；只对成功入库的 MQTT 事件触发，坏行不会触发。
-- Safety 处理异常会写入 stderr，并保持 MQTT 入库继续执行。
-- 真实 live MQTT 验证通过：收到 ESP32-S3 固件 `sensor_sample seq=9064`，worker 立即写入 1 条 `safety_evaluation`，`risk_type=none`。
-- Dashboard API 幂等验证通过：对已处理的 live `sensor_sample` 再执行 `POST /api/safety/process-events` 返回 `processed=0`。
-- SIM7670G GNSS no-fix 验证通过：报告见 `reports/gnss_validation/20260621-161721/gnss_probe.md`，写入 `location_report fix=false`。
-- 模拟 SOS + GNSS no-fix 批处理验证通过：`POST /api/safety/process-events` 处理 2 个源事件，写入 2 条 `safety_evaluation`、1 条 `safety_event`、1 条无副作用模拟 command。
-- `python -m unittest quality_tests.test_mqtt_worker -v` 通过，12 个测试成功。
-- `python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v` 通过，26 个测试成功。
-- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` 通过，87 个测试成功。
-- Dashboard 已重启到最新代码，运行在 `http://127.0.0.1:8787`，PID `44568`。
+- 新增 `scripts/start_local_supervised_session.ps1`，可统一启动或复用 Mosquitto LAN broker、Dashboard 和 live MQTT Safety worker。
+- 新增 `scripts/local_session_summary.py`，可从 `events.jsonl` 生成 `session_summary.json` 和 `session_summary.md`。
+- 会话输出目录为 `pc_simulator/runtime/sessions/<timestamp>/`，包含 `session.log`、summary 文件以及进程 stdout/stderr 日志路径。
+- `-NoBroker -NoDashboard -NoWorker` 验证通过：不启动后台进程，只生成会话目录和 summary，便于做静态状态快照。
+- 直接运行 `python scripts\local_session_summary.py --event-log pc_simulator\runtime\events.jsonl --limit 8 --markdown` 可显示最新 `manual_sos`、`urgent_escalation`、Safety 统计和最近事件。
+- `python -m unittest quality_tests.test_local_session_summary -v` 通过，3 个测试成功。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` 通过，90 个测试成功。
 
 ## 完成标准
 
-- [x] MQTT worker 可通过 `--process-safety` 启用入库后 Safety 处理。
-- [x] 默认 MQTT worker 行为保持不变。
-- [x] Safety 处理失败不阻断 MQTT 事件入库。
-- [x] 测试覆盖新增监督式处理路径。
+- [x] 可以一条命令建立本地监督会话目录并生成 summary。
+- [x] 启动脚本可复用/跳过 broker、Dashboard、MQTT Safety worker。
+- [x] Summary 同时输出 JSON 和 Markdown。
+- [x] 测试覆盖新增摘要逻辑和脚本关键契约。
 - [x] 文档记录运行方式、验证结果和剩余限制。
