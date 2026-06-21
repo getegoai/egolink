@@ -24,14 +24,17 @@ Stage 0：单智能体、单任务、低风险开发模式。
 - T017：PC Simulator Dashboard 读取 MQTT 事件日志完成。`/api/state` 可合并 JSONL 事件日志，并用最新 MQTT status 更新设备状态；网页看板展示 RSSI、最后在线时间和来源。
 - T018：MQTT event / ack 闭环完成。worker 默认订阅 `status` / `event` / `ack` 三类 topic，Dashboard 事件流可展示 `mqtt_ack`、`wake_detected` 等上报与确认事件。
 - T019：固件传感器数据上报完成。`firmware/mqtt_heartbeat` 已新增 `sensor_sample` / `device_health` event，上报 uptime、Wi-Fi RSSI、free heap、minimum free heap 等 ESP32 设备健康数据；已刷写 ESP32-S3 `COM4`，PC Simulator 收到真实 `sensor_sample`，Dashboard 可展示 sensor sample 的 RSSI/heap 详情。
+- T020：板级探测 CH343 / RNDIS 识别修复完成。`egolink_board_probe.py` 已合并 Windows CIM 与 PnP 设备发现，真实探测可识别 ESP32-S3 `COM4`、SIM7670G 串口和 Remote NDIS 网卡。
 
 ## 当前建议任务
 
-下一项建议任务 T020：修复 `egolink_board_probe.py` 对 Windows PnP 中 CH343 串口的识别，并开始接入 SIM7670G GNSS / 定位数据上报。
+下一项建议任务 T021：接入 SIM7670G GNSS / 定位数据上报，先完成 AT 查询、解析和 PC Simulator `location_report` event 写入。
 
 ## 最近验证
 
-- `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`：通过，30 个测试全部成功。
+- `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`：通过，34 个测试全部成功。
+- `python -m unittest quality_tests.test_board_probe -v`：通过，8 个 board probe 测试全部成功。
+- `python scripts\egolink_board_probe.py --skip-esp-log --probe-all-sim-ports`：通过，报告见 `reports/board_validation/20260621-091239/probe.md`；`COM4` CH343、SIM7670G 串口、Remote NDIS 和 AT 身份质量门均通过，ESP32 日志与 SD 状态因本次跳过日志读取仍为 WARN。
 - `python -m unittest quality_tests.test_mqtt_heartbeat_firmware -v`：通过，3 个固件静态测试全部成功。
 - `& "C:\Espressif\tools\ninja\1.12.1\ninja.exe" -C build`：通过，`firmware/mqtt_heartbeat` 增量编译成功，生成 `egolink_mqtt_heartbeat.bin`。
 - `Get-PnpDevice -PresentOnly`：通过，找到 `USB-Enhanced-SERIAL CH343 (COM4)`，InstanceId 为 `USB\VID_1A86&PID_55D3\5B91047400`。

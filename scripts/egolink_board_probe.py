@@ -169,13 +169,32 @@ def discover_serial_ports() -> list[SerialPortInfo]:
         return []
     script = r"""
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-$ports = Get-CimInstance Win32_SerialPort |
+$ports = @()
+$ports += Get-CimInstance Win32_SerialPort |
   Select-Object DeviceID, Name, Description, PNPDeviceID
+$ports += Get-PnpDevice -PresentOnly -Class Ports |
+  Where-Object {
+    $_.FriendlyName -match 'COM\d+' -or
+    $_.FriendlyName -match 'CH343|CH34|USB|串行' -or
+    $_.InstanceId -match 'VID_1A86|PID_55D3|VID_05C6|PID_9330'
+  } |
+  ForEach-Object {
+    $port = ""
+    if ($_.FriendlyName -match '\((COM\d+)\)') {
+      $port = $Matches[1]
+    }
+    [pscustomobject]@{
+      DeviceID = $port
+      Name = $_.FriendlyName
+      Description = $_.FriendlyName
+      PNPDeviceID = $_.InstanceId
+    }
+  }
 $ports | ConvertTo-Json -Depth 4
 """
     raw = run_powershell(script)
     rows = ensure_list(json.loads(raw)) if raw.strip() else []
-    return [classify_serial_port(row) for row in rows]
+    return serial_rows_to_port_infos(rows)
 
 
 def discover_net_adapters() -> list[dict[str, Any]]:
@@ -183,22 +202,52 @@ def discover_net_adapters() -> list[dict[str, Any]]:
         return []
     script = r"""
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-$adapters = Get-NetAdapter |
+$adapters = @()
+$adapters += Get-NetAdapter |
   Where-Object {
     $_.InterfaceDescription -match 'RNDIS|Remote NDIS|05C6|SIM|Qualcomm|USB' -or
     $_.Name -match 'RNDIS|USB|SIM'
   } |
   Select-Object Name, InterfaceDescription, Status, LinkSpeed, MacAddress
+$adapters += Get-PnpDevice -PresentOnly -Class Net |
+  Where-Object {
+    $_.FriendlyName -match 'RNDIS|Remote NDIS|05C6|SIM|Qualcomm|USB' -or
+    $_.InstanceId -match 'VID_05C6|PID_9330'
+  } |
+  ForEach-Object {
+    [pscustomobject]@{
+      Name = $_.FriendlyName
+      InterfaceDescription = $_.FriendlyName
+      Status = $_.Status
+      LinkSpeed = $null
+      MacAddress = $null
+    }
+  }
 $adapters | ConvertTo-Json -Depth 4
 """
     raw = run_powershell(script)
     return ensure_list(json.loads(raw)) if raw.strip() else []
 
 
+def serial_rows_to_port_infos(rows: list[dict[str, Any]]) -> list[SerialPortInfo]:
+    ports: list[SerialPortInfo] = []
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        info = classify_serial_port(row)
+        if not info.port:
+            continue
+        key = (info.port.upper(), info.pnp_device_id.upper())
+        if key in seen:
+            continue
+        seen.add(key)
+        ports.append(info)
+    return ports
+
+
 def classify_serial_port(row: dict[str, Any]) -> SerialPortInfo:
-    port = str(row.get("DeviceID") or "")
     name = str(row.get("Name") or "")
     description = str(row.get("Description") or "")
+    port = str(row.get("DeviceID") or "") or parse_com_port(name) or parse_com_port(description) or ""
     pnp = str(row.get("PNPDeviceID") or "")
     usb_mi = parse_usb_mi(pnp)
     role = "unknown"
@@ -377,7 +426,7 @@ def evaluate_checks(
             f"SIM7670G serial ports: {', '.join(item.port for item in sim_ports) or 'not found'}",
         )
     )
-    rndis = [item for item in net_adapters if "RNDIS" in str(item.get("InterfaceDescription", "")).upper()]
+    rndis = [item for item in net_adapters if is_rndis_adapter(item)]
     checks.append(
         pass_fail(
             "sim7670_rndis_adapter_present",
@@ -516,6 +565,19 @@ def ensure_list(value: Any) -> list[dict[str, Any]]:
 def parse_usb_mi(pnp_device_id: str) -> str | None:
     match = re.search(r"&MI_([0-9A-Fa-f]{2})\\", pnp_device_id)
     return match.group(1).upper() if match else None
+
+
+def parse_com_port(text: str) -> str | None:
+    match = re.search(r"\b(COM[0-9]+)\b", text, re.I)
+    return match.group(1).upper() if match else None
+
+
+def is_rndis_adapter(adapter: dict[str, Any]) -> bool:
+    text = " ".join(
+        str(adapter.get(field) or "")
+        for field in ("Name", "InterfaceDescription")
+    ).upper()
+    return "RNDIS" in text or "REMOTE NDIS" in text or "NDIS" in text
 
 
 def match_text(pattern: str, text: str) -> str | None:
