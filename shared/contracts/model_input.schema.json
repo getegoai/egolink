@@ -1,147 +1,327 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://egolink.local/contracts/model_input.schema.json",
-  "title": "Ego Link Safety Companion Model Input",
+  "$id": "https://ego.local/contracts/model_input.schema.json",
+  "title": "Safety Companion Router Input",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "contract_version",
+    "input_id",
+    "device_id",
     "timestamp_ms",
     "mode",
-    "motion",
-    "audio",
-    "location",
-    "network",
-    "device"
+    "features",
+    "evidence_available"
   ],
   "properties": {
     "contract_version": {
-      "const": "safety-companion.contract.v0.1"
+      "const": "1.0.0"
+    },
+    "input_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
     },
     "timestamp_ms": {
       "type": "integer",
       "minimum": 0
     },
     "mode": {
+      "type": "string",
       "enum": [
         "personal_safety",
-        "asset_guard",
-        "school_trip",
-        "elder_care"
+        "child_safety",
+        "elder_safety",
+        "cycling",
+        "test"
       ]
     },
-    "active_event": {
-      "type": "string"
-    },
-    "motion": {
+    "features": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "accel_window",
-        "gyro_window",
-        "stationary_seconds"
+        "motion",
+        "audio",
+        "location",
+        "network",
+        "device",
+        "history",
+        "user"
       ],
       "properties": {
-        "accel_window": {
-          "type": "array"
-        },
-        "gyro_window": {
-          "type": "array"
-        },
-        "stationary_seconds": {
-          "type": "number",
-          "minimum": 0
-        }
-      }
-    },
-    "audio": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "event_scores"
-      ],
-      "properties": {
-        "event_scores": {
+        "motion": {
           "type": "object",
-          "additionalProperties": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1
+          "additionalProperties": false,
+          "required": [
+            "activity_label",
+            "activity_confidence",
+            "impact_score",
+            "fall_score",
+            "stationary_seconds",
+            "device_worn"
+          ],
+          "properties": {
+            "activity_label": {
+              "type": "string",
+              "enum": [
+                "unknown",
+                "stationary",
+                "walking",
+                "running",
+                "cycling",
+                "vehicle",
+                "impact",
+                "fall_candidate"
+              ]
+            },
+            "activity_confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "impact_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "fall_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "stationary_seconds": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 86400
+            },
+            "device_worn": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        },
+        "audio": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "speech_score",
+            "distress_score",
+            "impact_sound_score",
+            "unknown_loud_sound_score",
+            "quality_score"
+          ],
+          "properties": {
+            "speech_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "distress_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "impact_sound_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "unknown_loud_sound_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "quality_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "location": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "fix_valid",
+            "speed_mps",
+            "outside_safe_zone",
+            "dwell_seconds",
+            "route_deviation_m",
+            "quality_score"
+          ],
+          "properties": {
+            "fix_valid": {
+              "type": "boolean"
+            },
+            "speed_mps": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 200
+            },
+            "outside_safe_zone": {
+              "type": "boolean"
+            },
+            "dwell_seconds": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 604800
+            },
+            "route_deviation_m": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            "quality_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "connectivity_score",
+            "base_online",
+            "upload_available",
+            "signal_level",
+            "offline_seconds"
+          ],
+          "properties": {
+            "connectivity_score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "base_online": {
+              "type": "boolean"
+            },
+            "upload_available": {
+              "type": "boolean"
+            },
+            "signal_level": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4
+            },
+            "offline_seconds": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 604800
+            }
+          }
+        },
+        "device": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "battery_percent",
+            "charging",
+            "privacy_mode",
+            "camera_available",
+            "microphone_available"
+          ],
+          "properties": {
+            "battery_percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "charging": {
+              "type": "boolean"
+            },
+            "privacy_mode": {
+              "type": "boolean"
+            },
+            "camera_available": {
+              "type": "boolean"
+            },
+            "microphone_available": {
+              "type": "boolean"
+            }
+          }
+        },
+        "history": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "recent_risk_count_5m",
+            "last_user_response",
+            "seconds_since_last_contact"
+          ],
+          "properties": {
+            "recent_risk_count_5m": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "last_user_response": {
+              "type": "string",
+              "enum": [
+                "none",
+                "safe",
+                "need_help",
+                "no_response",
+                "cancel"
+              ]
+            },
+            "seconds_since_last_contact": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 604800
+            }
+          }
+        },
+        "user": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sos_pressed",
+            "cancel_pressed"
+          ],
+          "properties": {
+            "sos_pressed": {
+              "type": "boolean"
+            },
+            "cancel_pressed": {
+              "type": "boolean"
+            }
           }
         }
       }
     },
-    "location": {
+    "evidence_available": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "fix",
-        "speed_mps",
-        "accuracy_m",
-        "outside_safe_zone"
+        "audio_clip",
+        "single_image",
+        "fresh_gnss",
+        "imu_window"
       ],
       "properties": {
-        "fix": {
+        "audio_clip": {
           "type": "boolean"
         },
-        "lat": {
-          "type": "number",
-          "minimum": -90,
-          "maximum": 90
+        "single_image": {
+          "type": "boolean"
         },
-        "lon": {
-          "type": "number",
-          "minimum": -180,
-          "maximum": 180
+        "fresh_gnss": {
+          "type": "boolean"
         },
-        "speed_mps": {
-          "type": "number",
-          "minimum": 0
-        },
-        "accuracy_m": {
-          "type": "number",
-          "minimum": 0
-        },
-        "outside_safe_zone": {
+        "imu_window": {
           "type": "boolean"
         }
       }
     },
-    "network": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "registered",
-        "signal_level"
-      ],
-      "properties": {
-        "registered": {
-          "type": "boolean"
-        },
-        "signal_level": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 5
-        }
-      }
-    },
-    "device": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "battery_percent",
-        "base_online"
-      ],
-      "properties": {
-        "battery_percent": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 100
-        },
-        "base_online": {
-          "type": "boolean"
-        }
-      }
+    "metadata": {
+      "type": "object"
     }
   }
 }

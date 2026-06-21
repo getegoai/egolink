@@ -1,0 +1,292 @@
+{
+  "package_name": "EGOLINK Safety Companion M0 Overlay",
+  "package_version": "0.1.0",
+  "contract_version": "1.0.0",
+  "created_date": "2026-06-21",
+  "target_repository": "EGOLINK",
+  "target_hardware": "Waveshare ESP32-S3 + SIM7670G development board",
+  "scope": "Contracts, rule baseline, synthetic scenarios, tests, docs, Codex integration tasks",
+  "verification": {
+    "contract_tests": "12 passed",
+    "package_tests": "1 passed",
+    "synthetic_scenarios": "12/12 passed",
+    "external_python_dependencies": 0
+  },
+  "files": [
+    {
+      "path": "CHANGELOG_SAFETY_COMPANION.md",
+      "sha256": "0c71ca29d9c651d714bc59a24b013641a3afd8c426f6aecb9f5da41e2d6a0a24",
+      "bytes": 586
+    },
+    {
+      "path": "MODEL_PACKAGE_README.md",
+      "sha256": "dced078fbbebdfbe8538326c61b3640a6e96eb6a442606486b93a489c03f8e27",
+      "bytes": 1830
+    },
+    {
+      "path": "docs/modeling/AGENTS_MODELING_APPEND.md",
+      "sha256": "a2244b543daedd08539eaf876a6feca173be5db0c2830d64090907b86241d63f",
+      "bytes": 661
+    },
+    {
+      "path": "docs/modeling/CODEX_INTEGRATION_PROMPT.md",
+      "sha256": "57a1fb4e2aa6922e1a9706fe4a01cfaaa134440b062a6021e1bbe0e2481525d2",
+      "bytes": 1399
+    },
+    {
+      "path": "docs/modeling/DATA_COLLECTION_SPEC.md",
+      "sha256": "8c98fdae461f4070abcc7756a09386928d2842a0fb3055c2c8a71520c8b20827",
+      "bytes": 3822
+    },
+    {
+      "path": "docs/modeling/INTEGRATION_ISSUES.md",
+      "sha256": "be2eefc2aeec8d23faf3ec6b9e051c5b75a6b1a986f9459e0031f4befe3b8e04",
+      "bytes": 3116
+    },
+    {
+      "path": "docs/modeling/INTEGRATION_REPORT_TEMPLATE.md",
+      "sha256": "8a256db1edd44ba5ce936adaf0140dfa8bce4585fd4e84eddc272b29b47e9fff",
+      "bytes": 501
+    },
+    {
+      "path": "docs/modeling/INTEGRATION_TASKS.md",
+      "sha256": "e56e314da79b69af79a611fde000fbe06d402e1f45cb94441526fd6f3636bd4d",
+      "bytes": 5817
+    },
+    {
+      "path": "docs/modeling/MODEL_HANDOFF.md",
+      "sha256": "78f97c175bfcc577c55963a7a795976e5119385447acc1dfb866620d877b64ce",
+      "bytes": 2020
+    },
+    {
+      "path": "docs/modeling/SAFETY_COMPANION_ARCHITECTURE.md",
+      "sha256": "3f19d22f34b1c2445bf373e36d39a7565973c9b72950a81921d25e62cc013f65",
+      "bytes": 3443
+    },
+    {
+      "path": "model_artifacts/safety_companion/rule_router/0.1.0/include/safety_router_thresholds.h",
+      "sha256": "2d6777dc76851126313a76e986f5205c16fe884a5f1e63d5c47e849cddf80617",
+      "bytes": 1731
+    },
+    {
+      "path": "model_artifacts/safety_companion/rule_router/0.1.0/manifest.json",
+      "sha256": "1cbebb3c90ad2f8531d5f86bc73a56976d6bee4edea19b42a93ce7c85d599962",
+      "bytes": 1055
+    },
+    {
+      "path": "model_artifacts/safety_companion/rule_router/0.1.0/model_card.md",
+      "sha256": "a00fc914f82c2f53c650b8c7309e2cb9e216d7cf0d99590bace931b7b684e3f9",
+      "bytes": 1168
+    },
+    {
+      "path": "model_artifacts/safety_companion/rule_router/0.1.0/model_config.json",
+      "sha256": "c77245ea2a6c9caa30508a7d3e6594bcdb806bbd6086bc71f0d6ca088e85d279",
+      "bytes": 1115
+    },
+    {
+      "path": "model_artifacts/safety_companion/rule_router/0.1.0/sha256.txt",
+      "sha256": "ffd657b6ab8428aec93ff2ec71e588052620619a4ec01180227e3369b8e17711",
+      "bytes": 551
+    },
+    {
+      "path": "model_artifacts/safety_companion/rule_router/0.1.0/thresholds.json",
+      "sha256": "c77245ea2a6c9caa30508a7d3e6594bcdb806bbd6086bc71f0d6ca088e85d279",
+      "bytes": 1115
+    },
+    {
+      "path": "model_lab/__init__.py",
+      "sha256": "41b91c81d80234f161c225fb773be6f715e88bb0cb5ba8ce5e1c93821fae35b6",
+      "bytes": 48
+    },
+    {
+      "path": "model_lab/safety_companion/__init__.py",
+      "sha256": "6cf3eefbb9bd39f46f7bc792e94369e2ea0676d8cc8c4efcf106bf673b735bb5",
+      "bytes": 257
+    },
+    {
+      "path": "model_lab/safety_companion/configs/router_v0.1.0.json",
+      "sha256": "c77245ea2a6c9caa30508a7d3e6594bcdb806bbd6086bc71f0d6ca088e85d279",
+      "bytes": 1115
+    },
+    {
+      "path": "model_lab/safety_companion/datasets/README.md",
+      "sha256": "eb9da3f6507d06f8839e83bf3d6b109c0b02c3a3cdba0a911a7130e2ff2e7644",
+      "bytes": 456
+    },
+    {
+      "path": "model_lab/safety_companion/datasets/samples/model_inputs.jsonl",
+      "sha256": "232ffd7348a1990b561755d71c7244ee751ca92a089edf1e5b5317e7c6d2789b",
+      "bytes": 14402
+    },
+    {
+      "path": "model_lab/safety_companion/datasets/samples/scenario_suite.json",
+      "sha256": "d57efa588c93bb87414baa0a635fbd954273d97d1762298af4e48398b75fd4a2",
+      "bytes": 24809
+    },
+    {
+      "path": "model_lab/safety_companion/datasets/samples/sensor_frames.jsonl",
+      "sha256": "df2117242a7b108f96409447d99c436d0ad568356845ca9a5b385a7899872ff3",
+      "bytes": 2576
+    },
+    {
+      "path": "model_lab/safety_companion/evaluation/README.md",
+      "sha256": "03012f1a4a7c247b278fd89066dbe973173a8e846e9036dcb700adc3139db412",
+      "bytes": 242
+    },
+    {
+      "path": "model_lab/safety_companion/evaluation/evaluate_baseline.py",
+      "sha256": "49e37cd8b5c17c909d4375272db2b83fe6c167f1bb24992448aee3d71a9a826c",
+      "bytes": 2288
+    },
+    {
+      "path": "model_lab/safety_companion/export/README.md",
+      "sha256": "f6fb3bb2dd614a313130f165c65104d189de306cb58231aa1eb10f3b9eea4801",
+      "bytes": 333
+    },
+    {
+      "path": "model_lab/safety_companion/export/generate_c_header.py",
+      "sha256": "0c734b2cb42ff2dbb5a08165e3b3e35a7b65b45f48e57dc8fa87e3e5b83ebf79",
+      "bytes": 1463
+    },
+    {
+      "path": "model_lab/safety_companion/src/__init__.py",
+      "sha256": "79d618d458bba2b17b02a3a2052269cf534060e748e92fd0c65fb857019ef6be",
+      "bytes": 52
+    },
+    {
+      "path": "model_lab/safety_companion/src/baseline_router.py",
+      "sha256": "a92d4420b6623a8f62f9eaf6899e4bee5f87c7a6110c92d905d86ec5a51f3cfb",
+      "bytes": 14085
+    },
+    {
+      "path": "model_lab/safety_companion/src/cli.py",
+      "sha256": "555ecdab6e343fbfc7c07e5075ca336e09cbefdc51af7e47fb250dfe2cff2719",
+      "bytes": 5210
+    },
+    {
+      "path": "model_lab/safety_companion/src/contract_validation.py",
+      "sha256": "fb3117c9f5b6436d8dde0bd754183fe316e094f58b76b4b818d5c6e5f3a249bb",
+      "bytes": 7462
+    },
+    {
+      "path": "model_lab/safety_companion/src/event_builder.py",
+      "sha256": "4aac5c9f298c262a2cbb9da7d80de2faebff45047e207040a19d82145da04dab",
+      "bytes": 2578
+    },
+    {
+      "path": "model_lab/safety_companion/src/feature_extractor.py",
+      "sha256": "9e8dc73920d0b9cdd7f15834e9667527e581136be12a403ffe38ddbd0688d80e",
+      "bytes": 5624
+    },
+    {
+      "path": "model_lab/safety_companion/src/replay.py",
+      "sha256": "23d6a733ef57aa2c96c24b6ae5a5c2ef4807aa11a61acb95f6e6a2723e73e9b4",
+      "bytes": 1535
+    },
+    {
+      "path": "model_lab/safety_companion/src/scenario_generator.py",
+      "sha256": "61031e48a00a4040ea0f6a967ad44e7cb31461806048f95cac9919d777582061",
+      "bytes": 12627
+    },
+    {
+      "path": "model_lab/safety_companion/tests/__init__.py",
+      "sha256": "44fae3bd8f5353e86ed907243032cef695cc163e32d6a3086b82a4ca7e283de0",
+      "bytes": 32
+    },
+    {
+      "path": "model_lab/safety_companion/tests/test_feature_extractor.py",
+      "sha256": "5f2296704a538df8ec86c4618e59f854334f6ff3d9c515ea848e9be035540b89",
+      "bytes": 643
+    },
+    {
+      "path": "model_lab/safety_companion/training/README.md",
+      "sha256": "f2297ae74d3936cf9bdf6061dc66688a5e91a2d833b6ea707324558b6aae7b83",
+      "bytes": 437
+    },
+    {
+      "path": "model_lab/safety_companion/training/build_feature_dataset.py",
+      "sha256": "756e3503ce3508055020c8f1d13d2441eb52feb30c66c1f03b0ea1da51b9560b",
+      "bytes": 911
+    },
+    {
+      "path": "quality_tests/model_contract/__init__.py",
+      "sha256": "9dbcb4c4df28f681808ea1c98ebc42af08c4c0b438ef26fdb0a2e4134d12dbec",
+      "bytes": 50
+    },
+    {
+      "path": "quality_tests/model_contract/test_baseline_router.py",
+      "sha256": "8aa3d8b88deb925aeb02f5c2cb45fa5aaa23a0d65ec7f39b09ed8dd1235b8c72",
+      "bytes": 2469
+    },
+    {
+      "path": "quality_tests/model_contract/test_contracts.py",
+      "sha256": "54caf7236a21ada99717423fb4c3872439350ec4c7fb583b486d36c2fb1ca4f0",
+      "bytes": 2710
+    },
+    {
+      "path": "quality_tests/model_contract/test_sample_files.py",
+      "sha256": "0f3423bb0727e2ca9b400f9bd447c632fab07d2047bbd8849d102667d00d0fc5",
+      "bytes": 1394
+    },
+    {
+      "path": "scripts/run_safety_companion_tests.ps1",
+      "sha256": "68dde4c8887d5b6e131902235da2bbd8f4f5dbac6fb8e8ef120ae26658a5ea07",
+      "bytes": 187
+    },
+    {
+      "path": "scripts/run_safety_companion_tests.sh",
+      "sha256": "2a3d97401ed36f9c3bf11abdd601d8a5e4a9df487cfb4d74a25ab878a4666864",
+      "bytes": 179
+    },
+    {
+      "path": "scripts/verify_safety_companion_m0.py",
+      "sha256": "4cae4217aca9f3a14acaa96343e8b4f5a9bc938e4ab7c75d16c423578ff2de89",
+      "bytes": 3345
+    },
+    {
+      "path": "shared/contracts/README.md",
+      "sha256": "20a93bdaa772fc9f89ae08a4b8e6c96559da053a4c8e9243ed60667432a0d99f",
+      "bytes": 1189
+    },
+    {
+      "path": "shared/contracts/base_command.schema.json",
+      "sha256": "8229c2ca67b6934ba191fc3341b7a80ac0c4cf9741ee2e0fe4fb156301958cec",
+      "bytes": 1446
+    },
+    {
+      "path": "shared/contracts/model_input.schema.json",
+      "sha256": "34e5b8f37dd8583a4026c19ccf4dc22d4affe2566290c837a36cabf5cef470dc",
+      "bytes": 7989
+    },
+    {
+      "path": "shared/contracts/model_output.schema.json",
+      "sha256": "226fe70de3b294eb28479359c3cb6a914fa83e133945117ffb5259a61a822ece",
+      "bytes": 2590
+    },
+    {
+      "path": "shared/contracts/safety_annotation.schema.json",
+      "sha256": "39e310dd1ceab41fa921738d570672e3444182daa107fabd520d01dff996f42f",
+      "bytes": 2805
+    },
+    {
+      "path": "shared/contracts/safety_event.schema.json",
+      "sha256": "4fbbe21659966a2c1897a4d0a82292167097e92d40e9d569690533863cc449ba",
+      "bytes": 3697
+    },
+    {
+      "path": "shared/contracts/sensor_frame.schema.json",
+      "sha256": "8dde6f9a41e93859fbfbc019384b23da58ff2e9620ca0d8d96fca90dbc31cf05",
+      "bytes": 12245
+    },
+    {
+      "path": "shared/embedded/README.md",
+      "sha256": "cf7624ed72708228d14b0faafb6044572688a79719f4773728efd2970a7e2f1f",
+      "bytes": 507
+    },
+    {
+      "path": "shared/embedded/safety_model_contract.h",
+      "sha256": "16c1dfb1713d193f4ed6a92e62ac0efd43f3badf9e9664d83cf93b26ccd909f2",
+      "bytes": 3660
+    }
+  ]
+}

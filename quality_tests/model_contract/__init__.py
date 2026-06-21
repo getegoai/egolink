@@ -1,1 +1,1 @@
-"""Contract tests for Safety Companion model handoff files."""
+"""Contract and reference-model quality tests."""

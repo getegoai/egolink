@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/safety_annotation.schema.json",
+  "title": "Safety Companion Training Annotation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "annotation_id",
+    "sample_id",
+    "annotator_type",
+    "created_at_ms",
+    "labels",
+    "consent"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "1.0.0"
+    },
+    "annotation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sample_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "annotator_type": {
+      "type": "string",
+      "enum": [
+        "human",
+        "teacher_model",
+        "rule",
+        "user_confirmation"
+      ]
+    },
+    "created_at_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "risk_type",
+        "severity",
+        "user_state",
+        "action_outcome"
+      ],
+      "properties": {
+        "risk_type": {
+          "type": "string",
+          "enum": [
+            "none",
+            "manual_sos",
+            "possible_fall",
+            "possible_collision",
+            "post_impact_inactivity",
+            "distress_audio",
+            "geofence_exit",
+            "abnormal_dwell",
+            "communication_loss",
+            "low_battery",
+            "uncertain"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "none",
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ]
+        },
+        "user_state": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "safe",
+            "needs_help",
+            "unresponsive"
+          ]
+        },
+        "action_outcome": {
+          "type": "string",
+          "enum": [
+            "not_executed",
+            "dismissed",
+            "confirmed_safe",
+            "help_requested",
+            "contacted_base",
+            "contacted_person",
+            "false_alarm"
+          ]
+        }
+      }
+    },
+    "consent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "collection_allowed",
+        "training_allowed",
+        "raw_audio_allowed",
+        "raw_image_allowed"
+      ],
+      "properties": {
+        "collection_allowed": {
+          "type": "boolean"
+        },
+        "training_allowed": {
+          "type": "boolean"
+        },
+        "raw_audio_allowed": {
+          "type": "boolean"
+        },
+        "raw_image_allowed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "notes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

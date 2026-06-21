@@ -1,131 +1,114 @@
-# Safety Companion Architecture
+# Ego Link 随身安全陪伴模型架构
 
-## Position
+## 1. 目标
 
-Ego Link uses a shared "safety companion" core instead of splitting early into
-separate child, elder, cycling, pet, and asset products. The first product line
-stays focused on an AI-assisted safety locator: the device observes, routes
-risk, applies deterministic safety rules, and uploads structured evidence only
-when needed.
+Safety Companion 的目标是让 Ego Link 成为低功耗、隐私优先的随身安全前哨：及时发现值得关注的事件，决定是否询问用户、补充采集、上报摘要或紧急升级，再由 PC Simulator、未来 Ego Base 或明确授权的云端增强能力完成复杂理解。
 
-The approach from `模型架构.md` is feasible for the current project, with one
-important constraint: P0 must start with contracts and rule baselines, not an
-unverified neural network. Models can later be delivered as versioned packages
-once real data collection is stable.
+它不是医疗诊断系统，也不是在 ESP32-S3 上运行一个通用多模态大模型。
 
-## Safety Loop
+## 2. 分层闭环
 
 ```text
-sensor capture
-  -> edge event detection
-  -> edge risk routing
-  -> deterministic local safety rule review
-  -> structured event and evidence upload when needed
-  -> Ego Base / PC Simulator assessment
-  -> command back: ask, remind, collect more evidence, or escalate
+确定性安全规则
+    ↓
+低功耗传感器与事件触发
+    ↓
+AudioGate / MotionNet / VisionGate 等专用微模型
+    ↓
+ContextRouter：综合位置、网络、电量、历史和模型分数
+    ↓
+本地动作 / 询问用户 / 补充采集 / 发送摘要或证据
+    ↓
+PC Simulator → 未来 Ego Base 本地多模态推理与记忆
+    ↓
+下发提醒、再次采集、联系预设对象或结束事件
 ```
 
-## P0 Event Classes
+## 3. 端侧职责
 
-P0 keeps the first event set deliberately small:
+Ego Link 端侧负责：
 
-1. Manual SOS.
-2. Possible fall, impact, or crash.
-3. Long stationary period after impact.
-4. Abnormal stay or safe-zone deviation.
-5. Distress audio or abnormal loud sound.
-6. Device risk such as low battery, link loss, or GNSS no-fix.
+- 物理 SOS 和取消按键；
+- IMU、声音、GNSS、网络、电量和用户操作的采集；
+- 唤醒、声音事件、动作状态、跌倒候选、图像质量等专用微模型；
+- 结构化风险路由；
+- 本地提示、隐私策略、离线缓存和紧急兜底；
+- 仅在必要时保存或上传事件证据。
 
-SOS, emergency calling, privacy disable, and other safety-critical actions must
-remain deterministic. A model may provide risk scores, reason codes, and action
-recommendations, but must not be the sole authority for emergency behavior.
+端侧不承担：
 
-## Ownership Boundary
+- 通用长对话；
+- 长期记忆检索；
+- 复杂照片语义理解；
+- 对高风险行为进行无约束自主决策。
 
-Model owner responsibilities:
+## 4. PC Simulator / Ego Base 职责
 
-- Event taxonomy, data schemas, and model input/output contracts.
-- Data collection and labeling specifications.
-- Baseline rules, replay tooling, and model contract tests.
-- MotionNet, AudioGate, ContextRouter, VisionGate, teacher models, distillation,
-  quantization, model cards, thresholds, and versioned artifacts.
+- 接收 `safety_event`；
+- 验证事件、去重、保存证据链；
+- 结合多时刻事件、用户计划和长期记忆；
+- 在本地运行较强的 ASR、视觉和语言模型；
+- 决定是否下发 `base_command`；
+- 保存用户确认结果，形成训练标签；
+- 将复杂推理结果压缩成端侧可执行的策略和阈值。
 
-Codex integration responsibilities:
+当前 P0 只接 PC Simulator，不要求正式 Ego Base。
 
-- Firmware drivers, sensor capture, ring buffers, timestamps, queues, transport,
-  runtime adapters, hardware tests, and dashboard integration.
-- Mapping existing Ego Link events into stable model inputs.
-- Consuming model outputs through adapters that can switch between mock and real
-  implementations.
-- Recording integration issues rather than changing model semantics directly.
+## 5. 模型分解
 
-User responsibilities:
+### MotionNet
 
-- Real-world scenario testing, data authorization, risk-rule approval, and final
-  acceptance.
+输入 IMU 时间窗，输出活动状态、冲击、跌倒候选和静止概率。
 
-## Versioned Package Flow
+### AudioGate
 
-Model work should arrive as a versioned overlay package, for example:
+输入短音频窗，输出 VAD、呼救、碰撞声、异常大声和音频质量分数。
+
+### VisionGate
+
+摄像头仅按需启动。端侧只判断模糊、过暗、遮挡、是否有人、是否值得上传。复杂理解在 Base 侧完成。
+
+### ContextRouter
+
+输入各专用模型分数以及 GNSS、4G、设备、电量、时间和历史特征，输出：
 
 ```text
-EGOLINK_SAFETY_COMPANION_M0_V0_1.zip
-EGOLINK_SAFETY_COMPANION_M1_V0_2.zip
-EGOLINK_SAFETY_COMPANION_MODEL_V0_3.zip
+ignore
+local_prompt
+ask_user
+capture_more
+send_summary
+send_evidence
+urgent_escalation
 ```
 
-Expected package content:
+M0 使用透明规则实现 ContextRouter。后续学习模型必须以同一输入输出契约为基础，并通过回放、精度、延迟、RAM、Flash 和能耗评价。
+
+## 6. 安全优先级
+
+下列行为不允许只由概率模型决定：
+
+- 物理 SOS；
+- 用户停止录音、拍照或追踪；
+- 锂电、电源和温度保护；
+- 紧急拨号号码；
+- 证据上传授权；
+- 不可逆配置和固件更新。
+
+执行链路必须是：
 
 ```text
-docs/modeling/MODEL_HANDOFF.md
-docs/modeling/INTEGRATION_TASKS.md
-shared/contracts/
-model_lab/
-model_artifacts/
-quality_tests/model_contract/
+硬安全规则 → 模型建议 → 二次策略检查 → 可审计动作
 ```
 
-Codex may integrate the package, but should not silently rewrite model source,
-artifacts, thresholds, feature order, field names, units, or contract semantics.
-If a contract is hard to integrate, record it in
-`docs/modeling/INTEGRATION_ISSUES.md`.
+## 7. 版本路线
 
-## Roadmap
-
-### M0: Contracts And Rule Baseline
-
-Deliver stable schemas, event definitions, a ContextRouter baseline, simulated
-data, replay tooling, contract tests, and integration tasks. Codex maps current
-mock GNSS, wake, SOS, sensor samples, and device risk events into the model
-input contract and consumes model-like structured output.
-
-### M1: Real Data Collection
-
-Define recording format, directory layout, labeling flow, sample rates, windows,
-and quality checks. Codex implements IMU/audio/GNSS/4G/button capture, unified
-timestamps, event windows, and export manifests.
-
-### M2: MotionNet Plus ContextRouter
-
-Use motion and context first. Initial classes include normal activity,
-stationary, impact, fall candidate, post-impact stationary, and not worn.
-ContextRouter combines motion, GNSS, audio scores, network state, battery, base
-availability, and recent history.
-
-### M3: AudioGate
-
-Add VAD, distress sound detection, abnormal sound detection, recording quality
-checks, and short audio snippets around event triggers.
-
-### M4: VisionGate
-
-Use the camera only after events or explicit requests. Edge checks should decide
-whether an image is too dark, blurry, blocked, contains a person, or is worth
-uploading. Complex visual understanding remains in Ego Base.
-
-### M5: Quantized Device Deployment
-
-Model owner provides INT8 artifacts, normalization parameters, thresholds, PC
-reference outputs, and firmware consistency vectors. Codex integrates with
-ESP-DL, ESP-SR, or TFLite Micro only after M0/M1 evidence is stable.
-
+| 阶段 | 交付 |
+|---|---|
+| M0 | 数据契约、规则基线、模拟场景、回放与集成接口 |
+| M1 | 真实传感器数据记录、时间同步、标注工具 |
+| M2 | MotionNet + ContextRouter 初版 |
+| M3 | AudioGate 与事件音频截取 |
+| M4 | VisionGate 与主动视觉采集 |
+| M5 | Ego Base 本地多模态协同 |
+| M6 | 蒸馏、INT8 量化、ESP32-S3 部署与能耗评价 |

@@ -1,42 +1,81 @@
-# Safety Companion M0 Handoff
+# Safety Companion M0 模型交付说明
 
-## Package
+## 交付版本
 
-- Name: Safety Companion M0
-- Contract version: `safety-companion.contract.v0.1`
-- Purpose: define the first stable model/data boundary before real model
-  training begins.
+- Package：`Safety Companion M0 0.1.0`
+- Contract：`1.0.0`
+- Reference router：`safety_rule_router 0.1.0`
+- 目标：先建立固件、PC Simulator、未来 Ego Base 和模型实验之间的稳定接口。
 
-## What This Handoff Contains
+## 当前交付是什么
 
-- Architecture summary: `docs/modeling/SAFETY_COMPANION_ARCHITECTURE.md`
-- Integration tasks: `docs/modeling/INTEGRATION_TASKS.md`
-- Integration issue log: `docs/modeling/INTEGRATION_ISSUES.md`
-- JSON contracts:
-  - `shared/contracts/sensor_frame.schema.json`
-  - `shared/contracts/safety_event.schema.json`
-  - `shared/contracts/model_input.schema.json`
-  - `shared/contracts/model_output.schema.json`
-  - `shared/contracts/base_command.schema.json`
-- Contract tests: `quality_tests/model_contract/test_contract_schemas.py`
+当前 `model_artifacts` 是**规则基线**，不是神经网络模型。它用于：
 
-## Rules For Codex Integration
+- 明确安全场景的预期行为；
+- 让 Codex 先完成设备数据到模型接口、模型输出到动作接口的集成；
+- 让后续 MotionNet、AudioGate 和学习型 ContextRouter 有可比较的基线；
+- 在没有真实传感器数据时避免伪造模型效果。
 
-- Do not modify `model_lab/` or `model_artifacts/` when those directories are
-  later delivered by model packages.
-- Do not change `shared/contracts/` fields, units, enum meaning, or feature
-  order as part of a firmware/dashboard integration task.
-- Add adapters in firmware or PC Simulator code when existing data needs to be
-  mapped into model inputs.
-- Keep every model call switchable between mock and real implementations.
-- Hardware-dependent behavior must be reported as unverified unless the hardware
-  was actually exercised.
-- Passing unit tests or builds is not evidence of model accuracy.
+## 所有权边界
 
-## Current Scope
+### 模型侧维护
 
-This M0 handoff does not include a neural network. The first useful milestone is
-to route existing Ego Link events into a stable model input, return a
-deterministic mock model output, and let PC Simulator display or act on that
-structured result.
+```text
+shared/contracts/**
+shared/embedded/**
+model_lab/**
+model_artifacts/**
+quality_tests/model_contract/**
+docs/modeling/SAFETY_COMPANION_ARCHITECTURE.md
+docs/modeling/DATA_COLLECTION_SPEC.md
+```
 
+### Codex 集成侧主要维护
+
+```text
+firmware/**
+pc_simulator/**
+quality_tests/firmware/**
+quality_tests/pc_simulator/**
+docs/modeling/INTEGRATION_REPORT.md
+```
+
+Codex 不得为了快速通过测试自行改变字段、单位、枚举顺序、阈值语义或模型版本。
+
+## Python 参考接口
+
+```python
+from model_lab.safety_companion import RuleRouter, build_model_input
+
+model_input = build_model_input(sensor_frame)
+model_output = RuleRouter().evaluate(model_input)
+```
+
+## 固件参考接口
+
+```c
+#include "safety_model_contract.h"
+
+bool safety_model_evaluate(
+    const ego_sc_model_input_t *input,
+    ego_sc_model_output_t *output
+);
+```
+
+M0 固件可先使用 mock 或规则子集；完整规则结果以 PC 参考实现为准。后续端侧微模型必须提供测试向量，验证 PC 与设备输出误差。
+
+## 验证
+
+```powershell
+python scripts\verify_safety_companion_m0.py
+```
+
+验收必须区分：
+
+- 代码编译通过；
+- 契约测试通过；
+- PC 模拟闭环通过；
+- ESP32-S3 实机运行通过；
+- 模型效果经过真实数据验证。
+
+前四项不能替代第五项。

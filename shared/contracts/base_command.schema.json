@@ -1,21 +1,25 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://egolink.local/contracts/base_command.schema.json",
-  "title": "Ego Link Base Command",
+  "$id": "https://ego.local/contracts/base_command.schema.json",
+  "title": "Ego Base or PC Simulator Command",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "contract_version",
-    "cmd_id",
+    "command_id",
     "device_id",
-    "timestamp_ms",
-    "command"
+    "issued_at_ms",
+    "expires_at_ms",
+    "command",
+    "args",
+    "requires_user_consent",
+    "safety_class"
   ],
   "properties": {
     "contract_version": {
-      "const": "safety-companion.contract.v0.1"
+      "const": "1.0.0"
     },
-    "cmd_id": {
+    "command_id": {
       "type": "string",
       "minLength": 1
     },
@@ -23,29 +27,48 @@
       "type": "string",
       "minLength": 1
     },
-    "timestamp_ms": {
+    "issued_at_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "expires_at_ms": {
       "type": "integer",
       "minimum": 0
     },
     "command": {
+      "type": "string",
       "enum": [
-        "ask_user",
         "play_prompt",
-        "request_location",
-        "capture_audio_5s",
+        "ask_user",
+        "capture_audio",
         "capture_image",
-        "upload_summary",
-        "escalate_emergency",
-        "set_policy"
+        "request_location",
+        "set_mode",
+        "acknowledge_event",
+        "start_call",
+        "cancel_action",
+        "update_policy"
       ]
     },
-    "payload": {
-      "type": "object",
-      "additionalProperties": true
+    "args": {
+      "type": "object"
     },
-    "expire_sec": {
-      "type": "integer",
-      "minimum": 0
+    "requires_user_consent": {
+      "type": "boolean"
+    },
+    "safety_class": {
+      "type": "string",
+      "enum": [
+        "reversible",
+        "sensitive",
+        "emergency"
+      ]
+    },
+    "correlation_event_id": {
+      "type": [
+        "string",
+        "null"
+      ]
     }
   }
 }

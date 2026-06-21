@@ -5,13 +5,14 @@ from pathlib import Path
 import unittest
 
 
-CONTRACT_VERSION = "safety-companion.contract.v0.1"
+CONTRACT_VERSION = "1.0.0"
 CONTRACT_FILES = (
     "sensor_frame.schema.json",
     "safety_event.schema.json",
     "model_input.schema.json",
     "model_output.schema.json",
     "base_command.schema.json",
+    "safety_annotation.schema.json",
 )
 
 
@@ -47,17 +48,20 @@ class SafetyCompanionContractTests(unittest.TestCase):
         schema = self.load_schema("model_input.schema.json")
 
         self.assertEqual(
-            schema["required"][:8],
+            schema["required"],
             [
                 "contract_version",
+                "input_id",
+                "device_id",
                 "timestamp_ms",
                 "mode",
-                "motion",
-                "audio",
-                "location",
-                "network",
-                "device",
+                "features",
+                "evidence_available",
             ],
+        )
+        self.assertEqual(
+            schema["properties"]["features"]["required"],
+            ["motion", "audio", "location", "network", "device", "history", "user"],
         )
 
     def test_model_output_has_safety_action_enums(self) -> None:
@@ -65,10 +69,12 @@ class SafetyCompanionContractTests(unittest.TestCase):
         actions = schema["properties"]["recommended_action"]["enum"]
         risk_types = schema["properties"]["risk_type"]["enum"]
 
-        self.assertIn("ask_user_and_send_summary", actions)
-        self.assertIn("escalate_emergency", actions)
-        self.assertIn("possible_accident", risk_types)
-        self.assertIn("device_risk", risk_types)
+        self.assertIn("ask_user", actions)
+        self.assertIn("send_summary", actions)
+        self.assertIn("urgent_escalation", actions)
+        self.assertIn("manual_sos", risk_types)
+        self.assertIn("post_impact_inactivity", risk_types)
+        self.assertIn("communication_loss", risk_types)
 
     def test_safety_event_covers_p0_event_classes(self) -> None:
         schema = self.load_schema("safety_event.schema.json")
@@ -78,13 +84,13 @@ class SafetyCompanionContractTests(unittest.TestCase):
             {
                 "manual_sos",
                 "possible_fall",
-                "impact_detected",
-                "post_impact_stationary",
-                "zone_deviation",
+                "possible_collision",
+                "post_impact_inactivity",
+                "geofence_exit",
+                "abnormal_dwell",
                 "distress_audio",
                 "low_battery",
-                "link_lost",
-                "gnss_no_fix",
+                "communication_loss",
             }.issubset(event_types)
         )
 

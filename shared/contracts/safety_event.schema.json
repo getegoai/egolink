@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://egolink.local/contracts/safety_event.schema.json",
+  "$id": "https://ego.local/contracts/safety_event.schema.json",
   "title": "Ego Link Safety Event",
   "type": "object",
   "additionalProperties": false,
@@ -9,13 +9,18 @@
     "event_id",
     "device_id",
     "timestamp_ms",
+    "sequence",
     "event_type",
     "priority",
-    "source"
+    "source",
+    "model_result",
+    "context",
+    "evidence",
+    "privacy"
   ],
   "properties": {
     "contract_version": {
-      "const": "safety-companion.contract.v0.1"
+      "const": "1.0.0"
     },
     "event_id": {
       "type": "string",
@@ -29,68 +34,150 @@
       "type": "integer",
       "minimum": 0
     },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
     "event_type": {
+      "type": "string",
       "enum": [
         "manual_sos",
-        "wake_detected",
-        "location_report",
-        "sensor_sample",
         "possible_fall",
-        "impact_detected",
-        "post_impact_stationary",
-        "abnormal_stay",
-        "zone_deviation",
+        "possible_collision",
+        "post_impact_inactivity",
         "distress_audio",
-        "abnormal_sound",
+        "geofence_exit",
+        "abnormal_dwell",
+        "communication_loss",
         "low_battery",
-        "link_lost",
-        "gnss_no_fix"
+        "uncertain"
       ]
     },
     "priority": {
+      "type": "string",
       "enum": [
-        "low",
-        "normal",
+        "info",
         "warning",
+        "high",
         "critical"
       ]
     },
     "source": {
       "type": "string",
-      "minLength": 1
+      "enum": [
+        "rule_router",
+        "motion_model",
+        "audio_model",
+        "vision_gate",
+        "device_rule",
+        "simulator"
+      ]
     },
-    "risk_hint": {
-      "type": "string"
+    "model_result": {
+      "type": "object"
     },
-    "observations": {
+    "context": {
       "type": "object",
-      "additionalProperties": true
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "battery_percent",
+        "base_online",
+        "upload_available"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "battery_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "base_online": {
+          "type": "boolean"
+        },
+        "upload_available": {
+          "type": "boolean"
+        },
+        "latitude_deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude_deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": -180,
+          "maximum": 180
+        },
+        "speed_mps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 200
+        }
+      }
     },
     "evidence": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "type",
-          "uri"
-        ],
-        "properties": {
-          "type": {
-            "enum": [
-              "audio_5s",
-              "single_image",
-              "motion_window",
-              "location_point",
-              "device_log"
-            ]
-          },
-          "uri": {
-            "type": "string"
-          },
-          "sha256": {
-            "type": "string"
-          }
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audio_clip_ref",
+        "image_ref",
+        "imu_window_ref",
+        "location_fresh"
+      ],
+      "properties": {
+        "audio_clip_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "image_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "imu_window_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location_fresh": {
+          "type": "boolean"
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "privacy_mode",
+        "raw_evidence_allowed",
+        "retention_seconds"
+      ],
+      "properties": {
+        "privacy_mode": {
+          "type": "boolean"
+        },
+        "raw_evidence_allowed": {
+          "type": "boolean"
+        },
+        "retention_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2592000
         }
       }
     }
