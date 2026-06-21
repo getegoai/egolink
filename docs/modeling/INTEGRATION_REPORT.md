@@ -77,6 +77,16 @@ M0-INT-004 simulated end-to-end updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+T027 real event safety flow updates:
+
+- `pc_simulator/safety_companion.py`
+- `pc_simulator/app.py`
+- `quality_tests/test_safety_companion.py`
+- `quality_tests/test_pc_simulator.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
 
 ```powershell
@@ -98,16 +108,17 @@ decision.
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
-Result: passed. The repository test suite ran 79 tests successfully.
+Result: passed. The repository test suite ran 83 tests successfully.
 
 ```powershell
 python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v
 ```
 
-Result: passed. The PC Simulator adapter tests ran 22 tests successfully,
+Result: passed. The PC Simulator adapter tests ran 26 tests successfully,
 including packaged scenario inputs, sensor frame evaluation, safety event
 conversion, privacy evidence filtering, `POST /api/safety/evaluate`, and
-`POST /api/safety/replay`.
+`POST /api/safety/replay`. T027 also covers real `sensor_sample` field mapping,
+`POST /api/safety/process-events`, and idempotent event-log processing.
 
 M0-INT-004 replay result:
 
@@ -148,6 +159,12 @@ M0-INT-004 did not use hardware and did not trigger real calls, camera capture,
 audio recording, or external network actions. It only writes simulated
 `safety_event` and command records into the PC Simulator event log.
 
+T027 processed existing local runtime event logs only. The bounded validation
+processed 12 evaluable recent events and wrote 12 `safety_evaluation`, 3
+`safety_event`, and 3 simulated command records. It did not perform firmware
+flashing, MQTT subscription, GNSS probing, calls, camera capture, audio
+recording, or external network actions.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -163,6 +180,9 @@ had already been validated before this overlay package verification.
   validation because `idf.py` is not available on the current `PATH`.
 - M0-INT-004 is a simulated replay flow only. It validates message shape,
   routing, logging, and display behavior, not real-world incident detection.
+- T027 connects existing event logs to Safety Companion, but live MQTT worker
+  auto-processing is not yet continuous; `POST /api/safety/process-events`
+  currently performs a bounded process pass.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The earlier T023 adapter treated GNSS no-fix as a device risk. The official
@@ -186,7 +206,6 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Next, move from simulated replay to hardware-connected Stage 0 integration:
-map real device events into the Safety Companion flow, decide whether GNSS
-no-fix remains a device-health rule or becomes a model/product risk, and then
-run a bounded hardware validation pass.
+Next, add continuous or supervised processing for live MQTT events and run a
+fresh hardware pass with the ESP32-S3 connected: MQTT sensor sample, simulated
+SOS, GNSS no-fix, Safety evaluation records, and Dashboard review.

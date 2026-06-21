@@ -23,6 +23,17 @@ DEFAULT_REPLAY_SCENARIOS = (
     "post_impact_inactivity",
     "privacy_restricted_impact",
 )
+EVALUABLE_EVENT_TYPES = {
+    "sos_pressed",
+    "manual_sos",
+    "wake_detected",
+    "sensor_sample",
+    "location_report",
+    "impact_detected",
+    "post_impact_inactivity",
+    "possible_fall",
+    "distress_audio",
+}
 
 
 def evaluate_sensor_frame(sensor_frame: dict[str, Any]) -> dict[str, Any]:
@@ -167,6 +178,28 @@ def evaluate(events: list[dict[str, Any]], device: dict[str, Any], *, now_ms: in
     return evaluate_sensor_frame_bundle(sensor_frame)
 
 
+def evaluate_event(event: Mapping[str, Any], device: Mapping[str, Any], *, now_ms: int | None = None) -> dict[str, Any]:
+    """Evaluate a single device/simulator event through the Safety Companion flow."""
+
+    sensor_frame = build_sensor_frame([dict(event)], device, now_ms=now_ms)
+    bundle = evaluate_sensor_frame_bundle(sensor_frame)
+    bundle["source_event_key"] = source_event_key(event)
+    bundle["source_event_type"] = event.get("event_type")
+    return bundle
+
+
+def is_evaluable_event(event: Mapping[str, Any]) -> bool:
+    return str(event.get("event_type") or "") in EVALUABLE_EVENT_TYPES
+
+
+def source_event_key(event: Mapping[str, Any]) -> str:
+    device_id = str(event.get("device_id") or "")
+    event_type = str(event.get("event_type") or event.get("message_type") or "")
+    seq = str(event.get("seq") or "")
+    timestamp = str(event.get("ts") or event.get("received_at") or "")
+    return f"{device_id}:{event_type}:{seq}:{timestamp}"
+
+
 def build_sensor_frame(
     events: list[dict[str, Any]],
     device: Mapping[str, Any],
@@ -291,7 +324,10 @@ def location_sensor(event: Mapping[str, Any] | None, device: Mapping[str, Any]) 
 
 def network_sensor(event: Mapping[str, Any] | None, device: Mapping[str, Any]) -> dict[str, Any]:
     online = bool_value(device.get("online"), True)
-    rssi = int_value((event or {}).get("rssi"), int_value(device.get("rssi"), -120))
+    event_rssi = (event or {}).get("rssi")
+    if event_rssi is None:
+        event_rssi = (event or {}).get("wifi_rssi")
+    rssi = int_value(event_rssi, int_value(device.get("rssi"), -120))
     level = min(4, signal_level(rssi))
     return {
         "registered": online,
@@ -327,7 +363,7 @@ def user_input_sensor(event: Mapping[str, Any] | None) -> dict[str, Any]:
 
 
 def first_relevant_event(events: list[dict[str, Any]]) -> dict[str, Any] | None:
-    ignored = {"mqtt_status", "mqtt_ack", "command_sent", "heartbeat"}
+    ignored = {"mqtt_status", "mqtt_ack", "command_sent", "heartbeat", "safety_evaluation", "safety_event"}
     return next((event for event in events if event.get("event_type") not in ignored), None)
 
 

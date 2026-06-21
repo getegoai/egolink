@@ -248,10 +248,132 @@ class PcSimulatorTests(unittest.TestCase):
         for command in commands:
             self.assertTrue(command["args"]["no_external_side_effects"])
 
+    def test_process_safety_events_persists_real_event_flow_once(self) -> None:
+        app.event_store.append_jsonl(
+            app.EVENT_LOG,
+            {
+                "protocol_version": "egolink.p0.v1",
+                "device_id": "ego-link-001",
+                "ts": "2026-06-21T03:00:00+00:00",
+                "seq": 4001,
+                "message_type": "event",
+                "event_type": "sensor_sample",
+                "priority": "normal",
+                "source": "esp32_runtime",
+                "sensor_kind": "device_health",
+                "wifi_rssi": -53,
+                "battery": 87,
+                "direction": "uplink",
+                "ingest_source": "pc_simulator.mqtt_worker",
+                "received_at": "2026-06-21T03:00:01+00:00",
+            },
+        )
+        app.event_store.append_jsonl(
+            app.EVENT_LOG,
+            {
+                "protocol_version": "egolink.p0.v1",
+                "device_id": "ego-link-001",
+                "ts": "2026-06-21T03:01:00+00:00",
+                "seq": 4002,
+                "message_type": "event",
+                "event_type": "location_report",
+                "priority": "normal",
+                "source": "sim7670g_gnss",
+                "fix": False,
+                "gnss_state": "no_fix",
+                "direction": "uplink",
+                "received_at": "2026-06-21T03:01:01+00:00",
+            },
+        )
+        app.event_store.append_jsonl(
+            app.EVENT_LOG,
+            {
+                "protocol_version": "egolink.p0.v1",
+                "device_id": "ego-link-001",
+                "ts": "2026-06-21T03:02:00+00:00",
+                "seq": 4003,
+                "message_type": "event",
+                "event_type": "sos_pressed",
+                "priority": "critical",
+                "source": "unit_test",
+                "battery": 86,
+                "direction": "uplink",
+                "received_at": "2026-06-21T03:02:01+00:00",
+            },
+        )
+
+        first = app.process_safety_events(limit=20)
+        second = app.process_safety_events(limit=20)
+
+        self.assertEqual(first["processed"], 3)
+        self.assertEqual(first["summary"], {"safety_evaluations": 3, "safety_events": 1, "base_commands": 1})
+        self.assertEqual(second["processed"], 0)
+        self.assertEqual(second["summary"], {"safety_evaluations": 0, "safety_events": 0, "base_commands": 0})
+        evaluation_types = [
+            event["source_event_type"]
+            for event in first["persisted_events"]
+            if event["event_type"] == "safety_evaluation"
+        ]
+        self.assertEqual(evaluation_types, ["sensor_sample", "location_report", "sos_pressed"])
+        safety_event = next(event for event in first["persisted_events"] if event["event_type"] == "safety_event")
+        self.assertEqual(safety_event["risk_type"], "manual_sos")
+        command = next(event for event in first["persisted_events"] if event["event_type"] == "command_sent")
+        self.assertEqual(command["base_command"]["command"], "ask_user")
+        self.assertTrue(command["base_command"]["args"]["no_external_side_effects"])
+
+    def test_snapshot_safety_companion_ignores_derived_safety_records(self) -> None:
+        app.event_store.append_jsonl(
+            app.EVENT_LOG,
+            {
+                "protocol_version": "egolink.p0.v1",
+                "device_id": "ego-link-001",
+                "ts": "2026-06-21T03:02:00+00:00",
+                "seq": 4003,
+                "message_type": "event",
+                "event_type": "sos_pressed",
+                "priority": "critical",
+                "source": "unit_test",
+                "battery": 86,
+                "direction": "uplink",
+                "received_at": "2026-06-21T03:02:01+00:00",
+            },
+        )
+        app.process_safety_events(limit=20)
+
+        data = app.snapshot()
+
+        self.assertEqual(data["events"][0]["event_type"], "command_sent")
+        self.assertEqual(data["safety_companion"]["sensor_frame"]["metadata"]["source_event_type"], "sos_pressed")
+        self.assertEqual(data["safety_companion"]["model_output"]["risk_type"], "manual_sos")
+
+    def test_safety_process_events_endpoint(self) -> None:
+        app.sos_pressed()
+        server = app.ThreadingHTTPServer(("127.0.0.1", 0), app.SimulatorHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}/api/safety/process-events",
+                data=json.dumps({"limit": 20}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=5) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["processed"], 1)
+        self.assertEqual(payload["summary"], {"safety_evaluations": 1, "safety_events": 1, "base_commands": 1})
+
     def test_dashboard_renders_safety_event_detail_logic(self) -> None:
         html = app.render_dashboard()
 
         self.assertIn("safety_event", html)
+        self.assertIn("safety_evaluation", html)
         self.assertIn("evidence_request", html)
         self.assertIn("privacy mode", html)
 

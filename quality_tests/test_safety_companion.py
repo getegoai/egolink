@@ -115,6 +115,48 @@ class SafetyCompanionTests(unittest.TestCase):
         self.assertEqual(result["model_output"]["risk_type"], "none")
         self.assertEqual(result["model_output"]["recommended_action"], "ignore")
 
+    def test_real_sensor_sample_maps_device_health_fields(self) -> None:
+        event = {
+            "protocol_version": "egolink.p0.v1",
+            "device_id": "ego-link-001",
+            "ts": "uptime_ms:8044",
+            "seq": 1,
+            "message_type": "event",
+            "event_type": "sensor_sample",
+            "priority": "normal",
+            "source": "esp32_runtime",
+            "sensor_kind": "device_health",
+            "uptime_ms": 8044,
+            "wifi_rssi": -53,
+            "free_heap_bytes": 265332,
+            "min_free_heap_bytes": 256308,
+            "battery": 87,
+            "charging": False,
+            "link_type": "mock_4g_over_wifi",
+            "modem_state": "mock_data_ready",
+            "gnss_state": "mock_fix",
+            "direction": "uplink",
+            "mqtt_topic": "ego/link/ego-link-001/event",
+            "ingest_source": "pc_simulator.mqtt_worker",
+            "received_at": "2026-06-20T13:20:08.717597+00:00",
+        }
+        result = safety_companion.evaluate_event(
+            event,
+            {
+                "device_id": "ego-link-001",
+                "online": True,
+                "battery": 80,
+                "rssi": -90,
+                "guard_mode": "child_safety",
+            },
+        )
+
+        self.assertEqual(result["sensor_frame"]["source"], "device")
+        self.assertEqual(result["sensor_frame"]["sensors"]["network"]["rssi_dbm"], -53)
+        self.assertEqual(result["model_input"]["features"]["network"]["signal_level"], 4)
+        self.assertEqual(result["model_input"]["features"]["device"]["battery_percent"], 87.0)
+        self.assertEqual(result["model_output"]["risk_type"], "none")
+
     def test_model_input_uses_event_timestamp_ms(self) -> None:
         result = safety_companion.evaluate(
             [{"event_type": "wake_detected", "ts": "2026-06-21T00:00:00+00:00"}],

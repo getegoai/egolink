@@ -143,6 +143,23 @@ class SimulatorHandler(BaseHTTPRequestHandler):
             persisted = persist_safety_replay(replay)
             self.respond_json({"ok": True, **replay, "persisted_events": persisted, "state": snapshot()})
             return
+        if path == "/api/safety/process-events":
+            try:
+                body = self.read_optional_json_body()
+                limit = int(body.get("limit", 20))
+                result = process_safety_events(limit=limit)
+            except (ValueError, TypeError, json.JSONDecodeError) as error:
+                self.respond_json(
+                    {
+                        "ok": False,
+                        "error": "invalid_safety_process_request",
+                        "detail": safety_companion.error_message(error),
+                    },
+                    status=400,
+                )
+                return
+            self.respond_json({"ok": True, **result, "state": snapshot()})
+            return
         self.respond_json({"error": "not_found"}, status=404)
 
     def log_message(self, format: str, *args: Any) -> None:
@@ -340,6 +357,103 @@ def persist_safety_replay(replay: dict[str, Any]) -> list[dict[str, Any]]:
                     base_command=base_command,
                 )
             )
+    return persisted
+
+
+def process_safety_events(*, limit: int = 20) -> dict[str, Any]:
+    events = recent_events(limit=limit)
+    device = device_snapshot(events)
+    processed_keys = processed_safety_source_keys(events)
+    records: list[dict[str, Any]] = []
+    persisted: list[dict[str, Any]] = []
+
+    for event in sorted(events, key=event_time):
+        if not safety_companion.is_evaluable_event(event):
+            continue
+        source_key = safety_companion.source_event_key(event)
+        if source_key in processed_keys:
+            continue
+        bundle = safety_companion.evaluate_event(event, device)
+        records.append(bundle)
+        persisted.extend(persist_safety_bundle(bundle))
+        processed_keys.add(source_key)
+
+    return {
+        "processed": len(records),
+        "records": records,
+        "persisted_events": persisted,
+        "summary": {
+            "safety_evaluations": sum(1 for item in persisted if item.get("event_type") == "safety_evaluation"),
+            "safety_events": sum(1 for item in persisted if item.get("event_type") == "safety_event"),
+            "base_commands": sum(1 for item in persisted if item.get("event_type") == "command_sent"),
+        },
+    }
+
+
+def processed_safety_source_keys(events: list[dict[str, Any]]) -> set[str]:
+    return {
+        str(event.get("source_event_key"))
+        for event in events
+        if event.get("event_type") in {"safety_evaluation", "safety_event"} and event.get("source_event_key")
+    }
+
+
+def persist_safety_bundle(bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    persisted: list[dict[str, Any]] = []
+    output = bundle["model_output"]
+    source_key = str(bundle.get("source_event_key") or "")
+    source_type = str(bundle.get("source_event_type") or "")
+    persisted.append(
+        append_event(
+            "safety_evaluation",
+            {
+                "priority": output["priority"],
+                "source": "safety_flow",
+                "source_event_key": source_key,
+                "source_event_type": source_type,
+                "risk_type": output["risk_type"],
+                "risk_score": output["risk_score"],
+                "confidence": output["confidence"],
+                "recommended_action": output["recommended_action"],
+                "evidence_request": output["evidence_request"],
+                "model_output": output,
+            },
+        )
+    )
+
+    safety_event = bundle.get("safety_event")
+    if safety_event is not None:
+        persisted.append(
+            append_event(
+                "safety_event",
+                {
+                    "priority": output["priority"],
+                    "source": "safety_flow",
+                    "source_event_key": source_key,
+                    "source_event_type": source_type,
+                    "risk_type": output["risk_type"],
+                    "risk_score": output["risk_score"],
+                    "confidence": output["confidence"],
+                    "recommended_action": output["recommended_action"],
+                    "evidence_request": output["evidence_request"],
+                    "privacy_mode": safety_event["privacy"]["privacy_mode"],
+                    "raw_evidence_allowed": safety_event["privacy"]["raw_evidence_allowed"],
+                    "safety_event": safety_event,
+                },
+            )
+        )
+
+    base_command = bundle.get("base_command")
+    if base_command is not None:
+        persisted.append(
+            command_sent(
+                str(base_command["command"]),
+                safety_command_text(base_command),
+                command_id=str(base_command["command_id"]),
+                safety_class=str(base_command["safety_class"]),
+                base_command=base_command,
+            )
+        )
     return persisted
 
 
@@ -621,6 +735,13 @@ def render_dashboard() -> str:
         if (e.recommended_action) parts.push('action ' + e.recommended_action);
         if (e.evidence_request?.length) parts.push('evidence ' + e.evidence_request.join(','));
         if (e.privacy_mode) parts.push('privacy mode');
+        return parts.join(' / ');
+      }
+      if (e.event_type === 'safety_evaluation') {
+        const parts = [];
+        if (e.source_event_type) parts.push('from ' + e.source_event_type);
+        if (e.risk_type) parts.push('risk ' + e.risk_type);
+        if (e.recommended_action) parts.push('action ' + e.recommended_action);
         return parts.join(' / ');
       }
       return e.text || e.keyword || e.cmd_id || e.status || e.source || e.hw_target || e.mqtt_topic || '';
