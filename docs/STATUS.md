@@ -28,20 +28,21 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T021：SIM7670G GNSS 探测与 `location_report` 写入完成。新增 `scripts/sim7670_gnss_probe.py`，可自动探测 SIM7670G AT 口，打开/查询 GNSS，解析 `CGNSSINFO` / `CGPSINFO`，并写入 PC Simulator 事件日志；当前室内无 fix，但 `location_report` 已进入 Dashboard/API 闭环。
 - T022：Safety Companion M0 契约基线完成。已将 `模型架构.md` 的“版本化模型包 + 明确接口契约”路线整合为 `docs/modeling/` 文档、`shared/contracts/` JSON Schema 和 `quality_tests/model_contract/` 契约测试；当前只做契约和边界，不引入训练代码或推理运行时。
 - T023：PC Simulator Safety Companion adapter 完成。新增 `pc_simulator/safety_companion.py`，可将最近事件和设备状态转换为 `model_input`，并返回确定性 mock `model_output`；`/api/state` 和 Dashboard 已展示 Safety Companion 风险、分数、建议动作和 reason codes。
+- T024：Safety Companion M0 PC Simulator adapter 完成。`pc_simulator/safety_companion.py` 已从本地 mock router 切换为调用模型包 `RuleRouter` / `build_model_input`；新增 `POST /api/safety/evaluate`，支持标准 `sensor_frame` / `model_input` 评估，并可将非 `none` 输出转换为 `safety_event`。
 
 ## 当前建议任务
 
-下一项建议任务 T024：把 Safety Companion mock `model_output` 写成显式 PC Simulator 事件或下行命令建议，让事件流能展示 `ask_user`、`upload_summary`、`escalate_emergency` 等推荐动作。
+下一项建议任务 T025 / M0-INT-003：在固件侧建立 `safety_model` 调用边界，围绕 `shared/embedded/safety_model_contract.h` 提供 deterministic mock 实现，先固定接口，不声明真实模型准确率。
 
 ## 最近验证
 
-- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，54 个测试全部成功。
-- `python -m unittest quality_tests.test_safety_companion -v`：通过，5 个 Safety Companion adapter 测试全部成功。
-- `python -m unittest quality_tests.test_pc_simulator -v`：通过，9 个 PC Simulator 测试全部成功。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，71 个测试全部成功。
+- `python scripts\verify_safety_companion_m0.py`：通过，模型包自检、12 个合成场景、契约测试、包内测试和 C threshold header 比对全部成功。
+- `python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v`：通过，19 个 PC Simulator / Safety Companion adapter 测试全部成功。
 - `python -m unittest quality_tests.model_contract.test_contract_schemas -v`：通过，5 个 Safety Companion M0 契约测试全部成功。
 - `python -m unittest quality_tests.test_repository_contract -v`：通过，3 个仓库结构契约测试全部成功。
 - `python -m unittest quality_tests.test_sim7670_gnss_probe -v`：通过，6 个 GNSS probe 测试全部成功。
-- Dashboard API：通过，`http://127.0.0.1:8787/api/state` 当前 `safety_companion.model_input.active_event=location_report`，`model_output.risk_type=device_risk`，`recommended_action=upload_summary`，`reason_codes=gnss_no_fix`。
+- PC Simulator safety endpoint：通过，`POST /api/safety/evaluate` 可接收标准 `model_input` 并返回 M0 `model_output`；测试覆盖 `manual_sos -> urgent_escalation`。
 - `python scripts\sim7670_gnss_probe.py --warmup-seconds 5 --poll-count 3 --poll-interval-seconds 2`：通过，首次报告见 `reports/gnss_validation/20260621-100651/gnss_probe.md`；`COM6/COM7` AT 可达，型号 `SIM7670G-MNGV`。
 - `python scripts\sim7670_gnss_probe.py --no-power-on --warmup-seconds 0 --poll-count 1 --poll-interval-seconds 0`：通过，最终报告见 `reports/gnss_validation/20260621-101143/gnss_probe.md`；`gnss_power_state=1`，当前返回 no-fix，事件已写入 `pc_simulator/runtime/events.jsonl`。
 - Dashboard API：通过，`http://127.0.0.1:8787/api/state` 最新事件为 `event_type=location_report`、`source=sim7670g_gnss`、`fix=false`、`gnss_power_state=1`、`device.gnss_state=no_fix`。
@@ -55,6 +56,7 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 ## 已知限制
 
 - 当前 GNSS 在室内未获得卫星 fix，`location_report` 已可上报 no-fix 状态；后续需要户外或靠窗长时间冷启动验证真实经纬度。
+- Safety Companion M0 官方规则包当前不把 GNSS no-fix 作为模型风险；PC Simulator adapter 只保留 `fix_valid=false` 输入，不再沿用旧 mock 的 `device_risk/upload_summary` 输出。
 - 当前 T021 是 PC 侧通过 USB AT 口探测 SIM7670G GNSS，尚未把 ESP32 固件切换为直接控制 SIM7670G GNSS。
 - SD 卡挂载曾失败，需要单独确认格式、接线、引脚、供电和固件挂载参数。
 - 用户已确认当前 Wi-Fi 凭据可以在本机项目中明文保存，固件 `sdkconfig` 可保留 SSID/password。

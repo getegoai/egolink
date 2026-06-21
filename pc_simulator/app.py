@@ -112,6 +112,21 @@ class SimulatorHandler(BaseHTTPRequestHandler):
             event = command_sent("play_prompt", "你已经离开安全区域，请确认是否需要联系家长。")
             self.respond_json({"ok": True, "event": event, "state": snapshot()})
             return
+        if path == "/api/safety/evaluate":
+            try:
+                result = safety_companion.evaluate_request(self.read_json_body())
+            except (ValueError, TypeError, json.JSONDecodeError) as error:
+                self.respond_json(
+                    {
+                        "ok": False,
+                        "error": "invalid_safety_evaluation_request",
+                        "detail": safety_companion.error_message(error),
+                    },
+                    status=400,
+                )
+                return
+            self.respond_json({"ok": True, **result})
+            return
         self.respond_json({"error": "not_found"}, status=404)
 
     def log_message(self, format: str, *args: Any) -> None:
@@ -132,6 +147,17 @@ class SimulatorHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def read_json_body(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length") or "0")
+        if length <= 0:
+            raise ValueError("request body is empty")
+        if length > 1_000_000:
+            raise ValueError("request body is too large")
+        value = json.loads(self.rfile.read(length).decode("utf-8"))
+        if not isinstance(value, dict):
+            raise ValueError("request body must be a JSON object")
+        return value
 
 
 def heartbeat() -> dict[str, Any]:

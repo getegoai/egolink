@@ -15,7 +15,7 @@
 ## Completed tasks
 
 - [x] M0-INT-001 package verification
-- [ ] M0-INT-002 PC Simulator adapter
+- [x] M0-INT-002 PC Simulator adapter
 - [ ] M0-INT-003 firmware model interface
 - [ ] M0-INT-004 simulated end-to-end flow
 
@@ -49,6 +49,13 @@ Integration compatibility updates made during verification:
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/modeling/INTEGRATION_ISSUES.md`
 
+M0-INT-002 PC Simulator adapter updates:
+
+- `pc_simulator/safety_companion.py`
+- `pc_simulator/app.py`
+- `quality_tests/test_safety_companion.py`
+- `quality_tests/test_pc_simulator.py`
+
 ## Verification commands and results
 
 ```powershell
@@ -70,7 +77,15 @@ decision.
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
-Result: passed. The repository test suite ran 66 tests successfully.
+Result: passed. The repository test suite ran 71 tests successfully.
+
+```powershell
+python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v
+```
+
+Result: passed. The PC Simulator adapter tests ran 19 tests successfully,
+including packaged scenario inputs, sensor frame evaluation, safety event
+conversion, privacy evidence filtering, and `POST /api/safety/evaluate`.
 
 Manifest validation:
 
@@ -88,15 +103,15 @@ had already been validated before this overlay package verification.
 
 ## Known gaps
 
-- `pc_simulator/safety_companion.py` is still the earlier T023 deterministic
-  mock adapter and uses the old local contract shape/actions. It has not yet
-  been replaced with an adapter that calls
-  `model_lab.safety_companion.RuleRouter` and `build_model_input`.
-- `POST /api/safety/evaluate` is not implemented yet.
+- `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
+  `build_model_input`; it no longer copies local decision rules.
 - Firmware does not yet expose the `shared/embedded/safety_model_contract.h`
   model boundary.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
+- The earlier T023 adapter treated GNSS no-fix as a device risk. The official
+  M0 rule package does not include this product rule, so the M0-INT-002 adapter
+  does not promote GNSS no-fix into a model risk by itself.
 
 ## Contract issues
 
@@ -108,13 +123,13 @@ had already been validated before this overlay package verification.
   line endings. `generate_c_header.py` now writes LF explicitly so the generated
   threshold header remains byte-stable across platforms. No threshold values or
   model semantics were changed.
-- The T023 PC Simulator mock adapter is intentionally not treated as compliant
-  with the new M0 package. It should be replaced in M0-INT-002 rather than
-  silently mapped through renamed fields.
+- The T023 PC Simulator mock adapter was replaced in M0-INT-002 by a thin
+  adapter over the packaged model API. Old action names such as
+  `escalate_emergency` and `upload_summary` are no longer produced by the
+  adapter; M0 uses `urgent_escalation` and `send_summary`.
 
 ## Recommended next step
 
-Start M0-INT-002 only: implement the PC Simulator adapter that calls
-`RuleRouter` and `build_model_input`, add a testable `/api/safety/evaluate`
-entry point, verify it against `scenario_suite.json`, and rerun
-`python scripts\verify_safety_companion_m0.py`.
+Start M0-INT-003 only: add the firmware-side `safety_model` boundary around
+`shared/embedded/safety_model_contract.h` with a deterministic mock
+implementation, then verify it without claiming real model accuracy.

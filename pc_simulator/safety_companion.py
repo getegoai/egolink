@@ -1,203 +1,254 @@
-"""Safety Companion M0 adapter and deterministic mock router."""
+"""PC Simulator adapter for the Safety Companion M0 package."""
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Mapping
+
+from model_lab.safety_companion import RuleRouter, build_model_input
+from model_lab.safety_companion.src.contract_validation import ContractValidationError
+from model_lab.safety_companion.src.event_builder import build_safety_event
 
 
-CONTRACT_VERSION = "safety-companion.contract.v0.1"
-MOCK_MODEL_VERSION = "safety-router-mock-0.1.0"
+CONTRACT_VERSION = "1.0.0"
+ROUTER = RuleRouter()
+
+
+def evaluate_sensor_frame(sensor_frame: dict[str, Any]) -> dict[str, Any]:
+    """Evaluate a `sensor_frame` and return the standard `model_output`."""
+
+    model_input = build_model_input(sensor_frame)
+    return evaluate_model_input(model_input)
+
+
+def evaluate_model_input(model_input: dict[str, Any]) -> dict[str, Any]:
+    """Evaluate a standard `model_input` through the packaged rule router."""
+
+    return ROUTER.evaluate(model_input)
+
+
+def evaluate_request(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Evaluate an HTTP request payload containing a sensor frame or model input."""
+
+    value = dict(payload)
+    if "sensor_frame" in value:
+        return evaluate_sensor_frame_bundle(value["sensor_frame"])
+    if "model_input" in value:
+        model_input = deepcopy(value["model_input"])
+        model_output = evaluate_model_input(model_input)
+        return {
+            "input_type": "model_input",
+            "model_input": model_input,
+            "model_output": model_output,
+            "safety_event": None,
+        }
+    if value.get("contract_version") == CONTRACT_VERSION and "sensors" in value:
+        return evaluate_sensor_frame_bundle(value)
+    if value.get("contract_version") == CONTRACT_VERSION and "features" in value:
+        model_output = evaluate_model_input(value)
+        return {
+            "input_type": "model_input",
+            "model_input": deepcopy(value),
+            "model_output": model_output,
+            "safety_event": None,
+        }
+    raise ValueError("request body must contain `sensor_frame` or `model_input`")
+
+
+def evaluate_sensor_frame_bundle(sensor_frame: Mapping[str, Any]) -> dict[str, Any]:
+    """Evaluate a sensor frame and include derived input and optional event."""
+
+    frame = deepcopy(dict(sensor_frame))
+    model_input = build_model_input(frame)
+    model_output = evaluate_model_input(model_input)
+    safety_event = build_safety_event(
+        model_input,
+        model_output,
+        sequence=int(frame.get("sequence", 0)),
+        sensor_frame=frame,
+    )
+    return {
+        "input_type": "sensor_frame",
+        "sensor_frame": frame,
+        "model_input": model_input,
+        "model_output": model_output,
+        "safety_event": safety_event,
+    }
 
 
 def evaluate(events: list[dict[str, Any]], device: dict[str, Any], *, now_ms: int | None = None) -> dict[str, Any]:
-    model_input = build_model_input(events, device, now_ms=now_ms)
-    model_output = mock_model_output(model_input)
-    return {
-        "model_input": model_input,
-        "model_output": model_output,
-    }
+    """Evaluate the latest simulator state for `/api/state`."""
+
+    sensor_frame = build_sensor_frame(events, device, now_ms=now_ms)
+    return evaluate_sensor_frame_bundle(sensor_frame)
 
 
-def build_model_input(
+def build_sensor_frame(
     events: list[dict[str, Any]],
-    device: dict[str, Any],
+    device: Mapping[str, Any],
     *,
     now_ms: int | None = None,
 ) -> dict[str, Any]:
-    active_event = first_event_type(events)
-    timestamp_ms = first_event_timestamp_ms(events) or now_ms or utc_now_ms()
-    location_event = first_event_by_type(events, "location_report")
-    sensor_event = first_event_by_type(events, "sensor_sample")
-    battery = int_value(
-        value_from_event_or_device(sensor_event, device, "battery"),
-        default=int_value(device.get("battery"), 100),
-    )
+    active_event = first_relevant_event(events)
+    timestamp = first_event_timestamp_ms([active_event] if active_event else []) or now_ms or utc_now_ms()
+    sequence = int_value((active_event or {}).get("seq"), int_value(device.get("seq"), 0))
+    frame_id = f"pcsim-{sequence}-{timestamp}"
 
-    model_input: dict[str, Any] = {
+    return {
         "contract_version": CONTRACT_VERSION,
-        "timestamp_ms": timestamp_ms,
+        "frame_id": frame_id,
+        "device_id": str(device.get("device_id") or (active_event or {}).get("device_id") or "ego-link-001"),
+        "timestamp_ms": timestamp,
+        "monotonic_ms": None,
+        "sequence": max(0, sequence),
         "mode": mode_from_device(device),
-        "motion": {
-            "accel_window": [],
-            "gyro_window": [],
-            "stationary_seconds": stationary_seconds(events),
+        "source": source_from_event(active_event),
+        "sensors": {
+            "motion": motion_sensor(active_event, device),
+            "audio": audio_sensor(active_event),
+            "location": location_sensor(active_event, device),
+            "network": network_sensor(active_event, device),
+            "device": device_sensor(active_event, device),
+            "user_input": user_input_sensor(active_event),
         },
-        "audio": {
-            "event_scores": audio_event_scores(events),
-        },
-        "location": location_context(location_event, device),
-        "network": {
-            "registered": bool(device.get("online", True)),
-            "signal_level": signal_level(device.get("rssi")),
-        },
-        "device": {
-            "battery_percent": clamp_int(battery, 0, 100),
-            "base_online": bool(device.get("online", True)),
+        "metadata": {
+            "source_event_type": (active_event or {}).get("event_type"),
+            "source_message_type": (active_event or {}).get("message_type"),
         },
     }
-    if active_event:
-        model_input["active_event"] = active_event
-    return model_input
 
 
-def mock_model_output(model_input: dict[str, Any]) -> dict[str, Any]:
-    active_event = str(model_input.get("active_event") or "")
-    device = model_input.get("device", {})
-    location = model_input.get("location", {})
-    audio = model_input.get("audio", {}).get("event_scores", {})
+def motion_sensor(event: Mapping[str, Any] | None, device: Mapping[str, Any]) -> dict[str, Any]:
+    event_type = str((event or {}).get("event_type") or "")
+    impact_score = float_value((event or {}).get("impact_score"), 0.0)
+    fall_score = float_value((event or {}).get("fall_score"), 0.0)
+    stationary_seconds = float_value((event or {}).get("stationary_seconds"), 0.0)
+    label = str((event or {}).get("activity_label") or "unknown")
 
-    if active_event in {"sos_pressed", "manual_sos"}:
-        return output(
-            risk_type="manual_sos",
-            risk_score=1.0,
-            confidence=1.0,
-            recommended_action="escalate_emergency",
-            evidence_request=["location_point", "device_log"],
-            reason_codes=["manual_sos"],
-        )
+    if event_type in {"impact_detected", "post_impact_inactivity"}:
+        label = "impact"
+        impact_score = max(impact_score, 0.92)
+        stationary_seconds = max(stationary_seconds, 20.0)
+    elif event_type in {"possible_fall", "fall_detected"}:
+        label = "fall_candidate"
+        fall_score = max(fall_score, 0.91)
+    elif label == "unknown" and float_value((event or device).get("speed_mps"), 0.0) > 0.2:
+        label = "walking"
 
-    if active_event == "location_report" and location.get("fix") is False:
-        return output(
-            risk_type="device_risk",
-            risk_score=0.62,
-            confidence=0.82,
-            recommended_action="upload_summary",
-            evidence_request=["device_log"],
-            reason_codes=["gnss_no_fix"],
-        )
-
-    if int_value(device.get("battery_percent"), 100) <= 20:
-        return output(
-            risk_type="device_risk",
-            risk_score=0.7,
-            confidence=0.8,
-            recommended_action="local_reminder",
-            evidence_request=["device_log"],
-            reason_codes=["low_battery"],
-        )
-
-    if float_value(audio.get("distress"), 0.0) >= 0.75:
-        return output(
-            risk_type="distress_audio",
-            risk_score=0.86,
-            confidence=0.76,
-            recommended_action="ask_user_and_send_summary",
-            evidence_request=["audio_5s", "location_point"],
-            reason_codes=["distress_audio"],
-        )
-
-    if active_event == "wake_detected":
-        return output(
-            risk_type="none",
-            risk_score=0.2,
-            confidence=0.7,
-            recommended_action="ask_user",
-            evidence_request=["none"],
-            reason_codes=["wake_detected"],
-        )
-
-    return output(
-        risk_type="none",
-        risk_score=0.0,
-        confidence=0.9,
-        recommended_action="ignore",
-        evidence_request=["none"],
-        reason_codes=["no_risk_signal"],
-    )
-
-
-def output(
-    *,
-    risk_type: str,
-    risk_score: float,
-    confidence: float,
-    recommended_action: str,
-    evidence_request: list[str],
-    reason_codes: list[str],
-) -> dict[str, Any]:
     return {
-        "contract_version": CONTRACT_VERSION,
-        "model_version": MOCK_MODEL_VERSION,
-        "risk_type": risk_type,
-        "risk_score": risk_score,
-        "confidence": confidence,
-        "recommended_action": recommended_action,
-        "evidence_request": evidence_request,
-        "reason_codes": reason_codes,
+        "sample_rate_hz": 50.0,
+        "window_duration_ms": 2560,
+        "accel_mps2": None,
+        "gyro_rad_s": None,
+        "raw_ref": None,
+        "summary": {
+            "activity_label": label,
+            "activity_confidence": float_value((event or {}).get("activity_confidence"), 0.9 if label != "unknown" else 0.0),
+            "max_accel_g": float_value((event or {}).get("max_accel_g"), 1.2),
+            "jerk_peak_g_s": float_value((event or {}).get("jerk_peak_g_s"), 2.0),
+            "orientation_change_deg": float_value((event or {}).get("orientation_change_deg"), 0.0),
+            "impact_score": clamp_float(impact_score, 0.0, 1.0),
+            "fall_score": clamp_float(fall_score, 0.0, 1.0),
+            "stationary_seconds": max(0.0, stationary_seconds),
+            "device_worn": bool_value((event or {}).get("device_worn"), True),
+        },
     }
 
 
-def location_context(location_event: dict[str, Any] | None, device: dict[str, Any]) -> dict[str, Any]:
-    source = location_event or device
-    fix = bool(source.get("fix", True))
-    if location_event and location_event.get("fix") is False:
-        fix = False
-    context: dict[str, Any] = {
-        "fix": fix,
-        "speed_mps": float_value(source.get("speed_mps"), 0.0),
-        "accuracy_m": float_value(source.get("accuracy_m"), 999.0 if not fix else 10.0),
-        "outside_safe_zone": bool(source.get("outside_safe_zone", False)),
-    }
-    if source.get("lat") is not None:
-        context["lat"] = float_value(source.get("lat"), 0.0)
-    if source.get("lon") is not None:
-        context["lon"] = float_value(source.get("lon"), 0.0)
-    return context
+def audio_sensor(event: Mapping[str, Any] | None) -> dict[str, Any]:
+    event_type = str((event or {}).get("event_type") or "")
+    speech = float_value((event or {}).get("speech_score"), 0.0)
+    distress = float_value((event or {}).get("distress_score"), 0.0)
+    impact = float_value((event or {}).get("impact_sound_score"), 0.0)
+    loud = float_value((event or {}).get("unknown_loud_sound_score"), 0.0)
 
+    if event_type == "wake_detected":
+        speech = max(speech, float_value((event or {}).get("confidence"), 0.0))
+    elif event_type == "distress_audio":
+        distress = max(distress, 0.91)
+    elif event_type in {"impact_detected", "post_impact_inactivity"}:
+        impact = max(impact, 0.76)
 
-def audio_event_scores(events: list[dict[str, Any]]) -> dict[str, float]:
-    wake = first_event_by_type(events, "wake_detected")
-    if not wake:
-        return {"speech": 0.0, "distress": 0.0, "impact": 0.0}
-    confidence = float_value(wake.get("confidence"), 0.0)
     return {
-        "speech": clamp_float(confidence, 0.0, 1.0),
-        "distress": 0.0,
-        "impact": 0.0,
+        "sample_rate_hz": 16000,
+        "window_duration_ms": 1000,
+        "vad_probability": clamp_float(speech, 0.0, 1.0),
+        "rms_dbfs": -48.0,
+        "peak_dbfs": -31.0,
+        "quality_score": float_value((event or {}).get("audio_quality_score"), 0.9),
+        "event_scores": {
+            "speech": clamp_float(speech, 0.0, 1.0),
+            "distress": clamp_float(distress, 0.0, 1.0),
+            "impact": clamp_float(impact, 0.0, 1.0),
+            "unknown_loud_sound": clamp_float(loud, 0.0, 1.0),
+        },
+        "clip_ref": (event or {}).get("audio_clip_ref"),
     }
 
 
-def stationary_seconds(events: list[dict[str, Any]]) -> float:
-    for event in events:
-        if event.get("stationary_seconds") is not None:
-            return float_value(event.get("stationary_seconds"), 0.0)
-    return 0.0
+def location_sensor(event: Mapping[str, Any] | None, device: Mapping[str, Any]) -> dict[str, Any]:
+    source = event if event and event.get("event_type") == "location_report" else device
+    fix_valid = bool_value(source.get("fix"), str(source.get("gnss_state") or "") not in {"no_fix", "off"})
+    quality = 0.85 if fix_valid else 0.0
+    return {
+        "fix_valid": fix_valid,
+        "latitude_deg": optional_float(source.get("lat")),
+        "longitude_deg": optional_float(source.get("lon")),
+        "speed_mps": max(0.0, float_value(source.get("speed_mps"), 0.0)),
+        "heading_deg": optional_float(source.get("heading_deg")),
+        "accuracy_m": optional_float(source.get("accuracy_m")),
+        "fix_age_ms": int_value(source.get("fix_age_ms"), 1000) if fix_valid else None,
+        "outside_safe_zone": bool_value(source.get("outside_safe_zone"), False),
+        "dwell_seconds": max(0.0, float_value(source.get("dwell_seconds"), 0.0)),
+        "route_deviation_m": max(0.0, float_value(source.get("route_deviation_m"), 0.0)),
+        "quality_score": clamp_float(float_value(source.get("location_quality_score"), quality), 0.0, 1.0),
+    }
 
 
-def first_event_type(events: list[dict[str, Any]]) -> str | None:
-    for event in events:
-        event_type = event.get("event_type")
-        if event_type and event_type != "mqtt_status":
-            return str(event_type)
-    return None
+def network_sensor(event: Mapping[str, Any] | None, device: Mapping[str, Any]) -> dict[str, Any]:
+    online = bool_value(device.get("online"), True)
+    rssi = int_value((event or {}).get("rssi"), int_value(device.get("rssi"), -120))
+    level = min(4, signal_level(rssi))
+    return {
+        "registered": online,
+        "link_type": link_type_from_device(device),
+        "rssi_dbm": rssi if rssi > -160 else None,
+        "signal_level": level,
+        "round_trip_ms": optional_float((event or {}).get("round_trip_ms")),
+        "upload_available": online,
+        "base_online": online,
+        "offline_seconds": 0.0 if online else float_value(device.get("offline_seconds"), 1200.0),
+    }
 
 
-def first_event_by_type(events: list[dict[str, Any]], event_type: str) -> dict[str, Any] | None:
-    return next((event for event in events if event.get("event_type") == event_type), None)
+def device_sensor(event: Mapping[str, Any] | None, device: Mapping[str, Any]) -> dict[str, Any]:
+    battery = float_value((event or {}).get("battery"), float_value(device.get("battery"), 100.0))
+    return {
+        "battery_percent": clamp_float(battery, 0.0, 100.0),
+        "charging": bool_value((event or {}).get("charging"), bool_value(device.get("charging"), False)),
+        "temperature_c": optional_float((event or {}).get("temperature_c")),
+        "privacy_mode": bool_value((event or {}).get("privacy_mode"), bool_value(device.get("privacy_mode"), False)),
+        "camera_available": bool_value(device.get("camera_available"), True),
+        "microphone_available": bool_value(device.get("microphone_available"), True),
+    }
 
 
-def first_event_timestamp_ms(events: list[dict[str, Any]]) -> int | None:
+def user_input_sensor(event: Mapping[str, Any] | None) -> dict[str, Any]:
+    event_type = str((event or {}).get("event_type") or "")
+    return {
+        "sos_pressed": event_type in {"sos_pressed", "manual_sos"} or bool_value((event or {}).get("sos_pressed"), False),
+        "cancel_pressed": bool_value((event or {}).get("cancel_pressed"), False),
+        "response": str((event or {}).get("response") or "none"),
+    }
+
+
+def first_relevant_event(events: list[dict[str, Any]]) -> dict[str, Any] | None:
+    ignored = {"mqtt_status", "mqtt_ack", "command_sent", "heartbeat"}
+    return next((event for event in events if event.get("event_type") not in ignored), None)
+
+
+def first_event_timestamp_ms(events: list[Mapping[str, Any]]) -> int | None:
     for event in events:
         timestamp = timestamp_ms(event.get("received_at") or event.get("ts"))
         if timestamp is not None:
@@ -208,12 +259,13 @@ def first_event_timestamp_ms(events: list[dict[str, Any]]) -> int | None:
 def timestamp_ms(value: Any) -> int | None:
     if value is None:
         return None
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
     text = str(value)
     if text.isdigit():
         return int(text)
     try:
-        normalized = text.replace("Z", "+00:00")
-        parsed = datetime.fromisoformat(normalized)
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return None
     if parsed.tzinfo is None:
@@ -221,32 +273,55 @@ def timestamp_ms(value: Any) -> int | None:
     return int(parsed.timestamp() * 1000)
 
 
-def value_from_event_or_device(event: dict[str, Any] | None, device: dict[str, Any], field: str) -> Any:
-    if event is not None and event.get(field) is not None:
-        return event[field]
-    return device.get(field)
-
-
-def mode_from_device(device: dict[str, Any]) -> str:
-    guard_mode = str(device.get("guard_mode") or "")
-    if guard_mode in {"school_trip", "asset_guard", "elder_care"}:
-        return guard_mode
+def mode_from_device(device: Mapping[str, Any]) -> str:
+    mode = str(device.get("guard_mode") or "")
+    if mode in {"personal_safety", "child_safety", "elder_safety", "cycling", "test"}:
+        return mode
     return "personal_safety"
+
+
+def source_from_event(event: Mapping[str, Any] | None) -> str:
+    if event and event.get("ingest_source"):
+        return "device"
+    return "simulator"
+
+
+def link_type_from_device(device: Mapping[str, Any]) -> str:
+    link_type = str(device.get("link_type") or "unknown")
+    if "wifi" in link_type:
+        return "wifi_mock"
+    if "lte" in link_type or "4g" in link_type:
+        return "lte"
+    if link_type in {"ble", "offline", "unknown"}:
+        return link_type
+    return "unknown"
 
 
 def signal_level(rssi: Any) -> int:
     value = int_value(rssi, -120)
     if value >= -60:
-        return 5
-    if value >= -70:
         return 4
-    if value >= -85:
+    if value >= -70:
         return 3
-    if value >= -100:
+    if value >= -85:
         return 2
     if value > -120:
         return 1
     return 0
+
+
+def bool_value(value: Any, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return bool(value)
 
 
 def int_value(value: Any, default: int) -> int:
@@ -263,13 +338,21 @@ def float_value(value: Any, default: float) -> float:
         return default
 
 
-def clamp_int(value: int, minimum: int, maximum: int) -> int:
-    return max(minimum, min(maximum, value))
+def optional_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    return float_value(value, 0.0)
 
 
 def clamp_float(value: float, minimum: float, maximum: float) -> float:
-    return max(minimum, min(maximum, value))
+    return max(minimum, min(maximum, float(value)))
 
 
 def utc_now_ms() -> int:
     return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+
+def error_message(error: Exception) -> str:
+    if isinstance(error, ContractValidationError):
+        return str(error)
+    return f"{type(error).__name__}: {error}"

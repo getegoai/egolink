@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import tempfile
+import threading
 from pathlib import Path
+import urllib.request
 import unittest
 from unittest.mock import patch
 
@@ -178,9 +181,43 @@ class PcSimulatorTests(unittest.TestCase):
         data = app.snapshot()
 
         self.assertEqual(event["event_type"], "sos_pressed")
-        self.assertEqual(data["safety_companion"]["model_input"]["active_event"], "sos_pressed")
+        self.assertEqual(data["safety_companion"]["sensor_frame"]["metadata"]["source_event_type"], "sos_pressed")
         self.assertEqual(data["safety_companion"]["model_output"]["risk_type"], "manual_sos")
-        self.assertEqual(data["safety_companion"]["model_output"]["recommended_action"], "escalate_emergency")
+        self.assertEqual(data["safety_companion"]["model_output"]["recommended_action"], "urgent_escalation")
+        self.assertEqual(data["safety_companion"]["safety_event"]["event_type"], "manual_sos")
+
+    def test_safety_evaluate_endpoint_accepts_model_input(self) -> None:
+        scenarios_path = (
+            Path(__file__).resolve().parents[1]
+            / "model_lab"
+            / "safety_companion"
+            / "datasets"
+            / "samples"
+            / "scenario_suite.json"
+        )
+        scenarios = {item["id"]: item for item in json.loads(scenarios_path.read_text(encoding="utf-8"))}
+        server = app.ThreadingHTTPServer(("127.0.0.1", 0), app.SimulatorHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            body = json.dumps({"model_input": scenarios["manual_sos"]["input"]}).encode("utf-8")
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}/api/safety/evaluate",
+                data=body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=5) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["input_type"], "model_input")
+        self.assertEqual(payload["model_output"]["risk_type"], "manual_sos")
+        self.assertEqual(payload["model_output"]["recommended_action"], "urgent_escalation")
 
     def test_dashboard_renders_sensor_sample_detail_logic(self) -> None:
         html = app.render_dashboard()

@@ -1,31 +1,28 @@
-# CURRENT_TASK: T023 PC Simulator Safety Companion Adapter
+# CURRENT_TASK: T024 Safety Companion M0 PC Simulator Adapter
 
 ## 任务目标
 
-实现 PC Simulator 侧 Safety Companion adapter，把现有事件转换为 `model_input`，并用确定性的 mock router 返回 `model_output`，先跑通模型接口闭环。
+完成 `M0-INT-002`：让 PC Simulator 能接受 `sensor_frame` 或 `model_input`，调用 Safety Companion M0 包中的规则基线，并返回标准 `model_output`。非 `none` 结果可转换为 `safety_event`。
 
 ## 范围
 
-- 新增 `pc_simulator/safety_companion.py`。
-- 将 `sos_pressed`、`wake_detected`、`location_report`、`sensor_sample` 等事件映射为 `shared/contracts/model_input.schema.json` 兼容结构。
-- 增加确定性 mock `model_output`：
-  - SOS -> `manual_sos` / `escalate_emergency`
-  - GNSS no-fix -> `device_risk` / `upload_summary`
-  - 低电量 -> `device_risk` / `local_reminder`
-  - wake -> `none` / `ask_user`
-- `/api/state` 返回 `safety_companion.model_input` 和 `safety_companion.model_output`。
-- Dashboard 显示风险类型、分数、建议动作和 reason codes。
-- 新增 adapter 单元测试和 PC Simulator 回归测试。
-- 更新集成报告和状态记录。
+- 替换旧的 PC 侧本地 mock router。
+- `pc_simulator/safety_companion.py` 必须调用：
+  - `model_lab.safety_companion.RuleRouter`
+  - `model_lab.safety_companion.build_model_input`
+- 新增 `evaluate_sensor_frame(sensor_frame)`。
+- 新增 `evaluate_model_input(model_input)`。
+- 新增 `/api/safety/evaluate` HTTP 入口。
+- `/api/state` 继续返回 Dashboard 需要的 `safety_companion` 输出。
+- 新增/更新单元测试，覆盖官方场景、传感器帧、隐私证据过滤和 HTTP 入口。
 
 ## 不做
 
-- 不引入真实模型。
-- 不引入模型训练代码。
-- 不引入 ESP-DL、ESP-SR、TFLite Micro。
-- 不改变固件运行行为。
-- 不改变 MQTT topic 或设备上报格式。
-- 不把 mock router 的输出解释为模型准确率。
+- 不复制模型包规则到 PC Simulator。
+- 不修改 `model_lab/**`、`model_artifacts/**`、`shared/contracts/**` 的语义。
+- 不引入训练代码或第三方智能体框架。
+- 不把合成场景通过描述成真实安全识别效果。
+- 不在 adapter 中私自新增模型包没有定义的风险类型。
 
 ## 允许修改路径
 
@@ -34,37 +31,37 @@
 - `quality_tests/test_safety_companion.py`
 - `quality_tests/test_pc_simulator.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/modeling/INTEGRATION_ISSUES.md`
+- `PACKAGE_MANIFEST.json`
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
 ## 验证命令
 
 ```powershell
-python -m unittest quality_tests.test_safety_companion -v
-python -m unittest quality_tests.test_pc_simulator -v
+python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v
+python scripts\verify_safety_companion_m0.py
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
 ## 执行结果
 
-- 已新增 `pc_simulator/safety_companion.py`，输出契约版本 `safety-companion.contract.v0.1`。
-- 已将 `/api/state` 扩展为返回 `safety_companion` 字段。
-- 已在 Dashboard 增加 Safety 区块，展示 risk、score、action、reasons。
-- 已新增 `quality_tests/test_safety_companion.py`，覆盖 SOS、GNSS no-fix、wake、低电量和时间戳转换。
-- 已扩展 `quality_tests/test_pc_simulator.py`，确认 snapshot 包含 Safety Companion 输出。
-- `python -m unittest quality_tests.test_safety_companion -v` 通过，5 个测试成功。
-- `python -m unittest quality_tests.test_pc_simulator -v` 通过，9 个测试成功。
-- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` 通过，54 个测试全部成功。
-- 已重启 Dashboard，当前 `http://127.0.0.1:8787/api/state` 返回：
-  - `active_event=location_report`
-  - `safety_risk=device_risk`
-  - `safety_action=upload_summary`
-  - `reasons=gnss_no_fix`
+- `pc_simulator/safety_companion.py` 已改为薄适配层，调用模型包 `RuleRouter` / `build_model_input`。
+- 已支持 `evaluate_sensor_frame(sensor_frame)` 和 `evaluate_model_input(model_input)`。
+- 已支持 `POST /api/safety/evaluate`，输入错误返回明确 400 JSON。
+- 非 `none` 输出可通过包内 `build_safety_event` 转换为 `safety_event`。
+- `/api/state` 仍返回 `safety_companion`，供 Dashboard 展示 risk、score、action、reasons。
+- 已记录差异：旧 T023 mock 会把 GNSS no-fix 作为 `device_risk`；官方 M0 包没有这条规则，当前 adapter 不私自提升为模型风险。
+- `python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v` 通过，19 个测试成功。
+- `python scripts\verify_safety_companion_m0.py` 通过。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` 通过，71 个测试成功。
 
 ## 完成标准
 
-- [x] 现有 PC Simulator 事件可转换为 `model_input`。
-- [x] mock router 可返回 `model_output`。
-- [x] `/api/state` 和 Dashboard 可看到 Safety Companion 输出。
-- [x] 单元测试和全量验证通过。
-- [x] 明确记录该结果只验证接口闭环，不验证模型准确率。
+- [x] PC Simulator 可处理标准 `model_input`。
+- [x] PC Simulator 可处理标准 `sensor_frame`。
+- [x] 适配器调用模型包 API，不复制规则。
+- [x] 新增可测试 HTTP 入口 `/api/safety/evaluate`。
+- [x] 输入验证失败返回明确错误。
+- [x] 覆盖正常步行、手动 SOS、撞击后静止、隐私模式证据过滤。
+- [x] 模型包自检和项目全量验证通过。
