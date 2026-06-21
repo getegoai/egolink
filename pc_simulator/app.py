@@ -258,10 +258,15 @@ def event_time(event: dict[str, Any]) -> str:
 
 def device_snapshot(events: list[dict[str, Any]]) -> dict[str, Any]:
     device = asdict(STATE)
-    for event in events:
-        if event.get("message_type") == "status":
-            apply_status_event(device, event)
-            break
+    if events:
+        device["last_seen_at"] = ""
+        device["last_seen_source"] = "simulator"
+    latest_status = next((event for event in events if event.get("message_type") == "status"), None)
+    latest_location = next((event for event in events if event.get("event_type") == "location_report"), None)
+    if latest_status is not None:
+        apply_status_event(device, latest_status)
+    if latest_location is not None:
+        apply_location_event(device, latest_location)
     return device
 
 
@@ -285,7 +290,24 @@ def apply_status_event(device: dict[str, Any], event: dict[str, Any]) -> None:
             device[field] = event[field]
     device["online"] = True
     device["last_seen_at"] = event_time(event)
-    device["last_seen_source"] = "mqtt" if event.get("ingest_source") else "simulator"
+    device["last_seen_source"] = event_source_label(event)
+
+
+def apply_location_event(device: dict[str, Any], event: dict[str, Any]) -> None:
+    for field in ["lat", "lon", "gnss_state"]:
+        if field in event and event[field] not in (None, ""):
+            device[field] = event[field]
+    device["online"] = True
+    if event_time(event) >= str(device.get("last_seen_at") or ""):
+        device["last_seen_at"] = event_time(event)
+        device["last_seen_source"] = event_source_label(event)
+
+
+def event_source_label(event: dict[str, Any]) -> str:
+    if event.get("ingest_source"):
+        return "mqtt"
+    source = str(event.get("source") or "")
+    return source if source else "simulator"
 
 
 def snapshot() -> dict[str, Any]:
@@ -457,6 +479,14 @@ def render_dashboard() -> str:
         if (e.sensor_kind) parts.push(e.sensor_kind);
         if (e.wifi_rssi !== undefined) parts.push('RSSI ' + e.wifi_rssi);
         if (e.free_heap_bytes !== undefined) parts.push('heap ' + e.free_heap_bytes);
+        return parts.join(' / ');
+      }
+      if (e.event_type === 'location_report') {
+        const parts = [];
+        if (e.fix === false) parts.push('GNSS no fix');
+        if (e.lat !== undefined && e.lon !== undefined) parts.push(Number(e.lat).toFixed(6) + ', ' + Number(e.lon).toFixed(6));
+        if (e.satellites !== undefined) parts.push('SV ' + e.satellites);
+        if (e.source) parts.push(e.source);
         return parts.join(' / ');
       }
       return e.text || e.keyword || e.cmd_id || e.status || e.source || e.hw_target || e.mqtt_topic || '';

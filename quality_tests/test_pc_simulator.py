@@ -125,6 +125,54 @@ class PcSimulatorTests(unittest.TestCase):
         self.assertEqual(data["events"][0]["cmd_id"], "cmd-0001")
         self.assertEqual(data["events"][1]["keyword"], "Ego")
 
+    def test_snapshot_applies_location_report_from_event_log(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "events.jsonl"
+            app.event_store.append_jsonl(
+                log_path,
+                {
+                    "protocol_version": "egolink.p0.v1",
+                    "device_id": "ego-link-001",
+                    "ts": "2026-06-21T01:09:00+00:00",
+                    "seq": 59,
+                    "message_type": "status",
+                    "event_type": "mqtt_status",
+                    "battery": 76,
+                    "link_type": "mock_4g_over_wifi",
+                    "rssi": -55,
+                    "guard_mode": "child_safety",
+                    "gnss_state": "mock_fix",
+                    "queue_size": 3,
+                    "received_at": "2026-06-21T01:09:01+00:00",
+                },
+            )
+            app.event_store.append_jsonl(
+                log_path,
+                {
+                    "protocol_version": "egolink.p0.v1",
+                    "device_id": "ego-link-001",
+                    "ts": "2026-06-21T01:10:00+00:00",
+                    "seq": 60,
+                    "message_type": "event",
+                    "event_type": "location_report",
+                    "priority": "normal",
+                    "source": "sim7670g_gnss",
+                    "fix": True,
+                    "gnss_state": "fix",
+                    "lat": 31.222177,
+                    "lon": 121.354376,
+                    "received_at": "2026-06-21T01:10:01+00:00",
+                },
+            )
+
+            with patch.object(app, "EVENT_LOG", log_path), patch.object(app, "RUNTIME_DIR", Path(tmp)):
+                data = app.snapshot()
+
+        self.assertEqual(data["device"]["lat"], 31.222177)
+        self.assertEqual(data["device"]["lon"], 121.354376)
+        self.assertEqual(data["device"]["gnss_state"], "fix")
+        self.assertEqual(data["device"]["last_seen_source"], "sim7670g_gnss")
+
     def test_dashboard_renders_sensor_sample_detail_logic(self) -> None:
         html = app.render_dashboard()
 
@@ -132,6 +180,13 @@ class PcSimulatorTests(unittest.TestCase):
         self.assertIn("sensor_sample", html)
         self.assertIn("wifi_rssi", html)
         self.assertIn("free_heap_bytes", html)
+
+    def test_dashboard_renders_location_report_detail_logic(self) -> None:
+        html = app.render_dashboard()
+
+        self.assertIn("location_report", html)
+        self.assertIn("GNSS no fix", html)
+        self.assertIn("satellites", html)
 
 
 if __name__ == "__main__":

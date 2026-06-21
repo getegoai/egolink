@@ -1,12 +1,12 @@
 # Ego Link 状态记录
 
-更新时间：2026-06-20
+更新时间：2026-06-21
 
 ## 当前阶段
 
-Stage 0：单智能体、单任务、低风险开发模式。
+Stage 0：单智能体、单任务、低风险迭代开发模式。
 
-产品锚点：AI 主动守护定位器。近期 v0.1 目标聚焦设备联网、MQTT 上传、网页看板、SOS / 唤醒 / 定位事件闭环，并为后续 AI 主动提醒打基础。
+产品锚点：AI 主动守护定位器。近期 v0.1 目标聚焦设备联网、MQTT 上报、网页看板、SOS / 唤醒 / 定位事件闭环，并为后续 AI 主动提醒打基础。
 
 ## 已完成
 
@@ -25,43 +25,32 @@ Stage 0：单智能体、单任务、低风险开发模式。
 - T018：MQTT event / ack 闭环完成。worker 默认订阅 `status` / `event` / `ack` 三类 topic，Dashboard 事件流可展示 `mqtt_ack`、`wake_detected` 等上报与确认事件。
 - T019：固件传感器数据上报完成。`firmware/mqtt_heartbeat` 已新增 `sensor_sample` / `device_health` event，上报 uptime、Wi-Fi RSSI、free heap、minimum free heap 等 ESP32 设备健康数据；已刷写 ESP32-S3 `COM4`，PC Simulator 收到真实 `sensor_sample`，Dashboard 可展示 sensor sample 的 RSSI/heap 详情。
 - T020：板级探测 CH343 / RNDIS 识别修复完成。`egolink_board_probe.py` 已合并 Windows CIM 与 PnP 设备发现，真实探测可识别 ESP32-S3 `COM4`、SIM7670G 串口和 Remote NDIS 网卡。
+- T021：SIM7670G GNSS 探测与 `location_report` 写入完成。新增 `scripts/sim7670_gnss_probe.py`，可自动探测 SIM7670G AT 口，打开/查询 GNSS，解析 `CGNSSINFO` / `CGPSINFO`，并写入 PC Simulator 事件日志；当前室内无 fix，但 `location_report` 已进入 Dashboard/API 闭环。
 
 ## 当前建议任务
 
-下一项建议任务 T021：接入 SIM7670G GNSS / 定位数据上报，先完成 AT 查询、解析和 PC Simulator `location_report` event 写入。
+下一项建议任务 T022：固件侧周期发布 Mock GNSS `location_report` 到 MQTT，使 ESP32-S3 在不直接绑定真实 SIM7670G GNSS 的前提下跑通设备端定位上报闭环；真实 SIM7670G 户外 fix 作为独立硬件门禁继续验证。
 
 ## 最近验证
 
-- `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`：通过，34 个测试全部成功。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，42 个测试全部成功。
+- `python -m unittest quality_tests.test_sim7670_gnss_probe -v`：通过，6 个 GNSS probe 测试全部成功。
+- `python -m unittest quality_tests.test_pc_simulator -v`：通过，8 个 PC Simulator 测试全部成功。
+- `python scripts\sim7670_gnss_probe.py --warmup-seconds 5 --poll-count 3 --poll-interval-seconds 2`：通过，首次报告见 `reports/gnss_validation/20260621-100651/gnss_probe.md`；`COM6/COM7` AT 可达，型号 `SIM7670G-MNGV`。
+- `python scripts\sim7670_gnss_probe.py --no-power-on --warmup-seconds 0 --poll-count 1 --poll-interval-seconds 0`：通过，最终报告见 `reports/gnss_validation/20260621-101143/gnss_probe.md`；`gnss_power_state=1`，当前返回 no-fix，事件已写入 `pc_simulator/runtime/events.jsonl`。
+- Dashboard API：通过，`http://127.0.0.1:8787/api/state` 最新事件为 `event_type=location_report`、`source=sim7670g_gnss`、`fix=false`、`gnss_power_state=1`、`device.gnss_state=no_fix`。
 - `python -m unittest quality_tests.test_board_probe -v`：通过，8 个 board probe 测试全部成功。
 - `python scripts\egolink_board_probe.py --skip-esp-log --probe-all-sim-ports`：通过，报告见 `reports/board_validation/20260621-091239/probe.md`；`COM4` CH343、SIM7670G 串口、Remote NDIS 和 AT 身份质量门均通过，ESP32 日志与 SD 状态因本次跳过日志读取仍为 WARN。
 - `python -m unittest quality_tests.test_mqtt_heartbeat_firmware -v`：通过，3 个固件静态测试全部成功。
-- `& "C:\Espressif\tools\ninja\1.12.1\ninja.exe" -C build`：通过，`firmware/mqtt_heartbeat` 增量编译成功，生成 `egolink_mqtt_heartbeat.bin`。
-- `Get-PnpDevice -PresentOnly`：通过，找到 `USB-Enhanced-SERIAL CH343 (COM4)`，InstanceId 为 `USB\VID_1A86&PID_55D3\5B91047400`。
 - `idf.py -p COM4 flash`：通过，识别芯片 `ESP32-S3`，写入 `egolink_mqtt_heartbeat.bin` 并 hard reset。
 - `python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/event --max-messages 1 --wait-seconds 90`：通过，收到真实固件 `sensor_sample`。
-- Dashboard API：通过，`/api/state` 最新事件为 `event_type=sensor_sample`、`sensor_kind=device_health`、`wifi_rssi=-53`、`free_heap_bytes=265332`、`min_free_heap_bytes=256308`。
-- `python scripts/egolink_board_probe.py --skip-esp-log --probe-all-sim-ports`：未通过完整质量门，报告见 `reports/board_validation/20260620-211839/probe.md`；SIM7670G 串口 `COM5/COM6/COM7/COM8` 可见，`COM6/COM7` AT 身份识别正常，CSQ 为 `28,0`。注意：该脚本当前漏识别 PnP 中已存在的 CH343 `COM4`，需后续修复探测逻辑。
-- `python -m unittest quality_tests.test_mqtt_worker -v`：通过，8 个 MQTT worker 测试全部成功。
-- `python -m unittest quality_tests.test_pc_simulator -v`：通过，5 个 PC Simulator 测试全部成功。
-- T018 broker smoke test：通过，worker 限定订阅 `ego/link/+/event` 和 `ego/link/+/ack` 后，经 Mosquitto 发布模拟 `sos_pressed` 与 `ack`，成功写入 JSONL；Dashboard API 事件流显示 `mqtt_ack`、`wake_detected`、`mqtt_status`。
-- PC Simulator API smoke test：通过，`/api/state` 读取事件日志并返回真实 MQTT status，样例字段包括 `device_id=ego-link-001`、`seq=2515`、`rssi=-56`、`event_type=mqtt_status`、`source=mqtt`。
-- `python pc_simulator\app.py --help` / `python pc_simulator\mqtt_worker.py --help`：通过，两个本地 CLI 入口均可直接运行。
-- `python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/status --max-messages 1 --wait-seconds 20`：通过，worker 收到 1 条真实开发板 status 并写入 `pc_simulator/runtime/events.jsonl`，样例字段包括 `device_id=ego-link-001`、`seq=2446`、`rssi=-56`、`event_type=mqtt_status`。
-- `powershell -ExecutionPolicy Bypass -File scripts/start_mosquitto_lan.ps1 -BrokerIp 192.168.31.250 -Restart`：通过，用户态 LAN broker 监听 `192.168.31.250:1883`，PID `20100`。
-- `Get-NetTCPConnection -LocalAddress 192.168.31.250 -LocalPort 1883`：通过，确认 broker 处于 `Listen` 状态，并存在开发板连接。
-- `mosquitto_sub -h 192.168.31.250 -p 1883 -t ego/link/ego-link-001/status -C 1 -W 35`：通过，收到 `device_id=ego-link-001`、`message_type=status`、`seq=234` 的 JSON 心跳。
-- 项目清理：已删除 `firmware/**/build/`、`firmware/**/managed_components/`、`firmware/**/captures/`、`pc_simulator/runtime/` 和 `**/__pycache__/` 等可再生目录；后续运行生成物已由 `.gitignore` 忽略。
-- `AT+CFUN=1,1`：执行 SIM7670G 软重启后，模块重新识别 SIM。
-- `AT+CPIN?`：通过，返回 `+CPIN: READY`。
-- `AT+CICCID`：通过，ICCID 可读取，状态记录中不保存完整卡号。
-- `AT+COPS?` / `AT+CEREG?` / `AT+CGATT?`：通过，注册到 `460-00` LTE 网络，`CEREG=0,1`，`CGATT=1`。
-- `AT+CGDCONT?` / `AT+IPADDR`：通过，APN 为 `CMNET`，模块侧获得 IPv4 地址 `10.36.158.99`。
-- `AT+CPING="8.8.8.8",1,4,64,1000,10000,255`：通过，4/4 收到响应，RTT 约 74-247 ms。
+- 本机 Dashboard 当前运行在 `http://127.0.0.1:8787`，进程 PID `44632`。
 
 ## 已知限制
 
-- SD 卡挂载曾失败，需要单独确认格式、接线/引脚、供电和固件挂载参数。
+- 当前 GNSS 在室内未获得卫星 fix，`location_report` 已可上报 no-fix 状态；后续需要户外或靠窗长时间冷启动验证真实经纬度。
+- 当前 T021 是 PC 侧通过 USB AT 口探测 SIM7670G GNSS，尚未把 ESP32 固件切换为直接控制 SIM7670G GNSS。
+- SD 卡挂载曾失败，需要单独确认格式、接线、引脚、供电和固件挂载参数。
 - 用户已确认当前 Wi-Fi 凭据可以在本机项目中明文保存，固件 `sdkconfig` 可保留 SSID/password。
 - 当前 shell 不是管理员权限，无法修改 `C:\Program Files\mosquitto\mosquitto.conf`；因此系统服务仍只监听本机回环地址，局域网访问由用户态 Mosquitto 进程提供。
 - 当前开发板已从 camera smoke 固件切换为 MQTT heartbeat 固件；如需继续看 HTTP 摄像头照片，需要重新烧录 `firmware/camera_smoke`。
