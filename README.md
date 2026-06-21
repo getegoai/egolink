@@ -7,6 +7,7 @@ Ego Link P0 是“AI 主动守护定位器”的第一阶段验证项目。当�
 - 硬件：Waveshare ESP32-S3-SIM7670G-4G 开发板。
 - 固件：已验证摄像头拍照 smoke test 与 Wi-Fi MQTT 心跳 smoke test；`mqtt_heartbeat` 已支持设备健康 `sensor_sample` 事件上报。
 - 本机服务：Windows Mosquitto 已安装，用户态 LAN broker 可供开发板连接，PC Simulator 可订阅 MQTT status、写入事件日志并在 Dashboard 展示。
+- Safety Companion：M0 契约、规则基线、模拟回放、真实/半真实事件处理和本地监督会话已完成；M1 下一步进入数据基础与采集闭环。
 - 开发模式：采用 GitHub Flow，第一阶段保持单智能体、单任务、可验证迭代。
 
 详细约定见 `docs/DEVELOPMENT_WORKFLOW.md`。
@@ -17,6 +18,18 @@ Ego Link P0 是“AI 主动守护定位器”的第一阶段验证项目。当�
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
+```
+
+启动本地监督会话：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start_local_supervised_session.ps1
+```
+
+打开 AutoDev + 设备/Safety 统一监控：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/watch_autodev.ps1
 ```
 
 启动本机局域网 Mosquitto broker：
@@ -31,10 +44,16 @@ powershell -ExecutionPolicy Bypass -File scripts/start_mosquitto_lan.ps1 -Broker
 python pc_simulator/app.py --port 8787
 ```
 
-接收开发板 MQTT status 并写入事件日志：
+接收开发板 MQTT 并写入事件日志：
 
 ```powershell
 python pc_simulator/mqtt_worker.py --host 192.168.31.250 --port 1883
+```
+
+启用 live MQTT Safety 处理：
+
+```powershell
+python pc_simulator/mqtt_worker.py --host 192.168.31.250 --port 1883 --process-safety --safety-process-limit 20
 ```
 
 默认订阅 `ego/link/+/status`、`ego/link/+/event` 和 `ego/link/+/ack`。如需只订阅部分主题，可重复传入 `--topic`。
@@ -47,12 +66,22 @@ Dashboard 会读取 `pc_simulator/runtime/events.jsonl` 中的最新事件；wor
 http://127.0.0.1:8787
 ```
 
+## 模型上下文
+
+新模型上下文入口：
+
+- `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`
+- `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`
+
+若 M0 尚未完成集成，先执行 `docs/modeling/INTEGRATION_TASKS.md`；M0 集成完成后，从 M1-001 的硬件与传感器矩阵开始，不直接训练神经网络。
+
 ## 任务入口
 
 - 当前任务：`docs/tasks/CURRENT_TASK.md`
 - 项目状态：`docs/STATUS.md`
 - 产品定位：`docs/产品定位.md`
 - 板级验证：`docs/P0_BOARD_VALIDATION.md`
+- AutoDev 监控：`docs/AUTODEV_MONITORING.md`
 
 ## 版本化迭代
 

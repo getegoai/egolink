@@ -38,6 +38,9 @@ RUNS_DIR = AUTODEV_DIR / "runs"
 STATE_PATH = RUNTIME_DIR / "state.json"
 LIVE_STATUS_PATH = RUNTIME_DIR / "live_status.json"
 LIVE_STATUS_MD_PATH = RUNTIME_DIR / "LIVE_STATUS.md"
+PC_SIM_RUNTIME_DIR = REPO_ROOT / "pc_simulator" / "runtime"
+LOCAL_SESSION_ROOT = PC_SIM_RUNTIME_DIR / "sessions"
+LOCAL_EVENT_LOG = PC_SIM_RUNTIME_DIR / "events.jsonl"
 REQUIRED_DIRS = ("docs", "firmware", "pc_simulator", "quality_tests", "scripts")
 REQUIRED_FILES = ("README.md", "AGENTS.md", "autodev/backlog.json", "autodev/result.schema.json")
 DEFAULT_BRANCH = "autodev/egolink-p0"
@@ -1457,7 +1460,174 @@ def infer_live_status_from_latest_run() -> dict[str, Any] | None:
     }
 
 
-def render_live_dashboard(*, event_limit: int, clear: bool) -> None:
+def find_latest_local_session_summary(sessions_dir: Path = LOCAL_SESSION_ROOT) -> Path | None:
+    if not sessions_dir.is_dir():
+        return None
+    candidates = [
+        path / "session_summary.json"
+        for path in sessions_dir.iterdir()
+        if path.is_dir() and (path / "session_summary.json").is_file()
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def read_recent_jsonl(path: Path, limit: int) -> list[dict[str, Any]]:
+    if limit <= 0 or not path.is_file():
+        return []
+    recent: deque[dict[str, Any]] = deque(maxlen=limit)
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            for line in handle:
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                try:
+                    event = json.loads(stripped)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(event, dict):
+                    recent.append(event)
+    except OSError:
+        return []
+    return list(recent)[::-1]
+
+
+def compact_local_event(event: dict[str, Any]) -> dict[str, Any]:
+    fields = (
+        "event_type",
+        "device_id",
+        "seq",
+        "ts",
+        "source",
+        "source_event_type",
+        "risk_type",
+        "recommended_action",
+        "wifi_rssi",
+        "fix",
+        "gnss_state",
+        "cmd",
+    )
+    return {field: event[field] for field in fields if field in event}
+
+
+def build_local_session_summary_from_events(event_log: Path = LOCAL_EVENT_LOG, *, limit: int = 40) -> dict[str, Any] | None:
+    events = read_recent_jsonl(event_log, limit)
+    if not events:
+        return None
+    counts: dict[str, int] = {}
+    latest_by_type: dict[str, dict[str, Any]] = {}
+    for event in events:
+        event_type = str(event.get("event_type", "unknown"))
+        counts[event_type] = counts.get(event_type, 0) + 1
+        latest_by_type.setdefault(event_type, compact_local_event(event))
+    safety_evaluations = [event for event in events if event.get("event_type") == "safety_evaluation"]
+    safety_events = [event for event in events if event.get("event_type") == "safety_event"]
+    commands = [event for event in events if event.get("event_type") == "command_sent"]
+    return {
+        "generated_at": iso_now(),
+        "event_log": str(event_log),
+        "event_count": len(events),
+        "counts": dict(sorted(counts.items())),
+        "latest_by_type": latest_by_type,
+        "latest_events": [compact_local_event(event) for event in events[:8]],
+        "safety": {
+            "evaluations": len(safety_evaluations),
+            "safety_events": len(safety_events),
+            "commands": len(commands),
+            "latest_risk_type": str(safety_evaluations[0].get("risk_type", "none"))
+            if safety_evaluations
+            else "none",
+            "latest_action": str(safety_evaluations[0].get("recommended_action", "ignore"))
+            if safety_evaluations
+            else "ignore",
+        },
+        "processes": {"dashboard_pid": None, "worker_pid": None},
+        "endpoints": {"dashboard_url": None, "broker": None},
+        "session_dir": None,
+        "source": "event_log_fallback",
+    }
+
+
+def read_local_session_summary(
+    *,
+    summary_path: Path | None = None,
+    allow_event_log_fallback: bool = True,
+    event_limit: int = 40,
+) -> dict[str, Any] | None:
+    source_path = summary_path or find_latest_local_session_summary()
+    if source_path is not None and source_path.is_file():
+        try:
+            loaded = json.loads(source_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            loaded = None
+        if isinstance(loaded, dict):
+            loaded = dict(loaded)
+            loaded["source"] = "session_summary"
+            loaded["summary_path"] = normalize_relpath(source_path.relative_to(REPO_ROOT)) if source_path.is_relative_to(REPO_ROOT) else str(source_path)
+            return loaded
+    if allow_event_log_fallback:
+        return build_local_session_summary_from_events(limit=event_limit)
+    return None
+
+
+def render_local_session_section(summary: dict[str, Any] | None) -> None:
+    print("\nLOCAL DEVICE / SAFETY SESSION")
+    if not summary:
+        print("  No local session summary or event log was found.")
+        print("  Start one with: powershell -ExecutionPolicy Bypass -File scripts/start_local_supervised_session.ps1")
+        return
+    safety = summary.get("safety") if isinstance(summary.get("safety"), dict) else {}
+    counts = summary.get("counts") if isinstance(summary.get("counts"), dict) else {}
+    endpoints = summary.get("endpoints") if isinstance(summary.get("endpoints"), dict) else {}
+    processes = summary.get("processes") if isinstance(summary.get("processes"), dict) else {}
+    source = summary.get("source") or "unknown"
+    if source == "session_summary":
+        source_text = summary.get("summary_path") or summary.get("session_dir") or "latest session_summary.json"
+    else:
+        source_text = f"event log fallback: {summary.get('event_log', LOCAL_EVENT_LOG)}"
+    print(f"  Source    : {source_text}")
+    print(f"  Dashboard : {endpoints.get('dashboard_url') or 'not configured'} pid={processes.get('dashboard_pid') or 'unknown'}")
+    print(f"  Broker    : {endpoints.get('broker') or 'not configured'}")
+    print(
+        "  Safety    : evaluations={evaluations} safety-events={safety_events} "
+        "commands={commands} latest-risk={risk} action={action}".format(
+            evaluations=safety.get("evaluations", 0),
+            safety_events=safety.get("safety_events", 0),
+            commands=safety.get("commands", 0),
+            risk=safety.get("latest_risk_type", "none"),
+            action=safety.get("latest_action", "ignore"),
+        )
+    )
+    interesting = ["sensor_sample", "location_report", "sos_pressed", "safety_evaluation", "safety_event", "command_sent"]
+    count_text = ", ".join(f"{name}={counts.get(name, 0)}" for name in interesting)
+    print(f"  Events    : {count_text}")
+    latest_events = summary.get("latest_events") if isinstance(summary.get("latest_events"), list) else []
+    if latest_events:
+        print("  Latest    :")
+        for event in latest_events[:4]:
+            if not isinstance(event, dict):
+                continue
+            event_type = event.get("event_type", "unknown")
+            seq = event.get("seq", "unknown")
+            risk = event.get("risk_type")
+            action = event.get("recommended_action")
+            suffix = f"seq={seq}"
+            if risk is not None:
+                suffix += f" risk={risk}"
+            if action is not None:
+                suffix += f" action={action}"
+            print(f"    - {event_type} ({suffix})")
+
+
+def render_live_dashboard(
+    *,
+    event_limit: int,
+    clear: bool,
+    include_local_session: bool = True,
+    local_session_summary_path: Path | None = None,
+) -> None:
     if clear and sys.stdout.isatty():
         print("\033[2J\033[H", end="")
 
@@ -1481,6 +1651,10 @@ def render_live_dashboard(*, event_limit: int, clear: bool) -> None:
         print("\nNo live or previous run was found.")
         print("Start AutoDev in another terminal, then keep this monitor open.")
         print("\nCommand: python scripts/autodev.py run --max-tasks 3")
+        if include_local_session:
+            render_local_session_section(
+                read_local_session_summary(summary_path=local_session_summary_path, event_limit=40)
+            )
         return
     live = dict(live)
     live_age_seconds = seconds_since_iso_timestamp(live.get("updated_at"))
@@ -1562,14 +1736,31 @@ def render_live_dashboard(*, event_limit: int, clear: bool) -> None:
             f"\nNOTICE: live_status.json has not been updated for {format_duration(stale_seconds)}. "
             "Check the run terminal/logs; the AutoDev process is probably no longer active."
         )
+    if include_local_session:
+        render_local_session_section(
+            read_local_session_summary(summary_path=local_session_summary_path, event_limit=40)
+        )
     print("\nThis monitor shows operational evidence, not private chain-of-thought.")
     print("Press Ctrl+C to stop the monitor; AutoDev in the other terminal continues.")
 
 
-def watch_live_status(*, interval: float, event_limit: int, once: bool, no_clear: bool) -> int:
+def watch_live_status(
+    *,
+    interval: float,
+    event_limit: int,
+    once: bool,
+    no_clear: bool,
+    include_local_session: bool = True,
+    local_session_summary_path: Path | None = None,
+) -> int:
     try:
         while True:
-            render_live_dashboard(event_limit=event_limit, clear=not no_clear)
+            render_live_dashboard(
+                event_limit=event_limit,
+                clear=not no_clear,
+                include_local_session=include_local_session,
+                local_session_summary_path=local_session_summary_path,
+            )
             if once:
                 return 0
             time.sleep(interval)
@@ -1602,6 +1793,7 @@ def show_status() -> int:
                 CONSOLE.task(f"{task_id}: ready - {task['title']}")
     if state.get("last_updated"):
         CONSOLE.info(f"State last updated: {state['last_updated']}")
+    render_local_session_section(read_local_session_summary())
     return 0
 
 
@@ -1696,6 +1888,17 @@ def build_parser() -> argparse.ArgumentParser:
     watch_parser.add_argument("--events", type=int, default=12, help="Recent observable events to display (default: 12).")
     watch_parser.add_argument("--once", action="store_true", help="Render one snapshot and exit.")
     watch_parser.add_argument("--no-clear", action="store_true", help="Append snapshots instead of clearing the terminal.")
+    watch_parser.add_argument(
+        "--no-local-session",
+        action="store_true",
+        help="Hide the local device/Safety session summary from the monitor.",
+    )
+    watch_parser.add_argument(
+        "--local-session-summary",
+        type=Path,
+        default=None,
+        help="Read a specific pc_simulator session_summary.json instead of the latest one.",
+    )
 
     reset_parser = subparsers.add_parser("reset", help="Reset ignored AutoDev runtime state only.")
     reset_parser.add_argument("--yes", action="store_true", help="Confirm state reset.")
@@ -1759,6 +1962,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 event_limit=args.events,
                 once=args.once,
                 no_clear=args.no_clear,
+                include_local_session=not args.no_local_session,
+                local_session_summary_path=args.local_session_summary,
             )
         if args.command == "reset":
             return reset_state(args.yes)

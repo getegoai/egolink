@@ -34,13 +34,19 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T027：真实/半真实设备事件接入 Safety Companion 流程完成。新增 `evaluate_event` 和 `POST /api/safety/process-events`，可将 MQTT `sensor_sample`、SOS/模拟 SOS、GNSS no-fix 等事件转换为标准 `sensor_frame` 并记录 `safety_evaluation`；非 `none` 输出继续生成 `safety_event` 和无副作用模拟 command。
 - T028：live MQTT 监督式 Safety 处理完成。`pc_simulator/mqtt_worker.py` 新增 `--process-safety` / `--safety-process-limit`，可在真实 MQTT 消息入库后立即触发 Safety flow；默认入库行为保持不变，Safety 处理异常只写诊断、不阻断 MQTT 采集。
 - T029：本地监督会话入口完成。新增 `scripts/start_local_supervised_session.ps1` 和 `scripts/local_session_summary.py`，可一条命令建立 session 目录，启动或复用 broker / Dashboard / live MQTT Safety worker，并输出 `session.log`、`session_summary.json`、`session_summary.md`。
+- T030：AutoDev 与设备状态统一监控完成。`scripts/autodev.py watch` 和 `scripts/watch_autodev.ps1` 已同屏显示 AutoDev 任务进度与本地设备 / Safety session 摘要；`status` 也会显示本地 Safety 快照。
+- 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
 
-下一项建议任务 T030：把本地监督会话与 AutoDev 运行状态打通，形成“开发任务进度 + 设备/安全流状态”的统一观察入口。
+下一项建议任务 T031 / M1-001：创建 `docs/modeling/HARDWARE_SENSOR_MATRIX.md`，基于当前开发板和已有验证事实记录 IMU、麦克风、摄像头、GNSS、4G、按键、存储、电源能力，标明真实驱动、Mock 和缺失项。
 
 ## 最近验证
 
+- `python -m unittest autodev.tests.test_supervisor -v`：通过，15 个 AutoDev supervisor 测试全部成功；覆盖本地 session summary 读取、event-log fallback 和既有监控行为。
+- `python scripts\autodev.py watch --once --no-clear --events 4`：通过，同屏显示 AutoDev 最近任务状态和 `LOCAL DEVICE / SAFETY SESSION`，其中最新 Safety 风险为 `manual_sos`，动作为 `urgent_escalation`。
+- `powershell -ExecutionPolicy Bypass -File scripts\watch_autodev.ps1 -Once -NoClear -RecentEvents 4`：通过，PowerShell wrapper 可显示统一监控。
+- 新增模型上下文文档静态检查：通过，M1 下一步明确为硬件与传感器矩阵，不训练 MotionNet/AudioGate/VisionGate。
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，90 个测试全部成功。
 - `python -m unittest quality_tests.test_local_session_summary -v`：通过，3 个本地监督会话测试全部成功；覆盖事件摘要统计、JSON/Markdown 文件输出和 PowerShell 启动脚本关键契约。
 - `powershell -ExecutionPolicy Bypass -File scripts\start_local_supervised_session.ps1 -NoBroker -NoDashboard -NoWorker`：通过，生成 `pc_simulator/runtime/sessions/20260621-174427/`，写入 `session.log`、`session_summary.json` 和 `session_summary.md`，未启动新的后台进程。
@@ -74,7 +80,8 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - Safety Companion M0 官方规则包当前不把 GNSS no-fix 作为模型风险；PC Simulator adapter 只保留 `fix_valid=false` 输入，不再沿用旧 mock 的 `device_risk/upload_summary` 输出。
 - 当前 shell 未加载 ESP-IDF，`idf.py --version` 不可用；T025 只完成固件接口和主机侧静态测试，尚未进行 ESP-IDF build、flash 或真实串口 CLI 验证。
 - T026 是纯模拟 replay 闭环，只验证协议、记录、展示和无副作用命令，不验证真实事故/跌倒/呼救识别准确率。
-- T029 的本地监督会话仍是显式启动的 CLI 脚本，不是 Windows 服务；进程自动重启、日志轮转和长期运行守护仍未实现。
+- T030 的统一监控仍是只读观察入口，不负责启动、停止、重启或修复设备侧进程；长期运行守护、日志轮转和自动恢复仍未实现。
+- M1 数据基础尚未开始；当前没有真实 MotionNet、AudioGate、VisionGate，也没有可用于训练的正式 session 数据集。
 - 当前 T021 是 PC 侧通过 USB AT 口探测 SIM7670G GNSS，尚未把 ESP32 固件切换为直接控制 SIM7670G GNSS。
 - SD 卡挂载曾失败，需要单独确认格式、接线、引脚、供电和固件挂载参数。
 - 用户已确认当前 Wi-Fi 凭据可以在本机项目中明文保存，固件 `sdkconfig` 可保留 SSID/password。

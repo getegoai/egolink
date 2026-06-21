@@ -1,58 +1,67 @@
-# CURRENT_TASK: T029 Local Supervised Session Runner
+# CURRENT_TASK: T030 Unified AutoDev And Device Monitor
 
 ## 任务目标
 
-把本地调试时需要分别打开的 Mosquitto LAN broker、PC Simulator Dashboard、live MQTT Safety worker 和状态摘要整理成一个可显式启动的监督式会话入口，降低多终端运行的黑箱感，并为每次会话留下可追踪日志和摘要报告。
+把 AutoDev 开发任务进度与本地设备 / Safety flow 状态合并到同一个观察入口。运行 `watch_autodev.ps1` 时，不只看到 Codex/AutoDev 的任务、阶段、空闲时间和文件变化，也能同时看到最近本地会话中的 Dashboard、broker、Safety evaluation、safety_event、模拟 command 和最新风险动作。
 
 ## 范围
 
-- 新增 `scripts/start_local_supervised_session.ps1`，统一启动或复用 broker、Dashboard 和 live MQTT Safety worker。
-- 新增 `scripts/local_session_summary.py`，从 `pc_simulator/runtime/events.jsonl` 生成会话 JSON / Markdown 摘要。
-- 会话输出写入 `pc_simulator/runtime/sessions/<timestamp>/`，包括 `session.log`、进程日志和 summary 文件。
-- 支持 `-NoBroker`、`-NoDashboard`、`-NoWorker`，便于只生成摘要或复用已有进程。
-- 支持 `-Watch` 周期刷新 summary，方便运行时观察。
-- 增加测试覆盖摘要统计、文件输出和 PowerShell 脚本关键契约。
-- 更新状态文档和集成报告。
+- 扩展 `scripts/autodev.py watch`，读取最新 `pc_simulator/runtime/sessions/*/session_summary.json`。
+- 如果没有 session summary，则从 `pc_simulator/runtime/events.jsonl` 生成只读 fallback 摘要。
+- `scripts/autodev.py status` 也显示本地设备 / Safety flow 快照。
+- `scripts/watch_autodev.ps1` 增加 `-NoLocalSession` 和 `-LocalSessionSummary` 参数。
+- 增加 AutoDev supervisor 测试覆盖本地 session summary 读取和 event-log fallback。
+- 更新 `docs/AUTODEV_MONITORING.md`、`docs/STATUS.md`、`docs/modeling/INTEGRATION_REPORT.md` 和 `README.md`。
+- 纳入新增模型上下文文档，并明确下一步按 M1 数据基础推进。
 
 ## 不做
 
-- 不把会话脚本注册为 Windows 服务。
-- 不实现进程自动重启、日志轮转或长期守护。
-- 不修改 MQTT 协议、Safety Companion M0 模型规则或固件。
+- 不启动新的长期后台服务。
+- 不修改 AutoDev 执行 loop、任务选择、提交策略或失败回滚策略。
+- 不修改 Safety Companion M0 模型包规则、契约字段或固件。
+- 不训练 MotionNet、AudioGate、VisionGate 或学习型 ContextRouter。
 - 不真实拨号、拍照、录音或访问外网。
-- 不引入 LangGraph、AutoGen、CrewAI 等额外智能体框架。
 
 ## 允许修改路径
 
-- `scripts/start_local_supervised_session.ps1`
-- `scripts/local_session_summary.py`
-- `quality_tests/test_local_session_summary.py`
+- `scripts/autodev.py`
+- `scripts/watch_autodev.ps1`
+- `autodev/tests/test_supervisor.py`
+- `docs/AUTODEV_MONITORING.md`
+- `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`
+- `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
+- `README.md`
 
 ## 验证命令
 
 ```powershell
-python -m unittest quality_tests.test_local_session_summary -v
-powershell -ExecutionPolicy Bypass -File scripts\start_local_supervised_session.ps1 -NoBroker -NoDashboard -NoWorker
+python -m unittest autodev.tests.test_supervisor -v
+python scripts\autodev.py watch --once --no-clear --events 4
+powershell -ExecutionPolicy Bypass -File scripts\watch_autodev.ps1 -Once -NoClear -RecentEvents 4
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
 ## 执行结果
 
-- 新增 `scripts/start_local_supervised_session.ps1`，可统一启动或复用 Mosquitto LAN broker、Dashboard 和 live MQTT Safety worker。
-- 新增 `scripts/local_session_summary.py`，可从 `events.jsonl` 生成 `session_summary.json` 和 `session_summary.md`。
-- 会话输出目录为 `pc_simulator/runtime/sessions/<timestamp>/`，包含 `session.log`、summary 文件以及进程 stdout/stderr 日志路径。
-- `-NoBroker -NoDashboard -NoWorker` 验证通过：不启动后台进程，只生成会话目录和 summary，便于做静态状态快照。
-- 直接运行 `python scripts\local_session_summary.py --event-log pc_simulator\runtime\events.jsonl --limit 8 --markdown` 可显示最新 `manual_sos`、`urgent_escalation`、Safety 统计和最近事件。
-- `python -m unittest quality_tests.test_local_session_summary -v` 通过，3 个测试成功。
+- `watch` 已显示 `LOCAL DEVICE / SAFETY SESSION` 区块。
+- `watch` 默认读取最新 `session_summary.json`；没有 session summary 时可从 `events.jsonl` 生成 fallback。
+- `watch_autodev.ps1` 已支持 `-NoLocalSession` 和 `-LocalSessionSummary <path>`。
+- `status` 已显示本地设备 / Safety flow 快照。
+- 新增模型上下文文档已纳入项目入口；下一步建议从 M1-001 硬件与传感器矩阵开始。
+- `README.md` 已恢复为项目入口，并加入本地监督会话和模型上下文链接。
+- `python -m unittest autodev.tests.test_supervisor -v` 通过，15 个测试成功。
+- `python scripts\autodev.py watch --once --no-clear --events 4` 通过，显示 AutoDev 状态和本地 Safety 摘要。
+- `powershell -ExecutionPolicy Bypass -File scripts\watch_autodev.ps1 -Once -NoClear -RecentEvents 4` 通过。
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` 通过，90 个测试成功。
 
 ## 完成标准
 
-- [x] 可以一条命令建立本地监督会话目录并生成 summary。
-- [x] 启动脚本可复用/跳过 broker、Dashboard、MQTT Safety worker。
-- [x] Summary 同时输出 JSON 和 Markdown。
-- [x] 测试覆盖新增摘要逻辑和脚本关键契约。
-- [x] 文档记录运行方式、验证结果和剩余限制。
+- [x] AutoDev watch 同屏显示开发进度和设备 / Safety 状态。
+- [x] 没有本地 session summary 时有只读 event-log fallback。
+- [x] PowerShell wrapper 暴露本地 session 相关开关。
+- [x] AutoDev supervisor 测试覆盖新增读取逻辑。
+- [x] README 和监控文档记录新的统一观察入口。
+- [x] 下一步路线对齐新增 M1 数据基础文档。

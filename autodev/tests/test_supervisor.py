@@ -121,6 +121,61 @@ class MonitoringTests(unittest.TestCase):
         formatted = AUTODEV.format_codex_event(event)
         self.assertEqual(formatted, ("THINK", "Analysis step completed"))
 
+    def test_read_local_session_summary_from_explicit_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary_path = Path(tmp) / "session_summary.json"
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "event_count": 2,
+                        "counts": {"safety_evaluation": 1},
+                        "safety": {"latest_risk_type": "manual_sos"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            summary = AUTODEV.read_local_session_summary(
+                summary_path=summary_path,
+                allow_event_log_fallback=False,
+            )
+
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertEqual(summary["source"], "session_summary")
+        self.assertEqual(summary["event_count"], 2)
+        self.assertEqual(summary["safety"]["latest_risk_type"], "manual_sos")
+
+    def test_build_local_session_summary_from_event_log(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            event_log = Path(tmp) / "events.jsonl"
+            event_log.write_text(
+                "\n".join(
+                    [
+                        json.dumps({"event_type": "sensor_sample", "seq": 1}),
+                        json.dumps(
+                            {
+                                "event_type": "safety_evaluation",
+                                "seq": 2,
+                                "risk_type": "none",
+                                "recommended_action": "ignore",
+                            }
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summary = AUTODEV.build_local_session_summary_from_events(event_log, limit=10)
+
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertEqual(summary["source"], "event_log_fallback")
+        self.assertEqual(summary["counts"]["sensor_sample"], 1)
+        self.assertEqual(summary["safety"]["evaluations"], 1)
+        self.assertEqual(summary["safety"]["latest_action"], "ignore")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

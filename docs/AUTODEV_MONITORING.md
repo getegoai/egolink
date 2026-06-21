@@ -13,6 +13,7 @@ AutoDev v0.2 将“模型进程仍在运行”和“有可观察开发活动”�
 - Git diff 摘要；
 - 最近的命令、工具调用、文件变化和智能体消息；
 - backlog 已完成、阻塞和可执行任务数量。
+- 本地设备 / Safety 会话摘要：Dashboard、broker、最近 `sensor_sample`、`location_report`、`safety_evaluation`、`safety_event` 和模拟 command。
 
 监控不会显示模型的私有思维链。它显示的是可验证的外部动作和工程证据。
 
@@ -50,6 +51,20 @@ python scripts/autodev.py watch --interval 1 --events 20
 powershell -ExecutionPolicy Bypass -File scripts/watch_autodev.ps1 -Once -NoClear
 ```
 
+默认情况下，监控会同时显示最近一次本地监督会话的设备 / Safety 摘要。如果还没有 `session_summary.json`，会从 `pc_simulator/runtime/events.jsonl` 做只读 fallback。
+
+隐藏设备 / Safety 摘要：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/watch_autodev.ps1 -NoLocalSession
+```
+
+指定某一次本地会话摘要：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/watch_autodev.ps1 -LocalSessionSummary pc_simulator\runtime\sessions\<session>\session_summary.json
+```
+
 按 `Ctrl+C` 只会关闭监控，不会停止另一个终端中的 AutoDev。
 
 ## 2. LIVE_STATUS 文件
@@ -64,6 +79,15 @@ autodev/runtime/LIVE_STATUS.md
 可以直接在 VS Code 中打开 `LIVE_STATUS.md`。它会显示当前任务、阶段、运行时间、空闲时间、最后事件、变化文件和 diff 摘要。
 
 这两个文件位于已经被 Git 忽略的 `autodev/runtime/` 中，不会进入项目提交。
+
+本地设备 / Safety 摘要来自：
+
+```text
+pc_simulator/runtime/sessions/<timestamp>/session_summary.json
+pc_simulator/runtime/events.jsonl
+```
+
+这些文件同样位于运行时目录，不进入项目提交。
 
 ## 3. 终端心跳的含义
 
@@ -150,3 +174,18 @@ Source : inferred from the latest v0.1 run log
 5. 只有进程心跳，没有事件、文件变化或测试活动。
 
 当最后一种状态持续较久时，可以先查看 `events.jsonl` 和 `git diff`，再决定是否中止。默认 AutoDev 仍保留每次任务的总超时保护。
+
+## 7. 设备 / Safety 摘要怎么看
+
+`LOCAL DEVICE / SAFETY SESSION` 区块用于回答“开发任务之外，设备闭环现在是什么状态”。
+
+关键字段：
+
+- `Source`：本次摘要来自某个 session summary，还是直接从 event log fallback；
+- `Dashboard`：本地看板 URL 和进程 PID；
+- `Broker`：当前本地 MQTT broker 地址；
+- `Safety`：最近窗口内的 evaluation、safety event、模拟 command 数量，以及最新 risk/action；
+- `Events`：最近窗口内关键事件计数；
+- `Latest`：最近几条设备 / Safety 事件。
+
+这不是模型效果评估报告，只是运行时可观察状态。M0 的 `manual_sos`、`none` 等结果来自规则基线和模拟/半真实事件闭环，不能表述为真实跌倒、呼救或事故识别能力已经验证。

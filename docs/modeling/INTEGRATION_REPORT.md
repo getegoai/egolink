@@ -104,6 +104,19 @@ T029 local supervised session updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+T030 unified AutoDev and device monitor updates:
+
+- `scripts/autodev.py`
+- `scripts/watch_autodev.ps1`
+- `autodev/tests/test_supervisor.py`
+- `docs/AUTODEV_MONITORING.md`
+- `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`
+- `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+- `README.md`
+
 ## Verification commands and results
 
 ```powershell
@@ -126,6 +139,28 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
 Result: passed. The repository test suite ran 90 tests successfully.
+
+```powershell
+python -m unittest autodev.tests.test_supervisor -v
+```
+
+Result: passed. The AutoDev supervisor tests ran 15 tests successfully,
+including local session summary loading, event-log fallback summary generation,
+and existing monitor behavior.
+
+```powershell
+python scripts\autodev.py watch --once --no-clear --events 4
+```
+
+Result: passed. The monitor displayed the AutoDev run section and the
+`LOCAL DEVICE / SAFETY SESSION` section in one snapshot.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\watch_autodev.ps1 -Once -NoClear -RecentEvents 4
+```
+
+Result: passed. The PowerShell wrapper displayed the same unified monitor
+snapshot.
 
 ```powershell
 python -m unittest quality_tests.test_local_session_summary -v
@@ -241,6 +276,12 @@ T029 did not perform new hardware I/O. It added a local session runner and
 validated it in no-start mode so it can generate a session health summary
 without changing broker, Dashboard, worker, modem, camera, or firmware state.
 
+T030 did not perform new hardware I/O. It connects AutoDev monitoring to the
+latest local session summary or, when no session summary exists, to a read-only
+event-log fallback. The observed local session summary reported recent
+`manual_sos` / `urgent_escalation` rule-baseline activity from prior simulated
+and semi-real events.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -256,11 +297,14 @@ had already been validated before this overlay package verification.
   validation because `idf.py` is not available on the current `PATH`.
 - M0-INT-004 is a simulated replay flow only. It validates message shape,
   routing, logging, and display behavior, not real-world incident detection.
-- T029 adds a one-command local supervised session runner, but it is still an
-  explicitly launched CLI script rather than a Windows service with restart
-  policy, log rotation, or long-running health supervision.
+- T030 adds a unified read-only monitor, but it does not start, stop, restart,
+  or repair device-side processes. The local supervised session runner is still
+  an explicitly launched CLI script rather than a Windows service.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
+- The new M1 context requires data foundations before any MotionNet, AudioGate,
+  VisionGate, or learning-based ContextRouter claims. The next implementation
+  step should be the hardware/sensor matrix, not model training.
 - The earlier T023 adapter treated GNSS no-fix as a device risk. The official
   M0 rule package does not include this product rule, so the M0-INT-002 adapter
   does not promote GNSS no-fix into a model risk by itself.
@@ -282,6 +326,5 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Next, connect the local supervised session summary with the AutoDev progress
-monitor so development status and device/safety-flow status can be viewed in
-one place.
+Next, start M1-001 by creating `docs/modeling/HARDWARE_SENSOR_MATRIX.md` from
+verified board facts and current mock/real sensor boundaries.
