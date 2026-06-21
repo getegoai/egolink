@@ -1,38 +1,36 @@
-# CURRENT_TASK: T025 Safety Companion M0 Firmware Model Interface
+# CURRENT_TASK: T026 Safety Companion M0 Simulated End-to-End Flow
 
 ## 任务目标
 
-完成 `M0-INT-003`：在 ESP-IDF 固件中建立稳定的 `safety_model` 调用边界，当前实现为 deterministic mock，不部署真实神经网络。
+完成 `M0-INT-004`：跑通模拟传感器状态 -> `model_output` -> `safety_event` -> PC Simulator 记录/展示 -> 模拟 `base_command` 的端到端闭环。
 
 ## 范围
 
-- 新增 `firmware/mqtt_heartbeat/components/safety_model` 组件。
-- 使用 `shared/embedded/safety_model_contract.h` 中的 `ego_sc_model_input_t` / `ego_sc_model_output_t`。
-- 对业务层暴露：
-  - `bool safety_model_init(void)`
-  - `bool safety_model_evaluate(const ego_sc_model_input_t *input, ego_sc_model_output_t *output)`
-  - `const char *safety_model_version(void)`
-- 增加 `safety_model_input_from_mock_state`，把当前 mock GNSS、wake、网络、电量、隐私等状态转换为模型输入。
-- 在串口侧增加不冲突的测试命令：
-  - `safety status`
-  - `safety demo normal`
-  - `safety demo sos`
-  - `safety demo impact`
+- 使用包内场景：
+  - `normal_walk`
+  - `manual_sos`
+  - `post_impact_inactivity`
+  - `privacy_restricted_impact`
+- `none` 结果不生成 `safety_event`。
+- 非 `none` 结果生成标准 `safety_event`。
+- 对 `ask_user` 和 `urgent_escalation` 生成模拟 `base_command`。
+- PC Simulator 可通过 `POST /api/safety/replay` 重放场景并写入事件流。
+- Dashboard 事件详情展示 risk、action、evidence、privacy 信息。
 
 ## 不做
 
-- 不引入真实模型。
-- 不引入 ESP-DL、ESP-SR、TFLite Micro。
-- 不修改模型包、模型 artifact 或共享契约语义。
-- 不声明合成规则等于真实安全识别准确率。
-- 不进行真实紧急动作。
+- 不真实拨号。
+- 不真实拍照。
+- 不真实录音。
+- 不访问外网。
+- 不声明合成场景通过等于真实安全识别准确率。
 
 ## 允许修改路径
 
-- `firmware/mqtt_heartbeat/components/safety_model/**`
-- `firmware/mqtt_heartbeat/main/CMakeLists.txt`
-- `firmware/mqtt_heartbeat/main/app_main.c`
-- `quality_tests/test_safety_model_firmware.py`
+- `pc_simulator/safety_companion.py`
+- `pc_simulator/app.py`
+- `quality_tests/test_safety_companion.py`
+- `quality_tests/test_pc_simulator.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
@@ -40,32 +38,29 @@
 ## 验证命令
 
 ```powershell
-python -m unittest quality_tests.test_safety_model_firmware quality_tests.test_mqtt_heartbeat_firmware -v
+python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v
+python scripts\verify_safety_companion_m0.py
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
-idf.py --version
 ```
 
 ## 执行结果
 
-- 已新增 `safety_model` ESP-IDF component。
-- `safety_model.h` 已包装共享契约头 `safety_model_contract.h`。
-- `safety_model_evaluate` 已实现 deterministic mock：
-  - SOS -> `EGO_SC_RISK_MANUAL_SOS` / `EGO_SC_ACTION_URGENT_ESCALATION`
-  - impact + stationary -> `EGO_SC_RISK_POST_IMPACT_INACTIVITY`
-  - critical low battery -> `EGO_SC_RISK_LOW_BATTERY`
-  - long offline -> `EGO_SC_RISK_COMMUNICATION_LOSS`
-  - otherwise -> `EGO_SC_RISK_NONE`
-- 已在 `app_main.c` 初始化 `safety_model`，并注册串口测试命令任务。
-- `python -m unittest quality_tests.test_safety_model_firmware quality_tests.test_mqtt_heartbeat_firmware -v` 通过，8 个测试成功。
-- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` 通过，76 个测试成功。
-- `idf.py --version` 未通过：当前 shell 未加载 ESP-IDF，无法执行固件构建/烧录。
+- 已新增 `safety_companion.replay_scenarios()`，默认重放 4 个 M0 场景。
+- 已新增模拟 `base_command` 生成：
+  - `ask_user` -> command `ask_user`
+  - `urgent_escalation` -> command `ask_user` with emergency safety class
+- 模拟命令带 `simulated=true` 和 `no_external_side_effects=true`。
+- 已新增 `POST /api/safety/replay`。
+- Replay 会持久化 3 个 `safety_event` 和 3 个 `command_sent` 记录。
+- `normal_walk` 不生成 `safety_event` 或 `base_command`。
+- `privacy_restricted_impact` 不请求原始音频和图片证据。
+- `python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v` 通过，22 个测试成功。
+- `python scripts\verify_safety_companion_m0.py` 通过。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` 通过，79 个测试成功。
 
 ## 完成标准
 
-- [x] 业务代码通过 `safety_model` 边界调用 mock，不直接依赖未来模型框架。
-- [x] mock 与 future real implementation 可以在组件边界替换。
-- [x] SOS 路径为确定性规则。
-- [x] Mock GNSS、wake、网络、电量、隐私状态有 adapter。
-- [x] 串口测试命令已注册。
-- [x] 主机侧静态测试和全量验证通过。
-- [x] 如实记录本轮未进行 ESP-IDF build/flash。
+- [x] 自动测试可重放完整闭环。
+- [x] 所有模型输出、安全事件和模拟命令符合契约。
+- [x] 隐私模式下不产生原始音频/图像采集请求。
+- [x] 无真实硬件、通信和安全动作副作用。

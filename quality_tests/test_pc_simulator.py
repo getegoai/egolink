@@ -218,6 +218,42 @@ class PcSimulatorTests(unittest.TestCase):
         self.assertEqual(payload["input_type"], "model_input")
         self.assertEqual(payload["model_output"]["risk_type"], "manual_sos")
         self.assertEqual(payload["model_output"]["recommended_action"], "urgent_escalation")
+        self.assertEqual(payload["base_command"]["command"], "ask_user")
+
+    def test_safety_replay_endpoint_persists_events_and_simulated_commands(self) -> None:
+        server = app.ThreadingHTTPServer(("127.0.0.1", 0), app.SimulatorHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{server.server_port}/api/safety/replay",
+                data=b"",
+                method="POST",
+            )
+            with urllib.request.urlopen(request, timeout=5) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["summary"], {"total": 4, "safety_events": 3, "base_commands": 3})
+        self.assertEqual(len(payload["persisted_events"]), 6)
+        event_types = [event["event_type"] for event in payload["persisted_events"]]
+        self.assertEqual(event_types.count("safety_event"), 3)
+        self.assertEqual(event_types.count("command_sent"), 3)
+        commands = [event["base_command"] for event in payload["persisted_events"] if event["event_type"] == "command_sent"]
+        self.assertEqual({command["command"] for command in commands}, {"ask_user"})
+        for command in commands:
+            self.assertTrue(command["args"]["no_external_side_effects"])
+
+    def test_dashboard_renders_safety_event_detail_logic(self) -> None:
+        html = app.render_dashboard()
+
+        self.assertIn("safety_event", html)
+        self.assertIn("evidence_request", html)
+        self.assertIn("privacy mode", html)
 
     def test_dashboard_renders_sensor_sample_detail_logic(self) -> None:
         html = app.render_dashboard()

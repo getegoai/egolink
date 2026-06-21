@@ -17,7 +17,7 @@
 - [x] M0-INT-001 package verification
 - [x] M0-INT-002 PC Simulator adapter
 - [x] M0-INT-003 firmware model interface
-- [ ] M0-INT-004 simulated end-to-end flow
+- [x] M0-INT-004 simulated end-to-end flow
 
 ## Changed files
 
@@ -67,6 +67,16 @@ M0-INT-003 firmware model interface updates:
 - `docs/tasks/CURRENT_TASK.md`
 - `docs/STATUS.md`
 
+M0-INT-004 simulated end-to-end updates:
+
+- `pc_simulator/safety_companion.py`
+- `pc_simulator/app.py`
+- `quality_tests/test_safety_companion.py`
+- `quality_tests/test_pc_simulator.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
 
 ```powershell
@@ -88,15 +98,26 @@ decision.
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
-Result: passed. The repository test suite ran 76 tests successfully.
+Result: passed. The repository test suite ran 79 tests successfully.
 
 ```powershell
 python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v
 ```
 
-Result: passed. The PC Simulator adapter tests ran 19 tests successfully,
+Result: passed. The PC Simulator adapter tests ran 22 tests successfully,
 including packaged scenario inputs, sensor frame evaluation, safety event
-conversion, privacy evidence filtering, and `POST /api/safety/evaluate`.
+conversion, privacy evidence filtering, `POST /api/safety/evaluate`, and
+`POST /api/safety/replay`.
+
+M0-INT-004 replay result:
+
+- `normal_walk`: `risk_type=none`, no `safety_event`, no `base_command`.
+- `manual_sos`: `risk_type=manual_sos`, generates `safety_event` and simulated
+  `ask_user` command for `urgent_escalation`.
+- `post_impact_inactivity`: generates `safety_event` and simulated `ask_user`
+  command.
+- `privacy_restricted_impact`: generates `safety_event` and simulated
+  `ask_user` command while filtering raw audio/image evidence.
 
 ```powershell
 python -m unittest quality_tests.test_safety_model_firmware quality_tests.test_mqtt_heartbeat_firmware -v
@@ -123,6 +144,10 @@ Manifest validation:
 No new firmware flashing, GNSS probing, camera capture, MQTT broker test, or SIM
 test was performed for M0-INT-001, M0-INT-002, or M0-INT-003.
 
+M0-INT-004 did not use hardware and did not trigger real calls, camera capture,
+audio recording, or external network actions. It only writes simulated
+`safety_event` and command records into the PC Simulator event log.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -136,6 +161,8 @@ had already been validated before this overlay package verification.
   tested in this shell.
 - M0-INT-003 did not perform ESP-IDF build, flash, or serial CLI hardware
   validation because `idf.py` is not available on the current `PATH`.
+- M0-INT-004 is a simulated replay flow only. It validates message shape,
+  routing, logging, and display behavior, not real-world incident detection.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The earlier T023 adapter treated GNSS no-fix as a device risk. The official
@@ -159,7 +186,7 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Start M0-INT-004 only: run the simulated end-to-end flow from scenario input to
-`model_output`, `safety_event`, PC Simulator recording/display, and simulated
-base command generation. Keep the flow replayable and free of real emergency,
-camera, recording, or network side effects.
+Next, move from simulated replay to hardware-connected Stage 0 integration:
+map real device events into the Safety Companion flow, decide whether GNSS
+no-fix remains a device-health rule or becomes a model/product risk, and then
+run a bounded hardware validation pass.

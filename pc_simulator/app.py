@@ -127,6 +127,22 @@ class SimulatorHandler(BaseHTTPRequestHandler):
                 return
             self.respond_json({"ok": True, **result})
             return
+        if path == "/api/safety/replay":
+            try:
+                replay = safety_companion.replay_scenarios(self.read_optional_json_body().get("scenario_ids"))
+            except (ValueError, TypeError, json.JSONDecodeError) as error:
+                self.respond_json(
+                    {
+                        "ok": False,
+                        "error": "invalid_safety_replay_request",
+                        "detail": safety_companion.error_message(error),
+                    },
+                    status=400,
+                )
+                return
+            persisted = persist_safety_replay(replay)
+            self.respond_json({"ok": True, **replay, "persisted_events": persisted, "state": snapshot()})
+            return
         self.respond_json({"error": "not_found"}, status=404)
 
     def log_message(self, format: str, *args: Any) -> None:
@@ -152,6 +168,17 @@ class SimulatorHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or "0")
         if length <= 0:
             raise ValueError("request body is empty")
+        if length > 1_000_000:
+            raise ValueError("request body is too large")
+        value = json.loads(self.rfile.read(length).decode("utf-8"))
+        if not isinstance(value, dict):
+            raise ValueError("request body must be a JSON object")
+        return value
+
+    def read_optional_json_body(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length") or "0")
+        if length <= 0:
+            return {}
         if length > 1_000_000:
             raise ValueError("request body is too large")
         value = json.loads(self.rfile.read(length).decode("utf-8"))
@@ -222,18 +249,32 @@ def wake_detected() -> dict[str, Any]:
     )
 
 
-def command_sent(command: str, text: str) -> dict[str, Any]:
+def command_sent(
+    command: str,
+    text: str,
+    *,
+    command_id: str | None = None,
+    safety_class: str | None = None,
+    base_command: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     STATE.last_command = command
+    payload: dict[str, Any] = {
+        "priority": "normal",
+        "direction": "downlink",
+        "cmd": command,
+        "text": text,
+        "level": "warning",
+        "expire_sec": 60,
+    }
+    if command_id is not None:
+        payload["command_id"] = command_id
+    if safety_class is not None:
+        payload["safety_class"] = safety_class
+    if base_command is not None:
+        payload["base_command"] = base_command
     return append_event(
         "command_sent",
-        {
-            "priority": "normal",
-            "direction": "downlink",
-            "cmd": command,
-            "text": text,
-            "level": "warning",
-            "expire_sec": 60,
-        },
+        payload,
     )
 
 
@@ -262,6 +303,52 @@ def append_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
 def write_event(event: dict[str, Any]) -> None:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     event_store.append_jsonl(EVENT_LOG, event)
+
+
+def persist_safety_replay(replay: dict[str, Any]) -> list[dict[str, Any]]:
+    persisted: list[dict[str, Any]] = []
+    for record in replay["records"]:
+        safety_event = record.get("safety_event")
+        if safety_event is not None:
+            output = record["model_output"]
+            persisted.append(
+                append_event(
+                    "safety_event",
+                    {
+                        "priority": output["priority"],
+                        "source": "safety_replay",
+                        "scenario_id": record["scenario_id"],
+                        "risk_type": output["risk_type"],
+                        "risk_score": output["risk_score"],
+                        "confidence": output["confidence"],
+                        "recommended_action": output["recommended_action"],
+                        "evidence_request": output["evidence_request"],
+                        "privacy_mode": safety_event["privacy"]["privacy_mode"],
+                        "raw_evidence_allowed": safety_event["privacy"]["raw_evidence_allowed"],
+                        "safety_event": safety_event,
+                    },
+                )
+            )
+        base_command = record.get("base_command")
+        if base_command is not None:
+            persisted.append(
+                command_sent(
+                    str(base_command["command"]),
+                    safety_command_text(base_command),
+                    command_id=str(base_command["command_id"]),
+                    safety_class=str(base_command["safety_class"]),
+                    base_command=base_command,
+                )
+            )
+    return persisted
+
+
+def safety_command_text(command: dict[str, Any]) -> str:
+    args = command.get("args", {})
+    risk_type = args.get("risk_type", "unknown")
+    if args.get("recommended_action") == "urgent_escalation":
+        return f"SIMULATED urgent check-in for {risk_type}; no call, camera, or recording started."
+    return f"SIMULATED safety check-in for {risk_type}; no external action started."
 
 
 def recent_events(limit: int = 20) -> list[dict[str, Any]]:
@@ -525,6 +612,15 @@ def render_dashboard() -> str:
         if (e.lat !== undefined && e.lon !== undefined) parts.push(Number(e.lat).toFixed(6) + ', ' + Number(e.lon).toFixed(6));
         if (e.satellites !== undefined) parts.push('SV ' + e.satellites);
         if (e.source) parts.push(e.source);
+        return parts.join(' / ');
+      }
+      if (e.event_type === 'safety_event') {
+        const parts = [];
+        if (e.scenario_id) parts.push(e.scenario_id);
+        if (e.risk_type) parts.push('risk ' + e.risk_type);
+        if (e.recommended_action) parts.push('action ' + e.recommended_action);
+        if (e.evidence_request?.length) parts.push('evidence ' + e.evidence_request.join(','));
+        if (e.privacy_mode) parts.push('privacy mode');
         return parts.join(' / ');
       }
       return e.text || e.keyword || e.cmd_id || e.status || e.source || e.hw_target || e.mqtt_topic || '';

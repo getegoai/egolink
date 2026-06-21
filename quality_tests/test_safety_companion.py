@@ -127,6 +127,34 @@ class SafetyCompanionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             safety_companion.evaluate_request({"hello": "world"})
 
+    def test_replay_scenarios_runs_end_to_end_without_side_effect_commands(self) -> None:
+        replay = safety_companion.replay_scenarios()
+
+        self.assertEqual(
+            replay["scenario_ids"],
+            ["normal_walk", "manual_sos", "post_impact_inactivity", "privacy_restricted_impact"],
+        )
+        self.assertEqual(replay["summary"], {"total": 4, "safety_events": 3, "base_commands": 3})
+
+        records = {record["scenario_id"]: record for record in replay["records"]}
+        self.assertIsNone(records["normal_walk"]["safety_event"])
+        self.assertIsNone(records["normal_walk"]["base_command"])
+        self.assertEqual(records["manual_sos"]["model_output"]["recommended_action"], "urgent_escalation")
+        self.assertEqual(records["manual_sos"]["base_command"]["command"], "ask_user")
+
+        privacy_record = records["privacy_restricted_impact"]
+        self.assertEqual(privacy_record["model_output"]["recommended_action"], "ask_user")
+        self.assertNotIn("audio_5s", privacy_record["model_output"]["evidence_request"])
+        self.assertNotIn("image_single", privacy_record["model_output"]["evidence_request"])
+        self.assertFalse(privacy_record["safety_event"]["privacy"]["raw_evidence_allowed"])
+
+        commands = [record["base_command"] for record in replay["records"] if record["base_command"] is not None]
+        self.assertEqual({command["command"] for command in commands}, {"ask_user"})
+        for command in commands:
+            self.assertTrue(command["args"]["simulated"])
+            self.assertTrue(command["args"]["no_external_side_effects"])
+            self.assertNotIn(command["command"], {"start_call", "capture_audio", "capture_image"})
+
 
 if __name__ == "__main__":
     unittest.main()

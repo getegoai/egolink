@@ -4,15 +4,25 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime, timezone
+import json
+from pathlib import Path
 from typing import Any, Mapping
 
 from model_lab.safety_companion import RuleRouter, build_model_input
-from model_lab.safety_companion.src.contract_validation import ContractValidationError
+from model_lab.safety_companion.src.contract_validation import ContractValidationError, load_schema, validate_instance
 from model_lab.safety_companion.src.event_builder import build_safety_event
 
 
 CONTRACT_VERSION = "1.0.0"
 ROUTER = RuleRouter()
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SCENARIO_SUITE_PATH = REPO_ROOT / "model_lab" / "safety_companion" / "datasets" / "samples" / "scenario_suite.json"
+DEFAULT_REPLAY_SCENARIOS = (
+    "normal_walk",
+    "manual_sos",
+    "post_impact_inactivity",
+    "privacy_restricted_impact",
+)
 
 
 def evaluate_sensor_frame(sensor_frame: dict[str, Any]) -> dict[str, Any]:
@@ -35,25 +45,28 @@ def evaluate_request(payload: Mapping[str, Any]) -> dict[str, Any]:
     if "sensor_frame" in value:
         return evaluate_sensor_frame_bundle(value["sensor_frame"])
     if "model_input" in value:
-        model_input = deepcopy(value["model_input"])
-        model_output = evaluate_model_input(model_input)
-        return {
-            "input_type": "model_input",
-            "model_input": model_input,
-            "model_output": model_output,
-            "safety_event": None,
-        }
+        return evaluate_model_input_bundle(value["model_input"])
     if value.get("contract_version") == CONTRACT_VERSION and "sensors" in value:
         return evaluate_sensor_frame_bundle(value)
     if value.get("contract_version") == CONTRACT_VERSION and "features" in value:
-        model_output = evaluate_model_input(value)
-        return {
-            "input_type": "model_input",
-            "model_input": deepcopy(value),
-            "model_output": model_output,
-            "safety_event": None,
-        }
+        return evaluate_model_input_bundle(value)
     raise ValueError("request body must contain `sensor_frame` or `model_input`")
+
+
+def evaluate_model_input_bundle(model_input: Mapping[str, Any], *, sequence: int = 0) -> dict[str, Any]:
+    """Evaluate a model input and include optional safety event/command records."""
+
+    value = deepcopy(dict(model_input))
+    model_output = evaluate_model_input(value)
+    safety_event = build_safety_event(value, model_output, sequence=sequence)
+    base_command = build_simulated_base_command(value, model_output, safety_event)
+    return {
+        "input_type": "model_input",
+        "model_input": value,
+        "model_output": model_output,
+        "safety_event": safety_event,
+        "base_command": base_command,
+    }
 
 
 def evaluate_sensor_frame_bundle(sensor_frame: Mapping[str, Any]) -> dict[str, Any]:
@@ -68,12 +81,82 @@ def evaluate_sensor_frame_bundle(sensor_frame: Mapping[str, Any]) -> dict[str, A
         sequence=int(frame.get("sequence", 0)),
         sensor_frame=frame,
     )
+    base_command = build_simulated_base_command(model_input, model_output, safety_event)
     return {
         "input_type": "sensor_frame",
         "sensor_frame": frame,
         "model_input": model_input,
         "model_output": model_output,
         "safety_event": safety_event,
+        "base_command": base_command,
+    }
+
+
+def build_simulated_base_command(
+    model_input: Mapping[str, Any],
+    model_output: Mapping[str, Any],
+    safety_event: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Build a no-side-effect command for user-facing safety actions."""
+
+    action = str(model_output["recommended_action"])
+    if action not in {"ask_user", "urgent_escalation"}:
+        return None
+
+    issued_at = int(model_input["timestamp_ms"])
+    ttl = int(model_output["decision_ttl_ms"])
+    urgent = action == "urgent_escalation"
+    command = {
+        "contract_version": CONTRACT_VERSION,
+        "command_id": f"cmd-{model_output['output_id']}",
+        "device_id": model_input["device_id"],
+        "issued_at_ms": issued_at,
+        "expires_at_ms": issued_at + ttl,
+        "command": "ask_user",
+        "args": {
+            "prompt_kind": "urgent_check_in" if urgent else "safety_check_in",
+            "risk_type": model_output["risk_type"],
+            "priority": model_output["priority"],
+            "recommended_action": action,
+            "simulated": True,
+            "no_external_side_effects": True,
+        },
+        "requires_user_consent": False,
+        "safety_class": "emergency" if urgent else "reversible",
+        "correlation_event_id": safety_event["event_id"] if safety_event else None,
+    }
+    validate_instance(command, load_schema("base_command.schema.json"))
+    return command
+
+
+def replay_scenarios(scenario_ids: list[str] | None = None) -> dict[str, Any]:
+    """Replay packaged scenarios through the simulator adapter."""
+
+    wanted = tuple(scenario_ids or DEFAULT_REPLAY_SCENARIOS)
+    scenarios = {item["id"]: item for item in json.loads(SCENARIO_SUITE_PATH.read_text(encoding="utf-8"))}
+    missing = [scenario_id for scenario_id in wanted if scenario_id not in scenarios]
+    if missing:
+        raise ValueError("unknown scenario id(s): " + ", ".join(missing))
+
+    records: list[dict[str, Any]] = []
+    for sequence, scenario_id in enumerate(wanted, start=1):
+        scenario = scenarios[scenario_id]
+        bundle = evaluate_model_input_bundle(scenario["input"], sequence=sequence)
+        records.append(
+            {
+                "scenario_id": scenario_id,
+                "description": scenario.get("description", ""),
+                **bundle,
+            }
+        )
+    return {
+        "scenario_ids": list(wanted),
+        "records": records,
+        "summary": {
+            "total": len(records),
+            "safety_events": sum(1 for item in records if item["safety_event"] is not None),
+            "base_commands": sum(1 for item in records if item["base_command"] is not None),
+        },
     }
 
 
