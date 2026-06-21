@@ -15,6 +15,7 @@ class RepositoryLayoutContractTests(unittest.TestCase):
             "pc_simulator",
             "quality_tests",
             "scripts",
+            "shared",
         )
 
         for directory_name in required_directories:
@@ -32,6 +33,20 @@ class RepositoryLayoutContractTests(unittest.TestCase):
             readme_path.is_file(),
             f"Expected top-level README.md file to exist: {readme_path}",
         )
+
+    def test_modeling_contract_directories_exist(self) -> None:
+        required_directories = (
+            self.repo_root / "docs" / "modeling",
+            self.repo_root / "shared" / "contracts",
+            self.repo_root / "quality_tests" / "model_contract",
+        )
+
+        for directory_path in required_directories:
+            with self.subTest(directory=directory_path):
+                self.assertTrue(
+                    directory_path.is_dir(),
+                    f"Expected modeling contract directory to exist: {directory_path}",
+                )
 
 
 if __name__ == "__main__":

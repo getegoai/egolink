@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://egolink.local/contracts/model_input.schema.json",
+  "title": "Ego Link Safety Companion Model Input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "timestamp_ms",
+    "mode",
+    "motion",
+    "audio",
+    "location",
+    "network",
+    "device"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "safety-companion.contract.v0.1"
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "mode": {
+      "enum": [
+        "personal_safety",
+        "asset_guard",
+        "school_trip",
+        "elder_care"
+      ]
+    },
+    "active_event": {
+      "type": "string"
+    },
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accel_window",
+        "gyro_window",
+        "stationary_seconds"
+      ],
+      "properties": {
+        "accel_window": {
+          "type": "array"
+        },
+        "gyro_window": {
+          "type": "array"
+        },
+        "stationary_seconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "audio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_scores"
+      ],
+      "properties": {
+        "event_scores": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fix",
+        "speed_mps",
+        "accuracy_m",
+        "outside_safe_zone"
+      ],
+      "properties": {
+        "fix": {
+          "type": "boolean"
+        },
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "speed_mps": {
+          "type": "number",
+          "minimum": 0
+        },
+        "accuracy_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "outside_safe_zone": {
+          "type": "boolean"
+        }
+      }
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registered",
+        "signal_level"
+      ],
+      "properties": {
+        "registered": {
+          "type": "boolean"
+        },
+        "signal_level": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        }
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "battery_percent",
+        "base_online"
+      ],
+      "properties": {
+        "battery_percent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "base_online": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

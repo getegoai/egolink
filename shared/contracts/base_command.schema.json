@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://egolink.local/contracts/base_command.schema.json",
+  "title": "Ego Link Base Command",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "cmd_id",
+    "device_id",
+    "timestamp_ms",
+    "command"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "safety-companion.contract.v0.1"
+    },
+    "cmd_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "command": {
+      "enum": [
+        "ask_user",
+        "play_prompt",
+        "request_location",
+        "capture_audio_5s",
+        "capture_image",
+        "upload_summary",
+        "escalate_emergency",
+        "set_policy"
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "expire_sec": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

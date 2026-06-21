@@ -26,14 +26,17 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T019：固件传感器数据上报完成。`firmware/mqtt_heartbeat` 已新增 `sensor_sample` / `device_health` event，上报 uptime、Wi-Fi RSSI、free heap、minimum free heap 等 ESP32 设备健康数据；已刷写 ESP32-S3 `COM4`，PC Simulator 收到真实 `sensor_sample`，Dashboard 可展示 sensor sample 的 RSSI/heap 详情。
 - T020：板级探测 CH343 / RNDIS 识别修复完成。`egolink_board_probe.py` 已合并 Windows CIM 与 PnP 设备发现，真实探测可识别 ESP32-S3 `COM4`、SIM7670G 串口和 Remote NDIS 网卡。
 - T021：SIM7670G GNSS 探测与 `location_report` 写入完成。新增 `scripts/sim7670_gnss_probe.py`，可自动探测 SIM7670G AT 口，打开/查询 GNSS，解析 `CGNSSINFO` / `CGPSINFO`，并写入 PC Simulator 事件日志；当前室内无 fix，但 `location_report` 已进入 Dashboard/API 闭环。
+- T022：Safety Companion M0 契约基线完成。已将 `模型架构.md` 的“版本化模型包 + 明确接口契约”路线整合为 `docs/modeling/` 文档、`shared/contracts/` JSON Schema 和 `quality_tests/model_contract/` 契约测试；当前只做契约和边界，不引入训练代码或推理运行时。
 
 ## 当前建议任务
 
-下一项建议任务 T022：固件侧周期发布 Mock GNSS `location_report` 到 MQTT，使 ESP32-S3 在不直接绑定真实 SIM7670G GNSS 的前提下跑通设备端定位上报闭环；真实 SIM7670G 户外 fix 作为独立硬件门禁继续验证。
+下一项建议任务 T023：实现 PC Simulator Safety Companion adapter，将现有 `sos_pressed`、`wake_detected`、`location_report`、`sensor_sample` 和设备风险事件转换为 `shared/contracts/model_input.schema.json`，并返回确定性的 mock `model_output`，先跑通模型接口闭环。
 
 ## 最近验证
 
-- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，42 个测试全部成功。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，48 个测试全部成功。
+- `python -m unittest quality_tests.model_contract.test_contract_schemas -v`：通过，5 个 Safety Companion M0 契约测试全部成功。
+- `python -m unittest quality_tests.test_repository_contract -v`：通过，3 个仓库结构契约测试全部成功。
 - `python -m unittest quality_tests.test_sim7670_gnss_probe -v`：通过，6 个 GNSS probe 测试全部成功。
 - `python -m unittest quality_tests.test_pc_simulator -v`：通过，8 个 PC Simulator 测试全部成功。
 - `python scripts\sim7670_gnss_probe.py --warmup-seconds 5 --poll-count 3 --poll-interval-seconds 2`：通过，首次报告见 `reports/gnss_validation/20260621-100651/gnss_probe.md`；`COM6/COM7` AT 可达，型号 `SIM7670G-MNGV`。

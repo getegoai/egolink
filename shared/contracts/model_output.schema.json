@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://egolink.local/contracts/model_output.schema.json",
+  "title": "Ego Link Safety Companion Model Output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "model_version",
+    "risk_type",
+    "risk_score",
+    "confidence",
+    "recommended_action",
+    "evidence_request",
+    "reason_codes"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "safety-companion.contract.v0.1"
+    },
+    "model_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "risk_type": {
+      "enum": [
+        "none",
+        "manual_sos",
+        "possible_accident",
+        "post_impact_stationary",
+        "zone_deviation",
+        "distress_audio",
+        "device_risk"
+      ]
+    },
+    "risk_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "recommended_action": {
+      "enum": [
+        "ignore",
+        "local_reminder",
+        "ask_user",
+        "upload_summary",
+        "ask_user_and_send_summary",
+        "request_evidence",
+        "escalate_emergency"
+      ]
+    },
+    "evidence_request": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "none",
+          "audio_5s",
+          "single_image",
+          "motion_window",
+          "location_point",
+          "device_log"
+        ]
+      }
+    },
+    "reason_codes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

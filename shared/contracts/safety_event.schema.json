@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://egolink.local/contracts/safety_event.schema.json",
+  "title": "Ego Link Safety Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "event_id",
+    "device_id",
+    "timestamp_ms",
+    "event_type",
+    "priority",
+    "source"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "safety-companion.contract.v0.1"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "event_type": {
+      "enum": [
+        "manual_sos",
+        "wake_detected",
+        "location_report",
+        "sensor_sample",
+        "possible_fall",
+        "impact_detected",
+        "post_impact_stationary",
+        "abnormal_stay",
+        "zone_deviation",
+        "distress_audio",
+        "abnormal_sound",
+        "low_battery",
+        "link_lost",
+        "gnss_no_fix"
+      ]
+    },
+    "priority": {
+      "enum": [
+        "low",
+        "normal",
+        "warning",
+        "critical"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "risk_hint": {
+      "type": "string"
+    },
+    "observations": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "uri"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "audio_5s",
+              "single_image",
+              "motion_window",
+              "location_point",
+              "device_log"
+            ]
+          },
+          "uri": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
