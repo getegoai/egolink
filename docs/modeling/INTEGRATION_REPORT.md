@@ -87,6 +87,14 @@ T027 real event safety flow updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+T028 supervised live MQTT safety processing updates:
+
+- `pc_simulator/mqtt_worker.py`
+- `quality_tests/test_mqtt_worker.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
 
 ```powershell
@@ -108,7 +116,15 @@ decision.
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
-Result: passed. The repository test suite ran 83 tests successfully.
+Result: passed. The repository test suite ran 87 tests successfully.
+
+```powershell
+python -m unittest quality_tests.test_mqtt_worker -v
+```
+
+Result: passed. The MQTT worker tests ran 12 tests successfully, including the
+supervised `--process-safety` option, after-store hook behavior, bad-line
+skipping, safety-processing failure isolation, and progress output.
 
 ```powershell
 python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v
@@ -119,6 +135,16 @@ including packaged scenario inputs, sensor frame evaluation, safety event
 conversion, privacy evidence filtering, `POST /api/safety/evaluate`, and
 `POST /api/safety/replay`. T027 also covers real `sensor_sample` field mapping,
 `POST /api/safety/process-events`, and idempotent event-log processing.
+
+```powershell
+python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/event --max-messages 1 --wait-seconds 90 --process-safety --safety-process-limit 20
+```
+
+Result: passed. The worker received a real ESP32-S3 firmware `sensor_sample`
+with `seq=9064`, stored it in `pc_simulator/runtime/events.jsonl`, and
+immediately processed one source event through Safety Companion. It wrote one
+`safety_evaluation` with `risk_type=none` and did not generate a `safety_event`
+or simulated command.
 
 M0-INT-004 replay result:
 
@@ -165,6 +191,18 @@ processed 12 evaluable recent events and wrote 12 `safety_evaluation`, 3
 flashing, MQTT subscription, GNSS probing, calls, camera capture, audio
 recording, or external network actions.
 
+T028 performed a supervised live MQTT pass against the local LAN broker at
+`192.168.31.250:1883`. The worker received one real ESP32-S3 `sensor_sample`
+and wrote its paired `safety_evaluation`. A follow-up Dashboard API idempotency
+check returned `processed=0` for the already processed live event.
+
+T028 also ran a fresh SIM7670G GNSS no-fix probe:
+`reports/gnss_validation/20260621-161721/gnss_probe.md`. `COM6` and `COM7`
+were AT-reachable, `gnss_power_state=1`, and the probe wrote a
+`location_report` with `fix=false`. Processing that no-fix event plus a
+Dashboard-simulated SOS wrote 2 `safety_evaluation`, 1 `safety_event`, and 1
+no-side-effect simulated command.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -180,9 +218,9 @@ had already been validated before this overlay package verification.
   validation because `idf.py` is not available on the current `PATH`.
 - M0-INT-004 is a simulated replay flow only. It validates message shape,
   routing, logging, and display behavior, not real-world incident detection.
-- T027 connects existing event logs to Safety Companion, but live MQTT worker
-  auto-processing is not yet continuous; `POST /api/safety/process-events`
-  currently performs a bounded process pass.
+- T028 adds supervised live MQTT auto-processing, but it is still an explicitly
+  launched CLI mode rather than a Windows service with restart policy, log
+  rotation, or a unified local session monitor.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The earlier T023 adapter treated GNSS no-fix as a device risk. The official
@@ -206,6 +244,6 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Next, add continuous or supervised processing for live MQTT events and run a
-fresh hardware pass with the ESP32-S3 connected: MQTT sensor sample, simulated
-SOS, GNSS no-fix, Safety evaluation records, and Dashboard review.
+Next, package Dashboard, Mosquitto, the live MQTT Safety worker, and status
+observation into a one-command local supervised session that writes session
+logs and a concise health summary.

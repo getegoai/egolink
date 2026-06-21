@@ -160,6 +160,81 @@ class MqttWorkerTests(unittest.TestCase):
         self.assertEqual([row["event_type"] for row in rows], ["mqtt_ack", "sos_pressed", "mqtt_status"])
         self.assertIn("skipped line", errors.getvalue())
 
+    def test_consume_lines_calls_after_store_for_valid_events_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "events.jsonl"
+            calls: list[tuple[str, Path]] = []
+
+            stored = mqtt_worker.consume_lines(
+                [
+                    f"ego/link/ego-link-001/status {status_payload(seq=1)}",
+                    "bad-line-without-payload",
+                    f"ego/link/ego-link-001/event {telemetry_payload(seq=2)}",
+                ],
+                log_path,
+                now=lambda: "2026-06-20T00:00:00+00:00",
+                after_store=lambda event, path: calls.append((event["event_type"], path)),
+            )
+
+        self.assertEqual(stored, 2)
+        self.assertEqual(calls, [("mqtt_status", log_path), ("sos_pressed", log_path)])
+
+    def test_consume_lines_logs_after_store_failure_and_keeps_ingesting(self) -> None:
+        def fail_after_store(_event: dict[str, object], _path: Path) -> None:
+            raise RuntimeError("synthetic safety failure")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            log_path = Path(tmp) / "events.jsonl"
+            errors = io.StringIO()
+
+            stored = mqtt_worker.consume_lines(
+                [f"ego/link/ego-link-001/event {telemetry_payload(seq=2)}"],
+                log_path,
+                now=lambda: "2026-06-20T00:00:00+00:00",
+                errors=errors,
+                after_store=fail_after_store,
+            )
+            rows = event_store.load_recent(log_path, limit=5)
+
+        self.assertEqual(stored, 1)
+        self.assertEqual(rows[0]["event_type"], "sos_pressed")
+        self.assertIn("safety processing failed", errors.getvalue())
+
+    def test_make_safety_after_store_processes_log_and_reports_summary(self) -> None:
+        original = mqtt_worker.process_safety_log
+        calls: list[tuple[Path, int]] = []
+
+        def fake_process_safety_log(event_log: Path, *, limit: int = 20) -> dict[str, object]:
+            calls.append((event_log, limit))
+            return {
+                "processed": 1,
+                "summary": {
+                    "safety_evaluations": 1,
+                    "safety_events": 1,
+                    "base_commands": 1,
+                },
+            }
+
+        try:
+            mqtt_worker.process_safety_log = fake_process_safety_log  # type: ignore[assignment]
+            progress = io.StringIO()
+            log_path = Path("runtime/events.jsonl")
+            after_store = mqtt_worker.make_safety_after_store(limit=7, progress=progress)
+
+            after_store({"event_type": "sos_pressed"}, log_path)
+        finally:
+            mqtt_worker.process_safety_log = original  # type: ignore[assignment]
+
+        self.assertEqual(calls, [(log_path, 7)])
+        self.assertIn("processed 1 source event", progress.getvalue())
+        self.assertIn("base_commands=1", progress.getvalue())
+
+    def test_parse_args_enables_supervised_safety_processing(self) -> None:
+        args = mqtt_worker.parse_args(["--process-safety", "--safety-process-limit", "7"])
+
+        self.assertTrue(args.process_safety)
+        self.assertEqual(args.safety_process_limit, 7)
+
 
 if __name__ == "__main__":
     unittest.main()

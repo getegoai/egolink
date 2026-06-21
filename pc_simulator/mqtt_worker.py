@@ -186,6 +186,7 @@ def consume_lines(
     *,
     now: Callable[[], str] = utc_now,
     errors: TextIO | None = None,
+    after_store: Callable[[dict[str, Any], Path], None] | None = None,
 ) -> int:
     stored = 0
     for line in lines:
@@ -198,7 +199,48 @@ def consume_lines(
             continue
         event_store.append_jsonl(event_log, event)
         stored += 1
+        if after_store is not None:
+            try:
+                after_store(event, event_log)
+            except Exception as exc:  # pragma: no cover - defensive live-worker boundary
+                if errors is not None:
+                    print(f"mqtt_worker safety processing failed: {exc}", file=errors)
     return stored
+
+
+def process_safety_log(event_log: Path, *, limit: int = 20) -> dict[str, Any]:
+    from pc_simulator import app as simulator_app
+
+    simulator_app.RUNTIME_DIR = event_log.parent
+    simulator_app.EVENT_LOG = event_log
+    return simulator_app.process_safety_events(limit=limit)
+
+
+def make_safety_after_store(
+    *,
+    limit: int = 20,
+    progress: TextIO | None = None,
+) -> Callable[[dict[str, Any], Path], None]:
+    def after_store(_event: dict[str, Any], event_log: Path) -> None:
+        result = process_safety_log(event_log, limit=limit)
+        summary = result.get("summary", {})
+        processed = int(result.get("processed", 0))
+        if progress is not None and (
+            processed
+            or summary.get("safety_evaluations")
+            or summary.get("safety_events")
+            or summary.get("base_commands")
+        ):
+            print(
+                "mqtt_worker safety processed "
+                f"{processed} source event(s): "
+                f"evaluations={summary.get('safety_evaluations', 0)}, "
+                f"safety_events={summary.get('safety_events', 0)}, "
+                f"base_commands={summary.get('base_commands', 0)}",
+                file=progress,
+            )
+
+    return after_store
 
 
 def run_worker(
@@ -210,6 +252,8 @@ def run_worker(
     executable: str | None = None,
     max_messages: int | None = None,
     wait_seconds: int | None = None,
+    process_safety: bool = False,
+    safety_process_limit: int = 20,
 ) -> int:
     command = build_subscribe_command(
         host=host,
@@ -230,7 +274,12 @@ def run_worker(
     try:
         if process.stdout is None:
             raise RuntimeError("mosquitto_sub stdout was not captured")
-        stored = consume_lines(process.stdout, event_log, errors=sys.stderr)
+        after_store = (
+            make_safety_after_store(limit=safety_process_limit, progress=sys.stderr)
+            if process_safety
+            else None
+        )
+        stored = consume_lines(process.stdout, event_log, errors=sys.stderr, after_store=after_store)
         return_code = process.wait()
     except KeyboardInterrupt:
         process.terminate()
@@ -258,6 +307,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--mosquitto-sub", default=None, help="Path to mosquitto_sub. Defaults to PATH or Windows install path.")
     parser.add_argument("--max-messages", type=int, default=None, help="Exit after this many received MQTT messages.")
     parser.add_argument("--wait-seconds", type=int, default=None, help="Pass a receive timeout to mosquitto_sub.")
+    parser.add_argument(
+        "--process-safety",
+        action="store_true",
+        help="After each stored MQTT message, process recent event-log entries through Safety Companion.",
+    )
+    parser.add_argument(
+        "--safety-process-limit",
+        type=int,
+        default=20,
+        help="Recent event count to scan when --process-safety is enabled.",
+    )
     return parser.parse_args(argv)
 
 
@@ -266,6 +326,8 @@ def main(argv: list[str] | None = None) -> int:
     topics = args.topics or DEFAULT_TOPICS
     print(f"Listening mqtt://{args.host}:{args.port} {', '.join(topics)}")
     print(f"Writing events to {args.event_log}")
+    if args.process_safety:
+        print(f"Safety processing enabled; scanning latest {args.safety_process_limit} event(s) after each MQTT write.")
     try:
         stored = run_worker(
             host=args.host,
@@ -275,6 +337,8 @@ def main(argv: list[str] | None = None) -> int:
             executable=args.mosquitto_sub,
             max_messages=args.max_messages,
             wait_seconds=args.wait_seconds,
+            process_safety=args.process_safety,
+            safety_process_limit=args.safety_process_limit,
         )
     except KeyboardInterrupt:
         print("\nStopped.")

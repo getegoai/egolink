@@ -32,15 +32,21 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T025：Safety Companion M0 固件模型接口完成。新增 `firmware/mqtt_heartbeat/components/safety_model`，围绕 `shared/embedded/safety_model_contract.h` 暴露 `safety_model_init/evaluate/version`，当前为明确标识的 deterministic mock；SOS 路径固定输出 `MANUAL_SOS + URGENT_ESCALATION`，并提供 mock 状态 adapter 与串口测试命令。
 - T026：Safety Companion M0 模拟端到端闭环完成。新增 `POST /api/safety/replay`，可重放 `normal_walk`、`manual_sos`、`post_impact_inactivity`、`privacy_restricted_impact` 四个场景；非 `none` 输出生成 `safety_event`，`ask_user` / `urgent_escalation` 生成无副作用的模拟 `base_command`，Dashboard 事件详情可展示 risk/action/evidence/privacy。
 - T027：真实/半真实设备事件接入 Safety Companion 流程完成。新增 `evaluate_event` 和 `POST /api/safety/process-events`，可将 MQTT `sensor_sample`、SOS/模拟 SOS、GNSS no-fix 等事件转换为标准 `sensor_frame` 并记录 `safety_evaluation`；非 `none` 输出继续生成 `safety_event` 和无副作用模拟 command。
+- T028：live MQTT 监督式 Safety 处理完成。`pc_simulator/mqtt_worker.py` 新增 `--process-safety` / `--safety-process-limit`，可在真实 MQTT 消息入库后立即触发 Safety flow；默认入库行为保持不变，Safety 处理异常只写诊断、不阻断 MQTT 采集。
 
 ## 当前建议任务
 
-下一项建议任务 T028：增加 live MQTT 的监督式 Safety 处理方式，运行新一轮硬件验证：接收真实 `sensor_sample`、模拟/物理 SOS、GNSS no-fix，执行 `process-events`，并在 Dashboard 确认 `safety_evaluation` / `safety_event` / 模拟 command。
+下一项建议任务 T029：把 Dashboard、Mosquitto、live MQTT Safety worker 和状态观察整理成一键可运行的本地监督会话脚本，输出 session log / health summary，减少手动开多个终端的黑箱感。
 
 ## 最近验证
 
-- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，83 个测试全部成功。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，87 个测试全部成功。
+- `python -m unittest quality_tests.test_mqtt_worker -v`：通过，12 个 MQTT worker 测试全部成功；覆盖 `--process-safety` 参数、after-store hook、坏行跳过、Safety 失败隔离和进度输出。
 - `python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v`：通过，26 个 PC Simulator / Safety Companion adapter 测试全部成功；覆盖 `POST /api/safety/replay`、`POST /api/safety/process-events`、真实 `sensor_sample` 映射、事件日志幂等处理、派生 safety 记录过滤、隐私证据过滤和无副作用命令。
+- `python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/event --max-messages 1 --wait-seconds 90 --process-safety --safety-process-limit 20`：通过，收到真实固件 `sensor_sample seq=9064`，并立即写入 1 条 `safety_evaluation`；`risk_type=none`，未生成 `safety_event` 或 command。
+- Dashboard API live worker 幂等验证：通过，`POST /api/safety/process-events` 对已处理 live `sensor_sample` 返回 `processed=0`、`safety_evaluations=0`、`safety_events=0`、`base_commands=0`。
+- `python scripts\sim7670_gnss_probe.py --no-power-on --warmup-seconds 0 --poll-count 1 --poll-interval-seconds 0`：通过，报告见 `reports/gnss_validation/20260621-161721/gnss_probe.md`；`COM6/COM7` AT 可达，`gnss_power_state=1`，当前 no-fix，事件已写入 `pc_simulator/runtime/events.jsonl`。
+- GNSS no-fix + 模拟 SOS Safety process：通过，`POST /api/safety/process-events` 处理 2 个源事件，写入 2 条 `safety_evaluation`、1 条 `safety_event`、1 条无副作用模拟 command。
 - 真实/半真实日志 Safety process：通过，最近 20 条事件中处理 12 条可评估事件，写入 12 条 `safety_evaluation`、3 条 `safety_event`、3 条模拟 command。
 - `python -m unittest quality_tests.test_safety_model_firmware quality_tests.test_mqtt_heartbeat_firmware -v`：通过，8 个固件侧静态测试全部成功。
 - `python scripts\verify_safety_companion_m0.py`：通过，模型包自检、12 个合成场景、契约测试、包内测试和 C threshold header 比对全部成功。
@@ -56,7 +62,7 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - `python -m unittest quality_tests.test_mqtt_heartbeat_firmware -v`：通过，3 个固件静态测试全部成功。
 - `idf.py -p COM4 flash`：通过，识别芯片 `ESP32-S3`，写入 `egolink_mqtt_heartbeat.bin` 并 hard reset。
 - `python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/event --max-messages 1 --wait-seconds 90`：通过，收到真实固件 `sensor_sample`。
-- 本机 Dashboard 当前运行在 `http://127.0.0.1:8787`，进程 PID `18808`。
+- 本机 Dashboard 当前运行在 `http://127.0.0.1:8787`，进程 PID `44568`。
 
 ## 已知限制
 
@@ -64,7 +70,7 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - Safety Companion M0 官方规则包当前不把 GNSS no-fix 作为模型风险；PC Simulator adapter 只保留 `fix_valid=false` 输入，不再沿用旧 mock 的 `device_risk/upload_summary` 输出。
 - 当前 shell 未加载 ESP-IDF，`idf.py --version` 不可用；T025 只完成固件接口和主机侧静态测试，尚未进行 ESP-IDF build、flash 或真实串口 CLI 验证。
 - T026 是纯模拟 replay 闭环，只验证协议、记录、展示和无副作用命令，不验证真实事故/跌倒/呼救识别准确率。
-- T027 使用既有本地事件日志做 bounded process pass，尚未实现 live MQTT 消息到 Safety flow 的连续自动处理。
+- T028 的 live MQTT Safety worker 仍是显式启动的监督式 CLI，不是 Windows 服务；长期运行、日志轮转、异常重启和统一监控还需要下一轮整理。
 - 当前 T021 是 PC 侧通过 USB AT 口探测 SIM7670G GNSS，尚未把 ESP32 固件切换为直接控制 SIM7670G GNSS。
 - SD 卡挂载曾失败，需要单独确认格式、接线、引脚、供电和固件挂载参数。
 - 用户已确认当前 Wi-Fi 凭据可以在本机项目中明文保存，固件 `sdkconfig` 可保留 SSID/password。

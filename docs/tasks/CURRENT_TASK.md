@@ -1,32 +1,30 @@
-# CURRENT_TASK: T027 Real Event Safety Companion Flow
+# CURRENT_TASK: T028 Supervised Live MQTT Safety Processing
 
 ## 任务目标
 
-把真实/半真实设备事件接入 Safety Companion 流程：MQTT `sensor_sample`、SOS/模拟 SOS、GNSS no-fix 等事件可以转换为标准 `sensor_frame`，经过 M0 router 得到 `model_output`，并在 PC Simulator 事件流中记录处理结果。
+为 PC Simulator MQTT worker 增加可开关的监督式 Safety 处理模式：收到真实/半真实 MQTT 消息并写入事件日志后，可立即扫描最近事件并执行 Safety Companion flow，生成 `safety_evaluation`、必要的 `safety_event` 和无副作用模拟 command。
 
 ## 范围
 
-- 支持单个设备事件评估：`safety_companion.evaluate_event(event, device)`。
-- 支持判断可评估事件：`sensor_sample`、`location_report`、`sos_pressed`、`wake_detected`、`impact_detected` 等。
-- 支持从事件日志批处理未处理事件。
-- 新增 `POST /api/safety/process-events`。
-- 对所有进入 Safety flow 的真实/半真实事件写入 `safety_evaluation`。
-- 对非 `none` 输出继续写入 `safety_event` 和无副作用模拟命令。
-- Dashboard 事件详情可展示 `safety_evaluation`。
+- 在 `pc_simulator/mqtt_worker.py` 增加 `--process-safety` 开关。
+- 增加 `--safety-process-limit`，控制每次 MQTT 入库后扫描的最近事件数量。
+- 保持默认 MQTT ingester 行为不变：不开开关时只写事件日志。
+- Safety 处理失败时只写入 stderr 诊断，不阻塞后续 MQTT 消息入库。
+- 增加单元测试覆盖 after-store hook、失败隔离、参数解析和处理进度输出。
+- 更新状态文档和集成报告。
 
 ## 不做
 
-- 不修改模型包规则。
+- 不修改 Safety Companion M0 模型包规则。
 - 不把 GNSS no-fix 私自提升为模型风险。
 - 不真实拨号、拍照、录音或访问外网。
-- 不启动连续后台 worker；本轮只做 bounded process pass。
+- 不把 worker 做成 Windows 服务或长期后台守护；本轮只提供可显式启动的监督式处理模式。
+- 不引入 LangGraph、AutoGen、CrewAI 等额外智能体框架。
 
 ## 允许修改路径
 
-- `pc_simulator/safety_companion.py`
-- `pc_simulator/app.py`
-- `quality_tests/test_safety_companion.py`
-- `quality_tests/test_pc_simulator.py`
+- `pc_simulator/mqtt_worker.py`
+- `quality_tests/test_mqtt_worker.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
@@ -34,27 +32,29 @@
 ## 验证命令
 
 ```powershell
-python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v
-python scripts\verify_safety_companion_m0.py
+python -m unittest quality_tests.test_mqtt_worker -v
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/+/event --max-messages 1 --wait-seconds 90 --process-safety --safety-process-limit 20
 ```
 
 ## 执行结果
 
-- `sensor_sample` 中的 `wifi_rssi` 已映射为 `sensor_frame.sensors.network.rssi_dbm`。
-- `location_report fix=false` 已映射为 `sensor_frame.sensors.location.fix_valid=false`，但不会被 adapter 私自提升为模型风险。
-- `sos_pressed` 可生成 `manual_sos`、`safety_event` 和无副作用模拟 `ask_user` command。
-- `POST /api/safety/process-events` 可处理最近事件日志，跳过已处理的 source event，避免重复写入。
-- 真实/半真实日志验证：最近 20 条事件中处理 12 条可评估事件，写入 12 条 `safety_evaluation`、3 条 `safety_event`、3 条模拟 command。
+- `pc_simulator/mqtt_worker.py` 新增 `--process-safety` 和 `--safety-process-limit`。
+- `consume_lines()` 新增 after-store hook；只对成功入库的 MQTT 事件触发，坏行不会触发。
+- Safety 处理异常会写入 stderr，并保持 MQTT 入库继续执行。
+- 真实 live MQTT 验证通过：收到 ESP32-S3 固件 `sensor_sample seq=9064`，worker 立即写入 1 条 `safety_evaluation`，`risk_type=none`。
+- Dashboard API 幂等验证通过：对已处理的 live `sensor_sample` 再执行 `POST /api/safety/process-events` 返回 `processed=0`。
+- SIM7670G GNSS no-fix 验证通过：报告见 `reports/gnss_validation/20260621-161721/gnss_probe.md`，写入 `location_report fix=false`。
+- 模拟 SOS + GNSS no-fix 批处理验证通过：`POST /api/safety/process-events` 处理 2 个源事件，写入 2 条 `safety_evaluation`、1 条 `safety_event`、1 条无副作用模拟 command。
+- `python -m unittest quality_tests.test_mqtt_worker -v` 通过，12 个测试成功。
 - `python -m unittest quality_tests.test_safety_companion quality_tests.test_pc_simulator -v` 通过，26 个测试成功。
-- `python scripts\verify_safety_companion_m0.py` 通过。
-- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` 通过，83 个测试成功。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` 通过，87 个测试成功。
+- Dashboard 已重启到最新代码，运行在 `http://127.0.0.1:8787`，PID `44568`。
 
 ## 完成标准
 
-- [x] 真实 `sensor_sample` 可进入 Safety Companion 输入。
-- [x] GNSS no-fix 可进入 Safety Companion 输入且保留为 no-fix 状态。
-- [x] SOS/模拟 SOS 可生成模型输出、安全事件和模拟命令。
-- [x] PC Simulator 可记录 `safety_evaluation`。
-- [x] 事件日志处理具备幂等性。
-- [x] 无真实硬件、通信和安全动作副作用。
+- [x] MQTT worker 可通过 `--process-safety` 启用入库后 Safety 处理。
+- [x] 默认 MQTT worker 行为保持不变。
+- [x] Safety 处理失败不阻断 MQTT 事件入库。
+- [x] 测试覆盖新增监督式处理路径。
+- [x] 文档记录运行方式、验证结果和剩余限制。
