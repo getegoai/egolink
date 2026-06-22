@@ -23,6 +23,7 @@
 - [x] M1-004-pre session inspector quality gate
 - [x] M1-004-pre quality gate monitor integration
 - [x] M1-004-pre session file integrity
+- [x] M1-004 PC session import / replay
 
 ## Changed files
 
@@ -171,7 +172,38 @@ T035 session file integrity updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+T036 PC session import / replay updates:
+
+- `pc_simulator/session_replay.py`
+- `scripts/replay_session_recording.py`
+- `quality_tests/test_session_replay.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
+
+```powershell
+python -m unittest quality_tests.test_session_replay -v
+```
+
+Result: passed. The session replay tests ran 4 tests successfully, covering
+successful recording replay, quality-gate failure refusal, report writing, and
+CLI behavior.
+
+```powershell
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\t035-integrity-smoke
+```
+
+Result: passed. The replay command generated `session_replay_report.json` and
+`session_replay_report.md` for the integrity-checked smoke recording. It
+reported `PASS replayed_inputs=37 safety_events=9 skipped=23`.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed. The repository test suite ran 107 tests successfully.
 
 ```powershell
 python -m unittest quality_tests.test_session_recorder quality_tests.test_session_inspector -v
@@ -490,6 +522,11 @@ T035 did not perform new hardware I/O. It adds a local SHA-256 file manifest for
 recording artifacts and makes the inspector fail when any hashed recording file
 is missing, resized, or changed.
 
+T036 did not perform new hardware I/O. It reads integrity-checked local
+recording artifacts, rebuilds replay/model-input flow on the PC, calls the
+existing RuleRouter, and writes local replay reports. It does not start
+hardware, network, audio, camera, modem, firmware, or external side effects.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -515,14 +552,12 @@ had already been validated before this overlay package verification.
   these sources explicitly disabled or marked `not_available` until validated.
 - T032 recorder is a PC event-log derived skeleton, not an ESP32 firmware
   `safety_recorder`. It does not yet provide power-loss recovery,
-  sampling-rate statistics, event-window completeness, or replay.
+  sampling-rate statistics, or event-window completeness.
 - Annotations are only an empty `annotations.jsonl` placeholder until M1-005
   adds user feedback or human labeling.
-- T033/T034 quality gate now runs from the local supervised session script and
-  displays in the AutoDev/local monitor. Replay, model-input rebuilds, and user
-  annotations are still pending.
-- T035 adds file hashes and integrity checks, but replay, model-input rebuilds,
-  and user annotations are still pending.
+- T033/T034/T035/T036 now provide a PC-side quality gate, file integrity, and
+  replay/model-input rebuild path. User annotations, firmware recorder behavior,
+  and a formal trainable session dataset are still pending.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -549,6 +584,6 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Next, start T036 by adding PC session import/replay for integrity-checked
-recordings. Replay should rebuild event/model-input flow from the recording
+Next, start T037 by adding a minimal annotation CLI for integrity-checked
+recordings. It should append structured user/human labels to `annotations.jsonl`
 without starting hardware, network, audio, camera, or firmware actions.
