@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -11,11 +12,20 @@ from typing import Any
 
 REPORT_SCHEMA_VERSION = "egolink.session_quality_report.v0.1"
 EXPECTED_SCHEMA_VERSION = "egolink.session_recording.v0.1"
+EXPECTED_FILE_MANIFEST_SCHEMA_VERSION = "egolink.session_file_manifest.v0.1"
 REQUIRED_FILES = {
+    "manifest": "session_manifest.json",
+    "file_manifest": "file_manifest.json",
+    "sensor_frames": "sensor_frames.jsonl",
+    "events": "events.jsonl",
+    "annotations": "annotations.jsonl",
+}
+HASHED_FILES = {
     "manifest": "session_manifest.json",
     "sensor_frames": "sensor_frames.jsonl",
     "events": "events.jsonl",
     "annotations": "annotations.jsonl",
+    "summary": "session_recording.md",
 }
 REQUIRED_MANIFEST_FIELDS = {
     "schema_version",
@@ -121,6 +131,14 @@ def load_jsonl(path: Path) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     return rows, issues
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def inspect_recording(recording_dir: Path, *, generated_at: str | None = None) -> dict[str, Any]:
     recording_dir = recording_dir.resolve()
     generated = generated_at or utc_now()
@@ -133,7 +151,9 @@ def inspect_recording(recording_dir: Path, *, generated_at: str | None = None) -
             errors.append(make_issue("missing_file", f"Missing required {name} file.", path=str(path)))
 
     manifest, manifest_errors = load_json(file_paths["manifest"])
+    file_manifest, file_manifest_errors = load_json(file_paths["file_manifest"])
     errors.extend(manifest_errors)
+    errors.extend(file_manifest_errors)
     sensor_frames, sensor_frame_errors = load_jsonl(file_paths["sensor_frames"])
     events, event_errors = load_jsonl(file_paths["events"])
     annotations, annotation_errors = load_jsonl(file_paths["annotations"])
@@ -146,6 +166,8 @@ def inspect_recording(recording_dir: Path, *, generated_at: str | None = None) -
         validate_record_counts(manifest, sensor_frames, events, annotations, errors)
         validate_privacy(manifest, errors)
         validate_sensor_sources(manifest, errors, warnings)
+    if file_manifest is not None:
+        validate_file_manifest(file_manifest, recording_dir, errors)
 
     validate_sensor_frames(sensor_frames, errors, warnings)
     validate_events(events, errors, warnings)
@@ -163,6 +185,7 @@ def inspect_recording(recording_dir: Path, *, generated_at: str | None = None) -
         "summary": {
             "errors": len(errors),
             "warnings": len(warnings),
+            "integrity_files": len(HASHED_FILES),
             "sensor_frames": len(sensor_frames),
             "events": len(events),
             "annotations": len(annotations),
@@ -193,6 +216,9 @@ def validate_manifest(
         errors.append(make_issue("manifest_session_id", "Manifest session_id is required."))
     if manifest.get("firmware", {}).get("version") in (None, "", "unknown"):
         warnings.append(make_issue("firmware_version_unknown", "Firmware version is unknown."))
+    outputs = manifest.get("outputs")
+    if isinstance(outputs, dict) and outputs.get("file_manifest") != "file_manifest.json":
+        errors.append(make_issue("manifest_file_manifest_output", "Manifest outputs.file_manifest must be file_manifest.json."))
 
 
 def validate_record_counts(
@@ -217,6 +243,63 @@ def validate_record_counts(
                 make_issue(
                     "record_count_mismatch",
                     f"record_counts.{name}={counts.get(name)} but file has {actual}.",
+                )
+            )
+
+
+def validate_file_manifest(
+    file_manifest: dict[str, Any],
+    recording_dir: Path,
+    errors: list[dict[str, str]],
+) -> None:
+    if file_manifest.get("schema_version") != EXPECTED_FILE_MANIFEST_SCHEMA_VERSION:
+        errors.append(
+            make_issue(
+                "file_manifest_schema_version",
+                "file_manifest.json has an unsupported schema_version.",
+            )
+        )
+    if file_manifest.get("hash_algorithm") != "sha256":
+        errors.append(make_issue("file_manifest_hash_algorithm", "file_manifest.json must use sha256."))
+    files = file_manifest.get("files")
+    if not isinstance(files, dict):
+        errors.append(make_issue("file_manifest_files_missing", "file_manifest.json files must be an object."))
+        return
+    for name, filename in sorted(HASHED_FILES.items()):
+        entry = files.get(name)
+        if not isinstance(entry, dict):
+            errors.append(make_issue("file_manifest_missing_entry", f"file_manifest.json is missing `{name}`."))
+            continue
+        if entry.get("path") != filename:
+            errors.append(
+                make_issue(
+                    "file_manifest_path_mismatch",
+                    f"file_manifest `{name}` path must be `{filename}`, got `{entry.get('path')}`.",
+                )
+            )
+            continue
+        path = recording_dir / filename
+        if not path.is_file():
+            errors.append(make_issue("file_manifest_target_missing", f"Hashed file is missing: {filename}", path=str(path)))
+            continue
+        expected_size = entry.get("size_bytes")
+        actual_size = path.stat().st_size
+        if expected_size != actual_size:
+            errors.append(
+                make_issue(
+                    "file_size_mismatch",
+                    f"{filename} size is {actual_size}, expected {expected_size}.",
+                    path=str(path),
+                )
+            )
+        expected_sha = entry.get("sha256")
+        actual_sha = sha256_file(path)
+        if expected_sha != actual_sha:
+            errors.append(
+                make_issue(
+                    "file_hash_mismatch",
+                    f"{filename} sha256 does not match file_manifest.json.",
+                    path=str(path),
                 )
             )
 
@@ -394,6 +477,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Quality score: `{report['quality_score']}`",
         f"- Errors: `{summary['errors']}`",
         f"- Warnings: `{summary['warnings']}`",
+        f"- Integrity files: `{summary.get('integrity_files', 0)}`",
         f"- Sensor frames: `{summary['sensor_frames']}`",
         f"- Events: `{summary['events']}`",
         f"- Annotations: `{summary['annotations']}`",

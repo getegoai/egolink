@@ -122,12 +122,18 @@ class SessionRecorderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             paths = session_recorder.write_recording(recording, Path(tmp))
             manifest = json.loads(paths["manifest"].read_text(encoding="utf-8"))
+            file_manifest = json.loads(paths["file_manifest"].read_text(encoding="utf-8"))
             frames = [json.loads(line) for line in paths["sensor_frames"].read_text(encoding="utf-8").splitlines()]
             events = [json.loads(line) for line in paths["events"].read_text(encoding="utf-8").splitlines()]
             annotations = paths["annotations"].read_text(encoding="utf-8")
             summary = paths["summary"].read_text(encoding="utf-8")
 
         self.assertEqual(manifest["record_counts"]["sensor_frames"], 3)
+        self.assertEqual(manifest["outputs"]["file_manifest"], "file_manifest.json")
+        self.assertEqual(file_manifest["hash_algorithm"], "sha256")
+        self.assertIn("manifest", file_manifest["files"])
+        self.assertIn("sensor_frames", file_manifest["files"])
+        self.assertEqual(len(file_manifest["files"]["events"]["sha256"]), 64)
         self.assertEqual(len(frames), 3)
         self.assertEqual(events[-1]["command"], "ask_user")
         self.assertEqual(annotations, "")
@@ -158,10 +164,12 @@ class SessionRecorderTests(unittest.TestCase):
                 )
 
             manifest = json.loads((output_dir / "session_manifest.json").read_text(encoding="utf-8"))
+            file_manifest = json.loads((output_dir / "file_manifest.json").read_text(encoding="utf-8"))
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(manifest["session_id"], "cli-session")
         self.assertEqual(manifest["record_counts"]["events"], 3)
+        self.assertIn("annotations", file_manifest["files"])
 
 
 if __name__ == "__main__":

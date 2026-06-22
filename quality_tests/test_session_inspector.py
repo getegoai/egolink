@@ -37,6 +37,7 @@ class SessionInspectorTests(unittest.TestCase):
         self.assertEqual(report["summary"]["sensor_frames"], 3)
         self.assertEqual(report["summary"]["events"], 3)
         self.assertEqual(report["summary"]["annotations"], 0)
+        self.assertEqual(report["summary"]["integrity_files"], 5)
         warning_codes = {warning["code"] for warning in report["warnings"]}
         self.assertIn("annotations_empty", warning_codes)
         self.assertIn("firmware_version_unknown", warning_codes)
@@ -58,6 +59,8 @@ class SessionInspectorTests(unittest.TestCase):
         error_codes = {error["code"] for error in report["errors"]}
         self.assertIn("record_count_mismatch", error_codes)
         self.assertIn("unverified_source_marked_real", error_codes)
+        self.assertIn("file_size_mismatch", error_codes)
+        self.assertIn("file_hash_mismatch", error_codes)
 
     def test_inspector_rejects_duplicate_source_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -76,6 +79,21 @@ class SessionInspectorTests(unittest.TestCase):
 
         self.assertFalse(report["passed"])
         self.assertIn("duplicate_source_event_key", {error["code"] for error in report["errors"]})
+        self.assertIn("file_size_mismatch", {error["code"] for error in report["errors"]})
+
+    def test_inspector_rejects_tampered_recording_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            recording_dir = Path(tmp)
+            self.write_sample_recording(recording_dir)
+            events_path = recording_dir / "events.jsonl"
+            events_path.write_text(events_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+
+            report = session_inspector.inspect_recording(recording_dir)
+
+        self.assertFalse(report["passed"])
+        error_codes = {error["code"] for error in report["errors"]}
+        self.assertIn("file_size_mismatch", error_codes)
+        self.assertIn("file_hash_mismatch", error_codes)
 
     def test_write_report_outputs_json_and_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

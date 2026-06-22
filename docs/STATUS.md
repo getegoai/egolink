@@ -39,15 +39,16 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T032：M1-002 session recorder 骨架完成。新增 `pc_simulator/session_recorder.py` 和 `scripts/session_recorder.py`，可从 PC Simulator `events.jsonl` 派生 `session_manifest.json`、`sensor_frames.jsonl`、`events.jsonl`、`annotations.jsonl` 和 `session_recording.md`；本地监督会话脚本默认生成 `recording/`，且 manifest 显式标注未验证传感器不可用。
 - T033：M1-004-pre PC session inspector / quality gate 完成。新增 `pc_simulator/session_inspector.py` 和 `scripts/inspect_session_recording.py`，可校验 T032 `recording/` 目录的必需文件、manifest、JSONL、record counts、privacy、sensor source 边界、source key 唯一性和 seq/timestamp warning，并输出 `session_quality_report.json` / `.md`。
 - T034：M1-004-pre quality gate 监控接入完成。`scripts/start_local_supervised_session.ps1` 在 recorder 后自动运行 session inspector，写入 quality report 并在会话日志显示 PASS/FAIL；`scripts/autodev.py watch/status` 已在本地设备区块显示 Quality 和 Report。
+- T035：M1-004-pre session 文件完整性完成。Recorder 现在生成 `file_manifest.json`，记录 session manifest、sensor frames、events、annotations 和 summary 的 SHA-256；quality gate 会校验必需条目、文件大小和哈希，发现静默修改时失败。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
 
-下一项建议任务 T035 / M1-004-pre：为 session recording 增加文件 SHA-256 manifest 和 quality gate 完整性校验，确保 `sensor_frames.jsonl`、`events.jsonl`、`annotations.jsonl`、`session_manifest.json` 可追溯且未被静默修改。随后再做 replay/import；仍不进入 IMU 环形缓冲，直到 IMU 硬件事实确认。
+下一项建议任务 T036 / M1-004：PC session import / replay，导入通过完整性校验的 `recording/` 目录，按原始顺序重建 sensor frames / events，调用现有 RuleRouter，生成 replay report；仍不进入 IMU 环形缓冲，直到 IMU 硬件事实确认。
 
 ## 后续任务路线
 
-- T035：session 文件哈希与完整性校验，补齐 manifest / quality gate 的数据不可篡改基础。
+- T035：session 文件哈希与完整性校验，补齐 manifest / quality gate 的数据不可篡改基础。已完成。
 - T036：PC session import / replay，按 recording 重建事件流并调用现有 RuleRouter，验证可回放。
 - T037：最小 annotation CLI 或本地页面，写入 `safe`、`needs_help`、`false_alarm`、`cancelled`、`no_response`。
 - T038：硬件决策门，确认 IMU、麦克风、物理 SOS GPIO、SD 和真实电量路径；未确认前不写真实驱动声明。
@@ -55,6 +56,10 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 
 ## 最近验证
 
+- `python -m unittest quality_tests.test_session_recorder quality_tests.test_session_inspector -v`：通过，9 个测试全部成功；覆盖 file manifest 生成、hash manifest CLI 输出、manifest 篡改、JSONL 篡改和 hash mismatch。
+- `python scripts\session_recorder.py --event-log pc_simulator\runtime\events.jsonl --session-id t035-integrity-smoke --output-dir pc_simulator\runtime\recordings\t035-integrity-smoke`：通过，生成带 `file_manifest.json` 的 smoke recording。
+- `python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\t035-integrity-smoke`：通过，quality gate PASS；`quality_score=0.85`、`errors=0`、`warnings=5`。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，103 个测试全部成功。
 - `python -m unittest autodev.tests.test_supervisor quality_tests.test_local_session_summary -v`：通过，19 个测试全部成功；覆盖 AutoDev 读取 quality gate 摘要和本地监督会话脚本契约。
 - `powershell -ExecutionPolicy Bypass -File scripts\start_local_supervised_session.ps1 -NoBroker -NoDashboard -NoWorker`：通过，生成 `pc_simulator/runtime/sessions/20260621-211742/recording/session_quality_report.md`，quality gate 为 PASS，`quality_score=0.85`、`errors=0`、`warnings=5`。
 - `python scripts\autodev.py watch --once --no-clear --events 4`：通过，`LOCAL DEVICE / SAFETY SESSION` 显示 `Quality   : PASS score=0.85 errors=0 warnings=5 frames=11 events=27` 和 quality report 路径。
@@ -107,9 +112,9 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T026 是纯模拟 replay 闭环，只验证协议、记录、展示和无副作用命令，不验证真实事故/跌倒/呼救识别准确率。
 - T030 的统一监控仍是只读观察入口，不负责启动、停止、重启或修复设备侧进程；长期运行守护、日志轮转和自动恢复仍未实现。
 - M1 数据基础已开始于硬件传感器矩阵；当前没有真实 MotionNet、AudioGate、VisionGate，也没有可用于训练的正式 session 数据集。
-- T032 recorder 是 PC event-log 派生骨架，不是固件内 `safety_recorder`；它尚未实现掉电恢复、哈希校验、窗口完整率、采样率统计或回放。
-- T033 quality gate 只校验 T032 recording 包的结构和边界；它尚未接入本地监督会话自动执行、AutoDev watch、文件哈希、回放或模型输入重建。
-- T034 已把 quality gate 接入本地会话和监控，但文件哈希、回放、模型输入重建和标注仍未实现。
+- T032 recorder 是 PC event-log 派生骨架，不是固件内 `safety_recorder`；它尚未实现掉电恢复、窗口完整率、采样率统计或回放。
+- T033/T034 quality gate 已可自动运行并在监控中显示，T035 已补齐文件哈希；但回放、模型输入重建和标注仍未实现。
+- T035 已增加文件哈希和完整性校验，但 replay、模型输入重建和标注仍未实现。
 - 当前 IMU、麦克风、真实物理 SOS GPIO、SD 挂载、真实电量/充电和 ESP32 侧 SIM7670G 控制链路仍未验证，不能作为 M1 recorder 的真实传感源声明。
 - 当前 T021 是 PC 侧通过 USB AT 口探测 SIM7670G GNSS，尚未把 ESP32 固件切换为直接控制 SIM7670G GNSS。
 - SD 卡挂载曾失败，需要单独确认格式、接线、引脚、供电和固件挂载参数。

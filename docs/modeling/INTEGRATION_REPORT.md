@@ -22,6 +22,7 @@
 - [x] M1-002 session recorder skeleton
 - [x] M1-004-pre session inspector quality gate
 - [x] M1-004-pre quality gate monitor integration
+- [x] M1-004-pre session file integrity
 
 ## Changed files
 
@@ -160,7 +161,46 @@ T034 quality gate monitor integration updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+T035 session file integrity updates:
+
+- `pc_simulator/session_recorder.py`
+- `pc_simulator/session_inspector.py`
+- `quality_tests/test_session_recorder.py`
+- `quality_tests/test_session_inspector.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
+
+```powershell
+python -m unittest quality_tests.test_session_recorder quality_tests.test_session_inspector -v
+```
+
+Result: passed. The recorder and inspector tests ran 9 tests successfully,
+including file manifest generation, CLI output, manifest tampering, JSONL
+tampering, size mismatch, and hash mismatch checks.
+
+```powershell
+python scripts\session_recorder.py --event-log pc_simulator\runtime\events.jsonl --session-id t035-integrity-smoke --output-dir pc_simulator\runtime\recordings\t035-integrity-smoke
+```
+
+Result: passed. The smoke recording wrote `file_manifest.json` with SHA-256
+entries for `session_manifest.json`, `sensor_frames.jsonl`, `events.jsonl`,
+`annotations.jsonl`, and `session_recording.md`.
+
+```powershell
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\t035-integrity-smoke
+```
+
+Result: passed. The quality gate returned PASS with `quality_score=0.85`,
+`errors=0`, and `warnings=5`.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed. The repository test suite ran 103 tests successfully.
 
 ```powershell
 python -m unittest autodev.tests.test_supervisor quality_tests.test_local_session_summary -v
@@ -446,6 +486,10 @@ T034 did not perform new hardware I/O. It runs the existing local session
 inspector after the PC-side recorder and exposes the resulting quality summary
 through the AutoDev/local monitor. It only reads and writes local runtime files.
 
+T035 did not perform new hardware I/O. It adds a local SHA-256 file manifest for
+recording artifacts and makes the inspector fail when any hashed recording file
+is missing, resized, or changed.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -470,15 +514,15 @@ had already been validated before this overlay package verification.
   and ESP32-side SIM7670G GNSS/LTE control remain unverified. M1-002 must keep
   these sources explicitly disabled or marked `not_available` until validated.
 - T032 recorder is a PC event-log derived skeleton, not an ESP32 firmware
-  `safety_recorder`. It does not yet provide power-loss recovery, per-file
-  hashing, sampling-rate statistics, event-window completeness, or replay.
+  `safety_recorder`. It does not yet provide power-loss recovery,
+  sampling-rate statistics, event-window completeness, or replay.
 - Annotations are only an empty `annotations.jsonl` placeholder until M1-005
   adds user feedback or human labeling.
-- T033 quality gate does not yet run automatically from the local supervised
-  session script or AutoDev monitor. It also does not compute file hashes,
-  rebuild model inputs, or replay sessions.
-- T034 runs and displays the quality gate automatically, but file hashes, replay,
-  model-input rebuilds, and user annotations are still pending.
+- T033/T034 quality gate now runs from the local supervised session script and
+  displays in the AutoDev/local monitor. Replay, model-input rebuilds, and user
+  annotations are still pending.
+- T035 adds file hashes and integrity checks, but replay, model-input rebuilds,
+  and user annotations are still pending.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -505,6 +549,6 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Next, start T035 by adding SHA-256 file integrity records to session recordings
-and enforcing them in the quality gate. This should happen before replay/import
-or model-input rebuild work.
+Next, start T036 by adding PC session import/replay for integrity-checked
+recordings. Replay should rebuild event/model-input flow from the recording
+without starting hardware, network, audio, camera, or firmware actions.

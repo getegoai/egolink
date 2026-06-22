@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -18,6 +19,7 @@ from pc_simulator import event_store, protocol
 
 
 RECORDER_VERSION = "m1-002.0"
+FILE_MANIFEST_SCHEMA_VERSION = "egolink.session_file_manifest.v0.1"
 DEFAULT_BOARD_TARGET = "waveshare_esp32s3_sim7670g_4g"
 DEFAULT_CONTRACT_VERSION = protocol.PROTOCOL_VERSION
 UPTIME_RE = re.compile(r"^uptime_ms:(?P<value>\d+)$")
@@ -291,6 +293,7 @@ def build_manifest(
         "source_event_counts": dict(sorted(counts.items())),
         "outputs": {
             "manifest": "session_manifest.json",
+            "file_manifest": "file_manifest.json",
             "sensor_frames": "sensor_frames.jsonl",
             "events": "events.jsonl",
             "annotations": "annotations.jsonl",
@@ -368,6 +371,30 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
             handle.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def build_file_manifest(files: dict[str, Path], *, generated_at: str | None = None) -> dict[str, Any]:
+    return {
+        "schema_version": FILE_MANIFEST_SCHEMA_VERSION,
+        "generated_at": generated_at or utc_now(),
+        "hash_algorithm": "sha256",
+        "files": {
+            name: {
+                "path": path.name,
+                "size_bytes": path.stat().st_size,
+                "sha256": sha256_file(path),
+            }
+            for name, path in sorted(files.items())
+        },
+    }
+
+
 def render_markdown(recording: dict[str, Any]) -> str:
     manifest = recording["manifest"]
     counts = manifest["record_counts"]
@@ -408,6 +435,7 @@ def write_recording(recording: dict[str, Any], output_dir: Path) -> dict[str, Pa
     output_dir.mkdir(parents=True, exist_ok=True)
     paths = {
         "manifest": output_dir / "session_manifest.json",
+        "file_manifest": output_dir / "file_manifest.json",
         "sensor_frames": output_dir / "sensor_frames.jsonl",
         "events": output_dir / "events.jsonl",
         "annotations": output_dir / "annotations.jsonl",
@@ -418,4 +446,6 @@ def write_recording(recording: dict[str, Any], output_dir: Path) -> dict[str, Pa
     write_jsonl(paths["events"], recording["events"])
     write_jsonl(paths["annotations"], recording["annotations"])
     paths["summary"].write_text(render_markdown(recording), encoding="utf-8")
+    files_to_hash = {name: path for name, path in paths.items() if name != "file_manifest"}
+    write_json(paths["file_manifest"], build_file_manifest(files_to_hash))
     return paths
