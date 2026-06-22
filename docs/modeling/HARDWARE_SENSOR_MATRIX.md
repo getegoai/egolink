@@ -1,8 +1,8 @@
 # Ego Link M1 Hardware Sensor Matrix
 
-> 状态：HCTX-001 硬件上下文评估版
+> 状态：HCTX-001 硬件上下文评估版 + T038 硬件可用性验证
 > 更新时间：2026-06-22
-> 范围：Waveshare ESP32-S3-SIM7670G-4G 开发板、现有仓库证据、PC Simulator、硬件上下文包 v0.3
+> 范围：Waveshare ESP32-S3-SIM7670G-4G 开发板、现有仓库证据、PC Simulator、硬件上下文包 v0.3、2026-06-22 板级/GNSS/MQTT/session smoke
 > 原则：只记录已经由仓库、固件、报告或明确文档支撑的事实；采购清单和候选平台不等于已到货、已接线或已验证。
 
 ## 1. 目的
@@ -26,25 +26,35 @@ M1 的目标不是训练神经网络，而是建立可信数据采集闭环。�
 
 | 项目 | 料号 / 平台 | 接口 / 引脚 | 当前状态 | 证据 |
 |---|---|---|---:|---|
-| P0 主控板 | Waveshare ESP32-S3-SIM7670G-4G 开发板 | USB CH343 调试串口；SIM7670G USB composite；板载 Wi-Fi/BLE；摄像头连接器 | `verified` | `docs/EGO_LINK_P0_CONTEXT.md`；`docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md`；`reports/board_validation/20260621-091239/probe.md` |
-| 主控 MCU | ESP32-S3 | 当前 Windows 识别 CH343 串口 `COM4` | `verified` | `reports/board_validation/20260621-091239/probe.md` |
-| 蜂窝 / GNSS 测试模组 | SIMCom SIM7670G-MNGV | PC 侧 AT 口曾识别为 `COM6` / `COM7`；RNDIS 网卡可见 | `pc_side_verified` | `reports/board_validation/20260621-091239/probe.md`；`reports/gnss_validation/20260621-161721/gnss_probe.md`；`scripts/sim7670_gnss_probe.py` |
+| P0 主控板 | Waveshare ESP32-S3-SIM7670G-4G 开发板 | USB CH343 调试串口；SIM7670G USB composite；板载 Wi-Fi/BLE；摄像头连接器 | `verified` | `docs/EGO_LINK_P0_CONTEXT.md`；`docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md`；`docs/hardware/HARDWARE_USABILITY_VALIDATION.md`；`reports/board_validation/20260622-181619/probe.md`；`reports/board_validation/20260621-091239/probe.md` |
+| 主控 MCU | ESP32-S3 | 当前 Windows 识别 CH343 串口 `COM4` | `verified` | `reports/board_validation/20260622-181619/probe.md` |
+| 蜂窝 / GNSS 测试模组 | SIMCom SIM7670G-MNGV | PC 侧 AT 口识别为 `COM6` / `COM7`；RNDIS 网卡可见 | `pc_side_verified` | `docs/hardware/HARDWARE_USABILITY_VALIDATION.md`；`reports/board_validation/20260622-181619/probe.md`；`reports/gnss_validation/20260622-181804/gnss_probe.md`；`reports/gnss_validation/20260621-161721/gnss_probe.md`；`scripts/sim7670_gnss_probe.py` |
 | 量产主控 | 未冻结；STM32U5A5、Apollo4、ESP32-P4、Alif B1 仅为候选 | 不适用 | `not_verified` | `docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md`；`docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md` |
 | 量产蜂窝模组 | 未冻结；SIM7670G 仅是当前测试模组 | 不适用 | `not_verified` | `docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md` |
 | 采购清单 | `docs/hardware/EGOLINK_硬件开发采购清单_v1.xlsx` | sheet：概览、采购总表、已有物料、平台对比、到货验收 | `not_verified` | 该 Excel 可打开且结构有效；内容只作采购/验收参考，不作硬件到货事实 |
+
+### 2.1 最新硬件可用性验证
+
+T038 于 2026-06-22 执行了真实板级/GNSS/MQTT/session smoke，结论见 `docs/hardware/HARDWARE_USABILITY_VALIDATION.md`。本轮验证到可继续开发的最小闭环，但不扩大未实测硬件能力声明：
+
+- 板级探测：`reports/board_validation/20260622-181619/probe.md` 显示 ESP32-S3 CH343 `COM4`、SIM7670G 串口 `COM6/COM7` AT 身份、RNDIS 均可用；SIM inserted，CSQ 为 `21,0` / `20,0`，LTE registered/attached 均为 true。
+- GNSS 探测：`reports/gnss_validation/20260622-181804/gnss_probe.md` 显示 `COM6/COM7` AT 可达，`gnss_power_state=1`，室内 no-fix，并写入 `location_report fix=false`。
+- MQTT 接收：`pc_simulator/mqtt_worker.py --host 192.168.31.250 --port 1883 --max-messages 3 --process-safety` 成功收到开发板 `mqtt_status` 和 `sensor_sample/device_health seq=21548`；LAN broker 上可见开发板连接 `192.168.31.12 -> 192.168.31.250:1883`。
+- M1 session：`pc_simulator/runtime/recordings/t038-hardware-usability-smoke/session_quality_report.md` 为 PASS，`quality_score=0.91`；`session_replay_report.md` 为 PASS，说明当前硬件事件可进入 recorder、quality gate 和 replay。
+- Broker 边界：本机存在 loopback broker 和 LAN broker 两个实例；开发板连接 LAN broker，后续 live worker 必须使用 `192.168.31.250:1883`，不能用 `127.0.0.1:1883` 判断设备上报。
 
 ## 3. 传感器与能力矩阵
 
 | 能力 | 料号 / 来源 | 接口 / 引脚 | 驱动状态 | 数据能力 | 功耗控制能力 | 真实 / Mock 状态 | M1 数据可用性与阻塞项 |
 |---|---|---|---|---|---|---:|---|
-| 设备在线状态 | ESP32-S3 + `firmware/mqtt_heartbeat` | Wi-Fi STA + MQTT；topic `ego/link/ego-link-001/status` | 固件已实现并刷写过 | `device_id`、`seq`、`uptime_ms`、RSSI、guard mode、queue size、mock modem/GNSS、电量字段 | 仅有心跳间隔；未实现统一功耗状态事件 | `verified` | 可进入 M1-002 recorder 作为设备日志；仍需固件版本、session_id、Unix time 和配置 manifest。 |
-| 设备健康样本 | ESP32-S3 runtime | MQTT event topic `ego/link/ego-link-001/event`；`sensor_sample/device_health` | 固件已实现并收到真实上报 | uptime、Wi-Fi RSSI、free heap、minimum free heap、mock battery、mock modem/GNSS | 只有固定上报间隔；无低功耗采样策略 | `verified` | 可作为当前唯一真实端侧结构化传感样本；缺采样率统计、缺帧统计和功耗状态。 |
+| 设备在线状态 | ESP32-S3 + `firmware/mqtt_heartbeat` | Wi-Fi STA + MQTT；topic `ego/link/ego-link-001/status` | 固件已实现并刷写过；T038 live worker 已再次收到 status | `device_id`、`seq`、`uptime_ms`、RSSI、guard mode、queue size、mock modem/GNSS、电量字段 | 仅有心跳间隔；未实现统一功耗状态事件 | `verified` | 可进入 M1-002 recorder 作为设备日志；仍需固件版本、session_id、Unix time 和配置 manifest。 |
+| 设备健康样本 | ESP32-S3 runtime | MQTT event topic `ego/link/ego-link-001/event`；`sensor_sample/device_health` | 固件已实现并收到真实上报；T038 收到 `seq=21548` | uptime、Wi-Fi RSSI、free heap、minimum free heap、mock battery、mock modem/GNSS | 只有固定上报间隔；无低功耗采样策略 | `verified` | 可作为当前唯一真实端侧结构化传感样本；缺采样率统计、缺帧统计和功耗状态。 |
 | Wi-Fi RSSI | ESP32-S3 Wi-Fi | `esp_wifi_sta_get_ap_info` | 固件已调用 | RSSI dBm，随 status / sensor_sample 上报 | 未实现 Wi-Fi 省电/断连状态统计 | `verified` | 可用于网络质量特征；后续需记录断连、重连、离线时长。 |
 | Heap / runtime | ESP32-S3 runtime | ESP-IDF heap API | 固件已调用 | `free_heap_bytes`、`min_free_heap_bytes` | 无专门功耗控制 | `verified` | 可用于设备健康；不是用户安全传感器。 |
 | BLE | ESP32-S3 片内能力 | 未在当前固件启用 | 无应用驱动 | 无 BLE 数据 | 无 | `not_verified` | 不进入 M1 数据集；若后续用于近场或配置，需要独立任务验证。 |
 | 4G 数据链路 | SIM7670G-MNGV | PC 侧 USB AT / RNDIS；ESP32 侧控制链路未实现 | PC 侧 AT TCP/IP 栈曾验证公网访问；ESP32 固件未接入 | SIM、LTE 注册、分组数据附着、CSQ、AT TCP/IP 可用性 | 可通过 AT 电源/网络状态命令探测；尚无固件功耗状态机 | `pc_side_verified` | 可写入硬件验证报告，不作为端侧实时传感帧；阻塞项是 ESP32 侧 SIM7670G driver、弱网恢复和低功耗。 |
 | RNDIS | SIM7670G USB composite | Windows Remote NDIS，曾获 `192.168.0.100/24` | PC 识别；外网指定源地址 ping/curl 曾超时 | 诊断网络接口 | 无固件控制 | `pc_side_verified` | 仅作 PC 侧诊断；业务不可依赖 PC RNDIS。 |
-| SIM7670G GNSS no-fix | SIM7670G-MNGV | PC 侧 USB AT；`AT+CGNSSPWR`、`AT+CGNSSINFO`、`AT+CGPSINFO` | `scripts/sim7670_gnss_probe.py` 已实现 PC 侧探测 | 当前可记录 `fix=false`、`gnss_power_state=1`、satellites 等；室内未获得 fix | PC 脚本可开 GNSS 电源；无固件级 GNSS 启停策略 | `pc_side_verified` | 可验证协议闭环和 no-fix 记录；不可作为真实定位数据集。需要户外 fix、fix age、精度、速度和 ESP32 侧控制。 |
+| SIM7670G GNSS no-fix | SIM7670G-MNGV | PC 侧 USB AT；`AT+CGNSSPWR`、`AT+CGNSSINFO`、`AT+CGPSINFO` | `scripts/sim7670_gnss_probe.py` 已实现 PC 侧探测；T038 `COM6/COM7` 均 AT 可达 | 当前可记录 `fix=false`、`gnss_power_state=1`、satellites 等；室内未获得 fix | PC 脚本可开 GNSS 电源；无固件级 GNSS 启停策略 | `pc_side_verified` | 可验证协议闭环和 no-fix 记录；不可作为真实定位数据集。需要户外 fix、fix age、精度、速度和 ESP32 侧控制。 |
 | Mock GNSS | 固件 / Dashboard mock | MQTT status/event 或 PC Simulator | 已用于协议和 UI | `gnss_state=mock_fix`、模拟 location | 无真实功耗 | `mock_only` | 仅用于协议/UI，不可用于定位模型训练；M1 必须显式标注 source。 |
 | 摄像头单帧 | Waveshare 板载/连接器摄像头；具体 sensor 型号未在仓库确认 | Y2-Y9=GPIO7-GPIO14，PCLK=GPIO46，VSYNC=GPIO42，HREF=GPIO41，XCLK=GPIO39，SIO_D=GPIO15，SIO_C=GPIO16；CAM DIP ON | `firmware/camera_smoke` 已完成 init 和单帧 JPEG smoke；证据见 `firmware/camera_smoke/main/app_main.c` 和 `firmware/camera_smoke/README.md`；当前运行固件不是 camera smoke | 单张 JPEG、size、checksum、SOI/EOI；未进入统一 event log | 可按需启用；无摄像头电源域、隐私授权、保留期或哈希链路 | `semi_verified` | 可作为未来 VisionGate 候选；M1 recorder 暂不记录原始图像。需要 sensor 型号、授权、哈希、功耗和按需采集策略。 |
 | IMU 加速度/陀螺仪 | 未确认；可能需外接低功耗六轴 IMU | 未确认 I2C/SPI、引脚、安装方向 | 无驱动、无采样、无 ring buffer | 无真实 accel/gyro；无采样率、抖动、缺帧 | 无低功耗中断、FIFO、唤醒策略 | `missing_or_unknown` | 当前仓库无真实 IMU。阻塞 MotionNet 和事件前后窗口；需确认料号、接口、方向、ODR、FIFO 和功耗。 |
@@ -115,6 +125,7 @@ M1 的目标不是训练神经网络，而是建立可信数据采集闭环。�
 HCTX-001 后的建议顺序：
 
 1. T037 / M1-005：最小 annotation CLI，先把现有 recording 的人工标签闭环补上。
-2. T038：硬件决策门，确认 IMU、麦克风、物理 SOS GPIO、SD、真实电量/充电和 ESP32 侧 SIM7670G 控制链路。
-3. T039：IMU mock/driver interface 和 ring buffer 骨架；真实 IMU 确认后再接入采样。
-4. HARCH-001：输出 `docs/hardware/PLATFORM_COUPLING_AUDIT.md`，只审计平台耦合，不做大规模迁移。
+2. T039：IMU mock/driver interface 和 ring buffer 骨架；真实 IMU 确认后再接入采样。
+3. HARCH-001：输出 `docs/hardware/PLATFORM_COUPLING_AUDIT.md`，只审计平台耦合，不做大规模迁移。
+
+T038 硬件可用性 smoke 已完成，但它只确认当前开发板最小闭环可继续推进；IMU、麦克风、物理 SOS GPIO、SD、真实电量/充电和 ESP32 侧 SIM7670G 控制链路仍需后续任务逐项验证。

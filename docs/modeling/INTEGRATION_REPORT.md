@@ -25,6 +25,7 @@
 - [x] M1-004-pre session file integrity
 - [x] M1-004 PC session import / replay
 - [x] HCTX-001 hardware context sensor matrix update
+- [x] T038 hardware usability smoke validation
 
 ## Changed files
 
@@ -193,7 +194,55 @@ HCTX-001 hardware context updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+T038 hardware usability smoke updates:
+
+- `docs/hardware/HARDWARE_USABILITY_VALIDATION.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `quality_tests/test_hardware_sensor_matrix.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
+
+```powershell
+python scripts\egolink_board_probe.py --probe-all-sim-ports --esp-listen-seconds 8
+```
+
+Result: passed. The report was written to
+`reports/board_validation/20260622-181619/probe.md`. ESP32-S3 CH343 was visible
+as `COM4`; SIM7670G AT identity was reachable on `COM6` and `COM7`; RNDIS was
+visible; SIM was inserted; LTE registration and packet attachment were true;
+and the ESP32 log showed `MQTT_HEARTBEAT_PUBLISH_OK`.
+
+```powershell
+python scripts\sim7670_gnss_probe.py --warmup-seconds 5 --poll-count 3 --poll-interval-seconds 2
+```
+
+Result: passed. The report was written to
+`reports/gnss_validation/20260622-181804/gnss_probe.md`. `COM6` and `COM7`
+were AT-reachable, `gnss_power_state=1`, and the indoor query returned no GNSS
+fix. The probe wrote a `location_report` event with `fix=false`.
+
+```powershell
+python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --max-messages 3 --wait-seconds 90 --process-safety --safety-process-limit 30
+```
+
+Result: passed. The worker connected to the LAN broker, not the loopback
+broker, and stored 3 device MQTT messages including `mqtt_status` and real
+firmware `sensor_sample/device_health seq=21548`. Safety processing wrote
+`risk_type=none` evaluations and produced no real external side effects.
+
+```powershell
+python scripts\session_recorder.py --event-log pc_simulator\runtime\events.jsonl --session-id t038-hardware-usability-smoke --output-dir pc_simulator\runtime\recordings\t038-hardware-usability-smoke --limit 12 --json
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\t038-hardware-usability-smoke --json
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\t038-hardware-usability-smoke --json
+```
+
+Result: passed. The recorder wrote 12 source events, 5 sensor frames, and 7
+events. The quality gate passed with `quality_score=0.91`, `errors=0`, and
+`warnings=3`. Replay passed with 12 timeline records, 6 replayed inputs, 1
+`manual_sos`, 5 `none`, and 1 simulated base command.
 
 ```powershell
 python -m unittest quality_tests.test_hardware_sensor_matrix -v
@@ -563,9 +612,15 @@ container, corrects local documentation paths, and updates the sensor matrix
 from existing repo evidence. It does not start hardware, network, serial, audio,
 camera, modem, firmware, or external side effects.
 
-Existing hardware status remains unchanged from the previous project state:
-ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
-had already been validated before this overlay package verification.
+T038 performed bounded hardware I/O. It read ESP32 serial logs, queried the
+SIM7670G over PC-side USB AT ports, subscribed to the LAN MQTT broker, wrote
+local PC Simulator events, and generated local recording/quality/replay
+reports. It did not flash firmware, dial, send SMS, place calls, capture
+camera frames, record audio, or access external business services. Current
+usable hardware path: ESP32-S3 enumeration, SIM inserted, LTE
+registered/attached, RNDIS visible, ESP32 MQTT status and device-health samples
+received by the PC, PC-side SIM7670G GNSS no-fix report, and replayable M1
+session artifacts.
 
 ## Known gaps
 
@@ -598,6 +653,10 @@ had already been validated before this overlay package verification.
   microphone, physical SOS GPIO, SD storage, true battery/charging telemetry,
   power-state instrumentation, and ESP32-side SIM7670G modem/GNSS control remain
   unverified or missing.
+- T038 confirms the current board is usable for continued development, but it
+  does not solve GNSS fix, SD mounting, camera integration in the current
+  firmware, IMU, microphone, physical SOS GPIO, true battery telemetry, power
+  instrumentation, or ESP32-side SIM7670G modem/GNSS control.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -624,6 +683,7 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Next, start T037 by adding a minimal annotation CLI for integrity-checked
-recordings. It should append structured user/human labels to `annotations.jsonl`
-without starting hardware, network, audio, camera, or firmware actions.
+Next, return to T037 by adding a minimal annotation CLI for integrity-checked
+recordings. T038 shows the current hardware events can be recorded and replayed;
+the missing piece for M1 data foundation is a human/user label path in
+`annotations.jsonl`.

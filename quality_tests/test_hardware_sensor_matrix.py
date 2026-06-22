@@ -61,6 +61,10 @@ class HardwareSensorMatrixTests(unittest.TestCase):
 
     def test_evidence_paths_are_traceable(self) -> None:
         evidence_paths = [
+            "docs/hardware/HARDWARE_USABILITY_VALIDATION.md",
+            "reports/board_validation/20260622-181619/probe.md",
+            "reports/gnss_validation/20260622-181804/gnss_probe.md",
+            "pc_simulator/runtime/recordings/t038-hardware-usability-smoke/session_quality_report.md",
             "reports/board_validation/20260621-091239/probe.md",
             "reports/gnss_validation/20260621-161721/gnss_probe.md",
             "firmware/mqtt_heartbeat/main/app_main.c",
