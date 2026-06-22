@@ -13,6 +13,7 @@ param(
     [switch]$NoDashboard,
     [switch]$NoWorker,
     [switch]$NoRecorder,
+    [switch]$NoQualityGate,
     [switch]$Watch,
     [int]$WatchIntervalSeconds = 5
 )
@@ -90,6 +91,33 @@ function Write-SessionRecording {
     & python @recordingArgs *> $recordingLog
     if ($LASTEXITCODE -ne 0) {
         throw "session_recorder.py failed. See $recordingLog"
+    }
+}
+
+function Invoke-SessionQualityGate {
+    $recordingDir = Join-Path $SessionDir "recording"
+    $qualityLog = Join-Path $SessionDir "session_quality_gate.log"
+    $qualityArgs = @(
+        "scripts\inspect_session_recording.py",
+        $recordingDir
+    )
+    & python @qualityArgs *> $qualityLog
+    $qualityExitCode = $LASTEXITCODE
+    $qualityReport = Join-Path $recordingDir "session_quality_report.json"
+    if (Test-Path -LiteralPath $qualityReport) {
+        $payload = Get-Content -LiteralPath $qualityReport -Raw -Encoding UTF8 | ConvertFrom-Json
+        $summary = $payload.summary
+        $qualityStatus = if ($payload.passed) { "PASS" } else { "FAIL" }
+        Write-SessionLine ("Quality gate: {0} score={1} errors={2} warnings={3}" -f `
+            $qualityStatus,
+            $payload.quality_score,
+            $summary.errors,
+            $summary.warnings)
+    } else {
+        Write-SessionLine "Quality gate report was not written. See $qualityLog"
+    }
+    if ($qualityExitCode -ne 0) {
+        Write-SessionLine "Quality gate returned exit code $qualityExitCode; session continues for inspection."
     }
 }
 
@@ -195,12 +223,19 @@ if ($NoRecorder) {
 } else {
     Write-SessionLine "Writing M1 session recording."
     Write-SessionRecording
+    if ($NoQualityGate) {
+        Write-SessionLine "Session quality gate skipped by -NoQualityGate."
+    } else {
+        Write-SessionLine "Running M1 session quality gate."
+        Invoke-SessionQualityGate
+    }
 }
 
 Write-SessionLine "Dashboard URL: http://$DashboardHost`:$DashboardPort"
 Write-SessionLine "Session summary: $(Join-Path $SessionDir 'session_summary.md')"
 Write-SessionLine "Session JSON: $(Join-Path $SessionDir 'session_summary.json')"
 Write-SessionLine "Session recording: $(Join-Path $SessionDir 'recording\session_recording.md')"
+Write-SessionLine "Session quality: $(Join-Path $SessionDir 'recording\session_quality_report.md')"
 Write-SessionLine "Session log: $(Join-Path $SessionDir 'session.log')"
 
 if ($Watch) {

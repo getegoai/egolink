@@ -1,18 +1,16 @@
-# CURRENT_TASK: T033 M1-004-pre Session Inspector Quality Gate
+# CURRENT_TASK: T034 M1-004-pre Quality Gate Monitor Integration
 
 ## 任务目标
 
-建立 PC 侧 session inspector / quality gate：导入 T032 生成的 `recording/` 目录，校验 manifest、JSONL、record count、source key、seq / timestamp、隐私字段和传感源边界，并输出质量报告。该任务用于在进入 IMU 环形缓冲、回放和模型训练前先把数据包质量门补齐。
+把 T033 session quality gate 接入本地监督会话脚本和 AutoDev/local monitor。每次生成 `recording/` 后自动运行 inspector，并在会话日志、AutoDev `watch` / `status` 的本地设备区块显示 PASS/FAIL、quality score、errors、warnings 和报告路径。
 
 ## 范围
 
-- 新增 `pc_simulator/session_inspector.py`，读取 T032 recording 目录并生成结构化质量报告。
-- 新增 `scripts/inspect_session_recording.py` CLI，默认写入 `session_quality_report.json` 和 `session_quality_report.md`。
-- 检查必需文件：`session_manifest.json`、`sensor_frames.jsonl`、`events.jsonl`、`annotations.jsonl`。
-- 检查 manifest schema、record counts、privacy、sensor_sources 和未验证传感器 availability。
-- 检查 JSONL 行格式、frame/event 类型、source_event_key 唯一性、seq/timestamp 回退 warning。
-- 修正 recorder `source_event_key`，包含 timestamp，避免不同来源 seq 重置时碰撞。
-- 增加单元测试覆盖通过/失败质量门、重复 source key、report 写入和 CLI。
+- 扩展 `scripts/start_local_supervised_session.ps1`，在 recorder 后自动运行 `scripts/inspect_session_recording.py`。
+- 会话日志输出 quality gate 摘要，并保留 `-NoQualityGate` 跳过开关。
+- 扩展 `scripts/autodev.py`，读取 `session_summary.json` 同目录下的 `recording/session_quality_report.json`。
+- AutoDev `watch` / `status` 的 `LOCAL DEVICE / SAFETY SESSION` 区块显示 Quality 和 Report 行。
+- 增加测试覆盖 AutoDev 读取 quality gate 摘要，以及会话脚本包含 inspector 调用和跳过开关。
 - 更新状态文档和集成报告。
 
 ## 不做
@@ -24,14 +22,14 @@
 - 不声称 M0 规则模拟已经验证真实跌倒、呼救或事故识别能力。
 - 不把 IMU、麦克风、真实物理 SOS、电量或 SD 标记为真实可用。
 - 不实现 session replay、文件哈希、IMU 环形缓冲或用户标注 UI。
+- 不让 quality gate 启动任何硬件或网络动作。
 
 ## 允许修改路径
 
-- `pc_simulator/session_inspector.py`
-- `pc_simulator/session_recorder.py`
-- `scripts/inspect_session_recording.py`
-- `quality_tests/test_session_inspector.py`
-- `quality_tests/test_session_recorder.py`
+- `scripts/start_local_supervised_session.ps1`
+- `scripts/autodev.py`
+- `autodev/tests/test_supervisor.py`
+- `quality_tests/test_local_session_summary.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
@@ -39,32 +37,30 @@
 ## 验证命令
 
 ```powershell
-python -m unittest quality_tests.test_session_inspector quality_tests.test_session_recorder -v
-python scripts\session_recorder.py --event-log pc_simulator\runtime\events.jsonl --session-id t033-quality-smoke --output-dir pc_simulator\runtime\recordings\t033-quality-smoke
-python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\t033-quality-smoke
+python -m unittest autodev.tests.test_supervisor quality_tests.test_local_session_summary -v
+powershell -ExecutionPolicy Bypass -File scripts\start_local_supervised_session.ps1 -NoBroker -NoDashboard -NoWorker
+python scripts\autodev.py watch --once --no-clear --events 4
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
 ## 执行结果
 
-- 已新增 `pc_simulator/session_inspector.py`，可读取 T032 `recording/` 目录并生成结构化质量报告。
-- 已新增 `scripts/inspect_session_recording.py`，默认写入 `session_quality_report.json` 和 `session_quality_report.md`；质量门通过返回 0，失败返回非 0。
-- 已检查必需文件、manifest schema、record counts、privacy、sensor_sources、JSONL 行、frame/event 类型、source_event_key 唯一性、seq/timestamp 回退。
-- 已修正 recorder `source_event_key`，在 seq 之外加入 timestamp，避免真实 MQTT、Dashboard 模拟和 Safety 派生事件的 seq 重置造成碰撞。
-- 已新增 `quality_tests/test_session_inspector.py`，覆盖有效 recording、record count mismatch、未验证 source 被标记 real、重复 source key、报告写入和 CLI。
-- smoke recording 已生成：`pc_simulator/runtime/recordings/t033-quality-smoke/`，包含 19 条 sensor frames、41 条关键 events、0 条 annotations。
-- smoke inspector 通过：`PASS quality_score=0.85 errors=0 warnings=5`；warning 包括 firmware version unknown、annotations empty，以及历史 event log 中 Safety 派生事件 seq 回退。
-- 验证通过：`python -m unittest quality_tests.test_session_inspector quality_tests.test_session_recorder -v`，8 个测试成功。
-- 验证通过：`python scripts\session_recorder.py --event-log pc_simulator\runtime\events.jsonl --session-id t033-quality-smoke --output-dir pc_simulator\runtime\recordings\t033-quality-smoke`。
-- 验证通过：`python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\t033-quality-smoke`。
+- 已扩展 `scripts/start_local_supervised_session.ps1`，在生成 `recording/` 后自动运行 `scripts/inspect_session_recording.py`。
+- 本地监督会话脚本新增 `-NoQualityGate` 跳过开关；当 quality gate 失败时记录 exit code，但不删除会话证据。
+- 会话日志已输出 quality gate 摘要：`Quality gate: PASS score=0.85 errors=0 warnings=5`。
+- 已扩展 `scripts/autodev.py`，读取 `session_summary.json` 同目录下的 `recording/session_quality_report.json`。
+- AutoDev `watch` / `status` 的 `LOCAL DEVICE / SAFETY SESSION` 区块已显示 `Quality` 和 `Report` 行。
+- no-start 本地会话验证通过，生成 `pc_simulator/runtime/sessions/20260621-211742/recording/session_quality_report.md`。
+- `python scripts\autodev.py watch --once --no-clear --events 4` 验证通过，显示 `Quality   : PASS score=0.85 errors=0 warnings=5 frames=11 events=27`。
+- `python scripts\autodev.py status` 验证通过，显示相同 Quality/Report 摘要。
+- 验证通过：`python -m unittest autodev.tests.test_supervisor quality_tests.test_local_session_summary -v`，19 个测试成功。
+- 验证通过：`powershell -ExecutionPolicy Bypass -File scripts\start_local_supervised_session.ps1 -NoBroker -NoDashboard -NoWorker`。
 - 验证通过：`powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`，102 个测试成功。
 
 ## 完成标准
 
-- [x] inspector 可读取 recording 目录并生成 JSON/Markdown 质量报告。
-- [x] 必需文件、manifest、JSONL 和 record counts 校验可产生明确 error。
-- [x] 未验证传感器被标记为 real 时质量门失败。
-- [x] source_event_key 重复时质量门失败。
-- [x] annotations 为空、firmware version unknown、seq/timestamp 回退只作为 warning。
-- [x] CLI 对通过质量门返回 0，对失败质量门返回非 0。
+- [x] 本地监督会话脚本自动运行 quality gate 并写入报告。
+- [x] 本地监督会话脚本日志显示 PASS/FAIL、score、errors、warnings。
+- [x] 可用 `-NoQualityGate` 跳过自动质量门。
+- [x] AutoDev `watch` / `status` 显示 Quality 和 Report。
 - [x] 测试和全量验证通过。

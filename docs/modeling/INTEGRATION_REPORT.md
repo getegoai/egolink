@@ -21,6 +21,7 @@
 - [x] M1-001 hardware sensor matrix
 - [x] M1-002 session recorder skeleton
 - [x] M1-004-pre session inspector quality gate
+- [x] M1-004-pre quality gate monitor integration
 
 ## Changed files
 
@@ -149,7 +150,43 @@ T033 M1 session inspector quality gate updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+T034 quality gate monitor integration updates:
+
+- `scripts/start_local_supervised_session.ps1`
+- `scripts/autodev.py`
+- `autodev/tests/test_supervisor.py`
+- `quality_tests/test_local_session_summary.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
+
+```powershell
+python -m unittest autodev.tests.test_supervisor quality_tests.test_local_session_summary -v
+```
+
+Result: passed. The AutoDev monitor and local session tests ran 19 tests
+successfully, including quality-gate summary loading and the PowerShell session
+runner contract.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\start_local_supervised_session.ps1 -NoBroker -NoDashboard -NoWorker
+```
+
+Result: passed. The no-start session command generated
+`pc_simulator/runtime/sessions/20260621-211742/recording/session_quality_report.md`
+and logged `Quality gate: PASS score=0.85 errors=0 warnings=5` without starting
+broker, Dashboard, worker, modem, camera, or firmware operations.
+
+```powershell
+python scripts\autodev.py watch --once --no-clear --events 4
+python scripts\autodev.py status
+```
+
+Result: passed. Both monitor views displayed the local session Quality line
+with PASS, score, errors, warnings, frame/event counts, and the quality report
+path.
 
 ```powershell
 python -m unittest quality_tests.test_session_inspector quality_tests.test_session_recorder -v
@@ -405,6 +442,10 @@ recordings and fixed recorder source-event keys to include timestamps so seq
 resets across MQTT, Dashboard, and Safety-derived streams do not collide. The
 quality gate only reads local recording files and writes report files.
 
+T034 did not perform new hardware I/O. It runs the existing local session
+inspector after the PC-side recorder and exposes the resulting quality summary
+through the AutoDev/local monitor. It only reads and writes local runtime files.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -436,6 +477,8 @@ had already been validated before this overlay package verification.
 - T033 quality gate does not yet run automatically from the local supervised
   session script or AutoDev monitor. It also does not compute file hashes,
   rebuild model inputs, or replay sessions.
+- T034 runs and displays the quality gate automatically, but file hashes, replay,
+  model-input rebuilds, and user annotations are still pending.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -462,7 +505,6 @@ had already been validated before this overlay package verification.
 
 ## Recommended next step
 
-Next, start T034 by wiring the session inspector into
-`start_local_supervised_session.ps1` and the AutoDev/local monitor. Each local
-session should show the latest quality gate PASS/FAIL, score, errors, and
-warnings without starting new hardware activity.
+Next, start T035 by adding SHA-256 file integrity records to session recordings
+and enforcing them in the quality gate. This should happen before replay/import
+or model-input rebuild work.

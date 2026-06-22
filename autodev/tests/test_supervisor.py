@@ -146,6 +146,52 @@ class MonitoringTests(unittest.TestCase):
         self.assertEqual(summary["event_count"], 2)
         self.assertEqual(summary["safety"]["latest_risk_type"], "manual_sos")
 
+    def test_read_local_session_summary_includes_quality_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            session_dir = Path(tmp)
+            summary_path = session_dir / "session_summary.json"
+            summary_path.write_text(
+                json.dumps(
+                    {
+                        "event_count": 2,
+                        "counts": {"safety_evaluation": 1},
+                        "safety": {"latest_risk_type": "manual_sos"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            recording_dir = session_dir / "recording"
+            recording_dir.mkdir()
+            (recording_dir / "session_quality_report.json").write_text(
+                json.dumps(
+                    {
+                        "passed": True,
+                        "quality_score": 0.85,
+                        "summary": {
+                            "errors": 0,
+                            "warnings": 5,
+                            "sensor_frames": 19,
+                            "events": 41,
+                            "annotations": 0,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            summary = AUTODEV.read_local_session_summary(
+                summary_path=summary_path,
+                allow_event_log_fallback=False,
+            )
+
+        self.assertIsNotNone(summary)
+        assert summary is not None
+        self.assertIn("quality_gate", summary)
+        self.assertTrue(summary["quality_gate"]["passed"])
+        self.assertEqual(summary["quality_gate"]["quality_score"], 0.85)
+        self.assertEqual(summary["quality_gate"]["warnings"], 5)
+        self.assertEqual(summary["quality_gate"]["sensor_frames"], 19)
+
     def test_build_local_session_summary_from_event_log(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             event_log = Path(tmp) / "events.jsonl"

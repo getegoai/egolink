@@ -99,8 +99,11 @@ class LocalSessionSummaryTests(unittest.TestCase):
         self.assertIn("--safety-process-limit", script)
         self.assertIn("scripts\\local_session_summary.py", script)
         self.assertIn("scripts\\session_recorder.py", script)
+        self.assertIn("scripts\\inspect_session_recording.py", script)
         self.assertIn("recording\\session_recording.md", script)
+        self.assertIn("recording\\session_quality_report.md", script)
         self.assertIn("NoRecorder", script)
+        self.assertIn("NoQualityGate", script)
         self.assertIn("session_summary.md", script)
         self.assertIn("mqtt_safety_worker.stderr.log", script)
 

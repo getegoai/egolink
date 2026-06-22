@@ -1473,6 +1473,45 @@ def find_latest_local_session_summary(sessions_dir: Path = LOCAL_SESSION_ROOT) -
     return max(candidates, key=lambda path: path.stat().st_mtime)
 
 
+def normalize_optional_repo_path(path: Path) -> str:
+    try:
+        if path.is_relative_to(REPO_ROOT):
+            return normalize_relpath(path.relative_to(REPO_ROOT))
+    except ValueError:
+        pass
+    return str(path)
+
+
+def compact_quality_gate_report(report: dict[str, Any], report_path: Path) -> dict[str, Any]:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    return {
+        "passed": bool(report.get("passed")),
+        "quality_score": report.get("quality_score"),
+        "errors": int(summary.get("errors") or 0),
+        "warnings": int(summary.get("warnings") or 0),
+        "sensor_frames": int(summary.get("sensor_frames") or 0),
+        "events": int(summary.get("events") or 0),
+        "annotations": int(summary.get("annotations") or 0),
+        "report_path": normalize_optional_repo_path(report_path),
+        "generated_at": report.get("generated_at"),
+    }
+
+
+def read_local_quality_gate_report(session_dir: Path | None) -> dict[str, Any] | None:
+    if session_dir is None:
+        return None
+    report_path = session_dir / "recording" / "session_quality_report.json"
+    if not report_path.is_file():
+        return None
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(report, dict):
+        return None
+    return compact_quality_gate_report(report, report_path)
+
+
 def read_recent_jsonl(path: Path, limit: int) -> list[dict[str, Any]]:
     if limit <= 0 or not path.is_file():
         return []
@@ -1565,7 +1604,12 @@ def read_local_session_summary(
         if isinstance(loaded, dict):
             loaded = dict(loaded)
             loaded["source"] = "session_summary"
-            loaded["summary_path"] = normalize_relpath(source_path.relative_to(REPO_ROOT)) if source_path.is_relative_to(REPO_ROOT) else str(source_path)
+            loaded["summary_path"] = normalize_optional_repo_path(source_path)
+            session_dir = source_path.parent
+            loaded.setdefault("session_dir", normalize_optional_repo_path(session_dir))
+            quality_gate = read_local_quality_gate_report(session_dir)
+            if quality_gate is not None:
+                loaded["quality_gate"] = quality_gate
             return loaded
     if allow_event_log_fallback:
         return build_local_session_summary_from_events(limit=event_limit)
@@ -1600,6 +1644,24 @@ def render_local_session_section(summary: dict[str, Any] | None) -> None:
             action=safety.get("latest_action", "ignore"),
         )
     )
+    quality_gate = summary.get("quality_gate") if isinstance(summary.get("quality_gate"), dict) else None
+    if quality_gate is not None:
+        status = "PASS" if quality_gate.get("passed") else "FAIL"
+        print(
+            "  Quality   : {status} score={score} errors={errors} warnings={warnings} "
+            "frames={frames} events={events}".format(
+                status=status,
+                score=quality_gate.get("quality_score", "unknown"),
+                errors=quality_gate.get("errors", 0),
+                warnings=quality_gate.get("warnings", 0),
+                frames=quality_gate.get("sensor_frames", 0),
+                events=quality_gate.get("events", 0),
+            )
+        )
+        if quality_gate.get("report_path"):
+            print(f"  Report    : {quality_gate.get('report_path')}")
+    elif source == "session_summary":
+        print("  Quality   : not run")
     interesting = ["sensor_sample", "location_report", "sos_pressed", "safety_evaluation", "safety_event", "command_sent"]
     count_text = ", ".join(f"{name}={counts.get(name, 0)}" for name in interesting)
     print(f"  Events    : {count_text}")
