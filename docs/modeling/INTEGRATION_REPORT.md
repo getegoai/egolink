@@ -24,6 +24,7 @@
 - [x] M1-004-pre quality gate monitor integration
 - [x] M1-004-pre session file integrity
 - [x] M1-004 PC session import / replay
+- [x] HCTX-001 hardware context sensor matrix update
 
 ## Changed files
 
@@ -181,7 +182,36 @@ T036 PC session import / replay updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+HCTX-001 hardware context updates:
+
+- `HARDWARE_CONTEXT_PACKAGE_README.md`
+- `PACKAGE_MANIFEST.json`
+- `docs/hardware/**`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `quality_tests/test_hardware_sensor_matrix.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
+
+```powershell
+python -m unittest quality_tests.test_hardware_sensor_matrix -v
+```
+
+Result: passed. The updated matrix tests ran 5 tests successfully, covering
+HCTX-001 scope, explicit key sensor statuses, unknown/mock boundaries,
+traceable evidence paths, M1 blockers, and HARCH-001 audit targets.
+
+Hardware package validation: passed. `PACKAGE_MANIFEST.json` matched 10 files
+by SHA-256 and byte size. The procurement workbook opened as a valid `.xlsx`
+container with sheets `概览`, `采购总表`, `已有物料`, `平台对比`, and `到货验收`.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed. The repository test suite ran 108 tests successfully.
 
 ```powershell
 python -m unittest quality_tests.test_session_replay -v
@@ -527,6 +557,12 @@ recording artifacts, rebuilds replay/model-input flow on the PC, calls the
 existing RuleRouter, and writes local replay reports. It does not start
 hardware, network, audio, camera, modem, firmware, or external side effects.
 
+HCTX-001 did not perform new hardware I/O. It adds and validates the hardware
+context package, verifies package file hashes and the procurement workbook
+container, corrects local documentation paths, and updates the sensor matrix
+from existing repo evidence. It does not start hardware, network, serial, audio,
+camera, modem, firmware, or external side effects.
+
 Existing hardware status remains unchanged from the previous project state:
 ESP32-S3 MQTT heartbeat, SIM7670G LTE data attachment, and GNSS no-fix reporting
 had already been validated before this overlay package verification.
@@ -558,6 +594,10 @@ had already been validated before this overlay package verification.
 - T033/T034/T035/T036 now provide a PC-side quality gate, file integrity, and
   replay/model-input rebuild path. User annotations, firmware recorder behavior,
   and a formal trainable session dataset are still pending.
+- HCTX-001 identifies M1 data blockers but does not solve them: IMU,
+  microphone, physical SOS GPIO, SD storage, true battery/charging telemetry,
+  power-state instrumentation, and ESP32-side SIM7670G modem/GNSS control remain
+  unverified or missing.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,

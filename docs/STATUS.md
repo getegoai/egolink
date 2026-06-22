@@ -41,6 +41,7 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T034：M1-004-pre quality gate 监控接入完成。`scripts/start_local_supervised_session.ps1` 在 recorder 后自动运行 session inspector，写入 quality report 并在会话日志显示 PASS/FAIL；`scripts/autodev.py watch/status` 已在本地设备区块显示 Quality 和 Report。
 - T035：M1-004-pre session 文件完整性完成。Recorder 现在生成 `file_manifest.json`，记录 session manifest、sensor frames、events、annotations 和 summary 的 SHA-256；quality gate 会校验必需条目、文件大小和哈希，发现静默修改时失败。
 - T036：M1-004 PC session import / replay 完成。新增 `pc_simulator/session_replay.py` 和 `scripts/replay_session_recording.py`，可对完整性校验通过的 recording 重建 sensor frames / events 时间线，调用现有 RuleRouter，并输出 `session_replay_report.json` / `.md`；质量门失败时默认拒绝回放。
+- HCTX-001：硬件上下文包 v0.3 评估与硬件矩阵更新完成。新增 `docs/hardware/**` 和 `HARDWARE_CONTEXT_PACKAGE_README.md`，验证硬件包 manifest 与采购清单 Excel 结构，修正 P0 上下文路径为 `docs/EGO_LINK_P0_CONTEXT.md`，并把 `docs/modeling/HARDWARE_SENSOR_MATRIX.md` 更新为 HCTX-001 版，补齐接口、驱动、数据能力、功耗控制、真实/Mock 边界、M1 阻塞项和 HARCH-001 审计重点。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
@@ -57,6 +58,9 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 
 ## 最近验证
 
+- `python -m unittest quality_tests.test_hardware_sensor_matrix -v`：通过，5 个测试全部成功；覆盖 HCTX-001 范围、关键传感器状态、Mock/未知边界、证据路径、M1 阻塞项和 HARCH-001 审计重点。
+- 硬件包 manifest 校验：通过，`PACKAGE_MANIFEST.json` 中 10 个文件的 bytes / SHA-256 全部匹配；采购清单 Excel 可作为 `.xlsx` 打开，包含“概览、采购总表、已有物料、平台对比、到货验收”5 个 sheet。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，108 个测试全部成功。
 - `python -m unittest quality_tests.test_session_replay -v`：通过，4 个测试全部成功；覆盖成功回放、质量门失败拒绝回放、replay report 写入和 CLI。
 - `python scripts\replay_session_recording.py pc_simulator\runtime\recordings\t035-integrity-smoke`：通过，返回 `PASS replayed_inputs=37 safety_events=9 skipped=23`，生成 `session_replay_report.json` / `.md`。
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，107 个测试全部成功。

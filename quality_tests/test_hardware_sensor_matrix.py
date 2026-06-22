@@ -13,8 +13,9 @@ class HardwareSensorMatrixTests(unittest.TestCase):
     def test_matrix_exists_with_m1_scope(self) -> None:
         self.assertTrue(self.matrix_path.is_file())
         self.assertIn("# Ego Link M1 Hardware Sensor Matrix", self.content)
-        self.assertIn("M1-001", self.content)
+        self.assertIn("HCTX-001", self.content)
         self.assertIn("M1-002 recorder", self.content)
+        self.assertIn("Waveshare ESP32-S3-SIM7670G-4G", self.content)
 
     def test_key_sensor_statuses_are_explicit(self) -> None:
         required_terms = [
@@ -29,6 +30,11 @@ class HardwareSensorMatrixTests(unittest.TestCase):
             "物理 SOS 按键",
             "SD / 本地存储",
             "电量/充电",
+            "电源控制 / 功耗状态",
+            "STM32U5A5",
+            "Apollo4",
+            "ESP32-P4",
+            "Alif B1",
         ]
 
         for term in required_terms:
@@ -43,8 +49,10 @@ class HardwareSensorMatrixTests(unittest.TestCase):
             "当前仓库无真实麦克风",
             "真实按键 GPIO 未验证",
             "battery=87",
+            "采购清单和候选平台不等于已到货、已接线或已验证",
             "M0 Safety Companion 是确定性规则基线",
             "不是已验证的真实跌倒、呼救或事故识别模型",
+            "48 小时和 5-7 天续航是工程目标",
         ]
 
         for boundary in required_boundaries:
@@ -58,11 +66,27 @@ class HardwareSensorMatrixTests(unittest.TestCase):
             "firmware/mqtt_heartbeat/main/app_main.c",
             "firmware/camera_smoke/main/app_main.c",
             "firmware/camera_smoke/README.md",
+            "docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md",
+            "docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md",
         ]
 
         for evidence_path in evidence_paths:
             with self.subTest(evidence_path=evidence_path):
                 self.assertIn(evidence_path, self.content)
+
+    def test_hctx_outputs_are_present(self) -> None:
+        required_sections = [
+            "阻塞 M1 数据采集的缺失硬件或驱动",
+            "HARCH-001 应重点审计的耦合点",
+            "platform_modem",
+            "platform_gnss",
+            "platform_power",
+            "capability descriptor",
+        ]
+
+        for section in required_sections:
+            with self.subTest(section=section):
+                self.assertIn(section, self.content)
 
 
 if __name__ == "__main__":
