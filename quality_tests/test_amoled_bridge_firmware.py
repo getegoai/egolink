@@ -51,8 +51,12 @@ class AmoledBridgeFirmwareTests(unittest.TestCase):
     def test_sample_window_is_bounded_and_not_a_validation_claim(self) -> None:
         required_terms = [
             "#define AMOLED_BOOT_JSON_DELAY_MS 5000",
-            "#define AMOLED_SAMPLE_COUNT 40",
+            "#define AMOLED_SAMPLE_COUNT 120",
             "#define AMOLED_SAMPLE_INTERVAL_MS 50",
+            "#define AMOLED_TIMING_MODE \"vTaskDelayUntil\"",
+            "vTaskDelayUntil(&last_wake_tick, sample_interval_ticks)",
+            '\\"timing_mode\\":\\"%s\\"',
+            '\\"missed_deadlines\\":%',
             "identity_and_short_window_only",
             "not yet an ODR, jitter, drop-rate, orientation, calibration",
         ]

@@ -316,6 +316,14 @@ def analyze_imu_messages(
 
 
 def format_markdown(report: dict[str, Any], source_path: Path | None = None) -> str:
+    return format_markdown_with_title(report, source_path, "# TIMU-002 QMI8658 Sample Quality Report")
+
+
+def format_markdown_with_title(
+    report: dict[str, Any],
+    source_path: Path | None = None,
+    title: str = "# QMI8658 Sample Quality Report",
+) -> str:
     gate_rows = []
     for name, gate in report["gates"].items():
         gate_rows.append(f"| `{name}` | {'PASS' if gate['passed'] else 'FAIL'} | {gate['reason']} |")
@@ -325,7 +333,7 @@ def format_markdown(report: dict[str, Any], source_path: Path | None = None) -> 
     identity = report["identity"]
 
     lines = [
-        "# TIMU-002 QMI8658 Sample Quality Report",
+        title,
         "",
         f"- Source: `{source_path}`" if source_path else "- Source: not recorded",
         f"- QMI8658 WHOAMI: `{identity.get('whoami')}` expected `{identity.get('whoami_expected')}`",
@@ -360,6 +368,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("jsonl_path", type=Path)
     parser.add_argument("--json", action="store_true", help="Print the report as JSON.")
     parser.add_argument("--markdown", type=Path, default=None, help="Write a Markdown report.")
+    parser.add_argument("--title", default="# TIMU-002 QMI8658 Sample Quality Report")
+    parser.add_argument("--min-samples", type=int, default=40)
     parser.add_argument("--warmup-discard", type=int, default=5)
     parser.add_argument("--fail-on-unusable", action="store_true")
     return parser.parse_args(argv)
@@ -368,11 +378,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     messages = load_jsonl(args.jsonl_path)
-    report = analyze_imu_messages(messages, warmup_discard=args.warmup_discard)
+    report = analyze_imu_messages(
+        messages,
+        min_samples=args.min_samples,
+        warmup_discard=args.warmup_discard,
+    )
 
     if args.markdown:
         args.markdown.parent.mkdir(parents=True, exist_ok=True)
-        args.markdown.write_text(format_markdown(report, args.jsonl_path), encoding="utf-8")
+        args.markdown.write_text(
+            format_markdown_with_title(report, args.jsonl_path, args.title),
+            encoding="utf-8",
+        )
 
     if args.json or not args.markdown:
         print(json.dumps(report, ensure_ascii=False, indent=2))

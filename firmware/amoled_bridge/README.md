@@ -7,7 +7,7 @@ It prints newline-delimited JSON to the ESP32-S3 native USB serial/JTAG console:
 
 1. `hello` for PC Bridge role binding.
 2. `imu_whoami` with AXP2101 and QMI8658 probe metadata.
-3. A short `imu_sample` window from the QMI8658 accelerometer and gyroscope.
+3. A bounded `imu_sample` window from the QMI8658 accelerometer and gyroscope.
 4. `amoled_bridge_done` with sample/drop counters.
 
 The firmware intentionally keeps every IMU frame marked:
@@ -19,7 +19,9 @@ source_status=unverified
 
 This smoke proves only that the board can emit bridge-shaped QMI8658 samples.
 It is not yet an ODR, jitter, drop-rate, orientation, calibration, interrupt,
-FIFO, power, or product MotionNet validation.
+FIFO, power, or product MotionNet validation. TIMU-003 uses fixed-period
+`vTaskDelayUntil` sampling and emits a 120-sample window so timing can be
+measured separately from JSON printing overhead.
 
 ## Board Mapping
 
@@ -60,7 +62,7 @@ Then capture the JSONL output from the same port. Pass criteria:
 {"type":"hello",...,"role":"wearable_node",...}
 {"type":"imu_whoami",...,"whoami":5,...}
 {"type":"imu_sample",...,"sensor_model":"QMI8658",...}
-{"type":"amoled_bridge_done",...,"samples_emitted":40,...}
+{"type":"amoled_bridge_done",...,"samples_emitted":120,...,"timing_mode":"vTaskDelayUntil",...}
 ```
 
 After capture, feed the JSONL file to the existing PC Bridge:

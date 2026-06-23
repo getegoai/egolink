@@ -13,11 +13,15 @@
   flashed `firmware/amoled_bridge` to ESP32-S3-Touch-AMOLED-2.06 `COM9` and
   captured live QMI8658 WHOAMI plus a bounded sample window over USB JSONL.
   TIMU-002 analyzed that window and found identity/orientation sane but sample
-  timing below the requested 20 Hz target.
+  timing below the requested 20 Hz target. TIMU-003 fixed the AMOLED bridge
+  scheduler with `vTaskDelayUntil`, captured a 120-sample live QMI8658 window,
+  and measured about `49.99 ms / 20.00 Hz`.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
-- Hardware tested: no new hardware validation in M0-INT-001. This task only
-  verified the Safety Companion M0 overlay package and existing automated tests.
+- Hardware tested: M0-INT-001 itself performed no hardware validation. Later
+  hardware tasks in this report exercised the Waveshare ESP32-S3-SIM7670G-4G
+  board, standalone camera smoke firmware on `COM4`, and the
+  ESP32-S3-Touch-AMOLED-2.06 QMI8658 path on `COM9`.
 
 ## Completed tasks
 
@@ -45,6 +49,7 @@
 - [x] HDBRIDGE-001 dual-board PC bridge PoC
 - [x] HDBRIDGE-002 AMOLED USB CDC QMI8658 live window
 - [x] TIMU-002 QMI8658 sample quality gate
+- [x] TIMU-003 QMI8658 timing retest
 
 ## Changed files
 
@@ -354,6 +359,19 @@ TIMU-002 QMI8658 sample quality gate updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+TIMU-003 QMI8658 timing retest updates:
+
+- `firmware/amoled_bridge/main/app_main.c`
+- `firmware/amoled_bridge/README.md`
+- `pc_simulator/imu_quality.py`
+- `quality_tests/test_amoled_bridge_firmware.py`
+- `quality_tests/test_imu_quality.py`
+- `docs/hardware/TIMU_003_QMI8658_TIMING_RETEST_20260623.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
 
 ```powershell
@@ -476,6 +494,62 @@ completeness, completion, QMI timestamp monotonicity, static orientation, static
 gyro, and source-boundary gates. Device timing failed: requested `50 ms / 20 Hz`,
 observed mean interval `82.31 ms` and observed sample rate about `12.15 Hz`.
 Formal IMU acceptance remains false.
+
+```powershell
+python -m unittest quality_tests.test_amoled_bridge_firmware quality_tests.test_imu_quality -v
+```
+
+Result: passed for TIMU-003. The AMOLED bridge firmware and IMU analyzer tests
+ran 8 tests successfully. Coverage includes fixed-period `vTaskDelayUntil`
+sampling, the 120-sample live window contract, timing metadata in the completion
+record, configurable analyzer report titles, and the existing IMU quality gates.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py build
+```
+
+Result: passed for TIMU-003 from `firmware/amoled_bridge`. The build generated
+the updated `egolink_amoled_bridge.bin`; the app binary size was `0x38620`.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM9 flash
+```
+
+Result: passed for TIMU-003. esptool identified ESP32-S3 USB-Serial/JTAG,
+8 MB PSRAM, MAC `02:00:00:00:00:01`, wrote the image, verified hashes, and
+hard-reset the ESP32-S3-Touch-AMOLED-2.06 board.
+
+```powershell
+python scripts\analyze_imu_quality.py pc_simulator\runtime\timu003-qmi8658-live-20260623-201436.jsonl --json --min-samples 100 --title "# TIMU-003 QMI8658 Timing Retest Report" --markdown docs\hardware\TIMU_003_QMI8658_TIMING_RETEST_20260623.md
+```
+
+Result: passed for TIMU-003 live data. The capture contained 123 JSONL records:
+`hello`, `imu_whoami`, 120 `imu_sample` records, and `amoled_bridge_done`.
+The completion record reported `samples_emitted=120`, `timing_mode`
+`vTaskDelayUntil`, `missed_deadlines=0`, and `max_sample_work_ms=42`. The
+analyzer measured a mean device interval of about `49.99 ms`, an observed sample
+rate of about `20.00 Hz`, and all quality gates passed. Formal IMU acceptance
+remains false because source status is still intentionally `unverified`.
+
+```powershell
+python scripts\board_bridge.py --source wearable=pc_simulator\runtime\timu003-qmi8658-live-20260623-201436.jsonl --event-log pc_simulator\runtime\timu003-qmi8658-live-20260623-201436.events.jsonl --json
+python scripts\session_recorder.py --event-log pc_simulator\runtime\timu003-qmi8658-live-20260623-201436.events.jsonl --session-id timu003-qmi8658-live-20260623-201436 --output-dir pc_simulator\runtime\recordings\timu003-qmi8658-live-20260623-201436 --json
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\timu003-qmi8658-live-20260623-201436 --json
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\timu003-qmi8658-live-20260623-201436 --json
+```
+
+Result: passed for the TIMU-003 M1 loop. PC Bridge stored 123 events with
+0 skipped lines, the recorder created 120 `imu_motion` frames, the quality gate
+passed with score `0.94`, and replay passed with 120 `risk_type=none` outputs.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed after TIMU-003. The repository test suite ran 144 tests
+successfully, including the timing-fixed AMOLED bridge firmware contract,
+IMU quality analyzer, updated hardware matrix, and the existing PC/Firmware/M1
+quality gates.
 
 ```powershell
 idf.py --version
@@ -1130,6 +1204,16 @@ device timing failed because the requested `50 ms / 20 Hz` stream was observed
 at about `82.31 ms / 12.15 Hz`. This confirms the QMI8658 path is real enough
 to continue, but not acceptable as formal M1 IMU data yet.
 
+TIMU-003 changed the AMOLED bridge scheduler to fixed-period
+`vTaskDelayUntil`, timestamped samples at sample start, and extended the live
+window to 120 samples. The ESP32-S3-Touch-AMOLED-2.06 board on `COM9` produced
+120 live QMI8658 samples at about `49.99 ms / 20.00 Hz` with
+`missed_deadlines=0`; PC Bridge, session recording, quality gate, and replay
+all passed. This fixes the timing blocker found in TIMU-002, but the source
+remains `bridge_uplink/unverified` until mounting direction, calibration,
+FIFO/interrupt behavior, power behavior, and a real `platform_imu` backend are
+validated in later tasks.
+
 ## Known gaps
 
 - `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
@@ -1184,9 +1268,10 @@ to continue, but not acceptable as formal M1 IMU data yet.
 - TIMU-001 defines the real IMU evidence gate but does not fully satisfy it.
   HDBRIDGE-002 now provides a live AMOLED QMI8658 identity probe and short
   sample window. TIMU-002 measured that window and found the static orientation
-  plausible, but sample timing is too slow for the requested 20 Hz stream.
-  TIMU-003 must fix timing and rerun a longer-window quality gate before any
-  real IMU backend or dataset claim.
+  plausible, but sample timing was too slow for the requested 20 Hz stream.
+  TIMU-003 fixed the sample timing and passed a 120-sample 20 Hz retest, but
+  formal IMU acceptance is still false until mounting direction, calibration,
+  FIFO/interrupt behavior, power behavior, and a real backend PoC pass.
 - TCAM-001 confirms the standalone camera smoke path, but product firmware
   camera integration remains pending. `platform_camera`, privacy authorization,
   retention/hash manifests, camera power-state control, M1 image recording, and
@@ -1197,9 +1282,9 @@ to continue, but not acceptable as formal M1 IMU data yet.
   FIFO/interrupt behavior, microphone, display/touch downlink, board-to-board
   UART, standalone operation, TF/SD, and dual-board power behavior all require
   later hardware tasks.
-- TIMU-002 shows why formal IMU acceptance is still false: the current bridge
-  emits a real QMI8658 sample window, but observed device timing is about
-  `12.15 Hz` instead of the requested `20 Hz`.
+- TIMU-002/TIMU-003 show the current IMU boundary: the bridge now emits a real
+  QMI8658 sample window at about `20 Hz`, but it is still not a formal product
+  IMU source because it remains `bridge_uplink/unverified`.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -1226,8 +1311,7 @@ to continue, but not acceptable as formal M1 IMU data yet.
 
 ## Recommended next step
 
-Next, run TIMU-003 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: fix the
-AMOLED bridge sample scheduler/readout so observed device timing matches the
-requested interval, capture a 100+ sample window, rerun
-`scripts/analyze_imu_quality.py`, and only then consider a `platform_imu` real
-backend PoC.
+Next, run TIMU-004 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: use the
+TIMU-003 fixed-period sampler to collect multiple static poses or a manual
+rotation/tap window, record axis signs, mounting direction, calibration offset,
+and motion sanity, and only then consider a `platform_imu` real backend PoC.

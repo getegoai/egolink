@@ -1,65 +1,72 @@
-# CURRENT_TASK: TIMU-002 / QMI8658 Sample Quality Gate
+# CURRENT_TASK: TIMU-003 / QMI8658 Timing Retest
 
 ## Goal
 
-Turn the HDBRIDGE-002 AMOLED QMI8658 short-window capture into a repeatable
-measurement gate for IMU identity, completeness, timing, static orientation,
-gyro sanity, and source-boundary status.
-
-The purpose is to decide whether the current QMI8658 samples are ready to be
-treated as formal M1 IMU data. They are not ready yet.
+Fix the AMOLED bridge sample scheduling problem found by TIMU-002 and prove
+that the QMI8658 path can produce a longer 100+ sample window at the requested
+20 Hz cadence.
 
 ## Scope
 
-- Add a PC-side QMI8658 JSONL analyzer.
-- Parse `imu_whoami`, `imu_sample`, and `amoled_bridge_done` records.
-- Report identity, sample count, seq/sample-index continuity, read errors,
-  not-ready count, device monotonic interval, QMI timestamp monotonicity,
-  static 1g orientation, warm gyro sanity, and source status.
-- Keep `bridge_uplink/unverified` as a hard boundary.
-- Generate a TIMU-002 Markdown evidence report from the HDBRIDGE-002 live
-  capture.
+- Change `firmware/amoled_bridge` from end-of-loop `vTaskDelay(50ms)` sampling
+  to fixed-period `vTaskDelayUntil` scheduling.
+- Timestamp each `imu_sample` at sample-start time rather than after read/print
+  work.
+- Expand the bounded sample window from 40 to 120 samples.
+- Emit timing metadata in `amoled_bridge_done`.
+- Rebuild, flash, and capture a new live JSONL window from `COM9`.
+- Rerun the IMU quality analyzer with `--min-samples 100`.
+- Feed the capture through PC Bridge, session recording, quality gate, and
+  replay.
 
 ## Out Of Scope
 
-- No firmware timing fix in this task.
 - No `platform_imu` real backend switch.
+- No source promotion to `verified`.
 - No MotionNet training data claim.
 - No fall, impact, wear-state, or activity inference.
 - No microphone, TF/SD, touch, display, power, or board-to-board UART work.
 
 ## Result
 
-- Added `pc_simulator/imu_quality.py`.
-- Added `scripts/analyze_imu_quality.py`.
-- Added `quality_tests/test_imu_quality.py`.
+- Updated `firmware/amoled_bridge/main/app_main.c`.
+- Updated `firmware/amoled_bridge/README.md`.
+- Updated `quality_tests/test_amoled_bridge_firmware.py`.
+- Captured
+  `pc_simulator/runtime/timu003-qmi8658-live-20260623-201436.jsonl`.
 - Generated
-  `docs/hardware/TIMU_002_QMI8658_SAMPLE_QUALITY_20260623.md`.
-- Analyzed
-  `pc_simulator/runtime/hdb002-amoled-live-20260623-194454.jsonl`.
+  `docs/hardware/TIMU_003_QMI8658_TIMING_RETEST_20260623.md`.
 
 Measured result:
 
-- QMI8658 WHOAMI: `5`, expected `5` - PASS.
-- Sample count: 40 - PASS.
-- Sample index / seq continuity - PASS.
-- Completion record: `read_errors=0`, `not_ready_count=0` - PASS.
-- Static accel orientation: dominant `z` negative, mean magnitude about
-  `1031.43 mg` - PASS.
-- Warm gyro sanity: mean absolute rate about `502.42 mdps` - PASS.
-- Device timing: expected `50 ms`, observed mean `82.31 ms`, observed
-  `12.15 Hz` - FAIL.
-- Source boundary: `bridge_uplink/unverified` - PASS as a boundary, not as
-  formal acceptance.
+- Live JSONL lines: 123.
+- `imu_sample` count: 120.
+- Firmware timing mode: `vTaskDelayUntil`.
+- Missed deadlines: 0.
+- Max sample work: 42 ms.
+- Expected interval: 50 ms.
+- Observed mean interval: about `49.99 ms`.
+- Observed sample rate: about `20.00 Hz`.
+- Device timing gate: PASS.
+- Static orientation gate: PASS, dominant axis `z negative`.
+- PC Bridge stored 123 events with 0 skipped lines.
+- Session recording produced 120 `imu_motion` frames.
+- Quality gate PASS, `quality_score=0.94`.
+- Replay PASS, 120 inputs all `risk_type=none`.
+- Full repository verification PASS, 144 tests.
+
+Formal IMU acceptance remains false because the source is still intentionally
+`bridge_uplink/unverified`. TIMU-003 fixes timing; it does not complete
+mounting, calibration, FIFO/interrupt, power, or product backend acceptance.
 
 ## Done When
 
-- [x] Analyzer can parse AMOLED QMI8658 JSONL captures.
-- [x] Analyzer reports identity, completeness, timing, orientation, gyro, and
-  source-boundary gates.
-- [x] Analyzer refuses to treat `source_status=verified` as acceptable input
-  before formal acceptance.
-- [x] Existing HDBRIDGE-002 capture is analyzed.
-- [x] Evidence report records the timing failure and keeps formal IMU
-  acceptance false.
-- [x] Focused tests pass.
+- [x] AMOLED bridge builds.
+- [x] AMOLED board flashes over `COM9`.
+- [x] Live capture contains at least 100 `imu_sample` records.
+- [x] Analyzer timing gate passes.
+- [x] PC Bridge ingests the capture without skipped lines.
+- [x] Recorder emits 100+ `imu_motion` frames.
+- [x] Quality gate passes.
+- [x] Replay passes.
+- [x] Formal IMU acceptance remains false until later acceptance tasks.

@@ -75,6 +75,7 @@ class HardwareSensorMatrixTests(unittest.TestCase):
             "docs/hardware/HDBRIDGE_001_DUAL_BOARD_PC_BRIDGE_POC_20260623.md",
             "docs/hardware/HDBRIDGE_002_AMOLED_QMI8658_LIVE_CAPTURE_20260623.md",
             "docs/hardware/TIMU_002_QMI8658_SAMPLE_QUALITY_20260623.md",
+            "docs/hardware/TIMU_003_QMI8658_TIMING_RETEST_20260623.md",
             "pc_simulator/board_bridge.py",
             "pc_simulator/imu_quality.py",
             "docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md",

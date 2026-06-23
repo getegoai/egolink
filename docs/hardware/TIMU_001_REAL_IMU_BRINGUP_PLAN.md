@@ -110,7 +110,7 @@ available:
 
 Only after TIMU-002 passes should `platform_imu` gain a real backend.
 
-## Follow-Up Status After HDBRIDGE-002 / TIMU-002
+## Follow-Up Status After HDBRIDGE-002 / TIMU-002 / TIMU-003
 
 HDBRIDGE-002 made the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path physically
 available enough for a bounded live capture:
@@ -127,5 +127,13 @@ TIMU-002 then analyzed that capture and kept formal IMU acceptance false:
 - Device timing failed: requested `50 ms / 20 Hz`, observed about
   `82.31 ms / 12.15 Hz`.
 
-Updated next task: TIMU-003 should fix AMOLED bridge sample timing and rerun a
-100+ sample window before `platform_imu` gains a real QMI8658 backend.
+TIMU-003 then fixed the timing blocker:
+
+- The AMOLED bridge now uses fixed-period `vTaskDelayUntil` sampling.
+- A 120-sample live QMI8658 window reached about `49.99 ms / 20.00 Hz`.
+- PC Bridge, session recording, quality gate, and replay all passed while the
+  source remains `bridge_uplink/unverified`.
+
+Updated next task: TIMU-004 should collect multi-pose or rotation/tap evidence,
+document axis signs, mounting direction, calibration offsets, and motion sanity
+before `platform_imu` gains a real QMI8658 backend.
