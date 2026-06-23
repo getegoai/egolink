@@ -12,6 +12,8 @@
   PC-only dual-board bridge PoC without live serial hardware I/O. HDBRIDGE-002
   flashed `firmware/amoled_bridge` to ESP32-S3-Touch-AMOLED-2.06 `COM9` and
   captured live QMI8658 WHOAMI plus a bounded sample window over USB JSONL.
+  TIMU-002 analyzed that window and found identity/orientation sane but sample
+  timing below the requested 20 Hz target.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: no new hardware validation in M0-INT-001. This task only
@@ -42,6 +44,7 @@
 - [x] TCAM-001 camera smoke live capture evidence
 - [x] HDBRIDGE-001 dual-board PC bridge PoC
 - [x] HDBRIDGE-002 AMOLED USB CDC QMI8658 live window
+- [x] TIMU-002 QMI8658 sample quality gate
 
 ## Changed files
 
@@ -340,6 +343,17 @@ HDBRIDGE-002 AMOLED USB CDC QMI8658 live window updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+TIMU-002 QMI8658 sample quality gate updates:
+
+- `pc_simulator/imu_quality.py`
+- `scripts/analyze_imu_quality.py`
+- `quality_tests/test_imu_quality.py`
+- `docs/hardware/TIMU_002_QMI8658_SAMPLE_QUALITY_20260623.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
 
 ```powershell
@@ -443,6 +457,25 @@ records: `hello`, `imu_whoami`, 40 `imu_sample` records, and
 `amoled_bridge_done`. PC Bridge stored 43 events with 0 skipped lines, recorder
 created 40 `imu_motion` frames, quality gate passed with score `0.94`, and
 replay passed with 40 `risk_type=none` outputs.
+
+```powershell
+python -m unittest quality_tests.test_imu_quality -v
+```
+
+Result: passed for TIMU-002. The IMU quality tests ran 4 tests successfully.
+Coverage includes stable static capture gates, observed-period drift failure,
+source-boundary rejection when a capture claims `source_status=verified`, and
+JSONL/Markdown report generation.
+
+```powershell
+python scripts\analyze_imu_quality.py pc_simulator\runtime\hdb002-amoled-live-20260623-194454.jsonl --json --markdown docs\hardware\TIMU_002_QMI8658_SAMPLE_QUALITY_20260623.md
+```
+
+Result: completed for TIMU-002. The HDBRIDGE-002 capture passed identity,
+completeness, completion, QMI timestamp monotonicity, static orientation, static
+gyro, and source-boundary gates. Device timing failed: requested `50 ms / 20 Hz`,
+observed mean interval `82.31 ms` and observed sample rate about `12.15 Hz`.
+Formal IMU acceptance remains false.
 
 ```powershell
 idf.py --version
@@ -1089,6 +1122,14 @@ replay. It still marks all IMU data as `bridge_uplink/unverified` and does not
 claim ODR, jitter/drop, orientation, calibration, FIFO/interrupt, microphone,
 display/touch, TF/SD, board-to-board UART, or power validation.
 
+TIMU-002 did not change firmware. It added a PC-side sample-quality analyzer
+for AMOLED QMI8658 JSONL captures and applied it to the HDBRIDGE-002 capture.
+The result is intentionally mixed: identity, completeness, completion,
+monotonic QMI timestamp, static orientation, and static gyro gates passed, but
+device timing failed because the requested `50 ms / 20 Hz` stream was observed
+at about `82.31 ms / 12.15 Hz`. This confirms the QMI8658 path is real enough
+to continue, but not acceptable as formal M1 IMU data yet.
+
 ## Known gaps
 
 - `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
@@ -1142,19 +1183,23 @@ display/touch, TF/SD, board-to-board UART, or power validation.
   fall/impact claim.
 - TIMU-001 defines the real IMU evidence gate but does not fully satisfy it.
   HDBRIDGE-002 now provides a live AMOLED QMI8658 identity probe and short
-  sample window, but TIMU-002 must still measure ODR, jitter/drop, orientation,
-  mounting, FIFO/interrupt behavior, calibration, and longer-window quality
-  before any real IMU backend or dataset claim.
+  sample window. TIMU-002 measured that window and found the static orientation
+  plausible, but sample timing is too slow for the requested 20 Hz stream.
+  TIMU-003 must fix timing and rerun a longer-window quality gate before any
+  real IMU backend or dataset claim.
 - TCAM-001 confirms the standalone camera smoke path, but product firmware
   camera integration remains pending. `platform_camera`, privacy authorization,
   retention/hash manifests, camera power-state control, M1 image recording, and
   VisionGate must stay unavailable until separate tasks verify them.
 - HDBRIDGE-002 confirms AMOLED live USB JSONL, QMI8658 identity, and a bounded
   40-sample accel/gyro window through the PC Bridge loop. Formal IMU acceptance
-  remains pending: ODR, jitter/drop, mounting direction, orientation, calibration,
+  remains pending: timing/ODR, jitter/drop, mounting direction, calibration,
   FIFO/interrupt behavior, microphone, display/touch downlink, board-to-board
   UART, standalone operation, TF/SD, and dual-board power behavior all require
   later hardware tasks.
+- TIMU-002 shows why formal IMU acceptance is still false: the current bridge
+  emits a real QMI8658 sample window, but observed device timing is about
+  `12.15 Hz` instead of the requested `20 Hz`.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -1181,7 +1226,8 @@ display/touch, TF/SD, board-to-board UART, or power validation.
 
 ## Recommended next step
 
-Next, run TIMU-002 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: measure
-sample timing, ODR, jitter/drop, static orientation, axis signs, longer-window
-completeness, and calibration notes before any `platform_imu` real backend or
-MotionNet data claim is enabled.
+Next, run TIMU-003 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: fix the
+AMOLED bridge sample scheduler/readout so observed device timing matches the
+requested interval, capture a 100+ sample window, rerun
+`scripts/analyze_imu_quality.py`, and only then consider a `platform_imu` real
+backend PoC.

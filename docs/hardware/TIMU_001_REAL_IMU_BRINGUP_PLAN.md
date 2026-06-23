@@ -98,6 +98,8 @@ recording with:
 
 ## Recommended Next Task
 
+Original recommendation before the AMOLED board live capture:
+
 TIMU-002 should be a hardware I/O task only after an IMU board is physically
 available:
 
@@ -107,3 +109,23 @@ available:
 4. Produce a bounded live capture report.
 
 Only after TIMU-002 passes should `platform_imu` gain a real backend.
+
+## Follow-Up Status After HDBRIDGE-002 / TIMU-002
+
+HDBRIDGE-002 made the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path physically
+available enough for a bounded live capture:
+
+- QMI8658 WHOAMI returned `0x05`.
+- A 40-sample accel/gyro window was captured over USB JSONL.
+- PC Bridge, recording, quality gate, and replay all accepted the window while
+  keeping the source marked `bridge_uplink/unverified`.
+
+TIMU-002 then analyzed that capture and kept formal IMU acceptance false:
+
+- Identity, completeness, QMI timestamp monotonicity, static 1g orientation,
+  and warm gyro sanity passed.
+- Device timing failed: requested `50 ms / 20 Hz`, observed about
+  `82.31 ms / 12.15 Hz`.
+
+Updated next task: TIMU-003 should fix AMOLED bridge sample timing and rerun a
+100+ sample window before `platform_imu` gains a real QMI8658 backend.

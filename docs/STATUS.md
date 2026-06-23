@@ -54,11 +54,12 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - TCAM-001：摄像头 smoke live capture 完成。`firmware/camera_smoke` 已改为启动后延迟 5 秒并连续采集 3 帧，ESP32-S3 `COM4` 实机刷写通过；UART 证据显示摄像头识别为 OV5640，采集到 3 张 QVGA JPEG，bytes 分别为 `2893/3708/3700`，checksum 分别为 `a5db84d7/94301dec/7a151b26`，SOI/EOI 均为 `ffd8/ffd9`。证据摘要见 `docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md`。
 - HDBRIDGE-001：双板 PC Bridge PoC 完成。新增 `pc_simulator/board_bridge.py` 和 `scripts/board_bridge.py`，支持 JSONL/stdin 形式的 `wearable_node` / `connectivity_node` `hello` 绑定、`motion_event` 归一化、撞击/跌倒阈值下的 `ask_user` / `request_location` 下行命令记录，以及 M1 recorder 的 `imu_motion` frame；该 frame 显式标为 `source_availability=bridge_uplink`、`source_status=unverified`，不声明 AMOLED 板 QMI8658 已真实验证。证据摘要见 `docs/hardware/HDBRIDGE_001_DUAL_BOARD_PC_BRIDGE_POC_20260623.md`。
 - HDBRIDGE-002：AMOLED 板 USB CDC + QMI8658 最小样本窗口完成。新增 `firmware/amoled_bridge`，ESP32-S3-Touch-AMOLED-2.06 `COM9` 实机刷写通过，USB JSONL 捕获 1 条 `hello`、1 条 `imu_whoami`、40 条 `imu_sample` 和 1 条 `amoled_bridge_done`；AXP2101 chip id `0x4A`，QMI8658 WHOAMI `0x05`，`read_errors=0`，`not_ready_count=0`。PC Bridge 存储 43 条事件，recording 生成 40 条 `imu_motion` frame，quality gate PASS `0.94`，replay PASS。证据摘要见 `docs/hardware/HDBRIDGE_002_AMOLED_QMI8658_LIVE_CAPTURE_20260623.md`；IMU 仍标记 `bridge_uplink/unverified`，不是正式 IMU 验收。
+- TIMU-002：QMI8658 样本质量与方向验收门完成。新增 `pc_simulator/imu_quality.py` 和 `scripts/analyze_imu_quality.py`，对 HDBRIDGE-002 live JSONL 进行身份、完整性、时序、QMI timestamp、静置 1g 方向、gyro 静置 sanity 和 source 边界分析；WHOAMI、完整性、静置方向、gyro sanity 均 PASS，但 device timing FAIL：目标 `50 ms / 20 Hz`，实测均值约 `82.31 ms / 12.15 Hz`。证据摘要见 `docs/hardware/TIMU_002_QMI8658_SAMPLE_QUALITY_20260623.md`；formal IMU acceptance 仍为 false。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
 
-下一项建议任务：TIMU-002 QMI8658 样本质量与安装方向验证。基于 HDBRIDGE-002 已打通的 AMOLED USB JSONL，继续验证 ODR、PC 接收间隔、jitter/drop、静置方向、轴向符号、短窗口完整率和后续 `platform_imu` 真实后端边界；通过前仍不得把 IMU 标为正式已验收或用于 MotionNet 训练。
+下一项建议任务：TIMU-003 QMI8658 采样时序修复与更长窗口复测。优先把 AMOLED bridge 从“读一帧再 `vTaskDelay(50ms)`”改为可解释的周期调度/批量读取路径，并复测 100+ 样本窗口，使 observed interval 接近目标值后再继续 ODR、jitter/drop、方向、FIFO/中断和 `platform_imu` real backend。
 
 ## 后续任务路线
 
@@ -71,13 +72,17 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - HPWR-001：加入功耗状态和测量标记。已完成 log/mock 事件、累计时长、串口 marker 和场景模板；真实 GPIO marker、电流、续航仍未验证。
 - HDATA-001：继续 M1 真实数据采集闭环。已完成 HPWR 固件刷写后的 clean live capture、GNSS no-fix probe、T039 IMU mock live payload capture、recording quality gate 和 replay；后续可扩展户外 GNSS fix、真实 IMU、麦克风、SD 和功耗仪器采集。
 - T039：IMU mock/driver interface 和 ring buffer 骨架。已完成并完成 mock payload 真板 MQTT 采集；真实 IMU 确认后再接入采样。
-- TIMU-001：真实 IMU bring-up 证据门。已完成；HDBRIDGE-002 已确认 AMOLED 板 QMI8658 身份和短窗口样本，下一步 TIMU-002 可基于该路径继续做 ODR、jitter/drop、方向、FIFO/中断和校准验收。
+- TIMU-001：真实 IMU bring-up 证据门。已完成；HDBRIDGE-002 已确认 AMOLED 板 QMI8658 身份和短窗口样本，TIMU-002 已完成首轮质量分析并发现 timing gate 失败。
+- TIMU-002：QMI8658 样本质量与安装方向验证。已完成分析工具和 HDBRIDGE-002 live capture 报告；身份/完整性/静置方向通过，但设备采样时序未达目标，formal IMU acceptance=false。
 - TCAM-001：摄像头 smoke live capture。已完成 3 帧真实 JPEG UART 证据；后续如要进入产品路径，需要单独做 `platform_camera`、隐私授权、hash/retention、功耗状态和按需采集。
 - HDBRIDGE-001：双板 PC Bridge PoC。已完成 PC-only 消息桥、命令记录和 `imu_motion` recording 入口。
-- HDBRIDGE-002：AMOLED USB CDC + QMI8658 最小样本窗口。已完成 live `hello`、QMI8658 WHOAMI、40 条真实 I2C 样本、PC Bridge、recording、quality gate 和 replay；后续 TIMU-002 再做 ODR/jitter/drop/orientation/校准等正式 IMU 验收门。
+- HDBRIDGE-002：AMOLED USB CDC + QMI8658 最小样本窗口。已完成 live `hello`、QMI8658 WHOAMI、40 条真实 I2C 样本、PC Bridge、recording、quality gate 和 replay；TIMU-002 已确认首轮样本 timing 未达目标，后续 TIMU-003 修复采样时序。
+- TIMU-003：QMI8658 采样时序修复与更长窗口复测。下一步建议；通过前不切 `platform_imu` 真实后端，不进入 MotionNet 数据采集声明。
 
 ## 最近验证
 
+- `python -m unittest quality_tests.test_imu_quality -v`：通过，4 个测试全部成功；覆盖稳定静置样本 gate、82ms 时序偏移 fail、提前 `source_status=verified` 拒绝，以及 JSONL/Markdown report 生成。
+- `python scripts\analyze_imu_quality.py pc_simulator\runtime\hdb002-amoled-live-20260623-194454.jsonl --json --markdown docs\hardware\TIMU_002_QMI8658_SAMPLE_QUALITY_20260623.md`：通过，报告 43 条消息、40 条 `imu_sample`；identity/completeness/completion/qmi_timestamp/static_orientation/static_gyro/source_boundary 通过，device_timing 失败；formal IMU acceptance=false。
 - `python -m unittest quality_tests.test_amoled_bridge_firmware -v`：通过，4 个测试全部成功；覆盖 AMOLED I2C pin map、AXP2101/QMI8658 地址和 WHOAMI、JSONL 输出契约、短窗口边界、`bridge_uplink/unverified` 标记和保守 AXP2101 上电策略。
 - `. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py build`：HDBRIDGE-002 通过，生成 `egolink_amoled_bridge.bin`。
 - `. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM9 flash`：HDBRIDGE-002 通过，识别 ESP32-S3 `USB-Serial/JTAG`、PSRAM 8MB、MAC `02:00:00:00:00:01`，写入并校验 AMOLED bridge 固件，hard reset 成功。
