@@ -17,10 +17,11 @@
   scheduler with `vTaskDelayUntil`, captured a 120-sample live QMI8658 window,
   and measured about `49.99 ms / 20.00 Hz`. TIMU-004A added a pose/motion
   analyzer and captured a single live `z_negative` static pose window; pose
-  quality passed for that pose, but multi-pose/motion evidence remains missing.
-  TIMU-004B-Prep added a bounded COM9 capture helper and operator protocol for
-  repeatable manual multi-pose or motion capture; it does not add formal IMU
-  acceptance by itself.
+  quality passed for that pose. TIMU-004B added a bounded COM9 capture helper
+  and completed manual `z_negative` / `x_positive` / `y_positive` three-pose
+  evidence with M1 quality/replay closure. Formal IMU acceptance still remains
+  false because the source is `bridge_uplink/unverified` and product backend,
+  motion, FIFO/interrupt, and power gates are pending.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: M0-INT-001 itself performed no hardware validation. Later
@@ -56,7 +57,7 @@
 - [x] TIMU-002 QMI8658 sample quality gate
 - [x] TIMU-003 QMI8658 timing retest
 - [x] TIMU-004A QMI8658 single-pose quality gate
-- [x] TIMU-004B-Prep QMI8658 manual pose capture flow
+- [x] TIMU-004B QMI8658 manual three-pose capture
 
 ## Changed files
 
@@ -395,7 +396,7 @@ TIMU-004A QMI8658 single-pose quality gate updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
-TIMU-004B-Prep QMI8658 manual pose capture flow updates:
+TIMU-004B QMI8658 manual three-pose capture updates:
 
 - `scripts/capture_amoled_qmi8658_pose_set.ps1`
 - `quality_tests/test_amoled_pose_capture_script.py`
@@ -667,13 +668,53 @@ pose with no motion window. PC Bridge/M1 recording/quality/replay completed:
 `risk_type=none` outputs.
 
 ```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -PoseLabels x_positive -NoPrompt -Analyze -SessionId timu004b-qmi8658-manual-pose1-20260623-2100 -TimeoutSeconds 35
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -PoseLabels y_positive -NoPrompt -Analyze -SessionId timu004b-qmi8658-manual-pose2-20260623-2108 -TimeoutSeconds 35
+```
+
+Result: passed for TIMU-004B manual additional poses. The first manually moved
+window captured `x_positive` with 120 `imu_sample` records, measured dominant
+axis `x positive`, mean axes about `[1043.12, -59.83, -49.36] mg`, and passed
+static quality, label match, calibration offset, timing, and source-boundary
+checks. The second manually moved window captured `y_positive` with 120
+`imu_sample` records, measured dominant axis `y positive`, mean axes about
+`[43.92, 1005.44, 7.69] mg`, and passed the same checks.
+
+```powershell
+python scripts\analyze_imu_pose_quality.py --pose z_negative=pc_simulator\runtime\timu004b\timu004b-qmi8658-preflight-live-20260623-205520-z_negative.jsonl --pose x_positive=pc_simulator\runtime\timu004b\timu004b-qmi8658-manual-pose1-20260623-2100-x_positive.jsonl --pose y_positive=pc_simulator\runtime\timu004b\timu004b-qmi8658-manual-pose2-20260623-2108-y_positive.jsonl --json --markdown pc_simulator\runtime\timu004b\timu004b-qmi8658-manual-3pose-20260623-2108.pose_quality.md --title "# TIMU-004B QMI8658 Manual Three-Pose Quality Report"
+```
+
+Result: passed for TIMU-004B manual three-pose quality. The analyzer accepted
+`z_negative`, `x_positive`, and `y_positive`; `pose_static_quality`,
+`pose_count`, `axis_coverage`, `pose_label_match`, `calibration_offset`,
+`pose_or_motion_evidence`, and `source_boundary` all passed. `motion_sanity`
+remained false because no optional motion window was supplied. Overall
+`quality_gates_passed=true`, while `formal_imu_acceptance=false` with reason
+`source_status_unverified`.
+
+```powershell
+python scripts\board_bridge.py --source z_negative=pc_simulator\runtime\timu004b\timu004b-qmi8658-preflight-live-20260623-205520-z_negative.jsonl --source x_positive=pc_simulator\runtime\timu004b\timu004b-qmi8658-manual-pose1-20260623-2100-x_positive.jsonl --source y_positive=pc_simulator\runtime\timu004b\timu004b-qmi8658-manual-pose2-20260623-2108-y_positive.jsonl --event-log pc_simulator\runtime\timu004b\timu004b-qmi8658-manual-3pose-20260623-2108.events.jsonl --json
+python scripts\session_recorder.py --event-log pc_simulator\runtime\timu004b\timu004b-qmi8658-manual-3pose-20260623-2108.events.jsonl --session-id timu004b-qmi8658-manual-3pose-20260623-2108 --output-dir pc_simulator\runtime\recordings\timu004b-qmi8658-manual-3pose-20260623-2108 --limit 500 --json
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\timu004b-qmi8658-manual-3pose-20260623-2108 --json
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\timu004b-qmi8658-manual-3pose-20260623-2108 --json
+```
+
+Result: passed for the TIMU-004B three-pose M1 loop. PC Bridge stored 369
+events with 0 skipped lines. The recorder produced 360 `imu_motion` frames.
+The quality gate passed with score `0.91`, 0 errors, and 3 warnings
+(`firmware_version_unknown`, `annotations_empty`, and expected `seq_decrease`
+because each bounded capture window reset device sequence). Replay passed with
+360 inputs, all `risk_type=none`, and no generated safety events or base
+commands.
+
+```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
-Result: passed after TIMU-004B-Prep. The repository test suite ran 154 tests
-successfully, including the new AMOLED pose capture helper contract, hardware
-matrix updates, existing pose analyzer, PC Bridge, M1 recording, quality gate,
-and replay tests.
+Result: passed after TIMU-004B three-pose documentation sync. The repository
+test suite ran 154 tests successfully, including the AMOLED pose capture helper
+contract, hardware matrix updates, existing pose analyzer, PC Bridge, M1
+recording, quality gate, and replay tests.
 
 ```powershell
 idf.py --version
@@ -1417,11 +1458,12 @@ Bridge no longer skips the first `hello` line from PowerShell-generated logs.
   FIFO/interrupt behavior, microphone, display/touch downlink, board-to-board
   UART, standalone operation, TF/SD, and dual-board power behavior all require
   later hardware tasks.
-- TIMU-002/TIMU-004A show the current IMU boundary: the bridge now emits a real
-  QMI8658 sample window at about `20 Hz` and one `z_negative` static pose is
-  plausible, but it is still not a formal product IMU source because
-  multi-pose/motion evidence is incomplete and the source remains
-  `bridge_uplink/unverified`.
+- TIMU-002 through TIMU-004B show the current IMU boundary: the bridge now emits
+  real QMI8658 sample windows at about `20 Hz`, and manual `z_negative`,
+  `x_positive`, and `y_positive` static poses pass the pose quality gate. It is
+  still not a formal product IMU source because motion, product backend,
+  FIFO/interrupt, power, and mounting acceptance remain incomplete and the
+  source remains `bridge_uplink/unverified`.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -1448,8 +1490,8 @@ Bridge no longer skips the first `hello` line from PowerShell-generated logs.
 
 ## Recommended next step
 
-Next, run TIMU-004B against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: use
-the TIMU-004A pose/motion analyzer while an operator physically moves the board
-through at least two additional static orientations or one rotation/tap window.
-Only after that evidence passes should a `platform_imu` real backend PoC be
-considered.
+Next, run TIMU-005 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: either
+capture a rotation/tap motion window with the existing pose analyzer, or start a
+small `platform_imu` real backend PoC plan. Keep MotionNet training and formal
+IMU claims disabled until source verification, mounting, FIFO/interrupt, power,
+and backend quality gates pass.
