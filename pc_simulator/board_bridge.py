@@ -69,7 +69,7 @@ def utc_now() -> str:
 
 
 def parse_json_line(line: str) -> dict[str, Any]:
-    stripped = line.strip()
+    stripped = line.strip().lstrip("\ufeff")
     if not stripped:
         raise BoardBridgeError("empty bridge line")
     try:
@@ -334,4 +334,4 @@ def drop_none(payload: dict[str, Any]) -> dict[str, Any]:
 def read_source_lines(path: Path | str) -> list[str]:
     if str(path) == "-":
         return sys.stdin.read().splitlines()
-    return Path(path).read_text(encoding="utf-8").splitlines()
+    return Path(path).read_text(encoding="utf-8-sig").splitlines()

@@ -14,7 +14,7 @@ QMI_TIMESTAMP_WRAP = 1 << 24
 
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
-    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for line_number, raw_line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), start=1):
         line = raw_line.strip()
         if not line:
             continue

@@ -122,6 +122,19 @@ class ImuQualityTests(unittest.TestCase):
         self.assertIn("| `identity` | PASS |", markdown)
         self.assertIn("Formal IMU acceptance: `False`", markdown)
 
+    def test_load_jsonl_accepts_windows_utf8_bom_capture(self) -> None:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "capture.jsonl"
+            path.write_text(
+                "\n".join(json.dumps(message) for message in _fixture_messages()),
+                encoding="utf-8-sig",
+            )
+
+            report = analyze_imu_messages(load_jsonl(path))
+
+        self.assertTrue(report["quality_gates_passed"])
+        self.assertEqual(report["message_counts"]["imu_sample"], 40)
+
 
 if __name__ == "__main__":
     unittest.main()

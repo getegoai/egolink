@@ -186,6 +186,35 @@ class BoardBridgeTests(unittest.TestCase):
         self.assertEqual(payload["generated_commands"], 0)
         self.assertEqual(rows[-1]["event_type"], "motion_event")
 
+    def test_cli_consumes_windows_utf8_bom_capture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            boot = root / "boot.jsonl"
+            event_log = root / "events.jsonl"
+            boot.write_text(
+                j({"type": "hello", "device_id": "wearable-node-001", "role": "wearable_node"})
+                + "\n",
+                encoding="utf-8-sig",
+            )
+
+            with redirect_stdout(StringIO()) as output:
+                exit_code = board_bridge_cli.main(
+                    [
+                        "--source",
+                        f"boot={boot}",
+                        "--event-log",
+                        str(event_log),
+                        "--json",
+                    ]
+                )
+            payload = json.loads(output.getvalue())
+            rows = read_jsonl(event_log)
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["stored_events"], 1)
+        self.assertEqual(payload["skipped_lines"], 0)
+        self.assertEqual(rows[0]["event_type"], "board_hello")
+
 
 if __name__ == "__main__":
     unittest.main()

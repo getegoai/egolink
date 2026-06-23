@@ -15,7 +15,9 @@
   TIMU-002 analyzed that window and found identity/orientation sane but sample
   timing below the requested 20 Hz target. TIMU-003 fixed the AMOLED bridge
   scheduler with `vTaskDelayUntil`, captured a 120-sample live QMI8658 window,
-  and measured about `49.99 ms / 20.00 Hz`.
+  and measured about `49.99 ms / 20.00 Hz`. TIMU-004A added a pose/motion
+  analyzer and captured a single live `z_negative` static pose window; pose
+  quality passed for that pose, but multi-pose/motion evidence remains missing.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: M0-INT-001 itself performed no hardware validation. Later
@@ -50,6 +52,7 @@
 - [x] HDBRIDGE-002 AMOLED USB CDC QMI8658 live window
 - [x] TIMU-002 QMI8658 sample quality gate
 - [x] TIMU-003 QMI8658 timing retest
+- [x] TIMU-004A QMI8658 single-pose quality gate
 
 ## Changed files
 
@@ -372,6 +375,22 @@ TIMU-003 QMI8658 timing retest updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+TIMU-004A QMI8658 single-pose quality gate updates:
+
+- `pc_simulator/imu_pose_quality.py`
+- `scripts/analyze_imu_pose_quality.py`
+- `quality_tests/test_imu_pose_quality.py`
+- `pc_simulator/imu_quality.py`
+- `pc_simulator/board_bridge.py`
+- `quality_tests/test_imu_quality.py`
+- `quality_tests/test_board_bridge.py`
+- `quality_tests/test_hardware_sensor_matrix.py`
+- `docs/hardware/TIMU_004_QMI8658_POSE_QUALITY_20260623.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
 
 ```powershell
@@ -550,6 +569,59 @@ Result: passed after TIMU-003. The repository test suite ran 144 tests
 successfully, including the timing-fixed AMOLED bridge firmware contract,
 IMU quality analyzer, updated hardware matrix, and the existing PC/Firmware/M1
 quality gates.
+
+```powershell
+python -m unittest quality_tests.test_imu_pose_quality quality_tests.test_imu_quality -v
+```
+
+Result: passed for TIMU-004A. The pose/motion analyzer and existing IMU quality
+tests ran 10 tests successfully. Coverage includes three-pose quality success,
+single-pose coverage failure, mislabeled pose rejection, motion sanity, report
+generation, and Windows UTF-8 BOM JSONL handling.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM9 flash
+```
+
+Result: passed for TIMU-004A. The current AMOLED bridge firmware was rebuilt
+and flashed to `COM9`; esptool identified ESP32-S3 USB-Serial/JTAG, 8 MB PSRAM,
+MAC `02:00:00:00:00:01`, wrote and verified the image, and hard-reset the
+ESP32-S3-Touch-AMOLED-2.06 board.
+
+```powershell
+python scripts\analyze_imu_quality.py pc_simulator\runtime\timu004-qmi8658-single-pose-live-20260623-203238.jsonl --json --min-samples 100 --title "# TIMU-004 QMI8658 Single Pose Timing Check"
+python scripts\analyze_imu_pose_quality.py --pose z_negative=pc_simulator\runtime\timu004-qmi8658-single-pose-live-20260623-203238.jsonl --json --markdown docs\hardware\TIMU_004_QMI8658_POSE_QUALITY_20260623.md --title "# TIMU-004 QMI8658 Pose Quality Report"
+```
+
+Result: mixed by design for TIMU-004A. The new capture contained 123 JSONL
+records with 120 `imu_sample` records and `amoled_bridge_done`. Timing
+cross-check passed at about `49.99 ms / 20.00 Hz` with `missed_deadlines=0`.
+The single static pose was labeled `z_negative`, measured dominant axis
+`z negative`, mean axes about `[56.63, 22.98, -1030.48] mg`, and conservative
+offset about `[56.6, 23.0, -30.5] mg`. TIMU-004 total quality remains false:
+`pose_count`, `axis_coverage`, `motion_sanity`, and `pose_or_motion_evidence`
+failed because no additional physical pose or rotation/tap window was captured.
+
+```powershell
+python scripts\board_bridge.py --source wearable=pc_simulator\runtime\timu004-qmi8658-single-pose-live-20260623-203238.jsonl --event-log pc_simulator\runtime\timu004-qmi8658-single-pose-live-20260623-203238.events-fixed.jsonl --json
+python scripts\session_recorder.py --event-log pc_simulator\runtime\timu004-qmi8658-single-pose-live-20260623-203238.events-fixed.jsonl --session-id timu004-qmi8658-single-pose-live-20260623-203238 --output-dir pc_simulator\runtime\recordings\timu004-qmi8658-single-pose-live-20260623-203238 --json
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\timu004-qmi8658-single-pose-live-20260623-203238 --json
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\timu004-qmi8658-single-pose-live-20260623-203238 --json
+```
+
+Result: passed for the TIMU-004A M1 loop. PC Bridge stored 123 events with
+0 skipped lines after UTF-8 BOM tolerance was added, the recorder created 120
+`imu_motion` frames, the quality gate passed with score `0.94`, and replay
+passed with 120 `risk_type=none` outputs.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed after TIMU-004A. The repository test suite ran 151 tests
+successfully, including the new QMI8658 pose/motion analyzer, UTF-8 BOM JSONL
+tolerance, updated hardware matrix, and the existing PC/Firmware/M1 quality
+gates.
 
 ```powershell
 idf.py --version
@@ -1214,6 +1286,15 @@ remains `bridge_uplink/unverified` until mounting direction, calibration,
 FIFO/interrupt behavior, power behavior, and a real `platform_imu` backend are
 validated in later tasks.
 
+TIMU-004A added a PC-side pose/motion quality analyzer for QMI8658 captures and
+ran a fresh live single-pose window on `COM9`. The `z_negative` static pose
+passed static quality, label matching, and conservative offset checks with mean
+axes about `[56.63, 22.98, -1030.48] mg`; timing remained about
+`49.99 ms / 20.00 Hz`. TIMU-004 total quality remains false because no operator
+moved the board into additional poses or a rotation/tap window during this run.
+The task also made JSONL consumers tolerant of Windows UTF-8 BOM captures so PC
+Bridge no longer skips the first `hello` line from PowerShell-generated logs.
+
 ## Known gaps
 
 - `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
@@ -1270,8 +1351,10 @@ validated in later tasks.
   sample window. TIMU-002 measured that window and found the static orientation
   plausible, but sample timing was too slow for the requested 20 Hz stream.
   TIMU-003 fixed the sample timing and passed a 120-sample 20 Hz retest, but
-  formal IMU acceptance is still false until mounting direction, calibration,
-  FIFO/interrupt behavior, power behavior, and a real backend PoC pass.
+  formal IMU acceptance is still false. TIMU-004A passed a single `z_negative`
+  pose but did not collect multi-pose or rotation/tap evidence; mounting
+  direction, calibration, FIFO/interrupt behavior, power behavior, and a real
+  backend PoC remain pending.
 - TCAM-001 confirms the standalone camera smoke path, but product firmware
   camera integration remains pending. `platform_camera`, privacy authorization,
   retention/hash manifests, camera power-state control, M1 image recording, and
@@ -1282,9 +1365,11 @@ validated in later tasks.
   FIFO/interrupt behavior, microphone, display/touch downlink, board-to-board
   UART, standalone operation, TF/SD, and dual-board power behavior all require
   later hardware tasks.
-- TIMU-002/TIMU-003 show the current IMU boundary: the bridge now emits a real
-  QMI8658 sample window at about `20 Hz`, but it is still not a formal product
-  IMU source because it remains `bridge_uplink/unverified`.
+- TIMU-002/TIMU-004A show the current IMU boundary: the bridge now emits a real
+  QMI8658 sample window at about `20 Hz` and one `z_negative` static pose is
+  plausible, but it is still not a formal product IMU source because
+  multi-pose/motion evidence is incomplete and the source remains
+  `bridge_uplink/unverified`.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -1311,7 +1396,8 @@ validated in later tasks.
 
 ## Recommended next step
 
-Next, run TIMU-004 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: use the
-TIMU-003 fixed-period sampler to collect multiple static poses or a manual
-rotation/tap window, record axis signs, mounting direction, calibration offset,
-and motion sanity, and only then consider a `platform_imu` real backend PoC.
+Next, run TIMU-004B against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: use
+the TIMU-004A pose/motion analyzer while an operator physically moves the board
+through at least two additional static orientations or one rotation/tap window.
+Only after that evidence passes should a `platform_imu` real backend PoC be
+considered.
