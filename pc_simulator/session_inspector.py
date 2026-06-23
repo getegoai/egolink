@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from pc_simulator import session_annotations
+
 
 REPORT_SCHEMA_VERSION = "egolink.session_quality_report.v0.1"
 EXPECTED_SCHEMA_VERSION = "egolink.session_recording.v0.1"
@@ -171,7 +173,7 @@ def inspect_recording(recording_dir: Path, *, generated_at: str | None = None) -
 
     validate_sensor_frames(sensor_frames, errors, warnings)
     validate_events(events, errors, warnings)
-    validate_annotations(annotations, errors, warnings)
+    validate_annotations(annotations, sensor_frames + events, errors, warnings)
     validate_unique_source_keys(sensor_frames + events, errors)
     validate_seq_and_time(sensor_frames + events, warnings)
 
@@ -191,6 +193,7 @@ def inspect_recording(recording_dir: Path, *, generated_at: str | None = None) -
             "annotations": len(annotations),
             "frame_types": dict(sorted(Counter(str(row.get("frame_type", "unknown")) for row in sensor_frames).items())),
             "event_types": dict(sorted(Counter(str(row.get("event_type", "unknown")) for row in events).items())),
+            **session_annotations.summarize_annotations(annotations),
         },
         "errors": errors,
         "warnings": warnings,
@@ -390,17 +393,38 @@ def validate_events(
 
 def validate_annotations(
     annotations: list[dict[str, Any]],
+    source_rows: list[dict[str, Any]],
     errors: list[dict[str, str]],
     warnings: list[dict[str, str]],
 ) -> None:
     if not annotations:
         warnings.append(make_issue("annotations_empty", "Annotations file is present but empty."))
         return
+    valid_source_keys = {str(row.get("source_event_key")) for row in source_rows if row.get("source_event_key")}
     for index, annotation in enumerate(annotations, start=1):
         prefix = f"annotations[{index}]"
         for field in ["session_id", "source_event_key", "label", "created_at"]:
             if not annotation.get(field):
                 errors.append(make_issue("annotation_missing_field", f"{prefix} is missing `{field}`."))
+        label = annotation.get("label")
+        if label not in session_annotations.ALLOWED_LABELS:
+            errors.append(make_issue("annotation_label", f"{prefix} has unsupported label `{label}`."))
+        source_event_key = annotation.get("source_event_key")
+        if source_event_key and str(source_event_key) not in valid_source_keys:
+            errors.append(
+                make_issue(
+                    "annotation_source_event_key",
+                    f"{prefix} references unknown source_event_key `{source_event_key}`.",
+                )
+            )
+        consent = annotation.get("consent")
+        if not isinstance(consent, dict):
+            errors.append(make_issue("annotation_consent", f"{prefix} consent must be an object."))
+        else:
+            if consent.get("raw_audio_allowed") is not False:
+                errors.append(make_issue("annotation_raw_audio", f"{prefix} raw_audio_allowed must be false."))
+            if consent.get("raw_image_allowed") is not False:
+                errors.append(make_issue("annotation_raw_image", f"{prefix} raw_image_allowed must be false."))
 
 
 def validate_unique_source_keys(rows: list[dict[str, Any]], errors: list[dict[str, str]]) -> None:
@@ -493,6 +517,18 @@ def render_markdown(report: dict[str, Any]) -> str:
     for event_type, count in summary.get("event_types", {}).items():
         lines.append(f"- `{event_type}`: `{count}`")
     if not summary.get("event_types"):
+        lines.append("- None.")
+    lines.extend(["", "## Annotation Labels", ""])
+    if summary.get("annotation_labels"):
+        for label, count in summary["annotation_labels"].items():
+            lines.append(f"- `{label}`: `{count}`")
+    else:
+        lines.append("- None.")
+    lines.extend(["", "## Annotation Outcomes", ""])
+    if summary.get("annotation_outcomes"):
+        for outcome, count in summary["annotation_outcomes"].items():
+            lines.append(f"- `{outcome}`: `{count}`")
+    else:
         lines.append("- None.")
     lines.extend(["", "## Errors", ""])
     if report["errors"]:

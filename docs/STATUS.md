@@ -43,22 +43,26 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T036：M1-004 PC session import / replay 完成。新增 `pc_simulator/session_replay.py` 和 `scripts/replay_session_recording.py`，可对完整性校验通过的 recording 重建 sensor frames / events 时间线，调用现有 RuleRouter，并输出 `session_replay_report.json` / `.md`；质量门失败时默认拒绝回放。
 - HCTX-001：硬件上下文包 v0.3 评估与硬件矩阵更新完成。新增 `docs/hardware/**` 和 `HARDWARE_CONTEXT_PACKAGE_README.md`，验证硬件包 manifest 与采购清单 Excel 结构，修正 P0 上下文路径为 `docs/EGO_LINK_P0_CONTEXT.md`，并把 `docs/modeling/HARDWARE_SENSOR_MATRIX.md` 更新为 HCTX-001 版，补齐接口、驱动、数据能力、功耗控制、真实/Mock 边界、M1 阻塞项和 HARCH-001 审计重点。
 - T038：硬件可用性 smoke 验证完成。新增 `docs/hardware/HARDWARE_USABILITY_VALIDATION.md`，确认 ESP32-S3 `COM4`、SIM7670G `COM6/COM7`、RNDIS、SIM inserted、LTE registered/attached、LAN MQTT 上报、PC 侧 GNSS no-fix `location_report`、recording quality gate 和 replay 均可用；同时明确 GNSS fix、SD、IMU、麦克风、物理 SOS、真实电量和 ESP32 侧 SIM7670G 控制仍未验证。
+- T037：M1-005 最小 session annotation CLI 完成。新增 `pc_simulator/session_annotations.py` 和 `scripts/annotate_session_recording.py`，可列出可标注 target，并向 `annotations.jsonl` 追加 `safe`、`needs_help`、`false_alarm`、`cancelled`、`no_response` 标签；追加后自动刷新 manifest count、summary 和 file manifest 哈希，quality gate / replay report 均可读取 annotation 摘要。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
 
-下一项建议任务仍建议回到 T037 / M1-005：最小 annotation CLI，向已录制 session 的 `annotations.jsonl` 追加人工标签（`safe`、`needs_help`、`false_alarm`、`cancelled`、`no_response`），并让 quality gate / replay report 能读取 annotation 摘要；T038 已证明当前硬件事件可录制和回放，但还没有人工标签闭环。
+下一项建议任务 T039：IMU mock/driver interface 和 ring buffer 骨架。真实 IMU 料号/接线未确认前，只实现接口、环形缓冲契约和 mock 数据边界，不宣称真实运动传感器可用。
 
 ## 后续任务路线
 
 - T035：session 文件哈希与完整性校验，补齐 manifest / quality gate 的数据不可篡改基础。已完成。
 - T036：PC session import / replay，按 recording 重建事件流并调用现有 RuleRouter，验证可回放。已完成。
-- T037：最小 annotation CLI 或本地页面，写入 `safe`、`needs_help`、`false_alarm`、`cancelled`、`no_response`。
+- T037：最小 annotation CLI 或本地页面，写入 `safe`、`needs_help`、`false_alarm`、`cancelled`、`no_response`。已完成 CLI。
 - T038：硬件可用性 smoke / 决策门。已完成当前最小闭环验证；IMU、麦克风、物理 SOS GPIO、SD、真实电量路径和 ESP32 侧 SIM7670G 控制仍保持未验证声明。
 - T039：IMU mock/driver interface 和 ring buffer 骨架；真实 IMU 确认后再接入采样。
 
 ## 最近验证
 
+- `python -m unittest quality_tests.test_session_annotations quality_tests.test_session_inspector quality_tests.test_session_replay -v`：通过，13 个测试全部成功；覆盖 annotation 追加后 manifest/hash 刷新、quality gate 摘要、CLI target index、replay annotation 摘要和既有 inspector/replay 行为。
+- `python scripts\annotate_session_recording.py pc_simulator\runtime\recordings\t038-hardware-usability-smoke --list-targets --json`：通过，只读列出真实 T038 recording 的 12 个可标注 target；其中 index 4 是当前硬件 `sensor_sample/device_health seq=21548`。本次未写入真实用户标签。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，111 个测试全部成功。
 - `python scripts\egolink_board_probe.py --probe-all-sim-ports --esp-listen-seconds 8`：通过，报告为 `reports/board_validation/20260622-181619/probe.md`；ESP32-S3 CH343 为 `COM4`，SIM7670G AT 口 `COM6/COM7` 识别为 `SIM7670G-MNGV`，RNDIS 可见，SIM 已插入，LTE registered/attached 为 true，ESP32 日志观察到 `MQTT_HEARTBEAT_PUBLISH_OK`。
 - `python scripts\sim7670_gnss_probe.py --warmup-seconds 5 --poll-count 3 --poll-interval-seconds 2`：通过，报告为 `reports/gnss_validation/20260622-181804/gnss_probe.md`；`COM6/COM7` AT 可达，`gnss_power_state=1`，室内 no-fix，已写入 `location_report fix=false`。
 - `python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --max-messages 3 --wait-seconds 90 --process-safety --safety-process-limit 30`：通过，收到 3 条开发板 MQTT 消息，包括 `mqtt_status` 和真实固件 `sensor_sample/device_health seq=21548`；Safety 处理写入 `risk_type=none` 的 evaluation。注意开发板连接 LAN broker `192.168.31.250:1883`，不是 loopback broker。

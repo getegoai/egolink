@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 from typing import Any, Mapping
 
-from pc_simulator import safety_companion, session_inspector
+from pc_simulator import safety_companion, session_annotations, session_inspector
 
 
 REPLAY_SCHEMA_VERSION = "egolink.session_replay_report.v0.1"
@@ -122,6 +122,7 @@ def replay_recording(
     manifest = load_json(recording_dir / "session_manifest.json")
     sensor_frames = load_jsonl(recording_dir / "sensor_frames.jsonl")
     events = load_jsonl(recording_dir / "events.jsonl")
+    annotations = load_jsonl(recording_dir / "annotations.jsonl")
     timeline = build_timeline(sensor_frames, events)
 
     state = initial_replay_state(manifest)
@@ -135,6 +136,7 @@ def replay_recording(
         generated_at=generated,
         manifest=manifest,
         quality_report=quality_report,
+        annotations=annotations,
         records=records,
     )
 
@@ -182,6 +184,10 @@ def empty_summary() -> dict[str, Any]:
         "base_commands": 0,
         "risk_types": {},
         "recommended_actions": {},
+        "annotations": 0,
+        "annotation_labels": {},
+        "annotation_outcomes": {},
+        "annotator_types": {},
     }
 
 
@@ -485,14 +491,17 @@ def build_report(
     generated_at: str,
     manifest: Mapping[str, Any],
     quality_report: dict[str, Any],
+    annotations: list[dict[str, Any]],
     records: list[dict[str, Any]],
 ) -> dict[str, Any]:
     replayed = [record for record in records if record.get("replayed")]
     model_outputs = [record["model_output"] for record in replayed]
+    annotation_summary = session_annotations.summarize_annotations(annotations)
     summary = {
         "timeline_records": len(records),
         "sensor_frames": sum(1 for record in records if record.get("source_file") == "sensor_frames"),
         "events": sum(1 for record in records if record.get("source_file") == "events"),
+        "annotations": len(annotations),
         "replayed_inputs": len(replayed),
         "skipped_records": sum(1 for record in records if not record.get("replayed")),
         "model_outputs": len(model_outputs),
@@ -500,6 +509,7 @@ def build_report(
         "base_commands": sum(1 for record in replayed if record.get("base_command") is not None),
         "risk_types": dict(sorted(Counter(output["risk_type"] for output in model_outputs).items())),
         "recommended_actions": dict(sorted(Counter(output["recommended_action"] for output in model_outputs).items())),
+        **annotation_summary,
     }
     return {
         "schema_version": REPLAY_SCHEMA_VERSION,
@@ -539,6 +549,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Timeline records: `{summary['timeline_records']}`",
         f"- Replayed inputs: `{summary['replayed_inputs']}`",
         f"- Skipped records: `{summary['skipped_records']}`",
+        f"- Annotations: `{summary.get('annotations', 0)}`",
         f"- Safety events: `{summary['safety_events']}`",
         f"- Base commands: `{summary['base_commands']}`",
         "",
@@ -554,6 +565,18 @@ def render_markdown(report: dict[str, Any]) -> str:
     if summary.get("recommended_actions"):
         for action, count in summary["recommended_actions"].items():
             lines.append(f"- `{action}`: `{count}`")
+    else:
+        lines.append("- None.")
+    lines.extend(["", "## Annotation Labels", ""])
+    if summary.get("annotation_labels"):
+        for label, count in summary["annotation_labels"].items():
+            lines.append(f"- `{label}`: `{count}`")
+    else:
+        lines.append("- None.")
+    lines.extend(["", "## Annotation Outcomes", ""])
+    if summary.get("annotation_outcomes"):
+        for outcome, count in summary["annotation_outcomes"].items():
+            lines.append(f"- `{outcome}`: `{count}`")
     else:
         lines.append("- None.")
     lines.extend(["", "## Skips", ""])

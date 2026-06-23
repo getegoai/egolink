@@ -26,6 +26,7 @@
 - [x] M1-004 PC session import / replay
 - [x] HCTX-001 hardware context sensor matrix update
 - [x] T038 hardware usability smoke validation
+- [x] T037 M1-005 minimal session annotation CLI
 
 ## Changed files
 
@@ -203,7 +204,44 @@ T038 hardware usability smoke updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+T037 M1-005 session annotation updates:
+
+- `pc_simulator/session_annotations.py`
+- `pc_simulator/session_inspector.py`
+- `pc_simulator/session_replay.py`
+- `scripts/annotate_session_recording.py`
+- `quality_tests/test_session_annotations.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
+
+```powershell
+python -m unittest quality_tests.test_session_annotations quality_tests.test_session_inspector quality_tests.test_session_replay -v
+```
+
+Result: passed. The annotation, inspector, and replay tests ran 13 tests
+successfully. Coverage includes listing annotation targets, appending by
+`source_event_key` or target index, refreshing `session_manifest.json`,
+`session_recording.md`, and `file_manifest.json`, preserving quality-gate file
+integrity, removing the empty-annotations warning once a label exists, and
+surfacing annotation summaries in replay reports.
+
+```powershell
+python scripts\annotate_session_recording.py pc_simulator\runtime\recordings\t038-hardware-usability-smoke --list-targets --json
+```
+
+Result: passed. The command listed 12 annotatable targets from the real T038
+recording in read-only mode. Index 4 is the current hardware
+`sensor_sample/device_health seq=21548`. No real user annotation was written by
+Codex during this smoke validation.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed. The repository test suite ran 111 tests successfully.
 
 ```powershell
 python scripts\egolink_board_probe.py --probe-all-sim-ports --esp-listen-seconds 8
@@ -644,11 +682,13 @@ session artifacts.
 - T032 recorder is a PC event-log derived skeleton, not an ESP32 firmware
   `safety_recorder`. It does not yet provide power-loss recovery,
   sampling-rate statistics, or event-window completeness.
-- Annotations are only an empty `annotations.jsonl` placeholder until M1-005
-  adds user feedback or human labeling.
-- T033/T034/T035/T036 now provide a PC-side quality gate, file integrity, and
-  replay/model-input rebuild path. User annotations, firmware recorder behavior,
-  and a formal trainable session dataset are still pending.
+- T037 adds the minimal PC-side annotation CLI and report summaries, but real
+  user-confirmed labels are still not present until a user or operator applies
+  them to selected sessions.
+- T033/T034/T035/T036/T037 now provide a PC-side quality gate, file integrity,
+  replay/model-input rebuild path, and append-only annotation entry point.
+  Firmware recorder behavior and a formal trainable session dataset are still
+  pending.
 - HCTX-001 identifies M1 data blockers but does not solve them: IMU,
   microphone, physical SOS GPIO, SD storage, true battery/charging telemetry,
   power-state instrumentation, and ESP32-side SIM7670G modem/GNSS control remain
@@ -683,7 +723,7 @@ session artifacts.
 
 ## Recommended next step
 
-Next, return to T037 by adding a minimal annotation CLI for integrity-checked
-recordings. T038 shows the current hardware events can be recorded and replayed;
-the missing piece for M1 data foundation is a human/user label path in
-`annotations.jsonl`.
+Next, start T039 by adding an IMU mock/driver interface and ring-buffer
+skeleton. Because the real IMU part, bus, pins, and mounting direction remain
+unknown, T039 should define interfaces and mock boundaries only, not claim real
+motion sensing.
