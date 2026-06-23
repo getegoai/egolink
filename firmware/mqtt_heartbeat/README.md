@@ -44,6 +44,34 @@ MQTT_SENSOR_PUBLISH_OK seq=<n> ...
 
 The first sensor event is a `sensor_sample` / `device_health` payload. It
 reports ESP32 runtime observations that are available without extra drivers:
-uptime, Wi-Fi RSSI, free heap, minimum free heap, mock battery, mock modem
-state, and mock GNSS state. Later firmware tasks can add real GNSS, power, IMU,
-or button values to the same event channel.
+uptime, Wi-Fi RSSI, free heap, minimum free heap, mock battery/charging from the
+`platform_power` log backend, mock IMU metadata from the `platform_imu` ring
+buffer skeleton, mock modem state, and mock GNSS state. Later firmware tasks can
+add real GNSS, power, IMU, or button values to the same event channel.
+
+`platform_power` is currently a HARCH-002A / HPWR-001 log backend. It emits
+serial log markers such as `PLATFORM_POWER_ENTER`, `PLATFORM_POWER_MARK`, and
+structured `PLATFORM_POWER_EVENT` lines with `state_total_ms`,
+`serial_marker_id`, and `gpio_marker_id=disabled`. MQTT status and
+`sensor_sample` payloads include `battery_source=mock`, `charging_source=mock`,
+`power_state`, `power_state_elapsed_ms`, `power_state_cumulative_ms`,
+`power_marker_seq`, and marker IDs so a later PPK2 capture can be aligned with
+firmware activity.
+
+It does not read a real battery, charger, fuel gauge, sleep state, SIM7670G
+power rail, or GPIO measurement marker yet. The GPIO marker remains disabled;
+no runtime, current, or battery-life claim is valid until an external power
+instrument is connected and its raw capture is saved.
+
+`platform_imu` is currently a T039 mock/driver-interface skeleton. It exposes a
+bounded 32-sample ring buffer, `platform_imu_push_sample`,
+`platform_imu_read_recent`, and a deterministic `mock_stationary` sample path.
+The `sensor_sample` payload includes `imu_source`, `imu_hardware_present=false`,
+`imu_driver_enabled=false`, `imu_sample_mock=true`, ring counts, and latest
+mock accel/gyro fields so the M1 recorder can preserve the future interface
+shape.
+
+This does not prove a real IMU is present, wired, oriented, sampled, calibrated,
+or power-managed. Real accel/gyro data remains unavailable until the IMU part,
+bus, pins, orientation, ODR, FIFO behavior, interrupt strategy, and sample
+quality statistics are verified.

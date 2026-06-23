@@ -22,6 +22,9 @@ static const char *TAG = "egolink_camera_smoke";
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 #define WIFI_MAX_RETRY 8
+#define CAMERA_SMOKE_BOOT_CAPTURE_DELAY_MS 5000
+#define CAMERA_SMOKE_CAPTURE_COUNT 3
+#define CAMERA_SMOKE_CAPTURE_INTERVAL_MS 3000
 
 typedef struct {
     const char *name;
@@ -139,18 +142,19 @@ static esp_err_t init_camera(void)
     return ESP_FAIL;
 }
 
-static esp_err_t capture_once(void)
+static esp_err_t capture_once(uint32_t capture_index)
 {
     camera_fb_t *fb = esp_camera_fb_get();
     if (!fb) {
-        ESP_LOGE(TAG, "CAMERA_SMOKE_CAPTURE_FAIL");
+        ESP_LOGE(TAG, "CAMERA_SMOKE_CAPTURE_FAIL capture_index=%" PRIu32, capture_index);
         return ESP_FAIL;
     }
 
     uint32_t checksum = fnv1a32(fb->buf, fb->len);
     ESP_LOGI(
         TAG,
-        "CAMERA_SMOKE_CAPTURE_OK profile=%s bytes=%u checksum=%08" PRIx32 " width=%u height=%u format=%u jpeg_soi=%02x%02x jpeg_eoi=%02x%02x",
+        "CAMERA_SMOKE_CAPTURE_OK capture_index=%" PRIu32 " profile=%s bytes=%u checksum=%08" PRIx32 " width=%u height=%u format=%u jpeg_soi=%02x%02x jpeg_eoi=%02x%02x",
+        capture_index,
         s_active_profile ? s_active_profile->name : "unknown",
         (unsigned)fb->len,
         checksum,
@@ -163,6 +167,28 @@ static esp_err_t capture_once(void)
         fb->len >= 2 ? fb->buf[fb->len - 1] : 0);
     esp_camera_fb_return(fb);
     return ESP_OK;
+}
+
+static void capture_startup_sequence(void)
+{
+    ESP_LOGI(
+        TAG,
+        "CAMERA_SMOKE_CAPTURE_SEQUENCE delay_ms=%u count=%u interval_ms=%u",
+        CAMERA_SMOKE_BOOT_CAPTURE_DELAY_MS,
+        CAMERA_SMOKE_CAPTURE_COUNT,
+        CAMERA_SMOKE_CAPTURE_INTERVAL_MS);
+    vTaskDelay(pdMS_TO_TICKS(CAMERA_SMOKE_BOOT_CAPTURE_DELAY_MS));
+
+    for (uint32_t i = 1; i <= CAMERA_SMOKE_CAPTURE_COUNT; ++i) {
+        esp_err_t ret = capture_once(i);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "CAMERA_SMOKE_CAPTURE_SEQUENCE_STOP capture_index=%" PRIu32 " error=%s", i, esp_err_to_name(ret));
+            return;
+        }
+        if (i < CAMERA_SMOKE_CAPTURE_COUNT) {
+            vTaskDelay(pdMS_TO_TICKS(CAMERA_SMOKE_CAPTURE_INTERVAL_MS));
+        }
+    }
 }
 
 static esp_err_t root_handler(httpd_req_t *req)
@@ -291,11 +317,11 @@ void app_main(void)
     ESP_ERROR_CHECK(nvs_ret);
 
     if (init_camera() == ESP_OK) {
-        capture_once();
+        capture_startup_sequence();
     }
     start_wifi();
 
-    ESP_LOGI(TAG, "CAMERA_SMOKE_DONE one automatic capture attempted; HTTP /capture remains available if Wi-Fi is configured.");
+    ESP_LOGI(TAG, "CAMERA_SMOKE_DONE startup capture sequence attempted; HTTP /capture remains available if Wi-Fi is configured.");
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(60000));
     }

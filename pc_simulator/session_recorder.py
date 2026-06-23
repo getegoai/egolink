@@ -70,6 +70,19 @@ def default_sensor_sources() -> dict[str, dict[str, Any]]:
             "source": "firmware/camera_smoke",
             "note": "camera smoke is not part of this recorder path",
         },
+        "dual_board_pc_bridge": {
+            "availability": "bridge_uplink",
+            "status": "poc",
+            "source": "pc_simulator/board_bridge.py",
+            "records": ["board_hello", "motion_event", "command_sent"],
+        },
+        "wearable_node_imu": {
+            "availability": "bridge_uplink",
+            "status": "unverified",
+            "source": "ESP32-S3-Touch-AMOLED-2.06 via PC bridge",
+            "records": ["imu_motion"],
+            "note": "Bridge ingress shape only; QMI8658 identity, ODR, jitter, drops, and orientation still require hardware evidence.",
+        },
         "imu": {
             "availability": "not_available",
             "status": "missing_or_unknown",
@@ -207,8 +220,38 @@ def gnss_frame(event: dict[str, Any]) -> dict[str, Any] | None:
     return drop_none(frame)
 
 
+def motion_frame(event: dict[str, Any]) -> dict[str, Any] | None:
+    if event.get("event_type") not in {"motion_event", "imu_sample", "imu_motion"}:
+        return None
+    payload = event.get("payload")
+    if not isinstance(payload, dict):
+        payload = {}
+    frame = compact_base_event(event)
+    frame.update(
+        {
+            "record_type": "sensor_frame",
+            "frame_type": "imu_motion",
+            "source_availability": event.get("source_availability") or "bridge_uplink",
+            "source_status": event.get("source_status") or "unverified",
+            "role": event.get("role"),
+            "bridge_source": event.get("bridge_source"),
+            "sensor_model": event.get("sensor_model") or payload.get("sensor_model"),
+            "imu_source": event.get("imu_source") or payload.get("imu_source") or "bridge_uplink",
+            "monotonic_ms": parse_monotonic_ms(event.get("ts") or event.get("device_monotonic_ms")),
+            "timestamp_ms": event.get("timestamp_ms") or payload.get("timestamp_ms"),
+            "sample_hz": event.get("sample_hz") or payload.get("sample_hz"),
+            "impact_score": payload.get("impact_score"),
+            "fall_score": payload.get("fall_score"),
+            "stationary_seconds": payload.get("stationary_seconds"),
+            "accel_mg": payload.get("accel_mg"),
+            "gyro_mdps": payload.get("gyro_mdps"),
+        }
+    )
+    return drop_none(frame)
+
+
 def sensor_frame_from_event(event: dict[str, Any]) -> dict[str, Any] | None:
-    for builder in (device_health_frame, status_frame, gnss_frame):
+    for builder in (device_health_frame, status_frame, gnss_frame, motion_frame):
         frame = builder(event)
         if frame is not None:
             return frame

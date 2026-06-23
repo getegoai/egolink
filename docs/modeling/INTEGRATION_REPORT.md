@@ -3,10 +3,15 @@
 ## Repository baseline
 
 - Commit: `0bce67b`
-- Firmware framework/version: ESP-IDF firmware directories are present under
-  `firmware/mqtt_heartbeat` and `firmware/camera_smoke`; this shell does not
-  currently have `idf.py` on `PATH`, so no firmware build was executed in this
-  task.
+- Firmware framework/version: ESP-IDF v5.4.2 is available through
+  `C:\Espressif\v5.4.2\esp-idf\export.ps1`; `firmware/mqtt_heartbeat` built
+  successfully for ESP32-S3 during HPWR-001 and was flashed to `COM4` during
+  HDATA-001. The same firmware also built successfully after T039 added
+  `platform_imu`. `firmware/camera_smoke` was flashed to `COM4` during
+  TCAM-001 to collect current camera UART evidence. HDBRIDGE-001 added a
+  PC-only dual-board bridge PoC without live serial hardware I/O. HDBRIDGE-002
+  flashed `firmware/amoled_bridge` to ESP32-S3-Touch-AMOLED-2.06 `COM9` and
+  captured live QMI8658 WHOAMI plus a bounded sample window over USB JSONL.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: no new hardware validation in M0-INT-001. This task only
@@ -27,6 +32,16 @@
 - [x] HCTX-001 hardware context sensor matrix update
 - [x] T038 hardware usability smoke validation
 - [x] T037 M1-005 minimal session annotation CLI
+- [x] HARCH-001 platform coupling audit
+- [x] HARCH-002A minimal platform_power interface
+- [x] HPWR-001 power state events and measurement markers
+- [x] HDATA-001 live HPWR data capture loop
+- [x] T039 IMU mock driver interface and ring buffer
+- [x] T039 IMU mock live MQTT capture and `sensor_task` stack fix
+- [x] TIMU-001 real IMU bring-up evidence gate
+- [x] TCAM-001 camera smoke live capture evidence
+- [x] HDBRIDGE-001 dual-board PC bridge PoC
+- [x] HDBRIDGE-002 AMOLED USB CDC QMI8658 live window
 
 ## Changed files
 
@@ -215,7 +230,361 @@ T037 M1-005 session annotation updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+HARCH-001 platform coupling audit updates:
+
+- `docs/hardware/PLATFORM_COUPLING_AUDIT.md`
+
+HARCH-002A minimal platform_power updates:
+
+- `firmware/mqtt_heartbeat/components/platform_power/CMakeLists.txt`
+- `firmware/mqtt_heartbeat/components/platform_power/include/platform_power.h`
+- `firmware/mqtt_heartbeat/components/platform_power/platform_power.c`
+- `firmware/mqtt_heartbeat/main/CMakeLists.txt`
+- `firmware/mqtt_heartbeat/main/app_main.c`
+- `firmware/mqtt_heartbeat/README.md`
+- `quality_tests/test_platform_power_firmware.py`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
+HPWR-001 power marker updates:
+
+- `firmware/mqtt_heartbeat/components/platform_power/include/platform_power.h`
+- `firmware/mqtt_heartbeat/components/platform_power/platform_power.c`
+- `firmware/mqtt_heartbeat/main/CMakeLists.txt`
+- `firmware/mqtt_heartbeat/main/app_main.c`
+- `firmware/mqtt_heartbeat/README.md`
+- `quality_tests/test_platform_power_firmware.py`
+- `docs/hardware/POWER_MEASUREMENT_SCENARIO_TEMPLATE.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
+HDATA-001 live capture updates:
+
+- `docs/hardware/HDATA_001_LIVE_CAPTURE_20260623.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+- `pc_simulator/runtime/hdata-001-hpwr-live-20260623-0906-events.jsonl`
+- `pc_simulator/runtime/recordings/hdata-001-hpwr-live-20260623-0906/`
+- `reports/board_validation/20260623-090047/probe.md`
+- `reports/gnss_validation/20260623-090637/gnss_probe.md`
+
+T039 IMU mock/ring updates:
+
+- `firmware/mqtt_heartbeat/components/platform_imu/CMakeLists.txt`
+- `firmware/mqtt_heartbeat/components/platform_imu/include/platform_imu.h`
+- `firmware/mqtt_heartbeat/components/platform_imu/platform_imu.c`
+- `firmware/mqtt_heartbeat/main/CMakeLists.txt`
+- `firmware/mqtt_heartbeat/main/app_main.c`
+- `firmware/mqtt_heartbeat/README.md`
+- `quality_tests/test_platform_imu_firmware.py`
+- `docs/hardware/T039_IMU_MOCK_LIVE_CAPTURE_20260623.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+- `pc_simulator/runtime/hdata-001-imu-mock-live-20260623-0926-events.jsonl`
+- `pc_simulator/runtime/recordings/hdata-001-imu-mock-live-20260623-0926/`
+- `reports/board_validation/20260623-092315/probe.md`
+
+TIMU-001 real IMU bring-up evidence gate updates:
+
+- `docs/hardware/TIMU_001_REAL_IMU_BRINGUP_PLAN.md`
+- `quality_tests/test_imu_bringup_plan.py`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
+TCAM-001 camera smoke live capture updates:
+
+- `firmware/camera_smoke/main/app_main.c`
+- `firmware/camera_smoke/README.md`
+- `quality_tests/test_camera_smoke_firmware.py`
+- `docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+- `pc_simulator/runtime/camera-smoke-live-20260623-1842-uart.log`
+
+HDBRIDGE-001 dual-board PC bridge PoC updates:
+
+- `pc_simulator/board_bridge.py`
+- `scripts/board_bridge.py`
+- `quality_tests/test_board_bridge.py`
+- `pc_simulator/session_recorder.py`
+- `pc_simulator/session_inspector.py`
+- `docs/hardware/HDBRIDGE_001_DUAL_BOARD_PC_BRIDGE_POC_20260623.md`
+- `docs/hardware/双板开发架构.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
+HDBRIDGE-002 AMOLED USB CDC QMI8658 live window updates:
+
+- `firmware/amoled_bridge/CMakeLists.txt`
+- `firmware/amoled_bridge/main/CMakeLists.txt`
+- `firmware/amoled_bridge/main/app_main.c`
+- `firmware/amoled_bridge/sdkconfig.defaults`
+- `firmware/amoled_bridge/README.md`
+- `quality_tests/test_amoled_bridge_firmware.py`
+- `docs/hardware/HDBRIDGE_002_AMOLED_QMI8658_LIVE_CAPTURE_20260623.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
+
+```powershell
+python -m unittest quality_tests.test_platform_power_firmware quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_safety_model_firmware -v
+```
+
+Result: passed for HPWR-001. The platform-power, MQTT heartbeat, and firmware
+Safety static tests ran 14 tests successfully. Coverage includes the
+`platform_power` component API, HPWR state vocabulary, structured power-event
+markers, explicit mock battery/charging boundary, main firmware payload
+integration, README caveats, and existing MQTT/Safety firmware contracts.
+
+```powershell
+python -m unittest quality_tests.test_platform_imu_firmware quality_tests.test_platform_power_firmware quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_safety_model_firmware -v
+```
+
+Result: passed for T039 after the live stack fix. The platform-IMU,
+platform-power, MQTT heartbeat, and firmware Safety static tests ran 20 tests
+successfully. Coverage includes the `platform_imu` API, 32-sample ring buffer
+skeleton, explicit mock boundary, main firmware IMU payload fields, sensor
+payload stack protection, README caveats, and existing power/MQTT/Safety
+contracts.
+
+```powershell
+python -m unittest quality_tests.test_hardware_sensor_matrix -v
+```
+
+Result: passed after T039. The hardware matrix tests ran 5 tests successfully,
+including the updated IMU mock/ring boundary and the still-unverified real IMU
+hardware path.
+
+```powershell
+python -m unittest quality_tests.test_imu_bringup_plan -v
+```
+
+Result: passed for TIMU-001. The test covers the real IMU evidence gate,
+candidate IMU paths from local procurement materials, the current mock-only
+T039 payload boundary, and the required conditions before
+`imu_hardware_present=true` or `imu_sample_mock=false` may appear in live data.
+
+```powershell
+python -m unittest quality_tests.test_camera_smoke_firmware -v
+```
+
+Result: passed for TCAM-001. The camera smoke firmware tests ran 4 tests
+successfully. Coverage includes the Waveshare camera pin profile, bounded
+startup capture sequence, JPEG verification fields, and README pass criteria.
+
+```powershell
+python -m unittest quality_tests.test_board_bridge quality_tests.test_session_recorder quality_tests.test_session_inspector -v
+```
+
+Result: passed for HDBRIDGE-001. The bridge, recorder, and inspector tests ran
+12 tests successfully. Coverage includes board `hello` role binding,
+`motion_event` normalization, deterministic `ask_user` / `request_location`
+command records, `imu_motion` frames with `bridge_uplink` availability, and
+quality-gate compatibility.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed after HDBRIDGE-001. The repository test suite ran 136 tests
+successfully, including the new dual-board PC bridge tests and the existing
+camera smoke firmware/documentation contract tests.
+
+```powershell
+python -m unittest quality_tests.test_amoled_bridge_firmware -v
+```
+
+Result: passed for HDBRIDGE-002. The AMOLED bridge firmware tests ran 4 tests
+successfully. Coverage includes the vendor I2C pin map, AXP2101/QMI8658
+addresses, QMI8658 WHOAMI expectation, JSONL output contract, bounded sample
+window, `bridge_uplink/unverified` source status, and conservative AXP2101
+rail bring-up.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py build
+```
+
+Result: passed for HDBRIDGE-002. The build generated
+`egolink_amoled_bridge.bin` for ESP32-S3.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM9 flash
+```
+
+Result: passed for HDBRIDGE-002. esptool identified ESP32-S3 USB-Serial/JTAG,
+8 MB PSRAM, MAC `02:00:00:00:00:01`, wrote the image, verified hashes, and
+hard-reset the board.
+
+```powershell
+python scripts\board_bridge.py --source wearable=pc_simulator\runtime\hdb002-amoled-live-20260623-194454.jsonl --event-log pc_simulator\runtime\hdb002-amoled-live-20260623-194454.events.jsonl --json
+python scripts\session_recorder.py --event-log pc_simulator\runtime\hdb002-amoled-live-20260623-194454.events.jsonl --session-id hdb002-amoled-live-20260623-194454 --output-dir pc_simulator\runtime\recordings\hdb002-amoled-live-20260623-194454 --json
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\hdb002-amoled-live-20260623-194454 --json
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\hdb002-amoled-live-20260623-194454 --json
+```
+
+Result: passed for HDBRIDGE-002 live data. The serial capture contained 43 JSONL
+records: `hello`, `imu_whoami`, 40 `imu_sample` records, and
+`amoled_bridge_done`. PC Bridge stored 43 events with 0 skipped lines, recorder
+created 40 `imu_motion` frames, quality gate passed with score `0.94`, and
+replay passed with 40 `risk_type=none` outputs.
+
+```powershell
+idf.py --version
+```
+
+Result: passed after loading `C:\Espressif\v5.4.2\esp-idf\export.ps1`.
+`idf.py` reported `ESP-IDF v5.4.2`.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py build
+```
+
+Result: passed from `firmware/mqtt_heartbeat`. The ESP32-S3 firmware build
+generated `build\egolink_mqtt_heartbeat.bin`; the app binary size was
+`0xd89d0`, leaving `0x27630` bytes (15%) free in the smallest app partition.
+No flash or serial runtime validation was performed by this command.
+
+T039 rerun result: passed from `firmware/mqtt_heartbeat`. The ESP32-S3 firmware
+build included `platform_imu`, generated `build\egolink_mqtt_heartbeat.bin`,
+and reported app binary size `0xd8fe0`, leaving `0x27020` bytes (15%) free in
+the smallest app partition. A later T039-live flash after the stack fix reported
+app binary size `0xd8ff0`, leaving `0x27010` bytes (15%) free in the smallest
+app partition.
+
+```powershell
+python scripts\egolink_board_probe.py --probe-all-sim-ports --esp-listen-seconds 12
+```
+
+Initial T039 live result: the probe wrote
+`reports/board_validation/20260623-092315/probe.md` and exposed a runtime
+failure before the stack fix. The ESP32 serial log showed `PLATFORM_IMU_SAMPLE`
+followed by `***ERROR*** A stack overflow in task sensor_task has been
+detected.` The fix moved the 1536-byte sensor JSON payload buffer to static
+storage and raised `sensor_task` stack to 6144 bytes.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM4 flash
+```
+
+T039-live result after the stack fix: passed. The ESP32-S3 was detected on
+`COM4`, the bootloader, partition table, and `egolink_mqtt_heartbeat.bin` were
+written and hash-verified, app binary size was `0xd8ff0`, and the board
+hard-reset successfully.
+
+```powershell
+python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --event-log pc_simulator\runtime\hdata-001-imu-mock-live-20260623-0926-events.jsonl --max-messages 10 --wait-seconds 180 --process-safety --safety-process-limit 20
+```
+
+T039-live result: passed. The worker stored 10 live device MQTT messages:
+7 `mqtt_status` frames and 3 `sensor_sample/device_health` frames. The live
+`device_health` samples were `seq=13/17/21` and included RSSI, heap, mock
+battery, HPWR marker fields, and explicit IMU mock metadata:
+`imu_source=mock_stationary`, `imu_hardware_present=false`,
+`imu_driver_enabled=false`, `imu_sample_mock=true`, ring count, and accel/gyro
+mock values. Safety processing evaluated 3 samples as `risk_type=none`.
+
+```powershell
+python scripts\session_recorder.py --event-log pc_simulator\runtime\hdata-001-imu-mock-live-20260623-0926-events.jsonl --session-id hdata-001-imu-mock-live-20260623-0926 --output-dir pc_simulator\runtime\recordings\hdata-001-imu-mock-live-20260623-0926 --json
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\hdata-001-imu-mock-live-20260623-0926 --json
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\hdata-001-imu-mock-live-20260623-0926 --json
+```
+
+T039-live recording result: passed. The clean recorder wrote 13 source events,
+10 sensor frames, and 3 events. The quality gate passed with
+`quality_score=0.94`, `errors=0`, and `warnings=2`; frame types were
+`device_health=3` and `device_status=7`. Replay passed with 10 replayed inputs,
+all `risk_type=none`, and no generated safety events or base commands.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM4 flash
+```
+
+TCAM-001 flash result: passed from `firmware/camera_smoke`. The ESP32-S3 was
+detected on `COM4`, the bootloader, partition table, and
+`egolink_camera_smoke.bin` were written and hash-verified, app binary size was
+`0xdce40`, and the board hard-reset successfully.
+
+```powershell
+esptool.py --chip esp32s3 -p COM4 run
+```
+
+TCAM-001 UART result: passed. The log was saved to
+`pc_simulator/runtime/camera-smoke-live-20260623-1842-uart.log`. The camera was
+identified as OV5640, `CAMERA_SMOKE_INIT_OK` was logged, and the bounded startup
+sequence captured three QVGA JPEG frames:
+
+| Capture | Bytes | Checksum | JPEG SOI | JPEG EOI |
+|---:|---:|---|---|---|
+| 1 | 2893 | `a5db84d7` | `ffd8` | `ffd9` |
+| 2 | 3708 | `94301dec` | `ffd8` | `ffd9` |
+| 3 | 3700 | `7a151b26` | `ffd8` | `ffd9` |
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM4 flash
+```
+
+Result: passed for HDATA-001. The ESP32-S3 was detected on `COM4`, the
+bootloader, partition table, and `egolink_mqtt_heartbeat.bin` were written and
+hash-verified, and the board hard-reset successfully.
+
+```powershell
+python scripts\egolink_board_probe.py --skip-esp-log --probe-all-sim-ports
+```
+
+Result: passed. The report was written to
+`reports/board_validation/20260623-090047/probe.md`. ESP32-S3 CH343 was visible
+as `COM4`; SIM7670G AT identity was reachable on `COM6` and `COM7`; SIM was
+ready; CSQ was `18,0`; LTE registration and packet attachment were true; and
+RNDIS was visible.
+
+```powershell
+python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --event-log pc_simulator\runtime\hdata-001-hpwr-live-20260623-0906-events.jsonl --max-messages 6 --wait-seconds 120 --process-safety --safety-process-limit 20
+```
+
+Result: passed. The worker stored 6 live device MQTT messages into the clean
+HDATA event log: 4 `mqtt_status` frames and 2 `sensor_sample/device_health`
+frames. The live `device_health` samples included RSSI, heap, mock battery
+source fields, and HPWR marker fields such as `POWER_MARKER_000102` and
+`POWER_MARKER_000118`. Safety processing evaluated 2 samples as
+`risk_type=none` and produced no safety events or base commands.
+
+```powershell
+python scripts\sim7670_gnss_probe.py --warmup-seconds 5 --poll-count 3 --poll-interval-seconds 2 --device-id ego-link-001 --event-log pc_simulator\runtime\hdata-001-hpwr-live-20260623-0906-events.jsonl
+```
+
+Result: passed. The report was written to
+`reports/gnss_validation/20260623-090637/gnss_probe.md`. `COM6` and `COM7`
+were AT-reachable, `gnss_power_state=1`, and the indoor query returned no GNSS
+fix. The probe wrote `location_report seq=31 fix=false` into the clean HDATA
+event log.
+
+```powershell
+python scripts\session_recorder.py --event-log pc_simulator\runtime\hdata-001-hpwr-live-20260623-0906-events.jsonl --session-id hdata-001-hpwr-live-20260623-0906 --output-dir pc_simulator\runtime\recordings\hdata-001-hpwr-live-20260623-0906 --json
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\hdata-001-hpwr-live-20260623-0906 --json
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\hdata-001-hpwr-live-20260623-0906 --json
+```
+
+Result: passed. The clean recorder wrote 9 source events, 7 sensor frames, and
+2 events. The quality gate passed with `quality_score=0.94`, `errors=0`, and
+`warnings=2`. Frame types were `device_health=2`, `device_status=4`, and
+`gnss_report=1`. Replay passed with 7 replayed inputs, all `risk_type=none`,
+and no generated safety events or base commands.
 
 ```powershell
 python -m unittest quality_tests.test_session_annotations quality_tests.test_session_inspector quality_tests.test_session_replay -v
@@ -660,6 +1029,66 @@ registered/attached, RNDIS visible, ESP32 MQTT status and device-health samples
 received by the PC, PC-side SIM7670G GNSS no-fix report, and replayable M1
 session artifacts.
 
+HARCH-001, HARCH-002A, and HPWR-001 did not perform new hardware I/O. HARCH-001
+added a read-only platform-coupling audit. HARCH-002A added a minimal firmware
+`platform_power` abstraction. HPWR-001 added structured power-state events,
+cumulative durations, and serial measurement marker IDs. The backend remains
+log/mock-only: `battery=87` and `charging=false` are explicitly mock, GPIO
+markers remain disabled, and no real battery, charger, fuel gauge, sleep mode,
+current measurement, runtime claim, or SIM7670G power control was implemented.
+
+HDATA-001 performed bounded hardware I/O. It flashed the HPWR-001
+`mqtt_heartbeat` firmware to the ESP32-S3, queried SIM7670G AT ports from the
+PC side, subscribed to the LAN MQTT broker, wrote a clean local event log, and
+generated local recording/quality/replay reports. Current live data confirmed
+ESP32 MQTT status frames, ESP32 `sensor_sample/device_health` frames, HPWR
+marker fields in live payloads, and SIM7670G GNSS no-fix reports through the
+PC-side AT probe. It did not capture audio, images, IMU, SD storage, true
+battery telemetry, real current waveforms, calls, SMS, cloud services, or
+ESP32-side SIM7670G control.
+
+T039 performed bounded hardware I/O after the mock/ring implementation: it
+flashed the firmware to ESP32-S3 `COM4`, subscribed to the LAN MQTT broker,
+captured live `sensor_sample/device_health` frames, and generated local
+recording/quality/replay reports. It also exposed and fixed a `sensor_task`
+stack overflow in the first live attempt. The live samples prove only that
+IMU-shaped mock metadata moves through the firmware and M1 PC-side pipeline;
+they do not prove a real IMU is present, wired, oriented, sampled, calibrated,
+interrupting, or power-managed.
+
+TIMU-001 did not perform hardware I/O. It reviewed local hardware context,
+procurement workbook entries, T039 live evidence, and the sensor matrix, then
+created a real IMU bring-up evidence gate. It names `ST STEVAL-MKI227KA
+（LSM6DSV16X）` and `SensorTile.box PRO` as candidate paths, while keeping them
+classified as candidates rather than verified hardware.
+
+TCAM-001 performed bounded hardware I/O. It flashed the standalone
+`camera_smoke` firmware to ESP32-S3 `COM4`, reset the board, and captured UART
+logs for 25 seconds. Current camera evidence confirms OV5640 detection,
+camera init, and three valid QVGA JPEG frame summaries with non-zero byte
+counts, distinct checksums, and `ffd8`/`ffd9` JPEG boundaries. It did not add
+camera capture to `mqtt_heartbeat`, fetch HTTP `/capture`, upload images,
+record images into M1 sessions, or implement privacy, retention, hash, power,
+or VisionGate behavior.
+
+HDBRIDGE-001 did not perform hardware I/O. It added a PC-only dual-board bridge
+for JSONL/stdin sources, normalized `hello` and `motion_event` payloads into the
+existing PC Simulator event log, generated deterministic `command_sent` route
+records, and extended M1 recording with `imu_motion` frames marked
+`source_availability=bridge_uplink` and `source_status=unverified`. It did not
+open live USB CDC serial ports, flash the AMOLED board, probe QMI8658, record
+microphone audio, drive the display/touch UI, validate board-to-board UART, or
+measure dual-board power.
+
+HDBRIDGE-002 performed bounded hardware I/O on the
+ESP32-S3-Touch-AMOLED-2.06 board. It flashed `firmware/amoled_bridge` to
+`COM9`, captured live USB JSONL, verified AXP2101 chip id `0x4A`, verified
+QMI8658 WHOAMI `0x05`, emitted 40 short-window `imu_sample` records with
+`read_errors=0`, and passed PC Bridge, session recording, quality gate, and
+replay. It still marks all IMU data as `bridge_uplink/unverified` and does not
+claim ODR, jitter/drop, orientation, calibration, FIFO/interrupt, microphone,
+display/touch, TF/SD, board-to-board UART, or power validation.
+
 ## Known gaps
 
 - `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
@@ -697,6 +1126,35 @@ session artifacts.
   does not solve GNSS fix, SD mounting, camera integration in the current
   firmware, IMU, microphone, physical SOS GPIO, true battery telemetry, power
   instrumentation, or ESP32-side SIM7670G modem/GNSS control.
+- HARCH-002A/HPWR-001 now build with ESP-IDF v5.4.2, but the power backend is
+  still log/mock-only. Real battery telemetry, charger/fuel-gauge reads, sleep
+  current, GPIO marker waveform alignment, runtime, and battery-life evidence
+  remain pending until instrumented hardware capture is saved.
+- HDATA-001 provides a clean live recording after HPWR flashing, but the
+  available real sensor data is still limited to ESP32 health/status, Wi-Fi
+  RSSI/heap, and PC-side SIM7670G GNSS no-fix. IMU, microphone, physical SOS
+  GPIO, SD persistence, real battery telemetry, camera in the active firmware,
+  and ESP32-side modem/GNSS control remain pending.
+- T039 provides only a mock IMU interface, ring buffer, and live mock payload
+  capture. Real IMU part selection, bus/pin confirmation, orientation, ODR,
+  FIFO, interrupts, calibration, sample-rate statistics, jitter, missing-frame
+  accounting, and power behavior remain pending before any MotionNet or
+  fall/impact claim.
+- TIMU-001 defines the real IMU evidence gate but does not fully satisfy it.
+  HDBRIDGE-002 now provides a live AMOLED QMI8658 identity probe and short
+  sample window, but TIMU-002 must still measure ODR, jitter/drop, orientation,
+  mounting, FIFO/interrupt behavior, calibration, and longer-window quality
+  before any real IMU backend or dataset claim.
+- TCAM-001 confirms the standalone camera smoke path, but product firmware
+  camera integration remains pending. `platform_camera`, privacy authorization,
+  retention/hash manifests, camera power-state control, M1 image recording, and
+  VisionGate must stay unavailable until separate tasks verify them.
+- HDBRIDGE-002 confirms AMOLED live USB JSONL, QMI8658 identity, and a bounded
+  40-sample accel/gyro window through the PC Bridge loop. Formal IMU acceptance
+  remains pending: ODR, jitter/drop, mounting direction, orientation, calibration,
+  FIFO/interrupt behavior, microphone, display/touch downlink, board-to-board
+  UART, standalone operation, TF/SD, and dual-board power behavior all require
+  later hardware tasks.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -723,7 +1181,7 @@ session artifacts.
 
 ## Recommended next step
 
-Next, start T039 by adding an IMU mock/driver interface and ring-buffer
-skeleton. Because the real IMU part, bus, pins, and mounting direction remain
-unknown, T039 should define interfaces and mock boundaries only, not claim real
-motion sensing.
+Next, run TIMU-002 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: measure
+sample timing, ODR, jitter/drop, static orientation, axis signs, longer-window
+completeness, and calibration notes before any `platform_imu` real backend or
+MotionNet data claim is enabled.

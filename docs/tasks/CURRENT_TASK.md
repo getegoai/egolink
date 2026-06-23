@@ -1,65 +1,62 @@
-# CURRENT_TASK: T037 / M1-005 Minimal Session Annotation CLI
+# CURRENT_TASK: HDBRIDGE-002 / AMOLED USB CDC QMI8658 Live Window
 
-## 任务目标
+## Goal
 
-为已录制的 M1 session 增加最小人工/用户标签入口。CLI 应能查看可标注 target，向 `annotations.jsonl` 追加结构化标签，并同步刷新 `session_manifest.json`、`session_recording.md` 和 `file_manifest.json`，保证 quality gate / replay 仍可通过并能读取 annotation 摘要。
+Exercise the `ESP32-S3-Touch-AMOLED-2.06` board as the wearable sensor-node
+candidate by flashing a minimal ESP-IDF firmware, emitting newline-delimited
+JSON over native USB serial, and proving that QMI8658 identity plus a bounded
+sample window can pass through PC Bridge, session recording, quality gate, and
+replay.
 
-## 范围
+## Scope
 
-- 新增 session annotation 库函数，支持 `safe`、`needs_help`、`false_alarm`、`cancelled`、`no_response` 五类标签。
-- 新增 `scripts/annotate_session_recording.py`，支持 `--list-targets`、`--source-event-key`、`--target-index`、`--label`、`--notes` 和 consent/training 选项。
-- 追加 annotation 后自动刷新：
-  - `annotations.jsonl`
-  - `session_manifest.json` 中的 `record_counts.annotations`
-  - `session_recording.md`
-  - `file_manifest.json` 中的 SHA-256 和文件大小。
-- 扩展 quality gate，让 `session_quality_report` 输出 `annotation_labels`、`annotation_outcomes` 和 `annotator_types` 摘要。
-- 扩展 replay report，让 `session_replay_report` 输出 annotation 摘要。
-- 对真实 T038 recording 只运行 `--list-targets`，不替用户创建真实人工标签。
+- Add a dedicated `firmware/amoled_bridge` ESP-IDF app.
+- Use the vendor I2C pin map: SDA GPIO15, SCL GPIO14.
+- Bring up AXP2101 conservatively without disabling unrelated rails.
+- Probe QMI8658 at address `0x6B` and require WHOAMI `0x05`.
+- Emit `hello`, `imu_whoami`, bounded `imu_sample`, and
+  `amoled_bridge_done` JSONL records.
+- Keep all QMI8658 records marked `source_availability=bridge_uplink` and
+  `source_status=unverified`.
+- Feed the captured JSONL through PC Bridge, recording, quality gate, and
+  replay.
+- Document the live evidence and remaining validation boundary.
 
-## 不做
+## Out Of Scope
 
-- 不做 Web 标注页面。
-- 不把 Codex smoke 标签写成用户真实确认标签。
-- 不启动硬件、broker、摄像头、麦克风、拨号或外部服务。
-- 不引入训练流水线，不训练 MotionNet / AudioGate / VisionGate。
-- 不修改正式 `shared/contracts/safety_annotation.schema.json`。
+- No formal IMU acceptance claim.
+- No ODR, jitter, drop-rate, orientation, mounting, calibration, FIFO, or
+  interrupt validation.
+- No microphone capture, AudioGate, TF/SD, display UI, or touch command path.
+- No board-to-board UART direct connection.
+- No battery, fuel-gauge, charger, or power-consumption validation.
+- No MotionNet training or real fall-detection claim.
 
-## 允许修改路径
+## Result
 
-- `pc_simulator/session_annotations.py`
-- `pc_simulator/session_inspector.py`
-- `pc_simulator/session_replay.py`
-- `scripts/annotate_session_recording.py`
-- `quality_tests/test_session_annotations.py`
-- `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- Added `firmware/amoled_bridge/`.
+- Added `quality_tests/test_amoled_bridge_firmware.py`.
+- Flashed `egolink_amoled_bridge.bin` to the AMOLED board on `COM9`.
+- Captured 43 JSONL records at
+  `pc_simulator/runtime/hdb002-amoled-live-20260623-194454.jsonl`.
+- Observed AXP2101 chip id `0x4A` and QMI8658 WHOAMI `0x05`.
+- Captured 40 `imu_sample` records with `read_errors=0` and
+  `not_ready_count=0`.
+- PC Bridge stored 43 events with 0 skipped lines.
+- Session recording produced 40 `imu_motion` sensor frames.
+- Quality gate passed with `quality_score=0.94`.
+- Replay passed with 40 replayed inputs, all `risk_type=none`.
+- Evidence report:
+  `docs/hardware/HDBRIDGE_002_AMOLED_QMI8658_LIVE_CAPTURE_20260623.md`.
 
-## 验证命令
+## Done When
 
-```powershell
-python -m unittest quality_tests.test_session_annotations quality_tests.test_session_inspector quality_tests.test_session_replay -v
-python scripts\annotate_session_recording.py pc_simulator\runtime\recordings\t038-hardware-usability-smoke --list-targets --json
-powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
-```
-
-## 执行结果
-
-- 已新增 `pc_simulator/session_annotations.py`，实现 target 列表、annotation 构建、追加写入、manifest/summary/file manifest 刷新和 annotation 摘要统计。
-- 已新增 `scripts/annotate_session_recording.py`。
-- 已扩展 `pc_simulator/session_inspector.py`，quality report 可读取 annotation 标签、结果和标注者类型摘要；有 annotation 时不再产生 `annotations_empty` warning。
-- 已扩展 `pc_simulator/session_replay.py`，replay report 可读取 annotation 摘要。
-- 已新增 `quality_tests/test_session_annotations.py`，覆盖追加 annotation 后质量门通过、哈希不失效、CLI 通过 index 追加、replay report 读取摘要。
-- 已对真实 T038 recording 运行只读 target 列表，确认 index 4 为 `sensor_sample/device_health seq=21548`；未写入真实用户标签。
-
-## 完成标准
-
-- [x] CLI 可列出可标注 target。
-- [x] CLI 可通过 source key 或 target index 追加 annotation。
-- [x] 追加 annotation 后 manifest count 和 file manifest hash 自动刷新。
-- [x] Quality gate 可读取 annotation 摘要并保持通过。
-- [x] Replay report 可读取 annotation 摘要。
-- [x] 不伪造真实用户标签。
-- [x] Focused 测试通过。
-- [x] 全量验证通过。
+- [x] AMOLED firmware builds.
+- [x] AMOLED board flashes over native USB Serial/JTAG.
+- [x] USB serial JSONL includes `hello`.
+- [x] QMI8658 WHOAMI returns expected `0x05`.
+- [x] Bounded IMU sample window emits real I2C accel/gyro values.
+- [x] PC Bridge ingests the JSONL without skipped lines.
+- [x] Recorder emits `imu_motion` frames from the captured samples.
+- [x] Quality gate passes without marking IMU as verified.
+- [x] Replay passes from the resulting recording.

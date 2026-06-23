@@ -19,7 +19,7 @@ or power tests; it uses the latest checked-in evidence.
 | SIM7670G USB identity and LTE attach | `pc_side_verified` | `reports/board_validation/20260622-181619/probe.md` shows `COM6` / `COM7` model `SIM7670G-MNGV`, SIM inserted, registered, attached. | Verified through PC USB AT ports, not through ESP32 firmware control. |
 | SIM7670G GNSS query | `pc_side_verified` | `reports/gnss_validation/20260622-181804/gnss_probe.md`; `scripts/sim7670_gnss_probe.py`. | GNSS can be queried from the PC and currently reports indoor no-fix. No real lat/lon, speed, accuracy, or fix-age dataset exists yet. |
 | RNDIS | `pc_side_verified` | `reports/board_validation/20260622-181619/probe.md`. | Useful for diagnostics only. Product path cannot depend on the PC RNDIS interface. |
-| Camera single frame | `semi_verified` | `firmware/camera_smoke/main/app_main.c`; `firmware/camera_smoke/README.md`; historical T011 status. | Camera smoke is a separate firmware app. Current `mqtt_heartbeat` firmware does not capture images. |
+| Camera smoke frames | `semi_verified` | `docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md`; `firmware/camera_smoke/main/app_main.c`; `firmware/camera_smoke/README.md`. | Camera smoke is a separate firmware app. Current `mqtt_heartbeat` firmware does not capture images. |
 | M1 recording, quality gate, replay | `verified` on PC | `pc_simulator/session_recorder.py`, `pc_simulator/session_inspector.py`, `pc_simulator/session_replay.py`; T038 recording quality/replay reports. | PC event-log derived, not an ESP32 firmware recorder. |
 | Annotation CLI | `verified` on PC | `pc_simulator/session_annotations.py`; `scripts/annotate_session_recording.py`; T037 tests. | No real user-confirmed labels exist until an operator applies them. |
 | Safety Companion M0 firmware interface | `semi_verified` | `firmware/mqtt_heartbeat/components/safety_model/*`; firmware static tests. | Deterministic mock/rule baseline. It does not prove real incident detection. |
@@ -60,7 +60,8 @@ around one concern at a time.
 
 ### 2.2 Firmware camera smoke app
 
-`firmware/camera_smoke/main/app_main.c` verifies a camera path, but it is not a
+`firmware/camera_smoke/main/app_main.c` verifies a camera path and TCAM-001
+captured three OV5640 QVGA JPEG frame summaries over UART, but it is not a
 portable camera service:
 
 - Camera pin profile, `esp_camera_init`, frame capture, checksum logging,

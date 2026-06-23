@@ -1,6 +1,6 @@
 # Ego Link 状态记录
 
-更新时间：2026-06-22
+更新时间：2026-06-23
 
 ## 当前阶段
 
@@ -44,11 +44,21 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - HCTX-001：硬件上下文包 v0.3 评估与硬件矩阵更新完成。新增 `docs/hardware/**` 和 `HARDWARE_CONTEXT_PACKAGE_README.md`，验证硬件包 manifest 与采购清单 Excel 结构，修正 P0 上下文路径为 `docs/EGO_LINK_P0_CONTEXT.md`，并把 `docs/modeling/HARDWARE_SENSOR_MATRIX.md` 更新为 HCTX-001 版，补齐接口、驱动、数据能力、功耗控制、真实/Mock 边界、M1 阻塞项和 HARCH-001 审计重点。
 - T038：硬件可用性 smoke 验证完成。新增 `docs/hardware/HARDWARE_USABILITY_VALIDATION.md`，确认 ESP32-S3 `COM4`、SIM7670G `COM6/COM7`、RNDIS、SIM inserted、LTE registered/attached、LAN MQTT 上报、PC 侧 GNSS no-fix `location_report`、recording quality gate 和 replay 均可用；同时明确 GNSS fix、SD、IMU、麦克风、物理 SOS、真实电量和 ESP32 侧 SIM7670G 控制仍未验证。
 - T037：M1-005 最小 session annotation CLI 完成。新增 `pc_simulator/session_annotations.py` 和 `scripts/annotate_session_recording.py`，可列出可标注 target，并向 `annotations.jsonl` 追加 `safe`、`needs_help`、`false_alarm`、`cancelled`、`no_response` 标签；追加后自动刷新 manifest count、summary 和 file manifest 哈希，quality gate / replay report 均可读取 annotation 摘要。
+- HARCH-001：平台耦合审计完成。新增 `docs/hardware/PLATFORM_COUPLING_AUDIT.md`，盘点 ESP32-S3、SIM7670G、GNSS、摄像头、IMU、麦克风、SD、电池/电量计、功耗标记和 M1 PC 闭环的真实/Mock 边界，并明确 HARCH-002A 建议从 `platform_power` 开始。
+- HARCH-002A：最小 `platform_power` 接口完成。新增 `firmware/mqtt_heartbeat/components/platform_power` log/mock 后端，主固件通过 snapshot 输出 mock battery/charging source 和 `power_state`，并输出串口 power marker；未实现真实电池、电量计、睡眠、GPIO marker 或 SIM7670G 电源控制。
+- HPWR-001：功耗状态事件和测量标记完成。`platform_power` 现在输出结构化 `PLATFORM_POWER_EVENT` 日志、状态累计时长、`POWER_MARKER_<seq>` 串口 marker，并在 MQTT status / sensor payload 中带出 power elapsed/cumulative/marker 字段；GPIO marker 仍显式为 disabled，未声明任何真实电流、续航或电池数据。
+- HDATA-001：HPWR 固件 live 数据采集闭环完成。已刷写 `firmware/mqtt_heartbeat` 到 ESP32-S3 `COM4`，用独立 event log 收到 4 条 `mqtt_status`、2 条真实 `sensor_sample/device_health` 和 1 条 PC 侧 SIM7670G `location_report no_fix`；clean recording 质量门 PASS `quality_score=0.94`，replay PASS，7 个输入均为 `risk_type=none`。证据摘要见 `docs/hardware/HDATA_001_LIVE_CAPTURE_20260623.md`。
+- T039：IMU mock/driver interface 和 ring buffer 骨架完成。新增 `firmware/mqtt_heartbeat/components/platform_imu`，提供 32 样本 ring buffer、mock stationary accel/gyro sample、snapshot 和 recent-read API；`sensor_sample/device_health` 现在可带出 `imu_source`、ring count、latest seq、mock accel/gyro 字段。真实 IMU 料号、总线、引脚、方向、ODR、FIFO、中断和采样质量仍未验证。
+- T039-live：IMU mock payload 真板采集完成。首次 T039 烧录暴露 `sensor_task` 栈溢出，已通过静态 sensor JSON buffer 和 `sensor_task` 6144 stack 修复；随后 ESP32-S3 `COM4` 烧录成功，live MQTT 收到 7 条 `mqtt_status` 和 3 条 `sensor_sample/device_health`，样本带出 `imu_source=mock_stationary`、`imu_hardware_present=false`、`imu_driver_enabled=false`、`imu_sample_mock=true`、ring count 和 accel/gyro mock 数值；quality gate PASS `0.94`，replay PASS。证据摘要见 `docs/hardware/T039_IMU_MOCK_LIVE_CAPTURE_20260623.md`。
+- TIMU-001：真实 IMU bring-up 证据门完成。新增 `docs/hardware/TIMU_001_REAL_IMU_BRINGUP_PLAN.md`，确认当前 Waveshare ESP32-S3-SIM7670G-4G P0 setup 没有仓库证据证明真实 IMU 已存在/接线/采样；采购清单候选为 `ST STEVAL-MKI227KA（LSM6DSV16X）` 和 `SensorTile.box PRO`，但二者仍是候选/数据采集路径，不是已验证产品 BOM；文档定义了后续设置 `imu_hardware_present=true`、`imu_driver_enabled=true`、`imu_sample_mock=false` 前必须满足的身份探测、接线、ODR、FIFO/中断、样本率、quality gate 和 replay 门槛。
+- TCAM-001：摄像头 smoke live capture 完成。`firmware/camera_smoke` 已改为启动后延迟 5 秒并连续采集 3 帧，ESP32-S3 `COM4` 实机刷写通过；UART 证据显示摄像头识别为 OV5640，采集到 3 张 QVGA JPEG，bytes 分别为 `2893/3708/3700`，checksum 分别为 `a5db84d7/94301dec/7a151b26`，SOI/EOI 均为 `ffd8/ffd9`。证据摘要见 `docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md`。
+- HDBRIDGE-001：双板 PC Bridge PoC 完成。新增 `pc_simulator/board_bridge.py` 和 `scripts/board_bridge.py`，支持 JSONL/stdin 形式的 `wearable_node` / `connectivity_node` `hello` 绑定、`motion_event` 归一化、撞击/跌倒阈值下的 `ask_user` / `request_location` 下行命令记录，以及 M1 recorder 的 `imu_motion` frame；该 frame 显式标为 `source_availability=bridge_uplink`、`source_status=unverified`，不声明 AMOLED 板 QMI8658 已真实验证。证据摘要见 `docs/hardware/HDBRIDGE_001_DUAL_BOARD_PC_BRIDGE_POC_20260623.md`。
+- HDBRIDGE-002：AMOLED 板 USB CDC + QMI8658 最小样本窗口完成。新增 `firmware/amoled_bridge`，ESP32-S3-Touch-AMOLED-2.06 `COM9` 实机刷写通过，USB JSONL 捕获 1 条 `hello`、1 条 `imu_whoami`、40 条 `imu_sample` 和 1 条 `amoled_bridge_done`；AXP2101 chip id `0x4A`，QMI8658 WHOAMI `0x05`，`read_errors=0`，`not_ready_count=0`。PC Bridge 存储 43 条事件，recording 生成 40 条 `imu_motion` frame，quality gate PASS `0.94`，replay PASS。证据摘要见 `docs/hardware/HDBRIDGE_002_AMOLED_QMI8658_LIVE_CAPTURE_20260623.md`；IMU 仍标记 `bridge_uplink/unverified`，不是正式 IMU 验收。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
 
-下一项建议任务 T039：IMU mock/driver interface 和 ring buffer 骨架。真实 IMU 料号/接线未确认前，只实现接口、环形缓冲契约和 mock 数据边界，不宣称真实运动传感器可用。
+下一项建议任务：TIMU-002 QMI8658 样本质量与安装方向验证。基于 HDBRIDGE-002 已打通的 AMOLED USB JSONL，继续验证 ODR、PC 接收间隔、jitter/drop、静置方向、轴向符号、短窗口完整率和后续 `platform_imu` 真实后端边界；通过前仍不得把 IMU 标为正式已验收或用于 MotionNet 训练。
 
 ## 后续任务路线
 
@@ -56,10 +66,50 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - T036：PC session import / replay，按 recording 重建事件流并调用现有 RuleRouter，验证可回放。已完成。
 - T037：最小 annotation CLI 或本地页面，写入 `safe`、`needs_help`、`false_alarm`、`cancelled`、`no_response`。已完成 CLI。
 - T038：硬件可用性 smoke / 决策门。已完成当前最小闭环验证；IMU、麦克风、物理 SOS GPIO、SD、真实电量路径和 ESP32 侧 SIM7670G 控制仍保持未验证声明。
-- T039：IMU mock/driver interface 和 ring buffer 骨架；真实 IMU 确认后再接入采样。
+- HARCH-001：审计 ESP32/SIM7670G 平台耦合。已完成。
+- HARCH-002：每次只抽象一个硬件接口。首个切片 HARCH-002A `platform_power` 已完成。
+- HPWR-001：加入功耗状态和测量标记。已完成 log/mock 事件、累计时长、串口 marker 和场景模板；真实 GPIO marker、电流、续航仍未验证。
+- HDATA-001：继续 M1 真实数据采集闭环。已完成 HPWR 固件刷写后的 clean live capture、GNSS no-fix probe、T039 IMU mock live payload capture、recording quality gate 和 replay；后续可扩展户外 GNSS fix、真实 IMU、麦克风、SD 和功耗仪器采集。
+- T039：IMU mock/driver interface 和 ring buffer 骨架。已完成并完成 mock payload 真板 MQTT 采集；真实 IMU 确认后再接入采样。
+- TIMU-001：真实 IMU bring-up 证据门。已完成；HDBRIDGE-002 已确认 AMOLED 板 QMI8658 身份和短窗口样本，下一步 TIMU-002 可基于该路径继续做 ODR、jitter/drop、方向、FIFO/中断和校准验收。
+- TCAM-001：摄像头 smoke live capture。已完成 3 帧真实 JPEG UART 证据；后续如要进入产品路径，需要单独做 `platform_camera`、隐私授权、hash/retention、功耗状态和按需采集。
+- HDBRIDGE-001：双板 PC Bridge PoC。已完成 PC-only 消息桥、命令记录和 `imu_motion` recording 入口。
+- HDBRIDGE-002：AMOLED USB CDC + QMI8658 最小样本窗口。已完成 live `hello`、QMI8658 WHOAMI、40 条真实 I2C 样本、PC Bridge、recording、quality gate 和 replay；后续 TIMU-002 再做 ODR/jitter/drop/orientation/校准等正式 IMU 验收门。
 
 ## 最近验证
 
+- `python -m unittest quality_tests.test_amoled_bridge_firmware -v`：通过，4 个测试全部成功；覆盖 AMOLED I2C pin map、AXP2101/QMI8658 地址和 WHOAMI、JSONL 输出契约、短窗口边界、`bridge_uplink/unverified` 标记和保守 AXP2101 上电策略。
+- `. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py build`：HDBRIDGE-002 通过，生成 `egolink_amoled_bridge.bin`。
+- `. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM9 flash`：HDBRIDGE-002 通过，识别 ESP32-S3 `USB-Serial/JTAG`、PSRAM 8MB、MAC `02:00:00:00:00:01`，写入并校验 AMOLED bridge 固件，hard reset 成功。
+- 读取 `COM9` 30 秒：通过，日志写入 `pc_simulator/runtime/hdb002-amoled-live-20260623-194454.jsonl`；捕获 43 条 JSONL，其中 QMI8658 WHOAMI `0x05`，40 条 `imu_sample`，`samples_emitted=40`、`read_errors=0`、`not_ready_count=0`。
+- `python scripts\board_bridge.py --source wearable=pc_simulator\runtime\hdb002-amoled-live-20260623-194454.jsonl --event-log pc_simulator\runtime\hdb002-amoled-live-20260623-194454.events.jsonl --json`：通过，PC Bridge 存储 43 条事件、跳过 0 行。
+- `python scripts\session_recorder.py --event-log pc_simulator\runtime\hdb002-amoled-live-20260623-194454.events.jsonl --session-id hdb002-amoled-live-20260623-194454 --output-dir pc_simulator\runtime\recordings\hdb002-amoled-live-20260623-194454 --json`：通过，生成 40 条 `imu_motion` sensor frames。
+- `python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\hdb002-amoled-live-20260623-194454 --json`：通过，quality gate PASS，`quality_score=0.94`、`errors=0`、`warnings=2`。
+- `python scripts\replay_session_recording.py pc_simulator\runtime\recordings\hdb002-amoled-live-20260623-194454 --json`：通过，replay PASS，40 条输入全部为 `risk_type=none`，未生成 `safety_event` 或 `base_command`。
+- `python -m unittest quality_tests.test_board_bridge quality_tests.test_session_recorder quality_tests.test_session_inspector -v`：通过，12 个测试全部成功；覆盖双板 `hello` 角色绑定、`motion_event` 路由命令、`imu_motion` bridge frame、recorder 和 quality gate。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：HDBRIDGE-001 后通过，136 个测试全部成功；包含新增双板 PC Bridge、既有摄像头 smoke、PC/Firmware/Safety/M1 质量门测试。
+- `python -m unittest quality_tests.test_camera_smoke_firmware -v`：通过，4 个测试全部成功；覆盖 Waveshare 摄像头 pin map、启动延迟/3 帧采样序列、JPEG 可核验日志字段和 README pass criteria。
+- `. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM4 flash`：TCAM-001 通过，识别 ESP32-S3，写入并校验 `egolink_camera_smoke.bin`，app binary size `0xdce40`，hard reset 成功。
+- `esptool.py --chip esp32s3 -p COM4 run` 后读取 COM4 25 秒：通过，日志写入 `pc_simulator/runtime/camera-smoke-live-20260623-1842-uart.log`；识别 OV5640，`CAMERA_SMOKE_INIT_OK`，并采集 3 帧 QVGA JPEG，bytes `2893/3708/3700`、checksum `a5db84d7/94301dec/7a151b26`、SOI/EOI `ffd8/ffd9`。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，133 个测试全部成功；包含新增 TCAM-001 摄像头 smoke 固件/文档合同测试和既有 PC/Firmware/Safety/M1 质量门测试。
+- `python -m unittest quality_tests.test_platform_imu_firmware quality_tests.test_platform_power_firmware quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_safety_model_firmware -v`：通过，20 个测试全部成功；覆盖 `platform_imu` API、ring buffer、mock 边界、主固件 payload 字段、sensor payload 栈保护、README caveat，以及既有 power/MQTT/Safety 固件静态契约。
+- `python -m unittest quality_tests.test_imu_bringup_plan -v`：通过，覆盖 TIMU-001 文档、当前真实 IMU 不可用边界、`ST STEVAL-MKI227KA（LSM6DSV16X）` / `SensorTile.box PRO` 候选路径，以及 `imu_hardware_present=true` / `imu_sample_mock=false` 前置门槛。
+- `. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM4 flash`：T039-live 修复后通过，识别 ESP32-S3，写入并校验 `egolink_mqtt_heartbeat.bin`，app binary size `0xd8ff0`，hard reset 成功。
+- `python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --event-log pc_simulator\runtime\hdata-001-imu-mock-live-20260623-0926-events.jsonl --max-messages 10 --wait-seconds 180 --process-safety --safety-process-limit 20`：通过，收到 10 条真实设备 MQTT 消息；其中 3 条 `sensor_sample/device_health seq=13/17/21` 带出 RSSI、heap、mock battery、HPWR marker 和 `imu_*` mock/ring 字段，Safety 处理 3 条样本且均为 `risk_type=none`。
+- `python scripts\session_recorder.py --event-log pc_simulator\runtime\hdata-001-imu-mock-live-20260623-0926-events.jsonl --session-id hdata-001-imu-mock-live-20260623-0926 --output-dir pc_simulator\runtime\recordings\hdata-001-imu-mock-live-20260623-0926 --json`：通过，生成 clean recording：13 条 source events、10 条 sensor frames、3 条 events。
+- `python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\hdata-001-imu-mock-live-20260623-0926 --json`：通过，quality gate PASS，`quality_score=0.94`、`errors=0`、`warnings=2`，frame types 为 `device_health=3`、`device_status=7`。
+- `python scripts\replay_session_recording.py pc_simulator\runtime\recordings\hdata-001-imu-mock-live-20260623-0926 --json`：通过，replay PASS，10 条 replayed inputs 全部为 `risk_type=none`，未生成 `safety_event` 或 `base_command`。
+- `python -m unittest quality_tests.test_hardware_sensor_matrix -v`：通过，5 个测试全部成功；覆盖硬件矩阵中的 mock/unknown 边界、证据路径和 M1 阻塞项。
+- `. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM4 flash`：通过，识别 ESP32-S3，写入并校验 `egolink_mqtt_heartbeat.bin`，hard reset 成功。
+- `python scripts\egolink_board_probe.py --skip-esp-log --probe-all-sim-ports`：通过，报告为 `reports/board_validation/20260623-090047/probe.md`；ESP32-S3 CH343 为 `COM4`，SIM7670G AT 身份在 `COM6/COM7` 可达，SIM ready，CSQ `18,0`，LTE registered/attached 为 true，RNDIS 可见。
+- `python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --event-log pc_simulator\runtime\hdata-001-hpwr-live-20260623-0906-events.jsonl --max-messages 6 --wait-seconds 120 --process-safety --safety-process-limit 20`：通过，收到 6 条真实设备 MQTT 消息；其中 `sensor_sample/device_health seq=25/29` 带出 RSSI、heap、mock battery 和 HPWR marker 字段，Safety 处理 2 条样本且均为 `risk_type=none`。
+- `python scripts\sim7670_gnss_probe.py --warmup-seconds 5 --poll-count 3 --poll-interval-seconds 2 --device-id ego-link-001 --event-log pc_simulator\runtime\hdata-001-hpwr-live-20260623-0906-events.jsonl`：通过，报告为 `reports/gnss_validation/20260623-090637/gnss_probe.md`；`COM6/COM7` AT 可达，`gnss_power_state=1`，室内 no-fix，并写入 `location_report seq=31 fix=false`。
+- `python scripts\session_recorder.py --event-log pc_simulator\runtime\hdata-001-hpwr-live-20260623-0906-events.jsonl --session-id hdata-001-hpwr-live-20260623-0906 --output-dir pc_simulator\runtime\recordings\hdata-001-hpwr-live-20260623-0906 --json`：通过，生成 clean recording：9 条 source events、7 条 sensor frames、2 条 events。
+- `python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\hdata-001-hpwr-live-20260623-0906 --json`：通过，quality gate PASS，`quality_score=0.94`、`errors=0`、`warnings=2`，frame types 为 `device_health=2`、`device_status=4`、`gnss_report=1`。
+- `python scripts\replay_session_recording.py pc_simulator\runtime\recordings\hdata-001-hpwr-live-20260623-0906 --json`：通过，replay PASS，7 条 replayed inputs 全部为 `risk_type=none`，未生成 `safety_event` 或 `base_command`。
+- `python -m unittest quality_tests.test_platform_power_firmware quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_safety_model_firmware -v`：通过，14 个测试全部成功；覆盖 `platform_power` 组件、HPWR marker、mock battery 边界、主固件接入、README 边界声明和既有 MQTT/Safety 固件静态契约。
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，127 个测试全部成功。
+- `. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py build`：通过，`firmware/mqtt_heartbeat` 生成包含 `platform_imu` 的 ESP32-S3 固件镜像，app binary size `0xd8fe0`。
 - `python -m unittest quality_tests.test_session_annotations quality_tests.test_session_inspector quality_tests.test_session_replay -v`：通过，13 个测试全部成功；覆盖 annotation 追加后 manifest/hash 刷新、quality gate 摘要、CLI target index、replay annotation 摘要和既有 inspector/replay 行为。
 - `python scripts\annotate_session_recording.py pc_simulator\runtime\recordings\t038-hardware-usability-smoke --list-targets --json`：通过，只读列出真实 T038 recording 的 12 个可标注 target；其中 index 4 是当前硬件 `sensor_sample/device_health seq=21548`。本次未写入真实用户标签。
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`：通过，111 个测试全部成功。
@@ -133,10 +183,11 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - M1 数据基础已开始于硬件传感器矩阵；当前没有真实 MotionNet、AudioGate、VisionGate，也没有可用于训练的正式 session 数据集。
 - T032 recorder 是 PC event-log 派生骨架，不是固件内 `safety_recorder`；它尚未实现掉电恢复、窗口完整率或采样率统计。
 - T033/T034/T035/T036 已提供 PC 侧质量门、文件完整性和 replay/model-input rebuild；但固件 recorder、用户标注和可训练正式 session 数据集仍未实现。
-- 当前 IMU、麦克风、真实物理 SOS GPIO、SD 挂载、真实电量/充电和 ESP32 侧 SIM7670G 控制链路仍未验证，不能作为 M1 recorder 的真实传感源声明。
+- 当前 P0 4G 主控板 IMU、AMOLED QMI8658 正式验收、麦克风、真实物理 SOS GPIO、SD 挂载、真实电量/充电和 ESP32 侧 SIM7670G 控制链路仍未验证，不能作为 M1 recorder 的正式真实传感源声明。
 - 当前 T021 是 PC 侧通过 USB AT 口探测 SIM7670G GNSS，尚未把 ESP32 固件切换为直接控制 SIM7670G GNSS。
 - SD 卡挂载曾失败，需要单独确认格式、接线、引脚、供电和固件挂载参数。
 - 用户已确认当前 Wi-Fi 凭据可以在本机项目中明文保存，固件 `sdkconfig` 可保留 SSID/password。
 - 当前 shell 不是管理员权限，无法修改 `C:\Program Files\mosquitto\mosquitto.conf`；因此系统服务仍只监听本机回环地址，局域网访问由用户态 Mosquitto 进程提供。
-- 当前开发板已从 camera smoke 固件切换为 MQTT heartbeat 固件；如需继续看 HTTP 摄像头照片，需要重新烧录 `firmware/camera_smoke`。
+- 当前开发板已从 MQTT heartbeat 固件切换为 camera smoke 固件（指 Waveshare ESP32-S3-SIM7670G-4G）；如需恢复 MQTT 心跳、M1 live worker 或 IMU mock payload，需要重新烧录 `firmware/mqtt_heartbeat`。
+- 当前 ESP32-S3-Touch-AMOLED-2.06 开发板已从出厂/示例固件切换为 `firmware/amoled_bridge`；HDBRIDGE-002 已验证 USB CDC JSONL、QMI8658 WHOAMI 和 40 条短窗口样本，但尚未验证真实样本率、抖动、丢帧、安装方向、校准、FIFO/中断、麦克风音频、屏幕触摸下行命令、TF/SD、功耗或两板直连 UART。
 - Windows 侧 SIM7670G RNDIS 网卡可获得 `192.168.0.100/24` 和默认网关 `192.168.0.1`，但从电脑指定该源地址 ping/curl 外网仍超时；当前 4G 可用性以模块 AT TCP/IP 栈验证为准。

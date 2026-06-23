@@ -51,6 +51,8 @@ REQUIRED_SENSOR_SOURCES = {
     "mock_gnss",
     "safety_companion_m0",
     "camera_single_frame",
+    "dual_board_pc_bridge",
+    "wearable_node_imu",
     "imu",
     "microphone",
     "physical_sos_gpio",
@@ -65,8 +67,8 @@ DISALLOWED_REAL_SOURCES = {
     "sd_storage",
     "esp32_side_sim7670g_control",
 }
-ALLOWED_FRAME_TYPES = {"device_status", "device_health", "gnss_report"}
-ALLOWED_FRAME_AVAILABILITY = {"real", "pc_side_probe"}
+ALLOWED_FRAME_TYPES = {"device_status", "device_health", "gnss_report", "imu_motion"}
+ALLOWED_FRAME_AVAILABILITY = {"real", "pc_side_probe", "bridge_uplink"}
 ALLOWED_EVENT_TYPES = {
     "sos_pressed",
     "wake_detected",
