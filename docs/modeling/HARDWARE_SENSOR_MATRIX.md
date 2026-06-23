@@ -161,6 +161,34 @@ TIMU-004A 于 2026-06-23 新增 QMI8658 姿态/校准分析器，并对当前 AM
 - PC Bridge 存储 123 条事件，recording 生成 120 条 `imu_motion` frame，quality gate PASS `0.94`，replay PASS。
 - 本任务还修复了 Windows UTF-8 BOM JSONL 输入兼容，避免 PowerShell 捕获文件丢失首行 `hello`。
 
+### 2.11 TIMU-004B-Prep QMI8658 manual capture flow
+
+TIMU-004B-Prep adds `scripts/capture_amoled_qmi8658_pose_set.ps1` and
+`docs/hardware/TIMU_004B_QMI8658_MANUAL_CAPTURE_20260623.md` as the repeatable
+operator entry for the next QMI8658 manual pose or motion capture.
+
+The script captures bounded `COM9` JSONL windows from `firmware/amoled_bridge`,
+writes UTF-8 without BOM, waits for `amoled_bridge_done`, and can run
+`scripts/analyze_imu_pose_quality.py`, `scripts/board_bridge.py`,
+`scripts/session_recorder.py`, `scripts/inspect_session_recording.py`, and
+`scripts/replay_session_recording.py`.
+
+The live preflight
+`pc_simulator/runtime/timu004b/timu004b-qmi8658-preflight-live-20260623-205520-z_negative.jsonl`
+captured 123 JSONL records, including 120 `imu_sample` records, `imu_whoami`,
+and `amoled_bridge_done`. The single `z_negative` pose passed static quality,
+label match, calibration offset, and source-boundary checks; the M1 recording
+quality gate passed with score `0.94`, and replay returned 120 `risk_type=none`
+outputs.
+
+This does not change the current hardware truth table by itself. The AMOLED
+QMI8658 path remains `semi_verified`, with recorder frames marked
+`source_availability=bridge_uplink` and `source_status=unverified`, because the
+preflight was still only one static pose. A real operator run must physically
+move the board through the requested poses or motion window, and later hardware
+gates must verify mounting, calibration, FIFO/interrupt behavior, power, and a
+real `platform_imu` backend.
+
 ## 3. 传感器与能力矩阵
 
 | 能力 | 料号 / 来源 | 接口 / 引脚 | 驱动状态 | 数据能力 | 功耗控制能力 | 真实 / Mock 状态 | M1 数据可用性与阻塞项 |

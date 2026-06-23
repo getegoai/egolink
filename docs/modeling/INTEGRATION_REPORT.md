@@ -18,6 +18,9 @@
   and measured about `49.99 ms / 20.00 Hz`. TIMU-004A added a pose/motion
   analyzer and captured a single live `z_negative` static pose window; pose
   quality passed for that pose, but multi-pose/motion evidence remains missing.
+  TIMU-004B-Prep added a bounded COM9 capture helper and operator protocol for
+  repeatable manual multi-pose or motion capture; it does not add formal IMU
+  acceptance by itself.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: M0-INT-001 itself performed no hardware validation. Later
@@ -53,6 +56,7 @@
 - [x] TIMU-002 QMI8658 sample quality gate
 - [x] TIMU-003 QMI8658 timing retest
 - [x] TIMU-004A QMI8658 single-pose quality gate
+- [x] TIMU-004B-Prep QMI8658 manual pose capture flow
 
 ## Changed files
 
@@ -391,6 +395,15 @@ TIMU-004A QMI8658 single-pose quality gate updates:
 - `docs/STATUS.md`
 - `docs/tasks/CURRENT_TASK.md`
 
+TIMU-004B-Prep QMI8658 manual pose capture flow updates:
+
+- `scripts/capture_amoled_qmi8658_pose_set.ps1`
+- `quality_tests/test_amoled_pose_capture_script.py`
+- `docs/hardware/TIMU_004B_QMI8658_MANUAL_CAPTURE_20260623.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/tasks/CURRENT_TASK.md`
+
 ## Verification commands and results
 
 ```powershell
@@ -622,6 +635,45 @@ Result: passed after TIMU-004A. The repository test suite ran 151 tests
 successfully, including the new QMI8658 pose/motion analyzer, UTF-8 BOM JSONL
 tolerance, updated hardware matrix, and the existing PC/Firmware/M1 quality
 gates.
+
+```powershell
+python -m unittest quality_tests.test_amoled_pose_capture_script quality_tests.test_hardware_sensor_matrix -v
+```
+
+Result: passed for TIMU-004B-Prep. The new AMOLED pose capture helper static
+contract and hardware matrix evidence-path tests ran 8 tests successfully.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -Help
+```
+
+Result: passed for TIMU-004B-Prep. The bounded capture helper help entry is
+available and documents static pose, motion, analyzer, and M1-loop usage.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -PoseLabels z_negative -NoPrompt -Analyze -RunM1Loop -SessionId timu004b-qmi8658-preflight-live-20260623-205520 -TimeoutSeconds 35
+```
+
+Result: passed for TIMU-004B-Prep live preflight. COM9 produced
+`pc_simulator/runtime/timu004b/timu004b-qmi8658-preflight-live-20260623-205520-z_negative.jsonl`
+with 123 JSONL records, including 120 `imu_sample` records, `imu_whoami`, and
+`amoled_bridge_done`. The single `z_negative` pose measured dominant axis
+`z negative`, mean axes about `[56.93, 23.39, -1030.24] mg`, and conservative
+offset about `[56.93, 23.39, -30.24] mg`. Static quality, label match,
+calibration offset, and source-boundary gates passed. Overall TIMU-004
+pose/motion quality still failed by design because this was only one static
+pose with no motion window. PC Bridge/M1 recording/quality/replay completed:
+120 `imu_motion` frames, quality gate PASS `0.94`, replay PASS, and 120
+`risk_type=none` outputs.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed after TIMU-004B-Prep. The repository test suite ran 154 tests
+successfully, including the new AMOLED pose capture helper contract, hardware
+matrix updates, existing pose analyzer, PC Bridge, M1 recording, quality gate,
+and replay tests.
 
 ```powershell
 idf.py --version

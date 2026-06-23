@@ -1,87 +1,68 @@
-# CURRENT_TASK: TIMU-004A / QMI8658 Single-Pose Quality Gate
+# CURRENT_TASK: TIMU-004B-Prep / QMI8658 Manual Pose Capture Flow
 
 ## Goal
 
-Add a repeatable QMI8658 pose/motion quality gate and run it against the
-currently connected ESP32-S3-Touch-AMOLED-2.06 board without claiming formal
-IMU acceptance.
+Make the next QMI8658 multi-pose or motion capture repeatable on the
+ESP32-S3-Touch-AMOLED-2.06 board without claiming formal IMU acceptance.
 
 ## Scope
 
-- Add a PC-side pose/motion analyzer for labeled QMI8658 JSONL captures.
-- Check static pose quality, axis/sign label matching, conservative calibration
-  offset, optional motion sanity, and source boundary.
-- Keep TIMU-003 timing analysis unchanged.
-- Capture a fresh live QMI8658 window from `COM9`.
-- Feed the capture through PC Bridge, session recording, quality gate, and
-  replay.
-- Preserve `bridge_uplink/unverified` source status.
+- Add a bounded PowerShell capture helper for AMOLED bridge JSONL windows.
+- Support labeled static poses and an optional motion window.
+- Keep the source boundary at `bridge_uplink/unverified`.
+- Reuse the existing TIMU-004A pose/motion analyzer.
+- Optionally run PC Bridge, M1 session recording, quality gate, and replay.
+- Document the operator protocol and acceptance boundary.
 
 ## Out Of Scope
 
+- No claim that TIMU-004 multi-pose/motion evidence is complete unless the board
+  is physically moved during capture.
 - No `platform_imu` real backend switch.
 - No source promotion to `verified`.
 - No MotionNet training data claim.
 - No fall, impact, wear-state, or activity inference.
 - No microphone, TF/SD, touch, display, power, FIFO/interrupt, or board-to-board
   UART work.
-- No claim that TIMU-004 total multi-pose acceptance is complete.
 
 ## Result
 
-- Added `pc_simulator/imu_pose_quality.py`.
-- Added `scripts/analyze_imu_pose_quality.py`.
-- Added `quality_tests/test_imu_pose_quality.py`.
-- Updated JSONL consumers to tolerate Windows UTF-8 BOM captures.
-- Captured
-  `pc_simulator/runtime/timu004-qmi8658-single-pose-live-20260623-203238.jsonl`.
-- Generated
-  `docs/hardware/TIMU_004_QMI8658_POSE_QUALITY_20260623.md`.
-
-Measured result:
-
-- Live JSONL lines: 123.
-- `imu_sample` count: 120.
-- Firmware timing mode: `vTaskDelayUntil`.
-- Missed deadlines: 0.
-- Max sample work: 42 ms.
-- Expected interval: 50 ms.
-- Observed mean interval: about `49.99 ms`.
-- Observed sample rate: about `20.00 Hz`.
-- Pose label: `z_negative`.
-- Measured dominant axis: `z negative`.
-- Mean axes: about `[56.63, 22.98, -1030.48] mg`.
-- Conservative calibration offset estimate: about `[56.6, 23.0, -30.5] mg`.
-- Static pose quality: PASS.
-- Pose label match: PASS.
-- Calibration offset gate: PASS.
-- Pose count / axis coverage / motion sanity: FAIL because only one static pose
-  was captured and no rotation/tap window was supplied.
-- PC Bridge stored 123 events with 0 skipped lines.
-- Session recording produced 120 `imu_motion` frames.
-- Quality gate PASS, `quality_score=0.94`.
-- Replay PASS, 120 inputs all `risk_type=none`.
-- Full repository verification PASS, 151 tests.
-
-Formal IMU acceptance remains false because the source is still intentionally
-`bridge_uplink/unverified`, multi-pose/motion evidence is incomplete, and
-mounting, full calibration, FIFO/interrupt, power, and product backend
-acceptance are still pending.
+- Added `scripts/capture_amoled_qmi8658_pose_set.ps1`.
+- Added `quality_tests/test_amoled_pose_capture_script.py`.
+- Added `docs/hardware/TIMU_004B_QMI8658_MANUAL_CAPTURE_20260623.md`.
+- The helper captures finite COM9 windows, writes UTF-8 JSONL without BOM, and
+  waits for `amoled_bridge_done`.
+- The helper can call:
+  - `scripts/analyze_imu_pose_quality.py`
+  - `scripts/board_bridge.py`
+  - `scripts/session_recorder.py`
+  - `scripts/inspect_session_recording.py`
+  - `scripts/replay_session_recording.py`
+- Fixed the helper to filter ESP-IDF boot logs so captured `.jsonl` files
+  contain only JSON objects.
+- Ran a bounded live preflight on `COM9`:
+  `timu004b-qmi8658-preflight-live-20260623-205520`.
+- Live preflight captured 123 JSONL records, including 120 `imu_sample`
+  records, `imu_whoami`, and `amoled_bridge_done`.
+- Single-pose `z_negative` static quality, label match, calibration offset, and
+  source-boundary gates passed.
+- Overall TIMU-004 pose/motion quality still failed by design because only one
+  pose was captured and no motion window was supplied.
+- PC Bridge/M1 recording/quality/replay passed for the preflight:
+  120 `imu_motion` frames, quality score `0.94`, replay 120 `none` outputs.
 
 ## Done When
 
-- [x] Pose/motion analyzer exists and is unit-tested.
-- [x] Analyzer accepts labeled `LABEL=JSONL` pose windows.
-- [x] Analyzer reports static quality, label match, calibration offset, motion
-      sanity, and source boundary.
-- [x] Windows UTF-8 BOM JSONL captures do not break analyzer or PC Bridge.
-- [x] AMOLED board flashes over `COM9`.
-- [x] Live capture contains at least 100 `imu_sample` records.
-- [x] Timing cross-check passes.
-- [x] Single current static pose is analyzed and reported.
-- [x] PC Bridge ingests the capture without skipped lines.
-- [x] Recorder emits 100+ `imu_motion` frames.
-- [x] Quality gate passes.
-- [x] Replay passes.
-- [x] TIMU-004 total multi-pose/motion acceptance remains false until manual
-      pose or rotation/tap capture is performed.
+- [x] Capture helper exists and uses bounded serial reads.
+- [x] Helper supports labeled static pose windows.
+- [x] Helper supports an optional motion window.
+- [x] Helper can run the pose/motion analyzer.
+- [x] Helper can run PC Bridge, M1 recording, quality gate, and replay.
+- [x] Protocol report explains operator steps and acceptance boundaries.
+- [x] Static contract tests cover the helper.
+- [x] Live COM9 preflight has been run in this task.
+- [ ] Multi-pose or motion quality gate passes with real physical movement.
+
+Formal IMU acceptance remains false while the source is still
+`bridge_uplink/unverified` and mounting, calibration, FIFO/interrupt, power, and
+real backend validation are pending.

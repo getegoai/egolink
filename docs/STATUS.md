@@ -57,11 +57,12 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - TIMU-002：QMI8658 样本质量与方向验收门完成。新增 `pc_simulator/imu_quality.py` 和 `scripts/analyze_imu_quality.py`，对 HDBRIDGE-002 live JSONL 进行身份、完整性、时序、QMI timestamp、静置 1g 方向、gyro 静置 sanity 和 source 边界分析；WHOAMI、完整性、静置方向、gyro sanity 均 PASS，但 device timing FAIL：目标 `50 ms / 20 Hz`，实测均值约 `82.31 ms / 12.15 Hz`。证据摘要见 `docs/hardware/TIMU_002_QMI8658_SAMPLE_QUALITY_20260623.md`；formal IMU acceptance 仍为 false。
 - TIMU-003：QMI8658 采样时序修复与更长窗口复测完成。`firmware/amoled_bridge` 改为 `vTaskDelayUntil` 固定周期采样，样本时间戳改为采样开始时刻，窗口扩展到 120 样本；ESP32-S3-Touch-AMOLED-2.06 `COM9` 刷写和 live capture 通过。TIMU-003 报告显示 120 条 `imu_sample`，`missed_deadlines=0`，`max_sample_work_ms=42`，目标 `50 ms / 20 Hz`，实测均值约 `49.99 ms / 20.00 Hz`，所有 analyzer quality gates PASS。PC Bridge 存储 123 条事件，recording 生成 120 条 `imu_motion` frame，quality gate PASS `0.94`，replay PASS。证据摘要见 `docs/hardware/TIMU_003_QMI8658_TIMING_RETEST_20260623.md`；formal IMU acceptance 仍为 false，因为 source 仍保持 `bridge_uplink/unverified`。
 - TIMU-004A：QMI8658 姿态/校准分析器和单姿态实测完成。新增 `pc_simulator/imu_pose_quality.py` 和 `scripts/analyze_imu_pose_quality.py`，支持 `LABEL=JSONL` 多姿态输入、axis/sign 标签匹配、静置 1g 检查、保守校准 offset、motion sanity 和 source 边界；`COM9` 实机复测捕获 120 条 `imu_sample`，单姿态 `z_negative` 静置通过，平均轴约 `[56.63, 22.98, -1030.48] mg`，offset 约 `[56.6, 23.0, -30.5] mg`。PC Bridge 存储 123 条事件、0 skipped，recording 生成 120 条 `imu_motion` frame，quality gate PASS `0.94`，replay PASS。证据摘要见 `docs/hardware/TIMU_004_QMI8658_POSE_QUALITY_20260623.md`；TIMU-004 总验收仍未通过，因为未采集多姿态或手动旋转/轻敲 motion window。
+- TIMU-004B-Prep：QMI8658 人工多姿态/运动采集流程已落地并完成单姿态 live preflight。新增 `scripts/capture_amoled_qmi8658_pose_set.ps1`，可按 `z_negative`、`x_positive`、`y_positive` 等标签执行有界 `COM9` JSONL 采集，写入 UTF-8 no BOM，等待 `amoled_bridge_done`，并可串起 pose analyzer、PC Bridge、M1 recorder、quality gate 和 replay。本轮 preflight 捕获 123 条 JSONL、120 条 `imu_sample`，`z_negative` 静态质量/标签/offset/source boundary PASS，M1 quality gate PASS `0.94`，replay 120 条 `none`；但这仍是单姿态，不等于已经获得多姿态实测证据或正式 IMU 验收。协议与边界见 `docs/hardware/TIMU_004B_QMI8658_MANUAL_CAPTURE_20260623.md`。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
 
-下一项建议任务：TIMU-004B QMI8658 人工多姿态/旋转敲击采集。基于 TIMU-004A 已完成的 analyzer 和单姿态 `z_negative` 窗口，请在采集期间手动放置至少 2 个额外静置姿态或执行一次旋转/轻敲窗口，再决定是否进入 `platform_imu` real backend PoC。
+下一项建议任务：TIMU-004B QMI8658 人工多姿态/旋转敲击实采。采集脚本和协议已准备好；下一步需要操作员在脚本提示时手动放置至少 2 个额外静置姿态或执行一次旋转/轻敲窗口，再决定是否进入 `platform_imu` real backend PoC。
 
 ## 后续任务路线
 
@@ -78,7 +79,7 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - TIMU-002：QMI8658 样本质量与安装方向验证。已完成分析工具和 HDBRIDGE-002 live capture 报告；身份/完整性/静置方向通过，但设备采样时序未达目标，formal IMU acceptance=false。
 - TIMU-003：QMI8658 采样时序修复与更长窗口复测。已完成 `vTaskDelayUntil` 固定周期采样、120 样本 live capture、analyzer quality gates、PC Bridge、recording、quality gate 和 replay；formal IMU acceptance=false。
 - TIMU-004A：QMI8658 姿态/校准分析器和单姿态复测。已完成 pose/motion analyzer、Windows UTF-8 BOM JSONL 容错、`COM9` 单姿态 `z_negative` live capture、timing cross-check、PC Bridge、recording、quality gate 和 replay；multi-pose/motion evidence 仍失败，formal IMU acceptance=false。
-- TIMU-004B：QMI8658 人工多姿态/旋转敲击采集。下一步建议；需要操作员在采集时翻转或轻敲 AMOLED 板。
+- TIMU-004B：QMI8658 人工多姿态/旋转敲击采集。采集脚本和协议已完成；需要操作员在采集时翻转或轻敲 AMOLED 板，实采通过前仍不切真实后端。
 - TCAM-001：摄像头 smoke live capture。已完成 3 帧真实 JPEG UART 证据；后续如要进入产品路径，需要单独做 `platform_camera`、隐私授权、hash/retention、功耗状态和按需采集。
 - HDBRIDGE-001：双板 PC Bridge PoC。已完成 PC-only 消息桥、命令记录和 `imu_motion` recording 入口。
 - HDBRIDGE-002：AMOLED USB CDC + QMI8658 最小样本窗口。已完成 live `hello`、QMI8658 WHOAMI、40 条真实 I2C 样本、PC Bridge、recording、quality gate 和 replay；TIMU-002 已确认首轮样本 timing 未达目标，TIMU-003 已修复到约 `49.99 ms / 20.00 Hz`，剩余安装方向、校准、FIFO/中断和功耗验收转入 TIMU-004 之后。
@@ -86,6 +87,10 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 
 ## 最近验证
 
+- `python -m unittest quality_tests.test_amoled_pose_capture_script quality_tests.test_hardware_sensor_matrix -v`：通过，8 个测试全部成功；覆盖 TIMU-004B 采集脚本静态契约和硬件矩阵证据路径。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -Help`：通过，帮助入口可用。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -PoseLabels z_negative -NoPrompt -Analyze -RunM1Loop -SessionId timu004b-qmi8658-preflight-live-20260623-205520 -TimeoutSeconds 35`：通过，捕获 `pc_simulator/runtime/timu004b/timu004b-qmi8658-preflight-live-20260623-205520-z_negative.jsonl`，123 条 JSONL、120 条 `imu_sample`，`imu_whoami=true`，`amoled_bridge_done=true`，非 JSON 行跳过数为 0；pose analyzer 对 `z_negative` 静态质量、标签匹配、offset 和 source boundary 判定 PASS，但总体 pose/motion quality 因缺少多姿态/运动窗口仍 FAIL；M1 quality gate PASS `0.94`，replay PASS，120 条输出均为 `risk_type=none`。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1`：TIMU-004B-Prep 后通过，154 个测试全部成功。
 - `python -m unittest quality_tests.test_imu_pose_quality quality_tests.test_imu_quality -v`：通过，10 个测试全部成功；覆盖 TIMU-004 pose/motion analyzer、多姿态通过、单姿态覆盖失败、错标姿态失败、motion sanity 和 UTF-8 BOM JSONL 解析。
 - `. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -p COM9 flash`：TIMU-004A 通过，重新刷写当前 AMOLED bridge，识别 ESP32-S3 USB-Serial/JTAG、PSRAM 8MB、MAC `02:00:00:00:00:01`，hard reset 成功。
 - 读取 `COM9` 45 秒：通过，日志写入 `pc_simulator/runtime/timu004-qmi8658-single-pose-live-20260623-203238.jsonl`；捕获 123 条 JSONL，其中 120 条 `imu_sample`，完成记录为 `samples_emitted=120`、`read_errors=0`、`not_ready_count=0`、`timing_mode=vTaskDelayUntil`、`missed_deadlines=0`、`max_sample_work_ms=42`。

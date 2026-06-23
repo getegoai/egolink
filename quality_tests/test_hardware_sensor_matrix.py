@@ -77,9 +77,11 @@ class HardwareSensorMatrixTests(unittest.TestCase):
             "docs/hardware/TIMU_002_QMI8658_SAMPLE_QUALITY_20260623.md",
             "docs/hardware/TIMU_003_QMI8658_TIMING_RETEST_20260623.md",
             "docs/hardware/TIMU_004_QMI8658_POSE_QUALITY_20260623.md",
+            "docs/hardware/TIMU_004B_QMI8658_MANUAL_CAPTURE_20260623.md",
             "pc_simulator/board_bridge.py",
             "pc_simulator/imu_quality.py",
             "pc_simulator/imu_pose_quality.py",
+            "scripts/capture_amoled_qmi8658_pose_set.ps1",
             "docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md",
             "docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md",
         ]
