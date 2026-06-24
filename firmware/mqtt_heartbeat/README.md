@@ -63,15 +63,19 @@ power rail, or GPIO measurement marker yet. The GPIO marker remains disabled;
 no runtime, current, or battery-life claim is valid until an external power
 instrument is connected and its raw capture is saved.
 
-`platform_imu` is currently a T039 mock/driver-interface skeleton. It exposes a
-bounded 32-sample ring buffer, `platform_imu_push_sample`,
-`platform_imu_read_recent`, and a deterministic `mock_stationary` sample path.
-The `sensor_sample` payload includes `imu_source`, `imu_hardware_present=false`,
-`imu_driver_enabled=false`, `imu_sample_mock=true`, ring counts, and latest
-mock accel/gyro fields so the M1 recorder can preserve the future interface
-shape.
+`platform_imu` is currently a TIMU-007 backend-boundary PoC. The default
+configuration remains the deterministic `mock_stationary` path with a bounded
+32-sample ring buffer, `platform_imu_sample`, `platform_imu_push_sample`, and
+`platform_imu_read_recent`. A QMI8658 I2C backend exists only as an explicit
+Kconfig opt-in (`CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658`) and falls back to
+mock data if identity probing or reads fail. The default `sensor_sample` payload
+still includes `imu_source`, `imu_hardware_present=false`,
+`imu_driver_enabled=false`, `imu_sample_mock=true`, ring counts, and latest mock
+accel/gyro fields so the M1 recorder can preserve the future interface shape.
 
 This does not prove a real IMU is present, wired, oriented, sampled, calibrated,
 or power-managed. Real accel/gyro data remains unavailable until the IMU part,
 bus, pins, orientation, ODR, FIFO behavior, interrupt strategy, and sample
-quality statistics are verified.
+quality statistics are verified on the product path. The AMOLED-board QMI8658
+evidence remains bridge evidence until a separately configured real
+`platform_imu` capture is flashed, captured, and accepted.

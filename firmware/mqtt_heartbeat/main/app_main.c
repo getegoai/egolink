@@ -220,7 +220,7 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
     platform_power_snapshot_t power;
     platform_power_get_snapshot(&power);
     platform_imu_snapshot_t imu;
-    platform_imu_sample_mock();
+    platform_imu_sample();
     platform_imu_get_snapshot(&imu);
     snprintf(
         buffer,

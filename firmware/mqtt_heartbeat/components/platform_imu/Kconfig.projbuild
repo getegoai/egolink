@@ -1,0 +1,72 @@
+menu "Ego Link platform IMU"
+
+    choice EGOLINK_PLATFORM_IMU_BACKEND
+        prompt "Platform IMU backend"
+        default EGOLINK_PLATFORM_IMU_BACKEND_MOCK
+        help
+            Select the source used by platform_imu_sample(). Keep the mock
+            backend for the P0 4G board until a real board IMU is explicitly
+            wired, probed, and accepted.
+
+        config EGOLINK_PLATFORM_IMU_BACKEND_MOCK
+            bool "Mock stationary IMU"
+
+        config EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+            bool "QMI8658 I2C backend"
+            help
+                Experimental opt-in backend for QMI8658 accel/gyro samples.
+                This does not by itself prove product mounting, FIFO/interrupt
+                behavior, power, calibration, or formal IMU acceptance.
+    endchoice
+
+    config EGOLINK_PLATFORM_IMU_QMI8658_I2C_PORT
+        int "QMI8658 I2C port"
+        default 0
+        range 0 1
+        depends on EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+
+    config EGOLINK_PLATFORM_IMU_QMI8658_SDA_GPIO
+        int "QMI8658 I2C SDA GPIO"
+        default 15
+        range 0 48
+        depends on EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+
+    config EGOLINK_PLATFORM_IMU_QMI8658_SCL_GPIO
+        int "QMI8658 I2C SCL GPIO"
+        default 14
+        range 0 48
+        depends on EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+
+    config EGOLINK_PLATFORM_IMU_QMI8658_I2C_FREQ_HZ
+        int "QMI8658 I2C frequency"
+        default 100000
+        range 10000 400000
+        depends on EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+
+    config EGOLINK_PLATFORM_IMU_QMI8658_I2C_TIMEOUT_MS
+        int "QMI8658 I2C timeout"
+        default 1000
+        range 10 5000
+        depends on EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+
+    config EGOLINK_PLATFORM_IMU_QMI8658_I2C_ADDR
+        int "QMI8658 I2C address"
+        default 107
+        range 0 127
+        depends on EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+        help
+            Decimal 107 is 0x6B, the address used by the AMOLED bridge board.
+
+    config EGOLINK_PLATFORM_IMU_QMI8658_WHOAMI_EXPECTED
+        int "QMI8658 expected WHOAMI"
+        default 5
+        range 0 255
+        depends on EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+
+    config EGOLINK_PLATFORM_IMU_QMI8658_SAMPLE_INTERVAL_MS
+        int "QMI8658 nominal sample interval"
+        default 50
+        range 1 1000
+        depends on EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+
+endmenu
