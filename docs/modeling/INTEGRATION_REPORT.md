@@ -38,9 +38,12 @@
   `production_ready=false`. TIMU-009B added a product acceptance preflight
   gate ledger; the generated report is expected to fail today because no
   hardware-observed artifacts exist for final mounting, production calibration,
-  FIFO/DRDY, backend replay, or current-waveform gates. Formal IMU acceptance
-  still remains false because product mounting, FIFO/interrupt, final
-  calibration, and power gates are pending.
+  FIFO/DRDY, backend replay, or current-waveform gates. TIMU-009C-A then
+  captured a fresh bounded MQTT readiness slice from the same QMI8658 backend:
+  8 live messages, 4 real IMU sensor samples with `imu_sample_mock=false`, and
+  an 8-frame M1 quality/replay pass. Formal IMU acceptance still remains false
+  because product mounting, FIFO/interrupt, final calibration, and power gates
+  are pending.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: M0-INT-001 itself performed no hardware validation. Later
@@ -83,6 +86,7 @@
 - [x] TIMU-008 platform_imu QMI8658 backend live capture
 - [x] TIMU-009A IMU engineering calibration boundary
 - [x] TIMU-009B IMU product acceptance preflight gate
+- [x] TIMU-009C-A QMI8658 backend readiness capture
 
 ## Changed files
 
@@ -514,6 +518,15 @@ TIMU-009B IMU product acceptance preflight updates:
 - `quality_tests/test_hardware_sensor_matrix.py`
 - `docs/hardware/TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.json`
 - `docs/hardware/TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
+TIMU-009C-A QMI8658 backend readiness updates:
+
+- `quality_tests/test_hardware_sensor_matrix.py`
+- `docs/hardware/TIMU_009C_QMI8658_BACKEND_READINESS_CAPTURE_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
@@ -1096,6 +1109,48 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
 
 Result: passed after TIMU-009B code, preflight report, documentation, and
 hardware matrix sync. The repository test suite ran 167 tests successfully.
+
+```powershell
+python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/ego-link-amoled-qmi8658/status --topic ego/link/ego-link-amoled-qmi8658/event --event-log pc_simulator\runtime\timu009c\timu009c-qmi-backend-readiness-20260624-1710.events.jsonl --max-messages 8 --wait-seconds 45
+```
+
+Result: passed for TIMU-009C-A live backend readiness capture through the LAN
+broker. The capture stored 8 MQTT events: 4 `sensor_sample/device_health`
+events and 4 `mqtt_status` events. The QMI8658 samples carried
+`imu_source=qmi8658_i2c`, `imu_hardware_present=true`,
+`imu_driver_enabled=true`, and `imu_sample_mock=false`; status payloads still
+marked 4G/GNSS/battery as mock.
+
+```powershell
+python scripts\session_recorder.py --event-log pc_simulator\runtime\timu009c\timu009c-qmi-backend-readiness-20260624-1710.events.jsonl --session-id timu009c-qmi-backend-readiness-20260624-1710 --output-dir pc_simulator\runtime\recordings\timu009c-qmi-backend-readiness-20260624-1710 --limit 50 --json
+```
+
+Result: passed for TIMU-009C-A recording generation. The recorder produced
+8 sensor frames from 8 source events.
+
+```powershell
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\timu009c-qmi-backend-readiness-20260624-1710 --json
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\timu009c-qmi-backend-readiness-20260624-1710 --json
+```
+
+Result: passed for TIMU-009C-A M1 closure. The quality gate passed with
+`quality_score=0.94`, `errors=0`, and 2 warnings; replay passed with
+8 replayed inputs, 8 `risk_type=none` outputs, 0 safety events, and 0 base
+commands.
+
+```powershell
+python -m unittest quality_tests.test_hardware_sensor_matrix -v
+```
+
+Result: passed for TIMU-009C-A focused verification. The hardware matrix tests
+ran 5 tests successfully and covered the new backend readiness evidence path.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed after TIMU-009C-A documentation, status, and hardware matrix
+sync. The repository test suite ran 167 tests successfully.
 
 ```powershell
 idf.py --version
@@ -1847,6 +1902,14 @@ calibration, signed gyro bias, temperature drift, FIFO/DRDY, power/current
 waveform, backend quality gate, M1 recording/replay, and recalibration trigger
 review.
 
+TIMU-009C-A performed bounded hardware I/O through the LAN MQTT broker without
+reflashing firmware. It captured 8 live messages from the current AMOLED
+QMI8658 backend profile, including 4 real IMU sensor samples with
+`imu_sample_mock=false`, then converted them into an 8-frame M1 recording that
+passed quality and replay. This confirms backend readiness only; formal IMU
+acceptance remains blocked by mounting, final calibration, FIFO/DRDY, low-power
+wake, and current-waveform evidence.
+
 ## Known gaps
 
 - `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
@@ -1959,8 +2022,8 @@ review.
 
 ## Recommended next step
 
-Next, run TIMU-009C against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: fix
-the target mounting orientation, record the final calibration procedure,
+Next, run TIMU-009C-B against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path:
+fix the target mounting orientation, record the final calibration procedure,
 validate FIFO/DRDY or interrupt behavior, and align firmware power markers with
 real current waveforms. Keep MotionNet training and formal IMU claims disabled
 until mounting, FIFO/interrupt, power, production calibration, and backend

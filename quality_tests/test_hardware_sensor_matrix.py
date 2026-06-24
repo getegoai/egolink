@@ -86,6 +86,7 @@ class HardwareSensorMatrixTests(unittest.TestCase):
             "docs/hardware/TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.json",
             "docs/hardware/TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.md",
             "docs/hardware/TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.json",
+            "docs/hardware/TIMU_009C_QMI8658_BACKEND_READINESS_CAPTURE_20260624.md",
             "pc_simulator/board_bridge.py",
             "pc_simulator/imu_quality.py",
             "pc_simulator/imu_pose_quality.py",
