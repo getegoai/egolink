@@ -1,6 +1,8 @@
 # EGO Link P0 工程开发上下文
 
-> 本文档用于保存到 Codex 项目上下文。当前目标不是完整 EGO Base，也不是最终量产硬件，而是在电脑模拟后端环境下，先把 Ego Link 随身端主控工程跑通。
+> 本文档用于保存到 Codex 项目上下文。当前目标不是完整 EGO Base，也不是最终量产硬件，而是在电脑开发桥接环境下，先把 Ego Link 随身端感知、通信扩展、事件路由和安全陪伴最小闭环跑通。
+>
+> 2026-06-24 更新：当前 P0 实现形态明确为 **双开发板 + PC 中继的集成验证架构**。AMOLED 板是 `wearable_node` 可穿戴应用主节点；SIM7670G 板是 `connectivity_node` 通信、定位和摄像头扩展节点；PC 是开发期 Bridge、观察和回放工具，不是正式 Ego Base，也不能成为产品依赖。详细架构见 `docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md`，产品迁移路线见 `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`。
 
 ---
 
@@ -8,17 +10,21 @@
 
 ### 0.1 当前硬件
 
-当前 Ego Link P0 使用的主控开发板为：
+当前 Ego Link P0 使用双开发板分别连接 PC：
 
-- **微雪 ESP32-S3-SIM7670G-4G 开发板**
-- 主控：ESP32-S3
-- 蜂窝通信模块：SIMCom **SIM7670G**
-- 能力：4G Cat-1 上网、GNSS 定位、摄像头、Wi-Fi、BLE
-- 注意：本项目当前不是 ESP32-S3-A7670E-4G，蜂窝模块不是 A7670E。
+- **ESP32-S3-Touch-AMOLED-2.06**：当前 `wearable_node`，负责 QMI8658 IMU、双麦克风、屏幕、触摸、扬声器、MotionNet / AudioGate 和用户交互；
+- **微雪 ESP32-S3-SIM7670G-4G 开发板**：当前 `connectivity_node`，负责 SIM7670G 4G、GNSS、摄像头、TF 卡、缓存和通信能力验证；
+- **PC Development Bridge**：开发期串口中继、统一事件总线、ContextRouter、Safety Kernel、数据记录、时间同步、事件回放和调试 Dashboard。
+
+注意：
+
+- 本项目当前不是 ESP32-S3-A7670E-4G，蜂窝模块不是 A7670E；
+- SIM7670G 开发板是通信扩展节点和测试模组，不应被固化为最终主控；
+- AMOLED 板是当前可穿戴应用主节点，但最终产品目标也不是两块 ESP32 开发板，而是单低功耗主控 / AI MCU + 蜂窝模组 + 传感器。
 
 ### 0.2 当前工程范围
 
-当前阶段只聚焦 **Ego Link P0 Firmware + PC Simulator**。
+当前阶段聚焦 **Ego Link P0 Firmware + PC Development Bridge + 真实数据采集闭环**。
 
 暂不开发：
 
@@ -27,19 +33,22 @@
 - 不接入本地大模型；
 - 不做长期记忆；
 - 不做真实语音唤醒芯片；
-- 不做真实 4G 上网调试；
-- 不做真实 GNSS 搜星定位；
-- 不做摄像头功能；
-- 不做低功耗深度优化。
+- 不做真实报警、真实拨号或正式联系人联动；
+- 不做手机 App；
+- 不做云端服务；
+- 不做外壳；
+- 不做最终功耗优化。
 
 当前要做的是：
 
-- 用 ESP32-S3 作为随身端主控；
-- 用 Wi-Fi 模拟 4G 数据链路；
-- 用软件模拟 GNSS 定位；
-- 用按键 / 串口命令 / 定时器模拟唤醒事件；
-- 用电脑运行 MQTT Broker、PC Simulator、简单 Dashboard；
-- 跑通设备上线、心跳、定位上报、SOS、模拟唤醒、策略下发、离线缓存、恢复补传的闭环。
+- 两块开发板通过 USB 同时连接电脑；
+- 每块板启动后发送版本化 `hello`，PC 根据 `device_id` 和 `role` 识别设备，不写死 COM 口；
+- 两块板和 PC 使用同一套版本化消息协议；
+- AMOLED 板采集 QMI8658 原始六轴数据、验证麦克风链路、显示询问并接收用户确认；
+- SIM7670G 板验证 4G、GNSS、摄像头能力状态，并接收 `request_location`、`capture_image` 等命令；
+- PC Development Bridge 运行 ContextRouter、Safety Kernel、数据记录、时间同步、事件回放和调试 Dashboard；
+- 允许 Mock 与真实驱动并存，但必须标明数据来源；
+- 跑通安全陪伴最小闭环：运动候选 → 用户确认 → 请求定位/证据 → 完整事件记录。
 
 ---
 
@@ -51,27 +60,41 @@ Ego Link 是 EGO 项目的随身设备原型，不是独立大脑，也不是小
 
 > Ego Link 是 EGO 的随身感知节点、低功耗安全前哨和远程通信入口。
 
-P0 阶段暂时不依赖 EGO Base，而是通过电脑模拟 EGO 侧服务，验证随身端主控架构。
+P0 阶段暂时不依赖正式 EGO Base，而是通过 PC Development Bridge 验证随身端主节点、通信扩展节点和安全事件闭环。PC 仅是开发期桥接和观察工具，长期复杂能力仍由本地 Ego Base 协同完成。
 
 ---
 
 ## 2. P0 总体架构
 
 ```text
-ESP32-S3-SIM7670G-4G 开发板
-    ↓ Wi-Fi，暂时代替 4G 数据链路
-本地路由器 / 电脑热点
-    ↓
-电脑 PC Simulator
-    ├─ Mosquitto MQTT Broker
-    ├─ Python FastAPI / Flask Dashboard
-    ├─ MQTT Client
-    ├─ SQLite / JSONL 事件记录
-    ├─ 策略包下发
-    └─ 调试控制台
+可穿戴主节点
+ESP32-S3-Touch-AMOLED-2.06
+├─ QMI8658六轴IMU
+├─ 双麦克风
+├─ 屏幕、触摸、扬声器
+├─ MotionNet / AudioGate
+└─ USB连接电脑
+
+通信扩展节点
+ESP32-S3-SIM7670G-4G
+├─ SIM7670G 4G
+├─ GNSS
+├─ 摄像头
+├─ TF卡和缓存
+└─ USB连接电脑
+
+PC Development Bridge
+├─ 自动识别两个节点
+├─ 串口消息中继
+├─ 统一事件总线
+├─ ContextRouter
+├─ Safety Kernel
+├─ 数据记录与时间同步
+├─ 事件回放
+└─ 调试Dashboard
 ```
 
-P0 阶段必须坚持 Mock-first 架构。业务层不能直接绑定 Wi-Fi、SIM7670G、GNSS、唤醒芯片。所有外设能力都必须通过抽象接口访问。
+P0 阶段仍必须坚持 Mock-first 和抽象接口原则。业务层不能直接绑定 USB、COM 口、Wi-Fi、SIM7670G、GNSS、摄像头、IMU 或唤醒芯片。所有外设能力都必须通过抽象接口和版本化消息协议访问。
 
 ---
 
@@ -514,19 +537,24 @@ ego/link/{device_id}/config
 
 ---
 
-## 9. PC Simulator 设计
+## 9. PC Development Bridge / PC Simulator 设计
 
-当前电脑模拟 EGO 侧，不命名为正式 EGO Base，避免误导架构。
+当前电脑承担开发期 Bridge、观察、记录和回放，同时保留 PC Simulator 能力用于 MQTT / Dashboard / 规则基线测试。它不命名为正式 EGO Base，也不能成为产品依赖。
 
-### 9.1 PC Simulator 组成
+### 9.1 PC Bridge / Simulator 组成
 
 ```text
 pc_simulator/
+├─ Board Bridge：自动识别 wearable_node / connectivity_node
+├─ Serial Relay：中继双 USB 串口消息
+├─ Event Bus：归一化 hello、motion_event、user_confirmation、location_report 和 command ACK
+├─ ContextRouter / Safety Kernel：P0 规则基线
 ├─ MQTT Broker：Mosquitto
 ├─ MQTT Worker：订阅设备 status/event/log/ack
 ├─ FastAPI / Flask：提供本地 HTTP 页面和 API
-├─ SQLite / JSONL：记录事件
-├─ Dashboard：显示设备在线、电量、位置、事件
+├─ SQLite / JSONL：记录事件和 session
+├─ Session Replay：把记录脱离开发板重新喂给 ContextRouter
+├─ Dashboard：显示设备在线、电量、位置、事件和双板状态
 ├─ Command Console：向设备下发命令
 └─ Policy Manager：下发策略包
 ```
@@ -543,8 +571,12 @@ pc_simulator/
 - 最近位置；
 - 最近事件列表；
 - 离线队列长度；
+- `wearable_node` / `connectivity_node` 在线状态；
+- 当前 session 记录状态；
 - 手动下发按钮：
   - request_location；
+  - capture_image；
+  - ask_user；
   - play_prompt；
   - set_policy；
   - simulate_call；
@@ -640,14 +672,16 @@ reboot
 
 验收：断网 2 分钟产生的事件，恢复后全部补传，顺序正确，不重复。
 
-### Sprint 6：预留 SIM7670G 驱动桩
+### Sprint 6：SIM7670G 扩展节点能力桩
 
 - 建立 sim7670_at_driver_stub；
 - 建立 sim7670_gnss_driver_stub；
 - 文档记录后续 AT 指令接入点；
-- 不在 P0 调真实 4G。
+- 通过 `connectivity_node` 上报 4G、GNSS、摄像头能力状态；
+- 支持 `request_location`、`capture_image` 等命令的 Mock / Stub ACK；
+- P0-B 再逐步替换为真实 4G、GNSS 和摄像头证据。
 
-验收：业务层不需要修改即可从 Mock 切换到 Stub 编译目标。
+验收：业务层不需要修改即可从 Mock / Stub 切换到真实驱动，并且所有记录都能区分 Mock、Stub 和真实硬件来源。
 
 ---
 
@@ -655,24 +689,27 @@ reboot
 
 P0 不做：
 
-- 不调真实 SIM7670G 4G 上网；
-- 不调真实 GNSS；
-- 不调摄像头；
-- 不做语音 ASR；
+- 不做真实报警、真实拨号或正式联系人联动；
+- 不做完整语音 ASR；
 - 不做本地 LLM；
-- 不接 EGO Base；
+- 不接正式 EGO Base；
+- 不把 PC 固化为产品依赖；
+- 不把 SIM7670G 开发板固化为最终主控；
 - 不做手机 App；
 - 不做云端服务；
 - 不做外壳；
-- 不做最终功耗优化。
+- 不做最终功耗优化；
+- 当前不要求板间 UART 直连。
 
-原因：P0 的核心目标是主控软件架构和事件闭环，而不是硬件堆功能。
+P0-A 可以使用 Mock / Stub 跑通双板接入、统一协议、PC Bridge 和 ContextRouter 骨架。P0-B 开始接入真实 IMU、声音、GNSS、4G 和摄像头，建立真实数据集。Mock 与真实驱动可以并存，但必须在消息和记录中明确标记来源。
+
+原因：P0 的核心目标是双板集成验证、真实数据采集基础和安全事件闭环，而不是冻结最终硬件或完成正式产品服务。
 
 ---
 
-## 13. 后续真实 SIM7670G 接入路线
+## 13. SIM7670G 扩展节点接入路线
 
-P0 完成后，SIM7670G 接入分两条路线：
+SIM7670G 当前属于 `connectivity_node`，用于通信、定位、摄像头和缓存能力验证，不是最终主控结论。P0-A 允许 Stub / Mock，P0-B 开始接真实能力。
 
 ### 13.1 路线 A：SIM7670G AT MQTT
 
@@ -708,7 +745,7 @@ ESP32-S3 通过 PPP 获得 IP 网络，再使用 ESP-IDF 的 MQTT/HTTP 客户端
 
 ### 13.3 建议顺序
 
-先完成 P0 Mock-first 闭环，再接路线 A；路线 A 稳定后再评估是否需要 PPP。
+先完成双板 USB + PC Bridge 的 P0-A 闭环，再在 `connectivity_node` 上接路线 A；路线 A 稳定后再评估是否需要 PPP。所有上层业务仍通过版本化消息协议和硬件抽象访问，不直接绑定 SIM7670G AT 细节。
 
 ---
 
@@ -716,19 +753,20 @@ ESP32-S3 通过 PPP 获得 IP 网络，再使用 ESP-IDF 的 MQTT/HTTP 客户端
 
 P0 成功标准：
 
-1. ESP32-S3-SIM7670G-4G 开发板可以作为 Ego Link 主控启动；
-2. 通过 Wi-Fi 连接电脑 MQTT Broker；
-3. 设备每 10 秒上报心跳；
-4. 设备每 30 秒上报模拟定位；
-5. 串口输入 `wake` 可以生成 wake_detected 事件；
-6. 串口输入 `sos` 或按键可以生成 critical SOS 事件；
-7. PC Simulator 可以下发 play_prompt 命令；
-8. ESP32-S3 可以接收命令并在串口输出本地动作；
-9. PC Simulator 可以下发策略包；
-10. ESP32-S3 可以保存并执行策略包；
-11. 网络断开后事件进入本地队列；
-12. 网络恢复后事件按 seq 顺序补传；
-13. 所有业务逻辑不直接依赖真实 4G、真实 GNSS、真实唤醒芯片。
+1. AMOLED 板和 SIM7670G 板可以同时通过 USB 连接 PC；
+2. 两块板启动后发送版本化 `hello`；
+3. PC Bridge 根据 `device_id` 和 `role` 识别 `wearable_node` 与 `connectivity_node`；
+4. 不硬编码 COM 口，任意一块板重启后可以重新加入；
+5. 两块板和 PC 使用同一套版本化消息协议；
+6. AMOLED 板可以输出 QMI8658 原始六轴数据、统一时间戳和 IMU 窗口；
+7. AMOLED 板可以验证麦克风链路、屏幕询问和用户确认；
+8. SIM7670G 板可以输出 4G、GNSS、摄像头能力状态；
+9. SIM7670G 板可以接收 `request_location`、`capture_image` 等命令并返回 ACK / 状态；
+10. PC Bridge 可以接收 `motion_event`，运行 ContextRouter，向 AMOLED 板下发 `ask_user`；
+11. 用户确认后，PC Bridge 可以请求 SIM7670G 板刷新 GNSS；
+12. PC 保存 session 元数据、IMU、AudioGate、GNSS/网络、用户操作、模型输入输出、命令 ACK、异常和断线日志；
+13. 同一份记录可以离线回放给 ContextRouter；
+14. 所有业务逻辑不直接依赖 USB、COM 口、Wi-Fi、真实 4G、真实 GNSS、摄像头或具体开发板。
 
 ---
 
@@ -737,18 +775,19 @@ P0 成功标准：
 请按照以下要求实现 Ego Link P0 工程：
 
 ```text
-创建 Ego Link P0 工程。目标硬件为微雪 ESP32-S3-SIM7670G-4G 开发板，蜂窝模块为 SIM7670G，不是 A7670E。
+创建 Ego Link P0 工程。当前实现形态是双开发板 + PC Development Bridge 集成验证架构。
 
-当前阶段不接入正式 EGO Base，只用电脑运行 PC Simulator。PC Simulator 负责 MQTT Broker、事件接收、简单 Dashboard、策略包下发和命令下发。
+AMOLED 板作为 `wearable_node`，负责 QMI8658 IMU、音频、屏幕、触摸、扬声器、MotionNet / AudioGate 和用户确认。
 
-固件使用 ESP-IDF 开发。P0 阶段不启用真实 4G、不启用真实 GNSS、不启用真实语音唤醒芯片。用 Wi-Fi 模拟 4G 数据链路，用 MockGnssDriver 模拟定位，用 MockWakeDriver 模拟唤醒。
+微雪 ESP32-S3-SIM7670G-4G 板作为 `connectivity_node`，蜂窝模块为 SIM7670G，不是 A7670E，负责 4G、GNSS、摄像头、TF 卡、缓存和通信能力验证。
 
-固件必须采用抽象接口：LinkTransport、ModemDriver、GnssDriver、WakeDriver、PowerDriver。业务层不得直接调用 Wi-Fi、SIM7670G、GNSS、唤醒芯片接口。
+当前阶段不接入正式 EGO Base。PC Development Bridge 负责自动识别两个节点、串口中继、统一事件总线、ContextRouter、Safety Kernel、数据记录、时间同步、事件回放和调试 Dashboard。PC 不是正式 Ego Base，也不能成为产品依赖。
 
-实现功能：设备上线、心跳、定位上报、SOS、模拟唤醒、低电量事件、策略包接收与执行、离线缓存、恢复补传、串口 CLI、PC Dashboard。
+固件使用 ESP-IDF 开发。P0-A 可使用 Mock / Stub 跑通链路，P0-B 逐步接入真实 IMU、声音、GNSS、4G 和摄像头。Mock 与真实驱动可以并存，但必须在消息、日志和记录中明确标记来源。
 
-预留 sim7670_at_driver_stub、sim7670_gnss_driver_stub、sim7670_transport_stub，但 P0 只写接口和 TODO，不调真实蜂窝模块。
+固件和 PC 侧必须采用抽象接口和版本化消息协议。业务层不得直接调用 USB、COM 口、Wi-Fi、SIM7670G、GNSS、摄像头、IMU 或唤醒芯片接口。
 
-P0 的成功标准是主控状态机、事件协议、策略包、离线缓存、PC 模拟协同闭环跑通。
+实现功能：双板 `hello` 识别、统一消息协议、设备上线、心跳、运动事件、用户询问、用户确认、定位刷新命令、命令 ACK、低电量事件、策略包接收与执行、离线缓存、恢复补传、PC Dashboard、session 记录和回放。
+
+P0 的成功标准是安全陪伴最小闭环跑通：AMOLED 板产生撞击/跌倒候选，PC Bridge 接收运动事件，ContextRouter 判断需要确认，AMOLED 板显示询问，用户点击安全或需要帮助，PC 请求 4G 板刷新 GNSS，最终形成完整安全事件记录。
 ```
-

@@ -5,6 +5,8 @@
 > 状态：开发基线已确定，量产平台尚未冻结  
 > 适用对象：Codex、固件开发者、模型开发者、硬件工程师
 
+> 2026-06-24 更新：当前 P0 硬件实现形态是 **双开发板 + PC 中继的集成验证架构**。ESP32-S3-Touch-AMOLED-2.06 是 `wearable_node` 可穿戴应用主节点；ESP32-S3-SIM7670G-4G 是 `connectivity_node` 通信、定位和摄像头扩展节点；PC 是开发期 Bridge 和观察工具，不是正式 Ego Base。详见 `docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md`。
+
 ## 1. 产品与硬件目标
 
 Ego Link 首先面向中国市场开发“随身安全陪伴”产品。设备负责低功耗感知、事件检测、风险路由、本地安全反射和 4G 远程通信；复杂多模态理解、长期记忆和生成式推理由 PC Simulator / 后续 Ego Base 承担。
@@ -20,22 +22,40 @@ Ego Link 首先面向中国市场开发“随身安全陪伴”产品。设备�
 
 ## 2. 当前实现基线
 
-当前 P0 目标板保持不变：
+当前 P0 由两个开发节点和 PC Development Bridge 组成：
 
 ```text
+wearable_node
+ESP32-S3-Touch-AMOLED-2.06
+├─ QMI8658六轴IMU
+├─ 双麦克风
+├─ 屏幕、触摸、扬声器
+└─ 当前可穿戴应用主节点
+
+connectivity_node
 微雪 ESP32-S3-SIM7670G-4G 开发板
 ├─ 主控：ESP32-S3
 ├─ 测试蜂窝模组：SIM7670G
 ├─ Wi-Fi / BLE
 ├─ GNSS与摄像头能力
-└─ 当前固件和数据采集的主要实现平台
+├─ TF卡和缓存
+└─ 当前通信、定位和摄像头扩展节点
+
+PC Development Bridge
+├─ 串口自动识别和中继
+├─ ContextRouter / Safety Kernel
+├─ 数据记录、时间同步和事件回放
+└─ 调试Dashboard
 ```
 
 约束：
 
-- SIM7670G 仅是现阶段测试模组，不代表量产模组已经选定；
+- AMOLED 板是当前可穿戴应用主节点；
+- SIM7670G 开发板是通信扩展节点和测试模组，不代表量产模组或最终主控已经选定；
+- PC 仅是开发期 Bridge 和观察工具，不是正式 Ego Base，也不能成为产品依赖；
 - 不因新候选芯片出现而停止 ESP32-S3 P0、M0/M1 和真实数据采集；
-- 当前开发优先积累模型规模、数据质量、功耗和通信行为的实测依据。
+- 当前开发优先积累模型规模、数据质量、功耗和通信行为的实测依据；
+- 第一阶段允许 Mock 与真实驱动并存，但必须在日志、消息和记录中标明数据来源。
 
 ## 3. 产品架构原则
 
@@ -140,10 +160,13 @@ IMU / 麦克风 / 按需摄像头 / 交互器件
 
 ### 已冻结
 
-- 当前 P0 使用 ESP32-S3 + SIM7670G 开发板；
+- 当前 P0 使用 ESP32-S3-Touch-AMOLED-2.06 + ESP32-S3-SIM7670G-4G 双开发板，并分别通过 USB 接入 PC Development Bridge；
+- `wearable_node` 负责 IMU、音频、屏幕、触摸、扬声器和用户交互；
+- `connectivity_node` 负责 4G、GNSS、摄像头和通信/缓存能力；
+- 设备通过版本化 `hello` 的 `device_id` 和 `role` 识别，不硬编码 COM 口；
 - 先做随身安全陪伴；
 - 端侧采用专用微模型和规则混合，而非通用大模型；
-- 复杂认知回到本地 PC Simulator / Ego Base；
+- 复杂认知回到本地 PC Simulator / 后续 Ego Base；
 - 固件必须保持平台可迁移；
 - 续航最低目标为典型守护 48 小时。
 
@@ -152,6 +175,7 @@ IMU / 麦克风 / 按需摄像头 / 交互器件
 - 量产主控；
 - 最终蜂窝模组；
 - GNSS集成或独立；
+- 双板直连接口和最终板内总线；
 - 电池容量与外形；
 - 是否保留摄像头；
 - 是否需要片内 BLE / Wi-Fi；

@@ -10,6 +10,14 @@
   - GNSS is simulated in software.
   - Wake events are simulated by CLI/button/timer.
   - The PC acts only as a local simulator; this is not the formal EGO Base.
+- Current P0 integration validation uses **two development boards over USB plus a PC Development Bridge**.
+- `wearable_node` is responsible for IMU, audio, screen, touch, speaker, and user interaction.
+- `connectivity_node` is responsible for 4G, GNSS, camera, communication capability, and caching.
+- The PC is only a development bridge/observer, not the formal Ego Base and not a product dependency.
+- Do not hardcode COM port numbers; devices must be identified through versioned `hello` messages.
+- Both nodes must share a versioned message protocol.
+- Direct board-to-board UART is not required in current P0.
+- The final product target is not two ESP32 boards; it is one low-power MCU / AI MCU plus a cellular module and sensors.
 - Do not add cloud services or external hosted AI dependencies to the Ego Link product path.
 
 ## Repository boundaries

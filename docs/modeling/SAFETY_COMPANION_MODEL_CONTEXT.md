@@ -5,6 +5,8 @@
 > 适用阶段：Safety Companion M0—M6  
 > 目标读者：Codex、模型开发者、固件开发者、PC Simulator / Ego Base 开发者  
 > 本文是模型子系统的长期上下文。具体字段定义以 `shared/contracts/**` 为准，具体阶段任务以 `docs/modeling/INTEGRATION_TASKS.md` 和后续里程碑文档为准。
+>
+> 2026-06-24 更新：当前 P0 模型与安全闭环运行在 **双开发板 + PC Development Bridge** 形态中。`wearable_node` 负责 IMU、音频和用户交互；`connectivity_node` 负责 4G、GNSS、摄像头和通信能力；PC Bridge 当前运行规则版 ContextRouter、Safety Kernel、记录和回放。PC 不是正式 Ego Base，ContextRouter 会在 P1 逐步迁回可穿戴主节点。
 
 ---
 
@@ -26,6 +28,8 @@ Ego Link 是 EGO 的随身安全感知、通信与交互节点。Safety Companio
 Ego Link 是“反射系统和感觉器官”，Ego Base 是“长期记忆和复杂认知系统”。云端只能是用户明确授权后的可选增强层，不能成为基本安全闭环的必需依赖。
 
 Safety Companion 不是医疗诊断系统，不承诺识别所有危险，也不允许由概率模型单独决定不可逆或高风险动作。
+
+当前 P0 的实现形态见 `docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md`。模型路线必须服务于真实数据闭环，不得把 PC Bridge、Mock 数据或规则模拟结果描述为已经完成产品级安全识别。
 
 ---
 
@@ -249,7 +253,9 @@ VAD / 音量变化 / 是否有人声
 
 ### 7.1 定位
 
-ContextRouter 是端侧智能核心。它不直接读取完整波形或图像，而读取结构化特征并决定行动。
+ContextRouter 是 Ego Link 安全陪伴链路的行动路由核心。它不直接读取完整波形或图像，而读取结构化特征并决定行动。
+
+当前 P0-A / P0-B 中，规则版 ContextRouter 运行在 PC Development Bridge 上，用于联通 `wearable_node`、`connectivity_node`、记录和回放。P1 起再逐步迁到可穿戴主节点。文档或测试不得把 PC Bridge 上的规则基线误写成最终产品依赖。
 
 ### 7.2 输入类别
 
@@ -318,7 +324,7 @@ Safety Kernel 独立于模型，至少覆盖：
 | 层级 | 主要职责 | 不承担的职责 |
 |---|---|---|
 | Ego Link | 低功耗感知、端侧微模型、事件路由、本地提醒、断网兜底、必要证据采集 | 通用多模态推理、长期记忆、复杂自然语言规划 |
-| PC Simulator | P0 协议验证、事件回放、命令模拟、规则基线测试 | 正式用户长期记忆和生产级安全服务 |
+| PC Development Bridge / PC Simulator | P0 双板中继、协议验证、事件回放、命令模拟、规则基线测试、时间同步和记录 | 正式用户长期记忆、生产级安全服务、最终产品必需依赖 |
 | Ego Base | 本地 ASR、视觉理解、长期记忆、个性化推理、联系人联动、策略生成 | 未授权持续上传原始隐私数据 |
 | 云端增强 | 经明确授权处理少数本地能力不足的复杂任务 | 基本安全闭环的强依赖 |
 
@@ -327,18 +333,18 @@ Safety Kernel 独立于模型，至少覆盖：
 ## 10. 典型事件闭环：撞击后静止
 
 ```text
-1. IMU 检测到高冲击
-2. MotionNet 输出高 impact_score 和中高 fall_score
-3. ContextRouter 发现证据不足，输出 ask_user
-4. Ego Link 本地询问“检测到异常，你现在安全吗？”
-5. 用户无响应，静止时间继续增加
-6. ContextRouter 请求 GNSS 刷新、5 秒音频和可选单张图片
-7. Safety Kernel 检查隐私和电量，过滤不允许的证据
-8. Ego Link 发送结构化事件和允许的证据
-9. Ego Base 结合音频、位置、历史和联系人策略进行判断
-10. Base 下发再次询问、联系预设对象或结束事件的命令
-11. 用户最终结果被记录为安全、需要帮助、误报、取消或无响应
-12. 结果回流为后续训练标签
+1. AMOLED / `wearable_node` 的 QMI8658 检测到高冲击或跌倒候选
+2. MotionNet 或规则基线输出 `motion_event`
+3. PC Bridge 接收运动事件并交给规则版 ContextRouter
+4. ContextRouter 发现证据不足，输出 `ask_user`
+5. AMOLED 板显示“检测到异常，你现在安全吗？”
+6. 用户点击“安全”或“需要帮助”
+7. PC Bridge 记录 `user_confirmation`
+8. ContextRouter 请求 `connectivity_node` 刷新 GNSS，并可按策略请求音频或图像证据
+9. Safety Kernel 检查隐私、电量和动作边界
+10. PC Bridge 形成完整安全事件记录
+11. 同一 session 可离线回放给 ContextRouter
+12. 结果回流为后续 MotionNet / AudioGate 训练标签
 ```
 
 ---
@@ -401,6 +407,13 @@ Teacher 标签不能替代重要测试集的人工复核。
 - 固件 C 接口契约；
 - Codex 集成任务。
 
+当前 P0 双板桥接已建立：
+
+- `wearable_node` / `connectivity_node` 角色识别和桥接测试；
+- `motion_event` 进入 PC Bridge 后生成 `ask_user` 与 `request_location` 命令的骨架；
+- QMI8658 原始 IMU 数据采集、质量检查和夹具重复性记录；
+- IMU 记录仍标记为 `bridge_uplink/unverified`，直到完成正式验收。
+
 当前尚未完成：
 
 - 真实 MotionNet；
@@ -408,6 +421,8 @@ Teacher 标签不能替代重要测试集的人工复核。
 - 真实 VisionGate；
 - 学习型 ContextRouter；
 - ESP32-S3 量化模型部署；
+- AMOLED 屏幕确认回传与 PC Bridge 的现场端到端验收；
+- SIM7670G 板 `request_location` / `capture_image` 命令 ACK 和真实能力证据；
 - 正式 Ego Base 多模态协同；
 - 实际硬件功耗与安全效果验证。
 
