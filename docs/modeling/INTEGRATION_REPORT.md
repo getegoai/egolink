@@ -47,9 +47,13 @@
   TIMU-009C-B1 captured the first operator-mounted temporary fixture slice after
   the AMOLED/QMI8658 board was taped to a paper box: 16 live MQTT messages,
   8 real QMI8658 samples, stable `1024.98 mg` mean accel magnitude, M1 quality
-  PASS `0.94`, and replay PASS. Formal IMU acceptance still remains false
-  because final product mounting, FIFO/interrupt, final calibration, and power
-  gates are pending.
+  PASS `0.94`, and replay PASS. TIMU-009C-B2 repeated that path after the
+  operator added `TOP`, `OUT`, and `USB/CABLE` labels to the same paper-box
+  fixture: 20 live MQTT messages, 10 real QMI8658 samples, stable `1025.88 mg`
+  mean accel magnitude, negative-Z gravity retained, M1 quality PASS `0.94`,
+  and replay PASS. Formal IMU acceptance still remains false because final
+  product mounting, FIFO/interrupt, final calibration, and power gates are
+  pending.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: M0-INT-001 itself performed no hardware validation. Later
@@ -95,6 +99,7 @@
 - [x] TIMU-009C-A QMI8658 backend readiness capture
 - [x] TIMU-009C-B0 IMU product mounting evidence template
 - [x] TIMU-009C-B1 QMI8658 temporary fixture static capture
+- [x] TIMU-009C-B2 QMI8658 labeled fixture repeatability capture
 
 ## Changed files
 
@@ -559,6 +564,18 @@ TIMU-009C-B1 QMI8658 temporary fixture static capture updates:
 - `docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_EVIDENCE_20260624.json`
 - `docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_PREFLIGHT_20260624.json`
 - `docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_PREFLIGHT_20260624.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
+TIMU-009C-B2 QMI8658 labeled fixture repeatability capture updates:
+
+- `quality_tests/test_hardware_sensor_matrix.py`
+- `docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md`
+- `docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_EVIDENCE_20260624.json`
+- `docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_PREFLIGHT_20260624.json`
+- `docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_PREFLIGHT_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
@@ -1260,6 +1277,63 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
 Result: passed after TIMU-009C-B1 documentation, evidence artifacts, status,
+and hardware matrix sync. The repository test suite ran 169 tests
+successfully.
+
+```powershell
+python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/ego-link-amoled-qmi8658/status --topic ego/link/ego-link-amoled-qmi8658/event --event-log pc_simulator\runtime\timu009c_b2\timu009c-b2-labeled-temporary-fixture-static-20260624-1805.events.jsonl --max-messages 20 --wait-seconds 120
+```
+
+Result: passed for TIMU-009C-B2 live labeled fixture repeatability capture
+through the LAN broker. The capture stored 20 MQTT events: 10
+`sensor_sample/device_health` events and 10 `mqtt_status` events. The QMI8658
+samples carried `imu_source=qmi8658_i2c` and `imu_sample_mock=false`, with
+sequence range `11976..11995`. The static accel window had mean
+`[48.60, 94.10, -1020.40] mg`, mean accel magnitude `1025.88 mg`, and accel
+magnitude span `2.03 mg`. Compared with B1, accel magnitude mean delta was
+`0.90 mg`, Z mean delta was `0.10 mg`, and the gravity-dominant axis stayed
+negative Z.
+
+```powershell
+python scripts\session_recorder.py --event-log pc_simulator\runtime\timu009c_b2\timu009c-b2-labeled-temporary-fixture-static-20260624-1805.events.jsonl --session-id timu009c-b2-labeled-temporary-fixture-static-20260624-1805 --output-dir pc_simulator\runtime\recordings\timu009c-b2-labeled-temporary-fixture-static-20260624-1805 --limit 60 --json
+```
+
+Result: passed for TIMU-009C-B2 recording generation. The recorder produced
+20 sensor frames from 20 source events.
+
+```powershell
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\timu009c-b2-labeled-temporary-fixture-static-20260624-1805 --json
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\timu009c-b2-labeled-temporary-fixture-static-20260624-1805 --json
+```
+
+Result: passed for TIMU-009C-B2 M1 closure. The quality gate passed with
+`quality_score=0.94`, `errors=0`, and 2 warnings; replay passed with
+20 replayed inputs, 20 `risk_type=none` outputs, 0 safety events, and 0 base
+commands.
+
+```powershell
+python scripts\check_imu_acceptance.py --calibration-profile docs\hardware\TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.json --evidence-manifest docs\hardware\TIMU_009C_B2_QMI8658_LABELED_FIXTURE_EVIDENCE_20260624.json --report-id timu009c-b2-qmi8658-labeled-fixture-preflight-20260624 --output-json docs\hardware\TIMU_009C_B2_QMI8658_LABELED_FIXTURE_PREFLIGHT_20260624.json --markdown docs\hardware\TIMU_009C_B2_QMI8658_LABELED_FIXTURE_PREFLIGHT_20260624.md --title "# TIMU-009C-B2 QMI8658 Labeled Fixture Preflight"
+```
+
+Result: passed for TIMU-009C-B2 preflight generation. The report intentionally
+keeps `formal_imu_acceptance=false` and `motionnet_training_enabled=false`;
+labeled mounting, fixture, gyro summary, backend quality, M1 replay, and
+recalibration review are only `partial`, while accel calibration, temperature
+drift, FIFO/DRDY, and current waveform evidence remain `pending`.
+
+```powershell
+python -m unittest quality_tests.test_hardware_sensor_matrix quality_tests.test_imu_acceptance -v
+```
+
+Result: passed for TIMU-009C-B2 focused verification. The hardware matrix and
+IMU acceptance tests ran 12 tests successfully, covering the new B2 evidence
+paths and the existing formal gate semantics.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed after TIMU-009C-B2 documentation, evidence artifacts, status,
 and hardware matrix sync. The repository test suite ran 169 tests
 successfully.
 
@@ -2138,9 +2212,9 @@ configuration is supplied.
 
 ## Recommended next step
 
-Next, run TIMU-009C-B2 against the same ESP32-S3-Touch-AMOLED-2.06 QMI8658
-temporary fixture: label the paper box and board with `TOP`, `OUT`, and
-`USB/CABLE`, keep the direction unchanged, then capture the next repeatable
-static/equivalent-calibration window. Keep MotionNet training and formal IMU
-claims disabled until final mounting, FIFO/interrupt, power, production
-calibration, and backend quality gates pass.
+Next, run TIMU-009C-B3 against the same labeled ESP32-S3-Touch-AMOLED-2.06
+QMI8658 temporary fixture: capture a bounded equivalent-calibration pose set
+using the `TOP`, `OUT`, and `USB/CABLE` labels, or move to FIFO/DRDY validation
+if the interrupt path is wired. Keep MotionNet training and formal IMU claims
+disabled until final mounting, FIFO/interrupt, power, production calibration,
+and backend quality gates pass.

@@ -1,0 +1,80 @@
+{
+  "schema_version": "egolink.imu_acceptance_evidence.v0.1",
+  "manifest_id": "timu009c-b2-qmi8658-labeled-fixture-evidence-20260624",
+  "generated_at": "2026-06-24T09:55:00+00:00",
+  "hardware_profile": "esp32-s3-touch-amoled-2.06-qmi8658",
+  "calibration_profile_id": "timu009a-qmi8658-engineering-20260624",
+  "target_mounting_direction": "temporary_fixture_paper_box_labeled_top_out_usb_cable_20260624",
+  "reference_artifacts": [
+    "docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_STATIC_CAPTURE_20260624.md",
+    "docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_EVIDENCE_20260624.json",
+    "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md"
+  ],
+  "evidence": {
+    "product_mounting_direction_frozen": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "Operator added TOP, OUT, and USB/CABLE labels to the paper-box temporary fixture and a repeatability capture kept gravity dominated by negative Z. This is still not final product mounting freeze."
+    },
+    "production_fixture_defined": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "The labeled paper-box fixture is repeatable for engineering captures, but it is not a production or lab calibration fixture."
+    },
+    "six_face_or_equivalent_accel_calibration_complete": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "note": "B2 repeats one labeled static orientation only; no six-face or equivalent final calibration was completed."
+    },
+    "signed_static_gyro_bias_complete": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "Static gyro summary was recorded for the labeled fixture, but this is not a signed production gyro bias calibration."
+    },
+    "temperature_drift_characterized": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "note": "No temperature sweep or drift characterization was performed."
+    },
+    "fifo_drdy_interrupt_validated": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "note": "No FIFO/DRDY interrupt evidence was captured."
+    },
+    "power_current_waveform_validated": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "note": "No PPK2/Otii or equivalent current waveform was captured."
+    },
+    "backend_quality_gate_passed": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "The labeled fixture MQTT capture and M1 quality/replay passed, but final backend quality gate remains pending."
+    },
+    "m1_recording_replay_passed": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "M1 recording/replay passed for labeled temporary fixture evidence, not final accepted backend evidence."
+    },
+    "recalibration_triggers_reviewed": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "Report keeps final enclosure, mounting, calibration, FIFO/DRDY, and power changes as recalibration blockers."
+    }
+  },
+  "boundary": {
+    "formal_imu_acceptance": false,
+    "motionnet_training_enabled": false,
+    "notes": "Labeled temporary fixture repeatability is useful for engineering bring-up, but every formal acceptance gate still requires final hardware-observed artifacts."
+  }
+}
