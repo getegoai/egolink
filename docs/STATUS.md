@@ -10,6 +10,7 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。2026-06-24 �
 
 ## 已完成
 
+- DEMO-002：AMOLED 安全询问屏幕 Demo 固件完成。新增 `firmware/amoled_safety_demo`，基于 Waveshare `ESP32-S3-Touch-AMOLED-2.06` BSP + LVGL 显示 `Impact detected / Are you safe? / SAFE / HELP`，按钮回调会通过 USB 串口输出 `user_confirmation` JSON。`ESP-IDF v5.4.2` build 通过，生成 `egolink_amoled_safety_demo.bin`，app binary size `0x9a370`；已刷写到自动识别出的 Espressif USB-Serial/JTAG 口 `COM9`，识别 ESP32-S3、PSRAM 8MB、MAC `02:00:00:00:00:01`，hard reset 成功。复位后有限串口读取已捕获 `hello` 和 `ask_user_rendered`；后续有限串口读取已捕获多条 `user_confirmation`，覆盖 `safe` 和 `help` 触摸回传。当前仍是启动即显示的最小屏幕 Demo，尚未接入 PC Bridge `ask_user` 下行命令。
 - T001：补齐可重复验证入口 `scripts/verify.ps1`。
 - T002：定义 PC Simulator 事件/命令协议模型。
 - T003：实现 PC Simulator 本地事件存储。

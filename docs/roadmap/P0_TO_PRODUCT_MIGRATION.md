@@ -82,6 +82,18 @@ python scripts\run_minimal_safety_demo.py --response safe
 python scripts\run_minimal_safety_demo.py --response help
 ```
 
+当前 AMOLED 侧最小屏幕入口：
+
+```powershell
+cd firmware\amoled_safety_demo
+idf.py -p <AMOLED_COM_PORT> flash
+```
+
+`firmware/amoled_safety_demo` 已能在可穿戴节点上创建安全询问 UI，并在串口输出
+`hello` / `ask_user_rendered`；实机点击已捕获 `safe` 和 `help` 两类 `user_confirmation`。
+它还不是完整 Demo v0.2：当前提示由固件启动后直接显示，尚未由 PC Bridge 的
+`ask_user` 命令驱动。
+
 Demo-first 的规则是：先让核心产品体验可演示，再逐步替换 Mock 输入、补硬件 ACK、补质量门和稳定性。
 
 ### P0-A：双板 USB + PC Bridge
