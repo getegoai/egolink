@@ -1,0 +1,80 @@
+{
+  "schema_version": "egolink.imu_acceptance_evidence.v0.1",
+  "manifest_id": "timu009c-b1-qmi8658-temporary-fixture-evidence-20260624",
+  "generated_at": "2026-06-24T09:40:20+00:00",
+  "hardware_profile": "esp32-s3-touch-amoled-2.06-qmi8658",
+  "calibration_profile_id": "timu009a-qmi8658-engineering-20260624",
+  "target_mounting_direction": "temporary_fixture_paper_box_user_declared_20260624",
+  "reference_artifacts": [
+    "docs/hardware/TIMU_009C_B0_QMI8658_PRODUCT_MOUNTING_EVIDENCE_TEMPLATE_20260624.json",
+    "docs/hardware/TIMU_009C_B0_QMI8658_PRODUCT_MOUNTING_EVIDENCE_TEMPLATE_20260624.md",
+    "docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_STATIC_CAPTURE_20260624.md"
+  ],
+  "evidence": {
+    "product_mounting_direction_frozen": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_STATIC_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "Operator fixed the AMOLED/QMI8658 board to a paper-box temporary fixture. This is repeatable temporary mounting evidence, not final product mounting freeze."
+    },
+    "production_fixture_defined": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_STATIC_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "Paper-box fixture exists and was used for capture, but it is not a production or lab calibration fixture."
+    },
+    "six_face_or_equivalent_accel_calibration_complete": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "note": "Only one mounted static window was captured."
+    },
+    "signed_static_gyro_bias_complete": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_STATIC_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "Static gyro summary was recorded, but this is not a signed production gyro bias calibration."
+    },
+    "temperature_drift_characterized": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "note": "No temperature sweep or drift characterization was performed."
+    },
+    "fifo_drdy_interrupt_validated": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "note": "No FIFO/DRDY interrupt evidence was captured."
+    },
+    "power_current_waveform_validated": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "note": "No PPK2/Otii or equivalent current waveform was captured."
+    },
+    "backend_quality_gate_passed": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_STATIC_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "The temporary fixture MQTT capture and M1 quality/replay passed, but final backend quality gate remains pending."
+    },
+    "m1_recording_replay_passed": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_STATIC_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "M1 recording/replay passed for temporary fixture evidence, not final accepted backend evidence."
+    },
+    "recalibration_triggers_reviewed": {
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_STATIC_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "note": "Report keeps final enclosure, mounting, calibration, FIFO/DRDY, and power changes as recalibration blockers."
+    }
+  },
+  "boundary": {
+    "formal_imu_acceptance": false,
+    "motionnet_training_enabled": false,
+    "notes": "Temporary fixture evidence is useful for bring-up and repeatability, but every formal acceptance gate still requires final hardware-observed artifacts."
+  }
+}
