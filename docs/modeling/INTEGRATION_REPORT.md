@@ -35,9 +35,12 @@
   the existing TIMU-004B three-pose captures, with same-axis/same-sign x/y/z
   mapping and a temporary accel offset estimate of about
   `[48.0, -10.3, -24.0] mg`; it explicitly remains
-  `production_ready=false`. Formal IMU acceptance still remains false because
-  product mounting, FIFO/interrupt, final calibration, and power gates are
-  pending.
+  `production_ready=false`. TIMU-009B added a product acceptance preflight
+  gate ledger; the generated report is expected to fail today because no
+  hardware-observed artifacts exist for final mounting, production calibration,
+  FIFO/DRDY, backend replay, or current-waveform gates. Formal IMU acceptance
+  still remains false because product mounting, FIFO/interrupt, final
+  calibration, and power gates are pending.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: M0-INT-001 itself performed no hardware validation. Later
@@ -79,6 +82,7 @@
 - [x] TIMU-007 platform_imu backend-boundary PoC
 - [x] TIMU-008 platform_imu QMI8658 backend live capture
 - [x] TIMU-009A IMU engineering calibration boundary
+- [x] TIMU-009B IMU product acceptance preflight gate
 
 ## Changed files
 
@@ -497,6 +501,19 @@ TIMU-009A IMU engineering calibration boundary updates:
 - `quality_tests/test_hardware_sensor_matrix.py`
 - `docs/hardware/TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.json`
 - `docs/hardware/TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
+TIMU-009B IMU product acceptance preflight updates:
+
+- `pc_simulator/imu_acceptance.py`
+- `scripts/check_imu_acceptance.py`
+- `quality_tests/test_imu_acceptance.py`
+- `quality_tests/test_hardware_sensor_matrix.py`
+- `docs/hardware/TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.json`
+- `docs/hardware/TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
@@ -1055,6 +1072,30 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
 
 Result: passed after TIMU-009A code, profile, documentation, and hardware
 matrix sync. The repository test suite ran 162 tests successfully.
+
+```powershell
+python scripts\check_imu_acceptance.py --calibration-profile docs\hardware\TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.json --report-id timu009b-qmi8658-product-acceptance-preflight-20260624 --output-json docs\hardware\TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.json --markdown docs\hardware\TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.md
+```
+
+Result: passed for TIMU-009B preflight generation. The generated report keeps
+`formal_imu_acceptance=false` and `motionnet_training_enabled=false`; every
+product acceptance evidence gate is currently `evidence_missing`, as expected.
+
+```powershell
+python -m unittest quality_tests.test_imu_acceptance quality_tests.test_imu_calibration quality_tests.test_hardware_sensor_matrix -v
+```
+
+Result: passed for TIMU-009B focused verification. The IMU acceptance,
+calibration, and hardware matrix tests ran 14 tests successfully, covering
+missing evidence, hardware-observed evidence requirements, engineering-profile
+blockers, and the synthetic all-evidence-pass contract.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed after TIMU-009B code, preflight report, documentation, and
+hardware matrix sync. The repository test suite ran 167 tests successfully.
 
 ```powershell
 idf.py --version
@@ -1797,6 +1838,15 @@ sets `stage=engineering`, `production_ready=false`, and
 IMU lot, mounting, enclosure, axis orientation, ODR/filter/FIFO/interrupt,
 power-rail, backend/conversion, and fixture changes.
 
+TIMU-009B performed no new hardware I/O. It consumed the TIMU-009A engineering
+calibration profile and generated a product acceptance preflight report. The
+report intentionally keeps `formal_imu_acceptance=false` and
+`motionnet_training_enabled=false` because every product acceptance gate lacks a
+hardware-observed artifact: mounting direction, fixture, final accel
+calibration, signed gyro bias, temperature drift, FIFO/DRDY, power/current
+waveform, backend quality gate, M1 recording/replay, and recalibration trigger
+review.
+
 ## Known gaps
 
 - `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
@@ -1856,10 +1906,10 @@ power-rail, backend/conversion, and fixture changes.
   formal IMU acceptance is still false. TIMU-004A passed a single `z_negative`
   pose, TIMU-004B added three static poses, TIMU-005 added rotation/light-tap
   motion, TIMU-006 added a 600-sample long window, TIMU-007 added the
-  backend boundary, TIMU-008 added real-backend live capture, and TIMU-009A
-  added an engineering-only calibration profile. Mounting direction, final
-  production calibration, FIFO/interrupt behavior, and power behavior remain
-  pending.
+  backend boundary, TIMU-008 added real-backend live capture, TIMU-009A added
+  an engineering-only calibration profile, and TIMU-009B added a product
+  acceptance preflight gate ledger. Mounting direction, final production
+  calibration, FIFO/interrupt behavior, and power behavior remain pending.
 - TCAM-001 confirms the standalone camera smoke path, but product firmware
   camera integration remains pending. `platform_camera`, privacy authorization,
   retention/hash manifests, camera power-state control, M1 image recording, and
@@ -1870,7 +1920,7 @@ power-rail, backend/conversion, and fixture changes.
   FIFO/interrupt behavior, microphone, display/touch downlink, board-to-board
   UART, standalone operation, TF/SD, and dual-board power behavior all require
   later hardware tasks.
-- TIMU-002 through TIMU-009A show the current IMU boundary: the bridge now emits
+- TIMU-002 through TIMU-009B show the current IMU boundary: the bridge now emits
   real QMI8658 sample windows at about `20 Hz`, manual `z_negative`,
   `x_positive`, and `y_positive` static poses pass the pose quality gate, and a
   rotation/light-tap window passes motion sanity. TIMU-006 adds a 600-sample
@@ -1878,9 +1928,11 @@ power-rail, backend/conversion, and fixture changes.
   opt-in QMI8658 `platform_imu` backend boundary. TIMU-008 validates that
   opt-in backend through UART, MQTT, M1 recording, quality gate, and replay with
   `imu_sample_mock=false`. TIMU-009A adds a repeatable engineering calibration
-  profile with `production_ready=false`. It is still not a formal product IMU
-  source because FIFO/interrupt, power, final production calibration, and
-  mounting acceptance remain incomplete.
+  profile with `production_ready=false`. TIMU-009B adds a preflight report that
+  currently fails every product acceptance gate due missing hardware-observed
+  artifacts. It is still not a formal product IMU source because
+  FIFO/interrupt, power, final production calibration, and mounting acceptance
+  remain incomplete.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -1907,7 +1959,7 @@ power-rail, backend/conversion, and fixture changes.
 
 ## Recommended next step
 
-Next, run TIMU-009B against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: fix
+Next, run TIMU-009C against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: fix
 the target mounting orientation, record the final calibration procedure,
 validate FIFO/DRDY or interrupt behavior, and align firmware power markers with
 real current waveforms. Keep MotionNet training and formal IMU claims disabled

@@ -1,8 +1,8 @@
 # Ego Link M1 Hardware Sensor Matrix
 
-> 状态：HCTX-001 硬件上下文评估版 + T038 硬件可用性验证 + T039 IMU mock/ring skeleton/live mock capture + TIMU-001 real IMU bring-up evidence gate + TCAM-001 camera smoke live capture + HDBRIDGE-001 dual-board PC bridge PoC + HDBRIDGE-002 AMOLED QMI8658 live window + TIMU-002 QMI8658 sample quality gate + TIMU-003 QMI8658 timing retest + TIMU-004A QMI8658 single-pose quality gate + TIMU-004B QMI8658 three-pose quality gate + TIMU-005 QMI8658 motion window + TIMU-006 QMI8658 long window + TIMU-007 platform_imu backend boundary + TIMU-008 platform_imu QMI8658 live capture + TIMU-009A IMU engineering calibration boundary
+> 状态：HCTX-001 硬件上下文评估版 + T038 硬件可用性验证 + T039 IMU mock/ring skeleton/live mock capture + TIMU-001 real IMU bring-up evidence gate + TCAM-001 camera smoke live capture + HDBRIDGE-001 dual-board PC bridge PoC + HDBRIDGE-002 AMOLED QMI8658 live window + TIMU-002 QMI8658 sample quality gate + TIMU-003 QMI8658 timing retest + TIMU-004A QMI8658 single-pose quality gate + TIMU-004B QMI8658 three-pose quality gate + TIMU-005 QMI8658 motion window + TIMU-006 QMI8658 long window + TIMU-007 platform_imu backend boundary + TIMU-008 platform_imu QMI8658 live capture + TIMU-009A IMU engineering calibration boundary + TIMU-009B IMU product acceptance preflight gate
 > 更新时间：2026-06-24
-> 范围：Waveshare ESP32-S3-SIM7670G-4G 开发板、ESP32-S3-Touch-AMOLED-2.06 双板开发候选、现有仓库证据、PC Simulator、硬件上下文包 v0.3、2026-06-22 板级/GNSS/MQTT/session smoke、2026-06-23 HDATA-001 HPWR live capture、T039 `platform_imu` mock/ring interface and live mock MQTT capture、TIMU-001 real IMU bring-up plan、TCAM-001 camera smoke UART live capture、HDBRIDGE-001 PC bridge PoC、HDBRIDGE-002 AMOLED USB JSONL + QMI8658 WHOAMI/sample window、TIMU-002 QMI8658 timing/orientation quality report、TIMU-003 QMI8658 20Hz 120-sample retest、TIMU-004A QMI8658 single-pose pose/calibration report、TIMU-004B QMI8658 manual three-pose report、TIMU-005 QMI8658 motion-window report、TIMU-006 QMI8658 long-window report、TIMU-007 platform_imu backend-boundary report、TIMU-008 platform_imu QMI8658 backend live capture report、TIMU-009A QMI8658 engineering calibration profile
+> 范围：Waveshare ESP32-S3-SIM7670G-4G 开发板、ESP32-S3-Touch-AMOLED-2.06 双板开发候选、现有仓库证据、PC Simulator、硬件上下文包 v0.3、2026-06-22 板级/GNSS/MQTT/session smoke、2026-06-23 HDATA-001 HPWR live capture、T039 `platform_imu` mock/ring interface and live mock MQTT capture、TIMU-001 real IMU bring-up plan、TCAM-001 camera smoke UART live capture、HDBRIDGE-001 PC bridge PoC、HDBRIDGE-002 AMOLED USB JSONL + QMI8658 WHOAMI/sample window、TIMU-002 QMI8658 timing/orientation quality report、TIMU-003 QMI8658 20Hz 120-sample retest、TIMU-004A QMI8658 single-pose pose/calibration report、TIMU-004B QMI8658 manual three-pose report、TIMU-005 QMI8658 motion-window report、TIMU-006 QMI8658 long-window report、TIMU-007 platform_imu backend-boundary report、TIMU-008 platform_imu QMI8658 backend live capture report、TIMU-009A QMI8658 engineering calibration profile、TIMU-009B IMU product acceptance preflight report
 > 原则：只记录已经由仓库、固件、报告或明确文档支撑的事实；采购清单和候选平台不等于已到货、已接线或已验证。
 
 ## 1. 目的
@@ -16,7 +16,9 @@ QMI8658 live backend path. TIMU-009A now adds a repeatable engineering
 calibration profile generated from the existing TIMU-004B three-pose captures:
 axis mapping is x/y/z same-axis same-sign, the temporary accel offset estimate
 is about `[48.0, -10.3, -24.0] mg`, and the profile explicitly records
-`production_ready=false` and `formal_imu_acceptance=false`.
+`production_ready=false` and `formal_imu_acceptance=false`. TIMU-009B adds a
+product acceptance preflight ledger that currently fails by design because all
+hardware-observed product acceptance artifacts are missing.
 
 状态枚举：
 
@@ -343,6 +345,31 @@ MotionNet training, fall/impact product claims, or battery/power claims, and it
 must be regenerated after hardware, mounting, enclosure, ODR/filter/FIFO/DRDY,
 power rail, firmware backend/conversion, or production fixture changes.
 
+### 2.17 TIMU-009B IMU product acceptance preflight gate
+
+TIMU-009B adds a product acceptance preflight gate for the QMI8658 IMU path.
+It consumes the TIMU-009A engineering calibration profile and generates:
+
+- `pc_simulator/imu_acceptance.py`
+- `scripts/check_imu_acceptance.py`
+- `docs/hardware/TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.json`
+- `docs/hardware/TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.md`
+
+Current result is intentionally not an IMU acceptance:
+
+- `formal_imu_acceptance=false`.
+- `motionnet_training_enabled=false`.
+- All evidence gates are missing because no hardware-observed product
+  acceptance artifact has been supplied.
+- The TIMU-009A calibration profile is still `stage=engineering` and
+  `production_ready=false`.
+
+The required gates are product mounting direction frozen, production fixture
+defined, six-face or equivalent final accel calibration, signed static gyro
+bias, temperature drift characterization, FIFO/DRDY interrupt validation,
+power/current waveform validation, backend quality gate, M1 recording/replay,
+and recalibration trigger review.
+
 ## 3. 传感器与能力矩阵
 
 | 能力 | 料号 / 来源 | 接口 / 引脚 | 驱动状态 | 数据能力 | 功耗控制能力 | 真实 / Mock 状态 | M1 数据可用性与阻塞项 |
@@ -361,6 +388,7 @@ power rail, firmware backend/conversion, or production fixture changes.
 | AMOLED 板 QMI8658 IMU via PC Bridge | ESP32-S3-Touch-AMOLED-2.06；HDBRIDGE-002 live WHOAMI `0x05` | Native USB Serial/JTAG `COM9` JSONL；I2C SDA GPIO15 / SCL GPIO14；QMI8658 address `0x6B`；AXP2101 address `0x34` | `firmware/amoled_bridge` 已完成最小 I2C probe；TIMU-003 改为 `vTaskDelayUntil` 固定周期采样；TIMU-004A 新增 pose/motion analyzer；TIMU-004B 新增人工采集脚本并完成三姿态实采；TIMU-005 新增 motion-only capture 并完成旋转/轻敲 motion window；TIMU-006 新增可配置 600 样本长窗口和 `device_jitter` gate；TIMU-007 在 `platform_imu` 中加入 opt-in QMI8658 后端边界；TIMU-008 已在 `firmware/mqtt_heartbeat` QMI profile 中完成真实后端 live capture；PC Bridge / recorder / quality gate / replay 已通过 | `hello`、`imu_whoami`、每窗口 120 或 600 条 `imu_sample`；identity/completeness/static orientation/device timing PASS；目标 `50 ms / 20 Hz`，TIMU-006 实测 mean interval 约 `49.9983 ms`、sample rate 约 `20.0007 Hz`、max interval deviation `1.0 ms`；三姿态 total quality gates PASS；motion window `motion_sanity` PASS；TIMU-008 MQTT `sensor_sample/device_health` 已出现 `imu_sample_mock=false` | 无 IMU 低功耗、中断、FIFO、唤醒或功耗波形；三姿态 offset 仍是保守估计，不是最终产品安装校准；TIMU-008 为后端 live capture，不等于最终产品安装验收 | `semi_verified` | 可作为 `platform_imu` real backend 的候选证据；不得用于 MotionNet 训练、跌倒判断或正式 IMU 声明，直到安装方向、FIFO/中断、功耗和后端质量门通过。 |
 | IMU platform backend boundary | `firmware/mqtt_heartbeat/components/platform_imu` | 默认 mock 后端；TIMU-007 新增显式 opt-in QMI8658 I2C backend Kconfig；TIMU-008 新增 QMI live-capture profile | T039 已实现 `platform_imu_init`、`platform_imu_push_sample`、`platform_imu_read_recent` 和 32 样本 ring buffer；TIMU-007 新增 `platform_imu_sample()`、后端 metadata、QMI8658 WHOAMI/read sample PoC；TIMU-008 在 `COM9` 上验证 AXP2101 rail enable、QMI8658 WHOAMI、40 条 boot sample 和 MQTT payload；默认 build 仍为 mock | 默认 `mock_stationary` accel/gyro、ring count、dropped samples、latest seq；TIMU-008 QMI profile `sensor_sample/device_health` 已捕获 `imu_hardware_present=true`、`imu_driver_enabled=true`、`imu_sample_mock=false`；默认产品 profile 仍是 mock | 无真实 IMU 功耗；无 FIFO/中断/唤醒；QMI8658 live profile 已通过但未做产品安装/功耗/FIFO 验收 | `semi_verified` | 可用于继续推进真实 IMU 后端验收；默认 P0 产品路径仍不得声称真实 IMU。TIMU-008 不可用于 MotionNet 训练或真实跌倒/碰撞判断，直到安装/校准/FIFO/中断/功耗质量门完成。 |
 | IMU engineering calibration profile | `pc_simulator/imu_calibration.py`；TIMU-004B QMI8658 three-pose captures | PC-side engineering artifact；no device firmware write | TIMU-009A 生成 `docs/hardware/TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.json` / `.md`；wrapper 为 `scripts/generate_imu_calibration_profile.py` | Axis map x/y/z same-axis same-sign；temporary accel offset estimate `[48.0, -10.3, -24.0] mg`；`stage=engineering` | 无 gyro signed bias、scale matrix、temperature drift、FIFO/DRDY、production fixture 或 current waveform evidence | `semi_verified` | 可用于 engineering bring-up 和 backend regression；`production_ready=false`，`formal_imu_acceptance=false`，不可用于 MotionNet training、production calibration 或产品安全声明。 |
+| IMU product acceptance preflight gate | `pc_simulator/imu_acceptance.py`；`scripts/check_imu_acceptance.py` | PC-side acceptance ledger；requires hardware-observed artifacts for pass gates | TIMU-009B 生成 `docs/hardware/TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.json` / `.md`；当前报告预期 FAIL | 10 个 required gates：安装方向、夹具、最终 accel 校准、signed gyro bias、温漂、FIFO/DRDY、功耗波形、后端质量门、M1 replay、recalibration review | 无新增硬件证据；所有 gate 当前 `evidence_missing`；`motionnet_training_enabled=false` | `semi_verified` | 可用于跟踪正式验收缺口；当前 `formal_imu_acceptance=false`，下一步必须做真实硬件采集。 |
 | 麦克风 / 音频 | 未确认；候选 PDM/I2S 麦克风 | 未确认 I2S/PDM/ADC、引脚、时钟 | 无驱动、无音频样本 | 无 VAD、音量、事件音频、clip ref | 无音频门控/环形缓冲功耗策略 | `missing_or_unknown` | 当前仓库无真实麦克风。阻塞 AudioGate；需确认硬件、采样率、隐私授权和短时缓冲。 |
 | 物理 SOS 按键 | 产品要求存在；真实 GPIO 未确认 | 未确认 GPIO、上拉/下拉、消抖 | Dashboard/CLI 可模拟 SOS；真实按键 GPIO 未验证 | 模拟 `sos_pressed` 可进入 Safety flow | 物理按键低功耗唤醒未实现 | `not_verified` | 可验证规则基线，不代表真实 SOS 可靠性。阻塞硬安全路径验证。 |
 | 串口 Safety CLI | ESP32-S3 固件 CLI | CH343 `COM4` | 固件提供 `safety status/demo normal/sos/impact` 静态测试路径 | deterministic mock safety input/output | 无功耗测量标记 | `semi_verified` | 可做接口 smoke；未写入统一 recorder。 |
@@ -389,13 +417,14 @@ power rail, firmware backend/conversion, or production fixture changes.
 | `imu_source` / `imu_ring_count` / `imu_latest_seq` / `imu_accel_mg_*` / `imu_gyro_mdps_*` | T039 `platform_imu` mock payload；TIMU-008 opt-in QMI backend payload | 默认 P0 profile 仍是 `mock_stationary`、`imu_hardware_present=false`、`imu_driver_enabled=false`；TIMU-008 QMI profile 已在 AMOLED 板上捕获 `qmi8658_i2c`、`imu_sample_mock=false` 的真实后端样本，但仍不是最终产品安装/FIFO/中断/功耗验收数据。 |
 | `imu_motion` | HDBRIDGE-001 / HDBRIDGE-002 PC Bridge / TIMU-002-TIMU-006 analyzer | TIMU-006 已有 QMI8658 live WHOAMI、20Hz 样本、`z_negative` / `x_positive` / `y_positive` 三姿态静态证据、motion window 证据和 600 样本长窗口证据，TIMU-007 已补 `platform_imu` 后端边界，TIMU-008 已完成真实后端 MQTT/M1 live capture；bridge recorder 中仍必须保留 `source_availability=bridge_uplink`、`source_status=unverified`；TIMU-008 的 `device_health` frame 不是 bridge `imu_motion` frame，也不是产品安装/FIFO/中断/功耗验收数据。 |
 | `imu_engineering_calibration_profile` | TIMU-009A profile artifact | 仅可作为工程 bring-up / regression metadata；`production_ready=false`，`formal_imu_acceptance=false`，不进入正式训练数据标签或产品声明。 |
+| `imu_acceptance_preflight_report` | TIMU-009B preflight artifact | 仅可作为验收缺口账本；当前所有硬件证据 gate 缺失，`formal_imu_acceptance=false`，`motionnet_training_enabled=false`。 |
 | `safety_evaluation` / replay output | PC Safety Companion M0 | 规则基线输出，可用于闭环调试，不可作为真实安全标签。 |
 
 ## 5. 阻塞 M1 数据采集的缺失硬件或驱动
 
 | 阻塞项 | 影响 | 建议下一步 |
 |---|---|---|
-| IMU 安装方向、校准和产品后端仍未验收 | HDBRIDGE-002 已确认 AMOLED QMI8658 身份和样本，TIMU-003 已修复 20Hz timing，TIMU-004A 已完成单姿态 `z_negative` 偏置估计，TIMU-004B 已完成三姿态静态质量门，TIMU-005 已完成 motion sanity，TIMU-006 已完成 600 样本长窗口 timing/jitter/drop 证据，TIMU-007 已完成 `platform_imu` 后端边界，TIMU-008 已完成 QMI8658 真实后端 live capture，TIMU-009A 已生成 engineering calibration profile 且明确 `production_ready=false`；但 FIFO/中断、功耗、最终量产校准和产品安装约定仍未验收，仍无法作为 MotionNet 所需正式 accel/gyro 数据集。 | 下一步 TIMU-009B 固定产品安装方向和最终校准流程，并验证 FIFO/DRDY、低功耗唤醒、功耗波形和后端 quality gate。 |
+| IMU 安装方向、校准和产品后端仍未验收 | HDBRIDGE-002 已确认 AMOLED QMI8658 身份和样本，TIMU-003 已修复 20Hz timing，TIMU-004A 已完成单姿态 `z_negative` 偏置估计，TIMU-004B 已完成三姿态静态质量门，TIMU-005 已完成 motion sanity，TIMU-006 已完成 600 样本长窗口 timing/jitter/drop 证据，TIMU-007 已完成 `platform_imu` 后端边界，TIMU-008 已完成 QMI8658 真实后端 live capture，TIMU-009A 已生成 engineering calibration profile 且明确 `production_ready=false`，TIMU-009B 已生成 product acceptance preflight 且预期 FAIL；但 FIFO/中断、功耗、最终量产校准和产品安装约定仍未验收，仍无法作为 MotionNet 所需正式 accel/gyro 数据集。 | 下一步 TIMU-009C 固定产品安装方向并采集真实硬件证据：最终校准、FIFO/DRDY、低功耗唤醒、功耗波形和后端 quality gate。 |
 | 麦克风硬件和音频链路未知 | 无法采集 AudioGate 数据或事件音频。 | 确认 PDM/I2S/ADC 麦克风和引脚；先定义隐私和短时缓冲边界。 |
 | 真实物理 SOS GPIO 未验证 | SOS 硬安全路径仍是 Dashboard/CLI 模拟。 | 确认按键 GPIO、消抖、长按/短按、低功耗唤醒和误触策略。 |
 | SD 挂载未验证 | 固件侧长 session 持久化和掉电恢复不可靠。 | 复测 SD 卡格式、供电、引脚和挂载参数；若继续失败，先用 SPI flash/NVS 或 PC 侧 recorder 过渡。 |
@@ -431,10 +460,10 @@ power rail, firmware backend/conversion, or production fixture changes.
 
 HCTX-001 后的建议顺序：
 
-1. 下一步 TIMU-009B：在 TIMU-008 live backend capture 和 TIMU-009A engineering profile 基础上，固定目标安装方向，记录最终校准流程，并验证 FIFO/DRDY 中断、低功耗唤醒和功耗波形。
-2. 后续真实 IMU 验收：TIMU-009B 通过后仍需重复后端 quality gate 和数据集策略确认；模型训练/跌倒判断继续禁用，直到数据集质量门通过。
+1. 下一步 TIMU-009C：在 TIMU-008 live backend capture、TIMU-009A engineering profile 和 TIMU-009B preflight gate 基础上，固定目标安装方向，记录最终校准流程，并验证 FIFO/DRDY 中断、低功耗唤醒和功耗波形。
+2. 后续真实 IMU 验收：TIMU-009C 通过后仍需重复后端 quality gate 和数据集策略确认；模型训练/跌倒判断继续禁用，直到数据集质量门通过。
 3. 后续 TSTOR/TMIC：确认 AMOLED 或 4G 板 TF/SD、麦克风链路和隐私/短缓冲边界。
 4. 后续 HDATA：在户外/靠窗环境复测 SIM7670G GNSS fix，并继续把 clean recording 作为 M1 数据质量入口。
 5. 后续 HPWR：接入 PPK2/Otii 或等价仪器，把 `POWER_MARKER_<seq>` 与真实电流波形对齐。
 
-T038 硬件可用性 smoke、HDATA-001 live capture、T039 IMU mock/ring skeleton、TIMU-001 real IMU bring-up evidence gate、TCAM-001 camera smoke live capture、HDBRIDGE-001 dual-board PC bridge PoC、HDBRIDGE-002 AMOLED QMI8658 live window、TIMU-002 QMI8658 sample quality gate、TIMU-003 QMI8658 timing retest、TIMU-004A single-pose quality gate、TIMU-004B manual three-pose capture、TIMU-005 motion window capture、TIMU-006 long window capture、TIMU-007 platform_imu backend boundary、TIMU-008 platform_imu QMI8658 live capture 和 TIMU-009A engineering calibration boundary 已完成，但它们只确认当前开发板最小闭环、未来 IMU 接口形状、真实 IMU 验收门、独立摄像头 smoke、PC 侧双板消息桥、AMOLED QMI8658 身份/样本、20Hz timing、单姿态 `z_negative`、三姿态静态证据、一次 motion sanity 证据、600 样本 timing/jitter/drop 证据、默认 mock/显式 QMI8658 后端边界、opt-in 真实后端 MQTT/M1 闭环以及工程校准 profile 可继续推进；安装方向/最终量产校准/FIFO/中断/功耗、麦克风、物理 SOS GPIO、SD、真实电量/充电、真实功耗波形、产品固件摄像头路径和 ESP32 侧 SIM7670G 控制链路仍需后续任务逐项验证。
+T038 硬件可用性 smoke、HDATA-001 live capture、T039 IMU mock/ring skeleton、TIMU-001 real IMU bring-up evidence gate、TCAM-001 camera smoke live capture、HDBRIDGE-001 dual-board PC bridge PoC、HDBRIDGE-002 AMOLED QMI8658 live window、TIMU-002 QMI8658 sample quality gate、TIMU-003 QMI8658 timing retest、TIMU-004A single-pose quality gate、TIMU-004B manual three-pose capture、TIMU-005 motion window capture、TIMU-006 long window capture、TIMU-007 platform_imu backend boundary、TIMU-008 platform_imu QMI8658 live capture、TIMU-009A engineering calibration boundary 和 TIMU-009B product acceptance preflight gate 已完成，但它们只确认当前开发板最小闭环、未来 IMU 接口形状、真实 IMU 验收门、独立摄像头 smoke、PC 侧双板消息桥、AMOLED QMI8658 身份/样本、20Hz timing、单姿态 `z_negative`、三姿态静态证据、一次 motion sanity 证据、600 样本 timing/jitter/drop 证据、默认 mock/显式 QMI8658 后端边界、opt-in 真实后端 MQTT/M1 闭环、工程校准 profile 以及验收缺口账本可继续推进；安装方向/最终量产校准/FIFO/中断/功耗、麦克风、物理 SOS GPIO、SD、真实电量/充电、真实功耗波形、产品固件摄像头路径和 ESP32 侧 SIM7670G 控制链路仍需后续任务逐项验证。
