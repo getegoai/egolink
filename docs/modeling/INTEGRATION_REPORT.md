@@ -22,9 +22,11 @@
   evidence with M1 quality/replay closure. TIMU-005 extended the helper with
   `-MotionOnly` and `-ExistingPose`, captured a live rotation/light-tap motion
   window, passed motion sanity, and closed the merged M1 quality/replay loop
-  with 480 `imu_motion` frames. Formal IMU acceptance still remains false
-  because the source is `bridge_uplink/unverified` and product backend,
-  continuous-window, FIFO/interrupt, mounting, and power gates are pending.
+  with 480 `imu_motion` frames. TIMU-006 made the AMOLED bridge window
+  configurable, captured a 600-sample long window, passed timing and jitter
+  gates, and closed the M1 loop with 600 `imu_motion` frames. Formal IMU
+  acceptance still remains false because the source is `bridge_uplink/unverified`
+  and product backend, FIFO/interrupt, mounting, and power gates are pending.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: M0-INT-001 itself performed no hardware validation. Later
@@ -62,6 +64,7 @@
 - [x] TIMU-004A QMI8658 single-pose quality gate
 - [x] TIMU-004B QMI8658 manual three-pose capture
 - [x] TIMU-005 QMI8658 motion window capture
+- [x] TIMU-006 QMI8658 long-window capture
 
 ## Changed files
 
@@ -415,6 +418,25 @@ TIMU-005 QMI8658 motion window capture updates:
 - `quality_tests/test_amoled_pose_capture_script.py`
 - `quality_tests/test_hardware_sensor_matrix.py`
 - `docs/hardware/TIMU_005_QMI8658_MOTION_WINDOW_20260624.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
+TIMU-006 QMI8658 long-window capture updates:
+
+- `firmware/amoled_bridge/main/Kconfig.projbuild`
+- `firmware/amoled_bridge/main/app_main.c`
+- `firmware/amoled_bridge/sdkconfig`
+- `firmware/amoled_bridge/sdkconfig.defaults`
+- `firmware/amoled_bridge/README.md`
+- `pc_simulator/imu_quality.py`
+- `scripts/capture_amoled_qmi8658_pose_set.ps1`
+- `quality_tests/test_amoled_bridge_firmware.py`
+- `quality_tests/test_amoled_pose_capture_script.py`
+- `quality_tests/test_imu_quality.py`
+- `quality_tests/test_hardware_sensor_matrix.py`
+- `docs/hardware/TIMU_006_QMI8658_LONG_WINDOW_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
@@ -791,6 +813,75 @@ Result: passed after TIMU-005 script and documentation sync. The repository test
 suite ran 155 tests successfully, including the AMOLED motion-only capture
 helper contract, hardware matrix updates, existing pose/motion analyzer, PC
 Bridge, M1 recording, quality gate, and replay tests.
+
+```powershell
+python -m unittest quality_tests.test_amoled_bridge_firmware quality_tests.test_amoled_pose_capture_script quality_tests.test_imu_quality -v
+```
+
+Result: passed for TIMU-006 static changes. The AMOLED bridge firmware tests,
+capture-helper tests, and IMU quality analyzer tests ran 15 tests successfully.
+Coverage includes configurable 600-sample firmware windows, `-M1Limit`, the
+`long_window_timing` analyzer mode, and the `device_jitter` gate.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1
+idf.py build
+```
+
+Result: passed for TIMU-006. ESP-IDF generated
+`firmware/amoled_bridge/build/egolink_amoled_bridge.bin`; binary size was
+`0x38650`.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1
+idf.py -p COM9 flash
+```
+
+Result: passed for TIMU-006. esptool identified ESP32-S3 USB-Serial/JTAG,
+8 MB PSRAM, MAC `02:00:00:00:00:01`, wrote the image, verified hashes, and
+hard-reset the board.
+
+```powershell
+.\scripts\capture_amoled_qmi8658_pose_set.ps1 -MotionOnly -NoPrompt -RunM1Loop -SessionId timu006-qmi8658-long-window-live-20260624-0001 -OutputDir pc_simulator\runtime\timu006 -TimeoutSeconds 75 -SettleSeconds 0 -M1Limit 1000
+```
+
+Result: passed for TIMU-006 live long-window capture. COM9 produced
+`pc_simulator/runtime/timu006/timu006-qmi8658-long-window-live-20260624-0001-motion.jsonl`
+with 603 JSONL records, including 600 `imu_sample` records, `imu_whoami`, and
+`amoled_bridge_done`. The completion payload reported `samples_emitted=600`,
+`read_errors=0`, `not_ready_count=0`, `missed_deadlines=0`, and
+`max_sample_work_ms=42`.
+
+```powershell
+python scripts\analyze_imu_quality.py pc_simulator\runtime\timu006\timu006-qmi8658-long-window-live-20260624-0001-motion.jsonl --long-window --min-samples 500 --max-interval-jitter-ms 10 --json --markdown pc_simulator\runtime\timu006\timu006-qmi8658-long-window-live-20260624-0001.long_window_quality.md --title "# TIMU-006 QMI8658 Long Window Quality Report"
+```
+
+Result: passed for the TIMU-006 long-window gate. The analyzer reported
+`analysis_mode=long_window_timing`, `quality_gates_passed=true`, observed mean
+interval about `49.9983 ms`, observed sample rate about `20.0007 Hz`, max
+interval deviation `1.0 ms`, jitter limit `10.0 ms`, monotonic QMI timestamps,
+and `source_boundary=PASS`. `formal_imu_acceptance=false` remains correct
+because the source is still `bridge_uplink/unverified`.
+
+```powershell
+python scripts\board_bridge.py --source motion=pc_simulator\runtime\timu006\timu006-qmi8658-long-window-live-20260624-0001-motion.jsonl --event-log pc_simulator\runtime\timu006\timu006-qmi8658-long-window-live-20260624-0001.events.jsonl --json
+python scripts\session_recorder.py --event-log pc_simulator\runtime\timu006\timu006-qmi8658-long-window-live-20260624-0001.events.jsonl --session-id timu006-qmi8658-long-window-live-20260624-0001 --output-dir pc_simulator\runtime\recordings\timu006-qmi8658-long-window-live-20260624-0001 --limit 1000 --json
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\timu006-qmi8658-long-window-live-20260624-0001 --json
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\timu006-qmi8658-long-window-live-20260624-0001 --json
+```
+
+Result: passed for the TIMU-006 M1 loop. PC Bridge stored 603 events with 0
+skipped lines. The recorder produced 600 `imu_motion` frames. The quality gate
+passed with score `0.94`, 0 errors, and 2 warnings (`firmware_version_unknown`
+and `annotations_empty`). Replay passed with 600 inputs, all `risk_type=none`,
+and no generated safety events or base commands.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed after TIMU-006 firmware, analyzer, hardware matrix, and
+documentation sync. The repository test suite ran 157 tests successfully.
 
 ```powershell
 idf.py --version
@@ -1486,6 +1577,20 @@ replayed 480 `risk_type=none` outputs. Formal IMU acceptance remains false:
 the source is still `bridge_uplink/unverified`, and continuous-window,
 product-backend, FIFO/interrupt, mounting, and power validation remain pending.
 
+TIMU-006 performed bounded hardware I/O on the same AMOLED QMI8658 bridge path.
+It changed the bridge firmware to a configurable 600-sample, 50 ms window,
+built and flashed the firmware to `COM9`, then captured a stationary long
+window. The capture produced 600 `imu_sample` records with `read_errors=0`,
+`not_ready_count=0`, `missed_deadlines=0`, and `max_sample_work_ms=42`.
+The long-window analyzer passed identity, completeness, completion, timing,
+jitter, QMI timestamp, and source-boundary gates; observed mean interval was
+about `49.9983 ms`, observed sample rate about `20.0007 Hz`, and max interval
+deviation `1.0 ms` under a `10.0 ms` jitter limit. The PC Bridge/M1 loop
+produced 600 `imu_motion` frames, passed quality gate with score `0.94`, and
+replayed 600 `risk_type=none` outputs. Formal IMU acceptance remains false:
+the source is still `bridge_uplink/unverified`, and real backend, product
+mounting, FIFO/interrupt, and power validation remain pending.
+
 ## Known gaps
 
 - `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
@@ -1556,13 +1661,13 @@ product-backend, FIFO/interrupt, mounting, and power validation remain pending.
   FIFO/interrupt behavior, microphone, display/touch downlink, board-to-board
   UART, standalone operation, TF/SD, and dual-board power behavior all require
   later hardware tasks.
-- TIMU-002 through TIMU-005 show the current IMU boundary: the bridge now emits
+- TIMU-002 through TIMU-006 show the current IMU boundary: the bridge now emits
   real QMI8658 sample windows at about `20 Hz`, manual `z_negative`,
   `x_positive`, and `y_positive` static poses pass the pose quality gate, and a
-  rotation/light-tap window passes motion sanity. It is still not a formal
-  product IMU source because continuous-window behavior, product backend,
-  FIFO/interrupt, power, and mounting acceptance remain incomplete and the
-  source remains `bridge_uplink/unverified`.
+  rotation/light-tap window passes motion sanity. TIMU-006 adds a 600-sample
+  long-window timing/jitter/drop pass. It is still not a formal product IMU
+  source because product backend, FIFO/interrupt, power, and mounting acceptance
+  remain incomplete and the source remains `bridge_uplink/unverified`.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -1589,8 +1694,7 @@ product-backend, FIFO/interrupt, mounting, and power validation remain pending.
 
 ## Recommended next step
 
-Next, run TIMU-006 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: capture
-a longer continuous window for ODR/jitter/drop/seq behavior, or start a small
-`platform_imu` real backend PoC plan with explicit source-promotion gates. Keep
-MotionNet training and formal IMU claims disabled until source verification,
-mounting, FIFO/interrupt, power, and backend quality gates pass.
+Next, run TIMU-007 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: start a
+small `platform_imu` real backend PoC plan with explicit source-promotion gates.
+Keep MotionNet training and formal IMU claims disabled until source
+verification, mounting, FIFO/interrupt, power, and backend quality gates pass.

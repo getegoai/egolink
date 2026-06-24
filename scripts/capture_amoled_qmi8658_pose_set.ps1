@@ -12,6 +12,7 @@ param(
     [string]$MarkdownReport = "",
     [string[]]$ExistingPose = @(),
     [switch]$MotionOnly,
+    [int]$M1Limit = 1000,
     [switch]$NoPrompt,
     [switch]$Analyze,
     [switch]$RunM1Loop,
@@ -38,6 +39,7 @@ Examples:
   powershell -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -PoseLabels z_negative,x_positive,y_positive -CaptureMotion -Analyze
   powershell -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -PoseLabels z_negative -NoPrompt -Analyze
   powershell -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -MotionOnly -ExistingPose z_negative=pc_simulator\runtime\timu004b\z.jsonl -CaptureMotion -Analyze
+  powershell -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -MotionOnly -TimeoutSeconds 60 -M1Limit 1000 -Analyze -RunM1Loop
   powershell -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -Analyze -MarkdownReport docs\hardware\TIMU_004B_QMI8658_MANUAL_CAPTURE_20260623.md
 
 The script captures finite windows only. It resets the bridge before each
@@ -268,7 +270,7 @@ function Invoke-M1Loop {
         "--event-log", $eventLog,
         "--session-id", $SessionId,
         "--output-dir", $recordingDir,
-        "--limit", "500",
+        "--limit", "$M1Limit",
         "--json"
     )
     Invoke-PythonChecked -Arguments $recorderArgs -LogPath $recorderLog

@@ -79,6 +79,7 @@ class HardwareSensorMatrixTests(unittest.TestCase):
             "docs/hardware/TIMU_004_QMI8658_POSE_QUALITY_20260623.md",
             "docs/hardware/TIMU_004B_QMI8658_MANUAL_CAPTURE_20260623.md",
             "docs/hardware/TIMU_005_QMI8658_MOTION_WINDOW_20260624.md",
+            "docs/hardware/TIMU_006_QMI8658_LONG_WINDOW_20260624.md",
             "pc_simulator/board_bridge.py",
             "pc_simulator/imu_quality.py",
             "pc_simulator/imu_pose_quality.py",

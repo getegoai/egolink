@@ -1,20 +1,19 @@
-# CURRENT_TASK: TIMU-005 / QMI8658 Motion Window Capture
+# CURRENT_TASK: TIMU-006 / QMI8658 Long Window Capture
 
 ## Goal
 
-Capture and verify a real QMI8658 motion window on the
-ESP32-S3-Touch-AMOLED-2.06 board, reusing the TIMU-004B three-pose evidence and
-without claiming formal IMU acceptance.
+Capture and verify a longer real QMI8658 window on the
+ESP32-S3-Touch-AMOLED-2.06 board, using the bridge path only and without
+claiming formal IMU acceptance.
 
 ## Scope
 
-- Extend the bounded AMOLED capture helper with `-MotionOnly` and
-  `-ExistingPose LABEL=PATH` support.
-- Reuse the existing `z_negative`, `x_positive`, and `y_positive` static pose
-  windows from TIMU-004B.
-- Capture one operator-driven rotation/light-tap motion window on `COM9`.
-- Run the pose/motion analyzer, PC Bridge, M1 session recording, quality gate,
-  and replay.
+- Make the AMOLED bridge sample count and interval configurable through ESP-IDF
+  project configuration.
+- Use a 600-sample, 50 ms window for about 30 seconds of QMI8658 data.
+- Add a PC-side `--long-window` timing/jitter/drop quality mode.
+- Capture one live long window on `COM9`.
+- Run PC Bridge, M1 session recording, quality gate, and replay.
 - Keep the source boundary at `bridge_uplink/unverified`.
 
 ## Out Of Scope
@@ -28,39 +27,47 @@ without claiming formal IMU acceptance.
 
 ## Result
 
-- Updated `scripts/capture_amoled_qmi8658_pose_set.ps1` with motion-only capture
-  and existing pose source reuse.
-- Updated `quality_tests/test_amoled_pose_capture_script.py`.
-- Added `docs/hardware/TIMU_005_QMI8658_MOTION_WINDOW_20260624.md`.
+- Added `firmware/amoled_bridge/main/Kconfig.projbuild`.
+- Updated `firmware/amoled_bridge` defaults:
+  `CONFIG_EGOLINK_AMOLED_SAMPLE_COUNT=600` and
+  `CONFIG_EGOLINK_AMOLED_SAMPLE_INTERVAL_MS=50`.
+- Updated `pc_simulator/imu_quality.py` with `long_window_timing` mode and
+  `device_jitter` gate.
+- Updated `scripts/capture_amoled_qmi8658_pose_set.ps1` with `-M1Limit` so long
+  windows are not truncated by the recorder.
+- Added `docs/hardware/TIMU_006_QMI8658_LONG_WINDOW_20260624.md`.
+- Built `firmware/amoled_bridge` successfully with ESP-IDF v5.4.2.
+- Flashed `firmware/amoled_bridge` to `COM9` successfully.
 - Captured:
-  `pc_simulator/runtime/timu005/timu005-qmi8658-motion-live-20260624-0001-motion.jsonl`.
-- Motion capture contained 123 JSONL records and 120 `imu_sample` records.
-- Motion timing cross-check passed at about `49.99 ms / 20.00 Hz`.
-- Motion analyzer saw 115 samples after warmup discard.
-- Accel magnitude range: about `490.04 mg`.
-- Gyro peak: about `201921 mdps`.
-- `motion_sanity`: PASS.
-- Three-pose + motion overall quality gates: PASS.
+  `pc_simulator/runtime/timu006/timu006-qmi8658-long-window-live-20260624-0001-motion.jsonl`.
+- Long-window capture contained 603 JSONL records and 600 `imu_sample` records.
+- Completion payload reported `samples_emitted=600`, `read_errors=0`,
+  `not_ready_count=0`, `missed_deadlines=0`, and `max_sample_work_ms=42`.
+- Long-window analyzer PASS:
+  - observed mean interval about `49.9983 ms`
+  - observed sample rate about `20.0007 Hz`
+  - max interval deviation `1.0 ms`
+  - jitter limit `10.0 ms`
+  - QMI timestamp monotonic
+- PC Bridge stored 603 events with 0 skipped lines.
+- M1 recording produced 600 `imu_motion` frames.
+- M1 quality gate PASS, `quality_score=0.94`, `errors=0`, `warnings=2`.
+- Replay PASS, 600 inputs all `risk_type=none`.
 - Formal IMU acceptance remains false with reason `source_status_unverified`.
-- PC Bridge stored 492 events with 0 skipped lines.
-- M1 recording produced 480 `imu_motion` frames.
-- M1 quality gate PASS, `quality_score=0.91`, `errors=0`, `warnings=3`.
-- Replay PASS, 480 inputs all `risk_type=none`.
-- `seq_decrease` warning is expected because the evidence set combines multiple
-  bounded capture windows after independent bridge resets.
 
 ## Done When
 
-- [x] Capture helper supports motion-only capture.
-- [x] Capture helper can reuse existing pose evidence.
-- [x] Live motion window is captured on `COM9`.
-- [x] Motion sanity gate passes.
-- [x] Pose/motion overall quality gate passes.
-- [x] PC Bridge ingests pose + motion evidence with 0 skipped lines.
+- [x] Firmware supports configurable long-window sample count and interval.
+- [x] Firmware builds.
+- [x] Firmware flashes to `COM9`.
+- [x] Live 600-sample long window is captured on `COM9`.
+- [x] Long-window timing gate passes.
+- [x] Long-window jitter gate passes.
+- [x] PC Bridge ingests the capture with 0 skipped lines.
 - [x] M1 recording quality gate passes.
 - [x] Replay passes.
 - [x] Formal IMU acceptance remains false.
 
 Formal IMU acceptance remains false while the source is still
-`bridge_uplink/unverified` and mounting, calibration, FIFO/interrupt, power, and
-real backend validation are pending.
+`bridge_uplink/unverified` and product mounting, FIFO/interrupt, power, and real
+backend validation are pending.

@@ -1,0 +1,20 @@
+menu "Ego Link AMOLED bridge"
+
+config EGOLINK_AMOLED_SAMPLE_COUNT
+    int "QMI8658 samples per bridge window"
+    default 600
+    range 1 36000
+    help
+        Number of QMI8658 samples emitted before amoled_bridge_done.
+        The TIMU-006 default is 600 samples at 50 ms, about 30 seconds.
+        This remains a bounded bridge test window, not a product IMU claim.
+
+config EGOLINK_AMOLED_SAMPLE_INTERVAL_MS
+    int "QMI8658 bridge sample interval in milliseconds"
+    default 50
+    range 5 60000
+    help
+        Fixed-period vTaskDelayUntil interval for the QMI8658 bridge window.
+        The TIMU-006 default is 50 ms, about 20 Hz.
+
+endmenu

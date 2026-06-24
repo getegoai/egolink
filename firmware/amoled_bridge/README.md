@@ -19,9 +19,11 @@ source_status=unverified
 
 This smoke proves only that the board can emit bridge-shaped QMI8658 samples.
 It is not yet an ODR, jitter, drop-rate, orientation, calibration, interrupt,
-FIFO, power, or product MotionNet validation. TIMU-003 uses fixed-period
-`vTaskDelayUntil` sampling and emits a 120-sample window so timing can be
-measured separately from JSON printing overhead.
+FIFO, power, or product MotionNet validation. TIMU-003 used fixed-period
+`vTaskDelayUntil` sampling and emitted a 120-sample window so timing could be
+measured separately from JSON printing overhead. TIMU-006 keeps the same timing
+mode but makes the bounded window configurable; the default is now 600 samples
+at 50 ms, about 30 seconds, for continuous-window ODR/jitter/drop evidence.
 
 ## Board Mapping
 
@@ -47,6 +49,16 @@ idf.py set-target esp32s3
 idf.py build
 ```
 
+The bridge window is configured by ESP-IDF project settings:
+
+```text
+CONFIG_EGOLINK_AMOLED_SAMPLE_COUNT=600
+CONFIG_EGOLINK_AMOLED_SAMPLE_INTERVAL_MS=50
+```
+
+These values intentionally control only this bounded validation firmware. They
+do not promote QMI8658 to a product `platform_imu` backend.
+
 ## Flash And Capture
 
 Use the current native USB COM port for the AMOLED board. On the first live
@@ -62,7 +74,7 @@ Then capture the JSONL output from the same port. Pass criteria:
 {"type":"hello",...,"role":"wearable_node",...}
 {"type":"imu_whoami",...,"whoami":5,...}
 {"type":"imu_sample",...,"sensor_model":"QMI8658",...}
-{"type":"amoled_bridge_done",...,"samples_emitted":120,...,"timing_mode":"vTaskDelayUntil",...}
+{"type":"amoled_bridge_done",...,"samples_emitted":600,...,"timing_mode":"vTaskDelayUntil",...}
 ```
 
 After capture, feed the JSONL file to the existing PC Bridge:

@@ -10,8 +10,10 @@ class AmoledBridgeFirmwareTests(unittest.TestCase):
         self.app_dir = self.repo_root / "firmware" / "amoled_bridge"
         self.app_path = self.app_dir / "main" / "app_main.c"
         self.readme_path = self.app_dir / "README.md"
+        self.sdkconfig_defaults_path = self.app_dir / "sdkconfig.defaults"
         self.app = self.app_path.read_text(encoding="utf-8")
         self.readme = self.readme_path.read_text(encoding="utf-8")
+        self.sdkconfig_defaults = self.sdkconfig_defaults_path.read_text(encoding="utf-8")
 
     def test_vendor_pin_map_and_i2c_devices_are_explicit(self) -> None:
         required_terms = [
@@ -25,7 +27,7 @@ class AmoledBridgeFirmwareTests(unittest.TestCase):
             "I2C SCL = GPIO14",
         ]
 
-        joined = self.app + "\n" + self.readme
+        joined = self.app + "\n" + self.readme + "\n" + self.sdkconfig_defaults
         for term in required_terms:
             with self.subTest(term=term):
                 self.assertIn(term, joined)
@@ -51,17 +53,21 @@ class AmoledBridgeFirmwareTests(unittest.TestCase):
     def test_sample_window_is_bounded_and_not_a_validation_claim(self) -> None:
         required_terms = [
             "#define AMOLED_BOOT_JSON_DELAY_MS 5000",
-            "#define AMOLED_SAMPLE_COUNT 120",
-            "#define AMOLED_SAMPLE_INTERVAL_MS 50",
+            "CONFIG_EGOLINK_AMOLED_SAMPLE_COUNT",
+            "CONFIG_EGOLINK_AMOLED_SAMPLE_INTERVAL_MS",
+            "CONFIG_EGOLINK_AMOLED_SAMPLE_COUNT=600",
+            "CONFIG_EGOLINK_AMOLED_SAMPLE_INTERVAL_MS=50",
             "#define AMOLED_TIMING_MODE \"vTaskDelayUntil\"",
             "vTaskDelayUntil(&last_wake_tick, sample_interval_ticks)",
             '\\"timing_mode\\":\\"%s\\"',
+            '\\"requested_window_ms\\":%d',
             '\\"missed_deadlines\\":%',
-            "identity_and_short_window_only",
+            "identity_and_configurable_window_only",
+            "600 samples",
             "not yet an ODR, jitter, drop-rate, orientation, calibration",
         ]
 
-        joined = self.app + "\n" + self.readme
+        joined = self.app + "\n" + self.readme + "\n" + self.sdkconfig_defaults
         for term in required_terms:
             with self.subTest(term=term):
                 self.assertIn(term, joined)

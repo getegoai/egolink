@@ -71,6 +71,8 @@ def analyze_imu_messages(
     warmup_discard: int = 5,
     expected_whoami: int = 0x05,
     timing_tolerance_ratio: float = 0.25,
+    require_static: bool = True,
+    max_interval_jitter_ms: float | None = None,
 ) -> dict[str, Any]:
     whoami_events = [message for message in messages if message.get("type") == "imu_whoami"]
     sample_events = [message for message in messages if message.get("type") == "imu_sample"]
@@ -149,6 +151,26 @@ def analyze_imu_messages(
         observed_mean_interval is not None
         and timing_tolerance_ms is not None
         and abs(observed_mean_interval - float(expected_interval_ms)) <= timing_tolerance_ms
+    )
+    interval_deviations = (
+        [abs(interval - float(expected_interval_ms)) for interval in device_intervals]
+        if isinstance(expected_interval_ms, (int, float))
+        else []
+    )
+    max_interval_deviation = max(interval_deviations) if interval_deviations else None
+    jitter_limit_ms = (
+        float(max_interval_jitter_ms)
+        if max_interval_jitter_ms is not None
+        else (
+            float(expected_interval_ms) * timing_tolerance_ratio
+            if isinstance(expected_interval_ms, (int, float))
+            else None
+        )
+    )
+    jitter_passed = bool(
+        max_interval_deviation is not None
+        and jitter_limit_ms is not None
+        and max_interval_deviation <= jitter_limit_ms
     )
 
     warm_samples = samples[warmup_discard:] if len(samples) > warmup_discard else samples
@@ -239,6 +261,13 @@ def analyze_imu_messages(
             tolerance_ms=timing_tolerance_ms,
             observed_hz=observed_hz,
         ),
+        "device_jitter": _gate(
+            jitter_passed,
+            "every device interval stays within jitter tolerance",
+            max_interval_deviation_ms=max_interval_deviation,
+            jitter_limit_ms=jitter_limit_ms,
+            interval_deviation_ms=_stats(interval_deviations),
+        ),
         "qmi_timestamp": _gate(
             qmi_timestamp_passed,
             "QMI timestamp is monotonic across samples",
@@ -265,12 +294,21 @@ def analyze_imu_messages(
         ),
     }
 
-    gate_failures = [name for name, gate in gates.items() if not gate["passed"]]
+    blocking_gate_names = set(gates)
+    if not require_static:
+        blocking_gate_names -= {"static_orientation", "static_gyro"}
+    gate_failures = [
+        name
+        for name, gate in gates.items()
+        if name in blocking_gate_names and not gate["passed"]
+    ]
     formal_reasons = []
     if source_status_values == {"unverified"}:
         formal_reasons.append("source_status_unverified")
     if "device_timing" in gate_failures:
         formal_reasons.append("device_timing_gate_failed")
+    if "device_jitter" in gate_failures:
+        formal_reasons.append("device_jitter_gate_failed")
     if gate_failures:
         formal_reasons.append("quality_gates_not_all_passed")
 
@@ -295,6 +333,9 @@ def analyze_imu_messages(
             "expected_sample_hz": sample_hz_values[0] if sample_hz_values else None,
             "observed_sample_hz": observed_hz,
             "device_interval_ms": _stats(device_intervals),
+            "device_interval_deviation_ms": _stats(interval_deviations),
+            "max_interval_deviation_ms": max_interval_deviation,
+            "jitter_limit_ms": jitter_limit_ms,
             "qmi_timestamp_delta": _stats([float(delta) for delta in qmi_intervals]),
         },
         "static_orientation": {
@@ -308,6 +349,7 @@ def analyze_imu_messages(
             "source_availability_values": sorted(str(value) for value in source_availability_values),
             "source_status_values": sorted(str(value) for value in source_status_values),
         },
+        "analysis_mode": "static_window" if require_static else "long_window_timing",
         "gates": gates,
         "quality_gates_passed": not gate_failures,
         "formal_imu_acceptance": False,
@@ -338,9 +380,12 @@ def format_markdown_with_title(
         f"- Source: `{source_path}`" if source_path else "- Source: not recorded",
         f"- QMI8658 WHOAMI: `{identity.get('whoami')}` expected `{identity.get('whoami_expected')}`",
         f"- Sample count: `{report['message_counts']['imu_sample']}`",
+        f"- Analysis mode: `{report.get('analysis_mode')}`",
         f"- Expected interval: `{timing.get('expected_interval_ms')}` ms",
         f"- Observed mean interval: `{timing['device_interval_ms'].get('mean')}` ms",
         f"- Observed sample Hz: `{timing.get('observed_sample_hz')}`",
+        f"- Max interval deviation: `{timing.get('max_interval_deviation_ms')}` ms",
+        f"- Jitter limit: `{timing.get('jitter_limit_ms')}` ms",
         f"- Dominant accel axis: `{orientation['dominant_axis']['axis']}` `{orientation['dominant_axis']['sign']}`",
         f"- Mean accel magnitude: `{orientation['accel_magnitude_mg'].get('mean')}` mg",
         f"- Formal IMU acceptance: `{report['formal_imu_acceptance']}`",
@@ -371,6 +416,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--title", default="# TIMU-002 QMI8658 Sample Quality Report")
     parser.add_argument("--min-samples", type=int, default=40)
     parser.add_argument("--warmup-discard", type=int, default=5)
+    parser.add_argument(
+        "--long-window",
+        action="store_true",
+        help="Gate continuous-window timing/jitter/drop behavior without requiring stationary pose checks.",
+    )
+    parser.add_argument(
+        "--max-interval-jitter-ms",
+        type=float,
+        default=None,
+        help="Maximum allowed absolute device interval deviation. Defaults to timing tolerance.",
+    )
     parser.add_argument("--fail-on-unusable", action="store_true")
     return parser.parse_args(argv)
 
@@ -382,6 +438,8 @@ def main(argv: list[str] | None = None) -> int:
         messages,
         min_samples=args.min_samples,
         warmup_discard=args.warmup_discard,
+        require_static=not args.long_window,
+        max_interval_jitter_ms=args.max_interval_jitter_ms,
     )
 
     if args.markdown:

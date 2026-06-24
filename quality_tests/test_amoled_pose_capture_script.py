@@ -63,10 +63,12 @@ class AmoledPoseCaptureScriptTests(unittest.TestCase):
         required_terms = [
             "[string[]]$ExistingPose",
             "[switch]$MotionOnly",
+            "[int]$M1Limit = 1000",
             "Convert-ExistingPoseSource",
             "ExistingPose must use LABEL=PATH",
             "$PoseLabels = @()",
             "$CaptureMotion = $true",
+            '"--limit", "$M1Limit"',
             "No captures selected",
         ]
 

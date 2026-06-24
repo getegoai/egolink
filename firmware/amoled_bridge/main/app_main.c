@@ -7,6 +7,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "sdkconfig.h"
 
 #define AMOLED_BRIDGE_DEVICE_ID "wearable-node-001"
 #define AMOLED_BRIDGE_ROLE "wearable_node"
@@ -21,9 +22,16 @@
 #define AMOLED_I2C_TIMEOUT_MS 1000
 
 #define AMOLED_BOOT_JSON_DELAY_MS 5000
-#define AMOLED_SAMPLE_COUNT 120
-#define AMOLED_SAMPLE_INTERVAL_MS 50
-#define AMOLED_SAMPLE_HZ 20
+#ifndef CONFIG_EGOLINK_AMOLED_SAMPLE_COUNT
+#define CONFIG_EGOLINK_AMOLED_SAMPLE_COUNT 600
+#endif
+#ifndef CONFIG_EGOLINK_AMOLED_SAMPLE_INTERVAL_MS
+#define CONFIG_EGOLINK_AMOLED_SAMPLE_INTERVAL_MS 50
+#endif
+
+#define AMOLED_SAMPLE_COUNT CONFIG_EGOLINK_AMOLED_SAMPLE_COUNT
+#define AMOLED_SAMPLE_INTERVAL_MS CONFIG_EGOLINK_AMOLED_SAMPLE_INTERVAL_MS
+#define AMOLED_SAMPLE_HZ (1000 / AMOLED_SAMPLE_INTERVAL_MS)
 #define AMOLED_TIMING_MODE "vTaskDelayUntil"
 
 #define AXP2101_ADDR 0x34
@@ -272,7 +280,7 @@ static void print_probe(const pmu_probe_t *pmu, const qmi_probe_t *qmi)
         "\"revision\":%u,\"reset_result\":%u,"
         "\"configured_accel_range_g\":4,\"configured_accel_odr_hz\":1000,"
         "\"configured_gyro_range_dps\":512,\"configured_gyro_odr_hz\":224,"
-        "\"validation_boundary\":\"identity_and_short_window_only\"}}\n",
+        "\"validation_boundary\":\"identity_and_configurable_window_only\"}}\n",
         AMOLED_BRIDGE_DEVICE_ID,
         AMOLED_BRIDGE_ROLE,
         next_seq(),
@@ -361,6 +369,7 @@ static void print_done(
         "\"payload\":{\"samples_requested\":%d,\"samples_emitted\":%" PRIu32 ","
         "\"read_errors\":%" PRIu32 ",\"not_ready_count\":%" PRIu32 ","
         "\"sample_interval_ms\":%d,\"timing_mode\":\"%s\","
+        "\"requested_window_ms\":%d,"
         "\"missed_deadlines\":%" PRIu32 ",\"max_sample_work_ms\":%" PRId64 "}}\n",
         AMOLED_BRIDGE_DEVICE_ID,
         AMOLED_BRIDGE_ROLE,
@@ -372,6 +381,7 @@ static void print_done(
         not_ready,
         AMOLED_SAMPLE_INTERVAL_MS,
         AMOLED_TIMING_MODE,
+        AMOLED_SAMPLE_COUNT * AMOLED_SAMPLE_INTERVAL_MS,
         missed_deadlines,
         max_sample_work_ms);
     json_flush();
