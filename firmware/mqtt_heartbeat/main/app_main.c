@@ -364,6 +364,41 @@ static void publish_sensor_sample(void)
     platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "sensor_publish_done");
 }
 
+static void run_platform_imu_boot_capture(void)
+{
+#if CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT > 0
+    ESP_LOGI(
+        TAG,
+        "PLATFORM_IMU_BOOT_CAPTURE_START count=%d interval_ms=%d",
+        CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT,
+        CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_INTERVAL_MS);
+    for (int i = 0; i < CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT; ++i) {
+        platform_imu_sample();
+        platform_imu_snapshot_t imu;
+        platform_imu_get_snapshot(&imu);
+        ESP_LOGI(
+            TAG,
+            "PLATFORM_IMU_BOOT_CAPTURE_SAMPLE index=%d seq=%" PRIu32
+            " source=%s hardware_present=%s driver_enabled=%s mock=%s"
+            " accel_mg=%d,%d,%d gyro_mdps=%d,%d,%d",
+            i,
+            imu.latest.seq,
+            imu.latest.source,
+            json_bool(imu.hardware_present),
+            json_bool(imu.driver_enabled),
+            json_bool(imu.data_is_mock || imu.latest.sample_is_mock),
+            imu.latest.accel_mg_x,
+            imu.latest.accel_mg_y,
+            imu.latest.accel_mg_z,
+            imu.latest.gyro_mdps_x,
+            imu.latest.gyro_mdps_y,
+            imu.latest.gyro_mdps_z);
+        vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_INTERVAL_MS));
+    }
+    ESP_LOGI(TAG, "PLATFORM_IMU_BOOT_CAPTURE_DONE count=%d", CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT);
+#endif
+}
+
 static void heartbeat_task(void *arg)
 {
     (void)arg;
@@ -511,6 +546,7 @@ void app_main(void)
     ESP_ERROR_CHECK(s_event_group == NULL ? ESP_ERR_NO_MEM : ESP_OK);
     ESP_ERROR_CHECK(platform_power_init() ? ESP_OK : ESP_FAIL);
     ESP_ERROR_CHECK(platform_imu_init() ? ESP_OK : ESP_FAIL);
+    run_platform_imu_boot_capture();
     platform_power_enter_state(PLATFORM_POWER_STATE_BOOT, "app_main");
     ESP_ERROR_CHECK(safety_model_init() ? ESP_OK : ESP_FAIL);
     ESP_LOGI(TAG, "SAFETY_MODEL_INIT_OK version=%s mock=true", safety_model_version());

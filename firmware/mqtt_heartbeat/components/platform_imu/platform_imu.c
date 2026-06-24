@@ -107,11 +107,23 @@ static const char *PLATFORM_IMU_SENSOR_MODEL_QMI8658 = "QMI8658";
 #define QMI8658_CTRL7_ENABLE_ACCEL_GYRO 0x03
 #define QMI8658_CTRL8_CTRL9_HANDSHAKE_STATUS_INT 0x80
 
-static esp_err_t qmi8658_i2c_read(uint8_t reg, uint8_t *data, size_t len)
+#if CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS
+#define AXP2101_ADDR 0x34
+#define AXP2101_CHIP_ID_REG 0x03
+#define AXP2101_EXPECTED_CHIP_ID 0x4A
+#define AXP2101_DC_ONOFF_DVM_CTRL 0x80
+#define AXP2101_DC_VOL0_CTRL 0x82
+#define AXP2101_LDO_ONOFF_CTRL0 0x90
+#define AXP2101_LDO_VOL0_CTRL 0x92
+#define AXP2101_DC1_3300MV_VALUE ((3300 - 1500) / 100)
+#define AXP2101_ALDO1_3300MV_VALUE ((3300 - 500) / 100)
+#endif
+
+static esp_err_t platform_imu_i2c_read(uint8_t addr, uint8_t reg, uint8_t *data, size_t len)
 {
     return i2c_master_write_read_device(
         QMI8658_I2C_PORT,
-        QMI8658_I2C_ADDR,
+        addr,
         &reg,
         1,
         data,
@@ -119,31 +131,51 @@ static esp_err_t qmi8658_i2c_read(uint8_t reg, uint8_t *data, size_t len)
         pdMS_TO_TICKS(QMI8658_I2C_TIMEOUT_MS));
 }
 
-static esp_err_t qmi8658_i2c_read_u8(uint8_t reg, uint8_t *value)
+static esp_err_t platform_imu_i2c_read_u8(uint8_t addr, uint8_t reg, uint8_t *value)
 {
-    return qmi8658_i2c_read(reg, value, 1);
+    return platform_imu_i2c_read(addr, reg, value, 1);
 }
 
-static esp_err_t qmi8658_i2c_write_u8(uint8_t reg, uint8_t value)
+static esp_err_t platform_imu_i2c_write_u8(uint8_t addr, uint8_t reg, uint8_t value)
 {
     uint8_t payload[2] = {reg, value};
     return i2c_master_write_to_device(
         QMI8658_I2C_PORT,
-        QMI8658_I2C_ADDR,
+        addr,
         payload,
         sizeof(payload),
         pdMS_TO_TICKS(QMI8658_I2C_TIMEOUT_MS));
 }
 
-static esp_err_t qmi8658_i2c_update_bits(uint8_t reg, uint8_t mask, uint8_t value)
+static esp_err_t platform_imu_i2c_update_bits(uint8_t addr, uint8_t reg, uint8_t mask, uint8_t value)
 {
     uint8_t current = 0;
-    esp_err_t err = qmi8658_i2c_read_u8(reg, &current);
+    esp_err_t err = platform_imu_i2c_read_u8(addr, reg, &current);
     if (err != ESP_OK) {
         return err;
     }
     current = (uint8_t)((current & (uint8_t)(~mask)) | (value & mask));
-    return qmi8658_i2c_write_u8(reg, current);
+    return platform_imu_i2c_write_u8(addr, reg, current);
+}
+
+static esp_err_t qmi8658_i2c_read(uint8_t reg, uint8_t *data, size_t len)
+{
+    return platform_imu_i2c_read(QMI8658_I2C_ADDR, reg, data, len);
+}
+
+static esp_err_t qmi8658_i2c_read_u8(uint8_t reg, uint8_t *value)
+{
+    return platform_imu_i2c_read_u8(QMI8658_I2C_ADDR, reg, value);
+}
+
+static esp_err_t qmi8658_i2c_write_u8(uint8_t reg, uint8_t value)
+{
+    return platform_imu_i2c_write_u8(QMI8658_I2C_ADDR, reg, value);
+}
+
+static esp_err_t qmi8658_i2c_update_bits(uint8_t reg, uint8_t mask, uint8_t value)
+{
+    return platform_imu_i2c_update_bits(QMI8658_I2C_ADDR, reg, mask, value);
 }
 
 static esp_err_t qmi8658_i2c_init(void)
@@ -168,6 +200,41 @@ static esp_err_t qmi8658_i2c_init(void)
     }
     return err;
 }
+
+#if CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS
+static esp_err_t axp2101_enable_minimal_rails(void)
+{
+    uint8_t chip_id = 0;
+    esp_err_t err = platform_imu_i2c_read_u8(AXP2101_ADDR, AXP2101_CHIP_ID_REG, &chip_id);
+    if (err != ESP_OK) {
+        return err;
+    }
+    if (chip_id != AXP2101_EXPECTED_CHIP_ID) {
+        s_last_error = (int)chip_id;
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    err = platform_imu_i2c_write_u8(AXP2101_ADDR, AXP2101_DC_VOL0_CTRL, AXP2101_DC1_3300MV_VALUE);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = platform_imu_i2c_update_bits(AXP2101_ADDR, AXP2101_LDO_VOL0_CTRL, 0x1F, AXP2101_ALDO1_3300MV_VALUE);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = platform_imu_i2c_update_bits(AXP2101_ADDR, AXP2101_DC_ONOFF_DVM_CTRL, 0x01, 0x01);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = platform_imu_i2c_update_bits(AXP2101_ADDR, AXP2101_LDO_ONOFF_CTRL0, 0x01, 0x01);
+    if (err != ESP_OK) {
+        return err;
+    }
+    vTaskDelay(pdMS_TO_TICKS(20));
+    ESP_LOGI(TAG, "PLATFORM_IMU_AXP2101_RAILS_OK chip_id=0x%02x", chip_id);
+    return ESP_OK;
+}
+#endif
 
 static esp_err_t qmi8658_wait_reset(uint8_t *reset_result)
 {
@@ -194,6 +261,17 @@ static bool platform_imu_init_qmi8658(void)
         s_backend_status = "qmi8658_i2c_init_failed";
         return false;
     }
+
+#if CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS
+    err = axp2101_enable_minimal_rails();
+    if (err != ESP_OK) {
+        if (s_last_error == 0) {
+            s_last_error = (int)err;
+        }
+        s_backend_status = "qmi8658_axp2101_rails_failed";
+        return false;
+    }
+#endif
 
     err = qmi8658_i2c_write_u8(QMI8658_REG_RESET, QMI8658_RESET_VALUE);
     if (err != ESP_OK) {

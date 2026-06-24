@@ -63,19 +63,23 @@ power rail, or GPIO measurement marker yet. The GPIO marker remains disabled;
 no runtime, current, or battery-life claim is valid until an external power
 instrument is connected and its raw capture is saved.
 
-`platform_imu` is currently a TIMU-007 backend-boundary PoC. The default
+`platform_imu` is currently a TIMU-008 backend live-capture path with a
+default-mock product profile. The default
 configuration remains the deterministic `mock_stationary` path with a bounded
 32-sample ring buffer, `platform_imu_sample`, `platform_imu_push_sample`, and
 `platform_imu_read_recent`. A QMI8658 I2C backend exists only as an explicit
 Kconfig opt-in (`CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658`) and falls back to
-mock data if identity probing or reads fail. The default `sensor_sample` payload
-still includes `imu_source`, `imu_hardware_present=false`,
-`imu_driver_enabled=false`, `imu_sample_mock=true`, ring counts, and latest mock
-accel/gyro fields so the M1 recorder can preserve the future interface shape.
+mock data if identity probing or reads fail. TIMU-008 validated that opt-in
+profile on the ESP32-S3-Touch-AMOLED-2.06 board with AXP2101 rail bring-up,
+QMI8658 WHOAMI `0x05`, boot-capture samples, MQTT payloads containing
+`imu_sample_mock=false`, and an M1 recording/quality/replay pass. The default
+`sensor_sample` payload still includes `imu_source`,
+`imu_hardware_present=false`, `imu_driver_enabled=false`,
+`imu_sample_mock=true`, ring counts, and latest mock accel/gyro fields so the
+M1 recorder can preserve the future interface shape.
 
 This does not prove a real IMU is present, wired, oriented, sampled, calibrated,
-or power-managed. Real accel/gyro data remains unavailable until the IMU part,
-bus, pins, orientation, ODR, FIFO behavior, interrupt strategy, and sample
-quality statistics are verified on the product path. The AMOLED-board QMI8658
-evidence remains bridge evidence until a separately configured real
-`platform_imu` capture is flashed, captured, and accepted.
+or power-managed on the final product path. Real accel/gyro data remains
+unavailable for formal model training until mounting direction, final
+calibration, ODR, FIFO behavior, interrupt strategy, power impact, and sample
+quality statistics are verified in the product topology.

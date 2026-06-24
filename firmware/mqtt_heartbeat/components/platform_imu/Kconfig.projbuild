@@ -69,4 +69,28 @@ menu "Ego Link platform IMU"
         range 1 1000
         depends on EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
 
+    config EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS
+        bool "Enable AMOLED-board AXP2101 rails before QMI8658 probe"
+        default y
+        depends on EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+        help
+            Enable the minimal AXP2101 DC1/ALDO1 rails used by the
+            ESP32-S3-Touch-AMOLED-2.06 QMI8658 bring-up path. Disable this for
+            a board where QMI8658 is powered independently.
+
+    config EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT
+        int "Boot-time IMU sample count"
+        default 0
+        range 0 1000
+        help
+            Emit a bounded IMU sampling window to the serial log during boot,
+            before network attach. Keep this disabled in the default product
+            path; enable it for hardware bring-up when MQTT is unavailable.
+
+    config EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_INTERVAL_MS
+        int "Boot-time IMU sample interval"
+        default 50
+        range 1 1000
+        depends on EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT > 0
+
 endmenu

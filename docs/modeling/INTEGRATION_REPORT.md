@@ -27,9 +27,12 @@
   gates, and closed the M1 loop with 600 `imu_motion` frames. TIMU-007 added a
   default-mock, opt-in QMI8658 `platform_imu` backend boundary and kept the P0
   firmware default on mock IMU metadata; the opt-in QMI8658 backend also passed
-  compile-only validation. Formal IMU acceptance still remains false because
-  live real-backend capture, FIFO/interrupt, mounting, and power gates are
-  pending.
+  compile-only validation. TIMU-008 flashed that opt-in QMI8658 backend profile
+  to the ESP32-S3-Touch-AMOLED-2.06 board on `COM9`, verified AXP2101 rail
+  enable and QMI8658 WHOAMI, captured boot samples plus MQTT payloads with
+  `imu_sample_mock=false`, and closed an 8-frame M1 recording/quality/replay
+  loop. Formal IMU acceptance still remains false because product mounting,
+  FIFO/interrupt, calibration, and power gates are pending.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: M0-INT-001 itself performed no hardware validation. Later
@@ -69,6 +72,7 @@
 - [x] TIMU-005 QMI8658 motion window capture
 - [x] TIMU-006 QMI8658 long-window capture
 - [x] TIMU-007 platform_imu backend-boundary PoC
+- [x] TIMU-008 platform_imu QMI8658 backend live capture
 
 ## Changed files
 
@@ -459,6 +463,21 @@ TIMU-007 platform_imu backend-boundary updates:
 - `quality_tests/test_platform_imu_firmware.py`
 - `quality_tests/test_hardware_sensor_matrix.py`
 - `docs/hardware/TIMU_007_PLATFORM_IMU_REAL_BACKEND_POC_20260624.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
+TIMU-008 platform_imu QMI8658 backend live-capture updates:
+
+- `firmware/mqtt_heartbeat/components/platform_imu/platform_imu.c`
+- `firmware/mqtt_heartbeat/components/platform_imu/Kconfig.projbuild`
+- `firmware/mqtt_heartbeat/main/app_main.c`
+- `firmware/mqtt_heartbeat/sdkconfig.qmi8658.defaults`
+- `firmware/mqtt_heartbeat/README.md`
+- `quality_tests/test_platform_imu_firmware.py`
+- `quality_tests/test_hardware_sensor_matrix.py`
+- `docs/hardware/TIMU_008_PLATFORM_IMU_QMI_BACKEND_LIVE_CAPTURE_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
@@ -944,6 +963,54 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
 
 Result: passed after TIMU-007 backend-boundary, documentation, and hardware
 matrix sync. The repository test suite ran 158 tests successfully.
+
+```powershell
+python -m unittest quality_tests.test_platform_imu_firmware -v
+```
+
+Result: passed for TIMU-008 before hardware flash. The platform-IMU firmware
+tests ran 7 tests successfully, including the QMI live profile device/topic,
+AXP2101 rail bring-up symbols, and boot-capture Kconfig/window checks.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -B build/timu008 -D SDKCONFIG=build/timu008/sdkconfig -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.qmi8658.defaults" build
+```
+
+Result: passed for the TIMU-008 QMI live profile. ESP-IDF generated
+`build\timu008\egolink_mqtt_heartbeat.bin`; the app binary size was `0xde6d0`.
+
+```powershell
+. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py -B build/timu008 -D SDKCONFIG=build/timu008/sdkconfig -D SDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.qmi8658.defaults" -p COM9 flash
+```
+
+Result: passed on ESP32-S3-Touch-AMOLED-2.06 `COM9`.
+
+```powershell
+python pc_simulator\mqtt_worker.py --host 192.168.31.250 --port 1883 --topic ego/link/ego-link-amoled-qmi8658/status --topic ego/link/ego-link-amoled-qmi8658/event --event-log pc_simulator\runtime\timu008\timu008-platform-imu-qmi-backend-live-20260624-0900.events.jsonl --max-messages 8 --wait-seconds 45
+```
+
+Result: passed for TIMU-008 PC-side MQTT capture through the LAN broker. The
+worker stored 8 messages: 4 `mqtt_status` and 4 `sensor_sample/device_health`
+rows. Each sensor sample contained `imu_source=qmi8658_i2c`,
+`imu_hardware_present=true`, `imu_driver_enabled=true`, and
+`imu_sample_mock=false`.
+
+```powershell
+python scripts\session_recorder.py --event-log pc_simulator\runtime\timu008\timu008-platform-imu-qmi-backend-live-20260624-0900.events.jsonl --session-id timu008-platform-imu-qmi-backend-live-20260624-0900 --output-dir pc_simulator\runtime\recordings\timu008-platform-imu-qmi-backend-live-20260624-0900 --limit 50 --json
+python scripts\inspect_session_recording.py pc_simulator\runtime\recordings\timu008-platform-imu-qmi-backend-live-20260624-0900 --json
+python scripts\replay_session_recording.py pc_simulator\runtime\recordings\timu008-platform-imu-qmi-backend-live-20260624-0900 --json
+```
+
+Result: passed for the TIMU-008 M1 loop. The recorder produced 8 sensor frames,
+quality gate passed with score `0.94`, and replay passed with 8 inputs, all
+`risk_type=none`.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed after TIMU-008 code, documentation, and hardware matrix sync.
+The repository test suite ran 158 tests successfully.
 
 ```powershell
 idf.py --version
@@ -1663,6 +1730,19 @@ compiled successfully without flashing. The P0 product path still reports mock
 IMU metadata until a later task performs explicit real-backend live capture and
 acceptance.
 
+TIMU-008 performed bounded hardware I/O on the ESP32-S3-Touch-AMOLED-2.06
+board. It built the opt-in QMI8658 `mqtt_heartbeat` profile, flashed it to
+`COM9`, reset the board, captured UART logs, and subscribed to the LAN broker
+at `192.168.31.250:1883`. The live evidence confirmed AXP2101 chip id `0x4a`,
+QMI8658 WHOAMI `0x05`, 40 boot samples with `mock=false`, and MQTT
+`sensor_sample/device_health` payloads with `imu_source=qmi8658_i2c`,
+`imu_hardware_present=true`, `imu_driver_enabled=true`, and
+`imu_sample_mock=false`. The PC-side M1 loop recorded 8 sensor frames, passed
+quality gate with score `0.94`, and replayed 8 `risk_type=none` outputs. This
+closes the real-backend live capture gap, but formal IMU acceptance remains
+false because product mounting, final calibration, FIFO/DRDY interrupt,
+low-power wake, and power/current waveform evidence are still pending.
+
 ## Known gaps
 
 - `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
@@ -1720,9 +1800,11 @@ acceptance.
   plausible, but sample timing was too slow for the requested 20 Hz stream.
   TIMU-003 fixed the sample timing and passed a 120-sample 20 Hz retest, but
   formal IMU acceptance is still false. TIMU-004A passed a single `z_negative`
-  pose but did not collect multi-pose or rotation/tap evidence; mounting
-  direction, calibration, FIFO/interrupt behavior, power behavior, and a real
-  backend PoC remain pending.
+  pose, TIMU-004B added three static poses, TIMU-005 added rotation/light-tap
+  motion, TIMU-006 added a 600-sample long window, TIMU-007 added the
+  backend boundary, and TIMU-008 added real-backend live capture. Mounting
+  direction, final calibration, FIFO/interrupt behavior, and power behavior
+  remain pending.
 - TCAM-001 confirms the standalone camera smoke path, but product firmware
   camera integration remains pending. `platform_camera`, privacy authorization,
   retention/hash manifests, camera power-state control, M1 image recording, and
@@ -1733,15 +1815,16 @@ acceptance.
   FIFO/interrupt behavior, microphone, display/touch downlink, board-to-board
   UART, standalone operation, TF/SD, and dual-board power behavior all require
   later hardware tasks.
-- TIMU-002 through TIMU-007 show the current IMU boundary: the bridge now emits
+- TIMU-002 through TIMU-008 show the current IMU boundary: the bridge now emits
   real QMI8658 sample windows at about `20 Hz`, manual `z_negative`,
   `x_positive`, and `y_positive` static poses pass the pose quality gate, and a
   rotation/light-tap window passes motion sanity. TIMU-006 adds a 600-sample
   long-window timing/jitter/drop pass, and TIMU-007 adds the default-mock,
-  opt-in QMI8658 `platform_imu` backend boundary. It is still not a formal
-  product IMU source because real-backend live capture, FIFO/interrupt, power,
-  and mounting acceptance remain incomplete and the current live source remains
-  `bridge_uplink/unverified`.
+  opt-in QMI8658 `platform_imu` backend boundary. TIMU-008 validates that
+  opt-in backend through UART, MQTT, M1 recording, quality gate, and replay with
+  `imu_sample_mock=false`. It is still not a formal product IMU source because
+  FIFO/interrupt, power, final calibration, and mounting acceptance remain
+  incomplete.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -1768,7 +1851,8 @@ acceptance.
 
 ## Recommended next step
 
-Next, run TIMU-007 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: start a
-small `platform_imu` real backend PoC plan with explicit source-promotion gates.
-Keep MotionNet training and formal IMU claims disabled until source
-verification, mounting, FIFO/interrupt, power, and backend quality gates pass.
+Next, run TIMU-009 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: fix the
+target mounting orientation, record calibration procedure, validate FIFO/DRDY
+or interrupt behavior, and align firmware power markers with real current
+waveforms. Keep MotionNet training and formal IMU claims disabled until
+mounting, FIFO/interrupt, power, and backend quality gates pass.

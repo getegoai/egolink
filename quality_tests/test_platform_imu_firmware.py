@@ -78,8 +78,19 @@ class PlatformImuFirmwareTests(unittest.TestCase):
         self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_MOCK=y", self.sdkconfig_defaults)
         self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658=y", self.qmi8658_defaults)
         self.assertIn("# CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_MOCK is not set", self.qmi8658_defaults)
+        self.assertIn('CONFIG_EGOLINK_DEVICE_ID="ego-link-amoled-qmi8658"', self.qmi8658_defaults)
+        self.assertIn('CONFIG_EGOLINK_EVENT_TOPIC="ego/link/ego-link-amoled-qmi8658/event"', self.qmi8658_defaults)
+        self.assertIn("CONFIG_EGOLINK_SENSOR_EVENT_INTERVAL_SEC=5", self.qmi8658_defaults)
+        self.assertIn("config EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT", self.component_kconfig)
+        self.assertIn("default 0", self.component_kconfig)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT=40", self.qmi8658_defaults)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_INTERVAL_MS=50", self.qmi8658_defaults)
         for token in [
             "#if CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658",
+            "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS",
+            "AXP2101_EXPECTED_CHIP_ID",
+            "axp2101_enable_minimal_rails",
+            "PLATFORM_IMU_AXP2101_RAILS_OK",
             'PLATFORM_IMU_SOURCE_QMI8658 = "qmi8658_i2c"',
             'PLATFORM_IMU_SENSOR_MODEL_QMI8658 = "QMI8658"',
             "QMI8658_WHOAMI_EXPECTED",
@@ -98,6 +109,9 @@ class PlatformImuFirmwareTests(unittest.TestCase):
         self.assertIn("platform_imu_sample();", self.app_main)
         self.assertNotIn("platform_imu_sample_mock();", self.app_main)
         self.assertIn("platform_imu_get_snapshot", self.app_main)
+        self.assertIn("run_platform_imu_boot_capture", self.app_main)
+        self.assertIn("PLATFORM_IMU_BOOT_CAPTURE_SAMPLE", self.app_main)
+        self.assertIn("#if CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT > 0", self.app_main)
         for field in [
             '\\"imu_source\\":\\"%s\\"',
             '\\"imu_hardware_present\\":%s',
