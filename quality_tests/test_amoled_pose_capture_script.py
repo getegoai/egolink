@@ -19,6 +19,7 @@ class AmoledPoseCaptureScriptTests(unittest.TestCase):
             "RTS reset pulse",
             "UTF8Encoding]::new($false)",
             "skipped_non_json_lines",
+            "Write-Utf8NoBomLines -Path $LogPath",
         ]
 
         for term in required_terms:
@@ -27,6 +28,7 @@ class AmoledPoseCaptureScriptTests(unittest.TestCase):
 
         self.assertNotIn("pyserial", self.script.lower())
         self.assertNotIn("pip install", self.script.lower())
+        self.assertNotIn("*> $LogPath", self.script)
 
     def test_script_preserves_pose_labels_and_unverified_source_boundary(self) -> None:
         required_terms = [
@@ -51,6 +53,21 @@ class AmoledPoseCaptureScriptTests(unittest.TestCase):
             "scripts\\replay_session_recording.py",
             "$SessionId.pose_quality.md",
             "TIMU_004B_QMI8658_MANUAL_CAPTURE_20260623.md",
+        ]
+
+        for term in required_terms:
+            with self.subTest(term=term):
+                self.assertIn(term, self.script)
+
+    def test_script_supports_motion_only_with_existing_pose_sources(self) -> None:
+        required_terms = [
+            "[string[]]$ExistingPose",
+            "[switch]$MotionOnly",
+            "Convert-ExistingPoseSource",
+            "ExistingPose must use LABEL=PATH",
+            "$PoseLabels = @()",
+            "$CaptureMotion = $true",
+            "No captures selected",
         ]
 
         for term in required_terms:

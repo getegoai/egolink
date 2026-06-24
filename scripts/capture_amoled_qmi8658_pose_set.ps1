@@ -10,6 +10,8 @@ param(
     [string]$SessionId = ("timu004b-qmi8658-" + (Get-Date -Format "yyyyMMdd-HHmmss")),
     [string]$OutputDir = "",
     [string]$MarkdownReport = "",
+    [string[]]$ExistingPose = @(),
+    [switch]$MotionOnly,
     [switch]$NoPrompt,
     [switch]$Analyze,
     [switch]$RunM1Loop,
@@ -35,6 +37,7 @@ Examples:
   powershell -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -Analyze -RunM1Loop
   powershell -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -PoseLabels z_negative,x_positive,y_positive -CaptureMotion -Analyze
   powershell -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -PoseLabels z_negative -NoPrompt -Analyze
+  powershell -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -MotionOnly -ExistingPose z_negative=pc_simulator\runtime\timu004b\z.jsonl -CaptureMotion -Analyze
   powershell -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -Analyze -MarkdownReport docs\hardware\TIMU_004B_QMI8658_MANUAL_CAPTURE_20260623.md
 
 The script captures finite windows only. It resets the bridge before each
@@ -53,6 +56,26 @@ function Assert-PoseLabel {
     $valid = @("x_positive", "x_negative", "y_positive", "y_negative", "z_positive", "z_negative")
     if ($valid -notcontains $Label) {
         throw "Unsupported pose label '$Label'. Use one of: $($valid -join ', ')"
+    }
+}
+
+function Convert-ExistingPoseSource {
+    param([string]$Source)
+    $separatorIndex = $Source.IndexOf("=")
+    if ($separatorIndex -lt 1 -or $separatorIndex -ge ($Source.Length - 1)) {
+        throw "ExistingPose must use LABEL=PATH, for example z_negative=pose.jsonl"
+    }
+    $label = $Source.Substring(0, $separatorIndex)
+    $path = $Source.Substring($separatorIndex + 1)
+    Assert-PoseLabel -Label $label
+    if (-not (Test-Path -LiteralPath $path)) {
+        throw "ExistingPose path does not exist: $path"
+    }
+    [pscustomobject]@{
+        label = $label
+        kind = "pose"
+        path = $path
+        existing = $true
     }
 }
 
@@ -77,9 +100,11 @@ function Invoke-PythonChecked {
         [string[]]$Arguments,
         [string]$LogPath
     )
-    & python @Arguments *> $LogPath
-    if ($LASTEXITCODE -ne 0) {
-        throw "python $($Arguments -join ' ') failed with exit code $LASTEXITCODE. See $LogPath"
+    $output = & python @Arguments 2>&1
+    $exitCode = $LASTEXITCODE
+    Write-Utf8NoBomLines -Path $LogPath -Lines @($output | ForEach-Object { "$_" })
+    if ($exitCode -ne 0) {
+        throw "python $($Arguments -join ' ') failed with exit code $exitCode. See $LogPath"
     }
 }
 
@@ -267,11 +292,20 @@ function Invoke-M1Loop {
 Set-Location $RepoRoot
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
+if ($MotionOnly) {
+    $PoseLabels = @()
+    $CaptureMotion = $true
+}
+
 foreach ($label in $PoseLabels) {
     Assert-PoseLabel -Label $label
 }
 
 $captures = @()
+foreach ($source in $ExistingPose) {
+    $captures += Convert-ExistingPoseSource -Source $source
+}
+
 foreach ($label in $PoseLabels) {
     if (-not $NoPrompt) {
         Write-Host ""
@@ -295,6 +329,10 @@ if ($CaptureMotion) {
     $path = Join-Path $OutputDir "$SessionId-$MotionLabel.jsonl"
     Write-Host "Capturing $MotionLabel -> $path"
     $captures += Read-AmoledBridgeWindow -Label $MotionLabel -Kind "motion" -Path $path
+}
+
+if ($captures.Count -eq 0) {
+    throw "No captures selected. Provide PoseLabels, ExistingPose, or CaptureMotion."
 }
 
 $analysis = $null

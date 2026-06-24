@@ -1,22 +1,24 @@
-# CURRENT_TASK: TIMU-004B / QMI8658 Manual Three-Pose Capture
+# CURRENT_TASK: TIMU-005 / QMI8658 Motion Window Capture
 
 ## Goal
 
-Capture and verify manual QMI8658 multi-pose evidence on the
-ESP32-S3-Touch-AMOLED-2.06 board without claiming formal IMU acceptance.
+Capture and verify a real QMI8658 motion window on the
+ESP32-S3-Touch-AMOLED-2.06 board, reusing the TIMU-004B three-pose evidence and
+without claiming formal IMU acceptance.
 
 ## Scope
 
-- Use the bounded PowerShell capture helper for AMOLED bridge JSONL windows.
-- Capture labeled static poses with real physical board movement.
+- Extend the bounded AMOLED capture helper with `-MotionOnly` and
+  `-ExistingPose LABEL=PATH` support.
+- Reuse the existing `z_negative`, `x_positive`, and `y_positive` static pose
+  windows from TIMU-004B.
+- Capture one operator-driven rotation/light-tap motion window on `COM9`.
+- Run the pose/motion analyzer, PC Bridge, M1 session recording, quality gate,
+  and replay.
 - Keep the source boundary at `bridge_uplink/unverified`.
-- Reuse the existing TIMU-004A pose/motion analyzer.
-- Run PC Bridge, M1 session recording, quality gate, and replay.
-- Document the operator protocol, measured pose results, and acceptance boundary.
 
 ## Out Of Scope
 
-- No optional motion-window claim.
 - No `platform_imu` real backend switch.
 - No source promotion to `verified`.
 - No MotionNet training data claim.
@@ -26,59 +28,38 @@ ESP32-S3-Touch-AMOLED-2.06 board without claiming formal IMU acceptance.
 
 ## Result
 
-- Added `scripts/capture_amoled_qmi8658_pose_set.ps1`.
-- Added `quality_tests/test_amoled_pose_capture_script.py`.
-- Added `docs/hardware/TIMU_004B_QMI8658_MANUAL_CAPTURE_20260623.md`.
-- The helper captures finite COM9 windows, writes UTF-8 JSONL without BOM, and
-  waits for `amoled_bridge_done`.
-- The helper can call:
-  - `scripts/analyze_imu_pose_quality.py`
-  - `scripts/board_bridge.py`
-  - `scripts/session_recorder.py`
-  - `scripts/inspect_session_recording.py`
-  - `scripts/replay_session_recording.py`
-- Fixed the helper to filter ESP-IDF boot logs so captured `.jsonl` files
-  contain only JSON objects.
-- Ran a bounded live preflight on `COM9`:
-  `timu004b-qmi8658-preflight-live-20260623-205520`.
-- Live preflight captured 123 JSONL records, including 120 `imu_sample`
-  records, `imu_whoami`, and `amoled_bridge_done`.
-- Single-pose `z_negative` static quality, label match, calibration offset, and
-  source-boundary gates passed.
-- Overall TIMU-004 pose/motion quality still failed by design because only one
-  pose was captured and no motion window was supplied.
-- PC Bridge/M1 recording/quality/replay passed for the preflight:
-  120 `imu_motion` frames, quality score `0.94`, replay 120 `none` outputs.
-- Captured two additional manually positioned static poses:
-  - `x_positive`:
-    `pc_simulator/runtime/timu004b/timu004b-qmi8658-manual-pose1-20260623-2100-x_positive.jsonl`
-  - `y_positive`:
-    `pc_simulator/runtime/timu004b/timu004b-qmi8658-manual-pose2-20260623-2108-y_positive.jsonl`
-- Combined three-pose analyzer input:
-  `z_negative`, `x_positive`, and `y_positive`.
-- Three-pose analyzer result: `quality_gates_passed=true`.
-- Pose gates passed: static quality, pose count, axis coverage, label match,
-  calibration offset, pose-or-motion evidence, and source boundary.
-- Optional `motion_sanity` remained false because no motion window was supplied.
+- Updated `scripts/capture_amoled_qmi8658_pose_set.ps1` with motion-only capture
+  and existing pose source reuse.
+- Updated `quality_tests/test_amoled_pose_capture_script.py`.
+- Added `docs/hardware/TIMU_005_QMI8658_MOTION_WINDOW_20260624.md`.
+- Captured:
+  `pc_simulator/runtime/timu005/timu005-qmi8658-motion-live-20260624-0001-motion.jsonl`.
+- Motion capture contained 123 JSONL records and 120 `imu_sample` records.
+- Motion timing cross-check passed at about `49.99 ms / 20.00 Hz`.
+- Motion analyzer saw 115 samples after warmup discard.
+- Accel magnitude range: about `490.04 mg`.
+- Gyro peak: about `201921 mdps`.
+- `motion_sanity`: PASS.
+- Three-pose + motion overall quality gates: PASS.
 - Formal IMU acceptance remains false with reason `source_status_unverified`.
-- PC Bridge stored 369 events with 0 skipped lines for the three-pose set.
-- M1 recording produced 360 `imu_motion` frames.
+- PC Bridge stored 492 events with 0 skipped lines.
+- M1 recording produced 480 `imu_motion` frames.
 - M1 quality gate PASS, `quality_score=0.91`, `errors=0`, `warnings=3`.
-- Replay PASS, 360 inputs all `risk_type=none`.
-- `seq_decrease` warning is expected because each bounded capture window resets
-  the device sequence.
+- Replay PASS, 480 inputs all `risk_type=none`.
+- `seq_decrease` warning is expected because the evidence set combines multiple
+  bounded capture windows after independent bridge resets.
 
 ## Done When
 
-- [x] Capture helper exists and uses bounded serial reads.
-- [x] Helper supports labeled static pose windows.
-- [x] Helper supports an optional motion window.
-- [x] Helper can run the pose/motion analyzer.
-- [x] Helper can run PC Bridge, M1 recording, quality gate, and replay.
-- [x] Protocol report explains operator steps and acceptance boundaries.
-- [x] Static contract tests cover the helper.
-- [x] Live COM9 preflight has been run in this task.
-- [x] Multi-pose quality gate passes with real physical movement.
+- [x] Capture helper supports motion-only capture.
+- [x] Capture helper can reuse existing pose evidence.
+- [x] Live motion window is captured on `COM9`.
+- [x] Motion sanity gate passes.
+- [x] Pose/motion overall quality gate passes.
+- [x] PC Bridge ingests pose + motion evidence with 0 skipped lines.
+- [x] M1 recording quality gate passes.
+- [x] Replay passes.
+- [x] Formal IMU acceptance remains false.
 
 Formal IMU acceptance remains false while the source is still
 `bridge_uplink/unverified` and mounting, calibration, FIFO/interrupt, power, and
