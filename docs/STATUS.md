@@ -65,11 +65,12 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - TIMU-009A：IMU engineering calibration boundary 完成。新增 `pc_simulator/imu_calibration.py` 和 `scripts/generate_imu_calibration_profile.py`，复用 TIMU-004B 三姿态 QMI8658 live captures 生成工程校准 profile；当前轴向映射为 x/y/z 同轴同号，临时 accel offset 估计约 `[48.0, -10.3, -24.0] mg`，gyro signed bias 未估计。证据 profile 见 `docs/hardware/TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.md` / `.json`；该 profile 明确 `stage=engineering`、`production_ready=false`、`formal_imu_acceptance=false`，并列出硬件、安装、外壳、ODR/FIFO/中断、电源轨、后端和夹具变化后的 recalibration triggers。它可用于工程 bring-up 和回归检查，但不可用于量产校准、MotionNet 训练、跌倒/碰撞产品声明或电池/功耗声明。
 - TIMU-009B：IMU product acceptance preflight gate 完成。新增 `pc_simulator/imu_acceptance.py` 和 `scripts/check_imu_acceptance.py`，把正式 IMU 验收拆成 10 个硬件证据 gate：安装方向冻结、夹具定义、最终 accel 校准、signed gyro bias、温漂、FIFO/DRDY、真实电流波形、后端 quality gate、M1 recording/replay 和 recalibration trigger review。当前报告 `docs/hardware/TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.md` / `.json` 预期 FAIL：`formal_imu_acceptance=false`、`motionnet_training_enabled=false`，全部 gate 因缺少 hardware-observed artifact 而失败，且 TIMU-009A profile 仍为 engineering stage。
 - TIMU-009C-A：QMI8658 backend readiness capture 完成。未重新刷写固件，复用 TIMU-008 已在 AMOLED 板 `COM9` 上运行的 QMI8658 MQTT backend profile，通过 LAN broker `192.168.31.250:1883` 有限捕获 8 条消息：4 条 `sensor_sample/device_health` 和 4 条 `mqtt_status`，`seq=11062..11069`。4 条 IMU 样本均带 `imu_source=qmi8658_i2c`、`imu_hardware_present=true`、`imu_driver_enabled=true`、`imu_sample_mock=false`；示例 `seq=11062` accel `[46,-29,-1027] mg`、gyro `[-218,1656,-234] mdps`，`seq=11068` accel `[46,-30,-1026] mg`、gyro `[-187,1546,-78] mdps`。M1 recording 生成 8 条 sensor frame，quality gate PASS `0.94`，replay PASS，8 条输出均为 `risk_type=none`。证据摘要见 `docs/hardware/TIMU_009C_QMI8658_BACKEND_READINESS_CAPTURE_20260624.md`；formal IMU acceptance 仍为 false，因为安装方向、最终校准、FIFO/DRDY、低功耗唤醒和功耗波形仍未验收。
+- TIMU-009C-B0：IMU product mounting evidence template 完成。`pc_simulator/imu_acceptance.py` 现在可生成 operator evidence manifest template；新增模板 `docs/hardware/TIMU_009C_B0_QMI8658_PRODUCT_MOUNTING_EVIDENCE_TEMPLATE_20260624.json` / `.md`，覆盖 TIMU-009B 的 10 个 gate，并把每个 gate 默认保持为 `status=pending`、`artifact=null`、`observed_on_hardware=false`。模板引用 TIMU-009C-A 后端 readiness 报告作为参考 artifact，但不把它升级成正式产品安装/校准/FIFO/功耗证据；`formal_imu_acceptance=false`、`motionnet_training_enabled=false` 继续保持。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
 
-下一项建议任务：TIMU-009C-B IMU 产品安装与真实硬件证据采集。TIMU-009C-A 已确认当前 QMI8658 后端仍在线可采并能进入 M1；下一步需要固定产品安装方向，补六面或等效 accel 校准、静止 gyro bias、温漂记录，验证 FIFO/DRDY 中断路径，并用 PPK2/Otii 类仪器把功耗 marker 与真实电流波形对齐。
+下一项建议任务：TIMU-009C-B1 IMU 产品安装方向固定与首个最终姿态采集。TIMU-009C-B0 已把证据模板固化；下一步需要把 AMOLED QMI8658 板固定到目标产品方向或可重复临时夹具，补安装方向 artifact，并采集最终姿态静态窗口。
 
 ## 后续任务路线
 
@@ -94,7 +95,8 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - TIMU-009A：IMU engineering calibration boundary。已完成；profile 由 TIMU-004B 三姿态实采生成，`production_ready=false`，用于工程 bring-up，不作为量产校准或正式 IMU acceptance。
 - TIMU-009B：IMU product acceptance preflight gate。已完成；当前报告预期 FAIL，列出所有缺失硬件证据并保持 `formal_imu_acceptance=false`。
 - TIMU-009C-A：QMI8658 backend readiness capture。已完成；当前 QMI profile 未重刷即可收到 4 条真实 QMI8658 sensor sample 并通过 M1 quality/replay；formal IMU acceptance=false。
-- TIMU-009C-B：IMU 产品安装/最终校准/FIFO/中断/功耗真实证据采集。建议下一步；重点是把 TIMU-009C-A 的真实后端数据推进到产品安装姿态、最终校准、FIFO/DRDY、低功耗唤醒和电流波形证据。
+- TIMU-009C-B0：IMU product mounting evidence template。已完成；10 个正式验收 gate 全部以 `pending` 模板固化，等待硬件 artifact。
+- TIMU-009C-B1：IMU 产品安装方向固定与首个最终姿态采集。建议下一步；重点是把 TIMU-009C-A 的真实后端数据推进到产品安装姿态和最终校准入口。
 - TCAM-001：摄像头 smoke live capture。已完成 3 帧真实 JPEG UART 证据；后续如要进入产品路径，需要单独做 `platform_camera`、隐私授权、hash/retention、功耗状态和按需采集。
 - HDBRIDGE-001：双板 PC Bridge PoC。已完成 PC-only 消息桥、命令记录和 `imu_motion` recording 入口。
 - HDBRIDGE-002：AMOLED USB CDC + QMI8658 最小样本窗口。已完成 live `hello`、QMI8658 WHOAMI、40 条真实 I2C 样本、PC Bridge、recording、quality gate 和 replay；TIMU-002 已确认首轮样本 timing 未达目标，TIMU-003 已修复到约 `49.99 ms / 20.00 Hz`，剩余安装方向、校准、FIFO/中断和功耗验收转入 TIMU-004 之后。
@@ -135,6 +137,9 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - `python scripts\session_recorder.py ...` / `python scripts\inspect_session_recording.py ...` / `python scripts\replay_session_recording.py ...`：TIMU-009C-A M1 闭环通过，8 条 sensor frame，quality gate PASS `0.94`，replay PASS，8 条输出均为 `risk_type=none`。
 - `python -m unittest quality_tests.test_hardware_sensor_matrix -v`：TIMU-009C-A focused verification 通过，5 个测试全部成功，覆盖新增后端 readiness 报告路径和硬件矩阵同步。
 - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1`：TIMU-009C-A 文档、状态和硬件矩阵同步后通过，167 个测试全部成功。
+- `python scripts\check_imu_acceptance.py --calibration-profile docs\hardware\TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.json --report-id timu009c-b0-qmi8658-product-mounting-evidence-template-20260624 --evidence-template-json docs\hardware\TIMU_009C_B0_QMI8658_PRODUCT_MOUNTING_EVIDENCE_TEMPLATE_20260624.json --evidence-template-markdown docs\hardware\TIMU_009C_B0_QMI8658_PRODUCT_MOUNTING_EVIDENCE_TEMPLATE_20260624.md --manifest-id timu009c-b0-qmi8658-product-mounting-evidence-template-20260624 --target-mounting-direction pending-final-wearable-orientation --reference-artifact docs/hardware/TIMU_009C_QMI8658_BACKEND_READINESS_CAPTURE_20260624.md`：TIMU-009C-B0 evidence template 生成通过，10 个 gate 全部保持 `pending`。
+- `python -m unittest quality_tests.test_imu_acceptance -v`：TIMU-009C-B0 focused verification 通过，7 个测试全部成功，覆盖 template builder、CLI 写出、hardware-observed requirement 和既有 preflight 行为。
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1`：TIMU-009C-B0 工具、模板 artifact、文档和硬件矩阵同步后通过，169 个测试全部成功。
 - `python -m unittest quality_tests.test_amoled_pose_capture_script quality_tests.test_hardware_sensor_matrix -v`：通过，8 个测试全部成功；覆盖 TIMU-004B 采集脚本静态契约和硬件矩阵证据路径。
 - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -Help`：通过，帮助入口可用。
 - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\capture_amoled_qmi8658_pose_set.ps1 -PoseLabels z_negative -NoPrompt -Analyze -RunM1Loop -SessionId timu004b-qmi8658-preflight-live-20260623-205520 -TimeoutSeconds 35`：通过，捕获 `pc_simulator/runtime/timu004b/timu004b-qmi8658-preflight-live-20260623-205520-z_negative.jsonl`，123 条 JSONL、120 条 `imu_sample`，`imu_whoami=true`，`amoled_bridge_done=true`，非 JSON 行跳过数为 0；pose analyzer 对 `z_negative` 静态质量、标签匹配、offset 和 source boundary 判定 PASS，但总体 pose/motion quality 因缺少多姿态/运动窗口仍 FAIL；M1 quality gate PASS `0.94`，replay PASS，120 条输出均为 `risk_type=none`。

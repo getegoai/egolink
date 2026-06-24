@@ -41,9 +41,11 @@
   FIFO/DRDY, backend replay, or current-waveform gates. TIMU-009C-A then
   captured a fresh bounded MQTT readiness slice from the same QMI8658 backend:
   8 live messages, 4 real IMU sensor samples with `imu_sample_mock=false`, and
-  an 8-frame M1 quality/replay pass. Formal IMU acceptance still remains false
-  because product mounting, FIFO/interrupt, final calibration, and power gates
-  are pending.
+  an 8-frame M1 quality/replay pass. TIMU-009C-B0 then generated the product
+  mounting evidence manifest template so the next operator-assisted hardware
+  run can fill gate artifacts without changing acceptance semantics. Formal IMU
+  acceptance still remains false because product mounting, FIFO/interrupt,
+  final calibration, and power gates are pending.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: M0-INT-001 itself performed no hardware validation. Later
@@ -87,6 +89,7 @@
 - [x] TIMU-009A IMU engineering calibration boundary
 - [x] TIMU-009B IMU product acceptance preflight gate
 - [x] TIMU-009C-A QMI8658 backend readiness capture
+- [x] TIMU-009C-B0 IMU product mounting evidence template
 
 ## Changed files
 
@@ -527,6 +530,18 @@ TIMU-009C-A QMI8658 backend readiness updates:
 
 - `quality_tests/test_hardware_sensor_matrix.py`
 - `docs/hardware/TIMU_009C_QMI8658_BACKEND_READINESS_CAPTURE_20260624.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
+TIMU-009C-B0 IMU product mounting evidence template updates:
+
+- `pc_simulator/imu_acceptance.py`
+- `quality_tests/test_imu_acceptance.py`
+- `quality_tests/test_hardware_sensor_matrix.py`
+- `docs/hardware/TIMU_009C_B0_QMI8658_PRODUCT_MOUNTING_EVIDENCE_TEMPLATE_20260624.json`
+- `docs/hardware/TIMU_009C_B0_QMI8658_PRODUCT_MOUNTING_EVIDENCE_TEMPLATE_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
@@ -1151,6 +1166,30 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
 
 Result: passed after TIMU-009C-A documentation, status, and hardware matrix
 sync. The repository test suite ran 167 tests successfully.
+
+```powershell
+python scripts\check_imu_acceptance.py --calibration-profile docs\hardware\TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.json --report-id timu009c-b0-qmi8658-product-mounting-evidence-template-20260624 --evidence-template-json docs\hardware\TIMU_009C_B0_QMI8658_PRODUCT_MOUNTING_EVIDENCE_TEMPLATE_20260624.json --evidence-template-markdown docs\hardware\TIMU_009C_B0_QMI8658_PRODUCT_MOUNTING_EVIDENCE_TEMPLATE_20260624.md --manifest-id timu009c-b0-qmi8658-product-mounting-evidence-template-20260624 --target-mounting-direction pending-final-wearable-orientation --reference-artifact docs/hardware/TIMU_009C_QMI8658_BACKEND_READINESS_CAPTURE_20260624.md
+```
+
+Result: passed for TIMU-009C-B0 evidence template generation. The template
+lists all 10 product acceptance gates with `status=pending`,
+`artifact=null`, and `observed_on_hardware=false`, while referencing the
+TIMU-009C-A backend readiness report only as prior context.
+
+```powershell
+python -m unittest quality_tests.test_imu_acceptance -v
+```
+
+Result: passed for TIMU-009C-B0 focused verification. The acceptance tests ran
+7 tests successfully, covering the template builder, CLI outputs, hardware
+observation requirement, and existing preflight behavior.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed after TIMU-009C-B0 tooling, template artifacts, documentation,
+and hardware matrix sync. The repository test suite ran 169 tests successfully.
 
 ```powershell
 idf.py --version
@@ -1910,6 +1949,11 @@ passed quality and replay. This confirms backend readiness only; formal IMU
 acceptance remains blocked by mounting, final calibration, FIFO/DRDY, low-power
 wake, and current-waveform evidence.
 
+TIMU-009C-B0 performed no new hardware I/O. It added a repeatable evidence
+manifest template for the next product mounting run. Every gate remains
+`pending` and not hardware-observed until a durable artifact from the final
+configuration is supplied.
+
 ## Known gaps
 
 - `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
@@ -2022,9 +2066,9 @@ wake, and current-waveform evidence.
 
 ## Recommended next step
 
-Next, run TIMU-009C-B against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path:
-fix the target mounting orientation, record the final calibration procedure,
-validate FIFO/DRDY or interrupt behavior, and align firmware power markers with
-real current waveforms. Keep MotionNet training and formal IMU claims disabled
-until mounting, FIFO/interrupt, power, production calibration, and backend
-quality gates pass.
+Next, run TIMU-009C-B1 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path:
+fix the target mounting orientation or a repeatable temporary fixture, capture
+the first final-orientation static window, and use the TIMU-009C-B0 evidence
+template to record the artifact. Keep MotionNet training and formal IMU claims
+disabled until mounting, FIFO/interrupt, power, production calibration, and
+backend quality gates pass.

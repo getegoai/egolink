@@ -92,6 +92,29 @@ class ImuAcceptanceTests(unittest.TestCase):
         self.assertEqual(report["profile_blockers"], [])
         self.assertEqual(report["failed_gates"], [])
 
+    def test_evidence_manifest_template_lists_all_gates_as_pending(self) -> None:
+        manifest = imu_acceptance.build_evidence_manifest_template(
+            manifest_id="timu009c-b0-template",
+            hardware_profile="esp32-s3-touch-amoled-2.06-qmi8658",
+            calibration_profile_id="sample-profile",
+            target_mounting_direction="pending-final-wearable-orientation",
+            reference_artifacts=["docs/hardware/TIMU_009C_QMI8658_BACKEND_READINESS_CAPTURE_20260624.md"],
+            generated_at="2026-06-24T00:00:00+00:00",
+        )
+
+        self.assertEqual(manifest["schema_version"], imu_acceptance.EVIDENCE_SCHEMA_VERSION)
+        self.assertEqual(manifest["target_mounting_direction"], "pending-final-wearable-orientation")
+        self.assertFalse(manifest["boundary"]["formal_imu_acceptance"])
+        self.assertEqual(
+            set(manifest["evidence"]),
+            {gate["id"] for gate in imu_acceptance.REQUIRED_GATES},
+        )
+        self.assertTrue(all(row["status"] == "pending" for row in manifest["evidence"].values()))
+        self.assertTrue(all(row["observed_on_hardware"] is False for row in manifest["evidence"].values()))
+        markdown = imu_acceptance.format_evidence_manifest_markdown(manifest)
+        self.assertIn("# TIMU-009C-B0 IMU Product Mounting Evidence Template", markdown)
+        self.assertIn("Do not set a gate to `pass`", markdown)
+
     def test_cli_writes_json_and_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -119,6 +142,41 @@ class ImuAcceptanceTests(unittest.TestCase):
             self.assertFalse(report["formal_imu_acceptance"])
             self.assertIn("# TIMU-009B IMU Product Acceptance Preflight", markdown)
             self.assertIn("Formal IMU acceptance: `False`", markdown)
+
+    def test_cli_writes_evidence_template(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            profile_path = root / "profile.json"
+            template_json = root / "evidence-template.json"
+            template_markdown = root / "evidence-template.md"
+            profile_path.write_text(json.dumps(sample_profile()), encoding="utf-8")
+
+            exit_code = imu_acceptance.main(
+                [
+                    "--calibration-profile",
+                    str(profile_path),
+                    "--report-id",
+                    "timu009c-b0",
+                    "--evidence-template-json",
+                    str(template_json),
+                    "--evidence-template-markdown",
+                    str(template_markdown),
+                    "--manifest-id",
+                    "timu009c-b0-template",
+                    "--target-mounting-direction",
+                    "pending-final-wearable-orientation",
+                    "--reference-artifact",
+                    "docs/hardware/TIMU_009C_QMI8658_BACKEND_READINESS_CAPTURE_20260624.md",
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            manifest = json.loads(template_json.read_text(encoding="utf-8"))
+            markdown = template_markdown.read_text(encoding="utf-8")
+            self.assertEqual(manifest["manifest_id"], "timu009c-b0-template")
+            self.assertEqual(manifest["evidence"]["product_mounting_direction_frozen"]["status"], "pending")
+            self.assertIn("TIMU-009C-B0", markdown)
+            self.assertIn("pending-final-wearable-orientation", markdown)
 
 
 if __name__ == "__main__":

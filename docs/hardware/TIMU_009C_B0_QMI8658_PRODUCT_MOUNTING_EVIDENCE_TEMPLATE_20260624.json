@@ -1,0 +1,98 @@
+{
+  "schema_version": "egolink.imu_acceptance_evidence.v0.1",
+  "manifest_id": "timu009c-b0-qmi8658-product-mounting-evidence-template-20260624",
+  "generated_at": "2026-06-24T09:19:18.281675+00:00",
+  "hardware_profile": "esp32-s3-touch-amoled-2.06-qmi8658",
+  "calibration_profile_id": "timu009a-qmi8658-engineering-20260624",
+  "target_mounting_direction": "pending-final-wearable-orientation",
+  "reference_artifacts": [
+    "docs/hardware/TIMU_009C_QMI8658_BACKEND_READINESS_CAPTURE_20260624.md"
+  ],
+  "evidence": {
+    "product_mounting_direction_frozen": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "expected_artifact": "Mounting-direction note with board/enclosure photos or fixture drawing, axis convention, and operator confirmation.",
+      "operator_action": "Freeze the IMU board orientation in the target enclosure or wearable fixture.",
+      "acceptance_rule": "Set status to pass only when artifact names a durable file or report from the final hardware configuration and observed_on_hardware is true."
+    },
+    "production_fixture_defined": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "expected_artifact": "Fixture description with repeatable board placement, orientation marks, and calibration operator steps.",
+      "operator_action": "Define the production or lab fixture used for repeatable IMU calibration.",
+      "acceptance_rule": "Set status to pass only when artifact names a durable file or report from the final hardware configuration and observed_on_hardware is true."
+    },
+    "six_face_or_equivalent_accel_calibration_complete": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "expected_artifact": "Final six-face or equivalent accel calibration JSON/Markdown generated after the mounting stack is frozen.",
+      "operator_action": "Capture the final accel calibration after the mechanical stack is frozen.",
+      "acceptance_rule": "Set status to pass only when artifact names a durable file or report from the final hardware configuration and observed_on_hardware is true."
+    },
+    "signed_static_gyro_bias_complete": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "expected_artifact": "Static gyro bias capture from the final mounting orientation, with signed x/y/z bias values and capture duration.",
+      "operator_action": "Capture signed static gyro bias with the final mounting orientation.",
+      "acceptance_rule": "Set status to pass only when artifact names a durable file or report from the final hardware configuration and observed_on_hardware is true."
+    },
+    "temperature_drift_characterized": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "expected_artifact": "Temperature sweep or bounded engineering drift note covering the expected operating range and recalibration limits.",
+      "operator_action": "Characterize accel/gyro drift across the expected operating temperature range.",
+      "acceptance_rule": "Set status to pass only when artifact names a durable file or report from the final hardware configuration and observed_on_hardware is true."
+    },
+    "fifo_drdy_interrupt_validated": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "expected_artifact": "Hardware log/report proving the selected FIFO or DRDY interrupt path fires and is consumed by firmware.",
+      "operator_action": "Validate the selected FIFO or DRDY interrupt path on hardware.",
+      "acceptance_rule": "Set status to pass only when artifact names a durable file or report from the final hardware configuration and observed_on_hardware is true."
+    },
+    "power_current_waveform_validated": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "expected_artifact": "PPK2/Otii or equivalent current waveform aligned to firmware POWER_MARKER records.",
+      "operator_action": "Align firmware power markers with PPK2/Otii or equivalent current waveforms.",
+      "acceptance_rule": "Set status to pass only when artifact names a durable file or report from the final hardware configuration and observed_on_hardware is true."
+    },
+    "backend_quality_gate_passed": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "expected_artifact": "Final backend live capture, quality report, and source-boundary report from the accepted configuration.",
+      "operator_action": "Repeat backend live capture, quality gate, and replay with the final configuration.",
+      "acceptance_rule": "Set status to pass only when artifact names a durable file or report from the final hardware configuration and observed_on_hardware is true."
+    },
+    "m1_recording_replay_passed": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "expected_artifact": "M1 recording directory plus quality and replay reports generated from accepted backend evidence.",
+      "operator_action": "Record and replay an M1 session using the accepted IMU backend evidence.",
+      "acceptance_rule": "Set status to pass only when artifact names a durable file or report from the final hardware configuration and observed_on_hardware is true."
+    },
+    "recalibration_triggers_reviewed": {
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "expected_artifact": "Review note covering PCB, IMU lot, mounting, enclosure, ODR/filter/FIFO, power rail, firmware conversion, and fixture changes.",
+      "operator_action": "Review hardware, mounting, firmware, power, and fixture changes against recalibration triggers.",
+      "acceptance_rule": "Set status to pass only when artifact names a durable file or report from the final hardware configuration and observed_on_hardware is true."
+    }
+  },
+  "boundary": {
+    "formal_imu_acceptance": false,
+    "motionnet_training_enabled": false,
+    "notes": "This is an operator evidence template. It does not validate hardware by itself; it becomes acceptance evidence only after each gate points to hardware-observed artifacts."
+  }
+}

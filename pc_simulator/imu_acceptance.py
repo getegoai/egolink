@@ -63,6 +63,49 @@ REQUIRED_GATES = [
     },
 ]
 
+EXPECTED_ARTIFACTS = {
+    "product_mounting_direction_frozen": (
+        "Mounting-direction note with board/enclosure photos or fixture drawing, "
+        "axis convention, and operator confirmation."
+    ),
+    "production_fixture_defined": (
+        "Fixture description with repeatable board placement, orientation marks, "
+        "and calibration operator steps."
+    ),
+    "six_face_or_equivalent_accel_calibration_complete": (
+        "Final six-face or equivalent accel calibration JSON/Markdown generated "
+        "after the mounting stack is frozen."
+    ),
+    "signed_static_gyro_bias_complete": (
+        "Static gyro bias capture from the final mounting orientation, with signed "
+        "x/y/z bias values and capture duration."
+    ),
+    "temperature_drift_characterized": (
+        "Temperature sweep or bounded engineering drift note covering the expected "
+        "operating range and recalibration limits."
+    ),
+    "fifo_drdy_interrupt_validated": (
+        "Hardware log/report proving the selected FIFO or DRDY interrupt path "
+        "fires and is consumed by firmware."
+    ),
+    "power_current_waveform_validated": (
+        "PPK2/Otii or equivalent current waveform aligned to firmware "
+        "POWER_MARKER records."
+    ),
+    "backend_quality_gate_passed": (
+        "Final backend live capture, quality report, and source-boundary report "
+        "from the accepted configuration."
+    ),
+    "m1_recording_replay_passed": (
+        "M1 recording directory plus quality and replay reports generated from "
+        "accepted backend evidence."
+    ),
+    "recalibration_triggers_reviewed": (
+        "Review note covering PCB, IMU lot, mounting, enclosure, ODR/filter/FIFO, "
+        "power rail, firmware conversion, and fixture changes."
+    ),
+}
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -195,6 +238,50 @@ def build_acceptance_preflight_report(
     }
 
 
+def build_evidence_manifest_template(
+    *,
+    manifest_id: str,
+    hardware_profile: str,
+    calibration_profile_id: str | None = None,
+    target_mounting_direction: str | None = None,
+    reference_artifacts: list[str] | None = None,
+    generated_at: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": EVIDENCE_SCHEMA_VERSION,
+        "manifest_id": manifest_id,
+        "generated_at": generated_at or utc_now(),
+        "hardware_profile": hardware_profile,
+        "calibration_profile_id": calibration_profile_id,
+        "target_mounting_direction": target_mounting_direction or "pending",
+        "reference_artifacts": reference_artifacts or [],
+        "evidence": {
+            gate["id"]: {
+                "status": "pending",
+                "artifact": None,
+                "observed_on_hardware": False,
+                "expected_artifact": EXPECTED_ARTIFACTS[gate["id"]],
+                "operator_action": gate["missing_action"],
+                "acceptance_rule": (
+                    "Set status to pass only when artifact names a durable file "
+                    "or report from the final hardware configuration and "
+                    "observed_on_hardware is true."
+                ),
+            }
+            for gate in REQUIRED_GATES
+        },
+        "boundary": {
+            "formal_imu_acceptance": False,
+            "motionnet_training_enabled": False,
+            "notes": (
+                "This is an operator evidence template. It does not validate "
+                "hardware by itself; it becomes acceptance evidence only after "
+                "each gate points to hardware-observed artifacts."
+            ),
+        },
+    }
+
+
 def format_acceptance_markdown(
     report: dict[str, Any],
     title: str = "# TIMU-009B IMU Product Acceptance Preflight",
@@ -252,6 +339,61 @@ def format_acceptance_markdown(
     )
 
 
+def format_evidence_manifest_markdown(
+    manifest: dict[str, Any],
+    title: str = "# TIMU-009C-B0 IMU Product Mounting Evidence Template",
+) -> str:
+    rows = []
+    for gate in REQUIRED_GATES:
+        evidence = _require_mapping(manifest["evidence"][gate["id"]], f"evidence.{gate['id']}")
+        rows.append(
+            "| "
+            f"`{gate['id']}` | `{evidence['status']}` | "
+            f"`{evidence['observed_on_hardware']}` | {evidence['expected_artifact']} | "
+            f"{evidence['operator_action']} |"
+        )
+
+    references = manifest.get("reference_artifacts") or ["none"]
+
+    return "\n".join(
+        [
+            title,
+            "",
+            f"- Manifest id: `{manifest['manifest_id']}`",
+            f"- Hardware profile: `{manifest['hardware_profile']}`",
+            f"- Calibration profile id: `{manifest.get('calibration_profile_id')}`",
+            f"- Target mounting direction: `{manifest['target_mounting_direction']}`",
+            f"- Formal IMU acceptance: `{manifest['boundary']['formal_imu_acceptance']}`",
+            f"- MotionNet training enabled: `{manifest['boundary']['motionnet_training_enabled']}`",
+            "",
+            "## Operator Rule",
+            "",
+            manifest["boundary"]["notes"],
+            "",
+            "Do not set a gate to `pass` until the artifact is a durable report or"
+            " file from the final hardware configuration and `observed_on_hardware`"
+            " is `true`.",
+            "",
+            "## Evidence Gates",
+            "",
+            "| Gate | Status | Hardware observed | Expected artifact | Operator action |",
+            "|---|---|---:|---|---|",
+            *rows,
+            "",
+            "## Reference Artifacts",
+            "",
+            *[f"- `{artifact}`" for artifact in references],
+            "",
+            "## Next Hardware Step",
+            "",
+            "Fix the QMI8658 board in the target wearable orientation or a repeatable"
+            " temporary fixture, then capture the final mounting/static calibration"
+            " evidence before promoting any gate to `pass`.",
+            "",
+        ]
+    )
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build an IMU product acceptance preflight report.")
     parser.add_argument("--calibration-profile", required=True, type=Path)
@@ -260,6 +402,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-json", type=Path, default=None)
     parser.add_argument("--markdown", type=Path, default=None)
     parser.add_argument("--title", default="# TIMU-009B IMU Product Acceptance Preflight")
+    parser.add_argument("--evidence-template-json", type=Path, default=None)
+    parser.add_argument("--evidence-template-markdown", type=Path, default=None)
+    parser.add_argument("--manifest-id", default=None)
+    parser.add_argument("--target-mounting-direction", default=None)
+    parser.add_argument("--reference-artifact", action="append", default=[])
     parser.add_argument("--json", action="store_true", help="Print the report as JSON.")
     return parser.parse_args(argv)
 
@@ -280,7 +427,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.markdown:
         args.markdown.parent.mkdir(parents=True, exist_ok=True)
         args.markdown.write_text(format_acceptance_markdown(report, args.title), encoding="utf-8")
-    if args.json or not (args.output_json or args.markdown):
+    if args.evidence_template_json or args.evidence_template_markdown:
+        manifest = build_evidence_manifest_template(
+            manifest_id=args.manifest_id or f"{args.report_id}-evidence-template",
+            hardware_profile=str(profile.get("hardware_profile", "unknown")),
+            calibration_profile_id=str(profile.get("profile_id")) if profile.get("profile_id") else None,
+            target_mounting_direction=args.target_mounting_direction,
+            reference_artifacts=args.reference_artifact,
+        )
+        if args.evidence_template_json:
+            args.evidence_template_json.parent.mkdir(parents=True, exist_ok=True)
+            args.evidence_template_json.write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        if args.evidence_template_markdown:
+            args.evidence_template_markdown.parent.mkdir(parents=True, exist_ok=True)
+            args.evidence_template_markdown.write_text(format_evidence_manifest_markdown(manifest), encoding="utf-8")
+    if args.json or not (args.output_json or args.markdown or args.evidence_template_json or args.evidence_template_markdown):
         print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 
