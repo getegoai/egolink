@@ -1,62 +1,46 @@
-# CURRENT_TASK: TIMU-008 / platform_imu QMI8658 Backend Live Capture
+# CURRENT_TASK: TIMU-009A / IMU Engineering Calibration Boundary
 
 ## Goal
 
-Exercise the opt-in `platform_imu` QMI8658 backend on the
-ESP32-S3-Touch-AMOLED-2.06 board and capture live evidence that the firmware can
-publish non-mock IMU metadata through the existing MQTT/M1 path.
+Create a repeatable engineering calibration artifact for the current AMOLED
+QMI8658 path while explicitly preventing it from being treated as production
+calibration or formal IMU acceptance.
 
 ## Scope
 
-- Keep the P0 Waveshare ESP32-S3-SIM7670G-4G firmware default on mock IMU data.
-- Use `sdkconfig.qmi8658.defaults` as an explicit, separate live-capture profile.
-- Enable the AMOLED-board AXP2101 rails before QMI8658 probe.
-- Add a bounded boot-time serial sample window for hardware bring-up.
-- Use an independent device id and MQTT topic for AMOLED QMI evidence:
-  `ego-link-amoled-qmi8658`.
-- Capture UART evidence, MQTT event-log evidence, M1 recording, quality gate,
-  and replay.
-
-## Out Of Scope
-
-- No formal IMU acceptance.
-- No MotionNet training data claim.
-- No product mounting, final calibration, FIFO/DRDY interrupt, wake, or power
-  acceptance.
-- No microphone, TF/SD, touch/display, battery, fuel-gauge, or SIM7670G power
-  control work.
-- No change to the default P0 mock IMU firmware path.
+- Reuse existing TIMU-004B three-pose QMI8658 captures.
+- Generate an engineering calibration profile with axis mapping and conservative
+  accel offset estimates.
+- Mark the profile as `stage=engineering`, `production_ready=false`, and
+  `formal_imu_acceptance=false`.
+- List hardware and firmware changes that require recalibration.
+- Keep MotionNet training, production calibration, final mounting, FIFO/DRDY,
+  low-power wake, and current-waveform validation out of scope.
 
 ## Result
 
-- Added optional AXP2101 rail bring-up behind
-  `CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS`.
-- Added boot-capture Kconfig knobs:
-  `CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT` and
-  `CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_INTERVAL_MS`.
-- Updated `sdkconfig.qmi8658.defaults` with independent device id/topic and a
-  40-sample, 50 ms boot capture window.
-- Built and flashed the QMI8658 backend profile to `COM9`.
-- Captured UART evidence with AXP2101 chip id `0x4a`, QMI8658 WHOAMI `0x05`,
-  40 boot samples, and MQTT payloads containing `imu_sample_mock=false`.
-- Captured PC-side MQTT evidence: 8 messages, including 4
-  `sensor_sample/device_health` rows with `imu_source=qmi8658_i2c`,
-  `imu_hardware_present=true`, `imu_driver_enabled=true`, and
-  `imu_sample_mock=false`.
-- Generated an M1 recording, passed quality gate `0.94`, and replayed 8 inputs
-  with `risk_type=none`.
+- Added `pc_simulator/imu_calibration.py`.
+- Added `scripts/generate_imu_calibration_profile.py`.
+- Added `quality_tests/test_imu_calibration.py`.
+- Generated:
+  - `docs/hardware/TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.json`
+  - `docs/hardware/TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.md`
+- Current engineering estimate:
+  - axis map: x/y/z measured axes match expected axes
+  - accel offset estimate xyz: approximately `[48.0, -10.3, -24.0] mg`
+  - gyro signed bias: not estimated
+  - production ready: false
 
 ## Done When
 
-- [x] Default config remains mock.
-- [x] QMI8658 live profile uses an independent device id and topic.
-- [x] AXP2101 rail enable and QMI8658 probe pass on hardware.
-- [x] Boot capture emits real QMI8658 samples with `mock=false`.
-- [x] MQTT payloads carry QMI8658 IMU fields with `imu_sample_mock=false`.
-- [x] PC-side MQTT worker records the live samples from the LAN broker.
-- [x] M1 session recorder, quality gate, and replay pass.
-- [x] TIMU-008 report and sensor matrix references are updated.
+- [x] Engineering calibration profile can be generated from existing pose
+  quality JSON or raw pose JSONL sources.
+- [x] Profile records axis mapping and conservative accel offset estimate.
+- [x] Profile explicitly says `production_ready=false`.
+- [x] Profile lists recalibration triggers after hardware, mounting, enclosure,
+  ODR/FIFO/interrupt, power rail, backend, or fixture changes.
+- [x] Tests cover engineering-vs-production boundary.
+- [x] Status, matrix, and integration report are updated.
 
-Formal IMU acceptance remains false while product mounting, calibration,
-FIFO/DRDY interrupt behavior, low-power wake, current waveform, and final
-backend quality gates remain open.
+Formal IMU acceptance remains false. A production calibration must be redone
+after the hardware and mechanical stack are frozen.

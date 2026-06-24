@@ -1,0 +1,158 @@
+{
+  "schema_version": "egolink.imu_calibration_profile.v0.1",
+  "profile_id": "timu009a-qmi8658-engineering-20260624",
+  "stage": "engineering",
+  "generated_at": "2026-06-24T02:07:07.708383+00:00",
+  "hardware_profile": "esp32-s3-touch-amoled-2.06-qmi8658",
+  "source_report": "z_negative=pc_simulator\\runtime\\timu004b\\timu004b-qmi8658-preflight-live-20260623-205520-z_negative.jsonl;x_positive=pc_simulator\\runtime\\timu004b\\timu004b-qmi8658-manual-pose1-20260623-2100-x_positive.jsonl;y_positive=pc_simulator\\runtime\\timu004b\\timu004b-qmi8658-manual-pose2-20260623-2108-y_positive.jsonl",
+  "source_report_schema_version": "egolink.imu_pose_quality_report.v0.1",
+  "usable_for_engineering": true,
+  "production_ready": false,
+  "formal_imu_acceptance": false,
+  "recalibration_required_after": [
+    "pcb_revision_change",
+    "imu_part_or_lot_change",
+    "imu_mounting_position_change",
+    "enclosure_or_wearable_mechanics_change",
+    "adhesive_or_fastener_change",
+    "axis_orientation_change",
+    "odr_filter_fifo_or_interrupt_policy_change",
+    "power_rail_or_regulator_change",
+    "firmware_backend_or_conversion_change",
+    "production_fixture_change"
+  ],
+  "production_blockers": [
+    "final_mounting_direction_not_frozen",
+    "production_fixture_not_defined",
+    "six_face_or_equivalent_accel_calibration_not_complete",
+    "signed_gyro_bias_capture_not_complete",
+    "temperature_drift_not_characterized",
+    "fifo_drdy_interrupt_not_validated",
+    "power_current_waveform_not_validated"
+  ],
+  "axis_map": {
+    "z": {
+      "measured_axis": "z",
+      "sign": 1,
+      "pose_label": "z_negative"
+    },
+    "x": {
+      "measured_axis": "x",
+      "sign": 1,
+      "pose_label": "x_positive"
+    },
+    "y": {
+      "measured_axis": "y",
+      "sign": 1,
+      "pose_label": "y_positive"
+    }
+  },
+  "accel_calibration": {
+    "method": "mean_of_pose_mean_minus_ideal_vectors",
+    "basis": "engineering_static_pose_quality_report",
+    "offset_mg_xyz": [
+      47.99130434782612,
+      -10.330434782608686,
+      -23.971014492753618
+    ],
+    "max_abs_pose_offset_mg": 59.82608695652174,
+    "per_pose_offset_mg": {
+      "z_negative": [
+        56.93043478260869,
+        23.391304347826086,
+        -30.24347826086955
+      ],
+      "x_positive": [
+        43.12173913043489,
+        -59.82608695652174,
+        -49.356521739130436
+      ],
+      "y_positive": [
+        43.92173913043478,
+        5.443478260869597,
+        7.6869565217391305
+      ]
+    },
+    "scale_matrix": null,
+    "scale_matrix_status": "not_estimated_requires_six_face_or_fixture_calibration"
+  },
+  "gyro_calibration": {
+    "bias_mdps_xyz": null,
+    "status": "not_estimated_requires_signed_static_gyro_capture"
+  },
+  "quality_summary": {
+    "pose_count": 3,
+    "quality_gates_passed": true,
+    "source_boundary_passed": true,
+    "formal_imu_acceptance_reasons": [
+      "source_status_unverified"
+    ],
+    "static_poses": {
+      "z_negative": {
+        "sample_count": 115,
+        "mean_axes_mg": [
+          56.93043478260869,
+          23.391304347826086,
+          -1030.2434782608696
+        ],
+        "axis_stddev_mg": [
+          0.6146294625068623,
+          0.6684915163054806,
+          0.6405338038505355
+        ],
+        "static_passed": true,
+        "label_match": true,
+        "calibration_offset_passed": true,
+        "gyro_abs_mean_mdps": 531.9043478260869
+      },
+      "x_positive": {
+        "sample_count": 115,
+        "mean_axes_mg": [
+          1043.121739130435,
+          -59.82608695652174,
+          -49.356521739130436
+        ],
+        "axis_stddev_mg": [
+          0.6996623544310066,
+          1.3847672512970006,
+          3.996066118502102
+        ],
+        "static_passed": true,
+        "label_match": true,
+        "calibration_offset_passed": true,
+        "gyro_abs_mean_mdps": 661.6260869565217
+      },
+      "y_positive": {
+        "sample_count": 115,
+        "mean_axes_mg": [
+          43.92173913043478,
+          1005.4434782608696,
+          7.6869565217391305
+        ],
+        "axis_stddev_mg": [
+          2.975692323059003,
+          1.0146004083666855,
+          2.6354282463364282
+        ],
+        "static_passed": true,
+        "label_match": true,
+        "calibration_offset_passed": true,
+        "gyro_abs_mean_mdps": 1235.744927536232
+      }
+    }
+  },
+  "boundary": {
+    "can_use_for": [
+      "engineering_axis_sanity",
+      "temporary_mounting_experiments",
+      "backend_regression_checks"
+    ],
+    "must_not_use_for": [
+      "production_calibration",
+      "motionnet_training",
+      "fall_or_impact_product_claims",
+      "battery_life_or_power_claims"
+    ],
+    "notes": "This profile captures an engineering calibration estimate. It must be regenerated after hardware, mounting, enclosure, firmware sampling, FIFO/interrupt, or power-path changes."
+  }
+}

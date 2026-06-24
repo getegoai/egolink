@@ -31,8 +31,13 @@
   to the ESP32-S3-Touch-AMOLED-2.06 board on `COM9`, verified AXP2101 rail
   enable and QMI8658 WHOAMI, captured boot samples plus MQTT payloads with
   `imu_sample_mock=false`, and closed an 8-frame M1 recording/quality/replay
-  loop. Formal IMU acceptance still remains false because product mounting,
-  FIFO/interrupt, calibration, and power gates are pending.
+  loop. TIMU-009A then generated an engineering-only calibration profile from
+  the existing TIMU-004B three-pose captures, with same-axis/same-sign x/y/z
+  mapping and a temporary accel offset estimate of about
+  `[48.0, -10.3, -24.0] mg`; it explicitly remains
+  `production_ready=false`. Formal IMU acceptance still remains false because
+  product mounting, FIFO/interrupt, final calibration, and power gates are
+  pending.
 - PC Simulator entry point: `python pc_simulator/app.py --host 127.0.0.1 --port 8787`
 - Python version: `Python 3.13.13`
 - Hardware tested: M0-INT-001 itself performed no hardware validation. Later
@@ -73,6 +78,7 @@
 - [x] TIMU-006 QMI8658 long-window capture
 - [x] TIMU-007 platform_imu backend-boundary PoC
 - [x] TIMU-008 platform_imu QMI8658 backend live capture
+- [x] TIMU-009A IMU engineering calibration boundary
 
 ## Changed files
 
@@ -478,6 +484,19 @@ TIMU-008 platform_imu QMI8658 backend live-capture updates:
 - `quality_tests/test_platform_imu_firmware.py`
 - `quality_tests/test_hardware_sensor_matrix.py`
 - `docs/hardware/TIMU_008_PLATFORM_IMU_QMI_BACKEND_LIVE_CAPTURE_20260624.md`
+- `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
+- `docs/modeling/INTEGRATION_REPORT.md`
+- `docs/STATUS.md`
+- `docs/tasks/CURRENT_TASK.md`
+
+TIMU-009A IMU engineering calibration boundary updates:
+
+- `pc_simulator/imu_calibration.py`
+- `scripts/generate_imu_calibration_profile.py`
+- `quality_tests/test_imu_calibration.py`
+- `quality_tests/test_hardware_sensor_matrix.py`
+- `docs/hardware/TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.json`
+- `docs/hardware/TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
 - `docs/STATUS.md`
@@ -1011,6 +1030,31 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
 
 Result: passed after TIMU-008 code, documentation, and hardware matrix sync.
 The repository test suite ran 158 tests successfully.
+
+```powershell
+python -m unittest quality_tests.test_imu_calibration quality_tests.test_imu_pose_quality quality_tests.test_hardware_sensor_matrix -v
+```
+
+Result: passed for TIMU-009A focused verification. The calibration, pose
+quality, and hardware matrix tests ran 14 tests successfully, covering the
+engineering-vs-production boundary, raw pose JSONL generation path, axis map,
+conservative accel offset estimate, and evidence path tracking.
+
+```powershell
+python scripts\generate_imu_calibration_profile.py --pose z_negative=pc_simulator\runtime\timu004b\timu004b-qmi8658-preflight-live-20260623-205520-z_negative.jsonl --pose x_positive=pc_simulator\runtime\timu004b\timu004b-qmi8658-manual-pose1-20260623-2100-x_positive.jsonl --pose y_positive=pc_simulator\runtime\timu004b\timu004b-qmi8658-manual-pose2-20260623-2108-y_positive.jsonl --profile-id timu009a-qmi8658-engineering-20260624 --hardware-profile esp32-s3-touch-amoled-2.06-qmi8658 --output-json docs\hardware\TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.json --markdown docs\hardware\TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.md
+```
+
+Result: passed for TIMU-009A profile generation. The generated profile records
+`stage=engineering`, `production_ready=false`, `formal_imu_acceptance=false`,
+x/y/z same-axis same-sign mapping, and accel offset estimate
+`[48.0, -10.3, -24.0] mg`.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
+```
+
+Result: passed after TIMU-009A code, profile, documentation, and hardware
+matrix sync. The repository test suite ran 162 tests successfully.
 
 ```powershell
 idf.py --version
@@ -1743,6 +1787,16 @@ closes the real-backend live capture gap, but formal IMU acceptance remains
 false because product mounting, final calibration, FIFO/DRDY interrupt,
 low-power wake, and power/current waveform evidence are still pending.
 
+TIMU-009A performed no new hardware I/O. It consumed the previously captured
+TIMU-004B `z_negative`, `x_positive`, and `y_positive` QMI8658 JSONL windows
+and generated an engineering calibration profile. The generated profile maps
+x/y/z to same-axis same-sign for the current board orientation and estimates a
+temporary accel offset of about `[48.0, -10.3, -24.0] mg`. It intentionally
+sets `stage=engineering`, `production_ready=false`, and
+`formal_imu_acceptance=false`; it also lists recalibration triggers for PCB,
+IMU lot, mounting, enclosure, axis orientation, ODR/filter/FIFO/interrupt,
+power-rail, backend/conversion, and fixture changes.
+
 ## Known gaps
 
 - `pc_simulator/safety_companion.py` now calls the packaged `RuleRouter` and
@@ -1802,9 +1856,10 @@ low-power wake, and power/current waveform evidence are still pending.
   formal IMU acceptance is still false. TIMU-004A passed a single `z_negative`
   pose, TIMU-004B added three static poses, TIMU-005 added rotation/light-tap
   motion, TIMU-006 added a 600-sample long window, TIMU-007 added the
-  backend boundary, and TIMU-008 added real-backend live capture. Mounting
-  direction, final calibration, FIFO/interrupt behavior, and power behavior
-  remain pending.
+  backend boundary, TIMU-008 added real-backend live capture, and TIMU-009A
+  added an engineering-only calibration profile. Mounting direction, final
+  production calibration, FIFO/interrupt behavior, and power behavior remain
+  pending.
 - TCAM-001 confirms the standalone camera smoke path, but product firmware
   camera integration remains pending. `platform_camera`, privacy authorization,
   retention/hash manifests, camera power-state control, M1 image recording, and
@@ -1815,16 +1870,17 @@ low-power wake, and power/current waveform evidence are still pending.
   FIFO/interrupt behavior, microphone, display/touch downlink, board-to-board
   UART, standalone operation, TF/SD, and dual-board power behavior all require
   later hardware tasks.
-- TIMU-002 through TIMU-008 show the current IMU boundary: the bridge now emits
+- TIMU-002 through TIMU-009A show the current IMU boundary: the bridge now emits
   real QMI8658 sample windows at about `20 Hz`, manual `z_negative`,
   `x_positive`, and `y_positive` static poses pass the pose quality gate, and a
   rotation/light-tap window passes motion sanity. TIMU-006 adds a 600-sample
   long-window timing/jitter/drop pass, and TIMU-007 adds the default-mock,
   opt-in QMI8658 `platform_imu` backend boundary. TIMU-008 validates that
   opt-in backend through UART, MQTT, M1 recording, quality gate, and replay with
-  `imu_sample_mock=false`. It is still not a formal product IMU source because
-  FIFO/interrupt, power, final calibration, and mounting acceptance remain
-  incomplete.
+  `imu_sample_mock=false`. TIMU-009A adds a repeatable engineering calibration
+  profile with `production_ready=false`. It is still not a formal product IMU
+  source because FIFO/interrupt, power, final production calibration, and
+  mounting acceptance remain incomplete.
 - M0 rules are only a deterministic baseline and synthetic scenario check; they
   do not prove real-world fall, accident, distress, or child-safety accuracy.
 - The new M1 context requires data foundations before any MotionNet, AudioGate,
@@ -1851,8 +1907,9 @@ low-power wake, and power/current waveform evidence are still pending.
 
 ## Recommended next step
 
-Next, run TIMU-009 against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: fix the
-target mounting orientation, record calibration procedure, validate FIFO/DRDY
-or interrupt behavior, and align firmware power markers with real current
-waveforms. Keep MotionNet training and formal IMU claims disabled until
-mounting, FIFO/interrupt, power, and backend quality gates pass.
+Next, run TIMU-009B against the ESP32-S3-Touch-AMOLED-2.06 QMI8658 path: fix
+the target mounting orientation, record the final calibration procedure,
+validate FIFO/DRDY or interrupt behavior, and align firmware power markers with
+real current waveforms. Keep MotionNet training and formal IMU claims disabled
+until mounting, FIFO/interrupt, power, production calibration, and backend
+quality gates pass.
