@@ -4,7 +4,7 @@
 
 ## 当前阶段
 
-Stage 0：单智能体、单任务、低风险迭代开发模式。
+Stage 0：单智能体、单任务、低风险迭代开发模式。2026-06-24 起，P0 执行策略调整为 **Demo-first / 最小功能原型优先**：先跑通核心产品体验，再逐步补硬件真实化、质量门和稳定性。
 
 产品锚点：AI 主动守护定位器。近期 v0.1 目标聚焦设备联网、MQTT 上报、网页看板、SOS / 唤醒 / 定位事件闭环，并为后续 AI 主动提醒打基础。
 
@@ -68,11 +68,12 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。
 - TIMU-009C-B0：IMU product mounting evidence template 完成。`pc_simulator/imu_acceptance.py` 现在可生成 operator evidence manifest template；新增模板 `docs/hardware/TIMU_009C_B0_QMI8658_PRODUCT_MOUNTING_EVIDENCE_TEMPLATE_20260624.json` / `.md`，覆盖 TIMU-009B 的 10 个 gate，并把每个 gate 默认保持为 `status=pending`、`artifact=null`、`observed_on_hardware=false`。模板引用 TIMU-009C-A 后端 readiness 报告作为参考 artifact，但不把它升级成正式产品安装/校准/FIFO/功耗证据；`formal_imu_acceptance=false`、`motionnet_training_enabled=false` 继续保持。
 - TIMU-009C-B1：QMI8658 temporary fixture static capture 完成。用户已将 AMOLED/QMI8658 板用双面胶固定到纸盒临时夹具；通过 LAN broker `192.168.31.250:1883` 捕获 16 条 MQTT 消息，其中 8 条 `sensor_sample/device_health` 为真实 QMI8658 样本，`imu_source=qmi8658_i2c`、`imu_sample_mock=false`，`seq=11728..11743`。静态窗口 accel 均值约 `[25.38,92.25,-1020.50] mg`，accel magnitude 均值 `1024.98 mg`、span `1.18 mg`；M1 recording 生成 16 条 sensor frame，quality gate PASS `0.94`，replay PASS，16 条输出均为 `risk_type=none`。新增证据摘要、manifest 和 preflight：`docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_STATIC_CAPTURE_20260624.md`、`docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_EVIDENCE_20260624.json`、`docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_PREFLIGHT_20260624.md` / `.json`；preflight 仍预期 FAIL，`formal_imu_acceptance=false`，因为这是临时夹具 partial evidence，不是最终产品安装/校准/FIFO/功耗验收。
 - TIMU-009C-B2：QMI8658 labeled fixture repeatability capture 完成。用户已在纸盒临时夹具上标出 `TOP`、`OUT`、`USB/CABLE`；通过 LAN broker `192.168.31.250:1883` 捕获 20 条 MQTT 消息，其中 10 条 `sensor_sample/device_health` 为真实 QMI8658 样本，`imu_source=qmi8658_i2c`、`imu_sample_mock=false`，`seq=11976..11995`。静态窗口 accel 均值约 `[48.60,94.10,-1020.40] mg`，accel magnitude 均值 `1025.88 mg`、span `2.03 mg`；相对 B1，accel magnitude 均值只差 `0.90 mg`，Z 均值只差 `0.10 mg`，主重力轴保持 negative Z。M1 recording 生成 20 条 sensor frame，quality gate PASS `0.94`，replay PASS，20 条输出均为 `risk_type=none`。新增证据摘要、manifest 和 preflight：`docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md`、`docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_EVIDENCE_20260624.json`、`docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_PREFLIGHT_20260624.md` / `.json`；preflight 仍预期 FAIL，`formal_imu_acceptance=false`，因为这是标记后临时夹具 repeatability partial evidence，不是最终产品安装/校准/FIFO/功耗验收。
+- DEMO-001：Demo-first 最小安全循环完成。新增 `pc_simulator/minimal_safety_demo.py` 和 `scripts/run_minimal_safety_demo.py`，可在没有 AMOLED 触摸和真实 GNSS 的情况下先跑通核心产品闭环：`motion_event -> ask_user -> user_confirmation -> request_location -> command_ack -> location_report -> safety_event`。Demo 会写入 event log、session recording 和 quality report；`user_confirmation` / `command_ack` 已进入 session recorder，`imu_motion` 可被 session replay 重新喂给规则路由。该 Demo 是产品体验原型，不声明真实报警、真实拨号、AMOLED 屏幕触摸或 SIM7670G 板载 GNSS ACK 已完成。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
 ## 当前建议任务
 
-下一项建议任务：TIMU-009C-B3 IMU 标记夹具等效校准 pose set，或在中断线可用后推进 FIFO/DRDY 验证。TIMU-009C-B2 已证明标记后纸盒夹具方向可复现；下一步如果继续校准，需要按 `TOP`、`OUT`、`USB/CABLE` 标签翻转/固定多个姿态窗口。
+下一项建议任务：DEMO-002 AMOLED 屏幕/触摸确认。目标是让 AMOLED 板接收 `ask_user` 后显示“检测到异常，你现在安全吗？”，用户点击“安全 / 需要帮助”后回传 `user_confirmation`。GNSS / 4G 继续允许 Mock，先不要被真实定位、拨号、长期稳定性或正式 IMU 验收卡住。
 
 ## 后续任务路线
 

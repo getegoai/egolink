@@ -266,6 +266,8 @@ def recorder_event_from_event(event: dict[str, Any]) -> dict[str, Any] | None:
         "safety_evaluation",
         "safety_event",
         "command_sent",
+        "command_ack",
+        "user_confirmation",
     }:
         return None
     record = compact_base_event(event)
@@ -281,6 +283,9 @@ def recorder_event_from_event(event: dict[str, Any]) -> dict[str, Any] | None:
             "recommended_action": event.get("recommended_action"),
             "command": event.get("cmd") or event.get("command"),
             "command_id": event.get("command_id") or event.get("cmd_id"),
+            "ack_status": event.get("ack_status") or event.get("status"),
+            "response": event.get("response"),
+            "outcome": event.get("outcome"),
             "source_event_key_ref": event.get("source_event_key"),
             "source_event_type_ref": event.get("source_event_type"),
         }

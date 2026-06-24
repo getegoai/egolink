@@ -16,7 +16,7 @@ from pc_simulator import safety_companion, session_annotations, session_inspecto
 
 REPLAY_SCHEMA_VERSION = "egolink.session_replay_report.v0.1"
 UPTIME_RE = re.compile(r"^uptime_ms:(?P<value>\d+)$")
-DERIVED_EVENT_TYPES = {"safety_evaluation", "safety_event", "command_sent"}
+DERIVED_EVENT_TYPES = {"safety_evaluation", "safety_event", "command_sent", "command_ack"}
 
 
 def utc_now() -> str:
@@ -378,6 +378,29 @@ def short_hash(value: str) -> str:
 
 def build_motion_sensor(row: Mapping[str, Any]) -> dict[str, Any] | None:
     event_type = str(row.get("event_type") or "")
+    if row.get("frame_type") == "imu_motion":
+        impact_score = clamp_float(float_value(row.get("impact_score"), 0.0), 0.0, 1.0)
+        fall_score = clamp_float(float_value(row.get("fall_score"), 0.0), 0.0, 1.0)
+        stationary_seconds = max(0.0, float_value(row.get("stationary_seconds"), 0.0))
+        activity_label = "fall_candidate" if fall_score >= 0.7 else "impact" if impact_score >= 0.8 else "motion"
+        return {
+            "sample_rate_hz": float_value(row.get("sample_hz"), 50.0),
+            "window_duration_ms": 2560,
+            "accel_mps2": None,
+            "gyro_rad_s": None,
+            "summary": {
+                "activity_label": activity_label,
+                "activity_confidence": max(impact_score, fall_score, 0.5),
+                "max_accel_g": max(1.0, 1.2 if impact_score >= 0.8 else 0.4),
+                "jerk_peak_g_s": 2.0 if impact_score >= 0.8 else 0.3,
+                "orientation_change_deg": 45.0 if fall_score >= 0.7 else 0.0,
+                "impact_score": impact_score,
+                "fall_score": fall_score,
+                "stationary_seconds": stationary_seconds,
+                "device_worn": True,
+            },
+            "raw_ref": row.get("source_event_key"),
+        }
     if event_type not in {"impact_detected", "post_impact_inactivity", "possible_fall"}:
         return None
     impact_score = 0.92 if event_type in {"impact_detected", "post_impact_inactivity"} else 0.0

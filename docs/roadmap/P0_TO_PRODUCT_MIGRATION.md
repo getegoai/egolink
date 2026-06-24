@@ -53,6 +53,37 @@ P4
 
 ## 3. 阶段验收口径
 
+### Demo-first 插队路线
+
+在 P0-A / P0-B 之间先做最小功能原型，避免过早进入大而全验收。
+
+```text
+Demo v0.1
+PC 最小安全循环：
+motion_event -> ask_user -> user_confirmation -> request_location -> mock location -> safety_event
+
+Demo v0.2
+AMOLED 板接收 ask_user，屏幕显示询问，触摸回传 user_confirmation
+
+Demo v0.3
+SIM7670G 板接收 request_location 并返回 ACK / GNSS 状态
+
+Demo v0.4
+接入真实 GNSS / 4G / 摄像头状态，但仍允许 Mock 兜底
+
+Demo v0.5
+再补断线重连、回放质量、异常日志和长期稳定性
+```
+
+当前可运行入口：
+
+```powershell
+python scripts\run_minimal_safety_demo.py --response safe
+python scripts\run_minimal_safety_demo.py --response help
+```
+
+Demo-first 的规则是：先让核心产品体验可演示，再逐步替换 Mock 输入、补硬件 ACK、补质量门和稳定性。
+
 ### P0-A：双板 USB + PC Bridge
 
 验收重点：

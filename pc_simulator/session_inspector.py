@@ -75,6 +75,8 @@ ALLOWED_EVENT_TYPES = {
     "safety_evaluation",
     "safety_event",
     "command_sent",
+    "command_ack",
+    "user_confirmation",
 }
 
 
