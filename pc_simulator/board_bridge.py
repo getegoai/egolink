@@ -21,6 +21,7 @@ from pc_simulator import event_store, protocol
 
 
 BRIDGE_PROTOCOL_VERSION = "egolink.bridge.v0.1"
+BOARD_PROTOCOL_VERSION = "0.2"
 BRIDGE_INGEST_SOURCE = "pc_simulator.board_bridge"
 KNOWN_ROLES = {"wearable_node", "connectivity_node"}
 MOTION_EVENT_TYPES = {"motion_event", "imu_sample", "imu_motion"}
@@ -227,7 +228,7 @@ def route_commands_for_event(event: dict[str, Any], state: BridgeState) -> list[
                 target_role="wearable_node",
                 target_device_id=wearable_id,
                 cmd="ask_user",
-                payload={"text": "检测到异常撞击，你现在安全吗？"},
+                payload={"text": "Impact detected. Are you safe?", "options": ["safe", "help"]},
             )
         )
     if connectivity_id:
@@ -274,6 +275,57 @@ def build_command_event(
         "source_event_key": bridge_source_event_key(source_event),
         "source_event_type": str(source_event.get("event_type") or "unknown"),
     }
+
+
+def build_downlink_message(command_event: dict[str, Any], *, session_id: str = "demo-v0-2") -> dict[str, Any]:
+    """Render a bridge command event into the board-facing v0.2 JSON message."""
+
+    cmd = str(command_event.get("cmd") or "")
+    target_device_id = str(command_event.get("target_device_id") or "")
+    cmd_id = str(command_event.get("cmd_id") or "")
+    if not cmd:
+        raise BoardBridgeError("command event missing cmd")
+    if not target_device_id:
+        raise BoardBridgeError("command event missing target_device_id")
+    if not cmd_id:
+        raise BoardBridgeError("command event missing cmd_id")
+
+    payload = command_event.get("command_payload")
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict):
+        raise BoardBridgeError("command_payload must be a JSON object")
+
+    rendered = {
+        "protocol_version": BOARD_PROTOCOL_VERSION,
+        "source": "pc-bridge",
+        "target": target_device_id,
+        "type": cmd,
+        "cmd": cmd,
+        "cmd_id": cmd_id,
+        "seq": command_event.get("seq"),
+        "timestamp_ms": timestamp_ms_from_bridge_event(command_event),
+        "session_id": str(command_event.get("session_id") or session_id),
+        "payload": payload,
+    }
+    return drop_none(rendered)
+
+
+def timestamp_ms_from_bridge_event(event: dict[str, Any]) -> int | None:
+    direct_value = event.get("timestamp_ms")
+    if isinstance(direct_value, int):
+        return direct_value
+    if isinstance(direct_value, str) and direct_value.isdigit():
+        return int(direct_value)
+
+    value = str(event.get("received_at") or event.get("ts") or "")
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return int(parsed.timestamp() * 1000)
 
 
 def bridge_source_event_key(event: dict[str, Any]) -> str:

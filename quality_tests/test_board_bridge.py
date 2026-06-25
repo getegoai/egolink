@@ -82,8 +82,37 @@ class BoardBridgeTests(unittest.TestCase):
         self.assertEqual(rows[2]["bridge_source"], "wearable_live")
         self.assertEqual(rows[3]["target_device_id"], "wearable-node-001")
         self.assertEqual(rows[3]["cmd"], "ask_user")
+        self.assertEqual(rows[3]["command_payload"]["options"], ["safe", "help"])
         self.assertEqual(rows[4]["target_device_id"], "connectivity-node-001")
         self.assertEqual(rows[4]["cmd"], "request_location")
+
+    def test_command_event_renders_board_downlink_message(self) -> None:
+        state = board_bridge.BridgeState()
+        command = board_bridge.build_command_event(
+            state,
+            source_event={
+                "device_id": "wearable-node-001",
+                "event_type": "motion_event",
+                "seq": 77,
+                "received_at": "2026-06-24T10:11:12+00:00",
+            },
+            target_role="wearable_node",
+            target_device_id="wearable-node-001",
+            cmd="ask_user",
+            payload={"text": "Impact detected. Are you safe?", "options": ["safe", "help"]},
+        )
+        rendered = board_bridge.build_downlink_message(command, session_id="unit-session")
+
+        self.assertEqual(rendered["protocol_version"], "0.2")
+        self.assertEqual(rendered["source"], "pc-bridge")
+        self.assertEqual(rendered["target"], "wearable-node-001")
+        self.assertEqual(rendered["type"], "ask_user")
+        self.assertEqual(rendered["cmd"], "ask_user")
+        self.assertEqual(rendered["cmd_id"], "bridge-cmd-000001")
+        self.assertEqual(rendered["seq"], 1)
+        self.assertEqual(rendered["timestamp_ms"], 1782295872000)
+        self.assertEqual(rendered["session_id"], "unit-session")
+        self.assertEqual(rendered["payload"]["options"], ["safe", "help"])
 
     def test_bridge_motion_event_records_as_unverified_imu_frame(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
