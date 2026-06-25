@@ -10,6 +10,7 @@ class AmoledSafetyDemoFirmwareTests(unittest.TestCase):
         self.app_dir = self.repo_root / "firmware" / "amoled_safety_demo"
         self.app = (self.app_dir / "main" / "app_main.c").read_text(encoding="utf-8")
         self.manifest = (self.app_dir / "main" / "idf_component.yml").read_text(encoding="utf-8")
+        self.lock = (self.app_dir / "dependencies.lock").read_text(encoding="utf-8")
         self.readme = (self.app_dir / "README.md").read_text(encoding="utf-8")
         self.sdkconfig = (self.app_dir / "sdkconfig.defaults").read_text(encoding="utf-8")
 
@@ -17,7 +18,10 @@ class AmoledSafetyDemoFirmwareTests(unittest.TestCase):
         required_terms = [
             "waveshare/esp32_s3_touch_amoled_2_06",
             "espressif/esp_lvgl_port",
-            'version: "2.3.2"',
+            'version: "1.0.3"',
+            "waveshare/esp_lcd_sh8601",
+            'version: "1.0.2"',
+            'version: "2.6.0"',
             "lvgl/lvgl",
             "bsp_display_start()",
             "lv_button_create",
@@ -26,7 +30,7 @@ class AmoledSafetyDemoFirmwareTests(unittest.TestCase):
             "SAFE",
             "HELP",
         ]
-        joined = self.app + "\n" + self.manifest + "\n" + self.readme
+        joined = self.app + "\n" + self.manifest + "\n" + self.lock + "\n" + self.readme
         for term in required_terms:
             with self.subTest(term=term):
                 self.assertIn(term, joined)
@@ -56,7 +60,8 @@ class AmoledSafetyDemoFirmwareTests(unittest.TestCase):
             "4G",
             "merge this UI with the QMI8658 IMU bridge",
             "CJK font",
-            "does not compile against LVGL 9.2.0",
+            "official Waveshare ESP-IDF v5.4.2 LVGL demo set",
+            "rendered corrupt frames",
         ]
         joined = self.readme + "\n" + self.sdkconfig
         for term in required_terms:

@@ -33,9 +33,15 @@ proper font asset is added.
 ## Build
 
 This project uses the official Waveshare ESP-IDF component for
-`ESP32-S3-Touch-AMOLED-2.06` and LVGL 9.2.0. It also pins
-`espressif/esp_lvgl_port` to 2.3.2 because newer registry resolution can select
-a port release that does not compile against LVGL 9.2.0.
+`ESP32-S3-Touch-AMOLED-2.06` and LVGL 9.2.0. Display dependencies are pinned to
+the official Waveshare ESP-IDF v5.4.2 LVGL demo set:
+
+- `waveshare/esp32_s3_touch_amoled_2_06` 1.0.3
+- `waveshare/esp_lcd_sh8601` 1.0.2
+- `espressif/esp_lvgl_port` 2.6.0
+
+Earlier registry resolution selected a newer BSP/display stack combination that
+compiled and emitted touch events but rendered corrupt frames on the panel.
 
 ```powershell
 cd firmware/amoled_safety_demo
