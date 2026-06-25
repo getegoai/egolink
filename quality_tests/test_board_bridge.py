@@ -114,6 +114,31 @@ class BoardBridgeTests(unittest.TestCase):
         self.assertEqual(rendered["session_id"], "unit-session")
         self.assertEqual(rendered["payload"]["options"], ["safe", "help"])
 
+    def test_uplink_confirmation_preserves_demo_correlation_fields(self) -> None:
+        state = board_bridge.BridgeState()
+        event = board_bridge.normalize_message(
+            {
+                "type": "user_confirmation",
+                "device_id": "wearable-node-001",
+                "role": "wearable_node",
+                "seq": 5,
+                "device_monotonic_ms": 71522,
+                "source": "amoled_touch_demo",
+                "response": "safe",
+                "cmd_id": "demo-v0-2-123",
+                "session_id": "demo-live",
+            },
+            received_at="2026-06-25T08:00:00+00:00",
+            bridge_source="amoled_live",
+            state=state,
+        )
+
+        self.assertEqual(event["event_type"], "user_confirmation")
+        self.assertEqual(event["response"], "safe")
+        self.assertEqual(event["cmd_id"], "demo-v0-2-123")
+        self.assertEqual(event["session_id"], "demo-live")
+        self.assertEqual(event["source"], "amoled_touch_demo")
+
     def test_bridge_motion_event_records_as_unverified_imu_frame(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             event_log = Path(tmp) / "events.jsonl"

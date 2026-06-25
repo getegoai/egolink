@@ -176,6 +176,12 @@ def normalize_uplink_event(
         "sensor_model",
         "source_status",
         "source_availability",
+        "response",
+        "cmd",
+        "cmd_id",
+        "ack_status",
+        "session_id",
+        "source",
     ):
         if key in message:
             event[key] = message[key]
