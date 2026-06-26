@@ -22,6 +22,17 @@ class AmoledAskUserDemoScriptTests(unittest.TestCase):
                 self.assertIn(term, self.script)
         self.assertNotIn('[string]$Port = "COM9"', self.script)
 
+    def test_script_supports_wait_for_motion_event(self) -> None:
+        required_terms = [
+            "WaitForMotionEvent",
+            "motionSeen",
+            "motion_event_seen",
+            "motion_event",
+        ]
+        for term in required_terms:
+            with self.subTest(term=term):
+                self.assertIn(term, self.script)
+
     def test_script_sends_versioned_ask_user_and_waits_for_reply(self) -> None:
         required_terms = [
             'protocol_version = "0.2"',

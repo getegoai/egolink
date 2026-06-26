@@ -382,7 +382,7 @@ def build_motion_sensor(row: Mapping[str, Any]) -> dict[str, Any] | None:
         impact_score = clamp_float(float_value(row.get("impact_score"), 0.0), 0.0, 1.0)
         fall_score = clamp_float(float_value(row.get("fall_score"), 0.0), 0.0, 1.0)
         stationary_seconds = max(0.0, float_value(row.get("stationary_seconds"), 0.0))
-        activity_label = "fall_candidate" if fall_score >= 0.7 else "impact" if impact_score >= 0.8 else "motion"
+        activity_label = "fall_candidate" if fall_score >= 0.7 else "impact" if impact_score >= 0.8 else "unknown"
         return {
             "sample_rate_hz": float_value(row.get("sample_hz"), 50.0),
             "window_duration_ms": 2560,

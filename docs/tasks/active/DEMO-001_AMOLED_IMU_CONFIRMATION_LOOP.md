@@ -1,7 +1,7 @@
 ﻿---
 id: DEMO-001
 title: AMOLED IMU Confirmation Loop
-status: active
+status: completed
 priority: high
 requires_hardware: true
 created: 2026-06-26
@@ -23,6 +23,13 @@ allowed_paths:
   - firmware/amoled_safety_demo/main/app_main.c
   - pc_simulator/board_bridge.py
   - pc_simulator/live_safety_demo.py
+  - pc_simulator/session_replay.py
+  - scripts/run_amoled_ask_user_demo.ps1
+  - scripts/run_demo_v0_3_live_safety_loop.py
+  - quality_tests/test_amoled_safety_demo_firmware.py
+  - quality_tests/test_amoled_ask_user_demo_script.py
+  - quality_tests/test_live_safety_demo.py
+  - quality_tests/test_session_replay.py
   - docs/tasks/active/DEMO-001_AMOLED_IMU_CONFIRMATION_LOOP.md
 
 out_of_scope:
@@ -51,13 +58,13 @@ A cohesive end-to-end Demo v0.1 confirmation flow using a single ESP32-S3-Touch-
 
 # Acceptance Criteria
 
-- [ ] Physical movement or tap on the ESP32-S3-Touch-AMOLED-2.06 board triggers an impact/fall candidate event.
-- [ ] PC Bridge receives, decodes, and normalizes the candidate event from the wearable board.
-- [ ] PC Bridge transmits an `ask_user` instruction to the wearable board.
-- [ ] Wearable board displays the query: "检测到异常，你现在安全吗？" (or a visual equivalent layout with touch buttons).
-- [ ] Screen touch detection captures user tap on "SAFE" or "HELP", returning a versioned JSON `user_confirmation` payload via serial, with the PC Bridge mapping the raw serial values (like `help`) to the canonical product outcomes (`safe` / `needs_help`).
-- [ ] PC Bridge receives the user's touch decision and records a final, cohesive safety event record (such as in an event log or JSONL) with precise timestamps.
-- [ ] GNSS/4G evidence within the safety event record is successfully mock or PC-side simulated; real SIM7670G cellular/GPS activation is completely bypassed for v0.1.
+- [x] Physical movement or tap on the ESP32-S3-Touch-AMOLED-2.06 board triggers an impact/fall candidate event.
+- [x] PC Bridge receives, decodes, and normalizes the candidate event from the wearable board.
+- [x] PC Bridge transmits an `ask_user` instruction to the wearable board.
+- [x] Wearable board displays the query: "检测到异常，你现在安全吗？" (or a visual equivalent layout with touch buttons).
+- [x] Screen touch detection captures user tap on "SAFE" or "HELP", returning a versioned JSON `user_confirmation` payload via serial, with the PC Bridge mapping the raw serial values (like `help`) to the canonical product outcomes (`safe` / `needs_help`).
+- [x] PC Bridge receives the user's touch decision and records a final, cohesive safety event record (such as in an event log or JSONL) with precise timestamps.
+- [x] GNSS/4G evidence within the safety event record is successfully mock or PC-side simulated; real SIM7670G cellular/GPS activation is completely bypassed for v0.1.
 
 # Validation Commands
 
@@ -75,15 +82,18 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 # Hardware Validation
 
 - Board: ESP32-S3-Touch-AMOLED-2.06
-- Firmware commit: unknown / unverified
-- Connection: USB CDC / JTAG Serial to PC
+- Firmware build: `firmware/amoled_safety_demo` built with ESP-IDF v5.4.2; flashed to COM9 during task execution.
+- Connection: USB CDC / JTAG Serial to PC (`COM9`)
 - Expected output:
   - Successful QMI8658 initialization and WHOAMI read.
   - Serial JSON stream showing raw accelerometer peaks exceeding candidate thresholds.
   - Prompt "检测到异常，你现在安全吗？" rendered using LVGL.
   - Touch interaction logs outputting correct `user_confirmation` values (with raw serial outputs like `safe` or `help` mapped to the canonical `safe` / `needs_help` outcomes).
   - Recorded PC bridge event log contains structured safety records.
-- Evidence path: unknown / unverified
+- Evidence path:
+  - Raw AMOLED hardware capture: `pc_simulator/runtime/demo_v0_3_live_hardware/amoled/demo-v03-live-amoled-imu-20260626-r4.jsonl`
+  - AMOLED capture summary: `pc_simulator/runtime/demo_v0_3_live_hardware/amoled/demo-v03-live-amoled-imu-20260626-r4.summary.json`
+  - Full v0.3 summary after replay-gate fix: `pc_simulator/runtime/demo_v0_3_live_hardware_fixed/demo-v03-live-amoled-imu-20260626-r4-fixed.summary.json`
 
 # Decisions
 
@@ -94,6 +104,25 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 # Completion Evidence
 
 - Changed files:
+  - `firmware/amoled_safety_demo/main/app_main.c`
+  - `pc_simulator/live_safety_demo.py`
+  - `pc_simulator/session_replay.py`
+  - `scripts/run_amoled_ask_user_demo.ps1`
+  - `scripts/run_demo_v0_3_live_safety_loop.py`
+  - `quality_tests/test_amoled_safety_demo_firmware.py`
+  - `quality_tests/test_amoled_ask_user_demo_script.py`
+  - `quality_tests/test_live_safety_demo.py`
+  - `quality_tests/test_session_replay.py`
 - Test result:
+  - Targeted session replay/live demo tests passed: `python -m unittest quality_tests.test_session_replay quality_tests.test_live_safety_demo -v`
+  - ESP-IDF v5.4.2 firmware build passed: `. C:\Espressif\v5.4.2\esp-idf\export.ps1; idf.py build`
+  - Context lint passed: `python scripts/context_lint.py`
+  - Full repository validation passed: `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1` (`189` tests OK)
 - Hardware result:
+  - AMOLED `COM9` live run `demo-v03-live-amoled-imu-20260626-r4` captured real QMI8658 `motion_event` with `trigger_reason=gyro_peak`, rendered `ask_user`, received `user_confirmation response=safe`, and recorded final `safety_event`.
+  - Reprocessed full v0.3 run `demo-v03-live-amoled-imu-20260626-r4-fixed` passed with quality score `0.94` and replay pass. Event counts included `motion_event=1`, `ask_user_rendered=1`, `user_confirmation=1`, `location_report=1`, `safety_event=1`.
+  - SIM7670G PC-side GNSS probe selected `COM6`, AT gate passed, GNSS fix remained `false` / `no_fix`, which is acceptable for Demo v0.3 mock/no-fix location evidence.
 - Remaining risks:
+  - IMU heuristic is demo-only and marked `demo_unverified_heuristic`; it is not a formal fall-detection model or product acceptance threshold.
+  - GNSS real outdoor fix and real 4G ACK remain deferred.
+  - Audio chain, long-run stability, disconnect/reconnect, and final product mounting/orientation calibration remain out of scope.

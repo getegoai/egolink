@@ -35,6 +35,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--amoled-jsonl", type=Path, default=None, help="Use an existing AMOLED JSONL capture.")
     parser.add_argument("--amoled-port", default="", help="Optional AMOLED USB Serial/JTAG port.")
     parser.add_argument("--amoled-wait-seconds", type=int, default=60)
+    parser.add_argument("--wait-for-motion", action="store_true", help="Wait for a physical motion event.")
     parser.add_argument("--reset-amoled", action="store_true")
 
     parser.add_argument("--location-event-json", type=Path, default=None, help="Use an existing location_report JSON object.")
@@ -71,6 +72,8 @@ def run_amoled_capture(args: argparse.Namespace, *, session_id: str, amoled_dir:
         command.extend(["-Port", args.amoled_port])
     if args.reset_amoled:
         command.append("-Reset")
+    if args.wait_for_motion:
+        command.append("-WaitForMotionEvent")
 
     completed = subprocess.run(command, cwd=REPO_ROOT, text=True, capture_output=True)
     summary_path = amoled_dir / f"{session_id}.summary.json"

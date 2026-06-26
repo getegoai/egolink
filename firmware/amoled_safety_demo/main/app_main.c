@@ -10,6 +10,66 @@
 #include "bsp/esp-bsp.h"
 #include "bsp/display.h"
 
+#include "driver/i2c_master.h"
+#include "esp_err.h"
+
+#define AMOLED_I2C_FREQ_HZ 100000
+#define AMOLED_I2C_TIMEOUT_MS 1000
+
+#define AXP2101_ADDR 0x34
+#define AXP2101_CHIP_ID_REG 0x03
+#define AXP2101_EXPECTED_CHIP_ID 0x4A
+#define AXP2101_DC_ONOFF_DVM_CTRL 0x80
+#define AXP2101_DC_VOL0_CTRL 0x82
+#define AXP2101_LDO_ONOFF_CTRL0 0x90
+#define AXP2101_LDO_VOL0_CTRL 0x92
+#define AXP2101_DC1_3300MV_VALUE ((3300 - 1500) / 100)
+#define AXP2101_ALDO1_3300MV_VALUE ((3300 - 500) / 100)
+
+#define QMI8658_ADDR 0x6B
+#define QMI8658_WHOAMI_EXPECTED 0x05
+#define QMI8658_REG_WHOAMI 0x00
+#define QMI8658_REG_REVISION 0x01
+#define QMI8658_REG_CTRL1 0x02
+#define QMI8658_REG_CTRL2 0x03
+#define QMI8658_REG_CTRL3 0x04
+#define QMI8658_REG_CTRL5 0x06
+#define QMI8658_REG_CTRL7 0x08
+#define QMI8658_REG_CTRL8 0x09
+#define QMI8658_REG_STATUS_INT 0x2D
+#define QMI8658_REG_STATUS0 0x2E
+#define QMI8658_REG_TIMESTAMP_L 0x30
+#define QMI8658_REG_TEMPERATURE_L 0x33
+#define QMI8658_REG_RESET 0x60
+#define QMI8658_REG_RST_RESULT 0x4D
+#define QMI8658_RESET_VALUE 0xB0
+#define QMI8658_RST_RESULT_VALUE 0x80
+#define QMI8658_CTRL1_ADDR_AUTO_INCREMENT 0x40
+#define QMI8658_CTRL2_ACCEL_4G_1000HZ 0x13
+#define QMI8658_CTRL3_GYRO_512DPS_224HZ 0x55
+#define QMI8658_CTRL5_ACCEL_GYRO_LPF_MODE0 0x11
+#define QMI8658_CTRL7_ENABLE_ACCEL_GYRO 0x03
+#define QMI8658_CTRL8_CTRL9_HANDSHAKE_STATUS_INT 0x80
+
+typedef struct {
+    bool present;
+    uint8_t chip_id;
+    uint8_t dc_onoff_before;
+    uint8_t dc_onoff_after;
+    uint8_t ldo_onoff_before;
+    uint8_t ldo_onoff_after;
+    esp_err_t status;
+} pmu_probe_t;
+
+typedef struct {
+    bool present;
+    uint8_t whoami;
+    uint8_t revision;
+    uint8_t reset_result;
+    esp_err_t status;
+} qmi_probe_t;
+
+
 #define DEMO_DEVICE_ID "wearable-node-001"
 #define DEMO_ROLE "wearable_node"
 #define DEMO_PROTOCOL_VERSION "0.2"
@@ -22,6 +82,195 @@ static uint32_t s_seq = 1;
 static lv_obj_t *s_status_label;
 static char s_active_cmd_id[COMMAND_ID_MAX];
 static bool s_response_sent;
+
+static i2c_master_bus_handle_t s_i2c_bus;
+static i2c_master_dev_handle_t s_axp2101_dev;
+static i2c_master_dev_handle_t s_qmi8658_dev;
+
+static i2c_master_dev_handle_t *device_slot_for_addr(uint8_t addr)
+{
+    if (addr == AXP2101_ADDR) {
+        return &s_axp2101_dev;
+    }
+    if (addr == QMI8658_ADDR) {
+        return &s_qmi8658_dev;
+    }
+    return NULL;
+}
+
+static esp_err_t i2c_device_for_addr(uint8_t addr, i2c_master_dev_handle_t *out_dev)
+{
+    i2c_master_dev_handle_t *slot = device_slot_for_addr(addr);
+    if (slot == NULL || out_dev == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (*slot != NULL) {
+        *out_dev = *slot;
+        return ESP_OK;
+    }
+    if (s_i2c_bus == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    i2c_device_config_t dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = addr,
+        .scl_speed_hz = AMOLED_I2C_FREQ_HZ,
+    };
+    esp_err_t err = i2c_master_bus_add_device(s_i2c_bus, &dev_cfg, slot);
+    if (err == ESP_OK) {
+        *out_dev = *slot;
+    }
+    return err;
+}
+
+static esp_err_t i2c_read(uint8_t addr, uint8_t reg, uint8_t *data, size_t len)
+{
+    i2c_master_dev_handle_t dev = NULL;
+    esp_err_t err = i2c_device_for_addr(addr, &dev);
+    if (err != ESP_OK) {
+        return err;
+    }
+    return i2c_master_transmit_receive(
+        dev,
+        &reg,
+        1,
+        data,
+        len,
+        AMOLED_I2C_TIMEOUT_MS);
+}
+
+static esp_err_t i2c_read_u8(uint8_t addr, uint8_t reg, uint8_t *value)
+{
+    return i2c_read(addr, reg, value, 1);
+}
+
+static esp_err_t i2c_write_u8(uint8_t addr, uint8_t reg, uint8_t value)
+{
+    i2c_master_dev_handle_t dev = NULL;
+    esp_err_t err = i2c_device_for_addr(addr, &dev);
+    if (err != ESP_OK) {
+        return err;
+    }
+    uint8_t payload[2] = {reg, value};
+    return i2c_master_transmit(
+        dev,
+        payload,
+        sizeof(payload),
+        AMOLED_I2C_TIMEOUT_MS);
+}
+
+static esp_err_t i2c_update_bits(uint8_t addr, uint8_t reg, uint8_t mask, uint8_t value)
+{
+    uint8_t current = 0;
+    esp_err_t err = i2c_read_u8(addr, reg, &current);
+    if (err != ESP_OK) {
+        return err;
+    }
+    current = (uint8_t)((current & (uint8_t)(~mask)) | (value & mask));
+    return i2c_write_u8(addr, reg, current);
+}
+
+static esp_err_t amoled_i2c_init(void)
+{
+    esp_err_t err = bsp_i2c_init();
+    if (err != ESP_OK) {
+        return err;
+    }
+    s_i2c_bus = bsp_i2c_get_handle();
+    if (s_i2c_bus == NULL) {
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+static pmu_probe_t axp2101_enable_minimal_rails(void)
+{
+    pmu_probe_t probe = {0};
+    probe.status = i2c_read_u8(AXP2101_ADDR, AXP2101_CHIP_ID_REG, &probe.chip_id);
+    if (probe.status != ESP_OK) {
+        return probe;
+    }
+    probe.present = true;
+
+    (void)i2c_read_u8(AXP2101_ADDR, AXP2101_DC_ONOFF_DVM_CTRL, &probe.dc_onoff_before);
+    (void)i2c_read_u8(AXP2101_ADDR, AXP2101_LDO_ONOFF_CTRL0, &probe.ldo_onoff_before);
+
+    if (probe.chip_id == AXP2101_EXPECTED_CHIP_ID) {
+        (void)i2c_write_u8(AXP2101_ADDR, AXP2101_DC_VOL0_CTRL, AXP2101_DC1_3300MV_VALUE);
+        (void)i2c_update_bits(AXP2101_ADDR, AXP2101_LDO_VOL0_CTRL, 0x1F, AXP2101_ALDO1_3300MV_VALUE);
+        (void)i2c_update_bits(AXP2101_ADDR, AXP2101_DC_ONOFF_DVM_CTRL, 0x01, 0x01);
+        (void)i2c_update_bits(AXP2101_ADDR, AXP2101_LDO_ONOFF_CTRL0, 0x01, 0x01);
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+
+    (void)i2c_read_u8(AXP2101_ADDR, AXP2101_DC_ONOFF_DVM_CTRL, &probe.dc_onoff_after);
+    (void)i2c_read_u8(AXP2101_ADDR, AXP2101_LDO_ONOFF_CTRL0, &probe.ldo_onoff_after);
+    return probe;
+}
+
+static esp_err_t qmi_wait_reset(uint8_t *reset_result)
+{
+    esp_err_t last = ESP_FAIL;
+    for (int retry = 0; retry < 50; retry++) {
+        last = i2c_read_u8(QMI8658_ADDR, QMI8658_REG_RST_RESULT, reset_result);
+        if (last == ESP_OK && *reset_result == QMI8658_RST_RESULT_VALUE) {
+            return ESP_OK;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    return last;
+}
+
+static qmi_probe_t qmi8658_init(void)
+{
+    qmi_probe_t probe = {0};
+    probe.status = i2c_write_u8(QMI8658_ADDR, QMI8658_REG_RESET, QMI8658_RESET_VALUE);
+    if (probe.status != ESP_OK) {
+        return probe;
+    }
+
+    probe.status = qmi_wait_reset(&probe.reset_result);
+    (void)i2c_update_bits(
+        QMI8658_ADDR,
+        QMI8658_REG_CTRL1,
+        QMI8658_CTRL1_ADDR_AUTO_INCREMENT,
+        QMI8658_CTRL1_ADDR_AUTO_INCREMENT);
+
+    probe.status = i2c_read_u8(QMI8658_ADDR, QMI8658_REG_WHOAMI, &probe.whoami);
+    if (probe.status != ESP_OK) {
+        return probe;
+    }
+    probe.present = probe.whoami == QMI8658_WHOAMI_EXPECTED;
+    (void)i2c_read_u8(QMI8658_ADDR, QMI8658_REG_REVISION, &probe.revision);
+    if (!probe.present) {
+        return probe;
+    }
+
+    (void)i2c_write_u8(QMI8658_ADDR, QMI8658_REG_CTRL8, QMI8658_CTRL8_CTRL9_HANDSHAKE_STATUS_INT);
+    (void)i2c_write_u8(QMI8658_ADDR, QMI8658_REG_CTRL2, QMI8658_CTRL2_ACCEL_4G_1000HZ);
+    (void)i2c_write_u8(QMI8658_ADDR, QMI8658_REG_CTRL3, QMI8658_CTRL3_GYRO_512DPS_224HZ);
+    (void)i2c_write_u8(QMI8658_ADDR, QMI8658_REG_CTRL5, QMI8658_CTRL5_ACCEL_GYRO_LPF_MODE0);
+    (void)i2c_write_u8(QMI8658_ADDR, QMI8658_REG_CTRL7, QMI8658_CTRL7_ENABLE_ACCEL_GYRO);
+    vTaskDelay(pdMS_TO_TICKS(50));
+    return probe;
+}
+
+static int16_t le16(const uint8_t *data)
+{
+    return (int16_t)((uint16_t)data[0] | ((uint16_t)data[1] << 8));
+}
+
+static int32_t accel_raw_to_mg(int16_t raw)
+{
+    return (int32_t)((int64_t)raw * 4000 / 32768);
+}
+
+static int32_t gyro_raw_to_mdps(int16_t raw)
+{
+    return (int32_t)((int64_t)raw * 512000 / 32768);
+}
+
 
 static uint32_t next_seq(void)
 {
@@ -291,6 +540,162 @@ static void command_reader_task(void *arg)
     }
 }
 
+static void imu_sampler_task(void *arg)
+{
+    (void)arg;
+    esp_err_t err = amoled_i2c_init();
+    bool qmi_present = false;
+    uint8_t whoami = 0;
+    if (err == ESP_OK) {
+        pmu_probe_t pmu = axp2101_enable_minimal_rails();
+        (void)pmu;
+        qmi_probe_t qmi = qmi8658_init();
+        whoami = qmi.whoami;
+        qmi_present = qmi.present;
+    }
+    printf(
+        "{\"type\":\"imu_whoami\",\"device_id\":\"%s\",\"role\":\"%s\","
+        "\"protocol_version\":\"%s\",\"seq\":%" PRIu32 ","
+        "\"device_monotonic_ms\":%" PRId64 ","
+        "\"source\":\"qmi8658_demo\",\"whoami\":%d,\"present\":%s}\n",
+        DEMO_DEVICE_ID,
+        DEMO_ROLE,
+        DEMO_PROTOCOL_VERSION,
+        next_seq(),
+        monotonic_ms(),
+        whoami,
+        qmi_present ? "true" : "false");
+    json_flush();
+
+    int64_t last_motion_event_ms = 0;
+    const int64_t cooldown_ms = 5000;
+
+    int32_t last_ax_mg = 0;
+    int32_t last_ay_mg = 0;
+    int32_t last_az_mg = 0;
+    bool has_last_sample = false;
+    int64_t last_sample_print_ms = 0;
+
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        if (!qmi_present) {
+            continue;
+        }
+        uint8_t raw[14] = {0};
+        esp_err_t r_err = i2c_read(QMI8658_ADDR, QMI8658_REG_TEMPERATURE_L, raw, sizeof(raw));
+        if (r_err != ESP_OK) {
+            continue;
+        }
+        int16_t ax = le16(&raw[2]);
+        int16_t ay = le16(&raw[4]);
+        int16_t az = le16(&raw[6]);
+        int16_t gx = le16(&raw[8]);
+        int16_t gy = le16(&raw[10]);
+        int16_t gz = le16(&raw[12]);
+        int32_t ax_mg = accel_raw_to_mg(ax);
+        int32_t ay_mg = accel_raw_to_mg(ay);
+        int32_t az_mg = accel_raw_to_mg(az);
+        int32_t gx_mdps = gyro_raw_to_mdps(gx);
+        int32_t gy_mdps = gyro_raw_to_mdps(gy);
+        int32_t gz_mdps = gyro_raw_to_mdps(gz);
+
+        int32_t abs_ax = ax_mg < 0 ? -ax_mg : ax_mg;
+        int32_t abs_ay = ay_mg < 0 ? -ay_mg : ay_mg;
+        int32_t abs_az = az_mg < 0 ? -az_mg : az_mg;
+
+        int32_t abs_gx = gx_mdps < 0 ? -gx_mdps : gx_mdps;
+        int32_t abs_gy = gy_mdps < 0 ? -gy_mdps : gy_mdps;
+        int32_t abs_gz = gz_mdps < 0 ? -gz_mdps : gz_mdps;
+
+        int32_t diff_x = has_last_sample ? (ax_mg - last_ax_mg) : 0;
+        int32_t diff_y = has_last_sample ? (ay_mg - last_ay_mg) : 0;
+        int32_t diff_z = has_last_sample ? (az_mg - last_az_mg) : 0;
+
+        int32_t abs_diff_x = diff_x < 0 ? -diff_x : diff_x;
+        int32_t abs_diff_y = diff_y < 0 ? -diff_y : diff_y;
+        int32_t abs_diff_z = diff_z < 0 ? -diff_z : diff_z;
+
+        last_ax_mg = ax_mg;
+        last_ay_mg = ay_mg;
+        last_az_mg = az_mg;
+        has_last_sample = true;
+
+        int64_t now_ms = monotonic_ms();
+
+        // Sparse 1Hz low-rate JSON imu_sample output
+        if (now_ms - last_sample_print_ms >= 1000) {
+            last_sample_print_ms = now_ms;
+            printf(
+                "{\"type\":\"imu_sample\",\"device_id\":\"%s\",\"role\":\"%s\","
+                "\"protocol_version\":\"%s\",\"seq\":%" PRIu32 ","
+                "\"device_monotonic_ms\":%" PRId64 ","
+                "\"payload\":{"
+                "\"accel_mg\":[%ld,%ld,%ld],"
+                "\"gyro_mdps\":[%ld,%ld,%ld]"
+                "}}\n",
+                DEMO_DEVICE_ID,
+                DEMO_ROLE,
+                DEMO_PROTOCOL_VERSION,
+                next_seq(),
+                now_ms,
+                (long)ax_mg, (long)ay_mg, (long)az_mg,
+                (long)gx_mdps, (long)gy_mdps, (long)gz_mdps);
+            json_flush();
+        }
+
+        bool trigger = false;
+        char trigger_reason[128] = "";
+
+        if (abs_diff_x > 300 || abs_diff_y > 300 || abs_diff_z > 300) {
+            trigger = true;
+            snprintf(trigger_reason, sizeof(trigger_reason), "accel_delta [dx:%ld,dy:%ld,dz:%ld]", (long)abs_diff_x, (long)abs_diff_y, (long)abs_diff_z);
+        } else if (abs_gx > 50000 || abs_gy > 50000 || abs_gz > 50000) {
+            trigger = true;
+            snprintf(trigger_reason, sizeof(trigger_reason), "gyro_peak [gx:%ld,gy:%ld,gz:%ld]", (long)abs_gx, (long)abs_gy, (long)abs_gz);
+        } else if (abs_ax > 2500 || abs_ay > 2500 || abs_az > 2500) {
+            trigger = true;
+            snprintf(trigger_reason, sizeof(trigger_reason), "accel_peak [ax:%ld,ay:%ld,az:%ld]", (long)abs_ax, (long)abs_ay, (long)abs_az);
+        }
+
+        if (trigger) {
+            if (now_ms - last_motion_event_ms >= cooldown_ms) {
+                last_motion_event_ms = now_ms;
+                printf(
+                    "{\"type\":\"motion_event\",\"device_id\":\"%s\",\"role\":\"%s\","
+                    "\"protocol_version\":\"%s\",\"seq\":%" PRIu32 ","
+                    "\"device_monotonic_ms\":%" PRId64 ","
+                    "\"source\":\"qmi8658_demo\",\"source_status\":\"demo_unverified_heuristic\","
+                    "\"sensor_kind\":\"imu\",\"sensor_model\":\"QMI8658\","
+                    "\"imu_source\":\"qmi8658_i2c\",\"source_availability\":\"bridge_uplink\","
+                    "\"payload\":{"
+                    "\"accel_mg\":[%ld,%ld,%ld],"
+                    "\"gyro_mdps\":[%ld,%ld,%ld],"
+                    "\"impact_score\":0.95,"
+                    "\"fall_score\":0.85,"
+                    "\"trigger_reason\":\"%s\","
+                    "\"accel_peak_mg\":[%ld,%ld,%ld],"
+                    "\"gyro_peak_mdps\":[%ld,%ld,%ld],"
+                    "\"accel_delta_mg\":[%ld,%ld,%ld],"
+                    "\"demo_boundary\":\"unverified_demo_only\""
+                    "}}\n",
+                    DEMO_DEVICE_ID,
+                    DEMO_ROLE,
+                    DEMO_PROTOCOL_VERSION,
+                    next_seq(),
+                    now_ms,
+                    (long)ax_mg, (long)ay_mg, (long)az_mg,
+                    (long)gx_mdps, (long)gy_mdps, (long)gz_mdps,
+                    trigger_reason,
+                    (long)abs_ax, (long)abs_ay, (long)abs_az,
+                    (long)abs_gx, (long)abs_gy, (long)abs_gz,
+                    (long)abs_diff_x, (long)abs_diff_y, (long)abs_diff_z);
+                json_flush();
+            }
+        }
+    }
+}
+
+
 void app_main(void)
 {
     setvbuf(stdin, NULL, _IONBF, 0);
@@ -304,6 +709,7 @@ void app_main(void)
 
     print_ui_event("display_ready", "waiting", "");
     xTaskCreate(command_reader_task, "command_reader", 4096, NULL, 5, NULL);
+    xTaskCreate(imu_sampler_task, "imu_sampler", 4096, NULL, 4, NULL);
 
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(1000));

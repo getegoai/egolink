@@ -217,16 +217,29 @@ def build_live_events(
 
     events = [mark_live(event) for event in minimal_safety_demo.default_hello_events(now=clock)]
 
-    seq = minimal_safety_demo.event_seq(events)
-    motion = mark_live(
-        minimal_safety_demo.build_motion_event(
-            None,
-            seq=seq,
-            session_id=session_id,
-            now=clock,
+    real_motions = [e for e in amoled_events if e.get("event_type") == "motion_event"]
+    if real_motions:
+        amoled_events = [e for e in amoled_events if e.get("event_type") != "motion_event"]
+        seq = minimal_safety_demo.event_seq(events)
+        motion = mark_live(
+            minimal_safety_demo.build_motion_event(
+                real_motions[-1],
+                seq=seq,
+                session_id=session_id,
+                now=clock,
+            )
         )
-    )
-    motion["source"] = "live_safety_demo"
+    else:
+        seq = minimal_safety_demo.event_seq(events)
+        motion = mark_live(
+            minimal_safety_demo.build_motion_event(
+                None,
+                seq=seq,
+                session_id=session_id,
+                now=clock,
+            )
+        )
+        motion["source"] = "live_safety_demo"
     events.append(motion)
 
     seq = minimal_safety_demo.event_seq(events)

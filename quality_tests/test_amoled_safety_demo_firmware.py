@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 import unittest
@@ -75,6 +75,64 @@ class AmoledSafetyDemoFirmwareTests(unittest.TestCase):
         for term in required_terms:
             with self.subTest(term=term):
                 self.assertIn(term, joined)
+
+    def test_serial_contract_outputs_imu_events(self) -> None:
+        required_terms = [
+            "imu_whoami",
+            "imu_sampler_task",
+            "qmi8658_demo",
+            "motion_event",
+            "demo_unverified_heuristic",
+            "accel_mg",
+            "gyro_mdps",
+            "impact_score",
+            "fall_score",
+            "sensor_kind",
+            "sensor_model",
+            "imu_source",
+            "source_availability",
+            "trigger_reason",
+            "accel_peak_mg",
+            "gyro_peak_mdps",
+            "accel_delta_mg",
+            "imu_sample",
+            "unverified_demo_only",
+            '\\"QMI8658\\"',
+            '\\"qmi8658_i2c\\"',
+            '\\"bridge_uplink\\"',
+        ]
+        for term in required_terms:
+            with self.subTest(term=term):
+                self.assertIn(term, self.app)
+
+        import re
+        impact_match = re.search(r'\\"impact_score\\":([0-9.]+)', self.app)
+        self.assertIsNotNone(impact_match, "Could not find impact_score in app_main.c")
+        impact_score = float(impact_match.group(1))
+        self.assertTrue(impact_score >= 0.8, f"Impact score {impact_score} is not >= 0.8")
+
+        fall_match = re.search(r'\\"fall_score\\":([0-9.]+)', self.app)
+        self.assertIsNotNone(fall_match, "Could not find fall_score in app_main.c")
+        fall_score = float(fall_match.group(1))
+        self.assertTrue(fall_score >= 0.7, f"Fall score {fall_score} is not >= 0.7")
+
+    def test_amoled_i2c_uses_bsp_new_driver(self) -> None:
+        required_terms = [
+            "driver/i2c_master.h",
+            "bsp_i2c_init()",
+            "bsp_i2c_get_handle()",
+            "i2c_master_bus_add_device",
+            "i2c_master_transmit_receive",
+            "i2c_master_transmit",
+        ]
+        for term in required_terms:
+            with self.subTest(term=term):
+                self.assertIn(term, self.app)
+        self.assertNotIn('#include "driver/i2c.h"', self.app)
+
+    def test_no_broken_printf_concatenation(self) -> None:
+        # Prevent broken format strings like %\" PRI...
+        self.assertNotIn('%\\" PRI', self.app)
 
 
 if __name__ == "__main__":

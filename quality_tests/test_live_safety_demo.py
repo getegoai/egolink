@@ -15,6 +15,65 @@ def write_jsonl(path: Path, rows: list[dict[str, object]]) -> None:
     path.write_text("\n".join(json.dumps(row, separators=(",", ":")) for row in rows) + "\n", encoding="utf-8")
 
 
+def amoled_rows_with_motion(cmd_id: str = "demo-v0-3-cmd") -> list[dict[str, object]]:
+    return [
+        {
+            "type": "motion_event",
+            "device_id": "wearable-node-001",
+            "role": "wearable_node",
+            "protocol_version": "0.2",
+            "seq": 2,
+            "device_monotonic_ms": 14000,
+            "source": "qmi8658_demo",
+            "source_status": "demo_unverified_heuristic",
+            "sensor_model": "QMI8658",
+            "imu_source": "qmi8658_i2c",
+            "source_availability": "bridge_uplink",
+            "payload": {
+                "accel_mg": [100, -200, 2800],
+                "gyro_mdps": [1000, -500, 300],
+                "impact_score": 0.95,
+                "fall_score": 0.85,
+                "demo_boundary": "unverified_demo_only"
+            }
+        },
+        {
+            "type": "command_ack",
+            "device_id": "wearable-node-001",
+            "role": "wearable_node",
+            "protocol_version": "0.2",
+            "seq": 3,
+            "device_monotonic_ms": 15526,
+            "source": "amoled_touch_demo",
+            "cmd": "ask_user",
+            "cmd_id": cmd_id,
+            "ack_status": "ok",
+        },
+        {
+            "type": "ask_user_rendered",
+            "device_id": "wearable-node-001",
+            "role": "wearable_node",
+            "protocol_version": "0.2",
+            "seq": 4,
+            "device_monotonic_ms": 15527,
+            "source": "amoled_touch_demo",
+            "response": "pending",
+            "cmd_id": cmd_id,
+        },
+        {
+            "type": "user_confirmation",
+            "device_id": "wearable-node-001",
+            "role": "wearable_node",
+            "protocol_version": "0.2",
+            "seq": 5,
+            "device_monotonic_ms": 71522,
+            "source": "amoled_touch_demo",
+            "response": "safe",
+            "cmd_id": cmd_id,
+        },
+    ]
+
+
 def amoled_rows(cmd_id: str = "demo-v0-3-cmd") -> list[dict[str, object]]:
     return [
         {
@@ -74,6 +133,42 @@ def location_event() -> dict[str, object]:
 
 
 class LiveSafetyDemoTests(unittest.TestCase):
+    def test_build_live_events_uses_physical_motion_event_if_present(self) -> None:
+        events = live_safety_demo.build_live_events(
+            amoled_messages=amoled_rows_with_motion(),
+            location_event=location_event(),
+            session_id="demo-v0-3-physical-test",
+            selected_gnss_port="COM6",
+            now=live_safety_demo.minimal_safety_demo.DemoClock(),
+        )
+        event_types = [event["event_type"] for event in events]
+        self.assertEqual(
+            event_types,
+            [
+                "board_hello",
+                "board_hello",
+                "motion_event",
+                "command_sent",
+                "command_ack",
+                "ask_user_rendered",
+                "user_confirmation",
+                "command_sent",
+                "command_ack",
+                "location_report",
+                "safety_event",
+            ],
+        )
+        motion = events[2]
+        self.assertEqual(motion["source"], "qmi8658_demo")
+        self.assertEqual(motion["source_status"], "demo_unverified_heuristic")
+        self.assertEqual(motion["sensor_model"], "QMI8658")
+        self.assertEqual(motion["imu_source"], "qmi8658_i2c")
+        self.assertEqual(motion["source_availability"], "bridge_uplink")
+        self.assertEqual(motion["payload"]["accel_mg"], [100, -200, 2800])
+        self.assertEqual(motion["payload"]["demo_boundary"], "unverified_demo_only")
+        self.assertEqual(motion["payload"]["impact_score"], 0.95)
+        self.assertEqual(motion["payload"]["fall_score"], 0.85)
+
     def test_build_live_events_preserves_real_touch_and_requests_location(self) -> None:
         events = live_safety_demo.build_live_events(
             amoled_messages=amoled_rows(),

@@ -7,6 +7,7 @@ param(
     [string]$OutputDir = "",
     [switch]$Reset,
     [switch]$RequireConfirmation,
+    [switch]$WaitForMotionEvent,
     [switch]$Help
 )
 
@@ -126,6 +127,7 @@ $confirmed = $false
 $confirmation = ""
 $captured = [System.Collections.Generic.List[string]]::new()
 $skippedNonJson = 0
+$motionSeen = $false
 
 $serial = [System.IO.Ports.SerialPort]::new(
     $Port,
@@ -153,10 +155,22 @@ try {
     }
 
     while ((Get-Date) -lt $deadline) {
-        if (-not $sent -and (Get-Date) -ge $sendAfter) {
-            $serial.WriteLine($commandJson)
-            Write-Host "SENT $commandJson"
-            $sent = $true
+        if (-not $sent) {
+            $shouldSend = $false
+            if ($WaitForMotionEvent) {
+                if ($motionSeen) {
+                    $shouldSend = $true
+                }
+            } else {
+                if ((Get-Date) -ge $sendAfter) {
+                    $shouldSend = $true
+                }
+            }
+            if ($shouldSend) {
+                $serial.WriteLine($commandJson)
+                Write-Host "SENT $commandJson"
+                $sent = $true
+            }
         }
 
         try {
@@ -185,7 +199,15 @@ try {
         Write-Output $trimmed
 
         if ($message.type -eq "hello" -or $message.type -eq "display_ready") {
-            if (-not $sent) {
+            if (-not $sent -and -not $WaitForMotionEvent) {
+                $serial.WriteLine($commandJson)
+                Write-Host "SENT $commandJson"
+                $sent = $true
+            }
+        }
+        if ($message.type -eq "motion_event" -or $message.event_type -eq "motion_event") {
+            $motionSeen = $true
+            if (-not $sent -and $WaitForMotionEvent) {
                 $serial.WriteLine($commandJson)
                 Write-Host "SENT $commandJson"
                 $sent = $true
@@ -225,6 +247,7 @@ $summary = [ordered]@{
     response = $confirmation
     jsonl_path = $jsonlPath
     skipped_non_json_lines = $skippedNonJson
+    motion_event_seen = $motionSeen
 }
 $summaryJson = $summary | ConvertTo-Json -Depth 6
 Write-Utf8NoBomText -Path $summaryPath -Content $summaryJson

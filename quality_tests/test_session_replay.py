@@ -53,6 +53,43 @@ class SessionReplayTests(unittest.TestCase):
         self.assertEqual(sos_record["base_command"]["command"], "ask_user")
         self.assertEqual(sos_record["sensor_frame"]["metadata"]["recording_session_id"], "replay-session")
 
+    def test_imu_motion_activity_labels_match_contract_enum(self) -> None:
+        allowed = {"unknown", "impact", "fall_candidate"}
+
+        low_score = session_replay.build_motion_sensor(
+            {
+                "frame_type": "imu_motion",
+                "source_event_key": "wearable-node-001:imu_sample:1:test",
+            }
+        )
+        self.assertEqual(low_score["summary"]["activity_label"], "unknown")
+
+        impact = session_replay.build_motion_sensor(
+            {
+                "frame_type": "imu_motion",
+                "impact_score": 0.8,
+                "source_event_key": "wearable-node-001:motion_event:2:test",
+            }
+        )
+        self.assertEqual(impact["summary"]["activity_label"], "impact")
+
+        fall = session_replay.build_motion_sensor(
+            {
+                "frame_type": "imu_motion",
+                "impact_score": 0.95,
+                "fall_score": 0.7,
+                "source_event_key": "wearable-node-001:motion_event:3:test",
+            }
+        )
+        self.assertEqual(fall["summary"]["activity_label"], "fall_candidate")
+
+        labels = {
+            low_score["summary"]["activity_label"],
+            impact["summary"]["activity_label"],
+            fall["summary"]["activity_label"],
+        }
+        self.assertLessEqual(labels, allowed)
+
     def test_replay_refuses_failed_quality_gate_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             recording_dir = Path(tmp)
