@@ -69,9 +69,16 @@ No task packet with `status: active` is currently present under
   - Result: full Demo v0.5 runner with AMOLED evidence, SIM7670G GNSS/AT
     evidence, mock-only audio, recording, quality gate, and replay.
 - `DEMO-005 Real GNSS Fix Evidence`
-  - Status: proposed.
+  - Status: deferred.
   - Goal: capture bounded real `fix=true` SIM7670G GNSS evidence and replay it
     through the full demo.
+  - Current blocker: the SIM7670G board must stay connected to the PC USB AT
+    port for the current probe path, but the host PC is too far from a window
+    or outdoor sky view for a practical fix attempt with the available USB
+    cable.
+  - Latest bounded attempt: SIM7670G AT was reachable on `COM6`, GNSS power was
+    on, and a `location_report fix=false` event was written; no real fix was
+    claimed.
 - `DEMO-006 Real Audio Chain Bring-Up`
   - Status: proposed.
   - Goal: replace mock-only audio evidence with accepted microphone evidence
@@ -132,9 +139,11 @@ No task packet with `status: active` is currently present under
 
 ## Current Recommended Execution Order
 
-1. Complete `DEMO-005 Real GNSS Fix Evidence` before new audio work, unless the
-   operator explicitly reprioritizes hardware.
-2. Run remote bootstrap only after the operator provides a remote URL and
+1. Resume `DEMO-005 Real GNSS Fix Evidence` only when the SIM7670G board can
+   remain USB-connected while placed near a window or outdoors, or after a
+   product-side message path can trigger GNSS without moving the host PC.
+2. Proceed with a non-location-blocked task such as `DEMO-006 Real Audio Chain
+   Bring-Up`, `DEMO-007 Stability / Reconnect / Long-Run Demo Gate`, or the
+   product-side `request_location -> connectivity_node -> GNSS` message path.
+3. Run remote bootstrap only after the operator provides a remote URL and
    desired protected branch policy.
-3. Keep generated docs out of default context; use them only as migration
-   evidence when a task explicitly names them.
