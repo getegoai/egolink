@@ -74,7 +74,7 @@ size: `0xd9170`.
 Result: PASS for compile-only opt-in QMI8658 backend. App binary size:
 `0xde340`. This was not flashed and does not validate live QMI8658 sampling.
 
-Additional repository verification is tracked in `docs/STATUS.md`.
+Additional repository verification is tracked in `docs/current/STATUS.md`.
 
 ```powershell
 python -m unittest quality_tests.test_platform_imu_firmware quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_hardware_sensor_matrix -v

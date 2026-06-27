@@ -3,7 +3,7 @@
 > 状态：P0 当前实现形态  
 > 更新日期：2026-06-24  
 > 适用阶段：P0-A / P0-B  
-> 相关文档：`docs/EGO_LINK_P0_CONTEXT.md`、`docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md`、`docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`
+> 相关文档：`docs/CONTEXT_INDEX.md`、`docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md`、`docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`
 
 ## 1. 架构定义
 

@@ -106,7 +106,7 @@
 Installed and validated the Safety Companion M0 overlay:
 
 - `MODEL_PACKAGE_README.md`
-- `CHANGELOG_SAFETY_COMPANION.md`
+- `docs/safety/CHANGELOG.md`
 - `PACKAGE_MANIFEST.json`
 - `docs/modeling/AGENTS_MODELING_APPEND.md`
 - `docs/modeling/CODEX_INTEGRATION_PROMPT.md`
@@ -146,8 +146,8 @@ M0-INT-003 firmware model interface updates:
 - `firmware/mqtt_heartbeat/main/CMakeLists.txt`
 - `firmware/mqtt_heartbeat/main/app_main.c`
 - `quality_tests/test_safety_model_firmware.py`
-- `docs/tasks/CURRENT_TASK.md`
-- `docs/STATUS.md`
+- `docs/tasks/active/`
+- `docs/current/STATUS.md`
 
 M0-INT-004 simulated end-to-end updates:
 
@@ -156,8 +156,8 @@ M0-INT-004 simulated end-to-end updates:
 - `quality_tests/test_safety_companion.py`
 - `quality_tests/test_pc_simulator.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 T027 real event safety flow updates:
 
@@ -166,16 +166,16 @@ T027 real event safety flow updates:
 - `quality_tests/test_safety_companion.py`
 - `quality_tests/test_pc_simulator.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 T028 supervised live MQTT safety processing updates:
 
 - `pc_simulator/mqtt_worker.py`
 - `quality_tests/test_mqtt_worker.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 T029 local supervised session updates:
 
@@ -183,20 +183,20 @@ T029 local supervised session updates:
 - `scripts/local_session_summary.py`
 - `quality_tests/test_local_session_summary.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 T030 unified AutoDev and device monitor updates:
 
 - `scripts/autodev.py`
 - `scripts/watch_autodev.ps1`
 - `autodev/tests/test_supervisor.py`
-- `docs/AUTODEV_MONITORING.md`
+- `docs/development/AUTODEV_MONITORING.md`
 - `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`
 - `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 - `README.md`
 
 T031 M1 hardware sensor matrix updates:
@@ -204,8 +204,8 @@ T031 M1 hardware sensor matrix updates:
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `quality_tests/test_hardware_sensor_matrix.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 T032 M1 session recorder skeleton updates:
 
@@ -215,8 +215,8 @@ T032 M1 session recorder skeleton updates:
 - `quality_tests/test_session_recorder.py`
 - `quality_tests/test_local_session_summary.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 T033 M1 session inspector quality gate updates:
 
@@ -225,8 +225,8 @@ T033 M1 session inspector quality gate updates:
 - `scripts/inspect_session_recording.py`
 - `quality_tests/test_session_inspector.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 T034 quality gate monitor integration updates:
 
@@ -235,8 +235,8 @@ T034 quality gate monitor integration updates:
 - `autodev/tests/test_supervisor.py`
 - `quality_tests/test_local_session_summary.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 T035 session file integrity updates:
 
@@ -245,8 +245,8 @@ T035 session file integrity updates:
 - `quality_tests/test_session_recorder.py`
 - `quality_tests/test_session_inspector.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 T036 PC session import / replay updates:
 
@@ -254,8 +254,8 @@ T036 PC session import / replay updates:
 - `scripts/replay_session_recording.py`
 - `quality_tests/test_session_replay.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 HCTX-001 hardware context updates:
 
@@ -265,8 +265,8 @@ HCTX-001 hardware context updates:
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `quality_tests/test_hardware_sensor_matrix.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 T038 hardware usability smoke updates:
 
@@ -274,8 +274,8 @@ T038 hardware usability smoke updates:
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `quality_tests/test_hardware_sensor_matrix.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 T037 M1-005 session annotation updates:
 
@@ -285,8 +285,8 @@ T037 M1-005 session annotation updates:
 - `scripts/annotate_session_recording.py`
 - `quality_tests/test_session_annotations.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 HARCH-001 platform coupling audit updates:
 
@@ -302,8 +302,8 @@ HARCH-002A minimal platform_power updates:
 - `firmware/mqtt_heartbeat/README.md`
 - `quality_tests/test_platform_power_firmware.py`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 HPWR-001 power marker updates:
 
@@ -316,16 +316,16 @@ HPWR-001 power marker updates:
 - `docs/hardware/POWER_MEASUREMENT_SCENARIO_TEMPLATE.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 HDATA-001 live capture updates:
 
 - `docs/hardware/HDATA_001_LIVE_CAPTURE_20260623.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 - `pc_simulator/runtime/hdata-001-hpwr-live-20260623-0906-events.jsonl`
 - `pc_simulator/runtime/recordings/hdata-001-hpwr-live-20260623-0906/`
 - `reports/board_validation/20260623-090047/probe.md`
@@ -343,8 +343,8 @@ T039 IMU mock/ring updates:
 - `docs/hardware/T039_IMU_MOCK_LIVE_CAPTURE_20260623.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 - `pc_simulator/runtime/hdata-001-imu-mock-live-20260623-0926-events.jsonl`
 - `pc_simulator/runtime/recordings/hdata-001-imu-mock-live-20260623-0926/`
 - `reports/board_validation/20260623-092315/probe.md`
@@ -355,8 +355,8 @@ TIMU-001 real IMU bring-up evidence gate updates:
 - `quality_tests/test_imu_bringup_plan.py`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TCAM-001 camera smoke live capture updates:
 
@@ -366,8 +366,8 @@ TCAM-001 camera smoke live capture updates:
 - `docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 - `pc_simulator/runtime/camera-smoke-live-20260623-1842-uart.log`
 
 HDBRIDGE-001 dual-board PC bridge PoC updates:
@@ -381,8 +381,8 @@ HDBRIDGE-001 dual-board PC bridge PoC updates:
 - `docs/hardware/双板开发架构.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 HDBRIDGE-002 AMOLED USB CDC QMI8658 live window updates:
 
@@ -395,8 +395,8 @@ HDBRIDGE-002 AMOLED USB CDC QMI8658 live window updates:
 - `docs/hardware/HDBRIDGE_002_AMOLED_QMI8658_LIVE_CAPTURE_20260623.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-002 QMI8658 sample quality gate updates:
 
@@ -406,8 +406,8 @@ TIMU-002 QMI8658 sample quality gate updates:
 - `docs/hardware/TIMU_002_QMI8658_SAMPLE_QUALITY_20260623.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-003 QMI8658 timing retest updates:
 
@@ -419,8 +419,8 @@ TIMU-003 QMI8658 timing retest updates:
 - `docs/hardware/TIMU_003_QMI8658_TIMING_RETEST_20260623.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-004A QMI8658 single-pose quality gate updates:
 
@@ -435,8 +435,8 @@ TIMU-004A QMI8658 single-pose quality gate updates:
 - `docs/hardware/TIMU_004_QMI8658_POSE_QUALITY_20260623.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-004B QMI8658 manual three-pose capture updates:
 
@@ -445,7 +445,7 @@ TIMU-004B QMI8658 manual three-pose capture updates:
 - `docs/hardware/TIMU_004B_QMI8658_MANUAL_CAPTURE_20260623.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/tasks/active/`
 
 TIMU-005 QMI8658 motion window capture updates:
 
@@ -455,8 +455,8 @@ TIMU-005 QMI8658 motion window capture updates:
 - `docs/hardware/TIMU_005_QMI8658_MOTION_WINDOW_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-006 QMI8658 long-window capture updates:
 
@@ -474,8 +474,8 @@ TIMU-006 QMI8658 long-window capture updates:
 - `docs/hardware/TIMU_006_QMI8658_LONG_WINDOW_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-007 platform_imu backend-boundary updates:
 
@@ -492,8 +492,8 @@ TIMU-007 platform_imu backend-boundary updates:
 - `docs/hardware/TIMU_007_PLATFORM_IMU_REAL_BACKEND_POC_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-008 platform_imu QMI8658 backend live-capture updates:
 
@@ -507,8 +507,8 @@ TIMU-008 platform_imu QMI8658 backend live-capture updates:
 - `docs/hardware/TIMU_008_PLATFORM_IMU_QMI_BACKEND_LIVE_CAPTURE_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-009A IMU engineering calibration boundary updates:
 
@@ -520,8 +520,8 @@ TIMU-009A IMU engineering calibration boundary updates:
 - `docs/hardware/TIMU_009A_QMI8658_ENGINEERING_CALIBRATION_PROFILE_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-009B IMU product acceptance preflight updates:
 
@@ -533,8 +533,8 @@ TIMU-009B IMU product acceptance preflight updates:
 - `docs/hardware/TIMU_009B_QMI8658_PRODUCT_ACCEPTANCE_PREFLIGHT_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-009C-A QMI8658 backend readiness updates:
 
@@ -542,8 +542,8 @@ TIMU-009C-A QMI8658 backend readiness updates:
 - `docs/hardware/TIMU_009C_QMI8658_BACKEND_READINESS_CAPTURE_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-009C-B0 IMU product mounting evidence template updates:
 
@@ -554,8 +554,8 @@ TIMU-009C-B0 IMU product mounting evidence template updates:
 - `docs/hardware/TIMU_009C_B0_QMI8658_PRODUCT_MOUNTING_EVIDENCE_TEMPLATE_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-009C-B1 QMI8658 temporary fixture static capture updates:
 
@@ -566,8 +566,8 @@ TIMU-009C-B1 QMI8658 temporary fixture static capture updates:
 - `docs/hardware/TIMU_009C_B1_QMI8658_TEMPORARY_FIXTURE_PREFLIGHT_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 TIMU-009C-B2 QMI8658 labeled fixture repeatability capture updates:
 
@@ -578,8 +578,8 @@ TIMU-009C-B2 QMI8658 labeled fixture repeatability capture updates:
 - `docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_PREFLIGHT_20260624.md`
 - `docs/modeling/HARDWARE_SENSOR_MATRIX.md`
 - `docs/modeling/INTEGRATION_REPORT.md`
-- `docs/STATUS.md`
-- `docs/tasks/CURRENT_TASK.md`
+- `docs/current/STATUS.md`
+- `docs/tasks/active/`
 
 ## Verification commands and results
 

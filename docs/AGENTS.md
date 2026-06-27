@@ -1,72 +1,25 @@
-# Ego Link P0 — Codex Working Agreement
+# Documentation Instructions
 
-## 1. 必须先读
+This file applies only to documentation work under `docs/`.
 
-每次任务开始时按顺序读取：
+## Scope
 
-1. `EGO_LINK_P0_CONTEXT.md`
-2. `tasks/CURRENT_TASK.md`
-3. `STATUS.md`（存在时）
-4. `CURRENT_TASK.md` 明确列出的相关源文件
+- Use `docs/CONTEXT_INDEX.md` as the router before editing project documentation.
+- Keep current authoritative context in `docs/product/`, `docs/current/`, `docs/architecture/`, `docs/hardware/BOARD_MATRIX.md`, and active task packets.
+- Keep historical sources in `docs/archive/`; archive files are evidence, not current authority.
+- Keep generated reports in `docs/generated/`; do not use generated reports as default context.
 
-不要默认遍历全部仓库或读取与本任务无关的文档。
+## Editing Rules
 
-## 2. 当前项目边界
+- Do not delete historical information. Move it to `docs/archive/` when it is replaced.
+- When splitting or merging documents, preserve source paths in a migration note or generated report.
+- Add `document_status: authoritative` and `last_verified: YYYY-MM-DD` only when a document is intended to be a current authority.
+- Do not mark archive files as authoritative.
+- If documents conflict, record the conflict instead of silently choosing a fact.
+- Keep Markdown links relative and runnable through `python scripts/context_lint.py`.
 
-- 目标硬件：微雪 ESP32-S3-SIM7670G-4G，主控 ESP32-S3，蜂窝模块 SIM7670G。
-- 当前只做 Ego Link P0 Firmware + PC Simulator。
-- 当前用 Wi-Fi 模拟 4G，用软件模拟 GNSS 和唤醒。
-- 不开发正式 EGO Base。
-- 不调试真实 SIM7670G 4G、真实 GNSS、摄像头或语音唤醒芯片。
-- 不做量产级低功耗优化。
+## Hardware Documentation
 
-## 3. 执行规则
-
-- 一次只完成 `tasks/CURRENT_TASK.md` 中的一个目标。
-- 只修改 `Allowed paths` 中的文件。
-- 不顺带重构、不补做未来功能、不扩大任务范围。
-- 不新增生产依赖，除非当前任务明确允许。
-- 先检查现状，再写最多 5 行实施计划，并立即执行；不要等待确认。
-- 默认采用最小、可验证、可回滚的实现。
-- 业务层不得直接依赖 Wi-Fi、SIM7670G、GNSS 或唤醒硬件；通过既定抽象接口访问。
-- 保持 Windows/PowerShell 开发流程可用。
-
-## 4. 验证规则
-
-- 只运行 `CURRENT_TASK.md` 指定的验证命令。
-- 每个命令必须能够自动退出。
-- 禁止默认运行 `idf.py monitor`、`tail -f`、`watch`、无限串口读取或常驻服务器。
-- 同一个失败验证最多进行 2 轮修复。
-- 不得通过删除测试、降低断言或屏蔽错误使验证通过。
-
-## 5. 停止规则
-
-出现以下任一情况，立即停止继续实现并更新 `STATUS.md`：
-
-- Done when 已全部满足；
-- 同一验证连续修复 2 次仍失败；
-- 需要修改 Allowed paths 之外的文件；
-- 缺少硬件、SDK、凭据、串口设备或外部服务；
-- 需要新增依赖或改变架构；
-- 任务说明互相矛盾；
-- 错误无法用现有日志复现。
-
-不要长时间猜测、重复搜索或无限尝试。
-
-## 6. 完成输出
-
-结束时只报告：
-
-1. 修改了什么；
-2. 运行了哪些验证及结果；
-3. 是否满足 Done when；
-4. 当前阻塞（如有）；
-5. 建议的下一项任务，但不要自行开始。
-
-更新 `STATUS.md`，但保持简短，不写冗长过程日志。
-
-## 7. 智能体限制
-
-- 当前不得自动创建或调用子智能体。
-- 当前不得引入 Agents SDK、MCP、多智能体框架或自动任务编排器。
-- 当前默认使用中等推理强度；除非任务明确要求，不使用长时间高强度推理。
+- Hardware capability must be written as `verified`, `observed`, `mock`, `pc_side_verified`, `unknown`, or `unverified`.
+- A build, flash, or serial log is not proof of 4G, GNSS, camera, audio, battery, storage, or power behavior unless the evidence directly exercises that capability.
+- PC-side bridge or AT-probe evidence must not be described as firmware-side product behavior.

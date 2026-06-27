@@ -2,7 +2,7 @@
 
 ```text
 请读取并遵守：
-1. docs/EGO_LINK_P0_CONTEXT.md
+1. docs/CONTEXT_INDEX.md
 2. docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md
 3. docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md
 4. docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md

@@ -1,0 +1,40 @@
+---
+document_status: authoritative
+last_verified: 2026-06-26
+verified_by: codex
+---
+
+# Product Charter
+
+Ego Link is the wearable/mobile companion node for Project EGO.
+
+The P0 product direction is an AI-assisted active safety locator and companion entry point, not a standalone brain, phone replacement, cloud AI product, or final mass-production wearable.
+
+## Product Role
+
+- Wearable sensing and user confirmation node.
+- Low-friction safety interaction surface.
+- Remote communication and location evidence entry point.
+- Development bridge into the larger EGO ecosystem.
+
+Long-term complex memory, multimodal understanding, and broader coordination belong with Ego Base. During P0, the PC Development Bridge is only a development bridge and observer, not the formal Ego Base and not a product dependency.
+
+## Current Product Promise
+
+P0 should prove that the system can:
+
+- observe or synthesize a safety candidate;
+- ask the user whether they are safe;
+- capture user confirmation;
+- refresh location or communication evidence;
+- create a complete replayable safety event record.
+
+## Non-Claims
+
+P0 does not claim:
+
+- production fall-detection accuracy;
+- real emergency dispatch;
+- real calling or SMS workflow;
+- final enclosure, battery, power, or wearable ergonomics;
+- final model architecture or training readiness.

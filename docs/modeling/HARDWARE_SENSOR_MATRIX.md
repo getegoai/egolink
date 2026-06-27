@@ -57,7 +57,7 @@ product acceptance.
 
 | 项目 | 料号 / 平台 | 接口 / 引脚 | 当前状态 | 证据 |
 |---|---|---|---:|---|
-| P0 主控板 | Waveshare ESP32-S3-SIM7670G-4G 开发板 | USB CH343 调试串口；SIM7670G USB composite；板载 Wi-Fi/BLE；摄像头连接器 | `verified` | `docs/EGO_LINK_P0_CONTEXT.md`；`docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md`；`docs/hardware/HARDWARE_USABILITY_VALIDATION.md`；`reports/board_validation/20260622-181619/probe.md`；`reports/board_validation/20260621-091239/probe.md` |
+| P0 主控板 | Waveshare ESP32-S3-SIM7670G-4G 开发板 | USB CH343 调试串口；SIM7670G USB composite；板载 Wi-Fi/BLE；摄像头连接器 | `verified` | `docs/CONTEXT_INDEX.md`；`docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md`；`docs/hardware/HARDWARE_USABILITY_VALIDATION.md`；`reports/board_validation/20260622-181619/probe.md`；`reports/board_validation/20260621-091239/probe.md` |
 | 主控 MCU | ESP32-S3 | 当前 Windows 识别 CH343 串口 `COM4` | `verified` | `reports/board_validation/20260622-181619/probe.md` |
 | 蜂窝 / GNSS 测试模组 | SIMCom SIM7670G-MNGV | PC 侧 AT 口识别为 `COM6` / `COM7`；RNDIS 网卡可见 | `pc_side_verified` | `docs/hardware/HARDWARE_USABILITY_VALIDATION.md`；`reports/board_validation/20260622-181619/probe.md`；`reports/gnss_validation/20260622-181804/gnss_probe.md`；`reports/gnss_validation/20260621-161721/gnss_probe.md`；`scripts/sim7670_gnss_probe.py` |
 | 量产主控 | 未冻结；STM32U5A5、Apollo4、ESP32-P4、Alif B1 仅为候选 | 不适用 | `not_verified` | `docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md`；`docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md` |

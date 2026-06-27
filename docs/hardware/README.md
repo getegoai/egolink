@@ -4,7 +4,7 @@
 
 ## 文档优先级
 
-1. `docs/EGO_LINK_P0_CONTEXT.md`：当前可执行硬件与 P0 工程边界。
+1. `docs/CONTEXT_INDEX.md`：当前可执行硬件与 P0 工程边界。
 2. `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`：模型语义和端基协同边界。
 3. `shared/contracts/**`：机器可校验的数据和模型接口。
 4. `EGOLINK_HARDWARE_PLATFORM_CONTEXT.md`：本轮硬件决策和未决事项。

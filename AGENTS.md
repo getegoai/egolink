@@ -1,57 +1,51 @@
-# Ego Link P0 — Codex Working Agreement
+# EGOLINK Repository Instructions
 
-## Project identity
+## Authoritative Sources
 
-- This repository is **Ego Link P0**, the wearable/mobile companion node for Project EGO.
-- Target board: **Waveshare ESP32-S3-SIM7670G-4G**.
-- Main MCU: ESP32-S3. Cellular/GNSS module: SIMCom SIM7670G.
-- Current P0 is **Mock-first**:
-  - Wi-Fi temporarily simulates the 4G data path.
-  - GNSS is simulated in software.
-  - Wake events are simulated by CLI/button/timer.
-  - The PC acts only as a local simulator; this is not the formal EGO Base.
-- Current P0 integration validation uses **two development boards over USB plus a PC Development Bridge**.
-- `wearable_node` is responsible for IMU, audio, screen, touch, speaker, and user interaction.
-- `connectivity_node` is responsible for 4G, GNSS, camera, communication capability, and caching.
-- The PC is only a development bridge/observer, not the formal Ego Base and not a product dependency.
-- Do not hardcode COM port numbers; devices must be identified through versioned `hello` messages.
-- Both nodes must share a versioned message protocol.
-- Direct board-to-board UART is not required in current P0.
-- The final product target is not two ESP32 boards; it is one low-power MCU / AI MCU plus a cellular module and sensors.
-- Do not add cloud services or external hosted AI dependencies to the Ego Link product path.
+- Context router: `docs/CONTEXT_INDEX.md`
+- Product definition: `docs/product/PRODUCT_CHARTER.md`
+- P0 scope and non-goals: `docs/product/P0_SCOPE.md`
+- Product migration roadmap: `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`
+- Current status: `docs/current/STATUS.md`
+- Current build and bench setup: `docs/current/ACTIVE_BUILD.md`
+- Current board capability matrix: `docs/hardware/BOARD_MATRIX.md`
+- System architecture: `docs/architecture/SYSTEM_OVERVIEW.md`
+- Approved architecture decisions: `docs/architecture/adr/`
+- Active task packets: `docs/tasks/active/`
+- Machine-readable protocol/model contracts: `shared/contracts/`
 
-## Repository boundaries
+`docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, and runtime folders are not default context. Read them only when a task packet explicitly names them.
 
-- `firmware/`: ESP-IDF firmware and hardware abstraction.
-- `pc_simulator/`: local PC-side simulator, protocol endpoint, dashboard, and test utilities.
-- `quality_tests/`: repeatable tests and contract checks.
-- `docs/`: architecture, protocol, development and verification records.
-- `scripts/`: local developer and automation utilities.
-- `autodev/`: automation control files. Codex may read this directory but must not modify it.
+## Context Loading Rules
 
-## Automatic development rules
+1. Start by reading `docs/CONTEXT_INDEX.md`.
+2. If an active task packet is provided, read only its `context` entries before editing.
+3. Before modifying a module, read that module's local `AGENTS.md`.
+4. Do not recursively scan `reports/`, `model_artifacts/`, `docs/archive/`, or runtime logs unless the task explicitly requires a named file.
+5. When two documents conflict, prefer the authoritative source listed above. If both claim authority, stop and record the conflict instead of deciding silently.
 
-1. Work on exactly one backlog task per Codex run.
-2. Treat the current task JSON embedded in the prompt as the task contract.
-3. Modify only paths listed in `allowed_paths`.
-4. Never modify:
-   - `.git/`
-   - `autodev/`
-   - `AGENTS.md`
-   - repository-wide configuration, unless the current task explicitly allows it.
-5. Do not run Git commit, push, reset, clean, checkout, switch, rebase, or merge. The supervisor owns Git operations.
-6. Do not install packages or access the network unless the task explicitly allows it.
-7. Do not start long-running foreground processes such as serial monitors, MQTT brokers, web servers, `tail -f`, or watch mode.
-8. Inspect existing code before editing. Preserve existing conventions and avoid unrelated refactoring.
-9. Run every verification command specified by the task when possible.
-10. Hardware-dependent behavior must be reported as unverified unless physical hardware was actually exercised.
-11. A passing build is not evidence that 4G registration, GNSS fix, calling, or power consumption works on hardware.
-12. Return the final result in the structured format requested by the supervisor.
+## Change Boundaries
 
-## P0 engineering principles
+- Keep tasks narrow and reversible.
+- Obey task `allowed_paths` and `out_of_scope` fields when present.
+- Do not change firmware logic, model behavior, pin assignments, communication protocol, hardware configuration, or public data contracts unless the active task explicitly allows it.
+- Do not commit secrets, real private user data, large model weights, or private device logs.
+- Do not modify `docs/generated/` by hand except for reports explicitly requested as generated artifacts.
 
-- Business logic depends on abstractions, not directly on Wi-Fi, SIM7670G, GNSS, or a wake chip.
-- Every uplink event has a stable `device_id`, monotonically increasing `seq`, and timestamp.
-- SOS and safety-critical behavior use deterministic rules; they do not depend on an LLM decision.
-- Preserve local-first and privacy-first behavior.
-- Prefer small, reversible, testable changes.
+## Hardware Safety
+
+- Build and static tests may run automatically.
+- Flashing firmware, erasing flash, changing device permissions, sending hardware control commands, or starting long serial captures requires explicit operator intent for that task.
+- Hardware evidence must identify board, firmware commit or image, connection path, timestamp, and evidence file path.
+- A passing build is not evidence that 4G registration, GNSS fix, calling, IMU accuracy, audio, camera, battery, or power behavior works on hardware.
+- Unknown hardware capability must be written as `unknown` or `unverified`, never inferred from a board name.
+
+## Testing And Completion Gate
+
+Before finishing:
+
+- Run the validation commands declared by the task when possible.
+- For context-only changes, run `python scripts/context_lint.py`.
+- If repository behavior might be affected, also run `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`.
+- Record changed files, validation results, evidence paths, unresolved conflicts, and remaining risks.
+- Update `docs/current/STATUS.md` only when the current milestone or verified state actually changes.
