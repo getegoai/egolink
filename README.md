@@ -10,7 +10,7 @@ Ego Link P0 是“AI 主动守护定位器”的第一阶段验证项目。当�
 - Safety Companion：M0 契约、规则基线、模拟回放、真实/半真实事件处理和本地监督会话已完成；M1 下一步进入数据基础与采集闭环。
 - 开发模式：采用 GitHub Flow，第一阶段保持单智能体、单任务、可验证迭代。
 
-详细约定见 `docs/DEVELOPMENT_WORKFLOW.md`。
+详细约定见 `docs/development/WORKFLOW.md`。
 
 ## 常用命令
 
@@ -77,11 +77,11 @@ http://127.0.0.1:8787
 
 ## 任务入口
 
-- 当前任务：`docs/tasks/CURRENT_TASK.md`
-- 项目状态：`docs/STATUS.md`
-- 产品定位：`docs/产品定位.md`
-- 板级验证：`docs/P0_BOARD_VALIDATION.md`
-- AutoDev 监控：`docs/AUTODEV_MONITORING.md`
+- 当前任务：`docs/tasks/active/`
+- 项目状态：`docs/current/STATUS.md`
+- 产品定位：`docs/product/PRODUCT_CHARTER.md`
+- 板级验证：`docs/hardware/validation/P0_BOARD_VALIDATION.md`
+- AutoDev 监控：`docs/development/AUTODEV_MONITORING.md`
 
 ## 版本化迭代
 
@@ -90,5 +90,5 @@ http://127.0.0.1:8787
 1. `main` 保持可构建、可运行、文档状态可信。
 2. 每个任务从 `main` 拉出 `task/T###-short-name`。
 3. 每轮只做 `CURRENT_TASK.md` 定义的一个目标。
-4. 任务完成前运行验证并更新 `docs/STATUS.md`。
+4. 任务完成前运行验证并更新 `docs/current/STATUS.md`。
 5. 可演示节点使用 `v0.x.y` tag 标记。

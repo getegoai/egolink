@@ -27,20 +27,23 @@ motion candidate
 ## Control Plane
 
 - `ENG-000 Repository context migration`
-  - Status: partially applied, uncommitted.
-  - Evidence: authoritative files such as `docs/CONTEXT_INDEX.md`,
-    `docs/current/`, `docs/product/`, and module `AGENTS.md` files are
-    currently untracked.
-  - Next: decide commit/revert/split policy.
-- `ENG-001 GitHub Flow baseline`
-  - Status: in progress in this control-plane baseline.
-  - Current branch: `autodev/egolink-p0`.
-  - Remote: none configured.
-  - Next: confirm remote, target branch, task branch naming, and merge rules.
-- `ENG-002 Task directory hygiene`
-  - Status: proposed follow-up.
-  - Current issue: task queue is now empty, but broader backlog and PR/merge
-    hygiene still need a clean baseline commit and human branch policy.
+  - Status: completed as a local control-plane migration baseline.
+  - Evidence: authoritative files are split into `docs/current/`,
+    `docs/product/`, `docs/architecture/`, `docs/hardware/`, `docs/modeling/`,
+    `docs/safety/`, module `AGENTS.md` files, and `scripts/context_lint.py`.
+- `ENG-001 Control Plane Baseline`
+  - Status: completed.
+  - Evidence: `docs/current/PROJECT_SNAPSHOT.md`,
+    `docs/tasks/TASK_TREE.md`, `docs/development/`, and
+    `reports/dev_runs/ENG-001-control-plane-baseline.md`.
+- `ENG-002 Control Plane Commit / Remote Policy`
+  - Status: completed on local branch `task/ENG-002-control-plane-commit`.
+  - Evidence: commits `12c79c0`, `a9270eb`, and `2194e58`.
+  - Remote: none configured; no push performed.
+- `ENG-003 Legacy Archive Review`
+  - Status: completed on local branch `task/ENG-003-legacy-archive-review`.
+  - Evidence: legacy documents were preserved under `docs/archive/` or exact
+    current destinations before old paths were removed or redirected.
 
 ## Active Queue
 
@@ -123,8 +126,9 @@ No task packet with `status: active` is currently present under
 
 ## Current Recommended Execution Order
 
-1. Finish ENG-001 control-plane baseline and review the resulting report.
-2. Run ENG-002 only if a separate cleanup commit is needed for branch/remote or
-   backlog policy.
-3. Proceed to DEMO-005 real GNSS fix evidence before new audio work, unless the
-   operator explicitly reprioritizes hardware.
+1. Review or locally merge the ENG-002 and ENG-003 task branches into
+   `autodev/egolink-p0`.
+2. Run `ENG-004 Remote Bootstrap Policy` only after the operator provides a
+   remote URL and desired protected branch policy.
+3. Proceed to `DEMO-005 Real GNSS Fix Evidence` before new audio work, unless
+   the operator explicitly reprioritizes hardware.

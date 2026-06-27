@@ -1,3 +1,9 @@
+---
+document_status: authoritative
+last_verified: 2026-06-26
+verified_by: codex
+---
+
 # Ego Link 从 P0 到产品形态迁移路线
 
 > 状态：P0 当前路线修订  

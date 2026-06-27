@@ -27,7 +27,7 @@ python scripts\verify_safety_companion_m0.py
 4. 验证通过后提交：
 
 ```powershell
-git add docs shared model_lab model_artifacts quality_tests scripts MODEL_PACKAGE_README.md CHANGELOG_SAFETY_COMPANION.md
+git add docs shared model_lab model_artifacts quality_tests scripts MODEL_PACKAGE_README.md docs/safety/CHANGELOG.md
 git commit -m "model: add safety companion M0 contract and rule baseline"
 ```
 
