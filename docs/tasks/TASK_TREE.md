@@ -44,6 +44,12 @@ motion candidate
   - Status: completed on local branch `task/ENG-003-legacy-archive-review`.
   - Evidence: legacy documents were preserved under `docs/archive/` or exact
     current destinations before old paths were removed or redirected.
+- `ENG-004 Generated Docs Review`
+  - Status: completed on local branch
+    `task/ENG-004-DEMO-005-generated-docs-gnss`.
+  - Evidence: `docs/generated/CONTEXT_MIGRATION_REPORT.md` and
+    `docs/generated/REPOSITORY_MAP.md` are versioned as generated,
+    non-authoritative migration evidence.
 
 ## Active Queue
 
@@ -126,9 +132,9 @@ No task packet with `status: active` is currently present under
 
 ## Current Recommended Execution Order
 
-1. Review or locally merge the ENG-002 and ENG-003 task branches into
-   `autodev/egolink-p0`.
-2. Run `ENG-004 Remote Bootstrap Policy` only after the operator provides a
-   remote URL and desired protected branch policy.
-3. Proceed to `DEMO-005 Real GNSS Fix Evidence` before new audio work, unless
-   the operator explicitly reprioritizes hardware.
+1. Complete `DEMO-005 Real GNSS Fix Evidence` before new audio work, unless the
+   operator explicitly reprioritizes hardware.
+2. Run remote bootstrap only after the operator provides a remote URL and
+   desired protected branch policy.
+3. Keep generated docs out of default context; use them only as migration
+   evidence when a task explicitly names them.
