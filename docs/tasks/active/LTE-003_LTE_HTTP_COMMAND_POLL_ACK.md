@@ -185,3 +185,37 @@ runtime.
   USB-attached bounded firmware console diagnosis on `COM4` to identify whether
   the device is booting the expected image, reaching LTE readiness, issuing
   HTTP GET `/commands/poll`, or failing before/inside the SIM7670G HTTP path.
+
+## Fix1 Direction
+
+- Add compact `lte_http_command_diag` telemetry posted through SIM7670G LTE
+  HTTP before and after command polling so a USB-Free run can distinguish
+  image boot/LTE-ready, poll failure, poll-empty, and ACK-missing states.
+- Increase `lte_http_command_task` stack from `12288` to `16384` to preserve
+  margin around the `response[2048]`, cJSON parse, and SIM7670G AT HTTP call
+  path.
+- Keep acceptance strict: diagnostic telemetry is not a substitute for an ACK;
+  LTE-003 still passes only when `cmd-000013` or a fresh harmless command is
+  ACKed with `transport.type=lte` and `lte_http.phase=command_ack`.
+
+## Fix1 Build Evidence
+
+- Firmware version: `0.1.0-lte003-command-loop-fix1`
+- Test run ID: `lte003-command-loop-fix1-20260628-223454`
+- Build directory: `firmware/mqtt_heartbeat/build_lte003_command_loop_fix1/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte003_command_loop_fix1/egolink_mqtt_heartbeat.bin`
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670LteHttpCommandLoop`.
+- Build config confirmed
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=1`,
+  `CONFIG_EGOLINK_FW_VERSION="0.1.0-lte003-command-loop-fix1"`, and
+  `CONFIG_EGOLINK_TEST_RUN_ID="lte003-command-loop-fix1-20260628-223454"`.
+- `python scripts/context_lint.py` passed.
+- `python -m unittest quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_fw001_hw_config quality_tests.test_fw001_hw_runner quality_tests.test_lte_command_loop_validation -v`
+  passed with 29 tests.
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
+  273 tests.
+- `git diff --check` passed.
+- Flash result: not run yet; requires explicit operator confirmation for
+  `COM4`.

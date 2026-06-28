@@ -90,7 +90,10 @@ motion candidate
     USB-Free runtime validation attempts 1 and 2 failed with `cmd-000013` still
     pending and no test-run messages under
     `reports/field_validation/lte003-command-loop-20260628-210214/`; attempt 2
-    reused the pending command after an independent-power cold reboot.
+    reused the pending command after an independent-power cold reboot. Fix1 is
+    build-verified as `0.1.0-lte003-command-loop-fix1` /
+    `lte003-command-loop-fix1-20260628-223454` with diagnostic LTE command
+    telemetry, but it has not been flashed yet.
 
 ## USB-Free VPS Walking Skeleton Line
 

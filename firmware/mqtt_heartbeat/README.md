@@ -226,6 +226,13 @@ The ACK includes additive `transport.type=lte`, `lte_http.phase=command_ack`,
 and poll HTTP status/reason fields so the VPS-side validator can prove the ACK
 did not use the earlier Wi-Fi Message Hub path.
 
+After the first USB-Free LTE-003 attempts produced no Message Hub traffic, the
+command-loop image also emits compact `lte_http_command_diag` telemetry over
+the same SIM7670G LTE HTTP POST path. These diagnostic events are intentionally
+not acceptance evidence for command ACK; they expose whether the image reached
+LTE readiness, attempted `/commands/poll`, and what poll HTTP reason/status was
+observed before a missing ACK.
+
 Host-side validation for this slice is:
 
 ```powershell

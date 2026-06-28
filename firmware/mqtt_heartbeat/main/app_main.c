@@ -35,7 +35,7 @@ static const char *TAG = "egolink_mqtt_heartbeat";
 #define HEARTBEAT_TASK_STACK_SIZE 12288
 #define SENSOR_TASK_STACK_SIZE 12288
 #define LTE_HTTP_PROBE_TASK_STACK_SIZE 12288
-#define LTE_HTTP_COMMAND_TASK_STACK_SIZE 12288
+#define LTE_HTTP_COMMAND_TASK_STACK_SIZE 16384
 #if CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED
 #define LTE_OBSERVATION_FRAGMENT_MAX 2300
 #else
@@ -65,6 +65,7 @@ static char s_sensor_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_lte_http_probe_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 static char s_lte_command_last_cmd_id[64];
+static char s_lte_command_diag_payload[1536];
 static bool s_lte_command_last_executed;
 #endif
 
@@ -1298,6 +1299,156 @@ static bool lte_http_ack_command(
     return ok;
 }
 
+static void build_lte_command_diag_payload(
+    char *buffer,
+    size_t buffer_size,
+    uint32_t seq,
+    const char *phase,
+    const sim7670_lte_http_probe_result_t *poll_result,
+    bool include_poll_result,
+    bool acked)
+{
+    sim7670_lte_http_probe_result_t fallback;
+    if (poll_result == NULL) {
+        sim7670_lte_http_probe_result_init(&fallback);
+        poll_result = &fallback;
+    }
+
+    char escaped_phase[64];
+    char escaped_reason[SIM7670_LTE_HTTP_REASON_MAX * 2];
+    char escaped_cmd_id[96];
+    char poll_status_code[16];
+    char poll_data_len[16];
+    char poll_action_elapsed_ms[16];
+    char rtt_ms[16];
+    char last_error_json[SIM7670_LTE_HTTP_REASON_MAX * 2 + 4];
+    const char *effective_phase = phase ? phase : "unknown";
+    const char *effective_reason = include_poll_result ? poll_result->reason_code : "LTE_HTTP_COMMAND_READY";
+    bool poll_ok = include_poll_result && strcmp(effective_reason, "LTE_HTTP_OK") == 0;
+
+    json_escape_summary(escaped_phase, sizeof(escaped_phase), effective_phase);
+    json_escape_summary(escaped_reason, sizeof(escaped_reason), effective_reason);
+    json_escape_summary(escaped_cmd_id, sizeof(escaped_cmd_id), s_lte_command_last_cmd_id);
+    json_int_or_null(
+        poll_status_code,
+        sizeof(poll_status_code),
+        include_poll_result && poll_result->status_code_valid,
+        poll_result->status_code);
+    json_int_or_null(
+        poll_data_len,
+        sizeof(poll_data_len),
+        include_poll_result && poll_result->data_len_valid,
+        poll_result->data_len);
+    json_int_or_null(
+        poll_action_elapsed_ms,
+        sizeof(poll_action_elapsed_ms),
+        include_poll_result && poll_result->action_elapsed_ms_valid,
+        poll_result->action_elapsed_ms);
+    json_int_or_null(
+        rtt_ms,
+        sizeof(rtt_ms),
+        include_poll_result && poll_result->action_elapsed_ms_valid,
+        poll_result->action_elapsed_ms);
+    if (include_poll_result && !poll_ok) {
+        snprintf(last_error_json, sizeof(last_error_json), "\"%s\"", escaped_reason);
+    } else {
+        snprintf(last_error_json, sizeof(last_error_json), "null");
+    }
+
+    build_lte_http_probe_lte_fragment(s_lte_http_probe_lte_fragment, sizeof(s_lte_http_probe_lte_fragment));
+    snprintf(
+        buffer,
+        buffer_size,
+        "{\"protocol_version\":\"egolink.p0.v1\","
+        "\"device_id\":\"%s\","
+        "\"ts\":\"uptime_ms:%" PRId64 "\","
+        "\"seq\":%" PRIu32 ","
+        "\"message_type\":\"event\","
+        "\"event_type\":\"lte_http_command_diag\","
+        "\"priority\":\"normal\","
+        "\"fw_version\":\"%s\","
+        "\"source\":\"sim7670g_lte_http_command_loop\","
+        "\"source_status\":\"%s\","
+        "\"reset_reason\":\"%s\","
+        "\"boot_count\":%" PRIu32 ","
+        "\"boot_uptime_ms\":%" PRId64 ","
+        "\"transport\":{\"type\":\"lte\","
+        "\"rtt_ms\":%s,"
+        "\"last_error\":%s},"
+        "\"lte_http\":{\"phase\":\"%s\","
+        "\"driver\":\"%s\","
+        "\"poll_reason_code\":\"%s\","
+        "\"poll_status_code\":%s,"
+        "\"poll_data_len\":%s,"
+        "\"poll_action_elapsed_ms\":%s},"
+        "\"command\":{\"last_cmd_id\":\"%s\","
+        "\"last_status\":\"%s\","
+        "\"last_ack_status\":%s,"
+        "\"ack_observed\":%s}"
+        "%s",
+        CONFIG_EGOLINK_DEVICE_ID,
+        uptime_ms(),
+        seq,
+        CONFIG_EGOLINK_FW_VERSION,
+        include_poll_result ? (poll_ok ? "observed" : "unverified") : "observed",
+        s_reset_reason,
+        s_boot_count,
+        uptime_ms(),
+        rtt_ms,
+        last_error_json,
+        escaped_phase,
+        sim7670_lte_http_backend_name(),
+        escaped_reason,
+        poll_status_code,
+        poll_data_len,
+        poll_action_elapsed_ms,
+        escaped_cmd_id,
+        acked ? "ok" : "pending",
+        acked ? "\"ok\"" : "null",
+        json_bool(acked),
+        s_lte_http_probe_lte_fragment);
+    append_test_run_id_and_close_json(buffer, buffer_size);
+}
+
+static bool lte_http_post_command_diag(
+    const char *phase,
+    const sim7670_lte_http_probe_result_t *poll_result,
+    bool include_poll_result,
+    bool acked)
+{
+    char path[160];
+    char url[256];
+    sim7670_lte_http_probe_result_t post_result;
+    uint32_t seq = next_seq();
+
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/telemetry", CONFIG_EGOLINK_DEVICE_ID);
+    build_message_hub_url(url, sizeof(url), path);
+    build_lte_command_diag_payload(
+        s_lte_command_diag_payload,
+        sizeof(s_lte_command_diag_payload),
+        seq,
+        phase,
+        poll_result,
+        include_poll_result,
+        acked);
+    ESP_LOGI(
+        TAG,
+        "LTE_HTTP_COMMAND_DIAG_PAYLOAD_BYTES phase=%s bytes=%u",
+        phase ? phase : "unknown",
+        (unsigned)strlen(s_lte_command_diag_payload));
+    bool ok =
+        sim7670_lte_http_post_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, s_lte_command_diag_payload, &post_result);
+    ESP_LOGI(
+        TAG,
+        "LTE_HTTP_COMMAND_DIAG_POST_DONE phase=%s seq=%" PRIu32 " ok=%s reason=%s status=%d",
+        phase ? phase : "unknown",
+        seq,
+        ok ? "true" : "false",
+        post_result.reason_code,
+        post_result.status_code);
+    return ok;
+}
+
 static bool lte_http_execute_and_ack_command(cJSON *command, const sim7670_lte_http_probe_result_t *poll_result)
 {
     cJSON *cmd_id = cJSON_GetObjectItemCaseSensitive(command, "cmd_id");
@@ -1332,24 +1483,27 @@ static bool lte_http_execute_and_ack_command(cJSON *command, const sim7670_lte_h
     return lte_http_ack_command(cmd_id->valuestring, status, message, poll_result, duplicate);
 }
 
-static bool lte_http_poll_commands_once(void)
+static bool lte_http_poll_commands_once(sim7670_lte_http_probe_result_t *poll_result)
 {
     char path[160];
     char url[256];
     char response[2048];
-    sim7670_lte_http_probe_result_t poll_result;
+    sim7670_lte_http_probe_result_t local_poll_result;
+    if (poll_result == NULL) {
+        poll_result = &local_poll_result;
+    }
 
     snprintf(path, sizeof(path), "/api/v1/devices/%s/commands/poll", CONFIG_EGOLINK_DEVICE_ID);
     build_message_hub_url(url, sizeof(url), path);
     bool poll_ok =
-        sim7670_lte_http_get_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, response, sizeof(response), &poll_result);
+        sim7670_lte_http_get_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, response, sizeof(response), poll_result);
     ESP_LOGI(
         TAG,
         "LTE_HTTP_COMMAND_POLL_DONE ok=%s reason=%s status=%d data_len=%d",
         poll_ok ? "true" : "false",
-        poll_result.reason_code,
-        poll_result.status_code,
-        poll_result.data_len);
+        poll_result->reason_code,
+        poll_result->status_code,
+        poll_result->data_len);
     if (!poll_ok) {
         return false;
     }
@@ -1375,7 +1529,7 @@ static bool lte_http_poll_commands_once(void)
     bool acked = false;
     cJSON_ArrayForEach(command, commands)
     {
-        if (lte_http_execute_and_ack_command(command, &poll_result)) {
+        if (lte_http_execute_and_ack_command(command, poll_result)) {
             acked = true;
             break;
         }
@@ -1399,6 +1553,7 @@ static void lte_http_command_task(void *arg)
     }
     platform_power_leave_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "lte_http_command_lte_ready");
     platform_power_enter_state(PLATFORM_POWER_STATE_UPLOAD, "lte_http_command_poll");
+    (void)lte_http_post_command_diag("ready", NULL, false, false);
 
     int max_attempts = CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS;
     if (max_attempts < 1) {
@@ -1406,8 +1561,10 @@ static void lte_http_command_task(void *arg)
     }
     bool acked = false;
     for (int attempt = 1; attempt <= max_attempts; ++attempt) {
+        sim7670_lte_http_probe_result_t poll_result;
         ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_ROUND_START attempt=%d max_attempts=%d", attempt, max_attempts);
-        acked = lte_http_poll_commands_once();
+        acked = lte_http_poll_commands_once(&poll_result);
+        (void)lte_http_post_command_diag(acked ? "command_ack_observed" : "poll_no_ack", &poll_result, true, acked);
         ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_ROUND_DONE attempt=%d acked=%s", attempt, acked ? "true" : "false");
         if (acked) {
             break;
