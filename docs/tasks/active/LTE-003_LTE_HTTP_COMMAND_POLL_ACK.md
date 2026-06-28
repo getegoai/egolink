@@ -121,3 +121,38 @@ runtime.
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
   272 tests.
 - `git diff --check` passed.
+
+## Validation Attempt 1
+
+- Firmware version: `0.1.0-lte003-command-loop`
+- Test run ID: `lte003-command-loop-20260628-210214`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte003-command-loop-20260628-210214/lte_command_loop_report.json`
+- Result: FAIL.
+- Started at: `2026-06-28T13:52:07.704903+00:00`
+- Completed at: `2026-06-28T13:58:13.028117+00:00`
+- Command: `cmd-000013`, `set_report_interval`.
+- Failure: command remained `pending`; no ACK was received, no ACK transport
+  evidence existed, and the test-run export contained zero messages.
+- VPS state still showed the prior LTE-002 fix5 `lte_http_probe` as latest
+  telemetry and did not show a fresh LTE-003 message during the validation
+  window.
+- Interpretation: LTE-003 has not passed runtime validation. The next lowest
+  risk retry is to keep the pending command and power-cycle the independently
+  powered device with USB disconnected, then run the validator in
+  `--existing-command-id cmd-000013` mode. This tests whether the first failure
+  was caused by the bounded boot-time command loop completing before the
+  command was queued.
+
+## Validator Update After Attempt 1
+
+- `scripts/validate_lte_command_loop.py` now supports
+  `--existing-command-id` so a pending command can be reused across a manual
+  independent-power reboot without enqueueing another command.
+- `python scripts/context_lint.py` passed.
+- `python -m unittest quality_tests.test_lte_command_loop_validation -v`
+  passed with 4 tests.
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
+  273 tests after the validator update.
+- `git diff --check` passed.

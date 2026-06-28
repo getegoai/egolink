@@ -110,6 +110,74 @@ class LteCommandLoopValidationTests(unittest.TestCase):
 
         self.assertIn("transport.type=wifi", str(context.exception))
 
+    def test_validation_can_wait_for_existing_pending_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            hub_url = f"http://127.0.0.1:{server.server_port}"
+            client = HubClient(hub_url)
+            try:
+                client.post(
+                    "/api/v1/test-runs",
+                    {
+                        "test_run_id": "lte003-unit",
+                        "task_id": "LTE-003",
+                        "board_id": "connectivity-node-001",
+                        "device_id": "ego-link-r1-test",
+                        "connection_path": "independent_power_usb_disconnected",
+                        "started_at": "2026-06-28T00:00:00+00:00",
+                        "status": "active",
+                        "goal": "existing command test",
+                    },
+                )
+                command = client.post(
+                    "/api/v1/devices/ego-link-r1-test/commands",
+                    {
+                        "cmd": "set_report_interval",
+                        "test_run_id": "lte003-unit",
+                        "payload": {"interval_ms": 10000, "test_run_id": "lte003-unit"},
+                    },
+                )["command"]
+                device_thread = threading.Thread(
+                    target=self._poll_and_ack_once,
+                    args=(hub_url,),
+                    kwargs={
+                        "device_id": "ego-link-r1-test",
+                        "fw_version": "0.1.0-lte003-command-loop",
+                        "test_run_id": "lte003-unit",
+                        "transport_type": "lte",
+                        "poll_reason_code": "LTE_HTTP_OK",
+                        "poll_status_code": 200,
+                    },
+                    daemon=True,
+                )
+                device_thread.start()
+                report = validate_lte_command_loop.validate_lte_command_loop(
+                    hub_url=hub_url,
+                    device_id="ego-link-r1-test",
+                    token=None,
+                    output_dir=Path(tmp) / "report",
+                    test_run_id="lte003-unit",
+                    board_id="connectivity-node-001",
+                    connection_path="independent_power_usb_disconnected",
+                    timeout_sec=1.0,
+                    poll_interval_sec=0.05,
+                    expected_fw_version="0.1.0-lte003-command-loop",
+                    command_name="set_report_interval",
+                    interval_ms=10000,
+                    existing_command_id=str(command["cmd_id"]),
+                )
+            finally:
+                server.shutdown()
+                server_thread.join(timeout=5)
+                server.server_close()
+
+            self.assertEqual(report["result"], "PASS")
+            self.assertEqual(report["command"]["cmd_id"], command["cmd_id"])
+            self.assertEqual(report["existing_command_id"], command["cmd_id"])
+
     def test_validation_timeout_writes_failure_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")

@@ -181,6 +181,7 @@ def validate_lte_command_loop(
     expected_fw_version: str | None,
     command_name: str,
     interval_ms: int,
+    existing_command_id: str | None = None,
 ) -> dict[str, Any]:
     client = HubClient(hub_url, token=token)
     started_at_text = utc_now()
@@ -193,18 +194,28 @@ def validate_lte_command_loop(
         connection_path=connection_path,
         started_at=started_at_text,
     )
-    created = client.post(
-        f"/api/v1/devices/{device_id}/commands",
-        {
-            "cmd": command_name,
-            "test_run_id": test_run_id,
-            "payload": {
-                "interval_ms": interval_ms,
+    if existing_command_id:
+        commands = [
+            item
+            for item in (client.get(f"/api/v1/devices/{device_id}/commands").get("commands") or [])
+            if isinstance(item, dict)
+        ]
+        created = find_command(commands, existing_command_id)
+        if not created:
+            raise FieldValidationError(f"existing command {existing_command_id} was not found for {device_id}")
+    else:
+        created = client.post(
+            f"/api/v1/devices/{device_id}/commands",
+            {
+                "cmd": command_name,
                 "test_run_id": test_run_id,
-                "source": "lte003_command_validation",
+                "payload": {
+                    "interval_ms": interval_ms,
+                    "test_run_id": test_run_id,
+                    "source": "lte003_command_validation",
+                },
             },
-        },
-    )["command"]
+        )["command"]
     cmd_id = str(created["cmd_id"])
     deadline = time.monotonic() + timeout_sec
     final_command: dict[str, Any] = created
@@ -265,6 +276,7 @@ def validate_lte_command_loop(
         "started_at": started_at_text,
         "completed_at": completed_at_text,
         "expected_fw_version": expected_fw_version,
+        "existing_command_id": existing_command_id,
         "health": health,
         "test_run": test_run,
         "command": final_command,
@@ -300,6 +312,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--expected-fw-version", default="0.1.0-lte003-command-loop")
     parser.add_argument("--command", default="set_report_interval")
     parser.add_argument("--interval-ms", type=int, default=10000)
+    parser.add_argument(
+        "--existing-command-id",
+        help="Wait for an already queued command instead of creating a new command.",
+    )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
@@ -321,6 +337,7 @@ def main(argv: list[str] | None = None) -> int:
             expected_fw_version=args.expected_fw_version,
             command_name=args.command,
             interval_ms=args.interval_ms,
+            existing_command_id=args.existing_command_id,
         )
     except FieldValidationError as exc:
         print(f"FAIL LTE-003 command loop validation: {exc}", file=sys.stderr)
