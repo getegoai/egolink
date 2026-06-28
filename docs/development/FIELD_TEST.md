@@ -62,6 +62,49 @@ Acceptance:
   transport error, reset, command timeout/ACK state, and unknown power.
 - Unknown fields are shown as `unknown` or `unverified`, not inferred.
 
+## STAB-001A Short Baseline Gate Tooling
+
+Goal: make the next USB-Free baseline run judgeable from VPS/Web evidence
+instead of serial logs.
+
+`scripts/validate_message_hub_stability.py` remains observation-only by
+default. It does not flash firmware, open serial ports, erase flash, or enqueue
+downlink commands. For STAB-001A it can be run with stricter requirements:
+
+```powershell
+python scripts\validate_message_hub_stability.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id <device-id> `
+  --observation-id <test-run-id> `
+  --expected-message-test-run-id <test-run-id> `
+  --duration-sec 120 `
+  --poll-interval-sec 5 `
+  --min-messages 4 `
+  --min-location-observations 1 `
+  --require-observability `
+  --require-location-belief `
+  --require-command-ack `
+  --require-test-run-export `
+  --json
+```
+
+The operator or Web may enqueue a harmless command during the observation when
+`--require-command-ack` is used. The observer itself does not enqueue it.
+
+Required STAB-001A report state:
+
+- recent messages meeting the minimum message count;
+- no sequence regressions unless explicitly allowed;
+- at least one `location_observation` when location observation is in scope;
+- final device state includes `observability`;
+- `location_belief.state` and `location_belief.reason` are present;
+- command ACK status is `ok` when command ACK is required;
+- test-run export is available and includes `observability_summary`.
+
+STAB-001A proves the gate tooling and simulator/local behavior. A physical
+STAB-001 pass still requires operator-confirmed independent power and USB
+disconnected for the whole run.
+
 ## R1 Indoor Real-Device Test Without Real GNSS
 
 Goal: prove that real hardware can boot, connect, report heartbeat or fixed/mock

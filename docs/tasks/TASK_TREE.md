@@ -288,6 +288,18 @@ No task packet with `status: active` is currently present under
   - Boundary: no firmware-side cell, Wi-Fi, IMU fusion, battery accuracy,
     location-memory table, rule-engine, LTE transport, or hardware action is
     claimed by this task.
+- `STAB-001A Short Baseline Gate Tooling`
+  - Path: `docs/tasks/done/STAB-001A_SHORT_BASELINE_GATE_TOOLING.md`
+  - Status: completed as gate tooling only.
+  - Goal: make the next short USB-Free baseline run judgeable from VPS/Web
+    evidence instead of serial logs.
+  - Evidence: PC Simulator can bind heartbeat, `location_report`,
+    `location_observation`, ACK, and export evidence to one `test_run_id`;
+    `scripts/validate_message_hub_stability.py` can require
+    `location_observation`, `observability`, `location_belief`, command ACK,
+    and test-run export availability.
+  - Boundary: no hardware stability pass, long run, LTE transport, firmware
+    flash, or serial capture is claimed by this task.
 - `RELIABILITY-001A USB-Free Stability Observer And Reset Diagnostics`
   - Path: `docs/tasks/done/RELIABILITY-001A_USB_FREE_STABILITY_OBSERVER_RESET_DIAGNOSTICS.md`
   - Status: completed as an R3 preflight diagnosability increment.
@@ -404,9 +416,11 @@ No task packet with `status: active` is currently present under
 
 ## Current Recommended Execution Order
 
-1. Use OBS-001 observability as the entry condition for any longer field run.
-2. Run only a short USB-Free baseline stability gate over the current Wi-Fi
-   HTTP path; do not treat it as product LTE acceptance.
+1. Use OBS-001 observability and LOC-002 `location_observation` as the entry
+   condition for any longer field run.
+2. STAB-001A gate tooling is ready. The next physical stability step is a
+   short operator-confirmed USB-Free baseline run over the current Wi-Fi HTTP
+   path; do not treat it as product LTE acceptance.
 3. Start LTE-001/LTE-002/LTE-003 in thin slices: LTE registration and cell
    state, LTE HTTP telemetry uplink, then LTE HTTP command polling and ACK.
 4. LOC-002 is complete as a contract/server/simulator baseline. Next location
