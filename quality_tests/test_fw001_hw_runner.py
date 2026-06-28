@@ -40,6 +40,7 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertFalse(payload["sim7670_gnss_enabled"])
         self.assertFalse(payload["sim7670_lte_status_enabled"])
         self.assertFalse(payload["sim7670_lte_http_probe_enabled"])
+        self.assertFalse(payload["sim7670_lte_http_command_loop_enabled"])
         self.assertIn("IUnderstandFlashWritesFirmware", payload["flash_guard"])
 
     def test_flash_requires_explicit_confirmation_and_port(self) -> None:
@@ -75,10 +76,16 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertIn("[switch]$EnableSim7670Gnss", self.script_text)
         self.assertIn("[switch]$EnableSim7670LteStatus", self.script_text)
         self.assertIn("[switch]$EnableSim7670LteHttpProbe", self.script_text)
+        self.assertIn("[switch]$EnableSim7670LteHttpCommandLoop", self.script_text)
         self.assertIn('Add-If $prepareArgs $EnableSim7670Gnss "-EnableSim7670Gnss"', self.script_text)
         self.assertIn('Add-If $prepareArgs $EnableSim7670LteStatus "-EnableSim7670LteStatus"', self.script_text)
         self.assertIn('Add-If $prepareArgs $EnableSim7670LteHttpProbe "-EnableSim7670LteHttpProbe"', self.script_text)
+        self.assertIn(
+            'Add-If $prepareArgs $EnableSim7670LteHttpCommandLoop "-EnableSim7670LteHttpCommandLoop"',
+            self.script_text,
+        )
         self.assertIn("validate_lte_http_probe.py", self.script_text)
+        self.assertIn("validate_lte_command_loop.py", self.script_text)
         self.assertIn("--expected-fw-version", self.script_text)
         self.assertIn("ForEach-Object { $prepareArgs.Add([string]$_) }", self.script_text)
         self.assertNotIn("$prepareArgs.AddRange(@(", self.script_text)

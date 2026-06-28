@@ -76,9 +76,16 @@ motion candidate
 
 ## Active Queue
 
-- No active task packet is currently open after LTE-002 completion.
-- Next likely route candidate: `LTE-003 LTE HTTP Command Poll And ACK`, but it
-  should be opened as a separate task packet before firmware changes.
+- `LTE-003 LTE HTTP Command Poll And ACK`
+  - Path: `docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md`
+  - Status: active.
+  - Goal: prove the existing Message Hub command queue can be polled over
+    SIM7670G LTE HTTP and that one harmless `set_report_interval` command can
+    be ACKed back over LTE with USB disconnected at runtime.
+  - Current evidence: build-verified as `0.1.0-lte003-command-loop` /
+    `lte003-command-loop-20260628-210214`; binary at
+    `firmware/mqtt_heartbeat/build_lte003_command_loop/egolink_mqtt_heartbeat.bin`.
+    Not flashed or USB-Free runtime validated yet.
 
 ## USB-Free VPS Walking Skeleton Line
 

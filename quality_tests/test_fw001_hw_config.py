@@ -70,6 +70,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertFalse(payload["sim7670_gnss_enabled"])
         self.assertFalse(payload["sim7670_lte_status_enabled"])
         self.assertFalse(payload["sim7670_lte_http_probe_enabled"])
+        self.assertFalse(payload["sim7670_lte_http_command_loop_enabled"])
         self.assertNotIn("unit-secret-token", result.stdout)
         self.assertIn('CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED=y', config)
         self.assertIn('CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL="http://example.invalid:8790"', config)
@@ -80,6 +81,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("# CONFIG_EGOLINK_SIM7670_GNSS_ENABLED is not set", config)
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED is not set", config)
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED is not set", config)
+        self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED is not set", config)
         self.assertIn("SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.vps.local", payload["build_command"])
         self.assertNotIn("flash", payload["build_command"].lower())
         self.assertFalse(config_bytes.startswith(b"\xef\xbb\xbf"))
@@ -175,9 +177,11 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertFalse(payload["sim7670_gnss_enabled"])
         self.assertTrue(payload["sim7670_lte_status_enabled"])
         self.assertFalse(payload["sim7670_lte_http_probe_enabled"])
+        self.assertFalse(payload["sim7670_lte_http_command_loop_enabled"])
         self.assertIn("# CONFIG_EGOLINK_SIM7670_GNSS_ENABLED is not set", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y", config)
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED is not set", config)
+        self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED is not set", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_NUM=1", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_RX_GPIO=17", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_TX_GPIO=18", config)
@@ -226,9 +230,60 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertFalse(payload["sim7670_gnss_enabled"])
         self.assertTrue(payload["sim7670_lte_status_enabled"])
         self.assertTrue(payload["sim7670_lte_http_probe_enabled"])
+        self.assertFalse(payload["sim7670_lte_http_command_loop_enabled"])
         self.assertNotIn("unit-secret-token", result.stdout)
         self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED=y", config)
+        self.assertIn("CONFIG_EGOLINK_SIM7670_UART_NUM=1", config)
+
+    def test_script_can_enable_lte_http_command_loop_and_implies_lte_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            firmware_dir = tmp_path / "firmware"
+            firmware_dir.mkdir()
+            source_sdkconfig = firmware_dir / "sdkconfig"
+            source_sdkconfig.write_text('CONFIG_EGOLINK_WIFI_SSID="lab-wifi"\n', encoding="utf-8")
+            token_file = tmp_path / "token.txt"
+            token_file.write_text("unit-secret-token\n", encoding="utf-8")
+            config_path = firmware_dir / "sdkconfig.vps.local"
+
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(self.script),
+                    "-HostName",
+                    "example.invalid",
+                    "-TokenFile",
+                    str(token_file),
+                    "-FirmwareDir",
+                    str(firmware_dir),
+                    "-ConfigPath",
+                    str(config_path),
+                    "-SourceSdkconfig",
+                    str(source_sdkconfig),
+                    "-EnableSim7670LteHttpCommandLoop",
+                    "-Json",
+                ],
+                cwd=self.repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(result.stdout)
+            config = config_path.read_text(encoding="utf-8-sig")
+
+        self.assertFalse(payload["sim7670_gnss_enabled"])
+        self.assertTrue(payload["sim7670_lte_status_enabled"])
+        self.assertFalse(payload["sim7670_lte_http_probe_enabled"])
+        self.assertTrue(payload["sim7670_lte_http_command_loop_enabled"])
+        self.assertNotIn("unit-secret-token", result.stdout)
+        self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y", config)
+        self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED is not set", config)
+        self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=y", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_NUM=1", config)
 
     def test_script_rejects_tracked_config_path_shape(self) -> None:
@@ -272,6 +327,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("[switch]$EnableSim7670Gnss", script_text)
         self.assertIn("[switch]$EnableSim7670LteStatus", script_text)
         self.assertIn("[switch]$EnableSim7670LteHttpProbe", script_text)
+        self.assertIn("[switch]$EnableSim7670LteHttpCommandLoop", script_text)
 
     def test_gitignore_keeps_local_vps_config_and_build_output_untracked(self) -> None:
         gitignore = (self.repo_root / ".gitignore").read_text(encoding="utf-8")

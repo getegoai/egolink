@@ -95,6 +95,22 @@ readiness gate, not as a GNSS, Web, or command-loop failure.
 Goal: migrate the current Web command queue to LTE HTTP polling without
 changing command semantics.
 
+Implementation shape:
+
+- opt-in firmware mode
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED`;
+- Wi-Fi initialization and Wi-Fi Message Hub tasks skipped while command-loop
+  mode is enabled;
+- SIM7670G AT HTTP `GET` polls the existing
+  `/api/v1/devices/{device_id}/commands/poll` endpoint;
+- the first hardware acceptance command is the harmless
+  `set_report_interval` command;
+- SIM7670G AT HTTP `POST` ACKs through the existing
+  `/api/v1/devices/{device_id}/commands/{cmd_id}/ack` endpoint;
+- ACK payloads include additive `transport.type=lte`, `lte_http.phase`, and
+  poll HTTP status/reason fields so validation can distinguish LTE ACKs from
+  the earlier Wi-Fi Message Hub path.
+
 Definition of Done:
 
 - Web enqueues a harmless command.

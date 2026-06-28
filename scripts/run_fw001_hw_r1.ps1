@@ -16,6 +16,7 @@ param(
     [switch]$EnableSim7670Gnss,
     [switch]$EnableSim7670LteStatus,
     [switch]$EnableSim7670LteHttpProbe,
+    [switch]$EnableSim7670LteHttpCommandLoop,
     [switch]$PrepareBuild,
     [switch]$Flash,
     [switch]$IUnderstandFlashWritesFirmware,
@@ -63,10 +64,11 @@ $hubUrl = "${Scheme}://${HostName}:${Port}"
 $prepareScript = Resolve-RepoPath "scripts/prepare_fw001_hw_config.ps1"
 $validationScript = Resolve-RepoPath "scripts/validate_fw001_hw_loop.py"
 $lteHttpValidationScript = Resolve-RepoPath "scripts/validate_lte_http_probe.py"
+$lteCommandValidationScript = Resolve-RepoPath "scripts/validate_lte_command_loop.py"
 $tokenPath = Resolve-RepoPath $TokenFile
 $buildPath = Join-Path $firmwarePath $BuildDir
 $binaryPath = Join-Path $buildPath "egolink_mqtt_heartbeat.bin"
-$effectiveEnableSim7670LteStatus = [bool]($EnableSim7670LteStatus -or $EnableSim7670LteHttpProbe)
+$effectiveEnableSim7670LteStatus = [bool]($EnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $EnableSim7670LteHttpCommandLoop)
 
 $result = [ordered]@{
     ok = $true
@@ -79,6 +81,7 @@ $result = [ordered]@{
     sim7670_gnss_enabled = [bool]$EnableSim7670Gnss
     sim7670_lte_status_enabled = [bool]$effectiveEnableSim7670LteStatus
     sim7670_lte_http_probe_enabled = [bool]$EnableSim7670LteHttpProbe
+    sim7670_lte_http_command_loop_enabled = [bool]$EnableSim7670LteHttpCommandLoop
     firmware_dir = $firmwarePath
     build_dir = $buildPath
     binary_path = $binaryPath
@@ -129,6 +132,7 @@ if ($PrepareBuild) {
     Add-If $prepareArgs $EnableSim7670Gnss "-EnableSim7670Gnss"
     Add-If $prepareArgs $EnableSim7670LteStatus "-EnableSim7670LteStatus"
     Add-If $prepareArgs $EnableSim7670LteHttpProbe "-EnableSim7670LteHttpProbe"
+    Add-If $prepareArgs $EnableSim7670LteHttpCommandLoop "-EnableSim7670LteHttpCommandLoop"
     $prepareOutput = & powershell @prepareArgs
     if ($LASTEXITCODE -ne 0) {
         throw "prepare_fw001_hw_config.ps1 failed with exit code $LASTEXITCODE"
@@ -177,7 +181,18 @@ if ($Validate) {
     $oldToken = $env:EGOLINK_MESSAGE_HUB_TOKEN
     $env:EGOLINK_MESSAGE_HUB_TOKEN = (Get-Content -LiteralPath $tokenPath -Raw).Trim()
     try {
-        if ($EnableSim7670LteHttpProbe) {
+        if ($EnableSim7670LteHttpCommandLoop) {
+            $validationArgs = @(
+                $lteCommandValidationScript,
+                "--hub", $hubUrl,
+                "--device-id", $DeviceId,
+                "--test-run-id", $TestRunId,
+                "--expected-fw-version", $FwVersion,
+                "--timeout-sec", [string]$ValidationTimeoutSec,
+                "--poll-interval-sec", [string]$ValidationPollIntervalSec,
+                "--json"
+            )
+        } elseif ($EnableSim7670LteHttpProbe) {
             $validationArgs = @(
                 $lteHttpValidationScript,
                 "--hub", $hubUrl,

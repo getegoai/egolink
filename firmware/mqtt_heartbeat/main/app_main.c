@@ -35,6 +35,7 @@ static const char *TAG = "egolink_mqtt_heartbeat";
 #define HEARTBEAT_TASK_STACK_SIZE 12288
 #define SENSOR_TASK_STACK_SIZE 12288
 #define LTE_HTTP_PROBE_TASK_STACK_SIZE 12288
+#define LTE_HTTP_COMMAND_TASK_STACK_SIZE 12288
 #if CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED
 #define LTE_OBSERVATION_FRAGMENT_MAX 2300
 #else
@@ -62,6 +63,10 @@ static uint32_t s_boot_count;
 static char s_status_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_sensor_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_lte_http_probe_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+static char s_lte_command_last_cmd_id[64];
+static bool s_lte_command_last_executed;
+#endif
 
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
 typedef struct {
@@ -946,7 +951,7 @@ static void build_lte_http_probe_lte_fragment(char *buffer, size_t buffer_size)
 #endif
 }
 
-#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && (CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED)
 static bool wait_for_lte_ready_for_http_probe(void)
 {
     int waited_sec = 0;
@@ -980,6 +985,7 @@ static bool wait_for_lte_ready_for_http_probe(void)
     }
 }
 
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
 static void build_lte_http_probe_payload(
     char *buffer,
     size_t buffer_size,
@@ -1154,6 +1160,270 @@ static void lte_http_probe_task(void *arg)
     platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_http_probe_done");
     vTaskDelete(NULL);
 }
+#endif
+
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+static void build_lte_command_ack_payload(
+    char *buffer,
+    size_t buffer_size,
+    uint32_t seq,
+    const char *cmd_id,
+    const char *status,
+    const char *message,
+    const sim7670_lte_http_probe_result_t *poll_result,
+    bool duplicate_prevented)
+{
+    sim7670_lte_http_probe_result_t fallback;
+    if (poll_result == NULL) {
+        sim7670_lte_http_probe_result_init(&fallback);
+        poll_result = &fallback;
+    }
+
+    char escaped_cmd_id[96];
+    char escaped_status[32];
+    char escaped_message[160];
+    char escaped_reason[SIM7670_LTE_HTTP_REASON_MAX * 2];
+    char poll_status_code[16];
+    char poll_action_elapsed_ms[16];
+    char rtt_ms[16];
+    char last_error_json[SIM7670_LTE_HTTP_REASON_MAX * 2 + 4];
+    bool poll_ok = strcmp(poll_result->reason_code, "LTE_HTTP_OK") == 0;
+
+    json_escape_summary(escaped_cmd_id, sizeof(escaped_cmd_id), cmd_id);
+    json_escape_summary(escaped_status, sizeof(escaped_status), status);
+    json_escape_summary(escaped_message, sizeof(escaped_message), message);
+    json_escape_summary(escaped_reason, sizeof(escaped_reason), poll_result->reason_code);
+    json_int_or_null(poll_status_code, sizeof(poll_status_code), poll_result->status_code_valid, poll_result->status_code);
+    json_int_or_null(
+        poll_action_elapsed_ms,
+        sizeof(poll_action_elapsed_ms),
+        poll_result->action_elapsed_ms_valid,
+        poll_result->action_elapsed_ms);
+    json_int_or_null(rtt_ms, sizeof(rtt_ms), poll_result->action_elapsed_ms_valid, poll_result->action_elapsed_ms);
+    if (!poll_ok) {
+        snprintf(last_error_json, sizeof(last_error_json), "\"%s\"", escaped_reason);
+    } else {
+        snprintf(last_error_json, sizeof(last_error_json), "null");
+    }
+
+    snprintf(
+        buffer,
+        buffer_size,
+        "{\"protocol_version\":\"egolink.p0.v1\","
+        "\"device_id\":\"%s\","
+        "\"ts\":\"uptime_ms:%" PRId64 "\","
+        "\"seq\":%" PRIu32 ","
+        "\"message_type\":\"ack\","
+        "\"fw_version\":\"%s\","
+        "\"cmd_id\":\"%s\","
+        "\"status\":\"%s\","
+        "\"message\":\"%s\","
+        "\"reset_reason\":\"%s\","
+        "\"boot_count\":%" PRIu32 ","
+        "\"boot_uptime_ms\":%" PRId64 ","
+        "\"transport\":{\"type\":\"lte\","
+        "\"rtt_ms\":%s,"
+        "\"last_error\":%s},"
+        "\"lte_http\":{\"phase\":\"command_ack\","
+        "\"driver\":\"%s\","
+        "\"poll_reason_code\":\"%s\","
+        "\"poll_status_code\":%s,"
+        "\"poll_action_elapsed_ms\":%s},"
+        "\"command\":{\"last_cmd_id\":\"%s\","
+        "\"last_status\":\"%s\","
+        "\"last_ack_status\":\"%s\","
+        "\"duplicate_local_execution_prevented\":%s}",
+        CONFIG_EGOLINK_DEVICE_ID,
+        uptime_ms(),
+        seq,
+        CONFIG_EGOLINK_FW_VERSION,
+        escaped_cmd_id,
+        escaped_status,
+        escaped_message,
+        s_reset_reason,
+        s_boot_count,
+        uptime_ms(),
+        rtt_ms,
+        last_error_json,
+        sim7670_lte_http_backend_name(),
+        escaped_reason,
+        poll_status_code,
+        poll_action_elapsed_ms,
+        escaped_cmd_id,
+        escaped_status,
+        escaped_status,
+        json_bool(duplicate_prevented));
+    append_test_run_id_and_close_json(buffer, buffer_size);
+}
+
+static bool lte_http_ack_command(
+    const char *cmd_id,
+    const char *status,
+    const char *message,
+    const sim7670_lte_http_probe_result_t *poll_result,
+    bool duplicate_prevented)
+{
+    char path[192];
+    char url[288];
+    char payload[1024];
+    sim7670_lte_http_probe_result_t ack_result;
+    uint32_t seq = next_seq();
+
+    snprintf(
+        path,
+        sizeof(path),
+        "/api/v1/devices/%s/commands/%s/ack",
+        CONFIG_EGOLINK_DEVICE_ID,
+        cmd_id);
+    build_message_hub_url(url, sizeof(url), path);
+    build_lte_command_ack_payload(
+        payload,
+        sizeof(payload),
+        seq,
+        cmd_id,
+        status,
+        message,
+        poll_result,
+        duplicate_prevented);
+    ESP_LOGI(TAG, "LTE_HTTP_COMMAND_ACK_PAYLOAD_BYTES=%u", (unsigned)strlen(payload));
+    bool ok = sim7670_lte_http_post_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, payload, &ack_result);
+    ESP_LOGI(
+        TAG,
+        "LTE_HTTP_COMMAND_ACK_DONE cmd_id=%s seq=%" PRIu32 " ok=%s reason=%s status=%d",
+        cmd_id,
+        seq,
+        ok ? "true" : "false",
+        ack_result.reason_code,
+        ack_result.status_code);
+    return ok;
+}
+
+static bool lte_http_execute_and_ack_command(cJSON *command, const sim7670_lte_http_probe_result_t *poll_result)
+{
+    cJSON *cmd_id = cJSON_GetObjectItemCaseSensitive(command, "cmd_id");
+    if (!cJSON_IsString(cmd_id) || cmd_id->valuestring == NULL) {
+        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_INVALID missing_cmd_id=true");
+        return false;
+    }
+    cJSON *cmd = cJSON_GetObjectItemCaseSensitive(command, "cmd");
+    const char *cmd_name = cJSON_IsString(cmd) && cmd->valuestring != NULL ? cmd->valuestring : "unknown";
+    bool duplicate = s_lte_command_last_executed && strcmp(s_lte_command_last_cmd_id, cmd_id->valuestring) == 0;
+    const char *status = "ok";
+    const char *message = "lte command loop acknowledged set_report_interval";
+
+    ESP_LOGI(
+        TAG,
+        "LTE_HTTP_COMMAND_RECEIVED cmd_id=%s cmd=%s duplicate=%s",
+        cmd_id->valuestring,
+        cmd_name,
+        duplicate ? "true" : "false");
+
+    if (!duplicate) {
+        snprintf(s_lte_command_last_cmd_id, sizeof(s_lte_command_last_cmd_id), "%s", cmd_id->valuestring);
+        s_lte_command_last_executed = true;
+        if (strcmp(cmd_name, "set_report_interval") != 0) {
+            status = "rejected";
+            message = "lte command loop only accepts set_report_interval in LTE-003";
+        }
+    } else {
+        message = "lte command duplicate ignored after local execution";
+    }
+
+    return lte_http_ack_command(cmd_id->valuestring, status, message, poll_result, duplicate);
+}
+
+static bool lte_http_poll_commands_once(void)
+{
+    char path[160];
+    char url[256];
+    char response[2048];
+    sim7670_lte_http_probe_result_t poll_result;
+
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/commands/poll", CONFIG_EGOLINK_DEVICE_ID);
+    build_message_hub_url(url, sizeof(url), path);
+    bool poll_ok =
+        sim7670_lte_http_get_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, response, sizeof(response), &poll_result);
+    ESP_LOGI(
+        TAG,
+        "LTE_HTTP_COMMAND_POLL_DONE ok=%s reason=%s status=%d data_len=%d",
+        poll_ok ? "true" : "false",
+        poll_result.reason_code,
+        poll_result.status_code,
+        poll_result.data_len);
+    if (!poll_ok) {
+        return false;
+    }
+
+    cJSON *root = cJSON_Parse(response);
+    if (root == NULL) {
+        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_POLL_PARSE_FAIL");
+        return false;
+    }
+    cJSON *commands = cJSON_GetObjectItemCaseSensitive(root, "commands");
+    if (!cJSON_IsArray(commands)) {
+        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_POLL_NO_COMMAND_ARRAY");
+        cJSON_Delete(root);
+        return false;
+    }
+    if (cJSON_GetArraySize(commands) <= 0) {
+        ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_EMPTY");
+        cJSON_Delete(root);
+        return false;
+    }
+
+    cJSON *command = NULL;
+    bool acked = false;
+    cJSON_ArrayForEach(command, commands)
+    {
+        if (lte_http_execute_and_ack_command(command, &poll_result)) {
+            acked = true;
+            break;
+        }
+        break;
+    }
+    cJSON_Delete(root);
+    return acked;
+}
+
+static void lte_http_command_task(void *arg)
+{
+    (void)arg;
+    platform_power_enter_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "lte_http_command_loop");
+    bool lte_ready = wait_for_lte_ready_for_http_probe();
+    ESP_LOGI(TAG, "LTE_HTTP_COMMAND_READY_RESULT ready=%s", lte_ready ? "true" : "false");
+    if (!lte_ready) {
+        platform_power_leave_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "lte_http_command_lte_not_ready");
+        platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_http_command_done");
+        vTaskDelete(NULL);
+        return;
+    }
+    platform_power_leave_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "lte_http_command_lte_ready");
+    platform_power_enter_state(PLATFORM_POWER_STATE_UPLOAD, "lte_http_command_poll");
+
+    int max_attempts = CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS;
+    if (max_attempts < 1) {
+        max_attempts = 1;
+    }
+    bool acked = false;
+    for (int attempt = 1; attempt <= max_attempts; ++attempt) {
+        ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_ROUND_START attempt=%d max_attempts=%d", attempt, max_attempts);
+        acked = lte_http_poll_commands_once();
+        ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_ROUND_DONE attempt=%d acked=%s", attempt, acked ? "true" : "false");
+        if (acked) {
+            break;
+        }
+        if (attempt < max_attempts) {
+            vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_INTERVAL_SEC * 1000));
+        }
+    }
+
+    platform_power_leave_state(
+        PLATFORM_POWER_STATE_UPLOAD,
+        acked ? "lte_http_command_ack_ok" : "lte_http_command_ack_missing");
+    platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_http_command_done");
+    vTaskDelete(NULL);
+}
+#endif
 #endif
 
 static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
@@ -1610,7 +1880,11 @@ void app_main(void)
     ESP_ERROR_CHECK(safety_model_init() ? ESP_OK : ESP_FAIL);
     ESP_LOGI(TAG, "SAFETY_MODEL_INIT_OK version=%s mock=true", safety_model_version());
 
-#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    BaseType_t lte_command_task_created =
+        xTaskCreate(lte_http_command_task, "lte_http_command_task", LTE_HTTP_COMMAND_TASK_STACK_SIZE, NULL, 5, NULL);
+    ESP_ERROR_CHECK(lte_command_task_created == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
+#elif CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
     BaseType_t lte_probe_task_created =
         xTaskCreate(lte_http_probe_task, "lte_http_probe_task", LTE_HTTP_PROBE_TASK_STACK_SIZE, NULL, 5, NULL);
     ESP_ERROR_CHECK(lte_probe_task_created == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);

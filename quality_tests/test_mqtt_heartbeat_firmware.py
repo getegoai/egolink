@@ -13,6 +13,9 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.kconfig = (
             self.repo_root / "firmware" / "mqtt_heartbeat" / "main" / "Kconfig.projbuild"
         ).read_text(encoding="utf-8")
+        self.sim7670_kconfig = (
+            self.repo_root / "firmware" / "mqtt_heartbeat" / "components" / "sim7670_gnss" / "Kconfig.projbuild"
+        ).read_text(encoding="utf-8")
         self.main_cmake = (
             self.repo_root / "firmware" / "mqtt_heartbeat" / "main" / "CMakeLists.txt"
         ).read_text(encoding="utf-8")
@@ -153,7 +156,7 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         )
         app_main_body = self.app_main.split("void app_main", 1)[1]
         probe_branch = app_main_body.split(
-            "#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED",
+            "#elif CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED",
             1,
         )[1].split("#else", 1)[0]
         self.assertIn("xTaskCreate(lte_http_probe_task", probe_branch)
@@ -161,12 +164,45 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertNotIn("start_wifi()", probe_branch)
         self.assertNotIn("xTaskCreate(command_poll_task", probe_branch)
 
+    def test_lte_http_command_loop_mode_is_opt_in_and_skips_wifi_runtime_path(self) -> None:
+        for token in [
+            "CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED",
+            "sim7670_lte_http_get_json",
+            "lte_http_command_task",
+            "build_lte_command_ack_payload",
+            "lte_http_ack_command",
+            "lte_http_poll_commands_once",
+            "#define LTE_HTTP_COMMAND_TASK_STACK_SIZE 12288",
+            '\\"transport\\":{\\"type\\":\\"lte\\"',
+            '\\"lte_http\\":{\\"phase\\":\\"command_ack\\"',
+            '\\"poll_reason_code\\":\\"%s\\"',
+            '\\"duplicate_local_execution_prevented\\":%s',
+            "LTE_HTTP_COMMAND_POLL_ROUND_START",
+            "LTE_HTTP_COMMAND_POLL_ROUND_DONE",
+            "LTE_HTTP_COMMAND_ACK_PAYLOAD_BYTES",
+            "LTE_HTTP_COMMAND_ACK_DONE",
+            "lte_http_command_done",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.app_main)
+        self.assertIn("config EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED", self.sim7670_kconfig)
+        self.assertIn("config EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS", self.sim7670_kconfig)
+        self.assertIn("config EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_INTERVAL_SEC", self.sim7670_kconfig)
+        app_main_body = self.app_main.split("void app_main", 1)[1]
+        command_branch = app_main_body.split(
+            "#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED",
+            1,
+        )[1].split("#elif", 1)[0]
+        self.assertIn("xTaskCreate(lte_http_command_task", command_branch)
+        self.assertNotIn("start_wifi()", command_branch)
+        self.assertNotIn("xTaskCreate(command_poll_task", command_branch)
+
     def test_lte_http_probe_payload_stays_compact_for_simcom_httpdata(self) -> None:
         probe_payload = self.app_main.split("static void build_lte_http_probe_payload", 1)[1].split(
             "static bool publish_lte_http_probe_once", 1
         )[0]
         compact_fragment = self.app_main.split("static void build_lte_http_probe_lte_fragment", 1)[1].split(
-            "#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED",
+            "#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && (CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED)",
             1,
         )[0]
 

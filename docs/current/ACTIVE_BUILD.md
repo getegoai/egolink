@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-002 fix5 dedicated-task HTTP probe firmware currently flashed on COM4; LTE HTTP uplink thin-slice passed USB-Free |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-002 fix5 dedicated-task HTTP probe firmware currently flashed on COM4; LTE HTTP uplink thin-slice passed USB-Free; LTE-003 command-loop image build-verified but not flashed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -248,9 +248,21 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   action elapsed `1570 ms`, LTE `reason_code=LTE_READY`, assigned IP
   `10.160.15.113`, and cell ID `180571649`. Evidence is under
   `reports/field_validation/lte002-lte-http-probe-fix5-20260628-193815/`.
+- LTE-003 command-loop firmware has been build-verified as
+  `0.1.0-lte003-command-loop` /
+  `lte003-command-loop-20260628-210214`. It enables
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED`, skips Wi-Fi as the
+  runtime data path for that image, polls the existing Message Hub command
+  queue through SIM7670G AT HTTP GET, and ACKs one harmless
+  `set_report_interval` command through SIM7670G AT HTTP POST with
+  `transport.type=lte` evidence on the ACK. The binary is
+  `firmware/mqtt_heartbeat/build_lte003_command_loop/egolink_mqtt_heartbeat.bin`.
+  This image has not been flashed or USB-Free runtime validated yet.
 - LTE command polling/ACK, reconnect behavior, long-run LTE stability, product
   battery/charging accuracy, product power behavior, and final
-  enclosure/mounting GNSS acceptance remain unverified.
+  enclosure/mounting GNSS acceptance remain unverified. LTE-003 currently has
+  build evidence only; it does not prove LTE command polling/ACK until the
+  image is flashed and the USB-Free Message Hub validator passes.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

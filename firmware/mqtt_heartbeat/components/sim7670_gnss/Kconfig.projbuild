@@ -30,17 +30,28 @@ config EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
         bounded LTE HTTP uplink slice only; command polling, ACK, reconnect,
         and long-run stability remain separate tasks.
 
+config EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    bool "Enable SIM7670G LTE HTTP command poll and ACK"
+    default n
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    help
+        Opt-in LTE-003 path. When enabled, firmware skips Wi-Fi as the runtime
+        data path, polls the Message Hub command queue through SIM7670G AT HTTP
+        GET, and ACKs one harmless command through SIM7670G AT HTTP POST.
+        This does not prove long-run reconnect behavior or product LTE
+        acceptance.
+
 config EGOLINK_SIM7670_UART_NUM
     int "SIM7670G UART number"
     default 1
     range 1 2
-    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 
 config EGOLINK_SIM7670_UART_RX_GPIO
     int "SIM7670G UART RX GPIO"
     default 17
     range 0 48
-    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
     help
         Official Waveshare ESP-IDF examples for ESP32-S3 + SIM7670X use
         ESP32-S3 RX GPIO17 connected to module TX.
@@ -49,7 +60,7 @@ config EGOLINK_SIM7670_UART_TX_GPIO
     int "SIM7670G UART TX GPIO"
     default 18
     range 0 48
-    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
     help
         Official Waveshare ESP-IDF examples for ESP32-S3 + SIM7670X use
         ESP32-S3 TX GPIO18 connected to module RX.
@@ -57,24 +68,24 @@ config EGOLINK_SIM7670_UART_TX_GPIO
 config EGOLINK_SIM7670_UART_BAUD
     int "SIM7670G UART baud"
     default 115200
-    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 
 config EGOLINK_SIM7670_AT_TIMEOUT_MS
     int "SIM7670G AT command timeout milliseconds"
     default 3000
     range 500 30000
-    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 
 config EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS
     int "SIM7670G HTTPACTION timeout milliseconds"
     default 30000
     range 5000 120000
-    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 
 config EGOLINK_SIM7670_LTE_HTTP_SET_CID_PARAM
     bool "Send AT+HTTPPARA CID before SIM7670G HTTP action"
     default n
-    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
     help
         Some SIMCom HTTP examples for older modules set HTTPPARA CID manually,
         while the A7600/A7670-style HTTP flow activates PDP during HTTPINIT and
@@ -85,7 +96,7 @@ config EGOLINK_SIM7670_LTE_HTTP_READY_WAIT_SEC
     int "SIM7670G LTE HTTP probe readiness wait seconds"
     default 120
     range 0 600
-    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
     help
         Maximum time LTE-002 waits for the SIM7670G status query to report
         LTE_READY before attempting HTTP. A value of 0 attempts immediately.
@@ -94,7 +105,7 @@ config EGOLINK_SIM7670_LTE_HTTP_READY_POLL_SEC
     int "SIM7670G LTE HTTP probe readiness poll seconds"
     default 5
     range 1 60
-    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 
 config EGOLINK_SIM7670_LTE_HTTP_PROBE_MAX_ATTEMPTS
     int "SIM7670G LTE HTTP probe max attempts"
@@ -115,6 +126,22 @@ config EGOLINK_SIM7670_LTE_HTTP_PROBE_RETRY_INTERVAL_SEC
         Delay between failed LTE HTTP probe rounds. Keeping this bounded lets
         USB-Free validation observe retries without turning LTE-002 into a
         long-run reconnect supervisor.
+
+config EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS
+    int "SIM7670G LTE HTTP command poll max attempts"
+    default 36
+    range 1 360
+    depends on EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    help
+        Maximum number of LTE command poll rounds before the LTE-003 thin
+        slice stops. This keeps the field run bounded without making LTE-003 a
+        long-run reconnect supervisor.
+
+config EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_INTERVAL_SEC
+    int "SIM7670G LTE HTTP command poll interval seconds"
+    default 5
+    range 1 120
+    depends on EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 
 config EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
     bool "Send AT+CGNSSPWR=1 before GNSS query"

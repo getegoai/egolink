@@ -204,7 +204,43 @@ This is observation only. It does not disable Wi-Fi, does not send Message Hub
 HTTP traffic through the SIM7670G LTE data path, does not prove DNS/HTTP over
 LTE, and does not replace the later LTE transport field gates.
 
-Host-side validation for this scaffold is:
+## LTE-003 SIM7670G LTE HTTP command poll and ACK
+
+LTE-003 adds a separate opt-in command-loop image:
+
+```text
+CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=y
+CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y
+CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED=y
+CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL="http://<operator-vps>:8790"
+CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN="<runtime-token>"
+CONFIG_EGOLINK_FW_VERSION="0.1.0-lte003-command-loop"
+CONFIG_EGOLINK_TEST_RUN_ID="<lte003-test-run-id>"
+```
+
+When enabled, firmware skips Wi-Fi as the runtime data path, waits for
+SIM7670G LTE readiness, polls
+`/api/v1/devices/<device_id>/commands/poll` through SIM7670G AT HTTP GET, and
+ACKs one harmless `set_report_interval` command through SIM7670G AT HTTP POST.
+The ACK includes additive `transport.type=lte`, `lte_http.phase=command_ack`,
+and poll HTTP status/reason fields so the VPS-side validator can prove the ACK
+did not use the earlier Wi-Fi Message Hub path.
+
+Host-side validation for this slice is:
+
+```powershell
+python ..\..\scripts\validate_lte_command_loop.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id ego-link-r1-connectivity-001 `
+  --test-run-id <same-test-run-id> `
+  --expected-fw-version 0.1.0-lte003-command-loop
+```
+
+This validates only the LTE HTTP command poll and ACK thin-slice. It does not
+prove reconnect recovery, long-run LTE stability, GNSS-over-LTE, battery,
+charging, or product power behavior.
+
+Host-side validation for the FW-002 location scaffold is:
 
 ```powershell
 python ..\..\scripts\validate_fw002_location_loop.py `

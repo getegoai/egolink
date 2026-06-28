@@ -201,6 +201,55 @@ The first firmware slice sends `phase=attempt` followed by `phase=result` so
 the result event can report the HTTP status of the preceding LTE POST. LTE-002
 does not implement command polling or ACK over LTE; that remains `LTE-003`.
 
+## LTE-003 LTE HTTP Command ACK
+
+LTE-003 keeps the existing `message_type=command` and `message_type=ack`
+envelopes. The command queue endpoint and ACK endpoint do not change; the
+firmware changes only the runtime transport from Wi-Fi HTTP to SIM7670G AT
+HTTP for the field-test image.
+
+The first LTE-003 acceptance command is the harmless `set_report_interval`.
+ACK payloads should include additive transport evidence:
+
+```json
+{
+  "protocol_version": "egolink.p0.v1",
+  "device_id": "ego-link-r1-connectivity-001",
+  "fw_version": "0.1.0-lte003-command-loop",
+  "seq": 3,
+  "ts": "uptime_ms:30000",
+  "message_type": "ack",
+  "cmd_id": "cmd-000013",
+  "status": "ok",
+  "message": "lte command loop acknowledged set_report_interval",
+  "test_run_id": "lte003-command-loop-20260628-001",
+  "transport": {
+    "type": "lte",
+    "rtt_ms": 123,
+    "last_error": null
+  },
+  "lte_http": {
+    "phase": "command_ack",
+    "driver": "sim7670g_uart_at_http",
+    "poll_reason_code": "LTE_HTTP_OK",
+    "poll_status_code": 200,
+    "poll_action_elapsed_ms": 123
+  },
+  "command": {
+    "last_cmd_id": "cmd-000013",
+    "last_status": "ok",
+    "last_ack_status": "ok",
+    "duplicate_local_execution_prevented": false
+  }
+}
+```
+
+If the device sees the same pending `cmd_id` again after local execution, it
+should re-send ACK without repeating the local command action and set
+`duplicate_local_execution_prevented=true`. LTE-003 does not require
+`request_location` over LTE; that can be added after the basic command ACK
+path is proven.
+
 ## LOC-002 Location Observation Event
 
 LOC-002 adds the compatible `event_type=location_observation` event. It keeps

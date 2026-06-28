@@ -19,7 +19,9 @@
 #define AT_RESPONSE_BUFFER_SIZE 512
 #define AT_READ_CHUNK_SIZE 96
 #define SIM7670_AT_BACKEND_ENABLED \
-    (CONFIG_EGOLINK_SIM7670_GNSS_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED)
+    (CONFIG_EGOLINK_SIM7670_GNSS_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED)
+#define SIM7670_LTE_HTTP_ENABLED \
+    (CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED)
 
 #if SIM7670_AT_BACKEND_ENABLED
 static const char *TAG = "sim7670_gnss";
@@ -95,7 +97,7 @@ void sim7670_lte_http_probe_result_init(sim7670_lte_http_probe_result_t *result)
 
 const char *sim7670_lte_http_backend_name(void)
 {
-#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+#if SIM7670_LTE_HTTP_ENABLED
     return "sim7670g_uart_at_http";
 #else
     return "disabled";
@@ -432,6 +434,26 @@ static bool parse_httpaction(const char *response, int *status_code, int *data_l
         *data_len = parsed_len;
     }
     return status_ok;
+}
+
+static bool copy_httpread_json_body(const char *response, char *body, size_t body_size)
+{
+    if (response == NULL || body == NULL || body_size == 0) {
+        return false;
+    }
+    body[0] = '\0';
+    const char *start = strchr(response, '{');
+    const char *end = strrchr(response, '}');
+    if (start == NULL || end == NULL || end < start) {
+        return false;
+    }
+    size_t length = (size_t)(end - start + 1);
+    if (length >= body_size) {
+        length = body_size - 1;
+    }
+    memcpy(body, start, length);
+    body[length] = '\0';
+    return length > 0;
 }
 
 static bool parse_cgpsinfo(const char *line, sim7670_gnss_report_t *report)
@@ -989,7 +1011,7 @@ bool sim7670_lte_http_post_json(
         result = &local_result;
     }
     sim7670_lte_http_probe_result_init(result);
-#if !CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+#if !SIM7670_LTE_HTTP_ENABLED
     (void)url;
     (void)bearer_token;
     (void)payload;
@@ -1152,6 +1174,164 @@ bool sim7670_lte_http_post_json(
     return false;
 #endif
 }
+
+bool sim7670_lte_http_get_json(
+    const char *url,
+    const char *bearer_token,
+    char *response_body,
+    size_t response_body_size,
+    sim7670_lte_http_probe_result_t *result)
+{
+    sim7670_lte_http_probe_result_t local_result;
+    if (result == NULL) {
+        result = &local_result;
+    }
+    sim7670_lte_http_probe_result_init(result);
+    if (response_body != NULL && response_body_size > 0) {
+        response_body[0] = '\0';
+    }
+#if !SIM7670_LTE_HTTP_ENABLED
+    (void)url;
+    (void)bearer_token;
+    (void)response_body;
+    (void)response_body_size;
+    return false;
+#else
+    result->driver_enabled = true;
+    if (url == NULL || url[0] == '\0') {
+        set_lte_http_reason(result, "LTE_HTTP_URL_MISSING");
+        return false;
+    }
+    if (response_body == NULL || response_body_size == 0) {
+        set_lte_http_reason(result, "LTE_HTTP_RESPONSE_BUFFER_MISSING");
+        return false;
+    }
+    if (sim7670_gnss_init() != ESP_OK) {
+        set_lte_http_reason(result, "LTE_HTTP_UART_INIT_FAILED");
+        return false;
+    }
+    result->uart_ready = true;
+
+    char response[AT_RESPONSE_BUFFER_SIZE];
+    if (!sim7670_send_at("AT", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_http_raw(result, "AT", response);
+        set_lte_http_reason(result, "LTE_HTTP_AT_UNREACHABLE");
+        return false;
+    }
+    result->at_ok = true;
+    update_lte_http_raw(result, "AT", response);
+
+    (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
+
+    if (!sim7670_send_at("AT+HTTPINIT", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_http_raw(result, "AT+HTTPINIT", response);
+        set_lte_http_reason(result, "LTE_HTTP_INIT_FAILED");
+        return false;
+    }
+    result->http_init_ok = true;
+
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_SET_CID_PARAM
+    if (!sim7670_send_at("AT+HTTPPARA=\"CID\",1", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_http_raw(result, "AT+HTTPPARA=CID", response);
+        set_lte_http_reason(result, "LTE_HTTP_CID_FAILED");
+        (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
+        return false;
+    }
+#endif
+
+    char command[384];
+    int written = snprintf(command, sizeof(command), "AT+HTTPPARA=\"URL\",\"%s\"", url);
+    if (written < 0 || (size_t)written >= sizeof(command)) {
+        set_lte_http_reason(result, "LTE_HTTP_URL_TOO_LONG");
+        (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
+        return false;
+    }
+    if (!sim7670_send_at(command, "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_http_raw(result, "AT+HTTPPARA=URL", response);
+        set_lte_http_reason(result, "LTE_HTTP_URL_FAILED");
+        (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
+        return false;
+    }
+    result->http_url_ok = true;
+
+    if (bearer_token != NULL && bearer_token[0] != '\0') {
+        written = snprintf(command, sizeof(command), "AT+HTTPPARA=\"USERDATA\",\"Authorization: Bearer %s\"", bearer_token);
+        if (written < 0 || (size_t)written >= sizeof(command)) {
+            set_lte_http_reason(result, "LTE_HTTP_HEADER_TOO_LONG");
+            (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
+            return false;
+        }
+        if (!sim7670_send_at_labeled(
+                command,
+                "AT+HTTPPARA=USERDATA",
+                "OK",
+                CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS,
+                response,
+                sizeof(response))) {
+            update_lte_http_raw(result, "AT+HTTPPARA=USERDATA", response);
+            set_lte_http_reason(result, "LTE_HTTP_HEADER_FAILED");
+            (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
+            return false;
+        }
+    }
+    result->http_header_ok = true;
+
+    TickType_t action_start = xTaskGetTickCount();
+    if (!sim7670_send_at(
+            "AT+HTTPACTION=0",
+            "+HTTPACTION:",
+            CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
+            response,
+            sizeof(response))) {
+        update_lte_http_raw(result, "AT+HTTPACTION=0", response);
+        set_lte_http_reason(result, "LTE_HTTP_ACTION_FAILED");
+        (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
+        return false;
+    }
+    result->http_action_ok = true;
+    result->action_elapsed_ms = (int)((xTaskGetTickCount() - action_start) * portTICK_PERIOD_MS);
+    result->action_elapsed_ms_valid = true;
+    update_lte_http_raw(result, "AT+HTTPACTION=0", response);
+
+    int status_code = 0;
+    int data_len = 0;
+    if (parse_httpaction(response, &status_code, &data_len)) {
+        result->status_code = status_code;
+        result->status_code_valid = true;
+        result->data_len = data_len;
+        result->data_len_valid = true;
+    } else {
+        set_lte_http_reason(result, "LTE_HTTP_STATUS_INVALID");
+        (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
+        return false;
+    }
+
+    bool read_ok = false;
+    if (data_len > 0 && sim7670_send_at("AT+HTTPREAD", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        result->http_read_ok = true;
+        update_lte_http_raw(result, "AT+HTTPREAD", response);
+        read_ok = copy_httpread_json_body(response, response_body, response_body_size);
+    }
+    (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
+
+    if (status_code >= 200 && status_code < 300 && read_ok) {
+        set_lte_http_reason(result, "LTE_HTTP_OK");
+        return true;
+    }
+    if (status_code >= 200 && status_code < 300) {
+        set_lte_http_reason(result, "LTE_HTTP_READ_FAILED");
+        return false;
+    }
+    if (status_code >= 400 && status_code < 500) {
+        set_lte_http_reason(result, "LTE_HTTP_CLIENT_ERROR");
+    } else if (status_code >= 500 && status_code < 600) {
+        set_lte_http_reason(result, "LTE_HTTP_SERVER_ERROR");
+    } else {
+        set_lte_http_reason(result, "LTE_HTTP_STATUS_ERROR");
+    }
+    return false;
+#endif
+}
 #else
 esp_err_t sim7670_gnss_init(void)
 {
@@ -1179,6 +1359,22 @@ bool sim7670_lte_http_post_json(
     (void)url;
     (void)bearer_token;
     (void)payload;
+    sim7670_lte_http_probe_result_init(result);
+    return false;
+}
+
+bool sim7670_lte_http_get_json(
+    const char *url,
+    const char *bearer_token,
+    char *response_body,
+    size_t response_body_size,
+    sim7670_lte_http_probe_result_t *result)
+{
+    (void)url;
+    (void)bearer_token;
+    if (response_body != NULL && response_body_size > 0) {
+        response_body[0] = '\0';
+    }
     sim7670_lte_http_probe_result_init(result);
     return false;
 }
