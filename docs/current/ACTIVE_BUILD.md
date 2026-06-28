@@ -170,7 +170,11 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   default through `CONFIG_EGOLINK_SIM7670_LTE_HTTP_SET_CID_PARAM=n`, matching
   the A7600/A7670-style SIMCom HTTP flow more closely. The binary is
   `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix3/egolink_mqtt_heartbeat.bin`.
-  The fix3 image has not been flashed or USB-Free runtime-validated yet.
+  The fix3 image was flashed on `COM4`; ESP32-S3 was detected, bootloader/app/
+  partition table were written, hashes verified, and hard reset completed.
+  Flash evidence is under
+  `reports/field_validation/lte002-lte-http-probe-fix3-20260628-170508/flash_report.md`.
+  USB-Free runtime validation has not been run yet.
 
 ## Current Known Limits
 
@@ -181,13 +185,13 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 - The USB-Free R1 validation used Wi-Fi HTTP to the Message Hub; it does not
   prove SIM7670G LTE data transport, GNSS fix, battery/charging accuracy, or
   product power behavior.
-- The currently flashed connectivity-node image is LTE-002 fix2
-  `0.1.0-lte002-lte-http-probe-fix2`. The first LTE-002 image and fix1 failed
+- The currently flashed connectivity-node image is LTE-002 fix3
+  `0.1.0-lte002-lte-http-probe-fix3`. The first LTE-002 image and fix1 failed
   USB-Free LTE HTTP validation with no fresh LTE HTTP telemetry reaching the
   VPS; fix2 also failed with no fresh LTE HTTP telemetry reaching the VPS.
-  LTE-002 fix3 is build-verified but not flashed. The prior LTE-001B fix1
-  image passed USB-Free LTE status observation, but LTE HTTP data transport
-  remains unverified.
+  Fix3 is flashed but not USB-Free runtime-validated yet. The prior LTE-001B
+  fix1 image passed USB-Free LTE status observation, but LTE HTTP data
+  transport remains unverified.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.
