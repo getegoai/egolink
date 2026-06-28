@@ -93,7 +93,15 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   built with SIM7670G GNSS and LTE-status observability enabled, flashed on
   `COM4`, and hard-reset successfully. The binary is
   `firmware/mqtt_heartbeat/build_lte001b_observe/egolink_mqtt_heartbeat.bin`.
-  USB-Free runtime validation has not run yet.
+  USB-Free runtime validation attempt 1 failed because the VPS saw new firmware
+  registration but no fresh LTE-001B status heartbeat; evidence is under
+  `reports/field_validation/lte001b-observe-20260628-130400/`.
+- LTE-001B fix1 has been build-verified as
+  `0.1.0-lte001b-observe-fix1` / `lte001b-observe-fix1-20260628-131739`.
+  It moves LTE observation fragments out of heartbeat/sensor task stack and
+  raises both task stacks to 12288 bytes. The binary is
+  `firmware/mqtt_heartbeat/build_lte001b_observe_fix1/egolink_mqtt_heartbeat.bin`.
+  The fix1 image has not been flashed or USB-Free validated yet.
 
 ## Current Known Limits
 
@@ -105,8 +113,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   prove SIM7670G LTE data transport, GNSS fix, battery/charging accuracy, or
   product power behavior.
 - The currently flashed connectivity-node image is LTE-001B
-  `0.1.0-lte001b-observe`. It has only passed build/flash so far; USB-Free LTE
-  status observation through the VPS Message Hub is pending.
+  `0.1.0-lte001b-observe`. It registered with the VPS after USB was
+  disconnected, but did not produce a fresh LTE-001B status heartbeat. Fix1 is
+  build-ready but not flashed.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.

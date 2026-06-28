@@ -132,9 +132,10 @@ class PlatformImuFirmwareTests(unittest.TestCase):
             "static void run_platform_imu_boot_capture", 1
         )[0]
         self.assertIn("static char payload[4096];", sensor_publish_body)
-        self.assertIn("#define SENSOR_TASK_STACK_SIZE 8192", self.app_main)
+        self.assertIn("#define SENSOR_TASK_STACK_SIZE 12288", self.app_main)
         self.assertIn('xTaskCreate(sensor_task, "sensor_task", SENSOR_TASK_STACK_SIZE', self.app_main)
         self.assertNotIn("\n    char payload[4096];", sensor_publish_body)
+        self.assertNotIn("char lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];", sensor_publish_body)
 
     def test_readme_keeps_real_imu_unverified(self) -> None:
         self.assertIn("platform_imu", self.readme)

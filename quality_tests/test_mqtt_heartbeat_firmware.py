@@ -92,7 +92,7 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         heartbeat_body = self.app_main.split("static void publish_heartbeat", 1)[1].split(
             "static void publish_sensor_sample", 1
         )[0]
-        self.assertIn("#define HEARTBEAT_TASK_STACK_SIZE 6144", self.app_main)
+        self.assertIn("#define HEARTBEAT_TASK_STACK_SIZE 12288", self.app_main)
         self.assertIn("static char payload[3072];", heartbeat_body)
         self.assertIn('xTaskCreate(heartbeat_task, "heartbeat_task", HEARTBEAT_TASK_STACK_SIZE', self.app_main)
         self.assertNotIn("\n    char payload[3072];", heartbeat_body)
@@ -112,11 +112,14 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             '\\"raw_command\\":\\"%s\\"',
             "static char payload[4096];",
             "#define LTE_OBSERVATION_FRAGMENT_MAX 2300",
-            "#define SENSOR_TASK_STACK_SIZE 8192",
+            "#define SENSOR_TASK_STACK_SIZE 12288",
+            "static char s_status_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];",
+            "static char s_sensor_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];",
             'xTaskCreate(sensor_task, "sensor_task", SENSOR_TASK_STACK_SIZE',
         ]:
             with self.subTest(token=token):
                 self.assertIn(token, self.app_main)
+        self.assertNotIn("char lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];", self.app_main)
 
     def test_http_mode_docs_keep_secret_and_capability_boundaries(self) -> None:
         self.assertIn("sdkconfig.vps.local", self.readme)

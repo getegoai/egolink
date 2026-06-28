@@ -32,8 +32,11 @@ yet; it is a diagnosable LTE status result such as `LTE_READY`,
 - `docs/tasks/TASK_TREE.md`
 - `docs/tasks/active/LTE-001B_USB_FREE_LTE_STATUS_OBSERVATION.md`
 - `docs/tasks/done/LTE-001B_USB_FREE_LTE_STATUS_OBSERVATION.md`
+- `firmware/mqtt_heartbeat/main/app_main.c`
 - `scripts/validate_lte_observability.py`
+- `quality_tests/test_mqtt_heartbeat_firmware.py`
 - `quality_tests/test_lte_observability_validation.py`
+- `quality_tests/test_platform_imu_firmware.py`
 
 ## Out Of Scope
 
@@ -62,6 +65,33 @@ yet; it is a diagnosable LTE status result such as `LTE_READY`,
   completed.
 - Runtime result: pending USB-Free validation after independent power and USB
   disconnected.
+
+## Validation Attempt 1
+
+- Observation ID: `lte001b-observe-20260628-130400`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte001b-observe-20260628-130400/lte_observability_report.json`
+- Result: FAIL.
+- VPS observed new firmware registration with `fw_version=0.1.0-lte001b-observe`,
+  but no fresh status/heartbeat from the new test run.
+- Last stored status remained `fw002c-resetdiag-fix3-20260628-093000`, and
+  `observability.lte.reason_code` remained `unknown`.
+- Interpretation: the new firmware reached the Message Hub register path, but
+  did not complete the LTE-enabled status heartbeat path.
+
+## Fix1 Candidate
+
+- Firmware version: `0.1.0-lte001b-observe-fix1`
+- Test run ID: `lte001b-observe-fix1-20260628-131739`
+- Build directory: `firmware/mqtt_heartbeat/build_lte001b_observe_fix1/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte001b_observe_fix1/egolink_mqtt_heartbeat.bin`
+- Change: move LTE observation fragments out of heartbeat/sensor task stack and
+  raise heartbeat/sensor task stack sizes to 12288 bytes.
+- Build result: PASS.
+- Flash/runtime result: pending operator reconnect and explicit COM4 flash
+  confirmation.
 
 ## Planned Commands
 

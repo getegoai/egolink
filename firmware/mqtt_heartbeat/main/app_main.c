@@ -32,8 +32,8 @@ static const char *TAG = "egolink_mqtt_heartbeat";
 #define MQTT_CONNECTED_BIT BIT2
 #define WIFI_MAX_RETRY 8
 #define COMMAND_POLL_TASK_STACK_SIZE 12288
-#define HEARTBEAT_TASK_STACK_SIZE 6144
-#define SENSOR_TASK_STACK_SIZE 8192
+#define HEARTBEAT_TASK_STACK_SIZE 12288
+#define SENSOR_TASK_STACK_SIZE 12288
 #if CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED
 #define LTE_OBSERVATION_FRAGMENT_MAX 2300
 #else
@@ -58,6 +58,8 @@ static portMUX_TYPE s_seq_mux = portMUX_INITIALIZER_UNLOCKED;
 static int s_last_rssi = -127;
 static const char *s_reset_reason = "unknown";
 static uint32_t s_boot_count;
+static char s_status_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
+static char s_sensor_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
 typedef struct {
@@ -870,8 +872,7 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
     int rssi = refresh_wifi_rssi();
     platform_power_snapshot_t power;
     platform_power_get_snapshot(&power);
-    char lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
-    build_lte_observation_fragment(lte_fragment, sizeof(lte_fragment));
+    build_lte_observation_fragment(s_status_lte_fragment, sizeof(s_status_lte_fragment));
     snprintf(
         buffer,
         buffer_size,
@@ -922,7 +923,7 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
         s_boot_count,
         uptime_ms(),
         rssi,
-        lte_fragment);
+        s_status_lte_fragment);
     append_test_run_id_and_close_json(buffer, buffer_size);
 }
 
@@ -937,8 +938,7 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
     platform_imu_snapshot_t imu;
     platform_imu_sample();
     platform_imu_get_snapshot(&imu);
-    char lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
-    build_lte_observation_fragment(lte_fragment, sizeof(lte_fragment));
+    build_lte_observation_fragment(s_sensor_lte_fragment, sizeof(s_sensor_lte_fragment));
     snprintf(
         buffer,
         buffer_size,
@@ -1022,7 +1022,7 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
         imu.latest.gyro_mdps_x,
         imu.latest.gyro_mdps_y,
         imu.latest.gyro_mdps_z,
-        lte_fragment);
+        s_sensor_lte_fragment);
     append_test_run_id_and_close_json(buffer, buffer_size);
 }
 
