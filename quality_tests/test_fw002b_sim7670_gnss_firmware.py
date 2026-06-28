@@ -71,7 +71,7 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
                 self.assertIn(token, combined)
 
     def test_lte_http_probe_backend_is_opt_in_and_does_not_log_token(self) -> None:
-        combined = self.header + self.source + self.app_main
+        combined = self.kconfig + self.header + self.source + self.app_main
         for token in [
             "sim7670_lte_http_probe_result_t",
             "sim7670_lte_http_post_json",
@@ -86,8 +86,12 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
             "LTE_HTTP_ACTION_FAILED",
             "LTE_HTTP_CLIENT_ERROR",
             "sim7670_send_at_labeled",
+            "config EGOLINK_SIM7670_LTE_HTTP_READY_WAIT_SEC",
+            "default 120",
             "LTE_HTTP_PROBE_ATTEMPT_DONE",
             "LTE_HTTP_PROBE_RESULT_DONE",
+            "LTE_HTTP_PROBE_READY_CHECK",
+            "LTE_HTTP_PROBE_READY_RESULT",
         ]:
             with self.subTest(token=token):
                 self.assertIn(token, combined)

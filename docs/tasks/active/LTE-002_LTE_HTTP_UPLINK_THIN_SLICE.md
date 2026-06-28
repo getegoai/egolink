@@ -116,3 +116,38 @@ context.
 - `python scripts/context_lint.py` passed.
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
   253 tests.
+
+## Validation Attempt 1
+
+- Firmware version: `0.1.0-lte002-lte-http-probe`
+- Test run ID: `lte002-lte-http-probe-20260628-141656`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte002-lte-http-probe-20260628-141656/lte_http_probe_report.json`
+- Result: FAIL.
+- Started at: `2026-06-28T06:30:38.364317+00:00`
+- Completed at: `2026-06-28T06:34:41.148585+00:00`
+- Failure: no fresh `lte_http_probe` telemetry reached the Message Hub.
+- VPS state remained on the prior LTE-001B fix1 Wi-Fi message lineage:
+  `observability.transport.type=mock_4g_over_wifi` and firmware
+  `0.1.0-lte001b-observe-fix1`.
+- Interpretation: LTE-002 did not reach the VPS over SIM7670G HTTP. The first
+  fix candidate adds a bounded LTE readiness wait before AT HTTP POST so the
+  module has time to re-register and activate PDP after independent-power boot.
+
+## Fix1 Candidate
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix1`
+- Test run ID: `lte002-lte-http-probe-fix1-20260628-143631`
+- Change: wait up to `CONFIG_EGOLINK_SIM7670_LTE_HTTP_READY_WAIT_SEC=120`
+  seconds, polling every `CONFIG_EGOLINK_SIM7670_LTE_HTTP_READY_POLL_SEC=5`
+  seconds, for SIM7670G LTE status to report `LTE_READY` before attempting
+  HTTP.
+- Build directory:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix1/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix1/egolink_mqtt_heartbeat.bin`
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
+- Flash result: not run; requires explicit operator confirmation.
+- Runtime validation: not run; requires independent power and USB disconnected.

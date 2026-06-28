@@ -124,12 +124,14 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
     def test_lte_http_probe_mode_is_opt_in_and_skips_wifi_runtime_path(self) -> None:
         for token in [
             "CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED",
+            "wait_for_lte_ready_for_http_probe",
             "publish_lte_http_probe_once",
             "build_lte_http_probe_payload",
             '\\"event_type\\":\\"lte_http_probe\\"',
             '\\"transport\\":{\\"type\\":\\"lte\\"',
             '\\"lte_http\\":{\\"phase\\":\\"%s\\"',
             "sim7670_lte_http_post_json",
+            "LTE_HTTP_PROBE_READY_CHECK",
             "LTE_HTTP_PROBE_ATTEMPT_DONE",
             "LTE_HTTP_PROBE_RESULT_DONE",
             "lte_http_probe_done",

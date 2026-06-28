@@ -71,6 +71,21 @@ config EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS
     range 5000 120000
     depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
 
+config EGOLINK_SIM7670_LTE_HTTP_READY_WAIT_SEC
+    int "SIM7670G LTE HTTP probe readiness wait seconds"
+    default 120
+    range 0 600
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    help
+        Maximum time LTE-002 waits for the SIM7670G status query to report
+        LTE_READY before attempting HTTP. A value of 0 attempts immediately.
+
+config EGOLINK_SIM7670_LTE_HTTP_READY_POLL_SEC
+    int "SIM7670G LTE HTTP probe readiness poll seconds"
+    default 5
+    range 1 60
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+
 config EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
     bool "Send AT+CGNSSPWR=1 before GNSS query"
     default y

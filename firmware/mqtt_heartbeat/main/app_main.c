@@ -869,6 +869,39 @@ static void build_lte_observation_fragment(char *buffer, size_t buffer_size)
 }
 
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+static bool wait_for_lte_ready_for_http_probe(void)
+{
+    int waited_sec = 0;
+    sim7670_lte_report_t lte;
+    while (true) {
+        sim7670_lte_report_init(&lte);
+        bool query_ok = sim7670_lte_query_status(&lte);
+        ESP_LOGI(
+            TAG,
+            "LTE_HTTP_PROBE_READY_CHECK query_ok=%s reason=%s registration=%s pdp=%s waited_sec=%d",
+            query_ok ? "true" : "false",
+            lte.reason_code,
+            lte.registration_state,
+            lte.pdp_state,
+            waited_sec);
+        if (query_ok && strcmp(lte.reason_code, "LTE_READY") == 0) {
+            return true;
+        }
+        if (waited_sec >= CONFIG_EGOLINK_SIM7670_LTE_HTTP_READY_WAIT_SEC) {
+            return false;
+        }
+        int delay_sec = CONFIG_EGOLINK_SIM7670_LTE_HTTP_READY_POLL_SEC;
+        if (waited_sec + delay_sec > CONFIG_EGOLINK_SIM7670_LTE_HTTP_READY_WAIT_SEC) {
+            delay_sec = CONFIG_EGOLINK_SIM7670_LTE_HTTP_READY_WAIT_SEC - waited_sec;
+        }
+        if (delay_sec <= 0) {
+            return false;
+        }
+        vTaskDelay(pdMS_TO_TICKS(delay_sec * 1000));
+        waited_sec += delay_sec;
+    }
+}
+
 static void build_lte_http_probe_payload(
     char *buffer,
     size_t buffer_size,
@@ -990,6 +1023,9 @@ static bool publish_lte_http_probe_once(void)
     char url[256];
     sim7670_lte_http_probe_result_t attempt_result;
     sim7670_lte_http_probe_result_t result_post_result;
+
+    bool lte_ready = wait_for_lte_ready_for_http_probe();
+    ESP_LOGI(TAG, "LTE_HTTP_PROBE_READY_RESULT ready=%s", lte_ready ? "true" : "false");
 
     snprintf(path, sizeof(path), "/api/v1/devices/%s/telemetry", CONFIG_EGOLINK_DEVICE_ID);
     build_message_hub_url(url, sizeof(url), path);
