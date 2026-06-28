@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-002 fix3 HTTP probe firmware currently flashed on COM4; fix4 compact-payload image is build-verified and awaits explicit flash confirmation |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-002 fix4 compact-payload HTTP probe firmware currently flashed on COM4; USB-Free runtime validation pending |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -200,7 +200,11 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   preserving `transport.type=lte`, HTTP status/reason, and LTE/cell readiness
   context. The binary is
   `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix4/egolink_mqtt_heartbeat.bin`.
-  The fix4 image has not been flashed or USB-Free validated yet.
+  The fix4 image was flashed on `COM4`; ESP32-S3 was detected, bootloader/app/
+  partition table were written, hashes verified, and hard reset completed.
+  Flash evidence is under
+  `reports/field_validation/lte002-lte-http-probe-fix4-20260628-184644/flash_report.md`.
+  USB-Free runtime validation has not been run yet.
 
 ## Current Known Limits
 
@@ -211,15 +215,15 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 - The USB-Free R1 validation used Wi-Fi HTTP to the Message Hub; it does not
   prove SIM7670G LTE data transport, GNSS fix, battery/charging accuracy, or
   product power behavior.
-- The currently flashed connectivity-node image is LTE-002 fix3
-  `0.1.0-lte002-lte-http-probe-fix3`. The first LTE-002 image and fix1 failed
+- The currently flashed connectivity-node image is LTE-002 fix4
+  `0.1.0-lte002-lte-http-probe-fix4`. The first LTE-002 image and fix1 failed
   USB-Free LTE HTTP validation with no fresh LTE HTTP telemetry reaching the
   VPS; fix2 also failed with no fresh LTE HTTP telemetry reaching the VPS.
   Fix3 also failed with no fresh LTE HTTP telemetry reaching the VPS. The prior
   LTE-001B fix1 image passed USB-Free LTE status observation, but LTE HTTP data
   transport remains unverified. USB-attached AT diagnosis indicates compact
   LTE HTTP payloads can reach the VPS, while larger POST bodies trigger
-  SIM7670G `HTTPACTION` 706; fix4 is build-verified but not yet flashed.
+  SIM7670G `HTTPACTION` 706; fix4 is flashed and pending USB-Free validation.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.
