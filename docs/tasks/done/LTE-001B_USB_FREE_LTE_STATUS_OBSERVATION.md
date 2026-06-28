@@ -1,7 +1,7 @@
 ---
 title: USB-Free LTE Status Observation
 task_id: LTE-001B
-status: active
+status: done
 last_verified: 2026-06-28
 ---
 
@@ -29,6 +29,7 @@ yet; it is a diagnosable LTE status result such as `LTE_READY`,
 
 - `docs/current/STATUS.md`
 - `docs/current/ACTIVE_BUILD.md`
+- `docs/hardware/BOARD_MATRIX.md`
 - `docs/tasks/TASK_TREE.md`
 - `docs/tasks/active/LTE-001B_USB_FREE_LTE_STATUS_OBSERVATION.md`
 - `docs/tasks/done/LTE-001B_USB_FREE_LTE_STATUS_OBSERVATION.md`
@@ -92,8 +93,27 @@ yet; it is a diagnosable LTE status result such as `LTE_READY`,
 - Build result: PASS.
 - Flash result: PASS on `COM4`; ESP32-S3 detected, image written, hashes
   verified, hard reset completed.
-- Runtime result: pending USB-Free validation after independent power and USB
-  disconnected.
+- Runtime result: PASS after independent power and USB disconnected.
+
+## Validation Attempt 2
+
+- Observation ID: `lte001b-observe-fix1-20260628-131739`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte001b-observe-fix1-20260628-131739/lte_observability_report.json`
+- Result: PASS.
+- Started at: `2026-06-28T05:57:00.901907+00:00`
+- Completed at: `2026-06-28T05:57:07.298088+00:00`
+- Firmware version: `0.1.0-lte001b-observe-fix1`
+- Test run ID: `lte001b-observe-fix1-20260628-131739`
+- LTE reason: `LTE_READY`
+- LTE driver: `sim7670g_uart_at`
+- SIM state: `READY`
+- Registration state: `registered_home`
+- APN/PDP: `configured` / `active`
+- Assigned IP: observed as present in the validation report.
+- RAT/cell: `LTE` / `180571649`
+- Signal: RSSI `-90`, RSRP `-97`, RSRQ `-7`, SINR `28`.
 
 ## Planned Commands
 
@@ -137,6 +157,8 @@ python scripts\validate_lte_observability.py `
 - `/api/state` exposes `observability.lte`.
 - `observability.lte.reason_code` is one of the known `LTE_*` reason codes.
 - Evidence is written under ignored `reports/field_validation/`.
+
+Result: accepted for LTE status observability.
 
 ## Boundary
 

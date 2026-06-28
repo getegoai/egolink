@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-001B fix1 status observability firmware flashed; USB-Free LTE status validation pending |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-001B fix1 status observability firmware flashed; USB-Free LTE status validation passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -101,8 +101,12 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   It moves LTE observation fragments out of heartbeat/sensor task stack and
   raises both task stacks to 12288 bytes. The binary is
   `firmware/mqtt_heartbeat/build_lte001b_observe_fix1/egolink_mqtt_heartbeat.bin`.
-  The fix1 image was flashed on `COM4` and hard-reset successfully. USB-Free
-  runtime validation has not run for fix1 yet.
+  The fix1 image was flashed on `COM4`, hard-reset successfully, and passed
+  USB-Free LTE status observability validation through the VPS Message Hub:
+  `reason_code=LTE_READY`, `registration_state=registered_home`,
+  `pdp_state=active`, assigned IP present, RAT `LTE`, cell ID `180571649`, RSSI
+  `-90`, RSRP `-97`, RSRQ `-7`, SINR `28`. Evidence is under
+  `reports/field_validation/lte001b-observe-fix1-20260628-131739/`.
 
 ## Current Known Limits
 
@@ -114,8 +118,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   prove SIM7670G LTE data transport, GNSS fix, battery/charging accuracy, or
   product power behavior.
 - The currently flashed connectivity-node image is LTE-001B fix1
-  `0.1.0-lte001b-observe-fix1`. It has passed build/flash only; USB-Free LTE
-  status observation through the VPS Message Hub is pending.
+  `0.1.0-lte001b-observe-fix1`. It has passed USB-Free LTE status observation
+  through the VPS Message Hub, but HTTP data transport still runs over Wi-Fi in
+  this firmware lineage.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.

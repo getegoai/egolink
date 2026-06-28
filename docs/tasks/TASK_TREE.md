@@ -314,11 +314,19 @@ No task packet with `status: active` is currently present under
     run, `transport.type=lte`, DNS over LTE, HTTP over LTE, or LTE command loop
     is claimed by this task.
 - `LTE-001B USB-Free LTE Status Observation`
-  - Path: `docs/tasks/active/LTE-001B_USB_FREE_LTE_STATUS_OBSERVATION.md`
-  - Status: active.
+  - Path: `docs/tasks/done/LTE-001B_USB_FREE_LTE_STATUS_OBSERVATION.md`
+  - Status: completed.
   - Goal: flash the LTE-status observability image and validate that a real
     USB-disconnected device reports `observability.lte` with a known `LTE_*`
     reason code through the VPS Message Hub.
+  - Evidence: after the original `0.1.0-lte001b-observe` image registered but
+    failed to produce a fresh status heartbeat, fix1 moved LTE observation
+    fragments out of heartbeat/sensor task stack and raised both task stacks to
+    12288 bytes. The fix1 image `0.1.0-lte001b-observe-fix1` passed USB-Free
+    Message Hub validation with `reason_code=LTE_READY`,
+    `registration_state=registered_home`, `pdp_state=active`, assigned IP
+    present, RAT `LTE`, and cell/signal metrics under
+    `reports/field_validation/lte001b-observe-fix1-20260628-131739/`.
   - Boundary: LTE status observation only. No LTE HTTP transport,
     `transport.type=lte`, Wi-Fi-disable run, LTE command loop, battery,
     charging, power, or long-run LTE stability claim belongs to this task.
