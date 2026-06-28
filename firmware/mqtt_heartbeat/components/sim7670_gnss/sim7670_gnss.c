@@ -1028,12 +1028,14 @@ bool sim7670_lte_http_post_json(
     }
     result->http_init_ok = true;
 
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_SET_CID_PARAM
     if (!sim7670_send_at("AT+HTTPPARA=\"CID\",1", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
         update_lte_http_raw(result, "AT+HTTPPARA=CID", response);
         set_lte_http_reason(result, "LTE_HTTP_CID_FAILED");
         (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
         return false;
     }
+#endif
 
     char command[384];
     int written = snprintf(command, sizeof(command), "AT+HTTPPARA=\"URL\",\"%s\"", url);

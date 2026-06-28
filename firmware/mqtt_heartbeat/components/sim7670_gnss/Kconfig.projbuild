@@ -71,6 +71,16 @@ config EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS
     range 5000 120000
     depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
 
+config EGOLINK_SIM7670_LTE_HTTP_SET_CID_PARAM
+    bool "Send AT+HTTPPARA CID before SIM7670G HTTP action"
+    default n
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    help
+        Some SIMCom HTTP examples for older modules set HTTPPARA CID manually,
+        while the A7600/A7670-style HTTP flow activates PDP during HTTPINIT and
+        does not require it. Keep this disabled for the SIM7670G thin slice
+        unless hardware evidence shows this module accepts and needs it.
+
 config EGOLINK_SIM7670_LTE_HTTP_READY_WAIT_SEC
     int "SIM7670G LTE HTTP probe readiness wait seconds"
     default 120

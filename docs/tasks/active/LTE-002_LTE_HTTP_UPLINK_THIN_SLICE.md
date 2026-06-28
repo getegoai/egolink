@@ -196,4 +196,42 @@ context.
   table written, hashes verified, hard reset completed.
 - Flash evidence:
   `reports/field_validation/lte002-lte-http-probe-fix2-20260628-161844/flash_report.md`
+- Runtime validation: FAIL as recorded in Validation Attempt 3.
+
+## Validation Attempt 3
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix2`
+- Test run ID: `lte002-lte-http-probe-fix2-20260628-161844`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix2-20260628-161844/lte_http_probe_report.json`
+- Result: FAIL.
+- Started at: `2026-06-28T08:55:08.460247+00:00`
+- Completed at: `2026-06-28T09:02:11.118918+00:00`
+- Failure: no fresh `lte_http_probe` telemetry reached the Message Hub.
+- VPS state remained on the prior LTE-001B fix1 Wi-Fi message lineage:
+  `observability.transport.type=mock_4g_over_wifi` and firmware
+  `0.1.0-lte001b-observe-fix1`.
+- Interpretation: bounded retries did not make any LTE HTTP attempt visible to
+  the VPS. The next likely blocker is an AT HTTP command sequence issue before
+  `AT+HTTPACTION=1`, so fix3 removes the default `HTTPPARA CID` setup that is
+  not part of the A7600/A7670-style SIMCom HTTP POST flow.
+
+## Fix3 Candidate
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix3`
+- Test run ID: `lte002-lte-http-probe-fix3-20260628-170508`
+- Change: keep Wi-Fi disabled and keep the fix2 bounded retry behavior, but
+  default `CONFIG_EGOLINK_SIM7670_LTE_HTTP_SET_CID_PARAM=n` so LTE-002 skips
+  `AT+HTTPPARA="CID",1` unless explicitly enabled by hardware evidence.
+- Build directory:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix3/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix3/egolink_mqtt_heartbeat.bin`
+- Focused tests:
+  `python -m unittest quality_tests.test_fw002b_sim7670_gnss_firmware quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_lte_http_probe_validation -v`
+  passed with 19 tests.
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
+- Flash result: not run; requires explicit operator confirmation.
 - Runtime validation: not run; requires independent power and USB disconnected.

@@ -78,6 +78,7 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
             "sim7670_lte_http_backend_name",
             "AT+HTTPINIT",
             "AT+HTTPPARA=USERDATA",
+            "CONFIG_EGOLINK_SIM7670_LTE_HTTP_SET_CID_PARAM",
             "AT+HTTPDATA",
             "AT+HTTPACTION=1",
             "AT+HTTPREAD",
@@ -103,6 +104,10 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
         ]:
             with self.subTest(token=token):
                 self.assertIn(token, combined)
+        cid_config = self.kconfig.split("config EGOLINK_SIM7670_LTE_HTTP_SET_CID_PARAM", 1)[1]
+        self.assertIn("default n", cid_config.split("config ", 1)[0])
+        cid_block = self.source.split("#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_SET_CID_PARAM", 1)[1]
+        self.assertIn('AT+HTTPPARA=\\"CID\\",1', cid_block)
         self.assertNotIn("command=AT+HTTPPARA=\\\"USERDATA\\\"", self.source)
 
     def test_component_sends_bounded_at_queries_and_parses_common_gnss_lines(self) -> None:
