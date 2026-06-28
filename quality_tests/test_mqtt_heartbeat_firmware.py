@@ -126,12 +126,16 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED",
             "wait_for_lte_ready_for_http_probe",
             "publish_lte_http_probe_once",
+            "publish_lte_http_probe_with_retries",
             "build_lte_http_probe_payload",
             '\\"event_type\\":\\"lte_http_probe\\"',
             '\\"transport\\":{\\"type\\":\\"lte\\"',
             '\\"lte_http\\":{\\"phase\\":\\"%s\\"',
             "sim7670_lte_http_post_json",
             "LTE_HTTP_PROBE_READY_CHECK",
+            "LTE_HTTP_PROBE_ROUND_START",
+            "LTE_HTTP_PROBE_ROUND_DONE",
+            "LTE_HTTP_PROBE_RETRY_DELAY",
             "LTE_HTTP_PROBE_ATTEMPT_DONE",
             "LTE_HTTP_PROBE_RESULT_DONE",
             "lte_http_probe_done",
@@ -143,7 +147,7 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED",
             1,
         )[1].split("#else", 1)[0]
-        self.assertIn("publish_lte_http_probe_once", probe_branch)
+        self.assertIn("publish_lte_http_probe_with_retries", probe_branch)
         self.assertNotIn("start_wifi()", probe_branch)
         self.assertNotIn("xTaskCreate(command_poll_task", probe_branch)
 

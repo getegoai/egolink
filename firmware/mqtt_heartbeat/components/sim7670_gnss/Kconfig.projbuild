@@ -27,7 +27,7 @@ config EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
         Opt-in LTE-002 path. When enabled, firmware skips Wi-Fi as the runtime
         data path and uses SIM7670G AT HTTP commands to POST a bounded
         lte_http_probe event to the Message Hub telemetry endpoint. This is a
-        one-shot LTE HTTP uplink slice only; command polling, ACK, reconnect,
+        bounded LTE HTTP uplink slice only; command polling, ACK, reconnect,
         and long-run stability remain separate tasks.
 
 config EGOLINK_SIM7670_UART_NUM
@@ -85,6 +85,26 @@ config EGOLINK_SIM7670_LTE_HTTP_READY_POLL_SEC
     default 5
     range 1 60
     depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+
+config EGOLINK_SIM7670_LTE_HTTP_PROBE_MAX_ATTEMPTS
+    int "SIM7670G LTE HTTP probe max attempts"
+    default 6
+    range 1 60
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    help
+        Maximum number of LTE HTTP probe rounds to attempt before the LTE-002
+        slice gives up. Each round refreshes LTE readiness and then posts the
+        attempt/result telemetry pair.
+
+config EGOLINK_SIM7670_LTE_HTTP_PROBE_RETRY_INTERVAL_SEC
+    int "SIM7670G LTE HTTP probe retry interval seconds"
+    default 20
+    range 0 600
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    help
+        Delay between failed LTE HTTP probe rounds. Keeping this bounded lets
+        USB-Free validation observe retries without turning LTE-002 into a
+        long-run reconnect supervisor.
 
 config EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
     bool "Send AT+CGNSSPWR=1 before GNSS query"

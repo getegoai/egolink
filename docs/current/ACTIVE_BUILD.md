@@ -135,7 +135,23 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   partition table were written, hashes verified, and hard reset completed.
   Flash evidence is under
   `reports/field_validation/lte002-lte-http-probe-fix1-20260628-143631/flash_report.md`.
-  USB-Free runtime validation has not been run yet.
+  USB-Free runtime validation attempt 2 failed as recorded below.
+- LTE-002 fix1 validation attempt 2 failed after the operator connected
+  independent power and disconnected USB. `scripts/validate_lte_http_probe.py`
+  observed no fresh `lte_http_probe` telemetry through the VPS Message Hub
+  between `2026-06-28T08:12:31Z` and `2026-06-28T08:16:34Z`; `/api/state`
+  remained on the prior LTE-001B fix1 Wi-Fi message lineage with
+  `observability.transport.type=mock_4g_over_wifi`. Evidence is under
+  `reports/field_validation/lte002-lte-http-probe-fix1-20260628-143631/`.
+- LTE-002 fix2 has been build-verified as
+  `0.1.0-lte002-lte-http-probe-fix2` /
+  `lte002-lte-http-probe-fix2-20260628-161844`. It keeps Wi-Fi disabled for the
+  LTE HTTP probe path and changes the probe from one round to a bounded retry:
+  up to `CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_MAX_ATTEMPTS=6`, waiting
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_RETRY_INTERVAL_SEC=20` seconds
+  between failed rounds. The binary is
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix2/egolink_mqtt_heartbeat.bin`.
+  The fix2 image has not been flashed or USB-Free runtime-validated yet.
 
 ## Current Known Limits
 
@@ -149,9 +165,10 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 - The currently flashed connectivity-node image is LTE-002 fix1
   `0.1.0-lte002-lte-http-probe-fix1`. The first LTE-002 image failed USB-Free
   LTE HTTP validation with no fresh LTE HTTP telemetry reaching the VPS; fix1
-  is flashed but not USB-Free runtime-validated yet. The prior LTE-001B fix1
-  image passed USB-Free LTE status observation, but LTE HTTP data transport
-  remains unverified.
+  also failed with no fresh LTE HTTP telemetry reaching the VPS. LTE-002 fix2
+  is build-verified but not flashed. The prior LTE-001B fix1 image passed
+  USB-Free LTE status observation, but LTE HTTP data transport remains
+  unverified.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.

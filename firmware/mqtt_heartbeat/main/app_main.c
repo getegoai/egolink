@@ -1056,6 +1056,40 @@ static bool publish_lte_http_probe_once(void)
         result_post_result.status_code);
     return attempt_ok && result_ok;
 }
+
+static bool publish_lte_http_probe_with_retries(void)
+{
+    int max_attempts = CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_MAX_ATTEMPTS;
+    if (max_attempts < 1) {
+        max_attempts = 1;
+    }
+
+    for (int attempt = 1; attempt <= max_attempts; ++attempt) {
+        ESP_LOGI(
+            TAG,
+            "LTE_HTTP_PROBE_ROUND_START attempt=%d max_attempts=%d",
+            attempt,
+            max_attempts);
+        bool ok = publish_lte_http_probe_once();
+        ESP_LOGI(
+            TAG,
+            "LTE_HTTP_PROBE_ROUND_DONE attempt=%d ok=%s",
+            attempt,
+            ok ? "true" : "false");
+        if (ok) {
+            return true;
+        }
+        if (attempt < max_attempts && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_RETRY_INTERVAL_SEC > 0) {
+            ESP_LOGI(
+                TAG,
+                "LTE_HTTP_PROBE_RETRY_DELAY attempt=%d delay_sec=%d",
+                attempt,
+                CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_RETRY_INTERVAL_SEC);
+            vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_RETRY_INTERVAL_SEC * 1000));
+        }
+    }
+    return false;
+}
 #endif
 
 static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
@@ -1514,7 +1548,7 @@ void app_main(void)
 
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
     platform_power_enter_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "lte_http_probe");
-    bool lte_probe_ok = publish_lte_http_probe_once();
+    bool lte_probe_ok = publish_lte_http_probe_with_retries();
     platform_power_leave_state(
         PLATFORM_POWER_STATE_NETWORK_ATTACH,
         lte_probe_ok ? "lte_http_probe_ok" : "lte_http_probe_fail");
