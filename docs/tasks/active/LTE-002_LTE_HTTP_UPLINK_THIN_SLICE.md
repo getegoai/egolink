@@ -237,4 +237,23 @@ context.
   table written, hashes verified, hard reset completed.
 - Flash evidence:
   `reports/field_validation/lte002-lte-http-probe-fix3-20260628-170508/flash_report.md`
-- Runtime validation: not run; requires independent power and USB disconnected.
+- Runtime validation: FAIL as recorded in Validation Attempt 4.
+
+## Validation Attempt 4
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix3`
+- Test run ID: `lte002-lte-http-probe-fix3-20260628-170508`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix3-20260628-170508/lte_http_probe_report.json`
+- Result: FAIL.
+- Started at: `2026-06-28T09:51:18.488421+00:00`
+- Completed at: `2026-06-28T09:58:22.863467+00:00`
+- Failure: no fresh `lte_http_probe` telemetry reached the Message Hub.
+- VPS state remained on the prior LTE-001B fix1 Wi-Fi message lineage:
+  `observability.transport.type=mock_4g_over_wifi` and firmware
+  `0.1.0-lte001b-observe-fix1`.
+- Interpretation: removing the default `HTTPPARA CID` setup did not make any
+  LTE HTTP attempt visible to the VPS. Further LTE-002 progress needs
+  USB-attached bounded SIM7670G AT/serial diagnosis of the HTTP command path;
+  another blind USB-Free retry would not explain the failure.

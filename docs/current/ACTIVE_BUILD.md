@@ -174,7 +174,14 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   partition table were written, hashes verified, and hard reset completed.
   Flash evidence is under
   `reports/field_validation/lte002-lte-http-probe-fix3-20260628-170508/flash_report.md`.
-  USB-Free runtime validation has not been run yet.
+  USB-Free runtime validation attempt 4 failed as recorded below.
+- LTE-002 fix3 validation attempt 4 failed after the operator connected
+  independent power and disconnected USB. `scripts/validate_lte_http_probe.py`
+  observed no fresh `lte_http_probe` telemetry through the VPS Message Hub
+  between `2026-06-28T09:51:18Z` and `2026-06-28T09:58:22Z`; `/api/state`
+  remained on the prior LTE-001B fix1 Wi-Fi message lineage with
+  `observability.transport.type=mock_4g_over_wifi`. Evidence is under
+  `reports/field_validation/lte002-lte-http-probe-fix3-20260628-170508/`.
 
 ## Current Known Limits
 
@@ -189,9 +196,11 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `0.1.0-lte002-lte-http-probe-fix3`. The first LTE-002 image and fix1 failed
   USB-Free LTE HTTP validation with no fresh LTE HTTP telemetry reaching the
   VPS; fix2 also failed with no fresh LTE HTTP telemetry reaching the VPS.
-  Fix3 is flashed but not USB-Free runtime-validated yet. The prior LTE-001B
-  fix1 image passed USB-Free LTE status observation, but LTE HTTP data
-  transport remains unverified.
+  Fix3 also failed with no fresh LTE HTTP telemetry reaching the VPS. The prior
+  LTE-001B fix1 image passed USB-Free LTE status observation, but LTE HTTP data
+  transport remains unverified. The next useful step is USB-attached bounded
+  SIM7670G AT/serial diagnosis of the HTTP command path, not another blind
+  USB-Free retry.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.
