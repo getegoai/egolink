@@ -106,7 +106,10 @@ runtime.
   `firmware/mqtt_heartbeat/build_lte003_command_loop/egolink_mqtt_heartbeat.bin`
 - Build result: PASS through
   `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670LteHttpCommandLoop`.
-- Flash result: not run. Requires explicit operator confirmation for COM port.
+- Flash result: PASS on `COM4`; ESP32-S3 detected, bootloader/app/partition
+  table written, hashes verified, and hard reset completed.
+- Flash evidence:
+  `reports/field_validation/lte003-command-loop-20260628-210214/flash_report.md`
 - Runtime validation: not run. Requires independent power and USB disconnected
   after flashing.
 

@@ -82,10 +82,12 @@ motion candidate
   - Goal: prove the existing Message Hub command queue can be polled over
     SIM7670G LTE HTTP and that one harmless `set_report_interval` command can
     be ACKed back over LTE with USB disconnected at runtime.
-  - Current evidence: build-verified as `0.1.0-lte003-command-loop` /
+  - Current evidence: build-verified and flashed as `0.1.0-lte003-command-loop` /
     `lte003-command-loop-20260628-210214`; binary at
     `firmware/mqtt_heartbeat/build_lte003_command_loop/egolink_mqtt_heartbeat.bin`.
-    Not flashed or USB-Free runtime validated yet.
+    Flash evidence:
+    `reports/field_validation/lte003-command-loop-20260628-210214/flash_report.md`.
+    USB-Free runtime validation has not run yet.
 
 ## USB-Free VPS Walking Skeleton Line
 
