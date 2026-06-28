@@ -60,6 +60,7 @@ static const char *s_reset_reason = "unknown";
 static uint32_t s_boot_count;
 static char s_status_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_sensor_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
+static char s_lte_http_probe_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
 typedef struct {
@@ -867,6 +868,160 @@ static void build_lte_observation_fragment(char *buffer, size_t buffer_size)
 #endif
 }
 
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+static void build_lte_http_probe_payload(
+    char *buffer,
+    size_t buffer_size,
+    uint32_t seq,
+    const char *phase,
+    const sim7670_lte_http_probe_result_t *probe,
+    bool include_result)
+{
+    sim7670_lte_http_probe_result_t fallback;
+    if (probe == NULL) {
+        sim7670_lte_http_probe_result_init(&fallback);
+        probe = &fallback;
+    }
+
+    char status_code[16];
+    char data_len[16];
+    char action_elapsed_ms[16];
+    char rtt_ms[16];
+    char reason_code[SIM7670_LTE_HTTP_REASON_MAX * 2];
+    char raw_command[SIM7670_LTE_HTTP_RAW_COMMAND_MAX * 2];
+    char raw_response[SIM7670_LTE_HTTP_RAW_RESPONSE_MAX * 2];
+    char last_error_json[SIM7670_LTE_HTTP_REASON_MAX * 2 + 4];
+    const char *effective_phase = phase ? phase : "unknown";
+    const char *effective_reason = include_result ? probe->reason_code : "LTE_HTTP_ATTEMPTING";
+    bool result_ok = include_result && strcmp(effective_reason, "LTE_HTTP_OK") == 0;
+
+    json_int_or_null(status_code, sizeof(status_code), include_result && probe->status_code_valid, probe->status_code);
+    json_int_or_null(data_len, sizeof(data_len), include_result && probe->data_len_valid, probe->data_len);
+    json_int_or_null(
+        action_elapsed_ms,
+        sizeof(action_elapsed_ms),
+        include_result && probe->action_elapsed_ms_valid,
+        probe->action_elapsed_ms);
+    json_int_or_null(rtt_ms, sizeof(rtt_ms), include_result && probe->action_elapsed_ms_valid, probe->action_elapsed_ms);
+    json_escape_summary(reason_code, sizeof(reason_code), effective_reason);
+    json_escape_summary(raw_command, sizeof(raw_command), include_result ? probe->raw_command : "");
+    json_escape_summary(raw_response, sizeof(raw_response), include_result ? probe->raw_response : "");
+    if (include_result && !result_ok) {
+        snprintf(last_error_json, sizeof(last_error_json), "\"%s\"", reason_code);
+    } else {
+        snprintf(last_error_json, sizeof(last_error_json), "null");
+    }
+
+    build_lte_observation_fragment(s_lte_http_probe_lte_fragment, sizeof(s_lte_http_probe_lte_fragment));
+    snprintf(
+        buffer,
+        buffer_size,
+        "{\"protocol_version\":\"egolink.p0.v1\","
+        "\"device_id\":\"%s\","
+        "\"ts\":\"uptime_ms:%" PRId64 "\","
+        "\"seq\":%" PRIu32 ","
+        "\"message_type\":\"event\","
+        "\"event_type\":\"lte_http_probe\","
+        "\"priority\":\"normal\","
+        "\"fw_version\":\"%s\","
+        "\"source\":\"sim7670g_lte_http_probe\","
+        "\"source_status\":\"%s\","
+        "\"reset_reason\":\"%s\","
+        "\"boot_count\":%" PRIu32 ","
+        "\"boot_uptime_ms\":%" PRId64 ","
+        "\"transport\":{\"type\":\"lte\","
+        "\"rtt_ms\":%s,"
+        "\"last_error\":%s},"
+        "\"lte_http\":{\"phase\":\"%s\","
+        "\"driver\":\"%s\","
+        "\"reason_code\":\"%s\","
+        "\"driver_enabled\":%s,"
+        "\"uart_ready\":%s,"
+        "\"at_ok\":%s,"
+        "\"http_init_ok\":%s,"
+        "\"http_url_ok\":%s,"
+        "\"http_content_ok\":%s,"
+        "\"http_header_ok\":%s,"
+        "\"http_data_ok\":%s,"
+        "\"http_action_ok\":%s,"
+        "\"http_read_ok\":%s,"
+        "\"status_code\":%s,"
+        "\"data_len\":%s,"
+        "\"action_elapsed_ms\":%s,"
+        "\"raw_command\":\"%s\","
+        "\"raw_response\":\"%s\"}"
+        "%s",
+        CONFIG_EGOLINK_DEVICE_ID,
+        uptime_ms(),
+        seq,
+        CONFIG_EGOLINK_FW_VERSION,
+        include_result ? (result_ok ? "observed" : "unverified") : "observed",
+        s_reset_reason,
+        s_boot_count,
+        uptime_ms(),
+        rtt_ms,
+        last_error_json,
+        effective_phase,
+        sim7670_lte_http_backend_name(),
+        reason_code,
+        json_bool(include_result && probe->driver_enabled),
+        json_bool(include_result && probe->uart_ready),
+        json_bool(include_result && probe->at_ok),
+        json_bool(include_result && probe->http_init_ok),
+        json_bool(include_result && probe->http_url_ok),
+        json_bool(include_result && probe->http_content_ok),
+        json_bool(include_result && probe->http_header_ok),
+        json_bool(include_result && probe->http_data_ok),
+        json_bool(include_result && probe->http_action_ok),
+        json_bool(include_result && probe->http_read_ok),
+        status_code,
+        data_len,
+        action_elapsed_ms,
+        raw_command,
+        raw_response,
+        s_lte_http_probe_lte_fragment);
+    append_test_run_id_and_close_json(buffer, buffer_size);
+}
+
+static bool publish_lte_http_probe_once(void)
+{
+    static char payload[4096];
+    char path[160];
+    char url[256];
+    sim7670_lte_http_probe_result_t attempt_result;
+    sim7670_lte_http_probe_result_t result_post_result;
+
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/telemetry", CONFIG_EGOLINK_DEVICE_ID);
+    build_message_hub_url(url, sizeof(url), path);
+
+    uint32_t attempt_seq = next_seq();
+    build_lte_http_probe_payload(payload, sizeof(payload), attempt_seq, "attempt", NULL, false);
+    bool attempt_ok =
+        sim7670_lte_http_post_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, payload, &attempt_result);
+    ESP_LOGI(
+        TAG,
+        "LTE_HTTP_PROBE_ATTEMPT_DONE seq=%" PRIu32 " ok=%s reason=%s status=%d",
+        attempt_seq,
+        attempt_ok ? "true" : "false",
+        attempt_result.reason_code,
+        attempt_result.status_code);
+
+    uint32_t result_seq = next_seq();
+    build_lte_http_probe_payload(payload, sizeof(payload), result_seq, "result", &attempt_result, true);
+    bool result_ok =
+        sim7670_lte_http_post_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, payload, &result_post_result);
+    ESP_LOGI(
+        TAG,
+        "LTE_HTTP_PROBE_RESULT_DONE seq=%" PRIu32 " ok=%s first_reason=%s result_post_reason=%s status=%d",
+        result_seq,
+        result_ok ? "true" : "false",
+        attempt_result.reason_code,
+        result_post_result.reason_code,
+        result_post_result.status_code);
+    return attempt_ok && result_ok;
+}
+#endif
+
 static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
 {
     int rssi = refresh_wifi_rssi();
@@ -1321,6 +1476,14 @@ void app_main(void)
     ESP_ERROR_CHECK(safety_model_init() ? ESP_OK : ESP_FAIL);
     ESP_LOGI(TAG, "SAFETY_MODEL_INIT_OK version=%s mock=true", safety_model_version());
 
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    platform_power_enter_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "lte_http_probe");
+    bool lte_probe_ok = publish_lte_http_probe_once();
+    platform_power_leave_state(
+        PLATFORM_POWER_STATE_NETWORK_ATTACH,
+        lte_probe_ok ? "lte_http_probe_ok" : "lte_http_probe_fail");
+    platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_http_probe_done");
+#else
     platform_power_enter_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "wifi_connect");
     ESP_ERROR_CHECK(start_wifi());
     platform_power_leave_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "wifi_connected");
@@ -1334,5 +1497,6 @@ void app_main(void)
 #endif
     xTaskCreate(heartbeat_task, "heartbeat_task", HEARTBEAT_TASK_STACK_SIZE, NULL, 5, NULL);
     xTaskCreate(sensor_task, "sensor_task", SENSOR_TASK_STACK_SIZE, NULL, 5, NULL);
+#endif
     xTaskCreate(safety_cli_task, "safety_cli_task", 4096, NULL, 3, NULL);
 }

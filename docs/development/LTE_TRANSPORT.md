@@ -65,6 +65,18 @@ Definition of Done:
 Goal: send one telemetry message from the ESP32-S3 through SIM7670G LTE to the
 VPS.
 
+Implementation shape:
+
+- opt-in firmware mode `CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED`;
+- Wi-Fi initialization and Wi-Fi Message Hub tasks skipped while probe mode is
+  enabled;
+- SIM7670G AT HTTP commands POST `event_type=lte_http_probe` to the existing
+  `/telemetry` endpoint;
+- the probe emits `phase=attempt` and then `phase=result` so the final event
+  can carry the first POST's HTTP status and LTE HTTP reason code;
+- validation is performed from the VPS Message Hub only by
+  `scripts/validate_lte_http_probe.py`.
+
 Definition of Done:
 
 - Wi-Fi is disabled for the run.
@@ -72,6 +84,11 @@ Definition of Done:
 - device posts telemetry to the existing VPS Message Hub.
 - `/api/state` shows `transport.type=lte`.
 - Dashboard shows LTE last update, cell fingerprint, and signal quality.
+
+Known boundary: if SIM7670G HTTP fails before any request reaches the VPS, the
+VPS cannot receive that failure detail through the same failed path. The
+validator must report this as no fresh LTE telemetry after the LTE-001B
+readiness gate, not as a GNSS, Web, or command-loop failure.
 
 ## LTE-003: Command Poll And ACK
 

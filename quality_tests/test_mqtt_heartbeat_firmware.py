@@ -121,6 +121,30 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
                 self.assertIn(token, self.app_main)
         self.assertNotIn("char lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];", self.app_main)
 
+    def test_lte_http_probe_mode_is_opt_in_and_skips_wifi_runtime_path(self) -> None:
+        for token in [
+            "CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED",
+            "publish_lte_http_probe_once",
+            "build_lte_http_probe_payload",
+            '\\"event_type\\":\\"lte_http_probe\\"',
+            '\\"transport\\":{\\"type\\":\\"lte\\"',
+            '\\"lte_http\\":{\\"phase\\":\\"%s\\"',
+            "sim7670_lte_http_post_json",
+            "LTE_HTTP_PROBE_ATTEMPT_DONE",
+            "LTE_HTTP_PROBE_RESULT_DONE",
+            "lte_http_probe_done",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.app_main)
+        app_main_body = self.app_main.split("void app_main", 1)[1]
+        probe_branch = app_main_body.split(
+            "#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED",
+            1,
+        )[1].split("#else", 1)[0]
+        self.assertIn("publish_lte_http_probe_once", probe_branch)
+        self.assertNotIn("start_wifi()", probe_branch)
+        self.assertNotIn("xTaskCreate(command_poll_task", probe_branch)
+
     def test_http_mode_docs_keep_secret_and_capability_boundaries(self) -> None:
         self.assertIn("sdkconfig.vps.local", self.readme)
         self.assertIn("Do not commit real VPS addresses", self.readme)

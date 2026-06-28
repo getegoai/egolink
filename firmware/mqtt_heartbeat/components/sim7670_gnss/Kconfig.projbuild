@@ -19,17 +19,28 @@ config EGOLINK_SIM7670_LTE_STATUS_ENABLED
         signal state queried through SIM7670G UART AT commands. It does not
         route Message Hub HTTP traffic through LTE or prove LTE data transport.
 
+config EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    bool "Enable SIM7670G LTE HTTP uplink probe"
+    default n
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    help
+        Opt-in LTE-002 path. When enabled, firmware skips Wi-Fi as the runtime
+        data path and uses SIM7670G AT HTTP commands to POST a bounded
+        lte_http_probe event to the Message Hub telemetry endpoint. This is a
+        one-shot LTE HTTP uplink slice only; command polling, ACK, reconnect,
+        and long-run stability remain separate tasks.
+
 config EGOLINK_SIM7670_UART_NUM
     int "SIM7670G UART number"
     default 1
     range 1 2
-    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
 
 config EGOLINK_SIM7670_UART_RX_GPIO
     int "SIM7670G UART RX GPIO"
     default 17
     range 0 48
-    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
     help
         Official Waveshare ESP-IDF examples for ESP32-S3 + SIM7670X use
         ESP32-S3 RX GPIO17 connected to module TX.
@@ -38,7 +49,7 @@ config EGOLINK_SIM7670_UART_TX_GPIO
     int "SIM7670G UART TX GPIO"
     default 18
     range 0 48
-    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
     help
         Official Waveshare ESP-IDF examples for ESP32-S3 + SIM7670X use
         ESP32-S3 TX GPIO18 connected to module RX.
@@ -46,13 +57,19 @@ config EGOLINK_SIM7670_UART_TX_GPIO
 config EGOLINK_SIM7670_UART_BAUD
     int "SIM7670G UART baud"
     default 115200
-    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
 
 config EGOLINK_SIM7670_AT_TIMEOUT_MS
     int "SIM7670G AT command timeout milliseconds"
     default 3000
     range 500 30000
-    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+
+config EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS
+    int "SIM7670G HTTPACTION timeout milliseconds"
+    default 30000
+    range 5000 120000
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
 
 config EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
     bool "Send AT+CGNSSPWR=1 before GNSS query"

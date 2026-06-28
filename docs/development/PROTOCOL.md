@@ -154,6 +154,53 @@ Expected failure reason codes include `LTE_AT_UNREACHABLE`,
 Message Hub path until an explicit LTE HTTP transport task proves uplink,
 command polling, and ACK over the SIM7670G data path.
 
+## LTE-002 LTE HTTP Probe Event
+
+LTE-002 uses the existing `message_type=event` envelope with
+`event_type=lte_http_probe`. It does not change `egolink.p0.v1`; the probe
+adds transport diagnostics so the Message Hub and Dashboard can distinguish an
+LTE uplink proof from the previous Wi-Fi HTTP development path.
+
+Required transport envelope fields remain those of a normal event:
+`protocol_version`, `device_id`, `ts`, `seq`, `message_type`, `event_type`,
+and `priority`.
+
+Recommended additive fields:
+
+```json
+{
+  "event_type": "lte_http_probe",
+  "source": "sim7670g_lte_http_probe",
+  "source_status": "observed",
+  "transport": {
+    "type": "lte",
+    "rtt_ms": 123,
+    "last_error": null
+  },
+  "lte_http": {
+    "phase": "result",
+    "driver": "sim7670g_uart_at_http",
+    "reason_code": "LTE_HTTP_OK",
+    "status_code": 200,
+    "action_elapsed_ms": 123
+  },
+  "lte": {
+    "driver": "sim7670g_uart_at",
+    "reason_code": "LTE_READY"
+  }
+}
+```
+
+Expected LTE HTTP reason codes include `LTE_HTTP_OK`,
+`LTE_HTTP_AT_UNREACHABLE`, `LTE_HTTP_UART_INIT_FAILED`,
+`LTE_HTTP_INIT_FAILED`, `LTE_HTTP_DATA_FAILED`,
+`LTE_HTTP_ACTION_FAILED`, `LTE_HTTP_CLIENT_ERROR`,
+`LTE_HTTP_SERVER_ERROR`, and `LTE_HTTP_STATUS_ERROR`.
+
+The first firmware slice sends `phase=attempt` followed by `phase=result` so
+the result event can report the HTTP status of the preceding LTE POST. LTE-002
+does not implement command polling or ACK over LTE; that remains `LTE-003`.
+
 ## LOC-002 Location Observation Event
 
 LOC-002 adds the compatible `event_type=location_observation` event. It keeps

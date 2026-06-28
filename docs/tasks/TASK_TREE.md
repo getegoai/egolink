@@ -76,8 +76,13 @@ motion candidate
 
 ## Active Queue
 
-No task packet with `status: active` is currently present under
-`docs/tasks/active/`. The directory is intentionally kept with `.gitkeep`.
+- `LTE-002 LTE HTTP Uplink Thin-Slice`
+  - Path: `docs/tasks/active/LTE-002_LTE_HTTP_UPLINK_THIN_SLICE.md`
+  - Status: active.
+  - Goal: prove one SIM7670G LTE HTTP telemetry uplink to the existing VPS
+    Message Hub with Wi-Fi disabled for the firmware run.
+  - Current boundary: implementation/build prep first; flash and USB-Free
+    runtime validation require explicit operator confirmation.
 
 ## USB-Free VPS Walking Skeleton Line
 
@@ -330,6 +335,15 @@ No task packet with `status: active` is currently present under
   - Boundary: LTE status observation only. No LTE HTTP transport,
     `transport.type=lte`, Wi-Fi-disable run, LTE command loop, battery,
     charging, power, or long-run LTE stability claim belongs to this task.
+- `LTE-002 LTE HTTP Uplink Thin-Slice`
+  - Path: `docs/tasks/active/LTE-002_LTE_HTTP_UPLINK_THIN_SLICE.md`
+  - Status: active.
+  - Goal: send a bounded `lte_http_probe` telemetry event through SIM7670G LTE
+    HTTP to the VPS Message Hub, with `transport.type=lte` visible in
+    `/api/state`.
+  - Boundary: no LTE command polling, ACK migration, reconnect supervisor,
+    long-run stability, battery, power, or product LTE acceptance belongs to
+    this task.
 - `RELIABILITY-001A USB-Free Stability Observer And Reset Diagnostics`
   - Path: `docs/tasks/done/RELIABILITY-001A_USB_FREE_STABILITY_OBSERVER_RESET_DIAGNOSTICS.md`
   - Status: completed as an R3 preflight diagnosability increment.

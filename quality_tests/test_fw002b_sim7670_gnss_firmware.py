@@ -27,11 +27,12 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
         for token in [
             "config EGOLINK_SIM7670_GNSS_ENABLED",
             "config EGOLINK_SIM7670_LTE_STATUS_ENABLED",
+            "config EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED",
             "default n",
             "depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED",
             "config EGOLINK_SIM7670_UART_NUM",
             "default 1",
-            "depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED",
+            "EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED",
             "config EGOLINK_SIM7670_UART_RX_GPIO",
             "default 17",
             "config EGOLINK_SIM7670_UART_TX_GPIO",
@@ -68,6 +69,29 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
         ]:
             with self.subTest(token=token):
                 self.assertIn(token, combined)
+
+    def test_lte_http_probe_backend_is_opt_in_and_does_not_log_token(self) -> None:
+        combined = self.header + self.source + self.app_main
+        for token in [
+            "sim7670_lte_http_probe_result_t",
+            "sim7670_lte_http_post_json",
+            "sim7670_lte_http_backend_name",
+            "AT+HTTPINIT",
+            "AT+HTTPPARA=USERDATA",
+            "AT+HTTPDATA",
+            "AT+HTTPACTION=1",
+            "AT+HTTPREAD",
+            "LTE_HTTP_OK",
+            "LTE_HTTP_DATA_FAILED",
+            "LTE_HTTP_ACTION_FAILED",
+            "LTE_HTTP_CLIENT_ERROR",
+            "sim7670_send_at_labeled",
+            "LTE_HTTP_PROBE_ATTEMPT_DONE",
+            "LTE_HTTP_PROBE_RESULT_DONE",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, combined)
+        self.assertNotIn("command=AT+HTTPPARA=\\\"USERDATA\\\"", self.source)
 
     def test_component_sends_bounded_at_queries_and_parses_common_gnss_lines(self) -> None:
         combined = self.header + self.source

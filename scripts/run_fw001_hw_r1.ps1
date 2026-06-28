@@ -15,6 +15,7 @@ param(
     [int]$ValidationPollIntervalSec = 5,
     [switch]$EnableSim7670Gnss,
     [switch]$EnableSim7670LteStatus,
+    [switch]$EnableSim7670LteHttpProbe,
     [switch]$PrepareBuild,
     [switch]$Flash,
     [switch]$IUnderstandFlashWritesFirmware,
@@ -61,9 +62,11 @@ $firmwarePath = Resolve-RepoPath $FirmwareDir
 $hubUrl = "${Scheme}://${HostName}:${Port}"
 $prepareScript = Resolve-RepoPath "scripts/prepare_fw001_hw_config.ps1"
 $validationScript = Resolve-RepoPath "scripts/validate_fw001_hw_loop.py"
+$lteHttpValidationScript = Resolve-RepoPath "scripts/validate_lte_http_probe.py"
 $tokenPath = Resolve-RepoPath $TokenFile
 $buildPath = Join-Path $firmwarePath $BuildDir
 $binaryPath = Join-Path $buildPath "egolink_mqtt_heartbeat.bin"
+$effectiveEnableSim7670LteStatus = [bool]($EnableSim7670LteStatus -or $EnableSim7670LteHttpProbe)
 
 $result = [ordered]@{
     ok = $true
@@ -74,7 +77,8 @@ $result = [ordered]@{
     fw_version = $FwVersion
     test_run_id = $TestRunId
     sim7670_gnss_enabled = [bool]$EnableSim7670Gnss
-    sim7670_lte_status_enabled = [bool]$EnableSim7670LteStatus
+    sim7670_lte_status_enabled = [bool]$effectiveEnableSim7670LteStatus
+    sim7670_lte_http_probe_enabled = [bool]$EnableSim7670LteHttpProbe
     firmware_dir = $firmwarePath
     build_dir = $buildPath
     binary_path = $binaryPath
@@ -124,6 +128,7 @@ if ($PrepareBuild) {
     ) | ForEach-Object { $prepareArgs.Add([string]$_) }
     Add-If $prepareArgs $EnableSim7670Gnss "-EnableSim7670Gnss"
     Add-If $prepareArgs $EnableSim7670LteStatus "-EnableSim7670LteStatus"
+    Add-If $prepareArgs $EnableSim7670LteHttpProbe "-EnableSim7670LteHttpProbe"
     $prepareOutput = & powershell @prepareArgs
     if ($LASTEXITCODE -ne 0) {
         throw "prepare_fw001_hw_config.ps1 failed with exit code $LASTEXITCODE"
@@ -172,18 +177,32 @@ if ($Validate) {
     $oldToken = $env:EGOLINK_MESSAGE_HUB_TOKEN
     $env:EGOLINK_MESSAGE_HUB_TOKEN = (Get-Content -LiteralPath $tokenPath -Raw).Trim()
     try {
-        $validationArgs = @(
-            $validationScript,
-            "--hub", $hubUrl,
-            "--device-id", $DeviceId,
-            "--test-run-id", $TestRunId,
-            "--timeout-sec", [string]$ValidationTimeoutSec,
-            "--poll-interval-sec", [string]$ValidationPollIntervalSec,
-            "--json"
-        )
+        if ($EnableSim7670LteHttpProbe) {
+            $validationArgs = @(
+                $lteHttpValidationScript,
+                "--hub", $hubUrl,
+                "--device-id", $DeviceId,
+                "--observation-id", $TestRunId,
+                "--expected-fw-version", $FwVersion,
+                "--expected-test-run-id", $TestRunId,
+                "--timeout-sec", [string]$ValidationTimeoutSec,
+                "--poll-interval-sec", [string]$ValidationPollIntervalSec,
+                "--json"
+            )
+        } else {
+            $validationArgs = @(
+                $validationScript,
+                "--hub", $hubUrl,
+                "--device-id", $DeviceId,
+                "--test-run-id", $TestRunId,
+                "--timeout-sec", [string]$ValidationTimeoutSec,
+                "--poll-interval-sec", [string]$ValidationPollIntervalSec,
+                "--json"
+            )
+        }
         $validationOutput = & python @validationArgs
         if ($LASTEXITCODE -ne 0) {
-            throw "validate_fw001_hw_loop.py failed with exit code $LASTEXITCODE"
+            throw "validation failed with exit code $LASTEXITCODE"
         }
     } finally {
         if ($null -eq $oldToken) {

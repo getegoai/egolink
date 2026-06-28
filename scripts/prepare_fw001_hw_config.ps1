@@ -17,6 +17,7 @@ param(
     [string]$IdfExport = "C:\Espressif\v5.4.2\esp-idf\export.ps1",
     [switch]$EnableSim7670Gnss,
     [switch]$EnableSim7670LteStatus,
+    [switch]$EnableSim7670LteHttpProbe,
     [int]$Sim7670UartNum = 1,
     [int]$Sim7670UartRxGpio = 17,
     [int]$Sim7670UartTxGpio = 18,
@@ -98,6 +99,8 @@ if (-not $Token) {
     throw "Message Hub token is required. Pass -Token, set EGOLINK_MESSAGE_HUB_TOKEN, or provide the ignored token file."
 }
 
+$effectiveEnableSim7670LteStatus = [bool]($EnableSim7670LteStatus -or $EnableSim7670LteHttpProbe)
+
 $wifiSource = "parameters"
 if (-not $WifiSsid) {
     $WifiSsid = Read-SdkconfigString $resolvedSourceSdkconfig "CONFIG_EGOLINK_WIFI_SSID"
@@ -126,12 +129,17 @@ if ($EnableSim7670Gnss) {
 } else {
     $lines += "# CONFIG_EGOLINK_SIM7670_GNSS_ENABLED is not set"
 }
-if ($EnableSim7670LteStatus) {
+if ($effectiveEnableSim7670LteStatus) {
     $lines += "CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y"
 } else {
     $lines += "# CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED is not set"
 }
-if ($EnableSim7670Gnss -or $EnableSim7670LteStatus) {
+if ($EnableSim7670LteHttpProbe) {
+    $lines += "CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED=y"
+} else {
+    $lines += "# CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED is not set"
+}
+if ($EnableSim7670Gnss -or $effectiveEnableSim7670LteStatus -or $EnableSim7670LteHttpProbe) {
     $lines += @(
         "CONFIG_EGOLINK_SIM7670_UART_NUM=$Sim7670UartNum",
         "CONFIG_EGOLINK_SIM7670_UART_RX_GPIO=$Sim7670UartRxGpio",
@@ -189,7 +197,8 @@ $result = [pscustomobject]@{
     token_source = $tokenSource
     wifi_source = $wifiSource
     sim7670_gnss_enabled = [bool]$EnableSim7670Gnss
-    sim7670_lte_status_enabled = [bool]$EnableSim7670LteStatus
+    sim7670_lte_status_enabled = [bool]$effectiveEnableSim7670LteStatus
+    sim7670_lte_http_probe_enabled = [bool]$EnableSim7670LteHttpProbe
     build_command = $buildCommand
     flash_intentionally_not_run = $true
 }

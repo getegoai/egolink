@@ -107,6 +107,13 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `pdp_state=active`, assigned IP present, RAT `LTE`, cell ID `180571649`, RSSI
   `-90`, RSRP `-97`, RSRQ `-7`, SINR `28`. Evidence is under
   `reports/field_validation/lte001b-observe-fix1-20260628-131739/`.
+- LTE-002 LTE HTTP probe firmware has been build-verified as
+  `0.1.0-lte002-lte-http-probe` /
+  `lte002-lte-http-probe-20260628-141656`. The image enables SIM7670G GNSS,
+  LTE status, and LTE HTTP probe mode, skips Wi-Fi runtime tasks in that mode,
+  and builds to
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe/egolink_mqtt_heartbeat.bin`.
+  Flash and USB-Free LTE HTTP runtime validation have not been run yet.
 
 ## Current Known Limits
 
@@ -117,10 +124,11 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 - The USB-Free R1 validation used Wi-Fi HTTP to the Message Hub; it does not
   prove SIM7670G LTE data transport, GNSS fix, battery/charging accuracy, or
   product power behavior.
-- The currently flashed connectivity-node image is LTE-001B fix1
+- The currently flashed connectivity-node image remains LTE-001B fix1
   `0.1.0-lte001b-observe-fix1`. It has passed USB-Free LTE status observation
   through the VPS Message Hub, but HTTP data transport still runs over Wi-Fi in
-  this firmware lineage.
+  that flashed firmware. The LTE-002 LTE HTTP probe image is build-verified but
+  not flashed or runtime-validated.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.
