@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/message_hub_status.schema.json",
+  "title": "Ego Link P0 Message Hub Status",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "protocol_version",
+    "device_id",
+    "ts",
+    "seq",
+    "message_type",
+    "battery",
+    "link_type",
+    "guard_mode",
+    "queue_size"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": "egolink.p0.v1"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fw_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ts": {
+      "type": "string",
+      "minLength": 1
+    },
+    "server_received_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "test_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "boot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "uptime_s": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "message_type": {
+      "const": "status"
+    },
+    "battery": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "battery_source": {
+      "type": "string"
+    },
+    "charging": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "charging_source": {
+      "type": "string"
+    },
+    "reset_reason": {
+      "type": "string",
+      "enum": [
+        "unknown",
+        "poweron",
+        "external",
+        "software",
+        "panic",
+        "interrupt_watchdog",
+        "task_watchdog",
+        "watchdog",
+        "deepsleep",
+        "brownout",
+        "sdio"
+      ]
+    },
+    "boot_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "boot_uptime_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "rtt_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "last_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "free_heap": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "last_reset_reason": {
+          "type": "string"
+        },
+        "watchdog_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "power": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "gnss": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "link_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rssi": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "guard_mode": {
+      "type": "string",
+      "minLength": 1
+    },
+    "queue_size": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

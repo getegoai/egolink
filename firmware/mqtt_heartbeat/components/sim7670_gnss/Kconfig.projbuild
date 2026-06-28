@@ -1,0 +1,52 @@
+menu "Ego Link SIM7670G GNSS"
+
+config EGOLINK_SIM7670_GNSS_ENABLED
+    bool "Enable SIM7670G firmware GNSS AT query"
+    default n
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    help
+        Opt-in FW-002B path. When enabled, request_location queries the
+        SIM7670G module through UART AT commands and reports a real module
+        no-fix/fix state. It does not prove outdoor fix or LTE data transport.
+
+config EGOLINK_SIM7670_UART_NUM
+    int "SIM7670G UART number"
+    default 1
+    range 1 2
+    depends on EGOLINK_SIM7670_GNSS_ENABLED
+
+config EGOLINK_SIM7670_UART_RX_GPIO
+    int "SIM7670G UART RX GPIO"
+    default 17
+    range 0 48
+    depends on EGOLINK_SIM7670_GNSS_ENABLED
+    help
+        Official Waveshare ESP-IDF examples for ESP32-S3 + SIM7670X use
+        ESP32-S3 RX GPIO17 connected to module TX.
+
+config EGOLINK_SIM7670_UART_TX_GPIO
+    int "SIM7670G UART TX GPIO"
+    default 18
+    range 0 48
+    depends on EGOLINK_SIM7670_GNSS_ENABLED
+    help
+        Official Waveshare ESP-IDF examples for ESP32-S3 + SIM7670X use
+        ESP32-S3 TX GPIO18 connected to module RX.
+
+config EGOLINK_SIM7670_UART_BAUD
+    int "SIM7670G UART baud"
+    default 115200
+    depends on EGOLINK_SIM7670_GNSS_ENABLED
+
+config EGOLINK_SIM7670_AT_TIMEOUT_MS
+    int "SIM7670G AT command timeout milliseconds"
+    default 3000
+    range 500 30000
+    depends on EGOLINK_SIM7670_GNSS_ENABLED
+
+config EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
+    bool "Send AT+CGNSSPWR=1 before GNSS query"
+    default y
+    depends on EGOLINK_SIM7670_GNSS_ENABLED
+
+endmenu

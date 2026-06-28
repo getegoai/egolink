@@ -13,7 +13,13 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.kconfig = (
             self.repo_root / "firmware" / "mqtt_heartbeat" / "main" / "Kconfig.projbuild"
         ).read_text(encoding="utf-8")
+        self.main_cmake = (
+            self.repo_root / "firmware" / "mqtt_heartbeat" / "main" / "CMakeLists.txt"
+        ).read_text(encoding="utf-8")
         self.readme = (self.repo_root / "firmware" / "mqtt_heartbeat" / "README.md").read_text(encoding="utf-8")
+        self.vps_http_defaults = (
+            self.repo_root / "firmware" / "mqtt_heartbeat" / "sdkconfig.vps_http.defaults.example"
+        ).read_text(encoding="utf-8")
 
     def test_sensor_event_topic_and_interval_are_configurable(self) -> None:
         self.assertIn("config EGOLINK_EVENT_TOPIC", self.kconfig)
@@ -25,15 +31,79 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertIn('\\"message_type\\":\\"event\\"', self.app_main)
         self.assertIn('\\"event_type\\":\\"sensor_sample\\"', self.app_main)
         self.assertIn('\\"sensor_kind\\":\\"device_health\\"', self.app_main)
+        self.assertIn('\\"reset_reason\\":\\"%s\\"', self.app_main)
+        self.assertIn('\\"boot_count\\":%" PRIu32', self.app_main)
         self.assertIn("esp_get_free_heap_size", self.app_main)
         self.assertIn("esp_get_minimum_free_heap_size", self.app_main)
         self.assertIn("refresh_wifi_rssi", self.app_main)
+
+    def test_reset_diagnostics_are_reported_without_serial_logs(self) -> None:
+        for token in [
+            "reset_reason_name",
+            "esp_reset_reason()",
+            "init_boot_diagnostics",
+            'nvs_open("egolink", NVS_READWRITE',
+            'nvs_get_u32(handle, "boot_count"',
+            'nvs_set_u32(handle, "boot_count"',
+            '\\"boot_uptime_ms\\":%" PRId64',
+            "BOOT_DIAGNOSTICS",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.app_main)
 
     def test_sensor_sample_is_published_to_event_topic(self) -> None:
         self.assertIn("CONFIG_EGOLINK_EVENT_TOPIC", self.app_main)
         self.assertIn("MQTT_SENSOR_PUBLISH_OK", self.app_main)
         self.assertIn("xTaskCreate(sensor_task", self.app_main)
         self.assertIn("ego/link/ego-link-001/event", self.readme)
+
+    def test_http_message_hub_mode_is_opt_in(self) -> None:
+        self.assertIn("config EGOLINK_MESSAGE_HUB_HTTP_ENABLED", self.kconfig)
+        self.assertIn("default n", self.kconfig)
+        self.assertIn("config EGOLINK_MESSAGE_HUB_BASE_URL", self.kconfig)
+        self.assertIn("config EGOLINK_MESSAGE_HUB_BEARER_TOKEN", self.kconfig)
+        self.assertIn("config EGOLINK_FW_VERSION", self.kconfig)
+        self.assertIn("config EGOLINK_TEST_RUN_ID", self.kconfig)
+        self.assertIn("esp_http_client", self.main_cmake)
+        self.assertIn("json", self.main_cmake)
+
+    def test_http_message_hub_posts_heartbeat_and_acks_commands(self) -> None:
+        for token in [
+            "#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED",
+            "message_hub_register_device",
+            "/api/v1/devices/register",
+            "/api/v1/devices/%s/heartbeat",
+            "/api/v1/devices/%s/telemetry",
+            "/api/v1/devices/%s/commands/poll",
+            "/api/v1/devices/%s/commands/%s/ack",
+            "Authorization",
+            "Bearer %s",
+            "build_ack_payload",
+            "append_test_run_id_and_close_json",
+            "CONFIG_EGOLINK_TEST_RUN_ID",
+            '\\"test_run_id\\":\\"%s\\"',
+            "cJSON_Parse",
+            "xTaskCreate(command_poll_task",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.app_main)
+
+    def test_status_payload_buffer_has_margin_for_reset_diagnostics(self) -> None:
+        self.assertIn("#define HEARTBEAT_TASK_STACK_SIZE 6144", self.app_main)
+        self.assertIn("static char payload[1280];", self.app_main)
+        self.assertIn('xTaskCreate(heartbeat_task, "heartbeat_task", HEARTBEAT_TASK_STACK_SIZE', self.app_main)
+        self.assertNotIn("\n    char payload[1280];", self.app_main)
+        self.assertIn('\\"reset_reason\\":\\"%s\\"', self.app_main)
+        self.assertIn('\\"boot_uptime_ms\\":%" PRId64', self.app_main)
+
+    def test_http_mode_docs_keep_secret_and_capability_boundaries(self) -> None:
+        self.assertIn("sdkconfig.vps.local", self.readme)
+        self.assertIn("Do not commit real VPS addresses", self.readme)
+        self.assertIn("does not prove real GNSS", self.readme)
+        self.assertIn("<operator-vps>", self.vps_http_defaults)
+        self.assertIn("<runtime-token>", self.vps_http_defaults)
+        self.assertIn("CONFIG_EGOLINK_TEST_RUN_ID", self.vps_http_defaults)
+        self.assertIn("server exports can bind", self.readme)
 
 
 if __name__ == "__main__":

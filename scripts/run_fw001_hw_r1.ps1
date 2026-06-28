@@ -1,0 +1,205 @@
+param(
+    [string]$HostName = $env:EGOLINK_VPS_HOST,
+    [int]$Port = 8790,
+    [ValidateSet("http", "https")]
+    [string]$Scheme = "http",
+    [string]$DeviceId = "ego-link-r1-connectivity-001",
+    [string]$FwVersion = "0.1.0-fw001-hw-r1",
+    [string]$TestRunId = $("fw001-hw-r1-" + (Get-Date -Format "yyyyMMdd-HHmmss")),
+    [string]$TokenFile = "server/runtime/vps_message_hub_token.txt",
+    [string]$FirmwareDir = "firmware/mqtt_heartbeat",
+    [string]$BuildDir = "build_fw001_hw",
+    [string]$IdfExport = "C:\Espressif\v5.4.2\esp-idf\export.ps1",
+    [string]$FlashPort = "",
+    [int]$ValidationTimeoutSec = 180,
+    [int]$ValidationPollIntervalSec = 5,
+    [switch]$EnableSim7670Gnss,
+    [switch]$PrepareBuild,
+    [switch]$Flash,
+    [switch]$IUnderstandFlashWritesFirmware,
+    [switch]$Validate,
+    [switch]$OperatorConfirmedIndependentPower,
+    [switch]$OperatorConfirmedUsbDisconnected,
+    [switch]$Json
+)
+
+$ErrorActionPreference = "Stop"
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+
+function Resolve-RepoPath {
+    param([string]$PathValue)
+    if ([System.IO.Path]::IsPathRooted($PathValue)) {
+        return [System.IO.Path]::GetFullPath($PathValue)
+    }
+    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $PathValue))
+}
+
+function Add-If {
+    param(
+        [System.Collections.Generic.List[string]]$List,
+        [bool]$Condition,
+        [string]$Value
+    )
+    if ($Condition) {
+        $List.Add($Value)
+    }
+}
+
+function ConvertFrom-LastJsonObject {
+    param([object[]]$OutputLines)
+    $lines = @($OutputLines | ForEach-Object { [string]$_ })
+    for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+        if ($lines[$i].Trim() -eq "{") {
+            return (($lines[$i..($lines.Count - 1)] -join "`n") | ConvertFrom-Json)
+        }
+    }
+    throw "No JSON object found in command output."
+}
+
+$firmwarePath = Resolve-RepoPath $FirmwareDir
+$hubUrl = "${Scheme}://${HostName}:${Port}"
+$prepareScript = Resolve-RepoPath "scripts/prepare_fw001_hw_config.ps1"
+$validationScript = Resolve-RepoPath "scripts/validate_fw001_hw_loop.py"
+$tokenPath = Resolve-RepoPath $TokenFile
+$buildPath = Join-Path $firmwarePath $BuildDir
+$binaryPath = Join-Path $buildPath "egolink_mqtt_heartbeat.bin"
+
+$result = [ordered]@{
+    ok = $true
+    mode = "plan"
+    host_name = $HostName
+    hub_url = $hubUrl
+    device_id = $DeviceId
+    fw_version = $FwVersion
+    test_run_id = $TestRunId
+    sim7670_gnss_enabled = [bool]$EnableSim7670Gnss
+    firmware_dir = $firmwarePath
+    build_dir = $buildPath
+    binary_path = $binaryPath
+    prepare_build_ran = $false
+    flash_ran = $false
+    validate_ran = $false
+    flash_guard = "requires -Flash -FlashPort <port> -IUnderstandFlashWritesFirmware"
+    validation_guard = "requires -Validate -OperatorConfirmedIndependentPower -OperatorConfirmedUsbDisconnected"
+}
+
+if (-not $PrepareBuild -and -not $Flash -and -not $Validate) {
+    if ($Json) {
+        $result | ConvertTo-Json -Depth 4
+    } else {
+        Write-Host "FW-001-HW R1 guarded runner plan"
+        Write-Host "  Prepare/build: add -PrepareBuild"
+        Write-Host "  Flash: add -Flash -FlashPort <COMx> -IUnderstandFlashWritesFirmware"
+        Write-Host "  Validate: add -Validate -OperatorConfirmedIndependentPower -OperatorConfirmedUsbDisconnected"
+        Write-Host "  Test run ID: $TestRunId"
+        Write-Host "  Hub URL: $hubUrl"
+        Write-Host "No hardware action was run."
+    }
+    exit 0
+}
+
+if (-not $HostName) {
+    throw "HostName is required. Pass -HostName or set EGOLINK_VPS_HOST."
+}
+
+if ($PrepareBuild) {
+    $prepareArgs = [System.Collections.Generic.List[string]]::new()
+    @(
+        "-ExecutionPolicy", "Bypass",
+        "-File", $prepareScript,
+        "-HostName", $HostName,
+        "-Port", [string]$Port,
+        "-Scheme", $Scheme,
+        "-DeviceId", $DeviceId,
+        "-FwVersion", $FwVersion,
+        "-TestRunId", $TestRunId,
+        "-TokenFile", $tokenPath,
+        "-FirmwareDir", $firmwarePath,
+        "-BuildDir", $BuildDir,
+        "-IdfExport", $IdfExport,
+        "-Build",
+        "-Json"
+    ) | ForEach-Object { $prepareArgs.Add([string]$_) }
+    Add-If $prepareArgs $EnableSim7670Gnss "-EnableSim7670Gnss"
+    $prepareOutput = & powershell @prepareArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "prepare_fw001_hw_config.ps1 failed with exit code $LASTEXITCODE"
+    }
+    $result["prepare_build_ran"] = $true
+    $result["prepare"] = ConvertFrom-LastJsonObject $prepareOutput
+}
+
+if ($Flash) {
+    if (-not $IUnderstandFlashWritesFirmware) {
+        throw "Flash requires -IUnderstandFlashWritesFirmware."
+    }
+    if (-not $FlashPort) {
+        throw "Flash requires -FlashPort <COMx>."
+    }
+    if (-not (Test-Path -LiteralPath $IdfExport -PathType Leaf)) {
+        throw "ESP-IDF export script not found: $IdfExport"
+    }
+    if (-not (Test-Path -LiteralPath $binaryPath -PathType Leaf)) {
+        throw "R1 build artifact not found: $binaryPath. Run -PrepareBuild first."
+    }
+    Push-Location $firmwarePath
+    try {
+        . $IdfExport
+        & idf.py -B $BuildDir -p $FlashPort flash
+        if ($LASTEXITCODE -ne 0) {
+            throw "idf.py flash failed with exit code $LASTEXITCODE"
+        }
+    } finally {
+        Pop-Location
+    }
+    $result["flash_ran"] = $true
+    $result["flash_port"] = $FlashPort
+}
+
+if ($Validate) {
+    if (-not $OperatorConfirmedIndependentPower) {
+        throw "Validation requires -OperatorConfirmedIndependentPower."
+    }
+    if (-not $OperatorConfirmedUsbDisconnected) {
+        throw "Validation requires -OperatorConfirmedUsbDisconnected."
+    }
+    if (-not (Test-Path -LiteralPath $tokenPath -PathType Leaf)) {
+        throw "Token file not found: $tokenPath"
+    }
+    $oldToken = $env:EGOLINK_MESSAGE_HUB_TOKEN
+    $env:EGOLINK_MESSAGE_HUB_TOKEN = (Get-Content -LiteralPath $tokenPath -Raw).Trim()
+    try {
+        $validationArgs = @(
+            $validationScript,
+            "--hub", $hubUrl,
+            "--device-id", $DeviceId,
+            "--test-run-id", $TestRunId,
+            "--timeout-sec", [string]$ValidationTimeoutSec,
+            "--poll-interval-sec", [string]$ValidationPollIntervalSec,
+            "--json"
+        )
+        $validationOutput = & python @validationArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "validate_fw001_hw_loop.py failed with exit code $LASTEXITCODE"
+        }
+    } finally {
+        if ($null -eq $oldToken) {
+            Remove-Item Env:EGOLINK_MESSAGE_HUB_TOKEN -ErrorAction SilentlyContinue
+        } else {
+            $env:EGOLINK_MESSAGE_HUB_TOKEN = $oldToken
+        }
+    }
+    $result["validate_ran"] = $true
+    $result["validation"] = $validationOutput | ConvertFrom-Json
+}
+
+$result["mode"] = "run"
+if ($Json) {
+    $result | ConvertTo-Json -Depth 8
+} else {
+    Write-Host "FW-001-HW R1 runner complete"
+    Write-Host "  Prepare/build ran: $($result["prepare_build_ran"])"
+    Write-Host "  Flash ran: $($result["flash_ran"])"
+    Write-Host "  Validate ran: $($result["validate_ran"])"
+    Write-Host "  Test run ID: $TestRunId"
+}

@@ -4,8 +4,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "cJSON.h"
 #include "esp_check.h"
 #include "esp_event.h"
+#include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_system.h"
@@ -16,10 +18,12 @@
 #include "freertos/portmacro.h"
 #include "freertos/task.h"
 #include "mqtt_client.h"
+#include "nvs.h"
 #include "nvs_flash.h"
 #include "platform_imu.h"
 #include "platform_power.h"
 #include "safety_model.h"
+#include "sim7670_gnss.h"
 
 static const char *TAG = "egolink_mqtt_heartbeat";
 
@@ -27,17 +31,92 @@ static const char *TAG = "egolink_mqtt_heartbeat";
 #define WIFI_FAIL_BIT BIT1
 #define MQTT_CONNECTED_BIT BIT2
 #define WIFI_MAX_RETRY 8
+#define COMMAND_POLL_TASK_STACK_SIZE 12288
+#define HEARTBEAT_TASK_STACK_SIZE 6144
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+#define UPLINK_READY_BIT WIFI_CONNECTED_BIT
+#else
+#define UPLINK_READY_BIT MQTT_CONNECTED_BIT
+#endif
+#ifndef CONFIG_EGOLINK_TEST_RUN_ID
+#define CONFIG_EGOLINK_TEST_RUN_ID ""
+#endif
 
 static EventGroupHandle_t s_event_group;
+#if !CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
 static esp_mqtt_client_handle_t s_mqtt_client;
+#endif
 static int s_wifi_retry_count;
 static uint32_t s_seq;
 static portMUX_TYPE s_seq_mux = portMUX_INITIALIZER_UNLOCKED;
 static int s_last_rssi = -127;
+static const char *s_reset_reason = "unknown";
+static uint32_t s_boot_count;
+
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+typedef struct {
+    char *buffer;
+    size_t capacity;
+    size_t length;
+} http_response_buffer_t;
+#endif
 
 static const char *json_bool(bool value)
 {
     return value ? "true" : "false";
+}
+
+static const char *reset_reason_name(esp_reset_reason_t reason)
+{
+    switch (reason) {
+    case ESP_RST_POWERON:
+        return "poweron";
+    case ESP_RST_EXT:
+        return "external";
+    case ESP_RST_SW:
+        return "software";
+    case ESP_RST_PANIC:
+        return "panic";
+    case ESP_RST_INT_WDT:
+        return "interrupt_watchdog";
+    case ESP_RST_TASK_WDT:
+        return "task_watchdog";
+    case ESP_RST_WDT:
+        return "watchdog";
+    case ESP_RST_DEEPSLEEP:
+        return "deepsleep";
+    case ESP_RST_BROWNOUT:
+        return "brownout";
+    case ESP_RST_SDIO:
+        return "sdio";
+    default:
+        return "unknown";
+    }
+}
+
+static void init_boot_diagnostics(void)
+{
+    s_reset_reason = reset_reason_name(esp_reset_reason());
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open("egolink", NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "BOOT_DIAGNOSTICS_NVS_OPEN_FAIL err=%s reset_reason=%s", esp_err_to_name(err), s_reset_reason);
+        return;
+    }
+    uint32_t boot_count = 0;
+    err = nvs_get_u32(handle, "boot_count", &boot_count);
+    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_LOGW(TAG, "BOOT_DIAGNOSTICS_NVS_READ_FAIL err=%s", esp_err_to_name(err));
+    }
+    boot_count += 1;
+    if (nvs_set_u32(handle, "boot_count", boot_count) == ESP_OK && nvs_commit(handle) == ESP_OK) {
+        s_boot_count = boot_count;
+    } else {
+        s_boot_count = boot_count;
+        ESP_LOGW(TAG, "BOOT_DIAGNOSTICS_NVS_WRITE_FAIL");
+    }
+    nvs_close(handle);
+    ESP_LOGI(TAG, "BOOT_DIAGNOSTICS reset_reason=%s boot_count=%" PRIu32, s_reset_reason, s_boot_count);
 }
 
 static safety_model_mock_state_t default_safety_mock_state(void)
@@ -153,6 +232,21 @@ static uint32_t next_seq(void)
     return seq;
 }
 
+static void append_test_run_id_and_close_json(char *buffer, size_t buffer_size)
+{
+    const char *test_run_id = CONFIG_EGOLINK_TEST_RUN_ID;
+    if (test_run_id[0] != '\0') {
+        size_t len = strlen(buffer);
+        if (len < buffer_size) {
+            snprintf(buffer + len, buffer_size - len, ",\"test_run_id\":\"%s\"", test_run_id);
+        }
+    }
+    size_t len = strlen(buffer);
+    if (len < buffer_size) {
+        snprintf(buffer + len, buffer_size - len, "}");
+    }
+}
+
 static int refresh_wifi_rssi(void)
 {
     wifi_ap_record_t ap_info;
@@ -161,6 +255,492 @@ static int refresh_wifi_rssi(void)
     }
     return s_last_rssi;
 }
+
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+static esp_err_t message_hub_http_event_handler(esp_http_client_event_t *event)
+{
+    if (event->event_id != HTTP_EVENT_ON_DATA || event->user_data == NULL || event->data == NULL) {
+        return ESP_OK;
+    }
+
+    http_response_buffer_t *response = (http_response_buffer_t *)event->user_data;
+    if (response->length + (size_t)event->data_len >= response->capacity) {
+        ESP_LOGW(TAG, "MESSAGE_HUB_RESPONSE_TRUNCATED len=%d capacity=%u", event->data_len, (unsigned)response->capacity);
+        return ESP_OK;
+    }
+    memcpy(response->buffer + response->length, event->data, (size_t)event->data_len);
+    response->length += (size_t)event->data_len;
+    response->buffer[response->length] = '\0';
+    return ESP_OK;
+}
+
+static void build_message_hub_url(char *buffer, size_t buffer_size, const char *path)
+{
+    const char *base_url = CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL;
+    size_t base_len = strlen(base_url);
+    bool base_has_slash = base_len > 0 && base_url[base_len - 1] == '/';
+    bool path_has_slash = path[0] == '/';
+    const char *separator = (base_has_slash || path_has_slash) ? "" : "/";
+    const char *normalized_path = (base_has_slash && path_has_slash) ? path + 1 : path;
+    snprintf(buffer, buffer_size, "%s%s%s", base_url, separator, normalized_path);
+}
+
+static bool message_hub_request(
+    esp_http_client_method_t method,
+    const char *path,
+    const char *payload,
+    char *response_buffer,
+    size_t response_size,
+    int *status_code)
+{
+    char url[256];
+    build_message_hub_url(url, sizeof(url), path);
+
+    http_response_buffer_t response = {
+        .buffer = response_buffer,
+        .capacity = response_size,
+        .length = 0,
+    };
+    if (response.buffer != NULL && response.capacity > 0) {
+        response.buffer[0] = '\0';
+    }
+
+    esp_http_client_config_t config = {
+        .url = url,
+        .timeout_ms = 8000,
+        .event_handler = message_hub_http_event_handler,
+        .user_data = &response,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client == NULL) {
+        ESP_LOGE(TAG, "MESSAGE_HUB_HTTP_INIT_FAIL path=%s", path);
+        return false;
+    }
+
+    esp_http_client_set_method(client, method);
+    if (strlen(CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN) > 0) {
+        char auth_header[192];
+        snprintf(auth_header, sizeof(auth_header), "Bearer %s", CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN);
+        esp_http_client_set_header(client, "Authorization", auth_header);
+    }
+    if (payload != NULL) {
+        esp_http_client_set_header(client, "Content-Type", "application/json");
+        esp_http_client_set_post_field(client, payload, (int)strlen(payload));
+    }
+
+    esp_err_t err = esp_http_client_perform(client);
+    int http_status = esp_http_client_get_status_code(client);
+    if (status_code != NULL) {
+        *status_code = http_status;
+    }
+    esp_http_client_cleanup(client);
+
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "MESSAGE_HUB_HTTP_FAIL path=%s err=%s", path, esp_err_to_name(err));
+        return false;
+    }
+    if (http_status < 200 || http_status >= 300) {
+        ESP_LOGW(TAG, "MESSAGE_HUB_HTTP_STATUS path=%s status=%d", path, http_status);
+        return false;
+    }
+    return true;
+}
+
+static bool message_hub_post_json(const char *path, const char *payload, const char *label, uint32_t seq)
+{
+    int status = 0;
+    bool ok = message_hub_request(HTTP_METHOD_POST, path, payload, NULL, 0, &status);
+    if (ok) {
+        ESP_LOGI(TAG, "MESSAGE_HUB_%s_OK seq=%" PRIu32 " status=%d path=%s", label, seq, status, path);
+    } else {
+        ESP_LOGE(TAG, "MESSAGE_HUB_%s_FAIL seq=%" PRIu32 " status=%d path=%s", label, seq, status, path);
+    }
+    return ok;
+}
+
+static void message_hub_register_device(void)
+{
+    char payload[256];
+    snprintf(
+        payload,
+        sizeof(payload),
+        "{\"protocol_version\":\"egolink.p0.v1\","
+        "\"device_id\":\"%s\","
+        "\"fw_version\":\"%s\","
+        "\"hw_target\":\"waveshare_esp32s3_sim7670g_4g\","
+        "\"uplink_transport\":\"http_message_hub\"}",
+        CONFIG_EGOLINK_DEVICE_ID,
+        CONFIG_EGOLINK_FW_VERSION);
+
+    int status = 0;
+    bool ok = message_hub_request(HTTP_METHOD_POST, "/api/v1/devices/register", payload, NULL, 0, &status);
+    if (ok) {
+        ESP_LOGI(TAG, "MESSAGE_HUB_REGISTER_OK status=%d", status);
+    } else {
+        ESP_LOGE(TAG, "MESSAGE_HUB_REGISTER_FAIL status=%d", status);
+    }
+}
+
+static void build_ack_payload(
+    char *buffer,
+    size_t buffer_size,
+    uint32_t seq,
+    const char *cmd_id,
+    const char *status,
+    const char *message)
+{
+    snprintf(
+        buffer,
+        buffer_size,
+        "{\"protocol_version\":\"egolink.p0.v1\","
+        "\"device_id\":\"%s\","
+        "\"ts\":\"uptime_ms:%" PRId64 "\","
+        "\"seq\":%" PRIu32 ","
+        "\"message_type\":\"ack\","
+        "\"fw_version\":\"%s\","
+        "\"cmd_id\":\"%s\","
+        "\"status\":\"%s\","
+        "\"message\":\"%s\"",
+        CONFIG_EGOLINK_DEVICE_ID,
+        uptime_ms(),
+        seq,
+        CONFIG_EGOLINK_FW_VERSION,
+        cmd_id,
+        status,
+        message);
+    append_test_run_id_and_close_json(buffer, buffer_size);
+}
+
+static void message_hub_ack_command(const char *cmd_id, const char *status, const char *message)
+{
+    char path[192];
+    char payload[512];
+    uint32_t seq = next_seq();
+    snprintf(
+        path,
+        sizeof(path),
+        "/api/v1/devices/%s/commands/%s/ack",
+        CONFIG_EGOLINK_DEVICE_ID,
+        cmd_id);
+    build_ack_payload(payload, sizeof(payload), seq, cmd_id, status, message);
+    (void)message_hub_post_json(path, payload, "COMMAND_ACK", seq);
+}
+
+#if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
+static const char *json_number_or_null(char *buffer, size_t buffer_size, bool valid, double value, const char *format)
+{
+    if (!valid) {
+        snprintf(buffer, buffer_size, "null");
+    } else {
+        snprintf(buffer, buffer_size, format, value);
+    }
+    return buffer;
+}
+
+static const char *json_int_or_null(char *buffer, size_t buffer_size, bool valid, int value)
+{
+    if (!valid) {
+        snprintf(buffer, buffer_size, "null");
+    } else {
+        snprintf(buffer, buffer_size, "%d", value);
+    }
+    return buffer;
+}
+
+static void json_escape_summary(char *buffer, size_t buffer_size, const char *value)
+{
+    if (buffer == NULL || buffer_size == 0) {
+        return;
+    }
+    size_t out = 0;
+    const char *input = value ? value : "";
+    for (size_t i = 0; input[i] != '\0' && out + 1 < buffer_size; ++i) {
+        char ch = input[i];
+        if (ch == '"' || ch == '\\') {
+            if (out + 2 >= buffer_size) {
+                break;
+            }
+            buffer[out++] = '\\';
+            buffer[out++] = ch;
+        } else if (ch == '\r' || ch == '\n' || ch == '\t') {
+            buffer[out++] = ' ';
+        } else if ((unsigned char)ch < 0x20) {
+            buffer[out++] = ' ';
+        } else {
+            buffer[out++] = ch;
+        }
+    }
+    buffer[out] = '\0';
+}
+
+static const char *message_hub_location_ack_message(void)
+{
+#if CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+    return "firmware uploaded SIM7670G GNSS location_report";
+#else
+    return "firmware uploaded location_report scaffold";
+#endif
+}
+
+static void build_location_report_payload(
+    char *buffer,
+    size_t buffer_size,
+    uint32_t seq,
+    const char *cmd_id,
+    const sim7670_gnss_report_t *gnss,
+    bool gnss_query_ok)
+{
+    char lat[32];
+    char lon[32];
+    char altitude[32];
+    char speed[32];
+    char course[32];
+    char pdop[32];
+    char hdop[32];
+    char vdop[32];
+    char satellites[16];
+    char raw_command[SIM7670_GNSS_RAW_COMMAND_MAX * 2];
+    char raw_response[SIM7670_GNSS_RAW_RESPONSE_MAX * 2];
+#if CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+    sim7670_gnss_report_t fallback;
+    if (gnss == NULL) {
+        sim7670_gnss_report_init(&fallback);
+        gnss = &fallback;
+    }
+    const char *source = "sim7670g_firmware_gnss";
+    const char *gnss_source = "sim7670g_uart_at";
+    const char *gnss_driver = "uart_at";
+    const char *state = gnss->gnss_state;
+    const char *source_status = gnss->source_status;
+    bool fix = gnss->fix;
+    bool lat_valid = gnss->lat_valid;
+    bool lon_valid = gnss->lon_valid;
+    bool altitude_valid = gnss->altitude_valid;
+    bool speed_valid = gnss->speed_valid;
+    bool course_valid = gnss->course_valid;
+    bool pdop_valid = gnss->pdop_valid;
+    bool hdop_valid = gnss->hdop_valid;
+    bool vdop_valid = gnss->vdop_valid;
+    bool satellites_valid = gnss->satellites_valid;
+    double lat_value = gnss->lat;
+    double lon_value = gnss->lon;
+    double altitude_value = gnss->altitude_m;
+    double speed_value = gnss->speed_mps;
+    double course_value = gnss->course_deg;
+    double pdop_value = gnss->pdop;
+    double hdop_value = gnss->hdop;
+    double vdop_value = gnss->vdop;
+    int satellites_value = gnss->satellites;
+    const char *utc_date = gnss->utc_date;
+    const char *utc_time = gnss->utc_time;
+    json_escape_summary(raw_command, sizeof(raw_command), gnss->raw_command);
+    json_escape_summary(raw_response, sizeof(raw_response), gnss->raw_response);
+#else
+    (void)gnss;
+    (void)gnss_query_ok;
+    const char *source = "firmware_gnss_scaffold";
+    const char *gnss_source = "sim7670g_scaffold";
+    const char *gnss_driver = "not_integrated";
+    const char *state = "driver_not_integrated";
+    const char *source_status = "unverified";
+    bool fix = false;
+    bool lat_valid = false;
+    bool lon_valid = false;
+    bool altitude_valid = false;
+    bool speed_valid = false;
+    bool course_valid = false;
+    bool pdop_valid = false;
+    bool hdop_valid = false;
+    bool vdop_valid = false;
+    bool satellites_valid = true;
+    double lat_value = 0.0;
+    double lon_value = 0.0;
+    double altitude_value = 0.0;
+    double speed_value = 0.0;
+    double course_value = 0.0;
+    double pdop_value = 0.0;
+    double hdop_value = 0.0;
+    double vdop_value = 0.0;
+    int satellites_value = 0;
+    const char *utc_date = "";
+    const char *utc_time = "";
+    raw_command[0] = '\0';
+    raw_response[0] = '\0';
+#endif
+    json_number_or_null(lat, sizeof(lat), lat_valid, lat_value, "%.7f");
+    json_number_or_null(lon, sizeof(lon), lon_valid, lon_value, "%.7f");
+    json_number_or_null(altitude, sizeof(altitude), altitude_valid, altitude_value, "%.2f");
+    json_number_or_null(speed, sizeof(speed), speed_valid, speed_value, "%.3f");
+    json_number_or_null(course, sizeof(course), course_valid, course_value, "%.2f");
+    json_number_or_null(pdop, sizeof(pdop), pdop_valid, pdop_value, "%.2f");
+    json_number_or_null(hdop, sizeof(hdop), hdop_valid, hdop_value, "%.2f");
+    json_number_or_null(vdop, sizeof(vdop), vdop_valid, vdop_value, "%.2f");
+    json_int_or_null(satellites, sizeof(satellites), satellites_valid, satellites_value);
+    snprintf(
+        buffer,
+        buffer_size,
+        "{\"protocol_version\":\"egolink.p0.v1\","
+        "\"device_id\":\"%s\","
+        "\"ts\":\"uptime_ms:%" PRId64 "\","
+        "\"seq\":%" PRIu32 ","
+        "\"message_type\":\"event\","
+        "\"event_type\":\"location_report\","
+        "\"priority\":\"normal\","
+        "\"fw_version\":\"%s\","
+        "\"source\":\"%s\","
+        "\"source_status\":\"%s\","
+        "\"fix\":%s,"
+        "\"gnss_state\":\"%s\","
+        "\"gnss_source\":\"%s\","
+        "\"gnss_driver\":\"%s\","
+        "\"gnss_query_ok\":%s,"
+        "\"lat\":%s,"
+        "\"lon\":%s,"
+        "\"altitude_m\":%s,"
+        "\"speed_mps\":%s,"
+        "\"course_deg\":%s,"
+        "\"pdop\":%s,"
+        "\"hdop\":%s,"
+        "\"vdop\":%s,"
+        "\"satellites\":%s,"
+        "\"utc_date\":\"%s\","
+        "\"utc_time\":\"%s\","
+        "\"raw_command\":\"%s\","
+        "\"raw_response\":\"%s\","
+        "\"location_request_cmd_id\":\"%s\","
+        "\"payload\":{\"gnss\":{\"fix\":%s,"
+        "\"state\":\"%s\","
+        "\"lat\":%s,"
+        "\"lon\":%s,"
+        "\"altitude_m\":%s,"
+        "\"speed_mps\":%s,"
+        "\"course_deg\":%s,"
+        "\"pdop\":%s,"
+        "\"hdop\":%s,"
+        "\"vdop\":%s,"
+        "\"satellites\":%s,"
+        "\"utc_date\":\"%s\","
+        "\"utc_time\":\"%s\","
+        "\"source\":\"%s\","
+        "\"source_status\":\"%s\"}}",
+        CONFIG_EGOLINK_DEVICE_ID,
+        uptime_ms(),
+        seq,
+        CONFIG_EGOLINK_FW_VERSION,
+        source,
+        source_status,
+        json_bool(fix),
+        state,
+        gnss_source,
+        gnss_driver,
+        json_bool(gnss_query_ok),
+        lat,
+        lon,
+        altitude,
+        speed,
+        course,
+        pdop,
+        hdop,
+        vdop,
+        satellites,
+        utc_date,
+        utc_time,
+        raw_command,
+        raw_response,
+        cmd_id,
+        json_bool(fix),
+        state,
+        lat,
+        lon,
+        altitude,
+        speed,
+        course,
+        pdop,
+        hdop,
+        vdop,
+        satellites,
+        utc_date,
+        utc_time,
+        source,
+        source_status);
+    append_test_run_id_and_close_json(buffer, buffer_size);
+}
+
+static bool message_hub_publish_location_report(const char *cmd_id)
+{
+    char path[160];
+    char payload[3072];
+    uint32_t seq = next_seq();
+    sim7670_gnss_report_t gnss;
+    sim7670_gnss_report_init(&gnss);
+#if CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+    bool gnss_query_ok = sim7670_gnss_request_location(&gnss);
+#else
+    bool gnss_query_ok = false;
+#endif
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/telemetry", CONFIG_EGOLINK_DEVICE_ID);
+    platform_power_enter_state(PLATFORM_POWER_STATE_UPLOAD, "location_report");
+    platform_power_mark("UPLOAD_LOCATION", "message_hub_http");
+    build_location_report_payload(payload, sizeof(payload), seq, cmd_id, &gnss, gnss_query_ok);
+    bool ok = message_hub_post_json(path, payload, "LOCATION_REPORT", seq);
+    platform_power_leave_state(PLATFORM_POWER_STATE_UPLOAD, ok ? "location_http_ok" : "location_http_fail");
+    platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "location_report_done");
+    return ok;
+}
+#endif
+
+static void message_hub_poll_commands(void)
+{
+    char path[160];
+    char response[1536];
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/commands/poll", CONFIG_EGOLINK_DEVICE_ID);
+
+    int status = 0;
+    if (!message_hub_request(HTTP_METHOD_GET, path, NULL, response, sizeof(response), &status)) {
+        ESP_LOGW(TAG, "MESSAGE_HUB_COMMAND_POLL_FAIL status=%d", status);
+        return;
+    }
+
+    cJSON *root = cJSON_Parse(response);
+    if (root == NULL) {
+        ESP_LOGW(TAG, "MESSAGE_HUB_COMMAND_POLL_PARSE_FAIL");
+        return;
+    }
+    cJSON *commands = cJSON_GetObjectItemCaseSensitive(root, "commands");
+    if (!cJSON_IsArray(commands)) {
+        cJSON_Delete(root);
+        return;
+    }
+
+    int ack_count = 0;
+    cJSON *command = NULL;
+    cJSON_ArrayForEach(command, commands)
+    {
+        cJSON *cmd_id = cJSON_GetObjectItemCaseSensitive(command, "cmd_id");
+        if (!cJSON_IsString(cmd_id) || cmd_id->valuestring == NULL) {
+            continue;
+        }
+        cJSON *cmd = cJSON_GetObjectItemCaseSensitive(command, "cmd");
+        const char *cmd_name = cJSON_IsString(cmd) && cmd->valuestring != NULL ? cmd->valuestring : "unknown";
+        ESP_LOGI(TAG, "MESSAGE_HUB_COMMAND_RECEIVED cmd_id=%s cmd=%s", cmd_id->valuestring, cmd_name);
+#if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
+        if (strcmp(cmd_name, "request_location") == 0) {
+            bool location_ok = message_hub_publish_location_report(cmd_id->valuestring);
+            message_hub_ack_command(
+                cmd_id->valuestring,
+                location_ok ? "ok" : "error",
+                location_ok ? message_hub_location_ack_message() : "location_report upload failed");
+            ack_count++;
+            continue;
+        }
+#endif
+        message_hub_ack_command(cmd_id->valuestring, "ok", "firmware acknowledged command");
+        ack_count++;
+    }
+    ESP_LOGI(TAG, "MESSAGE_HUB_COMMAND_POLL_OK ack_count=%d", ack_count);
+    cJSON_Delete(root);
+}
+#endif
 
 static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
 {
@@ -175,7 +755,7 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
         "\"ts\":\"uptime_ms:%" PRId64 "\","
         "\"seq\":%" PRIu32 ","
         "\"message_type\":\"status\","
-        "\"fw_version\":\"0.1.0-mqtt-smoke\","
+        "\"fw_version\":\"%s\","
         "\"hw_target\":\"waveshare_esp32s3_sim7670g_4g\","
         "\"battery\":%d,"
         "\"charging\":%s,"
@@ -188,15 +768,19 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
         "\"power_serial_marker_id\":\"%s\","
         "\"power_gpio_marker_id\":\"%s\","
         "\"power_gpio_marker_enabled\":%s,"
+        "\"reset_reason\":\"%s\","
+        "\"boot_count\":%" PRIu32 ","
+        "\"boot_uptime_ms\":%" PRId64 ","
         "\"link_type\":\"mock_4g_over_wifi\","
         "\"rssi\":%d,"
         "\"modem_state\":\"mock_data_ready\","
         "\"gnss_state\":\"mock_fix\","
         "\"guard_mode\":\"child_safety\","
-        "\"queue_size\":0}",
+        "\"queue_size\":0",
         CONFIG_EGOLINK_DEVICE_ID,
         uptime_ms(),
         seq,
+        CONFIG_EGOLINK_FW_VERSION,
         power.battery_percent,
         json_bool(power.charging),
         power.battery_source,
@@ -208,7 +792,11 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
         power.marker.serial_marker_id,
         power.marker.gpio_marker_id,
         json_bool(power.marker.gpio_marker_enabled),
+        s_reset_reason,
+        s_boot_count,
+        uptime_ms(),
         rssi);
+    append_test_run_id_and_close_json(buffer, buffer_size);
 }
 
 static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
@@ -249,6 +837,8 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
         "\"power_serial_marker_id\":\"%s\","
         "\"power_gpio_marker_id\":\"%s\","
         "\"power_gpio_marker_enabled\":%s,"
+        "\"reset_reason\":\"%s\","
+        "\"boot_count\":%" PRIu32 ","
         "\"imu_source\":\"%s\","
         "\"imu_hardware_present\":%s,"
         "\"imu_driver_enabled\":%s,"
@@ -266,7 +856,7 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
         "\"imu_gyro_mdps_z\":%d,"
         "\"link_type\":\"mock_4g_over_wifi\","
         "\"modem_state\":\"mock_data_ready\","
-        "\"gnss_state\":\"mock_fix\"}",
+        "\"gnss_state\":\"mock_fix\"",
         CONFIG_EGOLINK_DEVICE_ID,
         now_ms,
         seq,
@@ -285,6 +875,8 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
         power.marker.serial_marker_id,
         power.marker.gpio_marker_id,
         json_bool(power.marker.gpio_marker_enabled),
+        s_reset_reason,
+        s_boot_count,
         imu.source,
         json_bool(imu.hardware_present),
         json_bool(imu.driver_enabled),
@@ -300,13 +892,22 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
         imu.latest.gyro_mdps_x,
         imu.latest.gyro_mdps_y,
         imu.latest.gyro_mdps_z);
+    append_test_run_id_and_close_json(buffer, buffer_size);
 }
 
 static void publish_heartbeat(void)
 {
-    char payload[768];
+    static char payload[1280];
     uint32_t seq = next_seq();
     platform_power_enter_state(PLATFORM_POWER_STATE_UPLOAD, "status_publish");
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    char path[160];
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/heartbeat", CONFIG_EGOLINK_DEVICE_ID);
+    platform_power_mark("UPLOAD_STATUS", "message_hub_http");
+    build_status_payload(payload, sizeof(payload), seq);
+    bool ok = message_hub_post_json(path, payload, "HEARTBEAT", seq);
+    platform_power_leave_state(PLATFORM_POWER_STATE_UPLOAD, ok ? "status_http_ok" : "status_http_fail");
+#else
     platform_power_mark("UPLOAD_STATUS", CONFIG_EGOLINK_STATUS_TOPIC);
     build_status_payload(payload, sizeof(payload), seq);
 
@@ -330,6 +931,7 @@ static void publish_heartbeat(void)
         ESP_LOGE(TAG, "MQTT_HEARTBEAT_PUBLISH_FAIL seq=%" PRIu32 " rc=%d", seq, msg_id);
         platform_power_leave_state(PLATFORM_POWER_STATE_UPLOAD, "status_publish_fail");
     }
+#endif
     platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "status_publish_done");
 }
 
@@ -338,6 +940,14 @@ static void publish_sensor_sample(void)
     static char payload[1536];
     uint32_t seq = next_seq();
     platform_power_enter_state(PLATFORM_POWER_STATE_UPLOAD, "sensor_publish");
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    char path[160];
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/telemetry", CONFIG_EGOLINK_DEVICE_ID);
+    platform_power_mark("UPLOAD_SENSOR", "message_hub_http");
+    build_sensor_payload(payload, sizeof(payload), seq);
+    bool ok = message_hub_post_json(path, payload, "TELEMETRY", seq);
+    platform_power_leave_state(PLATFORM_POWER_STATE_UPLOAD, ok ? "sensor_http_ok" : "sensor_http_fail");
+#else
     platform_power_mark("UPLOAD_SENSOR", CONFIG_EGOLINK_EVENT_TOPIC);
     build_sensor_payload(payload, sizeof(payload), seq);
 
@@ -361,6 +971,7 @@ static void publish_sensor_sample(void)
         ESP_LOGE(TAG, "MQTT_SENSOR_PUBLISH_FAIL seq=%" PRIu32 " rc=%d", seq, msg_id);
         platform_power_leave_state(PLATFORM_POWER_STATE_UPLOAD, "sensor_publish_fail");
     }
+#endif
     platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "sensor_publish_done");
 }
 
@@ -405,11 +1016,11 @@ static void heartbeat_task(void *arg)
     while (true) {
         EventBits_t bits = xEventGroupWaitBits(
             s_event_group,
-            MQTT_CONNECTED_BIT,
+            UPLINK_READY_BIT,
             pdFALSE,
             pdTRUE,
             portMAX_DELAY);
-        if (bits & MQTT_CONNECTED_BIT) {
+        if (bits & UPLINK_READY_BIT) {
             publish_heartbeat();
         }
         vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_HEARTBEAT_INTERVAL_SEC * 1000));
@@ -422,16 +1033,35 @@ static void sensor_task(void *arg)
     while (true) {
         EventBits_t bits = xEventGroupWaitBits(
             s_event_group,
-            MQTT_CONNECTED_BIT,
+            UPLINK_READY_BIT,
             pdFALSE,
             pdTRUE,
             portMAX_DELAY);
-        if (bits & MQTT_CONNECTED_BIT) {
+        if (bits & UPLINK_READY_BIT) {
             publish_sensor_sample();
         }
         vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_SENSOR_EVENT_INTERVAL_SEC * 1000));
     }
 }
+
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+static void command_poll_task(void *arg)
+{
+    (void)arg;
+    while (true) {
+        EventBits_t bits = xEventGroupWaitBits(
+            s_event_group,
+            WIFI_CONNECTED_BIT,
+            pdFALSE,
+            pdTRUE,
+            portMAX_DELAY);
+        if (bits & WIFI_CONNECTED_BIT) {
+            message_hub_poll_commands();
+        }
+        vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC * 1000));
+    }
+}
+#endif
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
@@ -490,6 +1120,7 @@ static esp_err_t start_wifi(void)
     return ESP_OK;
 }
 
+#if !CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
     (void)handler_args;
@@ -525,15 +1156,22 @@ static void start_mqtt(void)
     ESP_ERROR_CHECK(esp_mqtt_client_register_event(s_mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL));
     ESP_ERROR_CHECK(esp_mqtt_client_start(s_mqtt_client));
 }
+#endif
 
 void app_main(void)
 {
     ESP_LOGI(
         TAG,
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+        "MESSAGE_HUB_BOOT device_id=%s hub=%s",
+        CONFIG_EGOLINK_DEVICE_ID,
+        CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL);
+#else
         "MQTT_HEARTBEAT_BOOT device_id=%s status_topic=%s event_topic=%s",
         CONFIG_EGOLINK_DEVICE_ID,
         CONFIG_EGOLINK_STATUS_TOPIC,
         CONFIG_EGOLINK_EVENT_TOPIC);
+#endif
 
     esp_err_t nvs_ret = nvs_flash_init();
     if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -541,6 +1179,7 @@ void app_main(void)
         nvs_ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(nvs_ret);
+    init_boot_diagnostics();
 
     s_event_group = xEventGroupCreate();
     ESP_ERROR_CHECK(s_event_group == NULL ? ESP_ERR_NO_MEM : ESP_OK);
@@ -554,9 +1193,15 @@ void app_main(void)
     platform_power_enter_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "wifi_connect");
     ESP_ERROR_CHECK(start_wifi());
     platform_power_leave_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "wifi_connected");
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    message_hub_register_device();
+    platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "message_hub_http_ready");
+    xTaskCreate(command_poll_task, "command_poll_task", COMMAND_POLL_TASK_STACK_SIZE, NULL, 5, NULL);
+#else
     platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "mqtt_smoke_ready");
     start_mqtt();
-    xTaskCreate(heartbeat_task, "heartbeat_task", 4096, NULL, 5, NULL);
+#endif
+    xTaskCreate(heartbeat_task, "heartbeat_task", HEARTBEAT_TASK_STACK_SIZE, NULL, 5, NULL);
     xTaskCreate(sensor_task, "sensor_task", 6144, NULL, 5, NULL);
     xTaskCreate(safety_cli_task, "safety_cli_task", 4096, NULL, 3, NULL);
 }

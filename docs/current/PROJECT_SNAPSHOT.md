@@ -19,6 +19,17 @@ of `docs/tasks/active/`; the remaining control-plane issue is that many context
 and documentation migration files are still uncommitted and no Git remote is
 configured.
 
+2026-06-28 addendum: the USB-Free VPS Message Hub path has progressed beyond
+this snapshot's original state. FW-002C resetdiag fix3 has USB-Free
+firmware-side SIM7670G real-fix evidence, and the near-term route has been
+corrected to observable-first development: R2.1 observability completion, R2.2
+short USB-Free baseline stability, R2.3 LTE HTTP thin-slice, R2.4 LTE command
+loop, R2.5 multi-source location observation and memory, then R3 product
+gates. The source planning draft used `ENG-003` for the route update, but the
+current task tree already uses `ENG-003` for Legacy Archive Review, so the
+route update is tracked with a non-conflicting task ID while preserving the
+same intent.
+
 ## Commands Executed
 
 - `git status`

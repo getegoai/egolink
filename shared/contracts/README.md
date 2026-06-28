@@ -1,6 +1,6 @@
-# Safety Companion contracts 1.0.0
+# Safety Companion contracts 1.0.0 and P0 message-hub contracts
 
-这些文件是 Ego Link 固件、PC Simulator、未来 Ego Base 和模型训练代码之间的稳定接口。
+这些文件是 Ego Link 固件、PC Simulator、未来 Ego Base、模型训练代码和 P0 message hub 之间的稳定接口。
 
 | 文件 | 含义 |
 |---|---|
@@ -10,6 +10,11 @@
 | `safety_event.schema.json` | 发往 PC Simulator / Ego Base 的安全事件 |
 | `base_command.schema.json` | PC Simulator / Ego Base 下发给设备的命令 |
 | `safety_annotation.schema.json` | 数据标注与用户确认结果 |
+| `message_hub_status.schema.json` | P0 message hub heartbeat/status envelope |
+| `message_hub_event.schema.json` | P0 message hub telemetry/event envelope |
+| `message_hub_command.schema.json` | P0 message hub downlink command envelope |
+| `message_hub_ack.schema.json` | P0 message hub command ACK envelope |
+| `message_hub_error.schema.json` | P0 message hub diagnosable error envelope |
 
 ## 变更规则
 
@@ -19,3 +24,5 @@
 4. 时间统一为 Unix 毫秒；固件内部可同时保留 monotonic time。
 5. 速度使用 m/s，距离使用 m，角度使用 degree，音频幅度使用 dBFS。
 6. 原始音频和图像是否保留必须服从 `privacy_mode` 和用户授权。
+7. P0 message hub 当前协议版本为 `egolink.p0.v1`，必须兼容既有
+   `status` / `event` / `command` / `ack` 行为；新增字段优先兼容追加。

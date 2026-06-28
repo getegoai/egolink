@@ -4,12 +4,17 @@ __pycache__/
 
 # Runtime data
 pc_simulator/runtime/
+server/runtime/
 reports/
 
 # ESP-IDF generated output
 firmware/**/build/
+firmware/**/build_*/
+firmware/**/build-*/
 firmware/**/managed_components/
 firmware/**/sdkconfig.old
+firmware/**/sdkconfig.local
+firmware/**/sdkconfig.*.local
 
 # Hardware smoke-test captures
 firmware/**/captures/

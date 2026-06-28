@@ -42,12 +42,161 @@ MQTT_HEARTBEAT_PUBLISH_OK seq=<n> ...
 MQTT_SENSOR_PUBLISH_OK seq=<n> ...
 ```
 
+## Optional FW-001 HTTP Message Hub Mode
+
+The default firmware path remains the local MQTT smoke test above. For the
+USB-Free R1 walking skeleton, enable the opt-in HTTP Message Hub transport and
+post directly to the VPS service:
+
+```text
+CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED=y
+CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL="http://<operator-vps>:8790"
+CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN="<runtime-token>"
+CONFIG_EGOLINK_DEVICE_ID="ego-link-r1-connectivity-001"
+CONFIG_EGOLINK_FW_VERSION="0.1.0-fw001-http"
+CONFIG_EGOLINK_TEST_RUN_ID="field-r1-<yyyymmdd>-001"
+```
+
+Use a local ignored config file such as `sdkconfig.vps.local` for real values.
+Do not commit real VPS addresses, passwords, bearer tokens, or private device
+logs. HTTP mode keeps the current protocol version `egolink.p0.v1`, posts
+device registration and heartbeat/status messages to the Message Hub, uploads
+the existing `sensor_sample` telemetry to `/telemetry`, polls
+`/commands/poll`, and ACKs any pending command with `status=ok`.
+`CONFIG_EGOLINK_TEST_RUN_ID` is optional; leave it empty for normal smoke
+builds and set it only for a named field run so server exports can bind
+status, telemetry, and ACK messages to that run.
+
+Prepare a local ignored R1 config and build the HTTP firmware:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ..\..\scripts\prepare_fw001_hw_config.ps1 `
+  -HostName <operator-vps> `
+  -TokenFile ..\..\server\runtime\vps_message_hub_token.txt `
+  -Build
+```
+
+After the operator flashes the connectivity node, powers it independently, and
+disconnects USB for the runtime path, validate the VPS loop:
+
+```powershell
+python ..\..\scripts\validate_fw001_hw_loop.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id ego-link-r1-connectivity-001 `
+  --test-run-id <same-test-run-id>
+```
+
+The guarded R1 runner wraps those steps and refuses hardware-affecting phases
+unless explicit operator flags are provided:
+
+```powershell
+# Plan only; no hardware action.
+powershell -ExecutionPolicy Bypass -File ..\..\scripts\run_fw001_hw_r1.ps1 `
+  -HostName <operator-vps>
+
+# Prepare local config and build only.
+powershell -ExecutionPolicy Bypass -File ..\..\scripts\run_fw001_hw_r1.ps1 `
+  -HostName <operator-vps> `
+  -PrepareBuild
+
+# Flash only after choosing the actual ESP32 console port.
+powershell -ExecutionPolicy Bypass -File ..\..\scripts\run_fw001_hw_r1.ps1 `
+  -HostName <operator-vps> `
+  -Flash `
+  -FlashPort COM4 `
+  -IUnderstandFlashWritesFirmware
+
+# Validate only after independent power is connected and USB is disconnected.
+powershell -ExecutionPolicy Bypass -File ..\..\scripts\run_fw001_hw_r1.ps1 `
+  -HostName <operator-vps> `
+  -Validate `
+  -OperatorConfirmedIndependentPower `
+  -OperatorConfirmedUsbDisconnected `
+  -TestRunId <same-test-run-id>
+```
+
+FW-001 HTTP mode is an R1 networking and command-ACK proof. It still reports
+mock GNSS and mock power fields and does not prove real GNSS, LTE module
+control, battery, camera, audio, or product power behavior.
+
+## FW-002 request_location scaffold
+
+HTTP Message Hub mode now recognizes the downlink command
+`request_location`. The first implementation is intentionally a GNSS telemetry
+scaffold: when the command is received, firmware uploads one
+`location_report` event to `/telemetry` and then ACKs the command. The report
+uses explicit no-fix fields:
+
+```text
+event_type=location_report
+source=firmware_gnss_scaffold
+source_status=unverified
+fix=false
+gnss_state=driver_not_integrated
+location_request_cmd_id=<cmd_id>
+```
+
+This proves only the USB-Free Message Hub command/telemetry path for location
+requests. It does not control SIM7670G GNSS, read satellites, produce real
+coordinates, prove LTE data transport, or replace the later outdoor R2 GNSS
+field test.
+
+## FW-002B SIM7670G firmware GNSS AT query
+
+FW-002B adds an opt-in SIM7670G GNSS firmware backend behind the same
+`request_location -> location_report -> ACK` envelope:
+
+```text
+CONFIG_EGOLINK_SIM7670_GNSS_ENABLED=y
+CONFIG_EGOLINK_SIM7670_UART_NUM=1
+CONFIG_EGOLINK_SIM7670_UART_RX_GPIO=17
+CONFIG_EGOLINK_SIM7670_UART_TX_GPIO=18
+CONFIG_EGOLINK_SIM7670_UART_BAUD=115200
+```
+
+The default remains disabled. When enabled, the firmware initializes UART1
+using the Waveshare ESP-IDF SIM7670X example pin convention
+`ESP32-S3 RX GPIO17 <- module TX` and `ESP32-S3 TX GPIO18 -> module RX`,
+sends bounded AT commands (`AT`, optional `AT+CGNSSPWR=1`,
+`AT+CGNSSINFO`, `AT+CGPSINFO`), parses no-fix/fix responses, and uploads one
+`location_report` with:
+
+```text
+source=sim7670g_firmware_gnss
+source_status=unverified for no-fix/unreachable states, observed for parsed fix=true coordinates
+gnss_source=sim7670g_uart_at
+gnss_driver=uart_at
+gnss_query_ok=<true|false>
+gnss_state=<fix|no_fix|at_unreachable|uart_init_failed>
+raw_command=<bounded AT command>
+raw_response=<bounded AT response summary>
+```
+
+`fix=true` requires parsed decimal coordinates from the module response.
+Indoor `fix=false` / `gnss_state=no_fix` is expected and is still valid
+telemetry. A fixed report with `source_status=observed` is hardware evidence,
+not final product GNSS acceptance. This task does not toggle unknown modem
+power GPIOs, does not use SIM7670G LTE data transport, and does not by itself
+prove outdoor GNSS acceptance. Outdoor USB-Free validation remains a separate
+field task.
+
+Host-side validation for this scaffold is:
+
+```powershell
+python ..\..\scripts\validate_fw002_location_loop.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id ego-link-r1-connectivity-001 `
+  --test-run-id <same-test-run-id>
+```
+
 The first sensor event is a `sensor_sample` / `device_health` payload. It
 reports ESP32 runtime observations that are available without extra drivers:
-uptime, Wi-Fi RSSI, free heap, minimum free heap, mock battery/charging from the
-`platform_power` log backend, mock IMU metadata from the `platform_imu` ring
-buffer skeleton, mock modem state, and mock GNSS state. Later firmware tasks can
-add real GNSS, power, IMU, or button values to the same event channel.
+uptime, Wi-Fi RSSI, free heap, minimum free heap, reset diagnostics
+(`reset_reason`, `boot_count`, and `boot_uptime_ms`), mock battery/charging
+from the `platform_power` log backend, mock IMU metadata from the
+`platform_imu` ring buffer skeleton, mock modem state, and mock GNSS state.
+Later firmware tasks can add real GNSS, power, IMU, or button values to the
+same event channel.
 
 `platform_power` is currently a HARCH-002A / HPWR-001 log backend. It emits
 serial log markers such as `PLATFORM_POWER_ENTER`, `PLATFORM_POWER_MARK`, and

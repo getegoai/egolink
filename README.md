@@ -8,9 +8,9 @@ Ego Link P0 是“AI 主动守护定位器”的第一阶段验证项目。当�
 - 固件：已验证摄像头拍照 smoke test 与 Wi-Fi MQTT 心跳 smoke test；`mqtt_heartbeat` 已支持设备健康 `sensor_sample` 事件上报。
 - 本机服务：Windows Mosquitto 已安装，用户态 LAN broker 可供开发板连接，PC Simulator 可订阅 MQTT status、写入事件日志并在 Dashboard 展示。
 - Safety Companion：M0 契约、规则基线、模拟回放、真实/半真实事件处理和本地监督会话已完成；M1 下一步进入数据基础与采集闭环。
-- 开发模式：采用 GitHub Flow，第一阶段保持单智能体、单任务、可验证迭代。
+- 开发模式：采用 USB-Free / VPS Message-First / Demo-Driven / Contract-First Walking Skeleton；GitHub Flow 继续作为分支和任务管理方式。
 
-详细约定见 `docs/development/WORKFLOW.md`。
+开发主流程见 `docs/development/DEV_FLOW.md`；VPS 消息中枢见 `docs/development/VPS_MESSAGE_HUB.md`；USB-Free 外场测试见 `docs/development/FIELD_TEST.md`；分支和任务机制见 `docs/development/WORKFLOW.md`。
 
 ## 常用命令
 
@@ -42,6 +42,26 @@ powershell -ExecutionPolicy Bypass -File scripts/start_mosquitto_lan.ps1 -Broker
 
 ```powershell
 python pc_simulator/app.py --port 8787
+```
+
+运行 P0 HTTP Message Hub：
+
+```powershell
+python scripts/run_message_hub.py --port 8790
+```
+
+运行一次 PC Simulator -> Message Hub R0 闭环：
+
+```powershell
+python scripts/run_message_hub_simulator.py --hub http://127.0.0.1:8790 --device-id ego-link-r0-sim --create-demo-command
+```
+
+部署 Message Hub 到 VPS（需要本机 SSH key 或已有安全认证通道；不在仓库保存密码）：
+
+```powershell
+$env:EGOLINK_VPS_HOST="<vps-host>"
+$env:EGOLINK_MESSAGE_HUB_TOKEN="<runtime-token>"
+powershell -ExecutionPolicy Bypass -File scripts/deploy_message_hub_vps.ps1 -Public
 ```
 
 接收开发板 MQTT 并写入事件日志：
@@ -79,6 +99,7 @@ http://127.0.0.1:8787
 
 - 当前任务：`docs/tasks/active/`
 - 项目状态：`docs/current/STATUS.md`
+- P0 Walking Skeleton 路线：`docs/current/ROADMAP_EGOLINK_P0.md`
 - 产品定位：`docs/product/PRODUCT_CHARTER.md`
 - 板级验证：`docs/hardware/validation/P0_BOARD_VALIDATION.md`
 - AutoDev 监控：`docs/development/AUTODEV_MONITORING.md`
