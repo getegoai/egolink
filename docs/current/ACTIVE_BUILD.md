@@ -278,7 +278,19 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   partition table were written, hashes verified, and hard reset completed.
   Flash evidence is under
   `reports/field_validation/lte003-command-loop-fix1-20260628-223454/flash_report.md`.
-  USB-Free runtime validation has not been run yet.
+  Runtime validation failed with `cmd-000013` still pending and no ACK. The
+  test-run export contained 37 earlier `lte_http_command_diag` messages: fix1
+  reached LTE readiness and posted diagnostics, but command poll ended with
+  `lte_http.poll_reason_code=LTE_HTTP_READ_FAILED`, HTTP status `200`, and
+  `poll_data_len=592`. Evidence is under
+  `reports/field_validation/lte003-command-loop-fix1-20260628-223454/`.
+- LTE-003 fix2 has been build-verified as
+  `0.1.0-lte003-command-loop-fix2` /
+  `lte003-command-loop-fix2-20260629-074709`. It increases the SIM7670 AT
+  response buffer from `512` to `1536` bytes so command-poll `HTTPREAD` can
+  hold the observed response body plus SIMCom framing. The binary is
+  `firmware/mqtt_heartbeat/build_lte003_command_loop_fix2/egolink_mqtt_heartbeat.bin`.
+  Fix2 has not been flashed yet.
 - LTE command polling/ACK, reconnect behavior, long-run LTE stability, product
   battery/charging accuracy, product power behavior, and final
   enclosure/mounting GNSS acceptance remain unverified. LTE-003 currently has

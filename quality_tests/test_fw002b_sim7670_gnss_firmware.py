@@ -110,6 +110,11 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
         self.assertIn('AT+HTTPPARA=\\"CID\\",1', cid_block)
         self.assertNotIn("command=AT+HTTPPARA=\\\"USERDATA\\\"", self.source)
 
+    def test_lte_http_read_buffer_has_margin_for_command_poll_body(self) -> None:
+        self.assertIn("#define AT_RESPONSE_BUFFER_SIZE 1536", self.source)
+        self.assertIn("uart_driver_install(uart_num, AT_RESPONSE_BUFFER_SIZE * 2", self.source)
+        self.assertIn('set_lte_http_reason(result, "LTE_HTTP_READ_FAILED")', self.source)
+
     def test_component_sends_bounded_at_queries_and_parses_common_gnss_lines(self) -> None:
         combined = self.header + self.source
         for token in [

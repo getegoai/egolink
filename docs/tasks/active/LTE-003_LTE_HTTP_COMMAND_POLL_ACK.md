@@ -223,3 +223,65 @@ runtime.
   `reports/field_validation/lte003-command-loop-fix1-20260628-223454/flash_report.md`
 - USB-Free runtime validation: not run yet. Requires independent power and USB
   disconnected.
+
+## Fix1 Runtime Attempt
+
+- Firmware version: `0.1.0-lte003-command-loop-fix1`
+- Test run ID: `lte003-command-loop-fix1-20260628-223454`
+- Validator mode: reused existing pending `cmd-000013` through
+  `--existing-command-id cmd-000013`.
+- Evidence:
+  `reports/field_validation/lte003-command-loop-fix1-20260628-223454/lte_command_loop_report.json`
+- Result: FAIL.
+- Validator started at: `2026-06-28T23:38:11.832669+00:00`
+- Validator completed at: `2026-06-28T23:44:13.137142+00:00`
+- Command: `cmd-000013`, `set_report_interval`.
+- Failure: command remained `pending`; no ACK was received.
+- The test-run export contained 37 `lte_http_command_diag` messages from
+  `2026-06-28T23:25:04.981401+00:00` to
+  `2026-06-28T23:30:02.130747+00:00`, before the validator wait window. This
+  shows the fix1 image booted after flash, reached LTE readiness, and posted
+  diagnostic telemetry, but it does not prove the later USB-Free validation
+  window had an active command loop.
+- Diagnostic summary: one `phase=ready` event and 36 `phase=poll_no_ack`
+  events. Latest diagnostic event had `fw_version=0.1.0-lte003-command-loop-fix1`,
+  `lte.reason_code=LTE_READY`, `transport.type=lte`,
+  `lte_http.poll_status_code=200`, `lte_http.poll_data_len=592`, and
+  `lte_http.poll_reason_code=LTE_HTTP_READ_FAILED`.
+- Interpretation: fix1 turned the prior silent failure into an explainable
+  failure. The command poll HTTP action reached the Message Hub and received a
+  200 response body, but firmware failed to read/parse the SIM7670G
+  `HTTPREAD` response. The immediate suspect is the component
+  `AT_RESPONSE_BUFFER_SIZE=512`, which is smaller than the observed poll body
+  length plus SIMCom `HTTPREAD` framing.
+
+## Fix2 Direction
+
+- Increase the SIM7670 AT response buffer from `512` to `1536` bytes so
+  command-poll `HTTPREAD` can hold the observed 592-byte response body plus
+  SIMCom framing.
+- Keep `lte_http_command_task` at `16384` stack from fix1.
+- Require a cold boot with USB disconnected after flashing fix2 so the command
+  loop runs during the USB-Free validation window.
+
+## Fix2 Build Evidence
+
+- Firmware version: `0.1.0-lte003-command-loop-fix2`
+- Test run ID: `lte003-command-loop-fix2-20260629-074709`
+- Build directory: `firmware/mqtt_heartbeat/build_lte003_command_loop_fix2/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte003_command_loop_fix2/egolink_mqtt_heartbeat.bin`
+- Binary size: `291440` bytes.
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670LteHttpCommandLoop`.
+- Build config confirmed
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=1`,
+  `CONFIG_EGOLINK_FW_VERSION="0.1.0-lte003-command-loop-fix2"`, and
+  `CONFIG_EGOLINK_TEST_RUN_ID="lte003-command-loop-fix2-20260629-074709"`.
+- Focused LTE/firmware tests passed with 24 tests before build.
+- `python scripts/context_lint.py` passed.
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
+  274 tests.
+- `git diff --check` passed.
+- Flash result: not run yet; requires explicit operator confirmation for
+  `COM4`.
