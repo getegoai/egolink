@@ -128,10 +128,13 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "publish_lte_http_probe_once",
             "publish_lte_http_probe_with_retries",
             "build_lte_http_probe_payload",
+            "build_lte_http_probe_lte_fragment",
             '\\"event_type\\":\\"lte_http_probe\\"',
             '\\"transport\\":{\\"type\\":\\"lte\\"',
             '\\"lte_http\\":{\\"phase\\":\\"%s\\"',
             "sim7670_lte_http_post_json",
+            "LTE_HTTP_PROBE_ATTEMPT_PAYLOAD_BYTES",
+            "LTE_HTTP_PROBE_RESULT_PAYLOAD_BYTES",
             "LTE_HTTP_PROBE_READY_CHECK",
             "LTE_HTTP_PROBE_ROUND_START",
             "LTE_HTTP_PROBE_ROUND_DONE",
@@ -150,6 +153,26 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertIn("publish_lte_http_probe_with_retries", probe_branch)
         self.assertNotIn("start_wifi()", probe_branch)
         self.assertNotIn("xTaskCreate(command_poll_task", probe_branch)
+
+    def test_lte_http_probe_payload_stays_compact_for_simcom_httpdata(self) -> None:
+        probe_payload = self.app_main.split("static void build_lte_http_probe_payload", 1)[1].split(
+            "static bool publish_lte_http_probe_once", 1
+        )[0]
+        compact_fragment = self.app_main.split("static void build_lte_http_probe_lte_fragment", 1)[1].split(
+            "#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED",
+            1,
+        )[0]
+
+        self.assertIn('\\"status_code\\":%s', probe_payload)
+        self.assertIn('\\"data_len\\":%s', probe_payload)
+        self.assertIn('\\"action_elapsed_ms\\":%s', probe_payload)
+        self.assertNotIn('\\"raw_command\\":\\"%s\\"', probe_payload)
+        self.assertNotIn('\\"raw_response\\":\\"%s\\"', probe_payload)
+        self.assertNotIn('\\"operator\\":\\"%s\\"', compact_fragment)
+        self.assertNotIn('\\"raw_command\\":\\"%s\\"', compact_fragment)
+        self.assertIn('\\"assigned_ip\\":\\"%s\\"', compact_fragment)
+        self.assertIn('\\"registration_state\\":\\"%s\\"', compact_fragment)
+        self.assertIn('\\"pdp_state\\":\\"%s\\"', compact_fragment)
 
     def test_http_mode_docs_keep_secret_and_capability_boundaries(self) -> None:
         self.assertIn("sdkconfig.vps.local", self.readme)

@@ -868,6 +868,83 @@ static void build_lte_observation_fragment(char *buffer, size_t buffer_size)
 #endif
 }
 
+static void build_lte_http_probe_lte_fragment(char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0) {
+        return;
+    }
+    buffer[0] = '\0';
+#if CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    sim7670_lte_report_t lte;
+    sim7670_lte_report_init(&lte);
+    bool lte_query_ok = sim7670_lte_query_status(&lte);
+
+    char rssi[16];
+    char rsrp[16];
+    char rsrq[16];
+    char sinr[16];
+    char rat[SIM7670_LTE_RAT_MAX * 2];
+    char cell_id[SIM7670_LTE_ID_MAX * 2];
+    char sim_state[SIM7670_LTE_STATUS_MAX * 2];
+    char registration_state[SIM7670_LTE_STATUS_MAX * 2];
+    char pdp_state[SIM7670_LTE_STATUS_MAX * 2];
+    char apn_state[SIM7670_LTE_STATUS_MAX * 2];
+    char assigned_ip[SIM7670_LTE_IP_MAX * 2];
+    char reason_code[SIM7670_LTE_STATUS_MAX * 2];
+
+    json_int_or_null(rssi, sizeof(rssi), lte.rssi_valid, lte.rssi);
+    json_int_or_null(rsrp, sizeof(rsrp), lte.rsrp_valid, lte.rsrp);
+    json_int_or_null(rsrq, sizeof(rsrq), lte.rsrq_valid, lte.rsrq);
+    json_int_or_null(sinr, sizeof(sinr), lte.sinr_valid, lte.sinr);
+    json_escape_summary(rat, sizeof(rat), lte.rat);
+    json_escape_summary(cell_id, sizeof(cell_id), lte.cell_id);
+    json_escape_summary(sim_state, sizeof(sim_state), lte.sim_state);
+    json_escape_summary(registration_state, sizeof(registration_state), lte.registration_state);
+    json_escape_summary(pdp_state, sizeof(pdp_state), lte.pdp_state);
+    json_escape_summary(apn_state, sizeof(apn_state), lte.apn_state);
+    json_escape_summary(assigned_ip, sizeof(assigned_ip), lte.assigned_ip);
+    json_escape_summary(reason_code, sizeof(reason_code), lte.reason_code);
+
+    snprintf(
+        buffer,
+        buffer_size,
+        ",\"cell\":{\"rat\":\"%s\","
+        "\"cell_id\":\"%s\","
+        "\"rssi\":%s,"
+        "\"rsrp\":%s,"
+        "\"rsrq\":%s,"
+        "\"sinr\":%s,"
+        "\"registration_state\":\"%s\","
+        "\"pdp_state\":\"%s\","
+        "\"reason_code\":\"%s\"},"
+        "\"lte\":{\"driver\":\"%s\","
+        "\"query_ok\":%s,"
+        "\"sim_state\":\"%s\","
+        "\"registration_state\":\"%s\","
+        "\"apn_state\":\"%s\","
+        "\"pdp_state\":\"%s\","
+        "\"assigned_ip\":\"%s\","
+        "\"reason_code\":\"%s\"}",
+        rat,
+        cell_id,
+        rssi,
+        rsrp,
+        rsrq,
+        sinr,
+        registration_state,
+        pdp_state,
+        reason_code,
+        sim7670_lte_backend_name(),
+        json_bool(lte_query_ok),
+        sim_state,
+        registration_state,
+        apn_state,
+        pdp_state,
+        assigned_ip,
+        reason_code);
+#endif
+}
+
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
 static bool wait_for_lte_ready_for_http_probe(void)
 {
@@ -921,8 +998,6 @@ static void build_lte_http_probe_payload(
     char action_elapsed_ms[16];
     char rtt_ms[16];
     char reason_code[SIM7670_LTE_HTTP_REASON_MAX * 2];
-    char raw_command[SIM7670_LTE_HTTP_RAW_COMMAND_MAX * 2];
-    char raw_response[SIM7670_LTE_HTTP_RAW_RESPONSE_MAX * 2];
     char last_error_json[SIM7670_LTE_HTTP_REASON_MAX * 2 + 4];
     const char *effective_phase = phase ? phase : "unknown";
     const char *effective_reason = include_result ? probe->reason_code : "LTE_HTTP_ATTEMPTING";
@@ -937,15 +1012,13 @@ static void build_lte_http_probe_payload(
         probe->action_elapsed_ms);
     json_int_or_null(rtt_ms, sizeof(rtt_ms), include_result && probe->action_elapsed_ms_valid, probe->action_elapsed_ms);
     json_escape_summary(reason_code, sizeof(reason_code), effective_reason);
-    json_escape_summary(raw_command, sizeof(raw_command), include_result ? probe->raw_command : "");
-    json_escape_summary(raw_response, sizeof(raw_response), include_result ? probe->raw_response : "");
     if (include_result && !result_ok) {
         snprintf(last_error_json, sizeof(last_error_json), "\"%s\"", reason_code);
     } else {
         snprintf(last_error_json, sizeof(last_error_json), "null");
     }
 
-    build_lte_observation_fragment(s_lte_http_probe_lte_fragment, sizeof(s_lte_http_probe_lte_fragment));
+    build_lte_http_probe_lte_fragment(s_lte_http_probe_lte_fragment, sizeof(s_lte_http_probe_lte_fragment));
     snprintf(
         buffer,
         buffer_size,
@@ -968,21 +1041,9 @@ static void build_lte_http_probe_payload(
         "\"lte_http\":{\"phase\":\"%s\","
         "\"driver\":\"%s\","
         "\"reason_code\":\"%s\","
-        "\"driver_enabled\":%s,"
-        "\"uart_ready\":%s,"
-        "\"at_ok\":%s,"
-        "\"http_init_ok\":%s,"
-        "\"http_url_ok\":%s,"
-        "\"http_content_ok\":%s,"
-        "\"http_header_ok\":%s,"
-        "\"http_data_ok\":%s,"
-        "\"http_action_ok\":%s,"
-        "\"http_read_ok\":%s,"
         "\"status_code\":%s,"
         "\"data_len\":%s,"
-        "\"action_elapsed_ms\":%s,"
-        "\"raw_command\":\"%s\","
-        "\"raw_response\":\"%s\"}"
+        "\"action_elapsed_ms\":%s}"
         "%s",
         CONFIG_EGOLINK_DEVICE_ID,
         uptime_ms(),
@@ -997,21 +1058,9 @@ static void build_lte_http_probe_payload(
         effective_phase,
         sim7670_lte_http_backend_name(),
         reason_code,
-        json_bool(include_result && probe->driver_enabled),
-        json_bool(include_result && probe->uart_ready),
-        json_bool(include_result && probe->at_ok),
-        json_bool(include_result && probe->http_init_ok),
-        json_bool(include_result && probe->http_url_ok),
-        json_bool(include_result && probe->http_content_ok),
-        json_bool(include_result && probe->http_header_ok),
-        json_bool(include_result && probe->http_data_ok),
-        json_bool(include_result && probe->http_action_ok),
-        json_bool(include_result && probe->http_read_ok),
         status_code,
         data_len,
         action_elapsed_ms,
-        raw_command,
-        raw_response,
         s_lte_http_probe_lte_fragment);
     append_test_run_id_and_close_json(buffer, buffer_size);
 }
@@ -1032,6 +1081,7 @@ static bool publish_lte_http_probe_once(void)
 
     uint32_t attempt_seq = next_seq();
     build_lte_http_probe_payload(payload, sizeof(payload), attempt_seq, "attempt", NULL, false);
+    ESP_LOGI(TAG, "LTE_HTTP_PROBE_ATTEMPT_PAYLOAD_BYTES=%u", (unsigned)strlen(payload));
     bool attempt_ok =
         sim7670_lte_http_post_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, payload, &attempt_result);
     ESP_LOGI(
@@ -1044,6 +1094,7 @@ static bool publish_lte_http_probe_once(void)
 
     uint32_t result_seq = next_seq();
     build_lte_http_probe_payload(payload, sizeof(payload), result_seq, "result", &attempt_result, true);
+    ESP_LOGI(TAG, "LTE_HTTP_PROBE_RESULT_PAYLOAD_BYTES=%u", (unsigned)strlen(payload));
     bool result_ok =
         sim7670_lte_http_post_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, payload, &result_post_result);
     ESP_LOGI(

@@ -25,10 +25,12 @@ allowed_paths:
   - firmware/mqtt_heartbeat/main/app_main.c
   - scripts/prepare_fw001_hw_config.ps1
   - scripts/run_fw001_hw_r1.ps1
+  - scripts/diag_lte_http_at.py
   - scripts/validate_lte_http_probe.py
   - quality_tests/test_fw001_hw_config.py
   - quality_tests/test_fw001_hw_runner.py
   - quality_tests/test_fw002b_sim7670_gnss_firmware.py
+  - quality_tests/test_lte_http_at_diag.py
   - quality_tests/test_lte_http_probe_validation.py
   - quality_tests/test_mqtt_heartbeat_firmware.py
 ---
@@ -257,3 +259,52 @@ context.
   LTE HTTP attempt visible to the VPS. Further LTE-002 progress needs
   USB-attached bounded SIM7670G AT/serial diagnosis of the HTTP command path;
   another blind USB-Free retry would not explain the failure.
+
+## USB AT Diagnosis
+
+- Operator reconnected USB and allowed LTE HTTP AT diagnosis.
+- Port scan evidence:
+  `reports/field_validation/lte002-atdiag-port-scan/20260628-182344/probe.md`
+- Result: SIM7670G USB AT ports `COM6` and `COM7` were reachable; SIM was
+  ready, CEREG registered, CGATT attached, PDP active, and assigned IP was
+  `10.63.36.116`.
+- Public health GET evidence:
+  `reports/field_validation/lte002-atdiag-http-20260628/20260628-182752/lte_http_at_diag.md`
+- Result: `AT+HTTPACTION=0` returned HTTP 200 for
+  `http://203.0.113.10:8790/health`.
+- Bearer-auth compact POST evidence:
+  `reports/field_validation/lte002-atdiag-authpost-20260628/20260628-183650/lte_http_at_diag.md`
+- Result: compact authenticated telemetry POST returned HTTP 200 with token
+  value redacted from the report.
+- Payload-size comparison:
+  - 1232-byte authenticated POST passed:
+    `reports/field_validation/lte002-atdiag-authpost-pad1000-20260628/20260628-184002/lte_http_at_diag.md`
+  - 2237-byte authenticated POST returned `+HTTPACTION: 1,706,0`:
+    `reports/field_validation/lte002-atdiag-authpost-pad2000-com7-20260628/20260628-184258/lte_http_at_diag.md`
+  - 3230-byte authenticated POST returned `+HTTPACTION: 1,706,0`:
+    `reports/field_validation/lte002-atdiag-authpost-large-20260628/20260628-183924/lte_http_at_diag.md`
+- Interpretation: the SIM7670G module, LTE registration, PDP, token length, and
+  VPS auth path work for compact HTTP bodies. The likely LTE-002 blocker is
+  the oversized firmware `lte_http_probe` payload, not APN/VPS reachability or
+  the basic SIMCom HTTP command sequence.
+
+## Fix4 Candidate
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix4`
+- Test run ID: `lte002-lte-http-probe-fix4-20260628-184644`
+- Change: use a compact LTE/cell fragment for `lte_http_probe`, and remove
+  raw AT command/response fields plus verbose HTTP boolean fields from the
+  probe event. The payload still preserves `transport.type=lte`,
+  `lte_http.phase`, `lte_http.reason_code`, HTTP status/data/action timing, and
+  LTE/cell readiness fields needed by the validator and dashboard.
+- Build directory:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix4/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix4/egolink_mqtt_heartbeat.bin`
+- Focused tests:
+  `python -m unittest quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_fw002b_sim7670_gnss_firmware quality_tests.test_lte_http_probe_validation quality_tests.test_lte_http_at_diag -v`
+  passed with 31 tests.
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
+- Runtime validation: not run. Flashing fix4 requires explicit operator
+  confirmation for `COM4`.

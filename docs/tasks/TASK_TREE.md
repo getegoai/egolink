@@ -83,8 +83,10 @@ motion candidate
     Message Hub with Wi-Fi disabled for the firmware run.
   - Current boundary: first flashed image, fix1, fix2, and fix3 all failed
     USB-Free runtime validation with no fresh LTE HTTP telemetry reaching the
-    VPS; the next step is USB-attached bounded SIM7670G AT/serial diagnosis of
-    the HTTP command path.
+    VPS. USB-attached SIM7670G AT diagnosis proved compact GET/POST LTE HTTP
+    reaches the VPS and reproduced `HTTPACTION` 706 for larger POST bodies.
+    Fix4 compacts the firmware probe payload and is build-verified, but it has
+    not been flashed or USB-Free validated.
 
 ## USB-Free VPS Walking Skeleton Line
 

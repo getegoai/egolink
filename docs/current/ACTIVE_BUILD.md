@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-002 HTTP probe firmware flashed on COM4; USB-Free LTE HTTP runtime validation pending |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-002 fix3 HTTP probe firmware currently flashed on COM4; fix4 compact-payload image is build-verified and awaits explicit flash confirmation |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -182,6 +182,25 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   remained on the prior LTE-001B fix1 Wi-Fi message lineage with
   `observability.transport.type=mock_4g_over_wifi`. Evidence is under
   `reports/field_validation/lte002-lte-http-probe-fix3-20260628-170508/`.
+- USB-attached LTE HTTP AT diagnosis then proved that the SIM7670G module and
+  VPS path are capable of HTTP over LTE for compact payloads: `/health` GET
+  returned HTTP 200, and a bearer-auth telemetry POST with a compact 211-byte
+  payload returned HTTP 200. The same diagnostic reproduced `+HTTPACTION:
+  1,706,0` once authenticated POST bodies reached 2237 and 3230 bytes, while a
+  1232-byte POST still passed. Evidence is under
+  `reports/field_validation/lte002-atdiag-http-20260628/`,
+  `reports/field_validation/lte002-atdiag-authpost-20260628/`,
+  `reports/field_validation/lte002-atdiag-authpost-pad1000-20260628/`,
+  `reports/field_validation/lte002-atdiag-authpost-pad2000-com7-20260628/`,
+  and `reports/field_validation/lte002-atdiag-authpost-large-20260628/`.
+- LTE-002 fix4 has been build-verified as
+  `0.1.0-lte002-lte-http-probe-fix4` /
+  `lte002-lte-http-probe-fix4-20260628-184644`. It compacts the
+  `lte_http_probe` payload to stay near the PC-side passing payload range while
+  preserving `transport.type=lte`, HTTP status/reason, and LTE/cell readiness
+  context. The binary is
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix4/egolink_mqtt_heartbeat.bin`.
+  The fix4 image has not been flashed or USB-Free validated yet.
 
 ## Current Known Limits
 
@@ -198,9 +217,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   VPS; fix2 also failed with no fresh LTE HTTP telemetry reaching the VPS.
   Fix3 also failed with no fresh LTE HTTP telemetry reaching the VPS. The prior
   LTE-001B fix1 image passed USB-Free LTE status observation, but LTE HTTP data
-  transport remains unverified. The next useful step is USB-attached bounded
-  SIM7670G AT/serial diagnosis of the HTTP command path, not another blind
-  USB-Free retry.
+  transport remains unverified. USB-attached AT diagnosis indicates compact
+  LTE HTTP payloads can reach the VPS, while larger POST bodies trigger
+  SIM7670G `HTTPACTION` 706; fix4 is build-verified but not yet flashed.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.
