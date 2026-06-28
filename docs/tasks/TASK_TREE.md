@@ -88,8 +88,9 @@ motion candidate
     Fix4 compacts the firmware probe payload and is flashed, but its USB-Free
     validation still produced zero test-run messages; USB-attached firmware
     console diagnosis explained this as a `main` task stack overflow reset loop
-    before LTE readiness or HTTP AT commands. Fix5 is build-verified and moves
-    the probe into a dedicated task with explicit stack margin.
+    before LTE readiness or HTTP AT commands. Fix5 moves the probe into a
+    dedicated task with explicit stack margin and is flashed, pending USB-Free
+    validation.
 
 ## USB-Free VPS Walking Skeleton Line
 
@@ -356,7 +357,8 @@ motion candidate
     still produced zero test-run messages; a bounded `COM4` console capture
     found repeated `main` task stack overflow panics before LTE readiness or
     HTTP AT commands. Fix5 moves the probe into a dedicated
-    `lte_http_probe_task` and is build-verified but not flashed.
+    `lte_http_probe_task`, was flashed on `COM4`, and is pending USB-Free
+    validation.
   - Boundary: no LTE command polling, ACK migration, reconnect supervisor,
     long-run stability, battery, power, or product LTE acceptance belongs to
     this task.

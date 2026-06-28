@@ -370,5 +370,9 @@ context.
   passed with 31 tests.
 - Build result: PASS through
   `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
-- Runtime validation: not run. Flashing fix5 requires explicit operator
-  confirmation for `COM4`.
+- Flash result: PASS on `COM4`; ESP32-S3 detected, bootloader/app/partition
+  table written, hashes verified, hard reset completed.
+- Flash evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix5-20260628-193815/flash_report.md`
+- Runtime validation: not run. It requires independent power and USB
+  disconnected.
