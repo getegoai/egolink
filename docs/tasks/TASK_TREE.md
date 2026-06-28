@@ -100,7 +100,10 @@ motion candidate
     poll HTTP status `200`, body length `592`, and `LTE_HTTP_READ_FAILED`.
     Fix2 is build-verified as `0.1.0-lte003-command-loop-fix2` /
     `lte003-command-loop-fix2-20260629-074709` with the SIM7670 AT response
-    buffer increased to `1536`; it has not been flashed yet.
+    buffer increased to `1536`, rebuilt with app version `43f5f55`, and flashed
+    on `COM4`. Flash evidence is under
+    `reports/field_validation/lte003-command-loop-fix2-20260629-074709/flash_report.md`.
+    USB-Free runtime validation has not been run yet.
 
 ## USB-Free VPS Walking Skeleton Line
 
