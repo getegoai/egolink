@@ -82,8 +82,9 @@ motion candidate
   - Goal: prove one SIM7670G LTE HTTP telemetry uplink to the existing VPS
     Message Hub with Wi-Fi disabled for the firmware run.
   - Current boundary: first flashed image failed USB-Free runtime validation
-    with no fresh LTE HTTP telemetry reaching the VPS; fix1 is build-verified
-    and requires explicit operator confirmation before flashing.
+    with no fresh LTE HTTP telemetry reaching the VPS; fix1 is flashed on
+    `COM4` and awaits operator-confirmed independent-power USB-Free
+    validation.
 
 ## USB-Free VPS Walking Skeleton Line
 
@@ -344,7 +345,8 @@ motion candidate
     `/api/state`.
   - Current state: `0.1.0-lte002-lte-http-probe` was flashed and failed with
     no fresh LTE HTTP telemetry; `0.1.0-lte002-lte-http-probe-fix1` waits for
-    `LTE_READY` before HTTP and is build-verified but not flashed.
+    `LTE_READY` before HTTP, is flashed on `COM4`, and awaits USB-Free runtime
+    validation.
   - Boundary: no LTE command polling, ACK migration, reconnect supervisor,
     long-run stability, battery, power, or product LTE acceptance belongs to
     this task.

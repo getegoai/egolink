@@ -135,7 +135,7 @@ context.
   fix candidate adds a bounded LTE readiness wait before AT HTTP POST so the
   module has time to re-register and activate PDP after independent-power boot.
 
-## Fix1 Candidate
+## Fix1 Build And Flash
 
 - Firmware version: `0.1.0-lte002-lte-http-probe-fix1`
 - Test run ID: `lte002-lte-http-probe-fix1-20260628-143631`
@@ -149,5 +149,8 @@ context.
   `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix1/egolink_mqtt_heartbeat.bin`
 - Build result: PASS through
   `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
-- Flash result: not run; requires explicit operator confirmation.
+- Flash result: PASS on `COM4`; ESP32-S3 detected, bootloader/app/partition
+  table written, hashes verified, hard reset completed.
+- Flash evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix1-20260628-143631/flash_report.md`
 - Runtime validation: not run; requires independent power and USB disconnected.
