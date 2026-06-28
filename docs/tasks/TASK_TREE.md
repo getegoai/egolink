@@ -273,6 +273,21 @@ No task packet with `status: active` is currently present under
   - Boundary: OBS-001 is additive and compatible with existing
     `egolink.p0.v1` messages. It does not prove LTE data transport, battery
     accuracy, long-run reliability, or enclosure GNSS performance.
+- `LOC-002 Location Observation Contract Baseline`
+  - Path: `docs/tasks/done/LOC-002_LOCATION_OBSERVATION_CONTRACT_BASELINE.md`
+  - Status: completed as a protocol/server/web/simulator baseline.
+  - Goal: add multi-source `location_observation` evidence without replacing
+    the existing `request_location -> location_report -> ACK` loop.
+  - Evidence: `docs/development/PROTOCOL.md` documents
+    `event_type=location_observation`; `message_hub_event.schema.json`
+    includes optional `wifi`, `imu`, and `location_belief`; PC Simulator
+    uploads a mock `location_observation`; `/api/state` exposes
+    `latest_location_observation`, treats it as `latest_location`, and derives
+    `observability.location_belief`; Dashboard renders location state,
+    belief confidence/radius/source/reason, Wi-Fi, and IMU state.
+  - Boundary: no firmware-side cell, Wi-Fi, IMU fusion, battery accuracy,
+    location-memory table, rule-engine, LTE transport, or hardware action is
+    claimed by this task.
 - `RELIABILITY-001A USB-Free Stability Observer And Reset Diagnostics`
   - Path: `docs/tasks/done/RELIABILITY-001A_USB_FREE_STABILITY_OBSERVER_RESET_DIAGNOSTICS.md`
   - Status: completed as an R3 preflight diagnosability increment.
@@ -394,6 +409,7 @@ No task packet with `status: active` is currently present under
    HTTP path; do not treat it as product LTE acceptance.
 3. Start LTE-001/LTE-002/LTE-003 in thin slices: LTE registration and cell
    state, LTE HTTP telemetry uplink, then LTE HTTP command polling and ACK.
-4. Add LOC-002/LOC-003/LOC-004 after the observability base: multi-source
-   location observation, VPS location memory tables, and a rule-based
-   `Fine`/`Coarse`/`Predicted`/`Unknown` belief engine.
+4. LOC-002 is complete as a contract/server/simulator baseline. Next location
+   work is LOC-003 VPS location memory tables and LOC-004 rule-based
+   `Fine`/`Coarse`/`Predicted`/`Unknown` belief engine after the short
+   baseline gate and LTE thin-slices are in motion.

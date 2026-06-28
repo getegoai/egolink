@@ -87,8 +87,28 @@ Future VPS tables should be introduced by task, not all at once:
 
 1. `OBS-001`: expose observability fields in state and test-run export.
 2. `LOC-002`: add multi-source `location_observation` contract.
-3. `LOC-003`: persist location memory tables on the VPS.
-4. `LOC-004`: implement the rule-based belief engine.
+3. `STAB-001`: run the short USB-Free baseline stability gate using the
+   observability and location-observation views.
+4. `LTE-001`: expose SIM7670G LTE registration and cell state.
+5. `LOC-003`: persist location memory tables on the VPS.
+6. `LOC-004`: implement the rule-based belief engine.
+
+## LOC-002 Baseline
+
+LOC-002 establishes the first `location_observation` server/simulator
+baseline:
+
+- `event_type=location_observation` is accepted under `egolink.p0.v1`.
+- PC Simulator can upload mock GNSS, cell, Wi-Fi, IMU, power, and
+  `location_belief`.
+- Message Hub treats both `location_report` and `location_observation` as
+  location evidence.
+- Dashboard can display location state, belief confidence/radius, belief
+  source, belief reason, Wi-Fi AP count, and IMU motion.
+
+Boundary: LOC-002 does not prove firmware-side cell fingerprint collection,
+real Wi-Fi scanning, real IMU fusion, battery accuracy, location-memory tables,
+or a rule engine. Those remain later tasks.
 
 EALE does not replace the existing `request_location -> location_report -> ACK`
 loop. It extends it into an explainable location system.

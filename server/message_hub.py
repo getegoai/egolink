@@ -323,7 +323,8 @@ class MessageHubStore:
 
     def _device_with_derived_state(self, db: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
         device = device_row(row)
-        device["latest_location"] = self._latest_event(db, device["device_id"], "location_report")
+        device["latest_location"] = self._latest_location_event(db, device["device_id"])
+        device["latest_location_observation"] = self._latest_event(db, device["device_id"], "location_observation")
         device["last_command"] = self._latest_command(db, device["device_id"])
         device["observability"] = build_observability(device, device["last_command"])
         return device
@@ -338,6 +339,19 @@ class MessageHubStore:
             ORDER BY id DESC LIMIT 1
             """,
             (device_id, event_type),
+        ).fetchone()
+        return json.loads(row["payload_json"]) if row else None
+
+    def _latest_location_event(self, db: sqlite3.Connection, device_id: str) -> dict[str, Any] | None:
+        row = db.execute(
+            """
+            SELECT payload_json FROM messages
+            WHERE device_id = ?
+              AND message_type = 'event'
+              AND event_type IN ('location_observation', 'location_report')
+            ORDER BY id DESC LIMIT 1
+            """,
+            (device_id,),
         ).fetchone()
         return json.loads(row["payload_json"]) if row else None
 
@@ -748,6 +762,15 @@ def latest_message(messages: list[dict[str, Any]], *, message_type: str | None =
     return {}
 
 
+def latest_location_message(messages: list[dict[str, Any]]) -> dict[str, Any]:
+    for message in reversed(messages):
+        if message.get("message_type") != "event":
+            continue
+        if message.get("event_type") in {"location_observation", "location_report"}:
+            return message
+    return {}
+
+
 def build_gnss_reason(fix: Any, state: Any, error_code: Any, latest_location: dict[str, Any]) -> str:
     if fix is True:
         return "GNSS_FIX"
@@ -765,6 +788,7 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
     status = as_dict(device.get("last_status"))
     telemetry = as_dict(device.get("latest_telemetry"))
     latest_location = as_dict(device.get("latest_location"))
+    latest_location_observation = as_dict(device.get("latest_location_observation"))
     field_message = latest_location if latest_location else telemetry
     error = as_dict(device.get("last_error"))
     latest_command = as_dict(latest_command)
@@ -777,6 +801,9 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
     power = as_dict(first_known(status.get("power"), telemetry.get("power"), field_message.get("power")))
     gnss = as_dict(first_known(field_message.get("gnss"), field_payload.get("gnss"), telemetry_payload.get("gnss")))
     cell = as_dict(first_known(field_message.get("cell"), telemetry.get("cell"), status.get("cell")))
+    wifi = as_dict(first_known(field_message.get("wifi"), telemetry.get("wifi"), status.get("wifi")))
+    imu = as_dict(first_known(field_message.get("imu"), telemetry.get("imu"), status.get("imu")))
+    location_belief = as_dict(first_known(field_message.get("location_belief"), field_payload.get("location_belief")))
     ack = as_dict(latest_command.get("ack"))
 
     boot_count = first_known(status.get("boot_count"), telemetry.get("boot_count"), runtime.get("boot_count"))
@@ -862,6 +889,22 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
             "rssi": first_known(cell.get("rssi"), status.get("rssi"), telemetry.get("rssi")),
             "sinr": first_known(cell.get("sinr"), cell.get("rssnr")),
         },
+        "wifi": {
+            "scan_enabled": first_known(wifi.get("scan_enabled"), False if wifi.get("aps") == [] else None),
+            "ap_count": len(wifi.get("aps")) if isinstance(wifi.get("aps"), list) else None,
+        },
+        "imu": {
+            "motion": first_known(imu.get("motion"), imu.get("state")),
+            "confidence": imu.get("confidence"),
+        },
+        "location_belief": {
+            "state": first_known(location_belief.get("state"), "unknown"),
+            "radius_m": location_belief.get("radius_m"),
+            "confidence": location_belief.get("confidence"),
+            "source": location_belief.get("source") if isinstance(location_belief.get("source"), list) else [],
+            "reason": first_known(location_belief.get("reason"), "no_location_belief"),
+            "updated_at": first_known(field_message.get("server_received_at"), latest_location_observation.get("server_received_at")),
+        },
         "explainability": {
             "state": "warning" if reason_codes else "ok",
             "reason_codes": reason_codes,
@@ -881,7 +924,8 @@ def summarize_test_run_observability(messages: list[dict[str, Any]], commands: l
         "last_seq": latest.get("seq"),
         "last_status": latest_message(messages, message_type="status"),
         "latest_telemetry": latest_message(messages, message_type="event"),
-        "latest_location": latest_message(messages, message_type="event", event_type="location_report"),
+        "latest_location": latest_location_message(messages),
+        "latest_location_observation": latest_message(messages, message_type="event", event_type="location_observation"),
         "last_error": latest_message(messages, message_type="error"),
     }
     latest_observability = build_observability(device, commands[-1] if commands else None)
@@ -985,8 +1029,9 @@ def render_dashboard() -> str:
       return 'offline';
     }
     function gnssField(telemetry, key, fallback = 'unknown') {
-      const nested = telemetry.payload && telemetry.payload.gnss ? telemetry.payload.gnss : {};
-      const value = telemetry[key] ?? nested[key];
+      const nested = telemetry.gnss || (telemetry.payload && telemetry.payload.gnss ? telemetry.payload.gnss : {});
+      const alias = key === 'gnss_state' ? (nested.state ?? nested.result) : undefined;
+      const value = telemetry[key] ?? nested[key] ?? alias;
       return value === undefined || value === null || value === '' ? fallback : value;
     }
     function currentToken() {
@@ -1018,10 +1063,13 @@ def render_dashboard() -> str:
       const obsPower = obs.power || {};
       const obsGnss = obs.gnss || {};
       const obsCell = obs.cell || {};
+      const obsWifi = obs.wifi || {};
+      const obsImu = obs.imu || {};
+      const obsBelief = obs.location_belief || {};
       const obsExplainability = obs.explainability || {};
       const location = d.latest_location || {};
       const telemetry = d.latest_telemetry || {};
-      const fieldTelemetry = location.event_type === 'location_report' ? location : telemetry;
+      const fieldTelemetry = ['location_report', 'location_observation'].includes(location.event_type) ? location : telemetry;
       const status = d.last_status || {};
       const error = d.last_error || {};
       const lat = gnssField(fieldTelemetry, 'lat');
@@ -1032,6 +1080,10 @@ def render_dashboard() -> str:
         <div class="metric"><span>Last Seen</span><span>${escapeHtml(d.last_seen_at)}</span></div>
         <div class="metric"><span>Location Updated</span><span>${escapeHtml(fieldTelemetry.server_received_at || 'none')}</span></div>
         <div class="metric"><span>Field Message</span><span>${escapeHtml(fieldTelemetry.event_type || fieldTelemetry.message_type || 'unknown')}</span></div>
+        <div class="metric"><span>Location State</span><span>${escapeHtml(obsBelief.state || 'unknown')}</span></div>
+        <div class="metric"><span>Belief</span><span>${escapeHtml(obsBelief.confidence ?? 'unknown')} / ${escapeHtml(obsBelief.radius_m ?? 'unknown')} m</span></div>
+        <div class="metric"><span>Belief Source</span><span>${escapeHtml((obsBelief.source || []).join(', ') || 'none')}</span></div>
+        <div class="metric"><span>Belief Reason</span><span>${escapeHtml(obsBelief.reason || 'unknown')}</span></div>
         <div class="metric"><span>GNSS State</span><span>${escapeHtml(gnssField(fieldTelemetry, 'gnss_state', fieldTelemetry.event_type || status.gnss_state || 'unknown'))}</span></div>
         <div class="metric"><span>Fix</span><span>${escapeHtml(gnssField(fieldTelemetry, 'fix'))}</span></div>
         <div class="metric"><span>Position</span><span>${escapeHtml(lat)}, ${escapeHtml(lon)}</span></div>
@@ -1045,6 +1097,8 @@ def render_dashboard() -> str:
         <div class="metric"><span>Command</span><span>${escapeHtml(obsCommand.last_cmd_id || 'none')} / ${escapeHtml(obsCommand.last_ack_status || obsCommand.last_status || 'none')}</span></div>
         <div class="metric"><span>Power</span><span>${escapeHtml(obsPower.battery_mv ?? 'unknown')} mV / ${escapeHtml(obsPower.soc_pct ?? status.battery ?? 'unknown')}%</span></div>
         <div class="metric"><span>Cell</span><span>${escapeHtml(obsCell.rat || 'unknown')} ${escapeHtml(obsCell.cell_id || '')} RSRP ${escapeHtml(obsCell.rsrp ?? 'unknown')}</span></div>
+        <div class="metric"><span>Wi-Fi</span><span>${escapeHtml(obsWifi.scan_enabled ?? 'unknown')} / APs ${escapeHtml(obsWifi.ap_count ?? 'unknown')}</span></div>
+        <div class="metric"><span>IMU</span><span>${escapeHtml(obsImu.motion || 'unknown')} ${escapeHtml(obsImu.confidence ?? '')}</span></div>
         <div class="metric"><span>GNSS Reason</span><span>${escapeHtml(obsGnss.reason_code || 'unknown')}</span></div>
         <div class="metric"><span>Reason Codes</span><span>${escapeHtml((obsExplainability.reason_codes || []).join(', ') || 'none')}</span></div>
         <div class="metric"><span>Last Error</span><span>${escapeHtml(error.error_code || 'none')}</span></div>

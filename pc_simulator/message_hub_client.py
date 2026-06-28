@@ -80,6 +80,59 @@ class SimulatedDevice:
             battery=self.battery,
         )
 
+    def location_observation(self) -> dict[str, Any]:
+        return protocol.event_message(
+            self.device_id,
+            utc_now(),
+            self.next_seq(),
+            "location_observation",
+            "normal",
+            fw_version=self.fw_version,
+            source="pc_simulator_location_observation",
+            source_status="mock",
+            transport={"type": self.link_type, "rtt_ms": 48, "last_error": None},
+            gnss={
+                "enabled": True,
+                "fix": True,
+                "lat": round(self.lat, 6),
+                "lon": round(self.lon, 6),
+                "hdop": 0.9,
+                "satellites": 12,
+                "attempt_ms": 18000,
+                "result": "fix",
+            },
+            cell={
+                "rat": "LTE",
+                "operator": "mock_operator",
+                "mcc": "460",
+                "mnc": "01",
+                "tac": "0x230A",
+                "cell_id": "mock-cell-001",
+                "rsrp": -67,
+                "rsrq": -21,
+                "rssi": -67,
+                "sinr": 19,
+            },
+            wifi={
+                "scan_enabled": True,
+                "aps": [
+                    {"bssid_hash": "mock_hash_home_1", "rssi": -62},
+                    {"bssid_hash": "mock_hash_home_2", "rssi": -74},
+                ],
+            },
+            imu={"motion": "stationary", "confidence": 0.93},
+            power={"battery_mv": 3920, "soc_pct": self.battery, "charging": False, "source": "mock"},
+            location_belief={
+                "state": "Fine",
+                "lat": round(self.lat, 6),
+                "lon": round(self.lon, 6),
+                "radius_m": 15,
+                "confidence": 0.91,
+                "source": ["gnss"],
+                "reason": "gnss_fix_hdop_good",
+            },
+        )
+
     def ack(self, command: dict[str, Any], status: str = "ok") -> dict[str, Any]:
         message = protocol.ack_message(self.device_id, utc_now(), self.next_seq(), str(command["cmd_id"]), status)
         message["fw_version"] = self.fw_version
@@ -103,6 +156,9 @@ class MessageHubClient:
 
     def send_location(self, device: SimulatedDevice) -> dict[str, Any]:
         return self.post(f"/api/v1/devices/{device.device_id}/telemetry", device.location_report())
+
+    def send_location_observation(self, device: SimulatedDevice) -> dict[str, Any]:
+        return self.post(f"/api/v1/devices/{device.device_id}/telemetry", device.location_observation())
 
     def create_demo_command(self, device: SimulatedDevice, *, interval_ms: int = 5000) -> dict[str, Any]:
         return self.post(
@@ -167,6 +223,7 @@ def run_once(
         "registered": client.register(device),
         "heartbeat": client.send_heartbeat(device),
         "location": client.send_location(device),
+        "location_observation": client.send_location_observation(device),
     }
     if create_demo_command:
         result["created_command"] = client.create_demo_command(device)

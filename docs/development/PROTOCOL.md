@@ -100,6 +100,90 @@ Typical derived state:
 }
 ```
 
+## LOC-002 Location Observation Event
+
+LOC-002 adds the compatible `event_type=location_observation` event. It keeps
+the same `message_type=event` envelope and does not replace
+`location_report`. Firmware, simulator, and future LTE transports may upload
+both:
+
+- `location_report`: command-scoped GNSS fix/no-fix result.
+- `location_observation`: multi-source location evidence and belief state.
+
+Required transport envelope fields remain those of a normal event:
+`protocol_version`, `device_id`, `ts`, `seq`, `message_type`, `event_type`,
+and `priority`.
+
+Recommended optional groups:
+
+| Group | Meaning |
+|---|---|
+| `gnss` | GNSS enabled/fix/quality/attempt result. |
+| `cell` | LTE RAT, operator, MCC/MNC, TAC, cell ID, and signal quality. |
+| `wifi` | privacy-preserving AP hashes and RSSI; no raw private BSSID by default. |
+| `imu` | motion state and confidence. |
+| `power` | battery voltage, state-of-charge estimate, charging state, source. |
+| `location_belief` | `Fine` / `Coarse` / `Predicted` / `Unknown`, radius, confidence, source, and reason. |
+
+Example coarse observation:
+
+```json
+{
+  "protocol_version": "egolink.p0.v1",
+  "device_id": "ego-link-r0-sim",
+  "fw_version": "0.1.0-sim",
+  "seq": 12,
+  "ts": "2026-06-28T02:40:00Z",
+  "message_type": "event",
+  "event_type": "location_observation",
+  "priority": "normal",
+  "source": "pc_simulator_location_observation",
+  "source_status": "mock",
+  "gnss": {
+    "enabled": true,
+    "fix": false,
+    "state": "no_fix",
+    "attempt_ms": 30000,
+    "result": "no_fix"
+  },
+  "cell": {
+    "rat": "LTE",
+    "mcc": "460",
+    "mnc": "01",
+    "tac": "0x230A",
+    "cell_id": "mock-cell-001",
+    "rsrp": -71
+  },
+  "wifi": {
+    "scan_enabled": true,
+    "aps": [
+      {
+        "bssid_hash": "mock_hash_1",
+        "rssi": -62
+      }
+    ]
+  },
+  "imu": {
+    "motion": "stationary",
+    "confidence": 0.93
+  },
+  "location_belief": {
+    "state": "Coarse",
+    "radius_m": 180,
+    "confidence": 0.72,
+    "source": ["cell", "wifi_memory"],
+    "reason": "matched_mock_known_place"
+  }
+}
+```
+
+The Message Hub treats `location_observation` as location evidence for
+`latest_location`, exposes the latest observation as
+`latest_location_observation`, and derives `observability.location_belief` for
+Dashboard and export. This is a contract/server/simulator baseline only; it
+does not claim firmware-side cell, Wi-Fi, IMU, or power observation until those
+sources are exercised by later tasks.
+
 ## Message Types
 
 ### Heartbeat / Status

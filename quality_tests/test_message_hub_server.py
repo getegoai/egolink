@@ -150,6 +150,62 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(device["latest_location"]["gnss_state"], "driver_not_integrated")
         self.assertEqual(device["latest_location"]["source_status"], "unverified")
 
+    def test_location_observation_updates_latest_location_and_belief(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.ingest(
+                "ego-link-001",
+                "telemetry",
+                protocol.event_message(
+                    "ego-link-001",
+                    "2026-06-27T00:00:01Z",
+                    1,
+                    "location_report",
+                    "normal",
+                    source="mock_gnss",
+                    source_status="mock",
+                    fix=True,
+                    lat=22.5431,
+                    lon=114.0579,
+                    gnss_state="fix",
+                ),
+            )
+            store.ingest(
+                "ego-link-001",
+                "telemetry",
+                protocol.event_message(
+                    "ego-link-001",
+                    "2026-06-27T00:00:02Z",
+                    2,
+                    "location_observation",
+                    "normal",
+                    source="pc_simulator_location_observation",
+                    source_status="mock",
+                    gnss={"enabled": True, "fix": False, "state": "no_fix", "attempt_ms": 30000},
+                    cell={"rat": "LTE", "cell_id": "mock-cell-001", "rsrp": -71},
+                    wifi={"scan_enabled": True, "aps": [{"bssid_hash": "mock_hash_1", "rssi": -62}]},
+                    imu={"motion": "stationary", "confidence": 0.93},
+                    location_belief={
+                        "state": "Coarse",
+                        "radius_m": 180,
+                        "confidence": 0.72,
+                        "source": ["cell", "wifi_memory"],
+                        "reason": "matched_mock_known_place",
+                    },
+                ),
+            )
+            device = store.get_device("ego-link-001")
+
+        self.assertEqual(device["latest_location"]["event_type"], "location_observation")
+        self.assertEqual(device["latest_location_observation"]["event_type"], "location_observation")
+        observability = device["observability"]
+        self.assertEqual(observability["gnss"]["reason_code"], "GNSS_NO_FIX")
+        self.assertEqual(observability["cell"]["cell_id"], "mock-cell-001")
+        self.assertEqual(observability["wifi"]["ap_count"], 1)
+        self.assertEqual(observability["imu"]["motion"], "stationary")
+        self.assertEqual(observability["location_belief"]["state"], "Coarse")
+        self.assertEqual(observability["location_belief"]["radius_m"], 180)
+
 
 class MessageHubDeployScriptTests(unittest.TestCase):
     def test_deploy_package_excludes_runtime_secret_files(self) -> None:

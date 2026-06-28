@@ -11,7 +11,7 @@
 | `base_command.schema.json` | PC Simulator / Ego Base 下发给设备的命令 |
 | `safety_annotation.schema.json` | 数据标注与用户确认结果 |
 | `message_hub_status.schema.json` | P0 message hub heartbeat/status envelope |
-| `message_hub_event.schema.json` | P0 message hub telemetry/event envelope |
+| `message_hub_event.schema.json` | P0 message hub telemetry/event envelope, including additive `location_observation` groups |
 | `message_hub_command.schema.json` | P0 message hub downlink command envelope |
 | `message_hub_ack.schema.json` | P0 message hub command ACK envelope |
 | `message_hub_error.schema.json` | P0 message hub diagnosable error envelope |

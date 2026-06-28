@@ -144,6 +144,14 @@
       "type": "object",
       "additionalProperties": true
     },
+    "wifi": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "imu": {
+      "type": "object",
+      "additionalProperties": true
+    },
     "location_belief": {
       "type": "object",
       "additionalProperties": true

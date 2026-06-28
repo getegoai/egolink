@@ -16,12 +16,17 @@ class MessageHubClientTests(unittest.TestCase):
 
         heartbeat = device.heartbeat()
         location = device.location_report()
+        observation = device.location_observation()
         ack = device.ack({"cmd_id": "cmd-0001", "cmd": "set_report_interval"})
 
         self.assertEqual(heartbeat["protocol_version"], protocol.PROTOCOL_VERSION)
         self.assertEqual(heartbeat["message_type"], "status")
         self.assertEqual(location["event_type"], "location_report")
         self.assertEqual(location["source_status"], "mock")
+        self.assertEqual(observation["event_type"], "location_observation")
+        self.assertEqual(observation["location_belief"]["state"], "Fine")
+        self.assertEqual(observation["cell"]["rat"], "LTE")
+        self.assertEqual(observation["wifi"]["aps"][0]["bssid_hash"], "mock_hash_home_1")
         self.assertEqual(ack["message_type"], "ack")
         self.assertEqual(ack["cmd_id"], "cmd-0001")
 
@@ -46,6 +51,10 @@ class MessageHubClientTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["heartbeat"]["message"]["message_type"], "status")
         self.assertEqual(result["location"]["message"]["event_type"], "location_report")
+        self.assertEqual(result["location_observation"]["message"]["event_type"], "location_observation")
+        device_state = result["state"]["devices"][0]
+        self.assertEqual(device_state["latest_location"]["event_type"], "location_observation")
+        self.assertEqual(device_state["observability"]["location_belief"]["state"], "Fine")
         self.assertEqual(len(result["polled_commands"]), 1)
         self.assertEqual(len(result["acks"]), 1)
         self.assertEqual(result["acks"][0]["message"]["status"], "ok")

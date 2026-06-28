@@ -104,7 +104,11 @@ class MessageHubContractTests(unittest.TestCase):
             self.assertTrue(expected.isdisjoint(schema["required"]))
 
         event_schema = self.load_schema(MESSAGE_HUB_SCHEMAS["event"])
+        self.assertIn("wifi", event_schema["properties"])
+        self.assertIn("imu", event_schema["properties"])
         self.assertIn("location_belief", event_schema["properties"])
+        self.assertNotIn("wifi", event_schema["required"])
+        self.assertNotIn("imu", event_schema["required"])
         self.assertNotIn("location_belief", event_schema["required"])
 
     def test_error_contract_requires_diagnosable_error_fields(self) -> None:
