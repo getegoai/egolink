@@ -51,6 +51,18 @@ yet; it is a diagnosable LTE status result such as `LTE_READY`,
 3. After flashing, connect independent power and disconnect USB.
 4. Confirm USB-Free runtime before validation starts.
 
+## Flash Evidence
+
+- Firmware version: `0.1.0-lte001b-observe`
+- Test run ID: `lte001b-observe-20260628-130400`
+- Build directory: `firmware/mqtt_heartbeat/build_lte001b_observe/`
+- Binary: `firmware/mqtt_heartbeat/build_lte001b_observe/egolink_mqtt_heartbeat.bin`
+- Flash port: `COM4`
+- Flash result: ESP32-S3 detected, image written, hashes verified, hard reset
+  completed.
+- Runtime result: pending USB-Free validation after independent power and USB
+  disconnected.
+
 ## Planned Commands
 
 Build/flash after explicit operator confirmation:

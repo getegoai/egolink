@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | FW-002C resetdiag fix3 HTTP Message Hub firmware flashed; USB-Free SIM7670G GNSS real-fix validation passed through VPS Message Hub |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-001B status observability firmware flashed; USB-Free LTE status validation pending |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -88,6 +88,12 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `fix=true`, `gnss_state=fix`, `source_status=observed`, and latitude/
   longitude fields present. Evidence is under
   `reports/field_validation/fw002c-fix3-window-gnss-retry1-20260628-093946/`.
+- LTE-001B status observability firmware has been build/flashed as
+  `0.1.0-lte001b-observe` / `lte001b-observe-20260628-130400`. The image was
+  built with SIM7670G GNSS and LTE-status observability enabled, flashed on
+  `COM4`, and hard-reset successfully. The binary is
+  `firmware/mqtt_heartbeat/build_lte001b_observe/egolink_mqtt_heartbeat.bin`.
+  USB-Free runtime validation has not run yet.
 
 ## Current Known Limits
 
@@ -98,10 +104,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 - The USB-Free R1 validation used Wi-Fi HTTP to the Message Hub; it does not
   prove SIM7670G LTE data transport, GNSS fix, battery/charging accuracy, or
   product power behavior.
-- The currently flashed connectivity-node image is FW-002C resetdiag fix3. It
-  reports `reset_reason`, persistent `boot_count`, and `boot_uptime_ms`, and it
-  passed the short USB-Free VPS stability gate lineage and the firmware-side
-  SIM7670G USB-Free real-fix validation.
+- The currently flashed connectivity-node image is LTE-001B
+  `0.1.0-lte001b-observe`. It has only passed build/flash so far; USB-Free LTE
+  status observation through the VPS Message Hub is pending.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.
