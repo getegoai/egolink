@@ -110,8 +110,9 @@ runtime.
   table written, hashes verified, and hard reset completed.
 - Flash evidence:
   `reports/field_validation/lte003-command-loop-20260628-210214/flash_report.md`
-- Runtime validation: not run. Requires independent power and USB disconnected
-  after flashing.
+- Runtime validation: failed twice with independent power and USB disconnected.
+  `cmd-000013` remained pending and no LTE-003 messages reached the Message
+  Hub.
 
 ## Validation So Far
 
@@ -156,3 +157,31 @@ runtime.
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
   273 tests after the validator update.
 - `git diff --check` passed.
+
+## Validation Attempt 2
+
+- Firmware version: `0.1.0-lte003-command-loop`
+- Test run ID: `lte003-command-loop-20260628-210214`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Operator action before retry: independent-power cold reboot with USB still
+  disconnected.
+- Validator mode: reused existing pending `cmd-000013` through
+  `--existing-command-id cmd-000013`.
+- Evidence:
+  `reports/field_validation/lte003-command-loop-20260628-210214/lte_command_loop_report_attempt2_existing_cmd.json`
+- Result: FAIL.
+- Started at: `2026-06-28T14:21:51.694056+00:00`
+- Completed at: `2026-06-28T14:27:53.800834+00:00`
+- Command: `cmd-000013`, `set_report_interval`.
+- Failure: command remained `pending`; no ACK was received, no ACK transport
+  evidence existed, and the test-run export contained zero messages.
+- VPS device state still showed the prior LTE-002 fix5 `lte_http_probe` as
+  latest telemetry with `server_received_at=2026-06-28T12:37:04.490795+00:00`
+  and `fw_version=0.1.0-lte002-lte-http-probe-fix5`.
+- Interpretation: the failure is not a Web display issue and is no longer
+  explained by the command being queued after an already-completed boot-time
+  command loop. The LTE-003 firmware image did not produce any fresh LTE-003
+  Message Hub traffic during the USB-Free retry window. The next useful step is
+  USB-attached bounded firmware console diagnosis on `COM4` to identify whether
+  the device is booting the expected image, reaching LTE readiness, issuing
+  HTTP GET `/commands/poll`, or failing before/inside the SIM7670G HTTP path.

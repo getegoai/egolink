@@ -87,9 +87,10 @@ motion candidate
     `firmware/mqtt_heartbeat/build_lte003_command_loop/egolink_mqtt_heartbeat.bin`.
     Flash evidence:
     `reports/field_validation/lte003-command-loop-20260628-210214/flash_report.md`.
-    USB-Free runtime validation attempt 1 failed with `cmd-000013` still
+    USB-Free runtime validation attempts 1 and 2 failed with `cmd-000013` still
     pending and no test-run messages under
-    `reports/field_validation/lte003-command-loop-20260628-210214/`.
+    `reports/field_validation/lte003-command-loop-20260628-210214/`; attempt 2
+    reused the pending command after an independent-power cold reboot.
 
 ## USB-Free VPS Walking Skeleton Line
 
