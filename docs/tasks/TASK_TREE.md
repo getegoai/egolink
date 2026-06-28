@@ -81,12 +81,13 @@ motion candidate
   - Status: active.
   - Goal: prove one SIM7670G LTE HTTP telemetry uplink to the existing VPS
     Message Hub with Wi-Fi disabled for the firmware run.
-  - Current boundary: first flashed image, fix1, fix2, and fix3 all failed
+  - Current boundary: first flashed image, fix1, fix2, fix3, and fix4 all failed
     USB-Free runtime validation with no fresh LTE HTTP telemetry reaching the
     VPS. USB-attached SIM7670G AT diagnosis proved compact GET/POST LTE HTTP
     reaches the VPS and reproduced `HTTPACTION` 706 for larger POST bodies.
-    Fix4 compacts the firmware probe payload and is build-verified, but it has
-    not been flashed or USB-Free validated.
+    Fix4 compacts the firmware probe payload and is flashed, but its USB-Free
+    validation still produced zero test-run messages. Next evidence should come
+    from USB-attached firmware console diagnosis of the ESP32-S3 UART AT path.
 
 ## USB-Free VPS Walking Skeleton Line
 
@@ -345,13 +346,13 @@ motion candidate
   - Goal: send a bounded `lte_http_probe` telemetry event through SIM7670G LTE
     HTTP to the VPS Message Hub, with `transport.type=lte` visible in
     `/api/state`.
-  - Current state: `0.1.0-lte002-lte-http-probe` and
-    `0.1.0-lte002-lte-http-probe-fix1` were flashed and failed with no fresh
-    LTE HTTP telemetry; `0.1.0-lte002-lte-http-probe-fix2` was also flashed
-    and failed with no fresh LTE HTTP telemetry. `0.1.0-lte002-lte-http-probe-fix3`
-    keeps Wi-Fi disabled, keeps bounded retries, skips `AT+HTTPPARA="CID",1`
-    by default, was flashed on `COM4`, and also failed with no fresh LTE HTTP
-    telemetry. Further progress needs bounded AT/serial evidence, not another
+  - Current state: `0.1.0-lte002-lte-http-probe`, fix1, fix2, fix3, and fix4
+    were flashed and failed with no fresh LTE HTTP telemetry. USB-attached
+    SIM7670G AT diagnosis proved compact GET/POST HTTP reaches the VPS and
+    reproduced `HTTPACTION` 706 for larger POST bodies. Fix4 compacted the
+    firmware probe payload and was flashed on `COM4`, but USB-Free validation
+    still produced zero test-run messages. Further progress needs bounded
+    firmware console/AT evidence from the ESP32-S3 UART path, not another
     blind USB-Free retry.
   - Boundary: no LTE command polling, ACK migration, reconnect supervisor,
     long-run stability, battery, power, or product LTE acceptance belongs to

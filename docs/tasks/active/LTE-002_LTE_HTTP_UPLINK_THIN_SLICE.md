@@ -306,5 +306,31 @@ context.
   passed with 31 tests.
 - Build result: PASS through
   `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
-- Runtime validation: not run. Flashing fix4 requires explicit operator
-  confirmation for `COM4`.
+- Flash result: PASS on `COM4`; ESP32-S3 detected, bootloader/app/partition
+  table written, hashes verified, hard reset completed.
+- Flash evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix4-20260628-184644/flash_report.md`
+- Runtime validation: FAIL as recorded in Validation Attempt 5.
+
+## Validation Attempt 5
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix4`
+- Test run ID: `lte002-lte-http-probe-fix4-20260628-184644`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix4-20260628-184644/lte_http_probe_report.json`
+- Result: FAIL.
+- Started at: `2026-06-28T11:00:01.555786+00:00`
+- Completed at: `2026-06-28T11:07:03.762627+00:00`
+- Failure: no fresh `lte_http_probe` telemetry reached the Message Hub.
+- VPS `/health` returned `ok=true`, and the test-run export contained zero
+  messages.
+- VPS state remained on the prior LTE-001B fix1 Wi-Fi message lineage:
+  `observability.transport.type=mock_4g_over_wifi`, firmware
+  `0.1.0-lte001b-observe-fix1`, and no `lte_http_probe`.
+- Interpretation: compacting the firmware payload was necessary but not
+  sufficient for USB-Free LTE HTTP transport. Since USB-attached SIM7670G AT
+  diagnosis proved compact HTTP bodies can reach the VPS, the next useful step
+  is USB-attached firmware console diagnosis of the ESP32-S3 UART AT path:
+  capture payload byte logs, LTE readiness, `HTTPDATA`, `HTTPACTION`, and AT
+  result codes from the actual firmware path.

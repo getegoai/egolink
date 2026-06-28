@@ -204,7 +204,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   partition table were written, hashes verified, and hard reset completed.
   Flash evidence is under
   `reports/field_validation/lte002-lte-http-probe-fix4-20260628-184644/flash_report.md`.
-  USB-Free runtime validation has not been run yet.
+  USB-Free runtime validation failed with no fresh `lte_http_probe` telemetry
+  reaching the VPS Message Hub; evidence is under
+  `reports/field_validation/lte002-lte-http-probe-fix4-20260628-184644/`.
 
 ## Current Known Limits
 
@@ -223,7 +225,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   LTE-001B fix1 image passed USB-Free LTE status observation, but LTE HTTP data
   transport remains unverified. USB-attached AT diagnosis indicates compact
   LTE HTTP payloads can reach the VPS, while larger POST bodies trigger
-  SIM7670G `HTTPACTION` 706; fix4 is flashed and pending USB-Free validation.
+  SIM7670G `HTTPACTION` 706. Fix4 is flashed but also failed USB-Free
+  validation with zero test-run messages, so the next useful step is
+  USB-attached firmware console diagnosis of the ESP32-S3 UART AT path.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.
