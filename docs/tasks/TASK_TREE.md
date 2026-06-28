@@ -86,8 +86,10 @@ motion candidate
     VPS. USB-attached SIM7670G AT diagnosis proved compact GET/POST LTE HTTP
     reaches the VPS and reproduced `HTTPACTION` 706 for larger POST bodies.
     Fix4 compacts the firmware probe payload and is flashed, but its USB-Free
-    validation still produced zero test-run messages. Next evidence should come
-    from USB-attached firmware console diagnosis of the ESP32-S3 UART AT path.
+    validation still produced zero test-run messages; USB-attached firmware
+    console diagnosis explained this as a `main` task stack overflow reset loop
+    before LTE readiness or HTTP AT commands. Fix5 is build-verified and moves
+    the probe into a dedicated task with explicit stack margin.
 
 ## USB-Free VPS Walking Skeleton Line
 
@@ -351,9 +353,10 @@ motion candidate
     SIM7670G AT diagnosis proved compact GET/POST HTTP reaches the VPS and
     reproduced `HTTPACTION` 706 for larger POST bodies. Fix4 compacted the
     firmware probe payload and was flashed on `COM4`, but USB-Free validation
-    still produced zero test-run messages. Further progress needs bounded
-    firmware console/AT evidence from the ESP32-S3 UART path, not another
-    blind USB-Free retry.
+    still produced zero test-run messages; a bounded `COM4` console capture
+    found repeated `main` task stack overflow panics before LTE readiness or
+    HTTP AT commands. Fix5 moves the probe into a dedicated
+    `lte_http_probe_task` and is build-verified but not flashed.
   - Boundary: no LTE command polling, ACK migration, reconnect supervisor,
     long-run stability, battery, power, or product LTE acceptance belongs to
     this task.

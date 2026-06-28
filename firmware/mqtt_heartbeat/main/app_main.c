@@ -34,6 +34,7 @@ static const char *TAG = "egolink_mqtt_heartbeat";
 #define COMMAND_POLL_TASK_STACK_SIZE 12288
 #define HEARTBEAT_TASK_STACK_SIZE 12288
 #define SENSOR_TASK_STACK_SIZE 12288
+#define LTE_HTTP_PROBE_TASK_STACK_SIZE 12288
 #if CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED
 #define LTE_OBSERVATION_FRAGMENT_MAX 2300
 #else
@@ -1141,6 +1142,18 @@ static bool publish_lte_http_probe_with_retries(void)
     }
     return false;
 }
+
+static void lte_http_probe_task(void *arg)
+{
+    (void)arg;
+    platform_power_enter_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "lte_http_probe");
+    bool lte_probe_ok = publish_lte_http_probe_with_retries();
+    platform_power_leave_state(
+        PLATFORM_POWER_STATE_NETWORK_ATTACH,
+        lte_probe_ok ? "lte_http_probe_ok" : "lte_http_probe_fail");
+    platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_http_probe_done");
+    vTaskDelete(NULL);
+}
 #endif
 
 static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
@@ -1598,12 +1611,9 @@ void app_main(void)
     ESP_LOGI(TAG, "SAFETY_MODEL_INIT_OK version=%s mock=true", safety_model_version());
 
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
-    platform_power_enter_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "lte_http_probe");
-    bool lte_probe_ok = publish_lte_http_probe_with_retries();
-    platform_power_leave_state(
-        PLATFORM_POWER_STATE_NETWORK_ATTACH,
-        lte_probe_ok ? "lte_http_probe_ok" : "lte_http_probe_fail");
-    platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_http_probe_done");
+    BaseType_t lte_probe_task_created =
+        xTaskCreate(lte_http_probe_task, "lte_http_probe_task", LTE_HTTP_PROBE_TASK_STACK_SIZE, NULL, 5, NULL);
+    ESP_ERROR_CHECK(lte_probe_task_created == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
 #else
     platform_power_enter_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "wifi_connect");
     ESP_ERROR_CHECK(start_wifi());

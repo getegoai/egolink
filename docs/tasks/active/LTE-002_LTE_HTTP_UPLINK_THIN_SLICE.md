@@ -334,3 +334,41 @@ context.
   is USB-attached firmware console diagnosis of the ESP32-S3 UART AT path:
   capture payload byte logs, LTE readiness, `HTTPDATA`, `HTTPACTION`, and AT
   result codes from the actual firmware path.
+
+## Fix4 Firmware Console Diagnosis
+
+- Connection path: USB-attached bounded console capture on `COM4`.
+- Evidence:
+  `reports/field_validation/lte002-fix4-console-diag-20260628/console_diag_report.md`
+- Raw log:
+  `reports/field_validation/lte002-fix4-console-diag-20260628/com4_capture_no_reset.log`
+- Result: FAIL.
+- Capture window: `2026-06-28T11:33:16Z` to `2026-06-28T11:36:16Z`.
+- Observed 340 repeated boots, 340 `LTE_HTTP_PROBE_ROUND_START attempt=1`
+  lines, and 340 `***ERROR*** A stack overflow in task main has been detected.`
+  panics.
+- No `LTE_HTTP_PROBE_READY_CHECK`, payload byte, `HTTPDATA`, or `HTTPACTION`
+  logs appeared.
+- Interpretation: fix4 does not reach LTE readiness or SIMCom HTTP commands.
+  It reset-loops because LTE HTTP probe execution runs synchronously inside the
+  ESP-IDF `main` task without enough stack margin.
+
+## Fix5 Candidate
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix5`
+- Test run ID: `lte002-lte-http-probe-fix5-20260628-193815`
+- Change: move LTE HTTP probe execution out of synchronous `app_main` and into
+  a dedicated `lte_http_probe_task` with
+  `LTE_HTTP_PROBE_TASK_STACK_SIZE=12288`, while keeping Wi-Fi disabled for the
+  LTE HTTP probe mode.
+- Build directory:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix5/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix5/egolink_mqtt_heartbeat.bin`
+- Focused tests:
+  `python -m unittest quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_fw002b_sim7670_gnss_firmware quality_tests.test_lte_http_probe_validation quality_tests.test_lte_http_at_diag -v`
+  passed with 31 tests.
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
+- Runtime validation: not run. Flashing fix5 requires explicit operator
+  confirmation for `COM4`.

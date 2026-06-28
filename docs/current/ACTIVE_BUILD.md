@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-002 fix4 compact-payload HTTP probe firmware currently flashed on COM4; USB-Free runtime validation pending |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-002 fix4 compact-payload HTTP probe firmware currently flashed on COM4 but reset-looping; fix5 is build-verified and awaits explicit flash confirmation |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -226,8 +226,18 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   transport remains unverified. USB-attached AT diagnosis indicates compact
   LTE HTTP payloads can reach the VPS, while larger POST bodies trigger
   SIM7670G `HTTPACTION` 706. Fix4 is flashed but also failed USB-Free
-  validation with zero test-run messages, so the next useful step is
-  USB-attached firmware console diagnosis of the ESP32-S3 UART AT path.
+  validation with zero test-run messages. USB-attached firmware console
+  diagnosis then observed repeated `main` task stack overflows before any LTE
+  readiness or HTTP AT command log appeared:
+  `reports/field_validation/lte002-fix4-console-diag-20260628/`.
+- LTE-002 fix5 has been build-verified as
+  `0.1.0-lte002-lte-http-probe-fix5` /
+  `lte002-lte-http-probe-fix5-20260628-193815`. It moves LTE HTTP probe
+  execution out of the ESP-IDF `main` task and into a dedicated
+  `lte_http_probe_task` with `LTE_HTTP_PROBE_TASK_STACK_SIZE=12288`. The
+  binary is
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix5/egolink_mqtt_heartbeat.bin`.
+  The fix5 image has not been flashed or USB-Free validated yet.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.
