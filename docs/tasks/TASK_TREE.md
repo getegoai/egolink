@@ -300,6 +300,19 @@ No task packet with `status: active` is currently present under
     and test-run export availability.
   - Boundary: no hardware stability pass, long run, LTE transport, firmware
     flash, or serial capture is claimed by this task.
+- `LTE-001A LTE Registration Cell Observability Baseline`
+  - Path: `docs/tasks/done/LTE-001A_LTE_REGISTRATION_CELL_OBSERVABILITY_BASELINE.md`
+  - Status: completed as a build-verified firmware/server/protocol baseline.
+  - Goal: expose SIM7670G LTE registration, SIM, APN/PDP, assigned-IP, cell
+    fingerprint, signal, raw AT summary, and reason-code state before using
+    LTE as the product transport.
+  - Evidence: firmware adds opt-in `CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED`
+    and optional `cell` / `lte` upload fragments; Message Hub derives
+    `observability.lte`; Dashboard renders LTE registration/PDP/SIM/reason;
+    contracts and docs list optional `lte` fields.
+  - Boundary: no firmware flash, USB-Free hardware validation, Wi-Fi-disable
+    run, `transport.type=lte`, DNS over LTE, HTTP over LTE, or LTE command loop
+    is claimed by this task.
 - `RELIABILITY-001A USB-Free Stability Observer And Reset Diagnostics`
   - Path: `docs/tasks/done/RELIABILITY-001A_USB_FREE_STABILITY_OBSERVER_RESET_DIAGNOSTICS.md`
   - Status: completed as an R3 preflight diagnosability increment.

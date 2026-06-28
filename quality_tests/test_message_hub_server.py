@@ -65,7 +65,26 @@ class MessageHubStoreTests(unittest.TestCase):
                     lat=22.5431,
                     lon=114.0579,
                     gnss={"fix": True, "hdop": 0.9, "satellites": 12, "attempt_ms": 18000},
-                    cell={"rat": "LTE", "cell_id": "cell-001", "rsrp": -67, "rsrq": -21, "sinr": 19},
+                    cell={
+                        "rat": "LTE",
+                        "cell_id": "cell-001",
+                        "rsrp": -67,
+                        "rsrq": -21,
+                        "sinr": 19,
+                        "registration_state": "registered_home",
+                        "pdp_state": "active",
+                        "sim_state": "READY",
+                    },
+                    lte={
+                        "driver": "sim7670g_uart_at",
+                        "query_ok": True,
+                        "sim_state": "READY",
+                        "registration_state": "registered_home",
+                        "apn_state": "configured",
+                        "pdp_state": "active",
+                        "assigned_ip": "10.1.2.3",
+                        "reason_code": "LTE_READY",
+                    },
                 ),
             )
             command = store.create_command("ego-link-001", {"cmd": "set_report_interval", "payload": {"interval_ms": 5000}})
@@ -91,6 +110,9 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(observability["power"]["battery_mv"], 3920)
         self.assertEqual(observability["gnss"]["reason_code"], "GNSS_FIX")
         self.assertEqual(observability["cell"]["cell_id"], "cell-001")
+        self.assertEqual(observability["cell"]["registration_state"], "registered_home")
+        self.assertEqual(observability["lte"]["reason_code"], "LTE_READY")
+        self.assertEqual(observability["lte"]["assigned_ip"], "10.1.2.3")
         self.assertEqual(observability["command"]["last_ack_status"], "ok")
 
     def test_error_ingest_updates_device_error_summary(self) -> None:
@@ -205,6 +227,38 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(observability["imu"]["motion"], "stationary")
         self.assertEqual(observability["location_belief"]["state"], "Coarse")
         self.assertEqual(observability["location_belief"]["radius_m"], 180)
+
+    def test_lte_reason_code_is_part_of_observability_explainability(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.ingest(
+                "ego-link-001",
+                "heartbeat",
+                protocol.status_message(
+                    "ego-link-001",
+                    "2026-06-27T00:00:00Z",
+                    1,
+                    battery=87,
+                    link_type="mock_4g_over_wifi",
+                    guard_mode="child_safety",
+                    queue_size=0,
+                    cell={"rat": "unknown", "registration_state": "searching", "reason_code": "LTE_NOT_REGISTERED"},
+                    lte={
+                        "driver": "sim7670g_uart_at",
+                        "query_ok": True,
+                        "sim_state": "READY",
+                        "registration_state": "searching",
+                        "pdp_state": "inactive",
+                        "reason_code": "LTE_NOT_REGISTERED",
+                    },
+                ),
+            )
+            device = store.get_device("ego-link-001")
+
+        observability = device["observability"]
+        self.assertEqual(observability["lte"]["registration_state"], "searching")
+        self.assertEqual(observability["lte"]["reason_code"], "LTE_NOT_REGISTERED")
+        self.assertIn("LTE_NOT_REGISTERED", observability["explainability"]["reason_codes"])
 
 
 class MessageHubDeployScriptTests(unittest.TestCase):

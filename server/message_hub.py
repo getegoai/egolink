@@ -801,6 +801,7 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
     power = as_dict(first_known(status.get("power"), telemetry.get("power"), field_message.get("power")))
     gnss = as_dict(first_known(field_message.get("gnss"), field_payload.get("gnss"), telemetry_payload.get("gnss")))
     cell = as_dict(first_known(field_message.get("cell"), telemetry.get("cell"), status.get("cell")))
+    lte = as_dict(first_known(field_message.get("lte"), telemetry.get("lte"), status.get("lte")))
     wifi = as_dict(first_known(field_message.get("wifi"), telemetry.get("wifi"), status.get("wifi")))
     imu = as_dict(first_known(field_message.get("imu"), telemetry.get("imu"), status.get("imu")))
     location_belief = as_dict(first_known(field_message.get("location_belief"), field_payload.get("location_belief")))
@@ -831,9 +832,10 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
     gnss_reason = build_gnss_reason(fix, gnss_state, error_code, latest_location)
 
     transport_last_error = first_known(transport.get("last_error"), status.get("transport_last_error"), error_code)
+    lte_reason = first_known(lte.get("reason_code"), cell.get("reason_code"))
     reason_codes: list[str] = []
-    for candidate in (error_code, transport_last_error, gnss_reason):
-        if candidate and candidate not in {"none", "GNSS_FIX"} and candidate not in reason_codes:
+    for candidate in (error_code, transport_last_error, gnss_reason, lte_reason):
+        if candidate and candidate not in {"none", "unknown", "GNSS_FIX", "LTE_READY"} and candidate not in reason_codes:
             reason_codes.append(str(candidate))
 
     return {
@@ -888,6 +890,27 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
             "rsrq": cell.get("rsrq"),
             "rssi": first_known(cell.get("rssi"), status.get("rssi"), telemetry.get("rssi")),
             "sinr": first_known(cell.get("sinr"), cell.get("rssnr")),
+            "sim_state": first_known(cell.get("sim_state"), lte.get("sim_state")),
+            "registration_state": first_known(cell.get("registration_state"), lte.get("registration_state")),
+            "pdp_state": first_known(cell.get("pdp_state"), lte.get("pdp_state")),
+            "reason_code": lte_reason,
+        },
+        "lte": {
+            "driver": first_known(lte.get("driver"), "unknown"),
+            "query_ok": lte.get("query_ok"),
+            "uart_ready": lte.get("uart_ready"),
+            "at_ok": lte.get("at_ok"),
+            "sim_ready": lte.get("sim_ready"),
+            "registered": lte.get("registered"),
+            "attached": lte.get("attached"),
+            "pdp_active": lte.get("pdp_active"),
+            "ip_valid": lte.get("ip_valid"),
+            "sim_state": first_known(lte.get("sim_state"), cell.get("sim_state"), "unknown"),
+            "registration_state": first_known(lte.get("registration_state"), cell.get("registration_state"), "unknown"),
+            "apn_state": first_known(lte.get("apn_state"), "unknown"),
+            "pdp_state": first_known(lte.get("pdp_state"), cell.get("pdp_state"), "unknown"),
+            "assigned_ip": first_known(lte.get("assigned_ip"), "unknown"),
+            "reason_code": first_known(lte_reason, "unknown"),
         },
         "wifi": {
             "scan_enabled": first_known(wifi.get("scan_enabled"), False if wifi.get("aps") == [] else None),
@@ -1063,6 +1086,7 @@ def render_dashboard() -> str:
       const obsPower = obs.power || {};
       const obsGnss = obs.gnss || {};
       const obsCell = obs.cell || {};
+      const obsLte = obs.lte || {};
       const obsWifi = obs.wifi || {};
       const obsImu = obs.imu || {};
       const obsBelief = obs.location_belief || {};
@@ -1097,6 +1121,8 @@ def render_dashboard() -> str:
         <div class="metric"><span>Command</span><span>${escapeHtml(obsCommand.last_cmd_id || 'none')} / ${escapeHtml(obsCommand.last_ack_status || obsCommand.last_status || 'none')}</span></div>
         <div class="metric"><span>Power</span><span>${escapeHtml(obsPower.battery_mv ?? 'unknown')} mV / ${escapeHtml(obsPower.soc_pct ?? status.battery ?? 'unknown')}%</span></div>
         <div class="metric"><span>Cell</span><span>${escapeHtml(obsCell.rat || 'unknown')} ${escapeHtml(obsCell.cell_id || '')} RSRP ${escapeHtml(obsCell.rsrp ?? 'unknown')}</span></div>
+        <div class="metric"><span>LTE</span><span>${escapeHtml(obsLte.registration_state || obsCell.registration_state || 'unknown')} / PDP ${escapeHtml(obsLte.pdp_state || obsCell.pdp_state || 'unknown')} / SIM ${escapeHtml(obsLte.sim_state || obsCell.sim_state || 'unknown')}</span></div>
+        <div class="metric"><span>LTE Reason</span><span>${escapeHtml(obsLte.reason_code || obsCell.reason_code || 'unknown')}</span></div>
         <div class="metric"><span>Wi-Fi</span><span>${escapeHtml(obsWifi.scan_enabled ?? 'unknown')} / APs ${escapeHtml(obsWifi.ap_count ?? 'unknown')}</span></div>
         <div class="metric"><span>IMU</span><span>${escapeHtml(obsImu.motion || 'unknown')} ${escapeHtml(obsImu.confidence ?? '')}</span></div>
         <div class="metric"><span>GNSS Reason</span><span>${escapeHtml(obsGnss.reason_code || 'unknown')}</span></div>

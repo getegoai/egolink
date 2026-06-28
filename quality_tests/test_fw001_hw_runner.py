@@ -38,6 +38,7 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertFalse(payload["flash_ran"])
         self.assertFalse(payload["validate_ran"])
         self.assertFalse(payload["sim7670_gnss_enabled"])
+        self.assertFalse(payload["sim7670_lte_status_enabled"])
         self.assertIn("IUnderstandFlashWritesFirmware", payload["flash_guard"])
 
     def test_flash_requires_explicit_confirmation_and_port(self) -> None:
@@ -71,7 +72,9 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertIn("Flash requires -IUnderstandFlashWritesFirmware", self.script_text)
         self.assertIn("Validation requires -OperatorConfirmedUsbDisconnected", self.script_text)
         self.assertIn("[switch]$EnableSim7670Gnss", self.script_text)
+        self.assertIn("[switch]$EnableSim7670LteStatus", self.script_text)
         self.assertIn('Add-If $prepareArgs $EnableSim7670Gnss "-EnableSim7670Gnss"', self.script_text)
+        self.assertIn('Add-If $prepareArgs $EnableSim7670LteStatus "-EnableSim7670LteStatus"', self.script_text)
         self.assertIn("ForEach-Object { $prepareArgs.Add([string]$_) }", self.script_text)
         self.assertNotIn("$prepareArgs.AddRange(@(", self.script_text)
         self.assertIn("function ConvertFrom-LastJsonObject", self.script_text)

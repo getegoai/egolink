@@ -26,10 +26,12 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
     def test_backend_is_explicit_opt_in_with_waveshare_uart_defaults(self) -> None:
         for token in [
             "config EGOLINK_SIM7670_GNSS_ENABLED",
+            "config EGOLINK_SIM7670_LTE_STATUS_ENABLED",
             "default n",
             "depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED",
             "config EGOLINK_SIM7670_UART_NUM",
             "default 1",
+            "depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED",
             "config EGOLINK_SIM7670_UART_RX_GPIO",
             "default 17",
             "config EGOLINK_SIM7670_UART_TX_GPIO",
@@ -39,6 +41,33 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
         ]:
             with self.subTest(token=token):
                 self.assertIn(token, self.kconfig)
+
+    def test_lte_status_backend_is_opt_in_and_reports_explainable_states(self) -> None:
+        combined = self.header + self.source
+        for token in [
+            "sim7670_lte_report_t",
+            "sim7670_lte_query_status",
+            "sim7670_lte_backend_name",
+            "AT+CPIN?",
+            "AT+COPS?",
+            "AT+CEREG?",
+            "AT+CGATT?",
+            "AT+CGDCONT?",
+            "AT+CGACT?",
+            "AT+CGPADDR=1",
+            "AT+CSQ",
+            "AT+CPSI?",
+            "LTE_AT_UNREACHABLE",
+            "LTE_SIM_NOT_READY",
+            "LTE_NOT_REGISTERED",
+            "LTE_NOT_ATTACHED",
+            "LTE_PDP_INACTIVE",
+            "LTE_READY",
+            "parse_cpsi",
+            "parse_cereg",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, combined)
 
     def test_component_sends_bounded_at_queries_and_parses_common_gnss_lines(self) -> None:
         combined = self.header + self.source
@@ -95,6 +124,7 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
             "prove outdoor GNSS acceptance",
             "Outdoor USB-Free validation remains a separate",
             "CONFIG_EGOLINK_SIM7670_GNSS_ENABLED is not set",
+            "CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED",
             "gnss_state=at_unreachable",
         ]:
             with self.subTest(token=token):

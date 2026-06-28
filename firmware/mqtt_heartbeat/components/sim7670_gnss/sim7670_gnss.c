@@ -18,8 +18,9 @@
 #define KNOT_TO_MPS 0.514444
 #define AT_RESPONSE_BUFFER_SIZE 512
 #define AT_READ_CHUNK_SIZE 96
+#define SIM7670_AT_BACKEND_ENABLED (CONFIG_EGOLINK_SIM7670_GNSS_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED)
 
-#if CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+#if SIM7670_AT_BACKEND_ENABLED
 static const char *TAG = "sim7670_gnss";
 
 static bool s_initialized;
@@ -54,7 +55,32 @@ const char *sim7670_gnss_backend_name(void)
 #endif
 }
 
-#if CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+void sim7670_lte_report_init(sim7670_lte_report_t *report)
+{
+    if (report == NULL) {
+        return;
+    }
+    memset(report, 0, sizeof(*report));
+    report->driver_enabled = false;
+    report->uart_ready = false;
+    report->at_ok = false;
+    snprintf(report->sim_state, sizeof(report->sim_state), "%s", "driver_disabled");
+    snprintf(report->registration_state, sizeof(report->registration_state), "%s", "unknown");
+    snprintf(report->pdp_state, sizeof(report->pdp_state), "%s", "unknown");
+    snprintf(report->apn_state, sizeof(report->apn_state), "%s", "unknown");
+    snprintf(report->reason_code, sizeof(report->reason_code), "%s", "LTE_STATUS_DISABLED");
+}
+
+const char *sim7670_lte_backend_name(void)
+{
+#if CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    return "sim7670g_uart_at";
+#else
+    return "disabled";
+#endif
+}
+
+#if SIM7670_AT_BACKEND_ENABLED
 esp_err_t sim7670_gnss_init(void)
 {
     if (s_initialized) {
@@ -396,12 +422,310 @@ static bool parse_best_fix(const char *command, const char *response, sim7670_gn
     return false;
 }
 
+static void strip_quotes(char *text)
+{
+    if (text == NULL) {
+        return;
+    }
+    trim(text);
+    size_t len = strlen(text);
+    if (len >= 2 && text[0] == '"' && text[len - 1] == '"') {
+        memmove(text, text + 1, len - 2);
+        text[len - 2] = '\0';
+        trim(text);
+    }
+}
+
+static const char *registration_state_from_stat(const char *stat)
+{
+    if (stat == NULL || stat[0] == '\0') {
+        return "unknown";
+    }
+    switch (stat[0]) {
+    case '0':
+        return "not_registered";
+    case '1':
+        return "registered_home";
+    case '2':
+        return "searching";
+    case '3':
+        return "registration_denied";
+    case '4':
+        return "unknown";
+    case '5':
+        return "registered_roaming";
+    default:
+        return "unknown";
+    }
+}
+
+static const char *rat_from_cops_act(const char *act)
+{
+    if (act == NULL || act[0] == '\0') {
+        return "";
+    }
+    if (strcmp(act, "0") == 0 || strcmp(act, "1") == 0 || strcmp(act, "3") == 0) {
+        return "GSM";
+    }
+    if (strcmp(act, "7") == 0 || strcmp(act, "9") == 0) {
+        return "LTE";
+    }
+    return act;
+}
+
+static void set_lte_reason(sim7670_lte_report_t *report, const char *reason)
+{
+    if (report == NULL) {
+        return;
+    }
+    copy_truncated(report->reason_code, sizeof(report->reason_code), reason ? reason : "LTE_UNKNOWN");
+}
+
+static void update_lte_raw(sim7670_lte_report_t *report, const char *command, const char *response)
+{
+    if (report == NULL) {
+        return;
+    }
+    copy_truncated(report->raw_command, sizeof(report->raw_command), command);
+    copy_truncated(report->raw_response, sizeof(report->raw_response), response);
+}
+
+static void split_mcc_mnc(const char *combined, sim7670_lte_report_t *report)
+{
+    if (combined == NULL || combined[0] == '\0' || report == NULL) {
+        return;
+    }
+    char value[SIM7670_LTE_ID_MAX * 2];
+    copy_truncated(value, sizeof(value), combined);
+    strip_quotes(value);
+    char *separator = strchr(value, '-');
+    if (separator == NULL) {
+        separator = strchr(value, ',');
+    }
+    if (separator == NULL) {
+        return;
+    }
+    *separator = '\0';
+    copy_truncated(report->mcc, sizeof(report->mcc), value);
+    copy_truncated(report->mnc, sizeof(report->mnc), separator + 1);
+}
+
+static void parse_cpin(const char *response, sim7670_lte_report_t *report)
+{
+    char state[SIM7670_LTE_STATUS_MAX];
+    const char *line = find_line(response, "+CPIN:");
+    if (line == NULL || report == NULL) {
+        return;
+    }
+    copy_truncated(state, sizeof(state), line + strlen("+CPIN:"));
+    char *line_end = strpbrk(state, "\r\n");
+    if (line_end != NULL) {
+        *line_end = '\0';
+    }
+    strip_quotes(state);
+    copy_truncated(report->sim_state, sizeof(report->sim_state), state);
+    report->sim_ready = strcmp(state, "READY") == 0;
+}
+
+static void parse_cops(const char *response, sim7670_lte_report_t *report)
+{
+    const char *line = find_line(response, "+COPS:");
+    char field[SIM7670_LTE_OPERATOR_MAX];
+    if (line == NULL || report == NULL) {
+        return;
+    }
+    copy_truncated(report->operator_name, sizeof(report->operator_name), field_at(line, "+COPS:", 2, field, sizeof(field)));
+    strip_quotes(report->operator_name);
+    (void)field_at(line, "+COPS:", 3, field, sizeof(field));
+    strip_quotes(field);
+    const char *rat = rat_from_cops_act(field);
+    if (rat[0] != '\0') {
+        copy_truncated(report->rat, sizeof(report->rat), rat);
+    }
+}
+
+static void parse_cereg(const char *response, sim7670_lte_report_t *report)
+{
+    const char *line = find_line(response, "+CEREG:");
+    char field0[SIM7670_LTE_ID_MAX];
+    char field1[SIM7670_LTE_ID_MAX];
+    char field2[SIM7670_LTE_ID_MAX];
+    char field3[SIM7670_LTE_ID_MAX];
+    if (line == NULL || report == NULL) {
+        return;
+    }
+    (void)field_at(line, "+CEREG:", 0, field0, sizeof(field0));
+    (void)field_at(line, "+CEREG:", 1, field1, sizeof(field1));
+    (void)field_at(line, "+CEREG:", 2, field2, sizeof(field2));
+    (void)field_at(line, "+CEREG:", 3, field3, sizeof(field3));
+    strip_quotes(field0);
+    strip_quotes(field1);
+    strip_quotes(field2);
+    strip_quotes(field3);
+    const char *stat = field1[0] != '\0' ? field1 : field0;
+    copy_truncated(report->registration_state, sizeof(report->registration_state), registration_state_from_stat(stat));
+    report->registered = stat[0] == '1' || stat[0] == '5';
+    if (field1[0] != '\0') {
+        copy_truncated(report->tac, sizeof(report->tac), field2);
+        copy_truncated(report->cell_id, sizeof(report->cell_id), field3);
+    }
+}
+
+static void parse_cgatt(const char *response, sim7670_lte_report_t *report)
+{
+    const char *line = find_line(response, "+CGATT:");
+    char field[SIM7670_LTE_STATUS_MAX];
+    if (line == NULL || report == NULL) {
+        return;
+    }
+    (void)field_at(line, "+CGATT:", 0, field, sizeof(field));
+    report->attached = strcmp(field, "1") == 0;
+}
+
+static void parse_cgdcont(const char *response, sim7670_lte_report_t *report)
+{
+    const char *line = find_line(response, "+CGDCONT:");
+    char apn[SIM7670_LTE_OPERATOR_MAX];
+    if (line == NULL || report == NULL) {
+        return;
+    }
+    (void)field_at(line, "+CGDCONT:", 2, apn, sizeof(apn));
+    strip_quotes(apn);
+    copy_truncated(report->apn_state, sizeof(report->apn_state), apn[0] != '\0' ? "configured" : "missing");
+}
+
+static void parse_cgact(const char *response, sim7670_lte_report_t *report)
+{
+    const char *line = find_line(response, "+CGACT:");
+    char field[SIM7670_LTE_STATUS_MAX];
+    if (line == NULL || report == NULL) {
+        return;
+    }
+    (void)field_at(line, "+CGACT:", 1, field, sizeof(field));
+    report->pdp_active = strcmp(field, "1") == 0;
+    copy_truncated(report->pdp_state, sizeof(report->pdp_state), report->pdp_active ? "active" : "inactive");
+}
+
+static void parse_cgpaddr(const char *response, sim7670_lte_report_t *report)
+{
+    const char *line = find_line(response, "+CGPADDR:");
+    char ip[SIM7670_LTE_IP_MAX];
+    if (line == NULL || report == NULL) {
+        return;
+    }
+    (void)field_at(line, "+CGPADDR:", 1, ip, sizeof(ip));
+    strip_quotes(ip);
+    copy_truncated(report->assigned_ip, sizeof(report->assigned_ip), ip);
+    report->ip_valid = ip[0] != '\0' && strcmp(ip, "0.0.0.0") != 0;
+}
+
+static void parse_csq(const char *response, sim7670_lte_report_t *report)
+{
+    const char *line = find_line(response, "+CSQ:");
+    char field[SIM7670_LTE_STATUS_MAX];
+    int raw = 0;
+    if (line == NULL || report == NULL) {
+        return;
+    }
+    if (parse_int_field(field_at(line, "+CSQ:", 0, field, sizeof(field)), &raw) && raw >= 0 && raw <= 31) {
+        report->rssi = -113 + (2 * raw);
+        report->rssi_valid = true;
+    }
+}
+
+static int split_prefixed_fields(
+    const char *line,
+    const char *prefix,
+    char fields[][SIM7670_LTE_ID_MAX],
+    int max_fields)
+{
+    int count = 0;
+    for (int i = 0; i < max_fields; ++i) {
+        char value[SIM7670_LTE_ID_MAX];
+        const char *parsed = field_at(line, prefix, i, value, sizeof(value));
+        if (parsed[0] == '\0') {
+            break;
+        }
+        copy_truncated(fields[count], SIM7670_LTE_ID_MAX, parsed);
+        strip_quotes(fields[count]);
+        count++;
+    }
+    return count;
+}
+
+static void parse_cpsi(const char *response, sim7670_lte_report_t *report)
+{
+    const char *line = find_line(response, "+CPSI:");
+    char fields[20][SIM7670_LTE_ID_MAX];
+    int value = 0;
+    if (line == NULL || report == NULL) {
+        return;
+    }
+    int count = split_prefixed_fields(line, "+CPSI:", fields, 20);
+    if (count <= 0) {
+        return;
+    }
+    copy_truncated(report->rat, sizeof(report->rat), fields[0]);
+    if (count > 2) {
+        split_mcc_mnc(fields[2], report);
+    }
+    if (count > 3) {
+        copy_truncated(report->tac, sizeof(report->tac), fields[3]);
+    }
+    if (count > 4) {
+        copy_truncated(report->cell_id, sizeof(report->cell_id), fields[4]);
+    }
+    if (count >= 4 && parse_int_field(fields[count - 4], &value)) {
+        report->rsrq = value;
+        report->rsrq_valid = true;
+    }
+    if (count >= 3 && parse_int_field(fields[count - 3], &value)) {
+        report->rsrp = value;
+        report->rsrp_valid = true;
+    }
+    if (count >= 2 && parse_int_field(fields[count - 2], &value)) {
+        report->rssi = value;
+        report->rssi_valid = true;
+    }
+    if (count >= 1 && parse_int_field(fields[count - 1], &value)) {
+        report->sinr = value;
+        report->sinr_valid = true;
+    }
+}
+
+static void classify_lte_status(sim7670_lte_report_t *report)
+{
+    if (report == NULL) {
+        return;
+    }
+    if (!report->driver_enabled) {
+        set_lte_reason(report, "LTE_STATUS_DISABLED");
+    } else if (!report->uart_ready) {
+        set_lte_reason(report, "LTE_UART_INIT_FAILED");
+    } else if (!report->at_ok) {
+        set_lte_reason(report, "LTE_AT_UNREACHABLE");
+    } else if (!report->sim_ready) {
+        set_lte_reason(report, "LTE_SIM_NOT_READY");
+    } else if (!report->registered) {
+        set_lte_reason(report, "LTE_NOT_REGISTERED");
+    } else if (!report->attached) {
+        set_lte_reason(report, "LTE_NOT_ATTACHED");
+    } else if (!report->pdp_active) {
+        set_lte_reason(report, "LTE_PDP_INACTIVE");
+    } else {
+        set_lte_reason(report, "LTE_READY");
+    }
+}
+
 bool sim7670_gnss_request_location(sim7670_gnss_report_t *report)
 {
     if (report == NULL) {
         return false;
     }
     sim7670_gnss_report_init(report);
+#if !CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+    return false;
+#else
     report->driver_enabled = true;
     if (sim7670_gnss_init() != ESP_OK) {
         set_status(report, "uart_init_failed", "unverified");
@@ -438,6 +762,73 @@ bool sim7670_gnss_request_location(sim7670_gnss_report_t *report)
     report->fix = fix && report->lat_valid && report->lon_valid;
     set_status(report, report->fix ? "fix" : "no_fix", report->fix ? "observed" : "unverified");
     return true;
+#endif
+}
+
+bool sim7670_lte_query_status(sim7670_lte_report_t *report)
+{
+    if (report == NULL) {
+        return false;
+    }
+    sim7670_lte_report_init(report);
+#if !CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    return false;
+#else
+    report->driver_enabled = true;
+    if (sim7670_gnss_init() != ESP_OK) {
+        set_lte_reason(report, "LTE_UART_INIT_FAILED");
+        return false;
+    }
+    report->uart_ready = true;
+
+    char response[AT_RESPONSE_BUFFER_SIZE];
+    if (!sim7670_send_at("AT", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_raw(report, "AT", response);
+        set_lte_reason(report, "LTE_AT_UNREACHABLE");
+        return false;
+    }
+    report->at_ok = true;
+    update_lte_raw(report, "AT", response);
+
+    if (sim7670_send_at("AT+CPIN?", "+CPIN:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_raw(report, "AT+CPIN?", response);
+        parse_cpin(response, report);
+    }
+    if (sim7670_send_at("AT+COPS?", "+COPS:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_raw(report, "AT+COPS?", response);
+        parse_cops(response, report);
+    }
+    if (sim7670_send_at("AT+CEREG?", "+CEREG:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_raw(report, "AT+CEREG?", response);
+        parse_cereg(response, report);
+    }
+    if (sim7670_send_at("AT+CGATT?", "+CGATT:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_raw(report, "AT+CGATT?", response);
+        parse_cgatt(response, report);
+    }
+    if (sim7670_send_at("AT+CGDCONT?", "+CGDCONT:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_raw(report, "AT+CGDCONT?", response);
+        parse_cgdcont(response, report);
+    }
+    if (sim7670_send_at("AT+CGACT?", "+CGACT:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_raw(report, "AT+CGACT?", response);
+        parse_cgact(response, report);
+    }
+    if (sim7670_send_at("AT+CGPADDR=1", "+CGPADDR:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_raw(report, "AT+CGPADDR=1", response);
+        parse_cgpaddr(response, report);
+    }
+    if (sim7670_send_at("AT+CSQ", "+CSQ:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_raw(report, "AT+CSQ", response);
+        parse_csq(response, report);
+    }
+    if (sim7670_send_at("AT+CPSI?", "+CPSI:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+        update_lte_raw(report, "AT+CPSI?", response);
+        parse_cpsi(response, report);
+    }
+    classify_lte_status(report);
+    return true;
+#endif
 }
 #else
 esp_err_t sim7670_gnss_init(void)
@@ -448,6 +839,12 @@ esp_err_t sim7670_gnss_init(void)
 bool sim7670_gnss_request_location(sim7670_gnss_report_t *report)
 {
     sim7670_gnss_report_init(report);
+    return false;
+}
+
+bool sim7670_lte_query_status(sim7670_lte_report_t *report)
+{
+    sim7670_lte_report_init(report);
     return false;
 }
 #endif

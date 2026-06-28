@@ -95,6 +95,7 @@ class MessageHubContractTests(unittest.TestCase):
             "power",
             "gnss",
             "cell",
+            "lte",
         }
         for name in (MESSAGE_HUB_SCHEMAS["status"], MESSAGE_HUB_SCHEMAS["event"]):
             with self.subTest(schema=name):

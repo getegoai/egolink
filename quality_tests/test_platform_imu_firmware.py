@@ -128,9 +128,13 @@ class PlatformImuFirmwareTests(unittest.TestCase):
                 self.assertIn(field, self.app_main)
 
     def test_sensor_payload_keeps_large_json_buffer_off_task_stack(self) -> None:
-        self.assertIn("static char payload[1536];", self.app_main)
-        self.assertIn('xTaskCreate(sensor_task, "sensor_task", 6144', self.app_main)
-        self.assertNotIn("\n    char payload[1536];", self.app_main)
+        sensor_publish_body = self.app_main.split("static void publish_sensor_sample", 1)[1].split(
+            "static void run_platform_imu_boot_capture", 1
+        )[0]
+        self.assertIn("static char payload[4096];", sensor_publish_body)
+        self.assertIn("#define SENSOR_TASK_STACK_SIZE 8192", self.app_main)
+        self.assertIn('xTaskCreate(sensor_task, "sensor_task", SENSOR_TASK_STACK_SIZE', self.app_main)
+        self.assertNotIn("\n    char payload[4096];", sensor_publish_body)
 
     def test_readme_keeps_real_imu_unverified(self) -> None:
         self.assertIn("platform_imu", self.readme)

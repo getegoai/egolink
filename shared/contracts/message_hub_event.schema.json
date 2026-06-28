@@ -144,6 +144,10 @@
       "type": "object",
       "additionalProperties": true
     },
+    "lte": {
+      "type": "object",
+      "additionalProperties": true
+    },
     "wifi": {
       "type": "object",
       "additionalProperties": true

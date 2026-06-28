@@ -14,6 +14,7 @@ param(
     [int]$ValidationTimeoutSec = 180,
     [int]$ValidationPollIntervalSec = 5,
     [switch]$EnableSim7670Gnss,
+    [switch]$EnableSim7670LteStatus,
     [switch]$PrepareBuild,
     [switch]$Flash,
     [switch]$IUnderstandFlashWritesFirmware,
@@ -73,6 +74,7 @@ $result = [ordered]@{
     fw_version = $FwVersion
     test_run_id = $TestRunId
     sim7670_gnss_enabled = [bool]$EnableSim7670Gnss
+    sim7670_lte_status_enabled = [bool]$EnableSim7670LteStatus
     firmware_dir = $firmwarePath
     build_dir = $buildPath
     binary_path = $binaryPath
@@ -121,6 +123,7 @@ if ($PrepareBuild) {
         "-Json"
     ) | ForEach-Object { $prepareArgs.Add([string]$_) }
     Add-If $prepareArgs $EnableSim7670Gnss "-EnableSim7670Gnss"
+    Add-If $prepareArgs $EnableSim7670LteStatus "-EnableSim7670LteStatus"
     $prepareOutput = & powershell @prepareArgs
     if ($LASTEXITCODE -ne 0) {
         throw "prepare_fw001_hw_config.ps1 failed with exit code $LASTEXITCODE"

@@ -33,6 +33,12 @@ static const char *TAG = "egolink_mqtt_heartbeat";
 #define WIFI_MAX_RETRY 8
 #define COMMAND_POLL_TASK_STACK_SIZE 12288
 #define HEARTBEAT_TASK_STACK_SIZE 6144
+#define SENSOR_TASK_STACK_SIZE 8192
+#if CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED
+#define LTE_OBSERVATION_FRAGMENT_MAX 2300
+#else
+#define LTE_OBSERVATION_FRAGMENT_MAX 1
+#endif
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
 #define UPLINK_READY_BIT WIFI_CONNECTED_BIT
 #else
@@ -64,6 +70,52 @@ typedef struct {
 static const char *json_bool(bool value)
 {
     return value ? "true" : "false";
+}
+
+static const char *json_number_or_null(char *buffer, size_t buffer_size, bool valid, double value, const char *format)
+{
+    if (!valid) {
+        snprintf(buffer, buffer_size, "null");
+    } else {
+        snprintf(buffer, buffer_size, format, value);
+    }
+    return buffer;
+}
+
+static const char *json_int_or_null(char *buffer, size_t buffer_size, bool valid, int value)
+{
+    if (!valid) {
+        snprintf(buffer, buffer_size, "null");
+    } else {
+        snprintf(buffer, buffer_size, "%d", value);
+    }
+    return buffer;
+}
+
+static void json_escape_summary(char *buffer, size_t buffer_size, const char *value)
+{
+    if (buffer == NULL || buffer_size == 0) {
+        return;
+    }
+    size_t out = 0;
+    const char *input = value ? value : "";
+    for (size_t i = 0; input[i] != '\0' && out + 1 < buffer_size; ++i) {
+        char ch = input[i];
+        if (ch == '"' || ch == '\\') {
+            if (out + 2 >= buffer_size) {
+                break;
+            }
+            buffer[out++] = '\\';
+            buffer[out++] = ch;
+        } else if (ch == '\r' || ch == '\n' || ch == '\t') {
+            buffer[out++] = ' ';
+        } else if ((unsigned char)ch < 0x20) {
+            buffer[out++] = ' ';
+        } else {
+            buffer[out++] = ch;
+        }
+    }
+    buffer[out] = '\0';
 }
 
 static const char *reset_reason_name(esp_reset_reason_t reason)
@@ -427,52 +479,6 @@ static void message_hub_ack_command(const char *cmd_id, const char *status, cons
 }
 
 #if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
-static const char *json_number_or_null(char *buffer, size_t buffer_size, bool valid, double value, const char *format)
-{
-    if (!valid) {
-        snprintf(buffer, buffer_size, "null");
-    } else {
-        snprintf(buffer, buffer_size, format, value);
-    }
-    return buffer;
-}
-
-static const char *json_int_or_null(char *buffer, size_t buffer_size, bool valid, int value)
-{
-    if (!valid) {
-        snprintf(buffer, buffer_size, "null");
-    } else {
-        snprintf(buffer, buffer_size, "%d", value);
-    }
-    return buffer;
-}
-
-static void json_escape_summary(char *buffer, size_t buffer_size, const char *value)
-{
-    if (buffer == NULL || buffer_size == 0) {
-        return;
-    }
-    size_t out = 0;
-    const char *input = value ? value : "";
-    for (size_t i = 0; input[i] != '\0' && out + 1 < buffer_size; ++i) {
-        char ch = input[i];
-        if (ch == '"' || ch == '\\') {
-            if (out + 2 >= buffer_size) {
-                break;
-            }
-            buffer[out++] = '\\';
-            buffer[out++] = ch;
-        } else if (ch == '\r' || ch == '\n' || ch == '\t') {
-            buffer[out++] = ' ';
-        } else if ((unsigned char)ch < 0x20) {
-            buffer[out++] = ' ';
-        } else {
-            buffer[out++] = ch;
-        }
-    }
-    buffer[out] = '\0';
-}
-
 static const char *message_hub_location_ack_message(void)
 {
 #if CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
@@ -742,11 +748,130 @@ static void message_hub_poll_commands(void)
 }
 #endif
 
+static void build_lte_observation_fragment(char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0) {
+        return;
+    }
+    buffer[0] = '\0';
+#if CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    sim7670_lte_report_t lte;
+    sim7670_lte_report_init(&lte);
+    bool lte_query_ok = sim7670_lte_query_status(&lte);
+
+    char rssi[16];
+    char rsrp[16];
+    char rsrq[16];
+    char sinr[16];
+    char operator_name[SIM7670_LTE_OPERATOR_MAX * 2];
+    char rat[SIM7670_LTE_RAT_MAX * 2];
+    char mcc[SIM7670_LTE_ID_MAX * 2];
+    char mnc[SIM7670_LTE_ID_MAX * 2];
+    char tac[SIM7670_LTE_ID_MAX * 2];
+    char cell_id[SIM7670_LTE_ID_MAX * 2];
+    char sim_state[SIM7670_LTE_STATUS_MAX * 2];
+    char registration_state[SIM7670_LTE_STATUS_MAX * 2];
+    char pdp_state[SIM7670_LTE_STATUS_MAX * 2];
+    char apn_state[SIM7670_LTE_STATUS_MAX * 2];
+    char assigned_ip[SIM7670_LTE_IP_MAX * 2];
+    char reason_code[SIM7670_LTE_STATUS_MAX * 2];
+    char raw_command[SIM7670_LTE_RAW_COMMAND_MAX * 2];
+    char raw_response[SIM7670_LTE_RAW_RESPONSE_MAX * 2];
+
+    json_int_or_null(rssi, sizeof(rssi), lte.rssi_valid, lte.rssi);
+    json_int_or_null(rsrp, sizeof(rsrp), lte.rsrp_valid, lte.rsrp);
+    json_int_or_null(rsrq, sizeof(rsrq), lte.rsrq_valid, lte.rsrq);
+    json_int_or_null(sinr, sizeof(sinr), lte.sinr_valid, lte.sinr);
+    json_escape_summary(operator_name, sizeof(operator_name), lte.operator_name);
+    json_escape_summary(rat, sizeof(rat), lte.rat);
+    json_escape_summary(mcc, sizeof(mcc), lte.mcc);
+    json_escape_summary(mnc, sizeof(mnc), lte.mnc);
+    json_escape_summary(tac, sizeof(tac), lte.tac);
+    json_escape_summary(cell_id, sizeof(cell_id), lte.cell_id);
+    json_escape_summary(sim_state, sizeof(sim_state), lte.sim_state);
+    json_escape_summary(registration_state, sizeof(registration_state), lte.registration_state);
+    json_escape_summary(pdp_state, sizeof(pdp_state), lte.pdp_state);
+    json_escape_summary(apn_state, sizeof(apn_state), lte.apn_state);
+    json_escape_summary(assigned_ip, sizeof(assigned_ip), lte.assigned_ip);
+    json_escape_summary(reason_code, sizeof(reason_code), lte.reason_code);
+    json_escape_summary(raw_command, sizeof(raw_command), lte.raw_command);
+    json_escape_summary(raw_response, sizeof(raw_response), lte.raw_response);
+
+    snprintf(
+        buffer,
+        buffer_size,
+        ",\"cell\":{\"rat\":\"%s\","
+        "\"operator\":\"%s\","
+        "\"mcc\":\"%s\","
+        "\"mnc\":\"%s\","
+        "\"tac\":\"%s\","
+        "\"cell_id\":\"%s\","
+        "\"rssi\":%s,"
+        "\"rsrp\":%s,"
+        "\"rsrq\":%s,"
+        "\"sinr\":%s,"
+        "\"sim_state\":\"%s\","
+        "\"registration_state\":\"%s\","
+        "\"pdp_state\":\"%s\","
+        "\"reason_code\":\"%s\"},"
+        "\"lte\":{\"driver\":\"%s\","
+        "\"query_ok\":%s,"
+        "\"uart_ready\":%s,"
+        "\"at_ok\":%s,"
+        "\"sim_ready\":%s,"
+        "\"registered\":%s,"
+        "\"attached\":%s,"
+        "\"pdp_active\":%s,"
+        "\"ip_valid\":%s,"
+        "\"sim_state\":\"%s\","
+        "\"registration_state\":\"%s\","
+        "\"apn_state\":\"%s\","
+        "\"pdp_state\":\"%s\","
+        "\"assigned_ip\":\"%s\","
+        "\"reason_code\":\"%s\","
+        "\"raw_command\":\"%s\","
+        "\"raw_response\":\"%s\"}",
+        rat,
+        operator_name,
+        mcc,
+        mnc,
+        tac,
+        cell_id,
+        rssi,
+        rsrp,
+        rsrq,
+        sinr,
+        sim_state,
+        registration_state,
+        pdp_state,
+        reason_code,
+        sim7670_lte_backend_name(),
+        json_bool(lte_query_ok),
+        json_bool(lte.uart_ready),
+        json_bool(lte.at_ok),
+        json_bool(lte.sim_ready),
+        json_bool(lte.registered),
+        json_bool(lte.attached),
+        json_bool(lte.pdp_active),
+        json_bool(lte.ip_valid),
+        sim_state,
+        registration_state,
+        apn_state,
+        pdp_state,
+        assigned_ip,
+        reason_code,
+        raw_command,
+        raw_response);
+#endif
+}
+
 static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
 {
     int rssi = refresh_wifi_rssi();
     platform_power_snapshot_t power;
     platform_power_get_snapshot(&power);
+    char lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
+    build_lte_observation_fragment(lte_fragment, sizeof(lte_fragment));
     snprintf(
         buffer,
         buffer_size,
@@ -776,7 +901,8 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
         "\"modem_state\":\"mock_data_ready\","
         "\"gnss_state\":\"mock_fix\","
         "\"guard_mode\":\"child_safety\","
-        "\"queue_size\":0",
+        "\"queue_size\":0"
+        "%s",
         CONFIG_EGOLINK_DEVICE_ID,
         uptime_ms(),
         seq,
@@ -795,7 +921,8 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
         s_reset_reason,
         s_boot_count,
         uptime_ms(),
-        rssi);
+        rssi,
+        lte_fragment);
     append_test_run_id_and_close_json(buffer, buffer_size);
 }
 
@@ -810,6 +937,8 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
     platform_imu_snapshot_t imu;
     platform_imu_sample();
     platform_imu_get_snapshot(&imu);
+    char lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
+    build_lte_observation_fragment(lte_fragment, sizeof(lte_fragment));
     snprintf(
         buffer,
         buffer_size,
@@ -856,7 +985,8 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
         "\"imu_gyro_mdps_z\":%d,"
         "\"link_type\":\"mock_4g_over_wifi\","
         "\"modem_state\":\"mock_data_ready\","
-        "\"gnss_state\":\"mock_fix\"",
+        "\"gnss_state\":\"mock_fix\""
+        "%s",
         CONFIG_EGOLINK_DEVICE_ID,
         now_ms,
         seq,
@@ -891,13 +1021,14 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
         imu.latest.accel_mg_z,
         imu.latest.gyro_mdps_x,
         imu.latest.gyro_mdps_y,
-        imu.latest.gyro_mdps_z);
+        imu.latest.gyro_mdps_z,
+        lte_fragment);
     append_test_run_id_and_close_json(buffer, buffer_size);
 }
 
 static void publish_heartbeat(void)
 {
-    static char payload[1280];
+    static char payload[3072];
     uint32_t seq = next_seq();
     platform_power_enter_state(PLATFORM_POWER_STATE_UPLOAD, "status_publish");
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
@@ -937,7 +1068,7 @@ static void publish_heartbeat(void)
 
 static void publish_sensor_sample(void)
 {
-    static char payload[1536];
+    static char payload[4096];
     uint32_t seq = next_seq();
     platform_power_enter_state(PLATFORM_POWER_STATE_UPLOAD, "sensor_publish");
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
@@ -1202,6 +1333,6 @@ void app_main(void)
     start_mqtt();
 #endif
     xTaskCreate(heartbeat_task, "heartbeat_task", HEARTBEAT_TASK_STACK_SIZE, NULL, 5, NULL);
-    xTaskCreate(sensor_task, "sensor_task", 6144, NULL, 5, NULL);
+    xTaskCreate(sensor_task, "sensor_task", SENSOR_TASK_STACK_SIZE, NULL, 5, NULL);
     xTaskCreate(safety_cli_task, "safety_cli_task", 4096, NULL, 3, NULL);
 }

@@ -16,6 +16,7 @@ param(
     [string]$BuildDir = "build_fw001_hw",
     [string]$IdfExport = "C:\Espressif\v5.4.2\esp-idf\export.ps1",
     [switch]$EnableSim7670Gnss,
+    [switch]$EnableSim7670LteStatus,
     [int]$Sim7670UartNum = 1,
     [int]$Sim7670UartRxGpio = 17,
     [int]$Sim7670UartTxGpio = 18,
@@ -121,15 +122,22 @@ $lines = @(
     "CONFIG_EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC=5"
 )
 if ($EnableSim7670Gnss) {
+    $lines += "CONFIG_EGOLINK_SIM7670_GNSS_ENABLED=y"
+} else {
+    $lines += "# CONFIG_EGOLINK_SIM7670_GNSS_ENABLED is not set"
+}
+if ($EnableSim7670LteStatus) {
+    $lines += "CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y"
+} else {
+    $lines += "# CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED is not set"
+}
+if ($EnableSim7670Gnss -or $EnableSim7670LteStatus) {
     $lines += @(
-        "CONFIG_EGOLINK_SIM7670_GNSS_ENABLED=y",
         "CONFIG_EGOLINK_SIM7670_UART_NUM=$Sim7670UartNum",
         "CONFIG_EGOLINK_SIM7670_UART_RX_GPIO=$Sim7670UartRxGpio",
         "CONFIG_EGOLINK_SIM7670_UART_TX_GPIO=$Sim7670UartTxGpio",
         "CONFIG_EGOLINK_SIM7670_UART_BAUD=$Sim7670UartBaud"
     )
-} else {
-    $lines += "# CONFIG_EGOLINK_SIM7670_GNSS_ENABLED is not set"
 }
 if ($WifiSsid) {
     $lines += "CONFIG_EGOLINK_WIFI_SSID=$(ConvertTo-KconfigString $WifiSsid)"
@@ -181,6 +189,7 @@ $result = [pscustomobject]@{
     token_source = $tokenSource
     wifi_source = $wifiSource
     sim7670_gnss_enabled = [bool]$EnableSim7670Gnss
+    sim7670_lte_status_enabled = [bool]$EnableSim7670LteStatus
     build_command = $buildCommand
     flash_intentionally_not_run = $true
 }

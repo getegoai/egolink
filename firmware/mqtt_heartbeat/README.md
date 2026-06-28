@@ -180,6 +180,30 @@ power GPIOs, does not use SIM7670G LTE data transport, and does not by itself
 prove outdoor GNSS acceptance. Outdoor USB-Free validation remains a separate
 field task.
 
+## LTE-001A SIM7670G LTE registration and cell observability
+
+LTE-001A adds an opt-in SIM7670G LTE status query behind the existing Wi-Fi
+HTTP Message Hub uplink:
+
+```text
+CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y
+CONFIG_EGOLINK_SIM7670_UART_NUM=1
+CONFIG_EGOLINK_SIM7670_UART_RX_GPIO=17
+CONFIG_EGOLINK_SIM7670_UART_TX_GPIO=18
+CONFIG_EGOLINK_SIM7670_UART_BAUD=115200
+```
+
+The default remains disabled. When enabled, heartbeat/status and
+`sensor_sample` uploads include optional `cell` and `lte` objects with SIM
+state, registration state, APN/PDP state, assigned IP when available, cell
+fingerprint, signal metrics, bounded raw AT evidence, and a diagnosable
+`reason_code` such as `LTE_AT_UNREACHABLE`, `LTE_SIM_NOT_READY`,
+`LTE_NOT_REGISTERED`, `LTE_NOT_ATTACHED`, `LTE_PDP_INACTIVE`, or `LTE_READY`.
+
+This is observation only. It does not disable Wi-Fi, does not send Message Hub
+HTTP traffic through the SIM7670G LTE data path, does not prove DNS/HTTP over
+LTE, and does not replace the later LTE transport field gates.
+
 Host-side validation for this scaffold is:
 
 ```powershell

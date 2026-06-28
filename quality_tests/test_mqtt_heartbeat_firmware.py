@@ -89,12 +89,34 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
                 self.assertIn(token, self.app_main)
 
     def test_status_payload_buffer_has_margin_for_reset_diagnostics(self) -> None:
+        heartbeat_body = self.app_main.split("static void publish_heartbeat", 1)[1].split(
+            "static void publish_sensor_sample", 1
+        )[0]
         self.assertIn("#define HEARTBEAT_TASK_STACK_SIZE 6144", self.app_main)
-        self.assertIn("static char payload[1280];", self.app_main)
+        self.assertIn("static char payload[3072];", heartbeat_body)
         self.assertIn('xTaskCreate(heartbeat_task, "heartbeat_task", HEARTBEAT_TASK_STACK_SIZE', self.app_main)
-        self.assertNotIn("\n    char payload[1280];", self.app_main)
+        self.assertNotIn("\n    char payload[3072];", heartbeat_body)
         self.assertIn('\\"reset_reason\\":\\"%s\\"', self.app_main)
         self.assertIn('\\"boot_uptime_ms\\":%" PRId64', self.app_main)
+
+    def test_lte_observation_payload_is_optional_and_explainable(self) -> None:
+        for token in [
+            "build_lte_observation_fragment",
+            "#if CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED",
+            "sim7670_lte_query_status",
+            '\\"cell\\":{\\"rat\\":\\"%s\\"',
+            '\\"lte\\":{\\"driver\\":\\"%s\\"',
+            '\\"registration_state\\":\\"%s\\"',
+            '\\"pdp_state\\":\\"%s\\"',
+            '\\"reason_code\\":\\"%s\\"',
+            '\\"raw_command\\":\\"%s\\"',
+            "static char payload[4096];",
+            "#define LTE_OBSERVATION_FRAGMENT_MAX 2300",
+            "#define SENSOR_TASK_STACK_SIZE 8192",
+            'xTaskCreate(sensor_task, "sensor_task", SENSOR_TASK_STACK_SIZE',
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.app_main)
 
     def test_http_mode_docs_keep_secret_and_capability_boundaries(self) -> None:
         self.assertIn("sdkconfig.vps.local", self.readme)

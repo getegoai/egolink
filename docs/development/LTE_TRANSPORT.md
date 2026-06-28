@@ -28,6 +28,19 @@ until HTTP over LTE proves the minimal product link.
 
 Goal: make SIM7670G LTE state observable before using it as transport.
 
+### LTE-001A build-verified observability baseline
+
+Completed on 2026-06-28 as a build-verified firmware/server/protocol baseline.
+The firmware can optionally query SIM7670G LTE state through the shared UART AT
+backend and upload `cell` plus `lte` observation objects over the existing
+Wi-Fi HTTP Message Hub path. The Message Hub stores those fields, derives
+`observability.lte`, includes LTE reason codes in explainability, and the
+Dashboard renders LTE registration, PDP, SIM, and reason state.
+
+Boundary: LTE-001A does not disable Wi-Fi, does not set
+`transport.type=lte`, does not prove DNS or HTTP through SIM7670G LTE, and was
+not flashed or USB-Free hardware validated in this step.
+
 Required fields:
 
 - SIM state;

@@ -68,6 +68,7 @@ Recommended additive groups:
 | `power` | `battery_mv`, `soc_pct`, `charging`, `source` |
 | `gnss` | `fix`, `state`, `hdop`, `satellites`, `attempt_ms`, `result`, `reason_code` |
 | `cell` | `rat`, `operator`, `mcc`, `mnc`, `tac`, `cell_id`, `rsrp`, `rsrq`, `rssi`, `sinr` |
+| `lte` | `driver`, `query_ok`, `sim_state`, `registration_state`, `apn_state`, `pdp_state`, `assigned_ip`, `reason_code` |
 
 The Message Hub exposes the derived view as `device.observability` in
 `/api/state` and includes `observability_summary` in test-run exports. Unknown
@@ -99,6 +100,59 @@ Typical derived state:
   }
 }
 ```
+
+## LTE-001A LTE Registration And Cell Observability
+
+LTE-001A adds optional firmware-supplied `cell` and `lte` objects to existing
+`status` and `sensor_sample` messages. The Message Hub stores them as normal
+`egolink.p0.v1` additive fields and derives `observability.cell`,
+`observability.lte`, and LTE reason codes from them.
+
+`cell` describes the radio fingerprint and signal quality:
+
+```json
+{
+  "cell": {
+    "rat": "LTE",
+    "operator": "operator-name",
+    "mcc": "460",
+    "mnc": "01",
+    "tac": "0x230A",
+    "cell_id": "1234567",
+    "rssi": -69,
+    "rsrp": -96,
+    "rsrq": -12,
+    "sinr": 18,
+    "registration_state": "registered_home",
+    "pdp_state": "active",
+    "reason_code": "LTE_READY"
+  }
+}
+```
+
+`lte` describes the SIM7670G query and the stage that blocks LTE readiness:
+
+```json
+{
+  "lte": {
+    "driver": "sim7670g_uart_at",
+    "query_ok": true,
+    "sim_state": "READY",
+    "registration_state": "registered_home",
+    "apn_state": "configured",
+    "pdp_state": "active",
+    "assigned_ip": "10.1.2.3",
+    "reason_code": "LTE_READY"
+  }
+}
+```
+
+Expected failure reason codes include `LTE_AT_UNREACHABLE`,
+`LTE_SIM_NOT_READY`, `LTE_NOT_REGISTERED`, `LTE_NOT_ATTACHED`,
+`LTE_PDP_INACTIVE`, and `LTE_READY`. LTE-001A does not change
+`transport.type` to `lte`; the firmware still uses the existing Wi-Fi HTTP
+Message Hub path until an explicit LTE HTTP transport task proves uplink,
+command polling, and ACK over the SIM7670G data path.
 
 ## LOC-002 Location Observation Event
 

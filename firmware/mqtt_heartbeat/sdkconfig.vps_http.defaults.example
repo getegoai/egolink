@@ -16,6 +16,11 @@ CONFIG_EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC=10
 # Optional FW-002B SIM7670G firmware GNSS AT query.
 # Leave disabled unless the build is explicitly for SIM7670G GNSS bring-up.
 # CONFIG_EGOLINK_SIM7670_GNSS_ENABLED is not set
+
+# Optional LTE-001A SIM7670G LTE registration/cell observability.
+# Leave disabled unless the build is explicitly for LTE state diagnosis.
+# CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED is not set
+
 # CONFIG_EGOLINK_SIM7670_UART_NUM=1
 # CONFIG_EGOLINK_SIM7670_UART_RX_GPIO=17
 # CONFIG_EGOLINK_SIM7670_UART_TX_GPIO=18
