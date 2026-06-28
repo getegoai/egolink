@@ -47,6 +47,7 @@ class LteHttpProbeValidationTests(unittest.TestCase):
                     poll_interval_sec=0.05,
                     expected_fw_version="0.1.0-lte002-lte-http-probe",
                     expected_test_run_id="lte002-unit",
+                    allow_existing_message_sec=0.0,
                 )
             finally:
                 device_thread.join(timeout=2)
@@ -97,6 +98,7 @@ class LteHttpProbeValidationTests(unittest.TestCase):
                         poll_interval_sec=0.05,
                         expected_fw_version="0.1.0-lte002-lte-http-probe",
                         expected_test_run_id="lte002-unit",
+                        allow_existing_message_sec=0.0,
                     )
             finally:
                 device_thread.join(timeout=2)
@@ -105,6 +107,97 @@ class LteHttpProbeValidationTests(unittest.TestCase):
                 server.server_close()
 
         self.assertIn("attempt reached Message Hub", str(context.exception))
+
+    def test_validation_can_accept_recent_one_shot_boot_probe(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            hub_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                self._post_lte_http_probe(
+                    hub_url,
+                    device_id="ego-link-r1-test",
+                    fw_version="0.1.0-lte002-lte-http-probe",
+                    test_run_id="lte002-unit",
+                    include_result=True,
+                )
+
+                report = validate_lte_http_probe.validate_lte_http_probe(
+                    hub_url=hub_url,
+                    device_id="ego-link-r1-test",
+                    token=None,
+                    output_dir=Path(tmp) / "report",
+                    observation_id="lte002-unit",
+                    board_id="connectivity-node-001",
+                    connection_path="independent_power_usb_disconnected",
+                    timeout_sec=0.1,
+                    poll_interval_sec=0.05,
+                    expected_fw_version="0.1.0-lte002-lte-http-probe",
+                    expected_test_run_id="lte002-unit",
+                    allow_existing_message_sec=5.0,
+                )
+            finally:
+                server.shutdown()
+                server_thread.join(timeout=5)
+                server.server_close()
+
+            self.assertEqual(report["result"], "PASS")
+            self.assertEqual(report["lte_http"]["reason_code"], "LTE_HTTP_OK")
+            self.assertEqual(report["allow_existing_message_sec"], 5.0)
+
+    def test_validation_reuses_existing_test_run_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            hub_url = f"http://127.0.0.1:{server.server_port}"
+            client = HubClient(hub_url)
+            try:
+                client.post(
+                    "/api/v1/test-runs",
+                    {
+                        "test_run_id": "lte002-unit",
+                        "task_id": "LTE-002",
+                        "board_id": "connectivity-node-001",
+                        "device_id": "ego-link-r1-test",
+                        "connection_path": "independent_power_usb_disconnected",
+                        "started_at": "2026-06-28T00:00:00+00:00",
+                        "status": "active",
+                        "goal": "existing test run",
+                    },
+                )
+                self._post_lte_http_probe(
+                    hub_url,
+                    device_id="ego-link-r1-test",
+                    fw_version="0.1.0-lte002-lte-http-probe",
+                    test_run_id="lte002-unit",
+                    include_result=True,
+                )
+
+                report = validate_lte_http_probe.validate_lte_http_probe(
+                    hub_url=hub_url,
+                    device_id="ego-link-r1-test",
+                    token=None,
+                    output_dir=Path(tmp) / "report",
+                    observation_id="lte002-unit",
+                    board_id="connectivity-node-001",
+                    connection_path="independent_power_usb_disconnected",
+                    timeout_sec=0.1,
+                    poll_interval_sec=0.05,
+                    expected_fw_version="0.1.0-lte002-lte-http-probe",
+                    expected_test_run_id="lte002-unit",
+                    allow_existing_message_sec=5.0,
+                )
+            finally:
+                server.shutdown()
+                server_thread.join(timeout=5)
+                server.server_close()
+
+            self.assertEqual(report["result"], "PASS")
+            self.assertEqual(report["test_run"]["test_run_id"], "lte002-unit")
 
     @staticmethod
     def _post_lte_http_probe(

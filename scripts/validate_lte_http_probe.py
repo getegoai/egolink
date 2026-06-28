@@ -59,8 +59,11 @@ def latest_probe_message(
     *,
     started_at: datetime,
     expected_test_run_id: str | None,
+    allow_existing_after: datetime | None = None,
     phase: str | None = None,
 ) -> dict[str, Any]:
+    earliest_allowed = allow_existing_after or started_at
+    latest: tuple[datetime, dict[str, Any]] | None = None
     for message in messages:
         if message.get("message_type") != "event" or message.get("event_type") != "lte_http_probe":
             continue
@@ -69,10 +72,11 @@ def latest_probe_message(
         if expected_test_run_id and message.get("test_run_id") != expected_test_run_id:
             continue
         received_at = parse_timestamp(message.get("server_received_at"))
-        if received_at is None or received_at < started_at:
+        if received_at is None or received_at < earliest_allowed:
             continue
-        return message
-    return {}
+        if latest is None or received_at > latest[0]:
+            latest = (received_at, message)
+    return latest[1] if latest else {}
 
 
 def lte_http_summary(message: dict[str, Any]) -> dict[str, Any]:
@@ -157,27 +161,34 @@ def validate_lte_http_probe(
     poll_interval_sec: float,
     expected_fw_version: str | None,
     expected_test_run_id: str | None,
+    allow_existing_message_sec: float,
 ) -> dict[str, Any]:
     client = HubClient(hub_url, token=token)
     started_at_text = utc_now()
     started_at = parse_timestamp(started_at_text)
     if started_at is None:
         raise FieldValidationError("failed to create LTE HTTP probe start timestamp")
+    allow_existing_after: datetime | None = None
+    if allow_existing_message_sec > 0:
+        allow_existing_after = datetime.fromtimestamp(started_at.timestamp() - allow_existing_message_sec, tz=started_at.tzinfo)
 
     health = client.get("/health")
-    test_run = client.post(
-        "/api/v1/test-runs",
-        {
-            "test_run_id": observation_id,
-            "task_id": "LTE-002",
-            "board_id": board_id,
-            "device_id": device_id,
-            "connection_path": connection_path,
-            "started_at": started_at_text,
-            "status": "active",
-            "goal": "USB-Free SIM7670G LTE HTTP telemetry uplink thin-slice",
-        },
-    )["test_run"]
+    test_run_payload = {
+        "test_run_id": observation_id,
+        "task_id": "LTE-002",
+        "board_id": board_id,
+        "device_id": device_id,
+        "connection_path": connection_path,
+        "started_at": started_at_text,
+        "status": "active",
+        "goal": "USB-Free SIM7670G LTE HTTP telemetry uplink thin-slice",
+    }
+    try:
+        test_run = client.post("/api/v1/test-runs", test_run_payload)["test_run"]
+    except FieldValidationError as exc:
+        if "UNIQUE constraint failed: test_runs.test_run_id" not in str(exc):
+            raise
+        test_run = as_dict(client.get(f"/api/v1/test-runs/{observation_id}/export").get("test_run"))
     deadline = time.monotonic() + timeout_sec
     final_device: dict[str, Any] = {}
     final_probe: dict[str, Any] = {}
@@ -199,12 +210,14 @@ def validate_lte_http_probe(
             history,
             started_at=started_at,
             expected_test_run_id=expected_test_run_id,
+            allow_existing_after=allow_existing_after,
             phase="result",
         )
         final_attempt = latest_probe_message(
             history,
             started_at=started_at,
             expected_test_run_id=expected_test_run_id,
+            allow_existing_after=allow_existing_after,
             phase="attempt",
         )
         if not final_probe:
@@ -253,6 +266,8 @@ def validate_lte_http_probe(
         "completed_at": completed_at_text,
         "expected_fw_version": expected_fw_version,
         "expected_test_run_id": expected_test_run_id,
+        "allow_existing_message_sec": allow_existing_message_sec,
+        "allow_existing_after": allow_existing_after.isoformat() if allow_existing_after else None,
         "fw_version": final_probe.get("fw_version"),
         "observed_test_run_id": final_probe.get("test_run_id"),
         "health": health,
@@ -288,6 +303,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--poll-interval-sec", type=float, default=5.0)
     parser.add_argument("--expected-fw-version", default="0.1.0-lte002-lte-http-probe")
     parser.add_argument("--expected-test-run-id")
+    parser.add_argument(
+        "--allow-existing-message-sec",
+        type=float,
+        default=0.0,
+        help=(
+            "Accept a matching LTE HTTP probe message that arrived this many seconds before "
+            "the validator started. Default 0 keeps the strict fresh-after-start gate."
+        ),
+    )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
@@ -308,6 +332,7 @@ def main(argv: list[str] | None = None) -> int:
             poll_interval_sec=args.poll_interval_sec,
             expected_fw_version=args.expected_fw_version,
             expected_test_run_id=args.expected_test_run_id,
+            allow_existing_message_sec=args.allow_existing_message_sec,
         )
     except FieldValidationError as exc:
         print(f"FAIL LTE-002 HTTP probe validation: {exc}", file=sys.stderr)

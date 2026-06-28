@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-002 fix5 dedicated-task HTTP probe firmware currently flashed on COM4; USB-Free runtime validation pending |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-002 fix5 dedicated-task HTTP probe firmware currently flashed on COM4; LTE HTTP uplink thin-slice passed USB-Free |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -213,19 +213,20 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 - GNSS indoor no-fix is expected and is not a P0 failure by itself.
 - SIM7670G GNSS refresh has PC-side USB AT no-fix evidence and FW-002B
   firmware-side UART/AT no-fix evidence through the USB-Free Message Hub loop.
-  Outdoor real fix remains unverified.
-- The USB-Free R1 validation used Wi-Fi HTTP to the Message Hub; it does not
-  prove SIM7670G LTE data transport, GNSS fix, battery/charging accuracy, or
-  product power behavior.
-- The currently flashed connectivity-node image is LTE-002 fix4
-  `0.1.0-lte002-lte-http-probe-fix4`. The first LTE-002 image and fix1 failed
+  FW-002C fix3 later observed a real firmware-side SIM7670G GNSS fix, but final
+  enclosure/mounting GNSS acceptance remains unverified.
+- The early USB-Free R1 validation used Wi-Fi HTTP to the Message Hub; it did
+  not prove SIM7670G LTE transport, GNSS fix, battery/charging accuracy, or
+  product power behavior. LTE-002 fix5 later proved one SIM7670G LTE HTTP
+  telemetry uplink thin-slice only.
+- The currently flashed connectivity-node image is LTE-002 fix5
+  `0.1.0-lte002-lte-http-probe-fix5`. The first LTE-002 image and fix1 failed
   USB-Free LTE HTTP validation with no fresh LTE HTTP telemetry reaching the
   VPS; fix2 also failed with no fresh LTE HTTP telemetry reaching the VPS.
   Fix3 also failed with no fresh LTE HTTP telemetry reaching the VPS. The prior
-  LTE-001B fix1 image passed USB-Free LTE status observation, but LTE HTTP data
-  transport remains unverified. USB-attached AT diagnosis indicates compact
-  LTE HTTP payloads can reach the VPS, while larger POST bodies trigger
-  SIM7670G `HTTPACTION` 706. Fix4 is flashed but also failed USB-Free
+  LTE-001B fix1 image passed USB-Free LTE status observation. USB-attached AT
+  diagnosis indicates compact LTE HTTP payloads can reach the VPS, while larger
+  POST bodies trigger SIM7670G `HTTPACTION` 706. Fix4 was flashed but failed USB-Free
   validation with zero test-run messages. USB-attached firmware console
   diagnosis then observed repeated `main` task stack overflows before any LTE
   readiness or HTTP AT command log appeared:
@@ -241,10 +242,15 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   partition table were written, hashes verified, and hard reset completed.
   Flash evidence is under
   `reports/field_validation/lte002-lte-http-probe-fix5-20260628-193815/flash_report.md`.
-  USB-Free runtime validation has not been run yet.
-- SIM7670G LTE data transport, product battery/charging accuracy, product
-  power behavior, and final enclosure/mounting GNSS acceptance remain
-  unverified.
+  USB-Free runtime validation passed after the operator disconnected USB and
+  power-cycled the independent-power board: result `lte_http_probe` had
+  `transport.type=lte`, `lte_http.reason_code=LTE_HTTP_OK`, HTTP status `200`,
+  action elapsed `1570 ms`, LTE `reason_code=LTE_READY`, assigned IP
+  `10.160.15.113`, and cell ID `180571649`. Evidence is under
+  `reports/field_validation/lte002-lte-http-probe-fix5-20260628-193815/`.
+- LTE command polling/ACK, reconnect behavior, long-run LTE stability, product
+  battery/charging accuracy, product power behavior, and final
+  enclosure/mounting GNSS acceptance remain unverified.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

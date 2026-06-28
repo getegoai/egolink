@@ -1,7 +1,7 @@
 ---
 title: LTE HTTP Uplink Thin-Slice
 task_id: LTE-002
-status: active
+status: completed
 last_verified: 2026-06-28
 context:
   - docs/current/ACTIVE_BUILD.md
@@ -18,7 +18,7 @@ allowed_paths:
   - docs/development/LTE_TRANSPORT.md
   - docs/development/PROTOCOL.md
   - docs/tasks/TASK_TREE.md
-  - docs/tasks/active/LTE-002_LTE_HTTP_UPLINK_THIN_SLICE.md
+  - docs/tasks/done/LTE-002_LTE_HTTP_UPLINK_THIN_SLICE.md
   - firmware/mqtt_heartbeat/components/sim7670_gnss/Kconfig.projbuild
   - firmware/mqtt_heartbeat/components/sim7670_gnss/include/sim7670_gnss.h
   - firmware/mqtt_heartbeat/components/sim7670_gnss/sim7670_gnss.c
@@ -376,3 +376,33 @@ context.
   `reports/field_validation/lte002-lte-http-probe-fix5-20260628-193815/flash_report.md`
 - Runtime validation: not run. It requires independent power and USB
   disconnected.
+
+## Validation Attempt 6
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix5`
+- Test run ID: `lte002-lte-http-probe-fix5-20260628-193815`
+- Connection path: independent power, USB disconnected, operator power-cycled
+  the board before validation evidence was collected.
+- Evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix5-20260628-193815/lte_http_probe_report.json`
+- Result: PASS.
+- Latest accepted result message:
+  `server_received_at=2026-06-28T12:37:04.490795+00:00`,
+  `boot_count=26006`, `seq=2`, `boot_uptime_ms=14764`.
+- LTE HTTP result: `phase=result`, `reason_code=LTE_HTTP_OK`,
+  `status_code=200`, `action_elapsed_ms=1570`, `data_len=1454`.
+- Transport and LTE state: `transport.type=lte`, LTE `reason_code=LTE_READY`,
+  registration `registered_home`, PDP `active`, assigned IP `10.160.15.113`,
+  RAT `LTE`, cell ID `180571649`, RSSI `-91`, RSRP `-95`, RSRQ `-4`, SINR
+  `24`.
+- Validator note: the firmware emits a one-shot boot probe. The validator now
+  supports explicit `--allow-existing-message-sec` for this workflow and picks
+  the latest matching `server_received_at`, so the accepted evidence is the
+  post-USB-disconnect reboot (`boot_count=26006`) rather than the earlier
+  post-flash boot (`boot_count=26005`).
+
+## Completion
+
+LTE-002 is complete as a USB-Free LTE HTTP telemetry uplink thin-slice. It does
+not validate LTE command polling, ACK migration, reconnect behavior, long-run
+LTE stability, battery/power behavior, or product LTE acceptance.

@@ -76,21 +76,9 @@ motion candidate
 
 ## Active Queue
 
-- `LTE-002 LTE HTTP Uplink Thin-Slice`
-  - Path: `docs/tasks/active/LTE-002_LTE_HTTP_UPLINK_THIN_SLICE.md`
-  - Status: active.
-  - Goal: prove one SIM7670G LTE HTTP telemetry uplink to the existing VPS
-    Message Hub with Wi-Fi disabled for the firmware run.
-  - Current boundary: first flashed image, fix1, fix2, fix3, and fix4 all failed
-    USB-Free runtime validation with no fresh LTE HTTP telemetry reaching the
-    VPS. USB-attached SIM7670G AT diagnosis proved compact GET/POST LTE HTTP
-    reaches the VPS and reproduced `HTTPACTION` 706 for larger POST bodies.
-    Fix4 compacts the firmware probe payload and is flashed, but its USB-Free
-    validation still produced zero test-run messages; USB-attached firmware
-    console diagnosis explained this as a `main` task stack overflow reset loop
-    before LTE readiness or HTTP AT commands. Fix5 moves the probe into a
-    dedicated task with explicit stack margin and is flashed, pending USB-Free
-    validation.
+- No active task packet is currently open after LTE-002 completion.
+- Next likely route candidate: `LTE-003 LTE HTTP Command Poll And ACK`, but it
+  should be opened as a separate task packet before firmware changes.
 
 ## USB-Free VPS Walking Skeleton Line
 
@@ -344,24 +332,19 @@ motion candidate
     `transport.type=lte`, Wi-Fi-disable run, LTE command loop, battery,
     charging, power, or long-run LTE stability claim belongs to this task.
 - `LTE-002 LTE HTTP Uplink Thin-Slice`
-  - Path: `docs/tasks/active/LTE-002_LTE_HTTP_UPLINK_THIN_SLICE.md`
-  - Status: active.
+  - Path: `docs/tasks/done/LTE-002_LTE_HTTP_UPLINK_THIN_SLICE.md`
+  - Status: completed.
   - Goal: send a bounded `lte_http_probe` telemetry event through SIM7670G LTE
     HTTP to the VPS Message Hub, with `transport.type=lte` visible in
     `/api/state`.
-  - Current state: `0.1.0-lte002-lte-http-probe`, fix1, fix2, fix3, and fix4
-    were flashed and failed with no fresh LTE HTTP telemetry. USB-attached
-    SIM7670G AT diagnosis proved compact GET/POST HTTP reaches the VPS and
-    reproduced `HTTPACTION` 706 for larger POST bodies. Fix4 compacted the
-    firmware probe payload and was flashed on `COM4`, but USB-Free validation
-    still produced zero test-run messages; a bounded `COM4` console capture
-    found repeated `main` task stack overflow panics before LTE readiness or
-    HTTP AT commands. Fix5 moves the probe into a dedicated
-    `lte_http_probe_task`, was flashed on `COM4`, and is pending USB-Free
-    validation.
-  - Boundary: no LTE command polling, ACK migration, reconnect supervisor,
-    long-run stability, battery, power, or product LTE acceptance belongs to
-    this task.
+  - Evidence: fix5 USB-Free validation passed after independent-power
+    power-cycle with USB disconnected: `transport.type=lte`,
+    `lte_http.reason_code=LTE_HTTP_OK`, HTTP status `200`, LTE `LTE_READY`,
+    assigned IP `10.160.15.113`, and cell ID `180571649`; evidence under
+    `reports/field_validation/lte002-lte-http-probe-fix5-20260628-193815/`.
+  - Boundary: this proves one LTE HTTP telemetry uplink thin-slice only. No
+    LTE command polling, ACK migration, reconnect supervisor, long-run
+    stability, battery, power, or product LTE acceptance belongs to this task.
 - `RELIABILITY-001A USB-Free Stability Observer And Reset Diagnostics`
   - Path: `docs/tasks/done/RELIABILITY-001A_USB_FREE_STABILITY_OBSERVER_RESET_DIAGNOSTICS.md`
   - Status: completed as an R3 preflight diagnosability increment.
