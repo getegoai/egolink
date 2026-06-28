@@ -93,7 +93,9 @@ motion candidate
     reused the pending command after an independent-power cold reboot. Fix1 is
     build-verified as `0.1.0-lte003-command-loop-fix1` /
     `lte003-command-loop-fix1-20260628-223454` with diagnostic LTE command
-    telemetry, but it has not been flashed yet.
+    telemetry, and flashed on `COM4`; flash evidence is under
+    `reports/field_validation/lte003-command-loop-fix1-20260628-223454/flash_report.md`.
+    USB-Free runtime validation has not been run yet.
 
 ## USB-Free VPS Walking Skeleton Line
 

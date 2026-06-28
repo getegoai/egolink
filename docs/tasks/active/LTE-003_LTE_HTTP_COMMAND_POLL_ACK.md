@@ -217,5 +217,9 @@ runtime.
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
   273 tests.
 - `git diff --check` passed.
-- Flash result: not run yet; requires explicit operator confirmation for
-  `COM4`.
+- Flash result: PASS on `COM4`; ESP32-S3 was detected, bootloader/app/
+  partition table were written, hashes verified, and hard reset completed.
+- Flash evidence:
+  `reports/field_validation/lte003-command-loop-fix1-20260628-223454/flash_report.md`
+- USB-Free runtime validation: not run yet. Requires independent power and USB
+  disconnected.
