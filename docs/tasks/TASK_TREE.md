@@ -313,6 +313,15 @@ No task packet with `status: active` is currently present under
   - Boundary: no firmware flash, USB-Free hardware validation, Wi-Fi-disable
     run, `transport.type=lte`, DNS over LTE, HTTP over LTE, or LTE command loop
     is claimed by this task.
+- `LTE-001B USB-Free LTE Status Observation`
+  - Path: `docs/tasks/active/LTE-001B_USB_FREE_LTE_STATUS_OBSERVATION.md`
+  - Status: active.
+  - Goal: flash the LTE-status observability image and validate that a real
+    USB-disconnected device reports `observability.lte` with a known `LTE_*`
+    reason code through the VPS Message Hub.
+  - Boundary: LTE status observation only. No LTE HTTP transport,
+    `transport.type=lte`, Wi-Fi-disable run, LTE command loop, battery,
+    charging, power, or long-run LTE stability claim belongs to this task.
 - `RELIABILITY-001A USB-Free Stability Observer And Reset Diagnostics`
   - Path: `docs/tasks/done/RELIABILITY-001A_USB_FREE_STABILITY_OBSERVER_RESET_DIAGNOSTICS.md`
   - Status: completed as an R3 preflight diagnosability increment.
