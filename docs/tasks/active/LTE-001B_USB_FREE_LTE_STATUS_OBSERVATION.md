@@ -90,8 +90,10 @@ yet; it is a diagnosable LTE status result such as `LTE_READY`,
 - Change: move LTE observation fragments out of heartbeat/sensor task stack and
   raise heartbeat/sensor task stack sizes to 12288 bytes.
 - Build result: PASS.
-- Flash/runtime result: pending operator reconnect and explicit COM4 flash
-  confirmation.
+- Flash result: PASS on `COM4`; ESP32-S3 detected, image written, hashes
+  verified, hard reset completed.
+- Runtime result: pending USB-Free validation after independent power and USB
+  disconnected.
 
 ## Planned Commands
 
@@ -100,9 +102,9 @@ Build/flash after explicit operator confirmation:
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_fw001_hw_r1.ps1 `
   -HostName 203.0.113.10 `
-  -FwVersion 0.1.0-lte001b-observe `
-  -TestRunId lte001b-observe-<yyyymmdd-hhmmss> `
-  -BuildDir build_lte001b_observe `
+  -FwVersion 0.1.0-lte001b-observe-fix1 `
+  -TestRunId lte001b-observe-fix1-20260628-131739 `
+  -BuildDir build_lte001b_observe_fix1 `
   -PrepareBuild `
   -EnableSim7670Gnss `
   -EnableSim7670LteStatus `
@@ -120,9 +122,9 @@ $env:EGOLINK_MESSAGE_HUB_TOKEN = (Get-Content -LiteralPath server\runtime\vps_me
 python scripts\validate_lte_observability.py `
   --hub http://203.0.113.10:8790 `
   --device-id ego-link-r1-connectivity-001 `
-  --observation-id lte001b-observe-<yyyymmdd-hhmmss> `
-  --expected-fw-version 0.1.0-lte001b-observe `
-  --expected-test-run-id lte001b-observe-<yyyymmdd-hhmmss> `
+  --observation-id lte001b-observe-fix1-20260628-131739 `
+  --expected-fw-version 0.1.0-lte001b-observe-fix1 `
+  --expected-test-run-id lte001b-observe-fix1-20260628-131739 `
   --timeout-sec 240 `
   --poll-interval-sec 5 `
   --json
@@ -130,7 +132,7 @@ python scripts\validate_lte_observability.py `
 
 ## Acceptance
 
-- The device reports firmware version `0.1.0-lte001b-observe`.
+- The device reports firmware version `0.1.0-lte001b-observe-fix1`.
 - The latest status message carries the expected test-run ID.
 - `/api/state` exposes `observability.lte`.
 - `observability.lte.reason_code` is one of the known `LTE_*` reason codes.

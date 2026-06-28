@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-001B status observability firmware flashed; USB-Free LTE status validation pending |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-001B fix1 status observability firmware flashed; USB-Free LTE status validation pending |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -101,7 +101,8 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   It moves LTE observation fragments out of heartbeat/sensor task stack and
   raises both task stacks to 12288 bytes. The binary is
   `firmware/mqtt_heartbeat/build_lte001b_observe_fix1/egolink_mqtt_heartbeat.bin`.
-  The fix1 image has not been flashed or USB-Free validated yet.
+  The fix1 image was flashed on `COM4` and hard-reset successfully. USB-Free
+  runtime validation has not run for fix1 yet.
 
 ## Current Known Limits
 
@@ -112,10 +113,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 - The USB-Free R1 validation used Wi-Fi HTTP to the Message Hub; it does not
   prove SIM7670G LTE data transport, GNSS fix, battery/charging accuracy, or
   product power behavior.
-- The currently flashed connectivity-node image is LTE-001B
-  `0.1.0-lte001b-observe`. It registered with the VPS after USB was
-  disconnected, but did not produce a fresh LTE-001B status heartbeat. Fix1 is
-  build-ready but not flashed.
+- The currently flashed connectivity-node image is LTE-001B fix1
+  `0.1.0-lte001b-observe-fix1`. It has passed build/flash only; USB-Free LTE
+  status observation through the VPS Message Hub is pending.
 - SIM7670G LTE data transport, product battery/charging accuracy, product
   power behavior, and final enclosure/mounting GNSS acceptance remain
   unverified.
