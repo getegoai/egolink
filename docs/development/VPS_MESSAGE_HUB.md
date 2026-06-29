@@ -86,13 +86,17 @@ POST /api/v1/devices/{device_id}/heartbeat
 POST /api/v1/devices/{device_id}/telemetry
 POST /api/v1/devices/{device_id}/ack
 POST /api/v1/devices/{device_id}/error
+POST /api/v1/devices/{device_id}/raw-ingest
 GET  /api/v1/devices/{device_id}/commands/poll
+GET  /api/v1/devices/{device_id}/commands/poll.raw
 POST /api/v1/devices/{device_id}/commands/{cmd_id}/ack
+POST /api/v1/devices/{device_id}/commands/{cmd_id}/ack.raw
 
 GET  /api/v1/devices
 GET  /api/v1/devices/{device_id}
 GET  /api/v1/devices/{device_id}/telemetry/latest
 GET  /api/v1/devices/{device_id}/telemetry/history
+GET  /api/v1/devices/{device_id}/raw-frames
 POST /api/v1/devices/{device_id}/commands
 GET  /api/v1/devices/{device_id}/commands
 

@@ -24,10 +24,27 @@ def post_json(base_url: str, path: str, payload: dict[str, object]) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
+def post_bytes(base_url: str, path: str, body: bytes, content_type: str = "text/x-egolink-frame") -> dict:
+    req = request.Request(
+        base_url + path,
+        data=body,
+        headers={"Content-Type": content_type},
+        method="POST",
+    )
+    with request.urlopen(req, timeout=5) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def get_json(base_url: str, path: str, headers: dict[str, str] | None = None) -> dict:
     req = request.Request(base_url + path, headers=headers or {}, method="GET")
     with request.urlopen(req, timeout=5) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def get_bytes(base_url: str, path: str) -> tuple[bytes, str]:
+    req = request.Request(base_url + path, method="GET")
+    with request.urlopen(req, timeout=5) as response:
+        return response.read(), response.headers.get("Content-Type", "")
 
 
 class MessageHubStoreTests(unittest.TestCase):
@@ -260,6 +277,61 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(observability["lte"]["reason_code"], "LTE_NOT_REGISTERED")
         self.assertIn("LTE_NOT_REGISTERED", observability["explainability"]["reason_codes"])
 
+    def test_raw_frame_ingest_retains_checksum_failed_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            raw = (
+                b"EGLK/1 type=event id=bad-frame seq=1 len=7 crc32=00000000\n"
+                b"content-type=text/x-egolink-kv\n\n"
+                b"foo=bar"
+            )
+            record = store.ingest_raw_frame("ego-link-001", raw)
+            listed = store.list_raw_frames("ego-link-001")
+
+        self.assertEqual(record["parse_result"]["status"], "checksum_failed")
+        self.assertEqual(record["parse_result"]["error_code"], "RAW_FRAME_PAYLOAD_CRC_MISMATCH")
+        self.assertEqual(record["raw_payload"]["byte_len"], len(raw))
+        self.assertIn("data", record["raw_payload"])
+        self.assertEqual(listed[0]["frame_id"], "bad-frame")
+        self.assertTrue(listed[0]["raw_payload"]["data_redacted"])
+        self.assertNotIn("data", listed[0]["raw_payload"])
+
+    def test_raw_ack_frame_updates_command_after_raw_storage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.create_test_run({"test_run_id": "raw-frame-test"})
+            command = store.create_command(
+                "ego-link-001",
+                {"cmd": "set_report_interval", "test_run_id": "raw-frame-test", "payload": {"interval_ms": 5000}},
+            )
+            payload = (
+                f"cmd_id={command['cmd_id']}\n"
+                "status=ok\n"
+                "test_run_id=raw-frame-test\n"
+            ).encode("utf-8")
+            frame = message_hub.build_raw_frame(
+                "ack",
+                command["cmd_id"],
+                payload,
+                metadata={"test-run-id": "raw-frame-test"},
+            )
+            record = store.ingest_raw_frame(
+                "ego-link-001",
+                frame,
+                expected_frame_type="ack",
+                expected_cmd_id=command["cmd_id"],
+            )
+            commands = store.list_commands("ego-link-001")
+            exported = store.export_test_run("raw-frame-test")
+
+        self.assertEqual(record["parse_result"]["status"], "ok")
+        self.assertEqual(record["parse_result"]["derived_message_type"], "ack")
+        self.assertEqual(commands[0]["status"], "ok")
+        self.assertEqual(commands[0]["ack"]["cmd_id"], command["cmd_id"])
+        self.assertEqual(commands[0]["ack"]["raw_frame"]["transport_profile"], "raw-frame.p0.v1")
+        self.assertEqual(exported["raw_frames"][0]["frame_id"], command["cmd_id"])
+        self.assertTrue(exported["raw_frames"][0]["raw_payload"]["data_redacted"])
+
 
 class MessageHubDeployScriptTests(unittest.TestCase):
     def test_deploy_package_excludes_runtime_secret_files(self) -> None:
@@ -394,6 +466,43 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertTrue(health["ok"])
         self.assertEqual(context.exception.code, 401)
         self.assertEqual(state["devices"], [])
+
+    def test_http_raw_command_poll_and_ack_routes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                command = post_json(
+                    base_url,
+                    "/api/v1/devices/ego-link-001/commands",
+                    {"cmd": "set_report_interval", "payload": {"interval_ms": 5000}},
+                )["command"]
+                raw_command, content_type = get_bytes(base_url, "/api/v1/devices/ego-link-001/commands/poll.raw")
+                ack_payload = f"cmd_id={command['cmd_id']}\nstatus=ok\n".encode("utf-8")
+                raw_ack = message_hub.build_raw_frame("ack", command["cmd_id"], ack_payload)
+                ack = post_bytes(
+                    base_url,
+                    f"/api/v1/devices/ego-link-001/commands/{command['cmd_id']}/ack.raw",
+                    raw_ack,
+                )
+                raw_frames = get_json(base_url, "/api/v1/devices/ego-link-001/raw-frames")["raw_frames"]
+                commands = get_json(base_url, "/api/v1/devices/ego-link-001/commands")["commands"]
+                state = get_json(base_url, "/api/state")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertTrue(raw_command.startswith(b"EGLK/1 type=command"))
+        self.assertIn("raw-frame.p0.v1", content_type)
+        self.assertEqual(ack["raw_frame"]["parse_result"]["status"], "ok")
+        self.assertEqual(commands[0]["status"], "ok")
+        self.assertGreaterEqual(len(raw_frames), 2)
+        self.assertNotIn("data", raw_frames[0]["raw_payload"])
+        self.assertIn("raw_frames", state)
 
 
 if __name__ == "__main__":

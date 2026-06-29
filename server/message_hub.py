@@ -7,12 +7,16 @@ can run on a clean VPS before we introduce deployment complexity.
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 from contextlib import contextmanager
 from datetime import datetime, timezone
+import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 import sys
 from typing import Any
@@ -27,6 +31,7 @@ from pc_simulator import protocol
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = REPO_ROOT / "server" / "runtime" / "message_hub.db"
 MAX_BODY_BYTES = 1_000_000
+RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 
 
 def utc_now() -> str:
@@ -121,6 +126,35 @@ class MessageHubStore:
                     status TEXT NOT NULL,
                     metadata_json TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS raw_frames (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    frame_id TEXT NOT NULL,
+                    device_id TEXT NOT NULL,
+                    direction TEXT NOT NULL,
+                    frame_type TEXT,
+                    seq INTEGER,
+                    test_run_id TEXT,
+                    fw_version TEXT,
+                    content_type TEXT,
+                    payload_len INTEGER,
+                    payload_crc32 TEXT,
+                    raw_payload_sha256 TEXT NOT NULL,
+                    raw_payload_b64 TEXT NOT NULL,
+                    server_received_at TEXT NOT NULL,
+                    parse_status TEXT NOT NULL,
+                    parse_error_code TEXT,
+                    parse_reason TEXT,
+                    derived_message_type TEXT,
+                    derived_message_json TEXT,
+                    record_json TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_raw_frames_device_time
+                ON raw_frames (device_id, id DESC);
+
+                CREATE INDEX IF NOT EXISTS idx_raw_frames_test_run
+                ON raw_frames (test_run_id, id);
                 """
             )
 
@@ -400,6 +434,149 @@ class MessageHubStore:
             rows = db.execute("SELECT * FROM commands ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [command_row(row) for row in rows]
 
+    def ingest_raw_frame(
+        self,
+        device_id: str,
+        raw_body: bytes,
+        *,
+        direction: str = "uplink",
+        expected_frame_type: str | None = None,
+        expected_cmd_id: str | None = None,
+    ) -> dict[str, Any]:
+        server_received_at = utc_now()
+        raw_id, initial = self._insert_raw_frame_initial(device_id, raw_body, direction, server_received_at)
+        record = parse_raw_frame_record(
+            initial,
+            raw_body,
+            expected_frame_type=expected_frame_type,
+            expected_cmd_id=expected_cmd_id,
+        )
+        derived_message = as_dict(record["parse_result"].get("derived_message"))
+        endpoint = derived_endpoint(derived_message.get("message_type"))
+        if record["parse_result"]["status"] == "ok" and endpoint:
+            try:
+                self.ingest(device_id, endpoint, derived_message)
+            except MessageHubError as error:
+                record["parse_result"].update(
+                    {
+                        "status": "malformed",
+                        "error_code": "DERIVED_MESSAGE_REJECTED",
+                        "reason": str(error),
+                    }
+                )
+        self._update_raw_frame(raw_id, record)
+        return record
+
+    def _insert_raw_frame_initial(
+        self,
+        device_id: str,
+        raw_body: bytes,
+        direction: str,
+        server_received_at: str,
+    ) -> tuple[int, dict[str, Any]]:
+        record = initial_raw_frame_record(device_id, raw_body, direction, server_received_at)
+        with self.connection() as db:
+            cursor = db.execute(
+                """
+                INSERT INTO raw_frames (
+                    frame_id, device_id, direction, frame_type, seq, test_run_id,
+                    fw_version, content_type, payload_len, payload_crc32,
+                    raw_payload_sha256, raw_payload_b64, server_received_at,
+                    parse_status, parse_error_code, parse_reason,
+                    derived_message_type, derived_message_json, record_json
+                )
+                VALUES (?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?)
+                """,
+                (
+                    record["frame_id"],
+                    device_id,
+                    direction,
+                    record["raw_payload"]["sha256"],
+                    record["raw_payload"]["data"],
+                    server_received_at,
+                    record["parse_result"]["status"],
+                    dumps(record),
+                ),
+            )
+            raw_id = int(cursor.lastrowid)
+        record["raw_frame_row_id"] = raw_id
+        return raw_id, record
+
+    def _update_raw_frame(self, raw_id: int, record: dict[str, Any]) -> None:
+        framing = as_dict(record.get("framing"))
+        parse_result = as_dict(record.get("parse_result"))
+        derived_message = as_dict(parse_result.get("derived_message"))
+        with self.connection() as db:
+            db.execute(
+                """
+                UPDATE raw_frames
+                SET frame_id = ?,
+                    frame_type = ?,
+                    seq = ?,
+                    test_run_id = ?,
+                    fw_version = ?,
+                    content_type = ?,
+                    payload_len = ?,
+                    payload_crc32 = ?,
+                    parse_status = ?,
+                    parse_error_code = ?,
+                    parse_reason = ?,
+                    derived_message_type = ?,
+                    derived_message_json = ?,
+                    record_json = ?
+                WHERE id = ?
+                """,
+                (
+                    record["frame_id"],
+                    framing.get("frame_type"),
+                    record.get("seq"),
+                    record.get("test_run_id"),
+                    record.get("fw_version"),
+                    framing.get("content_type"),
+                    framing.get("payload_len"),
+                    framing.get("payload_crc32"),
+                    parse_result.get("status"),
+                    parse_result.get("error_code"),
+                    parse_result.get("reason"),
+                    parse_result.get("derived_message_type"),
+                    dumps(derived_message) if derived_message else None,
+                    dumps(record),
+                    raw_id,
+                ),
+            )
+
+    def list_raw_frames(self, device_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        with self.connection() as db:
+            rows = db.execute(
+                """
+                SELECT record_json FROM raw_frames
+                WHERE device_id = ?
+                ORDER BY id DESC LIMIT ?
+                """,
+                (device_id, limit),
+            ).fetchall()
+        return [redact_raw_frame_record(json.loads(row["record_json"])) for row in rows]
+
+    def recent_raw_frames(self, limit: int = 50) -> list[dict[str, Any]]:
+        with self.connection() as db:
+            rows = db.execute("SELECT record_json FROM raw_frames ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [redact_raw_frame_record(json.loads(row["record_json"])) for row in rows]
+
+    def poll_commands_raw(self, device_id: str) -> tuple[bytes, dict[str, Any] | None]:
+        pending = self.poll_commands(device_id)
+        if not pending:
+            return build_raw_command_frame(device_id, None), None
+        command = pending[0]
+        frame = build_raw_command_frame(device_id, command)
+        record = self.ingest_raw_frame(
+            device_id,
+            frame,
+            direction="downlink",
+            expected_frame_type="command",
+            expected_cmd_id=str(command["cmd_id"]),
+        )
+        return frame, record
+
     def create_test_run(self, payload: dict[str, Any]) -> dict[str, Any]:
         test_run_id = str(payload.get("test_run_id") or f"test-run-{utc_now().replace(':', '').replace('+', 'Z')}")
         now = utc_now()
@@ -444,14 +621,24 @@ class MessageHubStore:
                 """,
                 (f'%"{test_run_id}"%', f'%"{test_run_id}"%'),
             ).fetchall()
+            raw_frames = db.execute(
+                """
+                SELECT record_json FROM raw_frames
+                WHERE test_run_id = ? OR record_json LIKE ?
+                ORDER BY id
+                """,
+                (test_run_id, f'%"{test_run_id}"%'),
+            ).fetchall()
         if run is None:
             raise MessageHubError("test_run_not_found", f"unknown test run: {test_run_id}", status=404)
         message_list = [json.loads(row["payload_json"]) for row in messages]
         command_list = [command_row(row) for row in commands]
+        raw_frame_list = [redact_raw_frame_record(json.loads(row["record_json"])) for row in raw_frames]
         return {
             "test_run": json.loads(run["metadata_json"]),
             "messages": message_list,
             "commands": command_list,
+            "raw_frames": raw_frame_list,
             "observability_summary": summarize_test_run_observability(message_list, command_list),
         }
 
@@ -554,6 +741,7 @@ def make_handler(store: MessageHubStore, *, token: str | None = None) -> type[Ba
                         "devices": store.list_devices(),
                         "messages": store.recent_messages(20),
                         "commands": store.recent_commands(20),
+                        "raw_frames": store.recent_raw_frames(20),
                     }
                 )
                 return
@@ -578,11 +766,25 @@ def make_handler(store: MessageHubStore, *, token: str | None = None) -> type[Ba
             if len(segments) == 5 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "commands":
                 self.respond_json({"commands": store.list_commands(segments[3])})
                 return
+            if len(segments) == 5 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "raw-frames":
+                self.respond_json({"raw_frames": store.list_raw_frames(segments[3])})
+                return
             if len(segments) == 6 and segments[:3] == ["api", "v1", "devices"] and segments[4:] == [
                 "commands",
                 "poll",
             ]:
                 self.respond_json({"commands": store.poll_commands(segments[3])})
+                return
+            if len(segments) == 6 and segments[:3] == ["api", "v1", "devices"] and segments[4:] == [
+                "commands",
+                "poll.raw",
+            ]:
+                frame, record = store.poll_commands_raw(segments[3])
+                self.respond_bytes(
+                    frame,
+                    content_type="text/x-egolink-frame; profile=raw-frame.p0.v1",
+                    headers={"X-Ego-Link-Raw-Frame-Id": record["frame_id"] if record else "none"},
+                )
                 return
             if segments == ["api", "v1", "test-runs"]:
                 self.respond_json({"test_runs": store.list_test_runs()})
@@ -594,6 +796,26 @@ def make_handler(store: MessageHubStore, *, token: str | None = None) -> type[Ba
 
         def route_post(self) -> None:
             segments = split_path(urlparse(self.path).path)
+            if len(segments) == 5 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "raw-ingest":
+                device_id = segments[3]
+                record = store.ingest_raw_frame(device_id, self.read_raw_body())
+                self.respond_json({"ok": True, "raw_frame": redact_raw_frame_record(record)})
+                return
+            if (
+                len(segments) == 7
+                and segments[:3] == ["api", "v1", "devices"]
+                and segments[4] == "commands"
+                and segments[6] == "ack.raw"
+            ):
+                device_id = segments[3]
+                record = store.ingest_raw_frame(
+                    device_id,
+                    self.read_raw_body(),
+                    expected_frame_type="ack",
+                    expected_cmd_id=segments[5],
+                )
+                self.respond_json({"ok": True, "raw_frame": redact_raw_frame_record(record)})
+                return
             body = self.read_json_body()
             if segments == ["api", "v1", "devices", "register"]:
                 self.respond_json({"ok": True, "device": store.register_device(body)})
@@ -633,6 +855,14 @@ def make_handler(store: MessageHubStore, *, token: str | None = None) -> type[Ba
                 raise MessageHubError("invalid_json", "request body must be a JSON object")
             return value
 
+        def read_raw_body(self) -> bytes:
+            length = int(self.headers.get("Content-Length") or "0")
+            if length <= 0:
+                return b""
+            if length > MAX_BODY_BYTES:
+                raise MessageHubError("body_too_large", "request body is too large", status=413)
+            return self.rfile.read(length)
+
         def respond_json(self, payload: dict[str, Any], status: int = 200) -> None:
             body = dumps(payload, indent=2).encode("utf-8")
             self.send_response(status)
@@ -646,6 +876,22 @@ def make_handler(store: MessageHubStore, *, token: str | None = None) -> type[Ba
             self.send_response(status)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def respond_bytes(
+            self,
+            body: bytes,
+            *,
+            content_type: str,
+            status: int = 200,
+            headers: dict[str, str] | None = None,
+        ) -> None:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
             self.end_headers()
             self.wfile.write(body)
 
@@ -677,6 +923,448 @@ def require_text(payload: dict[str, Any], field: str) -> str:
 
 def dumps(payload: Any, *, indent: int | None = None) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":") if indent is None else None, indent=indent)
+
+
+def sha256_hex(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def crc32_hex(value: bytes) -> str:
+    return f"{binascii.crc32(value) & 0xFFFFFFFF:08X}"
+
+
+def initial_raw_frame_record(
+    device_id: str,
+    raw_body: bytes,
+    direction: str,
+    server_received_at: str,
+) -> dict[str, Any]:
+    digest = sha256_hex(raw_body)
+    return {
+        "protocol_version": protocol.PROTOCOL_VERSION,
+        "transport_profile": RAW_FRAME_PROFILE,
+        "direction": direction,
+        "device_id": device_id,
+        "frame_id": f"raw-{digest[:12]}",
+        "server_received_at": server_received_at,
+        "raw_payload": {
+            "encoding": "base64",
+            "data": base64.b64encode(raw_body).decode("ascii"),
+            "byte_len": len(raw_body),
+            "sha256": digest,
+            "crc32": crc32_hex(raw_body),
+        },
+        "parse_result": {
+            "status": "not_attempted",
+            "derived_message_type": "unknown",
+        },
+        "retention": {
+            "privacy_class": "engineering",
+            "redacted": False,
+        },
+    }
+
+
+def parse_raw_frame_record(
+    initial: dict[str, Any],
+    raw_body: bytes,
+    *,
+    expected_frame_type: str | None = None,
+    expected_cmd_id: str | None = None,
+) -> dict[str, Any]:
+    record = json.loads(dumps(initial))
+    header_bytes, payload, has_separator = split_raw_frame_bytes(raw_body)
+    if not has_separator:
+        record["parse_result"] = {
+            "status": "partial",
+            "error_code": "RAW_FRAME_HEADER_INCOMPLETE",
+            "reason": "raw frame is missing a blank line before payload",
+            "derived_message_type": "unknown",
+        }
+        return record
+
+    header = parse_raw_header(header_bytes)
+    fields = header["fields"]
+    metadata = header["metadata"]
+    frame_id = first_known(fields.get("id"), fields.get("frame_id"), expected_cmd_id, record["frame_id"])
+    frame_type = str(fields.get("type") or "raw")
+    content_type = str(first_known(fields.get("content-type"), fields.get("content_type"), metadata.get("content-type"), "application/octet-stream"))
+    seq = parse_optional_int(fields.get("seq"))
+    declared_len = parse_optional_int(fields.get("len"))
+    declared_crc = normalize_crc32(fields.get("crc32"))
+    payload_crc = crc32_hex(payload)
+    kv_payload = parse_kv_payload(payload) if content_type.startswith("text/x-egolink-kv") else {}
+
+    record.update(
+        {
+            "frame_id": str(frame_id),
+            "seq": seq,
+            "fw_version": first_known(kv_payload.get("fw-version"), fields.get("fw"), fields.get("fw-version")),
+            "test_run_id": first_known(kv_payload.get("test-run-id"), fields.get("test-run-id")),
+            "framing": {
+                "magic": "EGLK" if header["magic_ok"] else str(header["magic"]),
+                "frame_version": header["frame_version"],
+                "frame_type": frame_type,
+                "content_type": content_type,
+                "payload_len": declared_len if declared_len is not None else len(payload),
+                "payload_crc32": declared_crc or payload_crc,
+                "actual_payload_len": len(payload),
+                "actual_payload_crc32": payload_crc,
+            },
+        }
+    )
+
+    parse_result = validate_raw_frame_header(
+        header,
+        frame_type,
+        declared_len,
+        declared_crc,
+        payload,
+        expected_frame_type=expected_frame_type,
+    )
+    if parse_result["status"] == "ok":
+        derived = derive_raw_frame_message(record, kv_payload, expected_cmd_id=expected_cmd_id)
+        parse_result.update(
+            {
+                "derived_message_type": str(derived.get("message_type") or "unknown"),
+                "derived_message": derived,
+            }
+        )
+        if expected_cmd_id and derived.get("cmd_id") and str(derived["cmd_id"]) != expected_cmd_id:
+            parse_result.update(
+                {
+                    "status": "malformed",
+                    "error_code": "RAW_FRAME_CMD_ID_MISMATCH",
+                    "reason": "raw frame command ID does not match route command ID",
+                }
+            )
+    record["parse_result"] = parse_result
+    return record
+
+
+def split_raw_frame_bytes(raw_body: bytes) -> tuple[bytes, bytes, bool]:
+    for separator in (b"\r\n\r\n", b"\n\n"):
+        index = raw_body.find(separator)
+        if index >= 0:
+            return raw_body[:index], raw_body[index + len(separator) :], True
+    return raw_body, b"", False
+
+
+def parse_raw_header(header_bytes: bytes) -> dict[str, Any]:
+    text = header_bytes.decode("ascii", errors="replace")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    first = lines[0] if lines else ""
+    tokens = first.split()
+    magic = tokens[0] if tokens else ""
+    magic_match = re.fullmatch(r"EGLK/(\d+)", magic)
+    fields = parse_key_tokens(tokens[1:])
+    metadata: dict[str, str] = {}
+    for line in lines[1:]:
+        if ":" in line:
+            key, value = line.split(":", 1)
+        elif "=" in line:
+            key, value = line.split("=", 1)
+        else:
+            continue
+        metadata[normalize_key(key)] = value.strip()
+    return {
+        "magic": magic,
+        "magic_ok": bool(magic_match),
+        "frame_version": int(magic_match.group(1)) if magic_match else None,
+        "fields": fields,
+        "metadata": metadata,
+    }
+
+
+def parse_key_tokens(tokens: list[str]) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for token in tokens:
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        fields[normalize_key(key)] = value.strip()
+    return fields
+
+
+def normalize_key(key: str) -> str:
+    return key.strip().lower().replace("_", "-")
+
+
+def normalize_crc32(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    return text.upper() if re.fullmatch(r"[0-9A-Fa-f]{8}", text) else text
+
+
+def parse_optional_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(str(value), 10)
+    except ValueError:
+        return None
+
+
+def validate_raw_frame_header(
+    header: dict[str, Any],
+    frame_type: str,
+    declared_len: int | None,
+    declared_crc: str | None,
+    payload: bytes,
+    *,
+    expected_frame_type: str | None = None,
+) -> dict[str, Any]:
+    if not header["magic_ok"] or header["frame_version"] != 1:
+        return {
+            "status": "unsupported",
+            "error_code": "RAW_FRAME_UNSUPPORTED_MAGIC",
+            "reason": "raw frame magic/version is not EGLK/1",
+            "derived_message_type": "unknown",
+        }
+    if frame_type not in {"status", "event", "command", "ack", "error", "log", "raw"}:
+        return {
+            "status": "unsupported",
+            "error_code": "RAW_FRAME_UNSUPPORTED_TYPE",
+            "reason": f"unsupported raw frame type: {frame_type}",
+            "derived_message_type": "unknown",
+        }
+    if expected_frame_type and frame_type != expected_frame_type:
+        return {
+            "status": "malformed",
+            "error_code": "RAW_FRAME_TYPE_MISMATCH",
+            "reason": f"expected {expected_frame_type} frame, got {frame_type}",
+            "derived_message_type": "unknown",
+        }
+    if declared_len is None or declared_crc is None:
+        return {
+            "status": "malformed",
+            "error_code": "RAW_FRAME_MISSING_LENGTH_OR_CRC",
+            "reason": "raw frame must include len and crc32",
+            "derived_message_type": "unknown",
+        }
+    if len(payload) < declared_len:
+        return {
+            "status": "partial",
+            "error_code": "RAW_FRAME_PAYLOAD_PARTIAL",
+            "reason": f"payload has {len(payload)} bytes, expected {declared_len}",
+            "derived_message_type": "unknown",
+        }
+    if len(payload) != declared_len:
+        return {
+            "status": "malformed",
+            "error_code": "RAW_FRAME_PAYLOAD_LENGTH_MISMATCH",
+            "reason": f"payload has {len(payload)} bytes, expected {declared_len}",
+            "derived_message_type": "unknown",
+        }
+    if declared_crc.upper() != crc32_hex(payload):
+        return {
+            "status": "checksum_failed",
+            "error_code": "RAW_FRAME_PAYLOAD_CRC_MISMATCH",
+            "reason": "payload CRC32 does not match frame header",
+            "derived_message_type": "unknown",
+        }
+    return {"status": "ok", "derived_message_type": "unknown"}
+
+
+def parse_kv_payload(payload: bytes) -> dict[str, str]:
+    text = payload.decode("utf-8", errors="replace")
+    result: dict[str, str] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        result[normalize_key(key)] = value.strip()
+    return result
+
+
+def derive_raw_frame_message(
+    record: dict[str, Any],
+    kv_payload: dict[str, str],
+    *,
+    expected_cmd_id: str | None = None,
+) -> dict[str, Any]:
+    framing = as_dict(record.get("framing"))
+    frame_type = str(framing.get("frame_type") or "raw")
+    seq = first_known(parse_optional_int(kv_payload.get("seq")), record.get("seq"), 0)
+    common = {
+        "protocol_version": protocol.PROTOCOL_VERSION,
+        "device_id": record["device_id"],
+        "fw_version": first_known(record.get("fw_version"), kv_payload.get("fw-version"), "unknown"),
+        "seq": seq,
+        "ts": first_known(kv_payload.get("ts"), f"raw_frame:{record['frame_id']}"),
+        "test_run_id": record.get("test_run_id") or kv_payload.get("test-run-id"),
+        "raw_frame": {
+            "frame_id": record["frame_id"],
+            "transport_profile": RAW_FRAME_PROFILE,
+        },
+    }
+    if frame_type == "ack":
+        cmd_id = first_known(expected_cmd_id, kv_payload.get("cmd-id"), kv_payload.get("cmd_id"), record["frame_id"])
+        return compact_dict(
+            {
+                **common,
+                "message_type": "ack",
+                "cmd_id": cmd_id,
+                "status": first_known(kv_payload.get("status"), "ok"),
+                "message": first_known(kv_payload.get("message"), "raw-frame ack"),
+            }
+        )
+    if frame_type == "command":
+        cmd_id = first_known(expected_cmd_id, kv_payload.get("cmd-id"), kv_payload.get("cmd_id"), record["frame_id"])
+        return compact_dict(
+            {
+                "protocol_version": protocol.PROTOCOL_VERSION,
+                "message_type": "command",
+                "device_id": record["device_id"],
+                "cmd_id": cmd_id,
+                "cmd": first_known(kv_payload.get("cmd"), "unknown"),
+                "created_at": first_known(kv_payload.get("created-at"), kv_payload.get("created_at"), record["server_received_at"]),
+                "test_run_id": record.get("test_run_id") or kv_payload.get("test-run-id"),
+                "payload": raw_command_payload(kv_payload),
+            }
+        )
+    if frame_type == "status":
+        return compact_dict(
+            {
+                **common,
+                "message_type": "status",
+                "battery": parse_number_or_text(kv_payload.get("battery")),
+                "link_type": first_known(kv_payload.get("link-type"), kv_payload.get("link_type"), "unknown"),
+                "guard_mode": first_known(kv_payload.get("guard-mode"), kv_payload.get("guard_mode"), "unknown"),
+                "queue_size": parse_optional_int(kv_payload.get("queue-size") or kv_payload.get("queue_size")) or 0,
+            }
+        )
+    if frame_type == "event":
+        return compact_dict(
+            {
+                **common,
+                "message_type": "event",
+                "event_type": first_known(kv_payload.get("event-type"), kv_payload.get("event_type"), "raw_event"),
+                "priority": first_known(kv_payload.get("priority"), "normal"),
+            }
+        )
+    if frame_type == "error":
+        return compact_dict(
+            {
+                **common,
+                "message_type": "error",
+                "error_code": first_known(kv_payload.get("error-code"), kv_payload.get("error_code"), "RAW_FRAME_ERROR"),
+                "severity": first_known(kv_payload.get("severity"), "warning"),
+                "message": kv_payload.get("message"),
+            }
+        )
+    return {}
+
+
+def raw_command_payload(kv_payload: dict[str, str]) -> dict[str, Any]:
+    reserved = {
+        "cmd",
+        "cmd-id",
+        "cmd_id",
+        "created-at",
+        "created_at",
+        "device-id",
+        "device_id",
+        "fw-version",
+        "fw_version",
+        "seq",
+        "status",
+        "test-run-id",
+        "test_run_id",
+        "ts",
+    }
+    return {key.replace("-", "_"): parse_number_or_text(value) for key, value in kv_payload.items() if key not in reserved}
+
+
+def parse_number_or_text(value: Any) -> Any:
+    if value in (None, ""):
+        return None
+    text = str(value)
+    try:
+        return int(text, 10)
+    except ValueError:
+        try:
+            return float(text)
+        except ValueError:
+            return text
+
+
+def compact_dict(payload: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in payload.items() if value is not None}
+
+
+def derived_endpoint(message_type: Any) -> str | None:
+    return {
+        "status": "heartbeat",
+        "event": "telemetry",
+        "ack": "ack",
+        "error": "error",
+    }.get(str(message_type or ""))
+
+
+def redact_raw_frame_record(record: dict[str, Any]) -> dict[str, Any]:
+    redacted = json.loads(dumps(record))
+    raw_payload = as_dict(redacted.get("raw_payload"))
+    if "data" in raw_payload:
+        raw_payload.pop("data", None)
+        raw_payload["data_redacted"] = True
+    retention = as_dict(redacted.get("retention"))
+    retention["redacted"] = True
+    redacted["retention"] = retention
+    return redacted
+
+
+def build_raw_frame(
+    frame_type: str,
+    frame_id: str,
+    payload: bytes,
+    *,
+    seq: int | None = None,
+    content_type: str = "text/x-egolink-kv",
+    metadata: dict[str, Any] | None = None,
+) -> bytes:
+    header_parts = [
+        "EGLK/1",
+        f"type={frame_type}",
+        f"id={frame_id}",
+        f"len={len(payload)}",
+        f"crc32={crc32_hex(payload)}",
+    ]
+    if seq is not None:
+        header_parts.insert(3, f"seq={seq}")
+    lines = [" ".join(header_parts), f"content-type={content_type}"]
+    for key, value in (metadata or {}).items():
+        if value not in (None, ""):
+            lines.append(f"{key}={value}")
+    return ("\n".join(lines) + "\n\n").encode("ascii") + payload
+
+
+def build_raw_command_frame(device_id: str, command: dict[str, Any] | None) -> bytes:
+    if not command:
+        return build_raw_frame(
+            "command",
+            "cmd-none",
+            b"cmd=none\n",
+            metadata={"device-id": device_id},
+        )
+    payload_lines = [
+        f"cmd={command['cmd']}",
+        f"cmd_id={command['cmd_id']}",
+    ]
+    payload = as_dict(command.get("payload"))
+    for key, value in payload.items():
+        if isinstance(value, (str, int, float, bool)):
+            payload_lines.append(f"{key}={value}")
+    if command.get("test_run_id"):
+        payload_lines.append(f"test_run_id={command['test_run_id']}")
+    return build_raw_frame(
+        "command",
+        str(command["cmd_id"]),
+        ("\n".join(payload_lines) + "\n").encode("utf-8"),
+        metadata={"device-id": device_id, "test-run-id": command.get("test_run_id")},
+    )
 
 
 def device_row(row: sqlite3.Row) -> dict[str, Any]:

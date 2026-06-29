@@ -231,6 +231,17 @@ motion candidate
     touching existing GitLab.
   - Evidence: `server/message_hub.py`, `scripts/run_message_hub.py`, and
     `quality_tests/test_message_hub_server.py`.
+- `SERVER-002 Raw Frame Ingest And Storage`
+  - Path: `docs/tasks/done/SERVER-002_RAW_FRAME_INGEST_STORAGE.md`
+  - Status: completed as a local server implementation baseline.
+  - Goal: add Message Hub raw-frame storage and HTTP routes so incoming bytes
+    are retained before parser/schema conversion.
+  - Evidence: `server/message_hub.py` adds the `raw_frames` table and
+    raw ingest/poll/ACK routes; `quality_tests/test_message_hub_server.py`
+    covers checksum-failed raw retention, raw ACK command update, and HTTP
+    `poll.raw` / `ack.raw`.
+  - Boundary: no firmware flash, hardware validation, VPS deployment, GitLab
+    change, or removal of existing JSON endpoints.
 - `WEB-001 Device Status Dashboard`
   - Path: `docs/tasks/done/WEB-001_MESSAGE_HUB_DASHBOARD_BASELINE.md`
   - Status: completed as a message-hub dashboard baseline.
