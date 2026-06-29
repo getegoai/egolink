@@ -65,8 +65,10 @@ static char s_sensor_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_lte_http_probe_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 static char s_lte_command_last_cmd_id[64];
+static char s_lte_command_parse_status[64] = "not_polled";
 static char s_lte_command_diag_payload[1536];
 static bool s_lte_command_last_executed;
+static int s_lte_command_last_command_count;
 #endif
 
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
@@ -1164,6 +1166,11 @@ static void lte_http_probe_task(void *arg)
 #endif
 
 #if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+static void set_lte_command_parse_status(const char *status)
+{
+    snprintf(s_lte_command_parse_status, sizeof(s_lte_command_parse_status), "%s", status ? status : "unknown");
+}
+
 static void build_lte_command_ack_payload(
     char *buffer,
     size_t buffer_size,
@@ -1184,6 +1191,7 @@ static void build_lte_command_ack_payload(
     char escaped_status[32];
     char escaped_message[160];
     char escaped_reason[SIM7670_LTE_HTTP_REASON_MAX * 2];
+    char escaped_parse_status[96];
     char poll_status_code[16];
     char poll_action_elapsed_ms[16];
     char rtt_ms[16];
@@ -1194,6 +1202,7 @@ static void build_lte_command_ack_payload(
     json_escape_summary(escaped_status, sizeof(escaped_status), status);
     json_escape_summary(escaped_message, sizeof(escaped_message), message);
     json_escape_summary(escaped_reason, sizeof(escaped_reason), poll_result->reason_code);
+    json_escape_summary(escaped_parse_status, sizeof(escaped_parse_status), s_lte_command_parse_status);
     json_int_or_null(poll_status_code, sizeof(poll_status_code), poll_result->status_code_valid, poll_result->status_code);
     json_int_or_null(
         poll_action_elapsed_ms,
@@ -1231,6 +1240,8 @@ static void build_lte_command_ack_payload(
         "\"poll_status_code\":%s,"
         "\"poll_action_elapsed_ms\":%s},"
         "\"command\":{\"last_cmd_id\":\"%s\","
+        "\"parse_status\":\"%s\","
+        "\"command_count\":%d,"
         "\"last_status\":\"%s\","
         "\"last_ack_status\":\"%s\","
         "\"duplicate_local_execution_prevented\":%s}",
@@ -1251,6 +1262,8 @@ static void build_lte_command_ack_payload(
         poll_status_code,
         poll_action_elapsed_ms,
         escaped_cmd_id,
+        escaped_parse_status,
+        s_lte_command_last_command_count,
         escaped_status,
         escaped_status,
         json_bool(duplicate_prevented));
@@ -1317,6 +1330,7 @@ static void build_lte_command_diag_payload(
     char escaped_phase[64];
     char escaped_reason[SIM7670_LTE_HTTP_REASON_MAX * 2];
     char escaped_cmd_id[96];
+    char escaped_parse_status[96];
     char poll_status_code[16];
     char poll_data_len[16];
     char poll_action_elapsed_ms[16];
@@ -1329,6 +1343,7 @@ static void build_lte_command_diag_payload(
     json_escape_summary(escaped_phase, sizeof(escaped_phase), effective_phase);
     json_escape_summary(escaped_reason, sizeof(escaped_reason), effective_reason);
     json_escape_summary(escaped_cmd_id, sizeof(escaped_cmd_id), s_lte_command_last_cmd_id);
+    json_escape_summary(escaped_parse_status, sizeof(escaped_parse_status), s_lte_command_parse_status);
     json_int_or_null(
         poll_status_code,
         sizeof(poll_status_code),
@@ -1382,6 +1397,8 @@ static void build_lte_command_diag_payload(
         "\"poll_data_len\":%s,"
         "\"poll_action_elapsed_ms\":%s},"
         "\"command\":{\"last_cmd_id\":\"%s\","
+        "\"parse_status\":\"%s\","
+        "\"command_count\":%d,"
         "\"last_status\":\"%s\","
         "\"last_ack_status\":%s,"
         "\"ack_observed\":%s}"
@@ -1403,6 +1420,8 @@ static void build_lte_command_diag_payload(
         poll_data_len,
         poll_action_elapsed_ms,
         escaped_cmd_id,
+        escaped_parse_status,
+        s_lte_command_last_command_count,
         acked ? "ok" : "pending",
         acked ? "\"ok\"" : "null",
         json_bool(acked),
@@ -1453,6 +1472,7 @@ static bool lte_http_execute_and_ack_command(cJSON *command, const sim7670_lte_h
 {
     cJSON *cmd_id = cJSON_GetObjectItemCaseSensitive(command, "cmd_id");
     if (!cJSON_IsString(cmd_id) || cmd_id->valuestring == NULL) {
+        set_lte_command_parse_status("missing_cmd_id");
         ESP_LOGW(TAG, "LTE_HTTP_COMMAND_INVALID missing_cmd_id=true");
         return false;
     }
@@ -1468,6 +1488,7 @@ static bool lte_http_execute_and_ack_command(cJSON *command, const sim7670_lte_h
         cmd_id->valuestring,
         cmd_name,
         duplicate ? "true" : "false");
+    set_lte_command_parse_status("command_selected");
 
     if (!duplicate) {
         snprintf(s_lte_command_last_cmd_id, sizeof(s_lte_command_last_cmd_id), "%s", cmd_id->valuestring);
@@ -1497,6 +1518,8 @@ static bool lte_http_poll_commands_once(sim7670_lte_http_probe_result_t *poll_re
     build_message_hub_url(url, sizeof(url), path);
     bool poll_ok =
         sim7670_lte_http_get_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, response, sizeof(response), poll_result);
+    s_lte_command_last_command_count = 0;
+    set_lte_command_parse_status(poll_ok ? "http_ok_body_received" : "http_poll_failed");
     ESP_LOGI(
         TAG,
         "LTE_HTTP_COMMAND_POLL_DONE ok=%s reason=%s status=%d data_len=%d",
@@ -1510,20 +1533,25 @@ static bool lte_http_poll_commands_once(sim7670_lte_http_probe_result_t *poll_re
 
     cJSON *root = cJSON_Parse(response);
     if (root == NULL) {
+        set_lte_command_parse_status("json_parse_failed");
         ESP_LOGW(TAG, "LTE_HTTP_COMMAND_POLL_PARSE_FAIL");
         return false;
     }
     cJSON *commands = cJSON_GetObjectItemCaseSensitive(root, "commands");
     if (!cJSON_IsArray(commands)) {
+        set_lte_command_parse_status("commands_array_missing");
         ESP_LOGW(TAG, "LTE_HTTP_COMMAND_POLL_NO_COMMAND_ARRAY");
         cJSON_Delete(root);
         return false;
     }
-    if (cJSON_GetArraySize(commands) <= 0) {
+    s_lte_command_last_command_count = cJSON_GetArraySize(commands);
+    if (s_lte_command_last_command_count <= 0) {
+        set_lte_command_parse_status("commands_empty");
         ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_EMPTY");
         cJSON_Delete(root);
         return false;
     }
+    set_lte_command_parse_status("commands_available");
 
     cJSON *command = NULL;
     bool acked = false;

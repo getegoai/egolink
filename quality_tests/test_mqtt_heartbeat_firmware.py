@@ -180,8 +180,15 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             '\\"lte_http\\":{\\"phase\\":\\"command_ack\\"',
             '\\"poll_reason_code\\":\\"%s\\"',
             '\\"poll_data_len\\":%s',
+            '\\"parse_status\\":\\"%s\\"',
+            '\\"command_count\\":%d',
             '\\"ack_observed\\":%s',
             '\\"duplicate_local_execution_prevented\\":%s',
+            "set_lte_command_parse_status",
+            '"json_parse_failed"',
+            '"commands_array_missing"',
+            '"commands_empty"',
+            '"commands_available"',
             "LTE_HTTP_COMMAND_POLL_ROUND_START",
             "LTE_HTTP_COMMAND_POLL_ROUND_DONE",
             "LTE_HTTP_COMMAND_ACK_PAYLOAD_BYTES",
@@ -197,6 +204,7 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
                 self.assertIn(token, self.app_main)
         self.assertIn("config EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED", self.sim7670_kconfig)
         self.assertIn("config EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS", self.sim7670_kconfig)
+        self.assertIn("default 120", self.sim7670_kconfig)
         self.assertIn("config EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_INTERVAL_SEC", self.sim7670_kconfig)
         app_main_body = self.app_main.split("void app_main", 1)[1]
         command_branch = app_main_body.split(

@@ -129,13 +129,14 @@ config EGOLINK_SIM7670_LTE_HTTP_PROBE_RETRY_INTERVAL_SEC
 
 config EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS
     int "SIM7670G LTE HTTP command poll max attempts"
-    default 36
+    default 120
     range 1 360
     depends on EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
     help
         Maximum number of LTE command poll rounds before the LTE-003 thin
-        slice stops. This keeps the field run bounded without making LTE-003 a
-        long-run reconnect supervisor.
+        slice stops. This keeps the field run bounded while giving operators
+        enough time to switch to independent power and start the validator
+        without making LTE-003 a long-run reconnect supervisor.
 
 config EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_INTERVAL_SEC
     int "SIM7670G LTE HTTP command poll interval seconds"
