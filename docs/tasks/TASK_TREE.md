@@ -175,7 +175,10 @@ motion candidate
     `firmware/mqtt_heartbeat/build_lte003_command_loop_fix7/egolink_mqtt_heartbeat.bin`.
     It adds command parser diagnostics (`command.parse_status` and
     `command.command_count`) and raises the bounded poll window to 120 attempts.
-    Fix7 is not flashed or USB-Free runtime validated yet.
+    Fix7 flash on `COM4` passed after explicit operator confirmation; flashed
+    repo/app version is `766f0d8`, and flash evidence is under
+    `reports/field_validation/lte003-command-loop-fix7-20260629-164429/flash_report.md`.
+    USB-Free runtime validation has not been run yet.
 
 ## USB-Free VPS Walking Skeleton Line
 

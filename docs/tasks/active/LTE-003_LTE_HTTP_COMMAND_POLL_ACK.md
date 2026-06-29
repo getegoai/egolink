@@ -398,7 +398,8 @@ runtime.
 
 - Firmware version: `0.1.0-lte003-command-loop-fix7`
 - Test run ID: `lte003-command-loop-fix7-20260629-164429`
-- Source/build app commit: `33b8503`
+- Source fix commit: `33b8503`
+- Flashed repo/app version: `766f0d8`
 - Build directory: `firmware/mqtt_heartbeat/build_lte003_command_loop_fix7/`
 - Binary:
   `firmware/mqtt_heartbeat/build_lte003_command_loop_fix7/egolink_mqtt_heartbeat.bin`
@@ -421,7 +422,9 @@ runtime.
   274 tests.
 - `git diff --check` passed with only the expected Windows line-ending warning
   for `firmware/mqtt_heartbeat/components/sim7670_gnss/Kconfig.projbuild`.
-- Flash result: not run. Requires explicit operator confirmation for `COM4`.
+- Flash result: PASS on `COM4` after explicit operator confirmation.
+- Flash evidence:
+  `reports/field_validation/lte003-command-loop-fix7-20260629-164429/flash_report.md`
 - USB-Free runtime validation: not run.
 
 ## Fix5 Build Evidence
