@@ -1,7 +1,7 @@
 ---
 id: PROTO-002
 title: Raw Frame Transport Contract
-status: active
+status: completed
 priority: high
 requires_hardware: false
 created: 2026-06-29
@@ -21,7 +21,7 @@ allowed_paths:
   - docs/development/LTE_TRANSPORT.md
   - docs/development/VPS_MESSAGE_HUB.md
   - docs/tasks/TASK_TREE.md
-  - docs/tasks/active/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
+  - docs/tasks/done/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
   - docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md
   - quality_tests/test_message_hub_contracts.py
   - shared/contracts/README.md
@@ -91,14 +91,14 @@ storage and parser-result contract; it does not mean the device sends JSON.
 
 ## Acceptance Criteria
 
-- [ ] Human-readable protocol docs define raw-frame preservation, checksum,
+- [x] Human-readable protocol docs define raw-frame preservation, checksum,
       parse status, and derived JSON boundaries.
-- [ ] Machine-readable raw-frame record schema is versioned under
+- [x] Machine-readable raw-frame record schema is versioned under
       `shared/contracts/`.
-- [ ] Message Hub implementation stores raw ingress bytes before parsing.
-- [ ] Dashboard/test-run export can show raw-frame parse status without
+- [x] Message Hub implementation stores raw ingress bytes before parsing.
+- [x] Dashboard/test-run export can show raw-frame parse status without
       requiring raw private payload display.
-- [ ] A firmware slice can poll and ACK `set_report_interval` through the raw
+- [x] A firmware slice can poll and ACK `set_report_interval` through the raw
       command profile with USB disconnected at runtime.
 
 ## Validation Commands
@@ -118,7 +118,8 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 
 ## Completion Notes
 
-This task intentionally pauses the JSON-only LTE-003 acceptance path. The next
-implementation slice should be `SERVER-002` raw-frame ingest/storage plus
-`FW-003` raw command poll/ACK, or equivalent task IDs if the task tree already
-allocates those names.
+This task intentionally paused the JSON-only LTE-003 acceptance path. The
+server side was implemented and deployed through `SERVER-002` / `DEPLOY-002`;
+the firmware side passed through `FW-003` with USB disconnected at runtime.
+Long LTE stability, reconnect recovery, GNSS-over-LTE, battery/power behavior,
+and product acceptance remain separate gates.

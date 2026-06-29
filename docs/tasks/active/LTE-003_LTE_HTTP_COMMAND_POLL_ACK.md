@@ -8,7 +8,7 @@ context:
   - docs/current/STATUS.md
   - docs/development/LTE_TRANSPORT.md
   - docs/development/PROTOCOL.md
-  - docs/tasks/active/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
+  - docs/tasks/done/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
   - docs/tasks/done/LTE-002_LTE_HTTP_UPLINK_THIN_SLICE.md
   - shared/contracts/message_hub_raw_frame_record.schema.json
   - firmware/AGENTS.md
@@ -21,7 +21,7 @@ allowed_paths:
   - docs/development/PROTOCOL.md
   - docs/tasks/TASK_TREE.md
   - docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md
-  - docs/tasks/active/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
+  - docs/tasks/done/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
   - shared/contracts/message_hub_raw_frame_record.schema.json
   - firmware/mqtt_heartbeat/README.md
   - firmware/mqtt_heartbeat/components/sim7670_gnss/Kconfig.projbuild
@@ -55,12 +55,15 @@ build-verified but not flashed. After the user protocol review on 2026-06-29,
 the next acceptance attempt should move to PROTO-002 raw-frame command polling
 and raw ACK storage instead of continuing JSON parser fixes on the device.
 
-FW-003 is the active raw-frame firmware slice for that acceptance attempt. It
-is build-verified as `0.1.0-fw003-raw-command-loop` /
+FW-003 completed that raw-frame acceptance attempt. It is build-verified and
+flashed as `0.1.0-fw003-raw-command-loop` /
 `fw003-raw-command-loop-20260629-175608`, and the VPS has been redeployed with
-raw ACK derived LTE evidence. FW-003 was flashed on `COM4` after explicit
-operator confirmation; independent-power USB-Free runtime validation remains
-pending.
+raw ACK derived LTE evidence. After an independent-power cold boot with USB
+disconnected, the validator created `cmd-000017`, observed a raw-frame ACK
+with `transport.type=lte`, `lte_http.phase=command_ack`,
+`lte_http.poll_reason_code=LTE_HTTP_OK`, HTTP status `200`,
+`command.parse_status=raw_command_selected`, and command status `ok`. Evidence
+is under `reports/field_validation/fw003-raw-command-loop-20260629-175608/`.
 
 ## Scope
 

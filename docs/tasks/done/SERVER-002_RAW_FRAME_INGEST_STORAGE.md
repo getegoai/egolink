@@ -12,7 +12,7 @@ context:
   - docs/CONTEXT_INDEX.md
   - docs/development/VPS_MESSAGE_HUB.md
   - docs/development/PROTOCOL.md
-  - docs/tasks/active/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
+  - docs/tasks/done/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
   - shared/contracts/message_hub_raw_frame_record.schema.json
   - server/message_hub.py
   - quality_tests/test_message_hub_server.py

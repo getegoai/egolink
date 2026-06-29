@@ -76,27 +76,25 @@ motion candidate
 
 ## Active Queue
 
-- `PROTO-002 Raw Frame Transport Contract`
-  - Path: `docs/tasks/active/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md`
-  - Status: active.
-  - Goal: define a raw-frame-first device/server transport profile where the
-    VPS preserves original bytes before parsing and derives existing
-    `egolink.p0.v1` JSON Web/API views afterward.
-  - Evidence: `docs/development/PROTOCOL.md`,
-    `docs/development/LTE_TRANSPORT.md`,
-    `docs/development/VPS_MESSAGE_HUB.md`, and
-    `shared/contracts/message_hub_raw_frame_record.schema.json`.
-  - Boundary: contract and route update only; no firmware flash, hardware
-    validation, GitLab change, or deletion of existing JSON APIs.
 - `LTE-003 LTE HTTP Command Poll And ACK`
   - Path: `docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md`
-  - Status: paused on the JSON command-poll path pending PROTO-002 raw-frame
-    transport.
+  - Status: raw-frame acceptance passed through FW-003; legacy JSON
+    command-poll path remains paused.
   - Goal: prove the existing Message Hub command queue can be polled over
     SIM7670G LTE HTTP-carried raw frames and that one harmless
     `set_report_interval` command can be ACKed back over LTE with USB
     disconnected at runtime.
-  - Current evidence: build-verified and flashed as `0.1.0-lte003-command-loop` /
+  - Current evidence: FW-003 raw-frame firmware
+    `0.1.0-fw003-raw-command-loop` /
+    `fw003-raw-command-loop-20260629-175608` passed USB-Free runtime
+    validation after independent-power cold boot with USB disconnected.
+    Validator created `cmd-000017`, observed raw-frame ACK `seq=5`,
+    `transport.type=lte`, `lte_http.phase=command_ack`,
+    `lte_http.poll_reason_code=LTE_HTTP_OK`, HTTP status `200`,
+    `command.parse_status=raw_command_selected`, and command status `ok`.
+    Evidence is under
+    `reports/field_validation/fw003-raw-command-loop-20260629-175608/`.
+    Earlier JSON evidence: build-verified and flashed as `0.1.0-lte003-command-loop` /
     `lte003-command-loop-20260628-210214`; binary at
     `firmware/mqtt_heartbeat/build_lte003_command_loop/egolink_mqtt_heartbeat.bin`.
     Flash evidence:
@@ -223,21 +221,35 @@ motion candidate
     `shared/contracts/message_hub_ack.schema.json`,
     `shared/contracts/message_hub_error.schema.json`, and
     `quality_tests/test_message_hub_contracts.py`.
+- `PROTO-002 Raw Frame Transport Contract`
+  - Path: `docs/tasks/done/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md`
+  - Status: completed.
+  - Goal: define a raw-frame-first device/server transport profile where the
+    VPS preserves original bytes before parsing and derives existing
+    `egolink.p0.v1` JSON Web/API views afterward.
+  - Evidence: `docs/development/PROTOCOL.md`,
+    `docs/development/LTE_TRANSPORT.md`,
+    `docs/development/VPS_MESSAGE_HUB.md`,
+    `shared/contracts/message_hub_raw_frame_record.schema.json`, SERVER-002,
+    DEPLOY-002, and FW-003.
+  - Boundary: raw-frame command/ACK passed through FW-003; long LTE stability,
+    reconnect recovery, GNSS-over-LTE, battery/power, and product acceptance
+    remain separate gates.
 - `FW-003 Raw Frame LTE Command Loop`
-  - Path: `docs/tasks/active/FW-003_RAW_FRAME_LTE_COMMAND_LOOP.md`
-  - Status: active.
+  - Path: `docs/tasks/done/FW-003_RAW_FRAME_LTE_COMMAND_LOOP.md`
+  - Status: completed.
   - Goal: move the LTE command-loop firmware path to PROTO-002 raw-frame
     poll/ACK over SIM7670G AT HTTP while keeping JSON views as derived
     server/Web compatibility state.
-  - Current scope: build-verified firmware slice only; flashing and USB-Free
-    runtime validation still require explicit operator confirmation.
   - Evidence: focused firmware/server tests passed with 24 tests,
     `context_lint` passed, full `verify.ps1` passed with 278 tests,
     `git diff --check` passed, guarded ESP-IDF prepare/build passed for
     `0.1.0-fw003-raw-command-loop` /
     `fw003-raw-command-loop-20260629-175608`, and VPS smoke
     `fw003-raw-derived-smoke-20260629-175946` derived LTE ACK evidence from
-    raw frames.
+    raw frames. The firmware was flashed on `COM4` after explicit operator
+    confirmation, then USB-Free runtime validation passed with `cmd-000017`
+    ACKed over LTE raw frames.
 - `SERVER-001 VPS Message Service Minimal Loop`
   - Path: `docs/tasks/done/SERVER-001_VPS_MESSAGE_SERVICE_MINIMAL_LOOP.md`
   - Status: completed as a local deployable service baseline.

@@ -1,7 +1,7 @@
 ---
 id: FW-003
 title: Raw Frame LTE Command Loop
-status: active
+status: completed
 priority: high
 requires_hardware: true
 created: 2026-06-29
@@ -13,7 +13,7 @@ context:
   - docs/current/STATUS.md
   - docs/development/LTE_TRANSPORT.md
   - docs/development/PROTOCOL.md
-  - docs/tasks/active/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
+  - docs/tasks/done/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
   - docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md
   - firmware/AGENTS.md
   - firmware/mqtt_heartbeat/README.md
@@ -25,7 +25,7 @@ allowed_paths:
   - docs/development/LTE_TRANSPORT.md
   - docs/development/PROTOCOL.md
   - docs/tasks/TASK_TREE.md
-  - docs/tasks/active/FW-003_RAW_FRAME_LTE_COMMAND_LOOP.md
+  - docs/tasks/done/FW-003_RAW_FRAME_LTE_COMMAND_LOOP.md
   - docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md
   - firmware/mqtt_heartbeat/README.md
   - firmware/mqtt_heartbeat/components/sim7670_gnss/include/sim7670_gnss.h
@@ -65,13 +65,14 @@ key/value command payloads, and ACK through `/ack.raw`.
 
 ## Acceptance
 
-- Focused firmware and server tests pass.
-- `python scripts/context_lint.py` passes.
-- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passes if
-  behavior changes.
-- ESP-IDF guarded prepare/build passes with LTE HTTP command loop enabled.
-- No flash or hardware validation is performed until the operator explicitly
-  confirms the COM port for this image.
+- [x] Focused firmware and server tests pass.
+- [x] `python scripts/context_lint.py` passes.
+- [x] `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passes if
+      behavior changes.
+- [x] ESP-IDF guarded prepare/build passes with LTE HTTP command loop enabled.
+- [x] Flash happens only after the operator explicitly confirms the COM port.
+- [x] USB-Free runtime validation passes with independent power and USB
+      disconnected.
 
 ## Hardware Validation Plan
 
@@ -104,7 +105,22 @@ key/value command payloads, and ACK through `/ack.raw`.
   `ack.lte_http.poll_status_code=200`.
 - Flash on `COM4` passed: ESP32-S3 detected, bootloader/app/partition table
   written, hashes verified, and hard reset completed.
+- USB-Free runtime validation passed after independent-power cold boot with USB
+  disconnected. Validator created `cmd-000017` (`set_report_interval`) and
+  observed raw-frame ACK `seq=5` with `transport.type=lte`,
+  `lte_http.phase=command_ack`, `lte_http.poll_reason_code=LTE_HTTP_OK`,
+  `lte_http.poll_status_code=200`, `lte_http.poll_action_elapsed_ms=450`,
+  `command.parse_status=raw_command_selected`, `command.command_count=1`, and
+  command status `ok`.
+- Runtime evidence files:
+  `reports/field_validation/fw003-raw-command-loop-20260629-175608/lte_command_loop_report.json`,
+  `reports/field_validation/fw003-raw-command-loop-20260629-175608/lte_command_loop_report.md`,
+  `reports/field_validation/fw003-raw-command-loop-20260629-175608/device_state.json`,
+  `reports/field_validation/fw003-raw-command-loop-20260629-175608/commands.json`, and
+  `reports/field_validation/fw003-raw-command-loop-20260629-175608/test_run_export.json`.
 
-## Remaining Work
+## Completion Boundary
 
-- After flashing, validate with independent power and USB disconnected.
+FW-003 validates the USB-Free Message-First raw command/ACK loop only. It does
+not validate long LTE stability, reconnect recovery, GNSS-over-LTE,
+battery/power behavior, enclosure behavior, or product readiness.

@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | FW-003 raw-frame command-loop firmware currently flashed on COM4; USB-Free FW-003 runtime validation pending |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | FW-003 raw-frame command-loop firmware currently flashed on COM4; USB-Free FW-003 raw command/ACK validation passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -457,7 +457,13 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   partition table were written, hashes verified, and hard reset completed.
   Flash evidence is under
   `reports/field_validation/fw003-raw-command-loop-20260629-175608/flash_report.md`.
-  USB-Free runtime validation has not been performed yet.
+  USB-Free runtime validation passed after an independent-power cold boot with
+  USB disconnected: validator created `cmd-000017`, observed raw-frame ACK
+  `seq=5`, `transport.type=lte`, `lte_http.phase=command_ack`,
+  `lte_http.poll_reason_code=LTE_HTTP_OK`, HTTP status `200`, action elapsed
+  `450 ms`, `command.parse_status=raw_command_selected`, and command status
+  `ok`. Runtime evidence is under
+  `reports/field_validation/fw003-raw-command-loop-20260629-175608/`.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.
