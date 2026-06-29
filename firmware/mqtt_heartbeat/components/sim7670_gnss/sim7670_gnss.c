@@ -456,6 +456,61 @@ static bool copy_httpread_json_body(const char *response, char *body, size_t bod
     return length > 0;
 }
 
+static void update_lte_http_raw(sim7670_lte_http_probe_result_t *result, const char *command, const char *response);
+
+static bool sim7670_lte_http_read_json_body(
+    int data_len,
+    char *response,
+    size_t response_size,
+    char *response_body,
+    size_t response_body_size,
+    sim7670_lte_http_probe_result_t *result,
+    bool *saw_error)
+{
+    if (saw_error != NULL) {
+        *saw_error = false;
+    }
+    if (data_len <= 0 || response == NULL || response_size == 0) {
+        return false;
+    }
+
+    char command[48];
+    int written = snprintf(command, sizeof(command), "AT+HTTPREAD=0,%d", data_len);
+    if (written > 0 && (size_t)written < sizeof(command)) {
+        if (sim7670_send_at_labeled(
+                command,
+                "AT+HTTPREAD=0,<len>",
+                "OK",
+                CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
+                response,
+                response_size)) {
+            result->http_read_ok = true;
+            update_lte_http_raw(result, "AT+HTTPREAD=0,<len>", response);
+            return copy_httpread_json_body(response, response_body, response_body_size);
+        }
+        update_lte_http_raw(result, "AT+HTTPREAD=0,<len>", response);
+        if (saw_error != NULL && contains_token(response, "ERROR")) {
+            *saw_error = true;
+        }
+    }
+
+    if (sim7670_send_at(
+            "AT+HTTPREAD",
+            "OK",
+            CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
+            response,
+            response_size)) {
+        result->http_read_ok = true;
+        update_lte_http_raw(result, "AT+HTTPREAD", response);
+        return copy_httpread_json_body(response, response_body, response_body_size);
+    }
+    update_lte_http_raw(result, "AT+HTTPREAD", response);
+    if (saw_error != NULL && contains_token(response, "ERROR")) {
+        *saw_error = true;
+    }
+    return false;
+}
+
 static bool parse_cgpsinfo(const char *line, sim7670_gnss_report_t *report)
 {
     char lat_raw[24];
@@ -1306,14 +1361,16 @@ bool sim7670_lte_http_get_json(
         return false;
     }
 
-    bool read_at_ok = false;
+    bool read_error = false;
     bool read_body_ok = false;
-    if (data_len > 0 && sim7670_send_at("AT+HTTPREAD", "OK", CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS, response, sizeof(response))) {
-        read_at_ok = true;
-        result->http_read_ok = true;
-        update_lte_http_raw(result, "AT+HTTPREAD", response);
-        read_body_ok = copy_httpread_json_body(response, response_body, response_body_size);
-    }
+    read_body_ok = sim7670_lte_http_read_json_body(
+        data_len,
+        response,
+        sizeof(response),
+        response_body,
+        response_body_size,
+        result,
+        &read_error);
     (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
 
     if (status_code >= 200 && status_code < 300 && read_body_ok) {
@@ -1321,7 +1378,11 @@ bool sim7670_lte_http_get_json(
         return true;
     }
     if (status_code >= 200 && status_code < 300) {
-        set_lte_http_reason(result, read_at_ok ? "LTE_HTTP_READ_BODY_PARSE_FAILED" : "LTE_HTTP_READ_AT_FAILED");
+        if (result->http_read_ok) {
+            set_lte_http_reason(result, "LTE_HTTP_READ_BODY_PARSE_FAILED");
+        } else {
+            set_lte_http_reason(result, read_error ? "LTE_HTTP_READ_AT_ERROR" : "LTE_HTTP_READ_AT_TIMEOUT");
+        }
         return false;
     }
     if (status_code >= 400 && status_code < 500) {
