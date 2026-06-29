@@ -81,11 +81,11 @@ key/value command payloads, and ACK through `/ack.raw`.
   (`286176` bytes).
 - Firmware version: `0.1.0-fw003-raw-command-loop`.
 - Test run ID: `fw003-raw-command-loop-20260629-175608`.
-- Connection path: build only for this task step; later flash requires operator
-  confirmation, and runtime validation requires independent power with USB
-  disconnected.
-- Evidence path: guarded build output from
-  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670LteHttpCommandLoop`.
+- Flash port: `COM4`, after explicit operator confirmation.
+- Connection path: USB serial flashing through CH343 ESP32 console on COM4;
+  runtime validation still requires independent power with USB disconnected.
+- Evidence path:
+  `reports/field_validation/fw003-raw-command-loop-20260629-175608/flash_report.md`.
 
 ## Validation Notes
 
@@ -102,8 +102,9 @@ key/value command payloads, and ACK through `/ack.raw`.
   `parse_result.status=ok`, updated the command to `ok`, and derived
   `ack.transport.type=lte`, `ack.lte_http.phase=command_ack`, and
   `ack.lte_http.poll_status_code=200`.
+- Flash on `COM4` passed: ESP32-S3 detected, bootloader/app/partition table
+  written, hashes verified, and hard reset completed.
 
 ## Remaining Work
 
-- Flash FW-003 only after explicit operator confirmation of the COM port.
 - After flashing, validate with independent power and USB disconnected.

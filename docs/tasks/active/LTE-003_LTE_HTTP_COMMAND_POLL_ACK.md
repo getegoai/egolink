@@ -58,9 +58,9 @@ and raw ACK storage instead of continuing JSON parser fixes on the device.
 FW-003 is the active raw-frame firmware slice for that acceptance attempt. It
 is build-verified as `0.1.0-fw003-raw-command-loop` /
 `fw003-raw-command-loop-20260629-175608`, and the VPS has been redeployed with
-raw ACK derived LTE evidence. FW-003 still requires explicit COM-port
-confirmation before flashing and independent-power USB-Free runtime validation
-after flashing.
+raw ACK derived LTE evidence. FW-003 was flashed on `COM4` after explicit
+operator confirmation; independent-power USB-Free runtime validation remains
+pending.
 
 ## Scope
 

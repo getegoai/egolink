@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix7 command-loop firmware currently flashed on COM4; USB-Free fix7 runtime validation failed with `json_parse_failed`; FW-003 raw-frame command-loop firmware is build-verified and pending explicit COM4 flash |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | FW-003 raw-frame command-loop firmware currently flashed on COM4; USB-Free FW-003 runtime validation pending |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -452,8 +452,12 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   VPS Message Hub was redeployed after adding raw ACK derived LTE evidence; the
   public smoke `fw003-raw-derived-smoke-20260629-175946` ACKed `cmd-000016`
   through raw frames and derived `transport.type=lte` plus
-  `lte_http.phase=command_ack`. FW-003 has not been flashed or USB-Free runtime
-  validated yet.
+  `lte_http.phase=command_ack`. FW-003 was then flashed on `COM4` after
+  explicit operator confirmation; ESP32-S3 was detected, bootloader/app/
+  partition table were written, hashes verified, and hard reset completed.
+  Flash evidence is under
+  `reports/field_validation/fw003-raw-command-loop-20260629-175608/flash_report.md`.
+  USB-Free runtime validation has not been performed yet.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.
