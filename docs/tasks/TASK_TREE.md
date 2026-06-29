@@ -183,7 +183,14 @@ motion candidate
     `command.parse_status=json_parse_failed`, `command.command_count=0`, and
     no ACK. Runtime evidence is under
     `reports/field_validation/lte003-command-loop-fix7-20260629-164429/`.
-    Fix8 direction is complete-JSON HTTPREAD body extraction.
+    Fix8 is implemented and build-verified as
+    `0.1.0-lte003-command-loop-fix8` /
+    `lte003-command-loop-fix8-20260629-170628`; source/build app commit is
+    `a87a754`, and the binary is at
+    `firmware/mqtt_heartbeat/build_lte003_command_loop_fix8/egolink_mqtt_heartbeat.bin`.
+    It changes HTTPREAD body extraction to wait for a complete brace-balanced
+    JSON object instead of accepting the first partial brace pair. Fix8 is not
+    flashed or USB-Free runtime validated yet.
 
 ## USB-Free VPS Walking Skeleton Line
 

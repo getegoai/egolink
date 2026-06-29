@@ -464,6 +464,35 @@ runtime.
   with `transport.type=lte`, `lte_http.phase=command_ack`, and
   `poll_reason_code=LTE_HTTP_OK`.
 
+## Fix8 Build Evidence
+
+- Firmware version: `0.1.0-lte003-command-loop-fix8`
+- Test run ID: `lte003-command-loop-fix8-20260629-170628`
+- Source/build app commit: `a87a754`
+- Build directory: `firmware/mqtt_heartbeat/build_lte003_command_loop_fix8/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte003_command_loop_fix8/egolink_mqtt_heartbeat.bin`
+- Binary size: `293216` bytes.
+- Code changes: make the SIM7670G HTTPREAD body extractor wait for a complete
+  brace-balanced JSON object, with string/escape awareness, before returning a
+  JSON body.
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670LteHttpCommandLoop`.
+- Build config confirmed
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=1`,
+  `CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=1`,
+  `CONFIG_EGOLINK_FW_VERSION="0.1.0-lte003-command-loop-fix8"`,
+  `CONFIG_EGOLINK_TEST_RUN_ID="lte003-command-loop-fix8-20260629-170628"`,
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS=120`, and
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_INTERVAL_SEC=5`.
+- Focused LTE/firmware tests passed with 24 tests.
+- `python scripts/context_lint.py` passed.
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
+  274 tests.
+- `git diff --check` passed.
+- Flash result: not run. Requires explicit operator confirmation for `COM4`.
+- USB-Free runtime validation: not run.
+
 ## Fix5 Build Evidence
 
 - Firmware version: `0.1.0-lte003-command-loop-fix5`
