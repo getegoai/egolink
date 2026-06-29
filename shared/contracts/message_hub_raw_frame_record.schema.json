@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/message_hub_raw_frame_record.schema.json",
+  "title": "Ego Link P0 Message Hub Raw Frame Record",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "protocol_version",
+    "transport_profile",
+    "direction",
+    "device_id",
+    "frame_id",
+    "server_received_at",
+    "raw_payload",
+    "parse_result"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": "egolink.p0.v1"
+    },
+    "transport_profile": {
+      "const": "raw-frame.p0.v1"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "uplink",
+        "downlink"
+      ]
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fw_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "test_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "frame_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "seq": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "server_received_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "framing": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "magic": {
+          "const": "EGLK"
+        },
+        "frame_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "frame_type": {
+          "type": "string",
+          "enum": [
+            "status",
+            "event",
+            "command",
+            "ack",
+            "error",
+            "log",
+            "raw"
+          ]
+        },
+        "content_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payload_len": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "payload_crc32": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{8}$"
+        },
+        "header_crc32": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{8}$"
+        }
+      }
+    },
+    "raw_payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "encoding",
+        "byte_len",
+        "sha256"
+      ],
+      "properties": {
+        "encoding": {
+          "type": "string",
+          "enum": [
+            "base64",
+            "hex",
+            "external_blob"
+          ]
+        },
+        "data": {
+          "type": "string"
+        },
+        "byte_len": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{64}$"
+        },
+        "crc32": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{8}$"
+        }
+      }
+    },
+    "parse_result": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "not_attempted",
+            "ok",
+            "partial",
+            "checksum_failed",
+            "unsupported",
+            "malformed"
+          ]
+        },
+        "parser_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "error_code": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_]+$"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "derived_message_type": {
+          "type": "string",
+          "enum": [
+            "status",
+            "event",
+            "command",
+            "ack",
+            "error",
+            "unknown"
+          ]
+        },
+        "derived_message": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "privacy_class": {
+          "type": "string",
+          "enum": [
+            "engineering",
+            "private_location",
+            "private_media",
+            "unknown"
+          ]
+        },
+        "redacted": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

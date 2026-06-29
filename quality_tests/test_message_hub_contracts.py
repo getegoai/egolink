@@ -15,6 +15,8 @@ MESSAGE_HUB_SCHEMAS = {
     "error": "message_hub_error.schema.json",
 }
 
+RAW_FRAME_SCHEMA = "message_hub_raw_frame_record.schema.json"
+
 
 class MessageHubContractTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -118,6 +120,30 @@ class MessageHubContractTests(unittest.TestCase):
         self.assertIn("error_code", schema["required"])
         self.assertIn("severity", schema["required"])
         self.assertEqual(schema["properties"]["error_code"]["pattern"], "^[A-Z0-9_]+$")
+
+    def test_raw_frame_record_contract_preserves_raw_bytes_before_parse(self) -> None:
+        schema = self.load_schema(RAW_FRAME_SCHEMA)
+
+        self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
+        self.assertEqual(schema["type"], "object")
+        self.assertTrue(schema["$id"].endswith(RAW_FRAME_SCHEMA))
+        self.assertEqual(schema["properties"]["protocol_version"]["const"], protocol.PROTOCOL_VERSION)
+        self.assertEqual(schema["properties"]["transport_profile"]["const"], "raw-frame.p0.v1")
+
+        required = set(schema["required"])
+        self.assertIn("raw_payload", required)
+        self.assertIn("parse_result", required)
+        self.assertIn("server_received_at", required)
+
+        raw_payload = schema["properties"]["raw_payload"]
+        self.assertIn("sha256", raw_payload["required"])
+        self.assertIn("byte_len", raw_payload["required"])
+
+        parse_statuses = schema["properties"]["parse_result"]["properties"]["status"]["enum"]
+        self.assertIn("ok", parse_statuses)
+        self.assertIn("partial", parse_statuses)
+        self.assertIn("checksum_failed", parse_statuses)
+        self.assertIn("malformed", parse_statuses)
 
 
 if __name__ == "__main__":

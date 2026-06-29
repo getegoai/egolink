@@ -1,14 +1,16 @@
 ---
 title: LTE HTTP Command Poll And ACK
 task_id: LTE-003
-status: active
+status: paused
 last_verified: 2026-06-29
 context:
   - docs/current/ACTIVE_BUILD.md
   - docs/current/STATUS.md
   - docs/development/LTE_TRANSPORT.md
   - docs/development/PROTOCOL.md
+  - docs/tasks/active/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
   - docs/tasks/done/LTE-002_LTE_HTTP_UPLINK_THIN_SLICE.md
+  - shared/contracts/message_hub_raw_frame_record.schema.json
   - firmware/AGENTS.md
   - firmware/mqtt_heartbeat/README.md
   - scripts/run_fw001_hw_r1.ps1
@@ -19,6 +21,8 @@ allowed_paths:
   - docs/development/PROTOCOL.md
   - docs/tasks/TASK_TREE.md
   - docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md
+  - docs/tasks/active/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
+  - shared/contracts/message_hub_raw_frame_record.schema.json
   - firmware/mqtt_heartbeat/README.md
   - firmware/mqtt_heartbeat/components/sim7670_gnss/Kconfig.projbuild
   - firmware/mqtt_heartbeat/components/sim7670_gnss/include/sim7670_gnss.h
@@ -42,16 +46,26 @@ ESP32-S3 through the SIM7670G LTE HTTP stack, and that the device can ACK one
 harmless command back through the same LTE HTTP path with USB disconnected at
 runtime.
 
+## Current Pivot
+
+This task is paused on the JSON command-poll implementation. Fix7 proved LTE
+HTTP reaches the VPS and receives a valid 592-byte command response, but the
+firmware path still failed at `command.parse_status=json_parse_failed`. Fix8 is
+build-verified but not flashed. After the user protocol review on 2026-06-29,
+the next acceptance attempt should move to PROTO-002 raw-frame command polling
+and raw ACK storage instead of continuing JSON parser fixes on the device.
+
 ## Scope
 
 - Add an opt-in firmware mode:
   `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED`.
 - Keep Wi-Fi disabled while LTE command loop mode is enabled.
-- Use SIM7670G AT HTTP `GET` for
-  `/api/v1/devices/{device_id}/commands/poll`.
+- Use SIM7670G AT HTTP as the carrier for a raw command frame, either through
+  a raw endpoint or content negotiation on the existing command endpoint.
 - Execute and ACK one harmless `set_report_interval` command.
-- Include additive LTE transport evidence on the ACK payload so the validator
-  can distinguish LTE ACK from the earlier Wi-Fi Message Hub path.
+- Store the raw frame/ACK first, then derive additive LTE transport evidence on
+  the ACK payload so the validator can distinguish LTE ACK from the earlier
+  Wi-Fi Message Hub path.
 - Add a Message Hub-side validator that creates a test run, enqueues the
   harmless command, waits for the ACK, checks `transport.type=lte`, and writes
   evidence under ignored `reports/field_validation/`.
@@ -81,8 +95,8 @@ runtime.
 - Wi-Fi is disabled by firmware mode during LTE command polling.
 - The Web/Message Hub command queue receives a harmless `set_report_interval`
   command for the expected `test_run_id`.
-- The device polls the command over LTE HTTP and returns an ACK with
-  `status=ok`.
+- The device polls the command over LTE HTTP as a raw frame and returns a raw
+  ACK that derives an ACK row with `status=ok`.
 - The stored ACK includes `transport.type=lte`, LTE HTTP poll/ACK status, and
   the expected firmware/test-run IDs.
 - Duplicate local execution of the same command ID is avoided inside the
@@ -492,6 +506,10 @@ runtime.
 - `git diff --check` passed.
 - Flash result: not run. Requires explicit operator confirmation for `COM4`.
 - USB-Free runtime validation: not run.
+- Pivot note: after fix8 build verification, the protocol direction changed to
+  PROTO-002 raw-frame transport. Do not flash fix8 as the default next step
+  unless the operator explicitly chooses to continue the legacy JSON diagnostic
+  path.
 
 ## Fix5 Build Evidence
 

@@ -13,7 +13,7 @@ each failure stage is visible.
 
 ## Scope
 
-P0 LTE transport uses the existing Message Hub HTTP envelope first:
+P0 LTE transport started with the existing Message Hub HTTP envelope:
 
 ```text
 HTTP POST telemetry
@@ -21,8 +21,15 @@ HTTP GET command polling
 HTTP POST ACK
 ```
 
-MQTT, raw TCP long connections, and advanced reconnect supervisors are deferred
-until HTTP over LTE proves the minimal product link.
+LTE-002 proved that HTTP over SIM7670G can reach the VPS for telemetry. The
+LTE-003 command-poll attempts then exposed a protocol risk: device-side JSON
+body extraction/parsing is a brittle runtime dependency. From PROTO-002 onward,
+the command/ACK acceptance path should use the HTTP transport only as a carrier
+for raw frames. Server/Web JSON remains a derived compatibility view, not the
+device wire truth.
+
+MQTT, raw TCP long connections, and advanced reconnect supervisors remain
+deferred until HTTP-carried raw frames prove the minimal product link.
 
 ## LTE-001: Registration And Cell State
 
@@ -92,8 +99,12 @@ readiness gate, not as a GNSS, Web, or command-loop failure.
 
 ## LTE-003: Command Poll And ACK
 
-Goal: migrate the current Web command queue to LTE HTTP polling without
-changing command semantics.
+Goal: migrate the current Web command queue to LTE HTTP-carried raw-frame
+polling without losing the Web/API command semantics.
+
+Current status: paused on the JSON command-poll path after fix7/fix8. The next
+runtime acceptance attempt should follow PROTO-002 raw-frame transport instead
+of continuing device-side JSON parser fixes.
 
 Implementation shape:
 
@@ -101,15 +112,17 @@ Implementation shape:
   `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED`;
 - Wi-Fi initialization and Wi-Fi Message Hub tasks skipped while command-loop
   mode is enabled;
-- SIM7670G AT HTTP `GET` polls the existing
-  `/api/v1/devices/{device_id}/commands/poll` endpoint;
+- SIM7670G AT HTTP `GET` polls a raw command endpoint or negotiates a
+  `raw-frame.p0.v1` response from the existing command endpoint;
 - the first hardware acceptance command is the harmless
   `set_report_interval` command;
-- SIM7670G AT HTTP `POST` ACKs through the existing
-  `/api/v1/devices/{device_id}/commands/{cmd_id}/ack` endpoint;
-- ACK payloads include additive `transport.type=lte`, `lte_http.phase`, and
-  poll HTTP status/reason fields so validation can distinguish LTE ACKs from
-  the earlier Wi-Fi Message Hub path.
+- firmware verifies raw-frame length/checksum and parses compact key/value
+  command content instead of a JSON object;
+- SIM7670G AT HTTP `POST` sends a raw ACK frame;
+- the Message Hub stores raw frames first, then derives the existing ACK row
+  with additive `transport.type=lte`, `lte_http.phase`, and poll HTTP
+  status/reason fields so validation can distinguish LTE ACKs from the earlier
+  Wi-Fi Message Hub path.
 
 Definition of Done:
 

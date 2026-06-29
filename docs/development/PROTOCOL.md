@@ -14,6 +14,7 @@ path. Machine-readable schemas live in `../../shared/contracts/`:
 - `message_hub_command.schema.json`
 - `message_hub_ack.schema.json`
 - `message_hub_error.schema.json`
+- `message_hub_raw_frame_record.schema.json`
 
 Model-facing schemas remain in the same directory and are separate from the
 message-hub transport contract.
@@ -30,6 +31,72 @@ Do not introduce another live protocol version such as `0.1` or `0.2` for the
 VPS message hub without a Protocol track task. Existing board-local demo
 protocols may keep their local versions, but bridge/server traffic must expose
 its own `protocol_version`.
+
+## PROTO-002 Raw Frame Transport Profile
+
+`egolink.p0.v1` remains the current Message Hub and Web data model. It is not
+the required device wire format for future SIM7670G LTE runtime traffic.
+
+The P0 runtime direction is `raw-frame.p0.v1`:
+
+- device/server transport is raw-frame first, not JSON first;
+- the server must persist the original received frame bytes before semantic
+  parsing;
+- incomplete, malformed, checksum-failed, and unsupported frames must remain
+  durable evidence with a parse status;
+- Message Hub JSON status/event/command/ACK objects are derived views for Web,
+  API, validation, and compatibility;
+- firmware should parse a small stable frame header and checksum for normal
+  command/ACK operation, not a full JSON command document.
+
+This keeps the demo loop visible while avoiding a brittle firmware dependency
+on exact JSON body extraction. Server-side parsers may still produce the
+existing `egolink.p0.v1` objects after raw storage succeeds.
+
+### Raw Frame Shape
+
+The P0 raw frame starts with one ASCII header line, optional ASCII metadata
+lines, a blank line, and then the exact payload bytes:
+
+```text
+EGLK/1 type=command id=cmd-000013 seq=13 len=37 crc32=2A4F8C91
+content-type=text/x-egolink-kv
+
+cmd=set_report_interval
+interval_ms=5000
+```
+
+Minimum header semantics:
+
+| Field | Required | Notes |
+|---|---|---|
+| `EGLK/1` | yes | Magic and raw-frame version. |
+| `type` | yes | `status`, `event`, `command`, `ack`, `error`, `log`, or `raw`. |
+| `id` | command/ACK | Command ID, frame ID, or parser-assigned ID. |
+| `seq` | preferred | Monotonic per device/session where available. |
+| `len` | yes | Payload byte length after the blank line. |
+| `crc32` | yes | CRC32 of the payload bytes. |
+| `content-type` | yes | `text/x-egolink-kv` for P0 commands unless a task approves another profile. |
+
+The storage/parser result is represented by
+`message_hub_raw_frame_record.schema.json`. That schema is a server-side record
+contract and does not mean the device wire payload is JSON.
+
+### Derived JSON Boundary
+
+Raw-frame ingest may derive existing Message Hub objects:
+
+| Raw frame type | Derived view |
+|---|---|
+| `status` | `message_type=status` state and observability. |
+| `event` | `message_type=event` telemetry and test-run evidence. |
+| `command` | Downlink command state for Web/API compatibility. |
+| `ack` | Command ACK row and validator result. |
+| `error` | Diagnosable Message Hub error row. |
+
+Failed parse is not data loss. A frame with `parse_result.status=partial`,
+`checksum_failed`, `unsupported`, or `malformed` must still be queryable in
+test-run evidence by frame ID, timestamp, device ID, and byte/hash metadata.
 
 ## Common Envelope
 
@@ -205,13 +272,19 @@ does not implement command polling or ACK over LTE; that remains `LTE-003`.
 
 ## LTE-003 LTE HTTP Command ACK
 
-LTE-003 keeps the existing `message_type=command` and `message_type=ack`
-envelopes. The command queue endpoint and ACK endpoint do not change; the
-firmware changes only the runtime transport from Wi-Fi HTTP to SIM7670G AT
-HTTP for the field-test image.
+LTE-003 began as a JSON command-poll migration using the existing
+`message_type=command` and `message_type=ack` envelopes. Fix7/fix8 evidence
+showed that the SIM7670G HTTP command path can reach the VPS and receive a
+valid body, while firmware can still fail because the JSON body extraction or
+`cJSON_Parse` boundary is brittle.
 
-The first LTE-003 acceptance command is the harmless `set_report_interval`.
-ACK payloads should include additive transport evidence:
+As of PROTO-002, the JSON command-poll implementation is a legacy diagnostic
+path. Do not treat flashing another JSON parser fix as LTE-003 product
+progress unless an explicit task says so. The next acceptance path should use
+the raw-frame command profile, where firmware reads a small frame header,
+verifies length/checksum, executes one harmless command, and posts a raw ACK.
+
+The existing JSON ACK shape remains the derived Web/API compatibility view:
 
 ```json
 {
@@ -251,6 +324,19 @@ should re-send ACK without repeating the local command action and set
 `duplicate_local_execution_prevented=true`. LTE-003 does not require
 `request_location` over LTE; that can be added after the basic command ACK
 path is proven.
+
+For the raw-frame path, the first acceptance command remains
+`set_report_interval`, but the downlink payload should be compact key/value
+content such as:
+
+```text
+cmd=set_report_interval
+interval_ms=5000
+cmd_id=cmd-000013
+```
+
+The server should derive the same ACK row and validator evidence from the raw
+ACK after the raw frame itself has been stored.
 
 ## LOC-002 Location Observation Event
 

@@ -76,12 +76,26 @@ motion candidate
 
 ## Active Queue
 
+- `PROTO-002 Raw Frame Transport Contract`
+  - Path: `docs/tasks/active/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md`
+  - Status: active.
+  - Goal: define a raw-frame-first device/server transport profile where the
+    VPS preserves original bytes before parsing and derives existing
+    `egolink.p0.v1` JSON Web/API views afterward.
+  - Evidence: `docs/development/PROTOCOL.md`,
+    `docs/development/LTE_TRANSPORT.md`,
+    `docs/development/VPS_MESSAGE_HUB.md`, and
+    `shared/contracts/message_hub_raw_frame_record.schema.json`.
+  - Boundary: contract and route update only; no firmware flash, hardware
+    validation, GitLab change, or deletion of existing JSON APIs.
 - `LTE-003 LTE HTTP Command Poll And ACK`
   - Path: `docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md`
-  - Status: active.
+  - Status: paused on the JSON command-poll path pending PROTO-002 raw-frame
+    transport.
   - Goal: prove the existing Message Hub command queue can be polled over
-    SIM7670G LTE HTTP and that one harmless `set_report_interval` command can
-    be ACKed back over LTE with USB disconnected at runtime.
+    SIM7670G LTE HTTP-carried raw frames and that one harmless
+    `set_report_interval` command can be ACKed back over LTE with USB
+    disconnected at runtime.
   - Current evidence: build-verified and flashed as `0.1.0-lte003-command-loop` /
     `lte003-command-loop-20260628-210214`; binary at
     `firmware/mqtt_heartbeat/build_lte003_command_loop/egolink_mqtt_heartbeat.bin`.
@@ -190,7 +204,10 @@ motion candidate
     `firmware/mqtt_heartbeat/build_lte003_command_loop_fix8/egolink_mqtt_heartbeat.bin`.
     It changes HTTPREAD body extraction to wait for a complete brace-balanced
     JSON object instead of accepting the first partial brace pair. Fix8 is not
-    flashed or USB-Free runtime validated yet.
+    flashed or USB-Free runtime validated yet. After protocol review on
+    2026-06-29, continuing JSON parser fixes is no longer the default next
+    step; PROTO-002 raw-frame transport should provide the next LTE-003
+    acceptance path.
 
 ## USB-Free VPS Walking Skeleton Line
 

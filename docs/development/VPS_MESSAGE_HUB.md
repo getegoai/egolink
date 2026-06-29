@@ -24,6 +24,8 @@ The VPS Message Hub is responsible for:
 - device registration and authentication;
 - receiving heartbeat, telemetry, GNSS, network, power, error, and log summary
   messages;
+- preserving raw device frames before parser or schema conversion when a raw
+  transport profile is used;
 - storing the minimum P0 engineering evidence needed for replayable tests;
 - exposing device state, latest location, history, command status, and event
   logs to the Web Dashboard;
@@ -62,6 +64,19 @@ Recommended shape:
 
 Development ports such as 1883, 8000, 8080, or 8787 must be documented as
 development-only when exposed.
+
+## Raw-First Ingest Boundary
+
+For `raw-frame.p0.v1`, the Message Hub must store the received frame bytes,
+byte length, hash/checksum metadata, receive timestamp, device ID, and parser
+status before deriving JSON state for Web/API clients. Parser failure is an
+observable result, not a reason to drop the record. This is especially
+important for LTE field tests, where a partial frame, checksum mismatch, or
+unsupported command payload still explains a real transport condition.
+
+Existing `egolink.p0.v1` JSON endpoints may remain for PC simulator, Web, and
+legacy firmware compatibility. Raw-frame endpoints or content negotiation
+should be additive.
 
 ## Minimal HTTP API
 

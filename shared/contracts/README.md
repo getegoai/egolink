@@ -15,6 +15,7 @@
 | `message_hub_command.schema.json` | P0 message hub downlink command envelope |
 | `message_hub_ack.schema.json` | P0 message hub command ACK envelope |
 | `message_hub_error.schema.json` | P0 message hub diagnosable error envelope |
+| `message_hub_raw_frame_record.schema.json` | P0 raw-frame storage and parse-result record; the device wire payload is not JSON |
 
 ## 变更规则
 
