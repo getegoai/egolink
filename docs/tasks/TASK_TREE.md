@@ -109,9 +109,13 @@ motion candidate
     poll status `200`, body length `592`, and `LTE_HTTP_READ_FAILED`.
     Runtime evidence is under
     `reports/field_validation/lte003-command-loop-fix2-20260629-074709/`.
-    Fix3 is in progress to make command-poll `AT+HTTPREAD` use the longer HTTP
-    action timeout and split the failure into AT-read versus body-parse reason
-    codes.
+    Fix3 is build-verified as `0.1.0-lte003-command-loop-fix3` /
+    `lte003-command-loop-fix3-20260629-081529` from commit `e79e4de`; binary
+    at
+    `firmware/mqtt_heartbeat/build_lte003_command_loop_fix3/egolink_mqtt_heartbeat.bin`.
+    It makes command-poll `AT+HTTPREAD` use the longer HTTP action timeout and
+    splits the failure into AT-read versus body-parse reason codes. Flash and
+    USB-Free runtime validation have not been run yet.
 
 ## USB-Free VPS Walking Skeleton Line
 

@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix2 command-loop firmware currently flashed on COM4; USB-Free fix2 runtime validation failed at SIM7670G `HTTPREAD`; fix3 diagnosis candidate in progress |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix2 command-loop firmware currently flashed on COM4; USB-Free fix2 runtime validation failed at SIM7670G `HTTPREAD`; LTE-003 fix3 is build-verified and awaiting flash |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -303,10 +303,17 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   status `200`, `poll_data_len=592`, and
   `lte_http.poll_reason_code=LTE_HTTP_READ_FAILED`. Evidence is under
   `reports/field_validation/lte003-command-loop-fix2-20260629-074709/`.
-- LTE-003 fix3 is the current diagnosis candidate. It keeps LTE-003 acceptance
+- LTE-003 fix3 has been build-verified as
+  `0.1.0-lte003-command-loop-fix3` /
+  `lte003-command-loop-fix3-20260629-081529`. It keeps LTE-003 acceptance
   unchanged, but makes command-poll `AT+HTTPREAD` use the longer LTE HTTP
   action timeout and splits the prior `LTE_HTTP_READ_FAILED` condition into
-  `LTE_HTTP_READ_AT_FAILED` and `LTE_HTTP_READ_BODY_PARSE_FAILED`.
+  `LTE_HTTP_READ_AT_FAILED` and `LTE_HTTP_READ_BODY_PARSE_FAILED`. The source
+  commit/build app version is `e79e4de`, the binary is
+  `firmware/mqtt_heartbeat/build_lte003_command_loop_fix3/egolink_mqtt_heartbeat.bin`,
+  and its size is `291488` bytes. Focused tests, `context_lint`,
+  `verify.ps1`, `git diff --check`, and the guarded prepare/build passed.
+  Flash and USB-Free runtime validation have not been run yet.
 - LTE command polling/ACK, reconnect behavior, long-run LTE stability, product
   battery/charging accuracy, product power behavior, and final
   enclosure/mounting GNSS acceptance remain unverified. LTE-003 currently has

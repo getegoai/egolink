@@ -332,3 +332,28 @@ runtime.
 - Keep acceptance strict: LTE-003 still passes only when the command is ACKed
   with `transport.type=lte`, `lte_http.phase=command_ack`, and
   `poll_reason_code=LTE_HTTP_OK`.
+
+## Fix3 Build Evidence
+
+- Firmware version: `0.1.0-lte003-command-loop-fix3`
+- Test run ID: `lte003-command-loop-fix3-20260629-081529`
+- Source commit for build app version: `e79e4de`
+- Build directory: `firmware/mqtt_heartbeat/build_lte003_command_loop_fix3/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte003_command_loop_fix3/egolink_mqtt_heartbeat.bin`
+- Binary size: `291488` bytes.
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670LteHttpCommandLoop`.
+- Build config confirmed
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=1`,
+  `CONFIG_EGOLINK_FW_VERSION="0.1.0-lte003-command-loop-fix3"`, and
+  `CONFIG_EGOLINK_TEST_RUN_ID="lte003-command-loop-fix3-20260629-081529"`.
+- Focused LTE/firmware tests passed with 24 tests before commit.
+- `python scripts/context_lint.py` passed.
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
+  274 tests.
+- `git diff --check` passed.
+- Flash result: not run. Requires explicit operator confirmation for the flash
+  port, expected currently `COM4`.
+- USB-Free runtime validation: not run. Requires independent power, USB
+  disconnected, and a cold boot in that state after flashing.
