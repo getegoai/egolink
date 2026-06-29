@@ -337,7 +337,10 @@ runtime.
 
 - Firmware version: `0.1.0-lte003-command-loop-fix3`
 - Test run ID: `lte003-command-loop-fix3-20260629-081529`
-- Source commit for build app version: `e79e4de`
+- Fix3 code-change commit: `e79e4de`
+- Initial build app version before flash: `e79e4de`
+- Flashed build app version after the guarded flash re-ran CMake at HEAD:
+  `79a12c8`
 - Build directory: `firmware/mqtt_heartbeat/build_lte003_command_loop_fix3/`
 - Binary:
   `firmware/mqtt_heartbeat/build_lte003_command_loop_fix3/egolink_mqtt_heartbeat.bin`
@@ -353,7 +356,11 @@ runtime.
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
   274 tests.
 - `git diff --check` passed.
-- Flash result: not run. Requires explicit operator confirmation for the flash
-  port, expected currently `COM4`.
+- Flash result: PASS on `COM4`; ESP32-S3 was detected, bootloader/app/
+  partition table were written, hashes verified, and hard reset completed.
+- Flash started at: `2026-06-29T00:22:01.0021679Z`
+- Flash completed at: `2026-06-29T00:22:36.3004908Z`
+- Flash evidence:
+  `reports/field_validation/lte003-command-loop-fix3-20260629-081529/flash_report.md`
 - USB-Free runtime validation: not run. Requires independent power, USB
   disconnected, and a cold boot in that state after flashing.

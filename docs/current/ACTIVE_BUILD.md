@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix2 command-loop firmware currently flashed on COM4; USB-Free fix2 runtime validation failed at SIM7670G `HTTPREAD`; LTE-003 fix3 is build-verified and awaiting flash |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix3 command-loop firmware currently flashed on COM4; USB-Free fix3 runtime validation pending |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -219,8 +219,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   not prove SIM7670G LTE transport, GNSS fix, battery/charging accuracy, or
   product power behavior. LTE-002 fix5 later proved one SIM7670G LTE HTTP
   telemetry uplink thin-slice only.
-- The currently flashed connectivity-node image is LTE-002 fix5
-  `0.1.0-lte002-lte-http-probe-fix5`. The first LTE-002 image and fix1 failed
+- Earlier LTE-002 fix5
+  `0.1.0-lte002-lte-http-probe-fix5` proved one LTE HTTP uplink thin-slice.
+  The first LTE-002 image and fix1 failed
   USB-Free LTE HTTP validation with no fresh LTE HTTP telemetry reaching the
   VPS; fix2 also failed with no fresh LTE HTTP telemetry reaching the VPS.
   Fix3 also failed with no fresh LTE HTTP telemetry reaching the VPS. The prior
@@ -308,12 +309,17 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `lte003-command-loop-fix3-20260629-081529`. It keeps LTE-003 acceptance
   unchanged, but makes command-poll `AT+HTTPREAD` use the longer LTE HTTP
   action timeout and splits the prior `LTE_HTTP_READ_FAILED` condition into
-  `LTE_HTTP_READ_AT_FAILED` and `LTE_HTTP_READ_BODY_PARSE_FAILED`. The source
-  commit/build app version is `e79e4de`, the binary is
+  `LTE_HTTP_READ_AT_FAILED` and `LTE_HTTP_READ_BODY_PARSE_FAILED`. The fix3
+  code-change commit is `e79e4de`; the flashed build app version is `79a12c8`
+  because the guarded flash re-ran CMake at the documentation commit. The binary is
   `firmware/mqtt_heartbeat/build_lte003_command_loop_fix3/egolink_mqtt_heartbeat.bin`,
   and its size is `291488` bytes. Focused tests, `context_lint`,
   `verify.ps1`, `git diff --check`, and the guarded prepare/build passed.
-  Flash and USB-Free runtime validation have not been run yet.
+  The image was flashed on `COM4`; ESP32-S3 was detected, bootloader/app/
+  partition table were written, hashes verified, and hard reset completed.
+  Flash evidence is under
+  `reports/field_validation/lte003-command-loop-fix3-20260629-081529/flash_report.md`.
+  USB-Free runtime validation has not been run yet.
 - LTE command polling/ACK, reconnect behavior, long-run LTE stability, product
   battery/charging accuracy, product power behavior, and final
   enclosure/mounting GNSS acceptance remain unverified. LTE-003 currently has
