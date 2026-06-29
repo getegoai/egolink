@@ -274,6 +274,15 @@ motion candidate
   - Evidence: active `egolink-message-hub.service`, bearer-token API gate,
     public `/health`, and PC Simulator VPS smoke device
     `ego-link-r0-vps-auth-smoke`.
+- `DEPLOY-002 Raw Frame Message Hub VPS Deployment`
+  - Path: `docs/tasks/done/DEPLOY-002_RAW_FRAME_MESSAGE_HUB_VPS_DEPLOYMENT.md`
+  - Status: completed as a raw-frame server redeploy.
+  - Goal: deploy SERVER-002 raw-frame storage and `poll.raw` / `ack.raw`
+    routes to the operator VPS without touching GitLab.
+  - Evidence: remote `egolink-message-hub.service` active on `0.0.0.0:8790`,
+    `/health` OK, unauthenticated `/api/state` 401, authenticated
+    `/api/state` includes `raw_frames`, and raw-frame smoke
+    `raw-frame-vps-smoke-20260629-174047` ACKed a command through raw frames.
 - `FW-001 Firmware Message Hub HTTP Client Baseline`
   - Path: `docs/tasks/done/FW-001_FIRMWARE_MESSAGE_HUB_HTTP_CLIENT_BASELINE.md`
   - Status: completed as a build-verified firmware transport baseline.
