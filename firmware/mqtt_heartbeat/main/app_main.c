@@ -1218,6 +1218,204 @@ static bool build_lte_raw_frame(
     return written > 0 && (size_t)written < buffer_size;
 }
 
+#if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
+static void build_lte_location_report_kv_payload(
+    char *buffer,
+    size_t buffer_size,
+    uint32_t seq,
+    const char *cmd_id,
+    const sim7670_gnss_report_t *gnss,
+    bool gnss_query_ok)
+{
+    char lat[32];
+    char lon[32];
+    char altitude[32];
+    char speed[32];
+    char course[32];
+    char pdop[32];
+    char hdop[32];
+    char vdop[32];
+    char satellites[16];
+    char raw_command[SIM7670_GNSS_RAW_COMMAND_MAX * 2];
+    char raw_response[SIM7670_GNSS_RAW_RESPONSE_MAX * 2];
+#if CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+    sim7670_gnss_report_t fallback;
+    if (gnss == NULL) {
+        sim7670_gnss_report_init(&fallback);
+        gnss = &fallback;
+    }
+    const char *source = "sim7670g_firmware_gnss";
+    const char *gnss_source = "sim7670g_uart_at";
+    const char *gnss_driver = "uart_at";
+    const char *state = gnss->gnss_state;
+    const char *source_status = gnss->source_status;
+    bool fix = gnss->fix;
+    bool lat_valid = gnss->lat_valid;
+    bool lon_valid = gnss->lon_valid;
+    bool altitude_valid = gnss->altitude_valid;
+    bool speed_valid = gnss->speed_valid;
+    bool course_valid = gnss->course_valid;
+    bool pdop_valid = gnss->pdop_valid;
+    bool hdop_valid = gnss->hdop_valid;
+    bool vdop_valid = gnss->vdop_valid;
+    bool satellites_valid = gnss->satellites_valid;
+    double lat_value = gnss->lat;
+    double lon_value = gnss->lon;
+    double altitude_value = gnss->altitude_m;
+    double speed_value = gnss->speed_mps;
+    double course_value = gnss->course_deg;
+    double pdop_value = gnss->pdop;
+    double hdop_value = gnss->hdop;
+    double vdop_value = gnss->vdop;
+    int satellites_value = gnss->satellites;
+    const char *utc_date = gnss->utc_date;
+    const char *utc_time = gnss->utc_time;
+    json_escape_summary(raw_command, sizeof(raw_command), gnss->raw_command);
+    json_escape_summary(raw_response, sizeof(raw_response), gnss->raw_response);
+#else
+    (void)gnss;
+    (void)gnss_query_ok;
+    const char *source = "firmware_gnss_scaffold";
+    const char *gnss_source = "sim7670g_scaffold";
+    const char *gnss_driver = "not_integrated";
+    const char *state = "driver_not_integrated";
+    const char *source_status = "unverified";
+    bool fix = false;
+    bool lat_valid = false;
+    bool lon_valid = false;
+    bool altitude_valid = false;
+    bool speed_valid = false;
+    bool course_valid = false;
+    bool pdop_valid = false;
+    bool hdop_valid = false;
+    bool vdop_valid = false;
+    bool satellites_valid = true;
+    double lat_value = 0.0;
+    double lon_value = 0.0;
+    double altitude_value = 0.0;
+    double speed_value = 0.0;
+    double course_value = 0.0;
+    double pdop_value = 0.0;
+    double hdop_value = 0.0;
+    double vdop_value = 0.0;
+    int satellites_value = 0;
+    const char *utc_date = "";
+    const char *utc_time = "";
+    raw_command[0] = '\0';
+    raw_response[0] = '\0';
+#endif
+    json_number_or_null(lat, sizeof(lat), lat_valid, lat_value, "%.7f");
+    json_number_or_null(lon, sizeof(lon), lon_valid, lon_value, "%.7f");
+    json_number_or_null(altitude, sizeof(altitude), altitude_valid, altitude_value, "%.2f");
+    json_number_or_null(speed, sizeof(speed), speed_valid, speed_value, "%.3f");
+    json_number_or_null(course, sizeof(course), course_valid, course_value, "%.2f");
+    json_number_or_null(pdop, sizeof(pdop), pdop_valid, pdop_value, "%.2f");
+    json_number_or_null(hdop, sizeof(hdop), hdop_valid, hdop_value, "%.2f");
+    json_number_or_null(vdop, sizeof(vdop), vdop_valid, vdop_value, "%.2f");
+    json_int_or_null(satellites, sizeof(satellites), satellites_valid, satellites_value);
+    snprintf(
+        buffer,
+        buffer_size,
+        "event_type=location_report\n"
+        "priority=normal\n"
+        "fw_version=%s\n"
+        "test_run_id=%s\n"
+        "seq=%" PRIu32 "\n"
+        "source=%s\n"
+        "source_status=%s\n"
+        "fix=%s\n"
+        "gnss_state=%s\n"
+        "gnss_source=%s\n"
+        "gnss_driver=%s\n"
+        "gnss_query_ok=%s\n"
+        "lat=%s\n"
+        "lon=%s\n"
+        "altitude_m=%s\n"
+        "speed_mps=%s\n"
+        "course_deg=%s\n"
+        "pdop=%s\n"
+        "hdop=%s\n"
+        "vdop=%s\n"
+        "satellites=%s\n"
+        "utc_date=%s\n"
+        "utc_time=%s\n"
+        "raw_command=%s\n"
+        "raw_response=%s\n"
+        "location_request_cmd_id=%s\n"
+        "transport_type=lte\n"
+        "lte_http_phase=location_report\n"
+        "lte_http_driver=%s\n",
+        CONFIG_EGOLINK_FW_VERSION,
+        CONFIG_EGOLINK_TEST_RUN_ID,
+        seq,
+        source,
+        source_status,
+        json_bool(fix),
+        state,
+        gnss_source,
+        gnss_driver,
+        json_bool(gnss_query_ok),
+        lat,
+        lon,
+        altitude,
+        speed,
+        course,
+        pdop,
+        hdop,
+        vdop,
+        satellites,
+        utc_date,
+        utc_time,
+        raw_command,
+        raw_response,
+        cmd_id,
+        sim7670_lte_http_backend_name());
+}
+
+static bool lte_http_publish_raw_location_report(const char *cmd_id)
+{
+    char path[160];
+    char url[256];
+    char frame_id[96];
+    char payload[1280];
+    char frame[1700];
+    sim7670_lte_http_probe_result_t post_result;
+    sim7670_gnss_report_t gnss;
+    uint32_t seq = next_seq();
+
+    sim7670_gnss_report_init(&gnss);
+#if CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+    bool gnss_query_ok = sim7670_gnss_request_location(&gnss);
+#else
+    bool gnss_query_ok = false;
+#endif
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/raw-ingest", CONFIG_EGOLINK_DEVICE_ID);
+    build_message_hub_url(url, sizeof(url), path);
+    snprintf(frame_id, sizeof(frame_id), "loc-%s", cmd_id);
+    build_lte_location_report_kv_payload(payload, sizeof(payload), seq, cmd_id, &gnss, gnss_query_ok);
+    if (!build_lte_raw_frame(frame, sizeof(frame), "event", frame_id, seq, payload)) {
+        ESP_LOGW(TAG, "LTE_HTTP_LOCATION_RAW_FRAME_BUILD_FAILED cmd_id=%s", cmd_id);
+        return false;
+    }
+    ESP_LOGI(TAG, "LTE_HTTP_LOCATION_RAW_FRAME_BYTES=%u", (unsigned)strlen(frame));
+    bool ok = sim7670_lte_http_post_raw(
+        url,
+        CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN,
+        frame,
+        "text/x-egolink-frame; profile=raw-frame.p0.v1",
+        &post_result);
+    ESP_LOGI(
+        TAG,
+        "LTE_HTTP_LOCATION_RAW_POST_DONE cmd_id=%s seq=%" PRIu32 " ok=%s reason=%s status=%d",
+        cmd_id,
+        seq,
+        ok ? "true" : "false",
+        post_result.reason_code,
+        post_result.status_code);
+    return ok;
+}
+#endif
+
 static void build_lte_command_ack_payload(
     char *buffer,
     size_t buffer_size,
@@ -1684,9 +1882,18 @@ static bool lte_http_execute_and_ack_raw_command(
     if (!duplicate) {
         snprintf(s_lte_command_last_cmd_id, sizeof(s_lte_command_last_cmd_id), "%s", command->cmd_id);
         s_lte_command_last_executed = true;
-        if (strcmp(command->cmd, "set_report_interval") != 0) {
+        if (strcmp(command->cmd, "set_report_interval") == 0) {
+            status = "ok";
+            message = "lte raw command loop acknowledged set_report_interval";
+#if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
+        } else if (strcmp(command->cmd, "request_location") == 0) {
+            bool location_ok = lte_http_publish_raw_location_report(command->cmd_id);
+            status = location_ok ? "ok" : "error";
+            message = location_ok ? message_hub_location_ack_message() : "lte raw location_report upload failed";
+#endif
+        } else {
             status = "rejected";
-            message = "lte raw command loop only accepts set_report_interval in FW-003";
+            message = "lte raw command loop only accepts set_report_interval or request_location";
         }
     } else {
         message = "lte raw command duplicate ignored after local execution";

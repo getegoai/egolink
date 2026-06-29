@@ -13,6 +13,7 @@ param(
     [string]$FlashPort = "",
     [string]$ExistingCommandId = "",
     [string]$ExpectedAckTestRunId = "",
+    [string]$LteCommandName = "set_report_interval",
     [int]$ValidationTimeoutSec = 180,
     [int]$ValidationPollIntervalSec = 5,
     [switch]$EnableSim7670Gnss,
@@ -25,6 +26,8 @@ param(
     [switch]$Validate,
     [switch]$OperatorConfirmedIndependentPower,
     [switch]$OperatorConfirmedUsbDisconnected,
+    [switch]$RequireLteLocationReport,
+    [switch]$RequireLocationFix,
     [switch]$Json
 )
 
@@ -89,6 +92,9 @@ $result = [ordered]@{
     binary_path = $binaryPath
     existing_command_id = $ExistingCommandId
     expected_ack_test_run_id = $ExpectedAckTestRunId
+    lte_command_name = $LteCommandName
+    require_lte_location_report = [bool]($RequireLteLocationReport -or $RequireLocationFix)
+    require_location_fix = [bool]$RequireLocationFix
     prepare_build_ran = $false
     flash_ran = $false
     validate_ran = $false
@@ -192,6 +198,7 @@ if ($Validate) {
                 "--device-id", $DeviceId,
                 "--test-run-id", $TestRunId,
                 "--expected-fw-version", $FwVersion,
+                "--command", $LteCommandName,
                 "--timeout-sec", [string]$ValidationTimeoutSec,
                 "--poll-interval-sec", [string]$ValidationPollIntervalSec,
                 "--json"
@@ -201,6 +208,12 @@ if ($Validate) {
             }
             if ($ExpectedAckTestRunId) {
                 $validationArgs += @("--expected-ack-test-run-id", $ExpectedAckTestRunId)
+            }
+            if ($RequireLteLocationReport -or $RequireLocationFix) {
+                $validationArgs += "--require-location-report"
+            }
+            if ($RequireLocationFix) {
+                $validationArgs += "--require-fix"
             }
         } elseif ($EnableSim7670LteHttpProbe) {
             $validationArgs = @(

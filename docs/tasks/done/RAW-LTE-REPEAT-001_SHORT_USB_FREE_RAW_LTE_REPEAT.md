@@ -19,7 +19,7 @@ allowed_paths:
   - docs/current/STATUS.md
   - docs/current/ACTIVE_BUILD.md
   - docs/tasks/TASK_TREE.md
-  - docs/tasks/active/RAW-LTE-REPEAT-001_SHORT_USB_FREE_RAW_LTE_REPEAT.md
+  - docs/tasks/done/RAW-LTE-REPEAT-001_SHORT_USB_FREE_RAW_LTE_REPEAT.md
   - scripts/run_fw001_hw_r1.ps1
   - scripts/validate_lte_command_loop.py
   - quality_tests/test_lte_command_loop_validation.py

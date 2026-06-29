@@ -1260,14 +1260,51 @@ def derive_raw_frame_message(
             }
         )
     if frame_type == "event":
-        return compact_dict(
+        event_type = first_known(kv_payload.get("event-type"), kv_payload.get("event_type"), "raw_event")
+        event = compact_dict(
             {
                 **common,
                 "message_type": "event",
-                "event_type": first_known(kv_payload.get("event-type"), kv_payload.get("event_type"), "raw_event"),
+                "event_type": event_type,
                 "priority": first_known(kv_payload.get("priority"), "normal"),
+                "source": kv_payload.get("source"),
+                "source_status": kv_payload.get("source-status"),
             }
         )
+        if event_type == "location_report":
+            event.update(
+                compact_dict(
+                    {
+                        "fix": parse_bool_or_text(kv_payload.get("fix")),
+                        "gnss_state": kv_payload.get("gnss-state"),
+                        "gnss_source": kv_payload.get("gnss-source"),
+                        "gnss_driver": kv_payload.get("gnss-driver"),
+                        "gnss_query_ok": parse_bool_or_text(kv_payload.get("gnss-query-ok")),
+                        "lat": parse_raw_scalar(kv_payload.get("lat")),
+                        "lon": parse_raw_scalar(kv_payload.get("lon")),
+                        "altitude_m": parse_raw_scalar(kv_payload.get("altitude-m")),
+                        "speed_mps": parse_raw_scalar(kv_payload.get("speed-mps")),
+                        "course_deg": parse_raw_scalar(kv_payload.get("course-deg")),
+                        "pdop": parse_raw_scalar(kv_payload.get("pdop")),
+                        "hdop": parse_raw_scalar(kv_payload.get("hdop")),
+                        "vdop": parse_raw_scalar(kv_payload.get("vdop")),
+                        "satellites": parse_raw_scalar(kv_payload.get("satellites")),
+                        "utc_date": kv_payload.get("utc-date"),
+                        "utc_time": kv_payload.get("utc-time"),
+                        "location_request_cmd_id": kv_payload.get("location-request-cmd-id"),
+                        "transport": compact_dict({"type": kv_payload.get("transport-type")})
+                        if kv_payload.get("transport-type")
+                        else None,
+                        "lte_http": compact_dict(
+                            {
+                                "phase": kv_payload.get("lte-http-phase"),
+                                "driver": kv_payload.get("lte-http-driver"),
+                            }
+                        ),
+                    }
+                )
+            )
+        return event
     if frame_type == "error":
         return compact_dict(
             {
@@ -1312,6 +1349,18 @@ def parse_number_or_text(value: Any) -> Any:
             return float(text)
         except ValueError:
             return text
+
+
+def parse_raw_scalar(value: Any) -> Any:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    if text.lower() == "null":
+        return None
+    parsed_bool = parse_bool_or_text(text)
+    if isinstance(parsed_bool, bool):
+        return parsed_bool
+    return parse_number_or_text(text)
 
 
 def parse_bool_or_text(value: Any) -> Any:

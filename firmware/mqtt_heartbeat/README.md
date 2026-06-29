@@ -246,6 +246,44 @@ python ..\..\scripts\validate_lte_command_loop.py `
   --expected-fw-version 0.1.0-lte003-command-loop
 ```
 
+## LTE-004 raw LTE request_location thin slice
+
+LTE-004 keeps the LTE command loop on raw frames and adds the first
+product-relevant command over the same transport:
+
+```text
+CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=y
+CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y
+CONFIG_EGOLINK_SIM7670_GNSS_ENABLED=y
+CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED=y
+CONFIG_EGOLINK_FW_VERSION="0.1.0-lte004-raw-lte-location"
+CONFIG_EGOLINK_TEST_RUN_ID="<lte004-test-run-id>"
+```
+
+When the raw command frame contains `cmd=request_location`, firmware queries the
+SIM7670G GNSS backend when available, builds a compact key/value
+`event_type=location_report` payload, wraps it in `EGLK/1 type=event`, and
+posts it to `/api/v1/devices/<device_id>/raw-ingest` through SIM7670G LTE HTTP.
+It then ACKs the command through the existing raw ACK endpoint. The server is
+responsible for storing the raw frame first and deriving the Web/API
+`location_report` view.
+
+Host-side validation can require the location report as well as the ACK:
+
+```powershell
+python ..\..\scripts\validate_lte_command_loop.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id ego-link-r1-connectivity-001 `
+  --test-run-id <same-test-run-id> `
+  --expected-fw-version 0.1.0-lte004-raw-lte-location `
+  --command request_location `
+  --require-location-report
+```
+
+Use `--require-fix` only for an explicit outdoor/window GNSS-fix acceptance
+attempt. The LTE-004 transport slice can pass with `fix=false` when the raw
+`location_report` explains the GNSS state.
+
 This validates only the LTE HTTP command poll and ACK thin-slice. It does not
 prove reconnect recovery, long-run LTE stability, GNSS-over-LTE, battery,
 charging, or product power behavior.

@@ -76,6 +76,16 @@ motion candidate
 
 ## Active Queue
 
+- `LTE-004 Raw LTE Request Location Thin Slice`
+  - Path: `docs/tasks/active/LTE-004_RAW_LTE_REQUEST_LOCATION_THIN_SLICE.md`
+  - Status: active; local implementation and build verification in progress.
+  - Goal: extend the proven raw LTE command/ACK loop from
+    `set_report_interval` to `request_location`, upload a raw-frame
+    `location_report` over SIM7670G LTE HTTP, derive the Web/API
+    `location_report`, and ACK through the raw LTE path.
+  - Boundary: no long LTE stability claim, no product GNSS acceptance, and no
+    flash/runtime hardware validation until the operator explicitly confirms
+    `COM4` flashing and then independent power with USB disconnected.
 - `LTE-003 LTE HTTP Command Poll And ACK`
   - Path: `docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md`
   - Status: raw-frame acceptance passed through FW-003; legacy JSON
@@ -120,9 +130,9 @@ motion candidate
     pending, no ACK was received, and the latest diagnostic still reported HTTP
     poll status `200`, body length `592`, and `LTE_HTTP_READ_FAILED`.
 - `RAW-LTE-REPEAT-001 Short USB-Free Raw LTE Repeat Validation`
-  - Path: `docs/tasks/active/RAW-LTE-REPEAT-001_SHORT_USB_FREE_RAW_LTE_REPEAT.md`
-  - Status: completed as a short repeat gate; the task packet remains at the
-    active path until a later task-packet archival cleanup moves it.
+  - Path: `docs/tasks/done/RAW-LTE-REPEAT-001_SHORT_USB_FREE_RAW_LTE_REPEAT.md`
+  - Status: completed as a short repeat gate and archived under `done`;
+    retained here as the immediate predecessor evidence for LTE-004.
   - Goal: repeat the FW-003 raw-frame command/ACK loop over a few short
     USB-Free cold-boot attempts before moving into long LTE stability or
     GNSS-over-LTE work.
@@ -682,8 +692,9 @@ motion candidate
 2. STAB-001A gate tooling is ready. The next physical stability step is a
    short operator-confirmed USB-Free baseline run over the current Wi-Fi HTTP
    path; do not treat it as product LTE acceptance.
-3. Start LTE-001/LTE-002/LTE-003 in thin slices: LTE registration and cell
-   state, LTE HTTP telemetry uplink, then LTE HTTP command polling and ACK.
+3. Continue LTE thin slices through LTE-004: LTE registration and cell state,
+   LTE HTTP telemetry uplink, raw LTE command polling and ACK, then raw LTE
+   `request_location -> location_report -> ACK`.
 4. LOC-002 is complete as a contract/server/simulator baseline. Next location
    work is LOC-003 VPS location memory tables and LOC-004 rule-based
    `Fine`/`Coarse`/`Predicted`/`Unknown` belief engine after the short

@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | FW-003 raw-frame command-loop firmware currently flashed on COM4; USB-Free FW-003 raw command/ACK validation passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | FW-003 raw-frame command-loop firmware currently flashed on COM4; LTE-004 raw request-location build is available but not flashed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -485,6 +485,22 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   attempts 1 and 2 both passed, the short USB-Free raw LTE repeat gate is
   satisfied; long LTE stability, reconnect recovery, GNSS-over-LTE, battery,
   power, and enclosure behavior remain unverified.
+- LTE-004 raw LTE request-location thin slice is implemented, VPS-deployed, and
+  build-verified as `0.1.0-lte004-raw-lte-location` /
+  `lte004-raw-lte-location-20260629-213717`. Firmware now accepts
+  `request_location` in the raw LTE command loop, uploads an `EGLK/1
+  type=event` key/value `location_report` to `/raw-ingest`, and then posts the
+  raw ACK. Message Hub derives Web/API `location_report` fields only after
+  storing the raw frame. VPS smoke
+  `lte004-vps-raw-location-smoke-20260629-133701` derived
+  `event_type=location_report`, `fix=false`, `gnss_state=no_fix`,
+  `transport.type=lte`, and `location_request_cmd_id=cmd-smoke-000001` from a
+  synthetic raw event without touching GitLab. The binary is
+  `firmware/mqtt_heartbeat/build_lte004_raw_lte_location/egolink_mqtt_heartbeat.bin`,
+  and its size is `296112` bytes. Focused tests passed with 36 tests,
+  `context_lint`, full `verify.ps1` with 282 tests, `git diff --check`, and
+  guarded ESP-IDF prepare/build all passed. LTE-004 has not been flashed or
+  USB-Free runtime validated yet.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

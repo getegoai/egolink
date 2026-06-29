@@ -338,6 +338,46 @@ cmd_id=cmd-000013
 The server should derive the same ACK row and validator evidence from the raw
 ACK after the raw frame itself has been stored.
 
+## LTE-004 Raw LTE Request Location
+
+LTE-004 extends the proven raw LTE command/ACK path to the product-relevant
+`request_location` command. The device still does not parse JSON from the
+server. It polls a raw `command` frame, runs the existing firmware GNSS backend
+or explicit no-fix scaffold, uploads one raw `event` frame, then sends a raw
+ACK frame.
+
+The raw location event payload uses compact key/value content:
+
+```text
+event_type=location_report
+priority=normal
+fw_version=0.1.0-lte004-raw-lte-location
+test_run_id=lte004-raw-lte-location-20260629-001
+seq=42
+source=sim7670g_firmware_gnss
+source_status=unverified
+fix=false
+gnss_state=no_fix
+gnss_source=sim7670g_uart_at
+gnss_driver=uart_at
+gnss_query_ok=true
+lat=null
+lon=null
+satellites=null
+hdop=null
+location_request_cmd_id=cmd-000020
+transport_type=lte
+lte_http_phase=location_report
+lte_http_driver=sim7670g_uart_at_http
+```
+
+The Message Hub must store the original `EGLK/1 type=event` frame first. It may
+then derive the existing `egolink.p0.v1` `message_type=event` /
+`event_type=location_report` compatibility view for Web, API, and validators.
+A no-fix report is acceptable for this transport slice when the report is
+explicit and diagnosable. A malformed or checksum-failed location frame remains
+raw evidence and must not be silently dropped.
+
 ## LOC-002 Location Observation Event
 
 LOC-002 adds the compatible `event_type=location_observation` event. It keeps

@@ -114,6 +114,57 @@ class LteCommandLoopValidationTests(unittest.TestCase):
             self.assertEqual(report["effective_expected_ack_test_run_id"], "fw003-build-unit")
             self.assertEqual(report["ack_summary"]["ack_test_run_id"], "fw003-build-unit")
 
+    def test_validation_can_require_lte_location_report_for_request_location(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            hub_url = f"http://127.0.0.1:{server.server_port}"
+            device_thread = threading.Thread(
+                target=self._poll_and_ack_once,
+                args=(hub_url,),
+                kwargs={
+                    "device_id": "ego-link-r1-test",
+                    "fw_version": "0.1.0-lte004-raw-lte-location",
+                    "test_run_id": "lte004-unit",
+                    "transport_type": "lte",
+                    "poll_reason_code": "LTE_HTTP_OK",
+                    "poll_status_code": 200,
+                    "post_location_report": True,
+                },
+                daemon=True,
+            )
+            try:
+                device_thread.start()
+                report = validate_lte_command_loop.validate_lte_command_loop(
+                    hub_url=hub_url,
+                    device_id="ego-link-r1-test",
+                    token=None,
+                    output_dir=Path(tmp) / "report",
+                    test_run_id="lte004-unit",
+                    board_id="connectivity-node-001",
+                    connection_path="independent_power_usb_disconnected",
+                    timeout_sec=1.0,
+                    poll_interval_sec=0.05,
+                    expected_fw_version="0.1.0-lte004-raw-lte-location",
+                    command_name="request_location",
+                    interval_ms=10000,
+                    require_location_report=True,
+                )
+            finally:
+                device_thread.join(timeout=2)
+                server.shutdown()
+                server_thread.join(timeout=5)
+                server.server_close()
+
+            self.assertEqual(report["result"], "PASS")
+            self.assertEqual(report["command"]["cmd"], "request_location")
+            self.assertEqual(report["location_report"]["event_type"], "location_report")
+            self.assertEqual(report["location_report"]["location_request_cmd_id"], report["command"]["cmd_id"])
+            self.assertEqual(report["location_report"]["transport"]["type"], "lte")
+            self.assertIs(report["location_report"]["fix"], False)
+
     def test_validation_rejects_non_lte_ack(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -270,6 +321,7 @@ class LteCommandLoopValidationTests(unittest.TestCase):
         transport_type: str,
         poll_reason_code: str,
         poll_status_code: int,
+        post_location_report: bool = False,
     ) -> None:
         client = HubClient(hub_url)
         deadline = time.monotonic() + 2.0
@@ -282,6 +334,34 @@ class LteCommandLoopValidationTests(unittest.TestCase):
             time.sleep(0.05)
         if command is None:
             return
+        if post_location_report:
+            client.post(
+                f"/api/v1/devices/{device_id}/telemetry",
+                {
+                    "protocol_version": "egolink.p0.v1",
+                    "device_id": device_id,
+                    "ts": "uptime_ms:2100",
+                    "seq": 6,
+                    "message_type": "event",
+                    "event_type": "location_report",
+                    "priority": "normal",
+                    "fw_version": fw_version,
+                    "test_run_id": test_run_id,
+                    "source": "sim7670g_firmware_gnss",
+                    "source_status": "unverified",
+                    "fix": False,
+                    "gnss_state": "no_fix",
+                    "gnss_source": "sim7670g_uart_at",
+                    "gnss_driver": "uart_at",
+                    "gnss_query_ok": True,
+                    "lat": None,
+                    "lon": None,
+                    "satellites": 0,
+                    "location_request_cmd_id": command["cmd_id"],
+                    "transport": {"type": "lte"},
+                    "lte_http": {"phase": "location_report", "driver": "sim7670g_uart_at_http"},
+                },
+            )
         ack = protocol.ack_message(device_id, "uptime_ms:2000", 7, str(command["cmd_id"]), "ok")
         ack.update(
             {

@@ -9,6 +9,7 @@ device.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -25,6 +26,7 @@ from scripts.validate_fw001_hw_loop import (  # noqa: E402
     FieldValidationError,
     HubClient,
     compact_utc_now,
+    parse_timestamp,
     utc_now,
     write_json,
 )
@@ -59,6 +61,82 @@ def command_ack_summary(command: dict[str, Any]) -> dict[str, Any]:
         "lte_http_phase": lte_http.get("phase"),
         "duplicate_local_execution_prevented": command_obs.get("duplicate_local_execution_prevented"),
     }
+
+
+LOCATION_SOURCE_STATUSES = {"verified", "observed", "pc_side_verified", "unverified"}
+
+
+def is_fresh_location_report(
+    message: dict[str, Any],
+    started_at: datetime,
+    *,
+    test_run_id: str,
+    cmd_id: str,
+) -> bool:
+    if message.get("message_type") != "event" or message.get("event_type") != "location_report":
+        return False
+    if message.get("test_run_id") != test_run_id:
+        return False
+    if str(message.get("location_request_cmd_id") or "") not in {"", cmd_id}:
+        return False
+    received_at = parse_timestamp(message.get("server_received_at"))
+    return received_at is not None and received_at >= started_at
+
+
+def validate_location_report(report: dict[str, Any], *, require_fix: bool) -> list[str]:
+    errors: list[str] = []
+    if "fix" not in report:
+        errors.append("location_report must explicitly include fix=true/false")
+    elif not isinstance(report.get("fix"), bool):
+        errors.append("location_report fix field must be boolean")
+
+    source_status = str(report.get("source_status") or "")
+    if source_status not in LOCATION_SOURCE_STATUSES:
+        errors.append(
+            "location_report source_status must be one of " + ", ".join(sorted(LOCATION_SOURCE_STATUSES))
+        )
+
+    gnss_state = str(report.get("gnss_state") or "")
+    if not gnss_state:
+        errors.append("location_report must include gnss_state")
+
+    if require_fix and report.get("fix") is not True:
+        errors.append(f"location_report did not contain a real fix; gnss_state={gnss_state}")
+    if report.get("fix") is True:
+        if report.get("lat") is None or report.get("lon") is None:
+            errors.append("fixed location_report must include lat and lon")
+        if require_fix and source_status not in {"verified", "observed"}:
+            errors.append("fixed location_report must use verified or observed source_status")
+
+    transport = as_dict(report.get("transport"))
+    if transport.get("type") != "lte":
+        errors.append(f"location_report transport.type={transport.get('type')} did not become lte")
+    return errors
+
+
+def wait_for_location_report(
+    client: HubClient,
+    *,
+    device_id: str,
+    started_at: datetime,
+    test_run_id: str,
+    cmd_id: str,
+    timeout_sec: float,
+    poll_interval_sec: float,
+    require_fix: bool,
+) -> tuple[dict[str, Any], list[str]]:
+    deadline = time.monotonic() + timeout_sec
+    last_count = 0
+    while True:
+        history = client.get(f"/api/v1/devices/{device_id}/telemetry/history").get("telemetry") or []
+        messages = [item for item in history if isinstance(item, dict)]
+        last_count = len(messages)
+        for message in messages:
+            if is_fresh_location_report(message, started_at, test_run_id=test_run_id, cmd_id=cmd_id):
+                return message, validate_location_report(message, require_fix=require_fix)
+        if time.monotonic() >= deadline:
+            return {}, [f"timed out waiting for LTE location_report from {device_id}; observed {last_count} recent messages"]
+        time.sleep(poll_interval_sec)
 
 
 def ack_summary_errors(
@@ -102,6 +180,7 @@ def find_command(commands: list[dict[str, Any]], cmd_id: str) -> dict[str, Any]:
 def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
     summary = report.get("ack_summary") or {}
     command = report.get("command") or {}
+    location = report.get("location_report") or {}
     lines = [
         "# LTE-003 LTE HTTP Command Loop Report",
         "",
@@ -121,6 +200,10 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- ACK status: {summary.get('ack_status', 'unknown')}",
         f"- ACK transport: {summary.get('transport_type', 'unknown')}",
         f"- Poll HTTP: {summary.get('poll_reason_code', 'unknown')} / {summary.get('poll_status_code', 'unknown')}",
+        f"- Location seq: {location.get('seq', 'not required')}",
+        f"- Location fix: {location.get('fix', 'not required')}",
+        f"- GNSS state: {location.get('gnss_state', 'not required')}",
+        f"- Location transport: {as_dict(location.get('transport')).get('type', 'not required')}",
         f"- Test-run export path: {report.get('test_run_export_path', 'not written')}",
         "",
         "## Errors",
@@ -187,9 +270,14 @@ def validate_lte_command_loop(
     interval_ms: int,
     existing_command_id: str | None = None,
     expected_ack_test_run_id: str | None = None,
+    require_location_report: bool = False,
+    require_fix: bool = False,
 ) -> dict[str, Any]:
     client = HubClient(hub_url, token=token)
     started_at_text = utc_now()
+    started_at = parse_timestamp(started_at_text)
+    if started_at is None:
+        raise FieldValidationError("failed to create validation start timestamp")
     health = client.get("/health")
     test_run = create_or_reuse_test_run(
         client,
@@ -215,9 +303,14 @@ def validate_lte_command_loop(
                 "cmd": command_name,
                 "test_run_id": test_run_id,
                 "payload": {
-                    "interval_ms": interval_ms,
+                    **({"interval_ms": interval_ms} if command_name == "set_report_interval" else {}),
+                    **({"reason": "lte004_raw_lte_location_validation"} if command_name == "request_location" else {}),
                     "test_run_id": test_run_id,
-                    "source": "lte003_command_validation",
+                    "source": (
+                        "lte004_raw_lte_location_validation"
+                        if command_name == "request_location"
+                        else "lte003_command_validation"
+                    ),
                 },
             },
         )["command"]
@@ -226,6 +319,7 @@ def validate_lte_command_loop(
     final_command: dict[str, Any] = created
     final_commands: list[dict[str, Any]] = []
     final_device: dict[str, Any] = {}
+    location_report: dict[str, Any] = {}
     summary: dict[str, Any] = command_ack_summary(created)
     errors: list[str] = [f"command {cmd_id} remained pending"]
 
@@ -264,6 +358,19 @@ def validate_lte_command_loop(
             break
         time.sleep(poll_interval_sec)
 
+    if not errors and require_location_report:
+        location_report, location_errors = wait_for_location_report(
+            client,
+            device_id=device_id,
+            started_at=started_at,
+            test_run_id=test_run_id,
+            cmd_id=cmd_id,
+            timeout_sec=timeout_sec,
+            poll_interval_sec=poll_interval_sec,
+            require_fix=require_fix,
+        )
+        errors.extend(location_errors)
+
     completed_at_text = utc_now()
     result = "PASS" if not errors else "FAIL"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -285,10 +392,13 @@ def validate_lte_command_loop(
         "expected_fw_version": expected_fw_version,
         "expected_ack_test_run_id": expected_ack_test_run_id,
         "effective_expected_ack_test_run_id": expected_ack_test_run_id or test_run_id,
+        "require_location_report": require_location_report,
+        "require_fix": require_fix,
         "existing_command_id": existing_command_id,
         "health": health,
         "test_run": test_run,
         "command": final_command,
+        "location_report": location_report,
         "ack_summary": summary,
         "errors": errors,
         "device_state_path": str(device_path),
@@ -330,6 +440,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--command", default="set_report_interval")
     parser.add_argument("--interval-ms", type=int, default=10000)
     parser.add_argument(
+        "--require-location-report",
+        action="store_true",
+        help="Require a fresh LTE-marked location_report for the command ID before passing.",
+    )
+    parser.add_argument(
+        "--require-fix",
+        action="store_true",
+        help="Require location_report fix=true with observed/verified coordinates.",
+    )
+    parser.add_argument(
         "--existing-command-id",
         help="Wait for an already queued command instead of creating a new command.",
     )
@@ -356,6 +476,8 @@ def main(argv: list[str] | None = None) -> int:
             command_name=args.command,
             interval_ms=args.interval_ms,
             existing_command_id=args.existing_command_id,
+            require_location_report=args.require_location_report or args.require_fix,
+            require_fix=args.require_fix,
         )
     except FieldValidationError as exc:
         print(f"FAIL LTE-003 command loop validation: {exc}", file=sys.stderr)

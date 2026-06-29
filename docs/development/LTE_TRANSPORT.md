@@ -131,9 +131,38 @@ Definition of Done:
 - firmware executes once and ACKs over LTE.
 - duplicate execution, timeout, retry, and stale command states are visible.
 
+## LTE-004: Raw Request Location Thin Slice
+
+Goal: extend the raw LTE command loop from `set_report_interval` to
+`request_location` without returning to device-side JSON parsing.
+
+Implementation shape:
+
+- Web/VPS enqueues `request_location`.
+- device receives it from `/commands/poll.raw` as an `EGLK/1 type=command`
+  frame;
+- firmware queries the SIM7670G GNSS backend when enabled, otherwise returns an
+  explicit no-fix scaffold state;
+- firmware posts an `EGLK/1 type=event` raw frame to `/raw-ingest` with
+  `event_type=location_report`, `location_request_cmd_id`, GNSS state/fix
+  fields, and `transport_type=lte`;
+- Message Hub stores the raw frame first, then derives the existing
+  `location_report` Web/API view;
+- firmware posts the raw ACK only after the location frame upload attempt.
+
+Definition of Done:
+
+- raw `request_location` command is selected and executed over LTE;
+- raw `location_report` is visible in Message Hub raw-frame evidence;
+- derived Web/API `latest_location` is updated from that raw event;
+- validator can require both the command ACK and a fresh LTE `location_report`
+  for the same command ID;
+- no-fix is acceptable only when the GNSS state and source status explain the
+  failure.
+
 ## R3.0 LTE Long-Run Gate
 
-Only after LTE-001 through LTE-003 pass should the project run a long LTE
+Only after LTE-001 through LTE-004 pass should the project run a long LTE
 stability and reconnect gate. That gate must cover:
 
 - LTE registration failure;

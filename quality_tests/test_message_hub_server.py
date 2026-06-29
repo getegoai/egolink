@@ -332,6 +332,57 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(exported["raw_frames"][0]["frame_id"], command["cmd_id"])
         self.assertTrue(exported["raw_frames"][0]["raw_payload"]["data_redacted"])
 
+    def test_raw_location_event_derives_location_report_after_raw_storage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.create_test_run({"test_run_id": "raw-location-test"})
+            payload = (
+                "event_type=location_report\n"
+                "priority=normal\n"
+                "fw_version=0.1.0-lte004-raw-lte-location\n"
+                "test_run_id=raw-location-test\n"
+                "seq=42\n"
+                "source=sim7670g_firmware_gnss\n"
+                "source_status=unverified\n"
+                "fix=false\n"
+                "gnss_state=no_fix\n"
+                "gnss_source=sim7670g_uart_at\n"
+                "gnss_driver=uart_at\n"
+                "gnss_query_ok=true\n"
+                "lat=null\n"
+                "lon=null\n"
+                "satellites=0\n"
+                "location_request_cmd_id=cmd-raw-location\n"
+                "transport_type=lte\n"
+                "lte_http_phase=location_report\n"
+                "lte_http_driver=sim7670g_uart_at_http\n"
+            ).encode("utf-8")
+            frame = message_hub.build_raw_frame(
+                "event",
+                "loc-cmd-raw-location",
+                payload,
+                metadata={"test-run-id": "raw-location-test"},
+            )
+            record = store.ingest_raw_frame("ego-link-001", frame)
+            history = store.telemetry_history("ego-link-001")
+            device = store.get_device("ego-link-001")
+            exported = store.export_test_run("raw-location-test")
+
+        self.assertEqual(record["parse_result"]["status"], "ok")
+        self.assertEqual(record["parse_result"]["derived_message_type"], "event")
+        self.assertEqual(history[0]["event_type"], "location_report")
+        self.assertEqual(history[0]["test_run_id"], "raw-location-test")
+        self.assertIs(history[0]["fix"], False)
+        self.assertIsNone(history[0].get("lat"))
+        self.assertEqual(history[0]["gnss_state"], "no_fix")
+        self.assertEqual(history[0]["gnss_query_ok"], True)
+        self.assertEqual(history[0]["location_request_cmd_id"], "cmd-raw-location")
+        self.assertEqual(history[0]["transport"]["type"], "lte")
+        self.assertEqual(history[0]["lte_http"]["phase"], "location_report")
+        self.assertEqual(device["latest_location"]["event_type"], "location_report")
+        self.assertEqual(exported["raw_frames"][0]["frame_id"], "loc-cmd-raw-location")
+        self.assertTrue(exported["raw_frames"][0]["raw_payload"]["data_redacted"])
+
 
 class MessageHubDeployScriptTests(unittest.TestCase):
     def test_deploy_package_excludes_runtime_secret_files(self) -> None:
