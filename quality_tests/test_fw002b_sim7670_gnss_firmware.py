@@ -115,6 +115,10 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
         self.assertIn("uart_driver_install(uart_num, AT_RESPONSE_BUFFER_SIZE * 2", self.source)
         self.assertIn('"AT+HTTPREAD=0,%d", data_len', self.source)
         self.assertIn('"AT+HTTPREAD=0,<len>"', self.source)
+        self.assertIn("find_complete_json_object", self.source)
+        self.assertIn("depth == 0", self.source)
+        self.assertIn("in_string", self.source)
+        self.assertIn("escaped", self.source)
         self.assertIn("sim7670_send_httpread_json_labeled", self.source)
         self.assertIn("SIM7670_AT_HTTPREAD", self.source)
         self.assertIn('\"AT+HTTPREAD\",\n            \"AT+HTTPREAD\"', self.source)
@@ -122,6 +126,7 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
         self.assertIn("LTE_HTTP_READ_AT_ERROR", self.source)
         self.assertIn("LTE_HTTP_READ_AT_TIMEOUT", self.source)
         self.assertIn("LTE_HTTP_READ_BODY_PARSE_FAILED", self.source)
+        self.assertNotIn("strrchr(response, '}')", self.source)
 
     def test_component_sends_bounded_at_queries_and_parses_common_gnss_lines(self) -> None:
         combined = self.header + self.source

@@ -436,15 +436,68 @@ static bool parse_httpaction(const char *response, int *status_code, int *data_l
     return status_ok;
 }
 
+static bool find_complete_json_object(const char *response, const char **start_out, const char **end_out)
+{
+    if (response == NULL || start_out == NULL || end_out == NULL) {
+        return false;
+    }
+    const char *start = strchr(response, '{');
+    if (start == NULL) {
+        return false;
+    }
+
+    int depth = 0;
+    bool in_string = false;
+    bool escaped = false;
+    for (const char *cursor = start; *cursor != '\0'; ++cursor) {
+        char ch = *cursor;
+        if (in_string) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (ch == '"') {
+                in_string = false;
+            }
+            continue;
+        }
+        if (ch == '"') {
+            in_string = true;
+            continue;
+        }
+        if (ch == '{') {
+            depth++;
+        } else if (ch == '}') {
+            if (depth <= 0) {
+                return false;
+            }
+            depth--;
+            if (depth == 0) {
+                *start_out = start;
+                *end_out = cursor;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static bool copy_httpread_json_body(const char *response, char *body, size_t body_size)
 {
     if (response == NULL || body == NULL || body_size == 0) {
         return false;
     }
     body[0] = '\0';
-    const char *start = strchr(response, '{');
-    const char *end = strrchr(response, '}');
-    if (start == NULL || end == NULL || end < start) {
+    const char *start = NULL;
+    const char *end = NULL;
+    if (!find_complete_json_object(response, &start, &end)) {
+        return false;
+    }
+    if (end < start) {
         return false;
     }
     size_t length = (size_t)(end - start + 1);
