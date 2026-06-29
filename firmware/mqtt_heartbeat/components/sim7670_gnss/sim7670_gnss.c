@@ -486,7 +486,10 @@ static bool sim7670_lte_http_read_json_body(
                 response_size)) {
             result->http_read_ok = true;
             update_lte_http_raw(result, "AT+HTTPREAD=0,<len>", response);
-            return copy_httpread_json_body(response, response_body, response_body_size);
+            bool positioned_body_ok = copy_httpread_json_body(response, response_body, response_body_size);
+            if (positioned_body_ok) {
+                return true;
+            }
         }
         update_lte_http_raw(result, "AT+HTTPREAD=0,<len>", response);
         if (saw_error != NULL && contains_token(response, "ERROR")) {

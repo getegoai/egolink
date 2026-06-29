@@ -115,6 +115,7 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
         self.assertIn("uart_driver_install(uart_num, AT_RESPONSE_BUFFER_SIZE * 2", self.source)
         self.assertIn('"AT+HTTPREAD=0,%d", data_len', self.source)
         self.assertIn('"AT+HTTPREAD=0,<len>"', self.source)
+        self.assertIn("positioned_body_ok", self.source)
         self.assertIn('sim7670_send_at(\n            "AT+HTTPREAD",', self.source)
         self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS", self.source)
         self.assertIn("LTE_HTTP_READ_AT_ERROR", self.source)
