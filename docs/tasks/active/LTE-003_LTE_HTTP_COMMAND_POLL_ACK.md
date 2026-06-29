@@ -404,3 +404,29 @@ runtime.
 - Keep acceptance strict: LTE-003 still passes only when the command is ACKed
   with `transport.type=lte`, `lte_http.phase=command_ack`, and
   `poll_reason_code=LTE_HTTP_OK`.
+
+## Fix4 Build Evidence
+
+- Firmware version: `0.1.0-lte003-command-loop-fix4`
+- Test run ID: `lte003-command-loop-fix4-20260629-084350`
+- Source/build app commit: `c8e1f59`
+- Build directory: `firmware/mqtt_heartbeat/build_lte003_command_loop_fix4/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte003_command_loop_fix4/egolink_mqtt_heartbeat.bin`
+- Binary size: `291872` bytes.
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670LteHttpCommandLoop`.
+- Build config confirmed
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=1`,
+  `CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=1`,
+  `CONFIG_EGOLINK_FW_VERSION="0.1.0-lte003-command-loop-fix4"`, and
+  `CONFIG_EGOLINK_TEST_RUN_ID="lte003-command-loop-fix4-20260629-084350"`.
+- Focused LTE/firmware tests passed with 24 tests before and after the
+  compile-order amend.
+- `python scripts/context_lint.py` passed before and after the amend.
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
+  274 tests before the amend; the amend only added a C `static` forward
+  declaration needed by the ESP-IDF compiler.
+- `git diff --check` passed.
+- Flash result: not run. Requires explicit operator confirmation for `COM4`.
+- USB-Free runtime validation: not run.

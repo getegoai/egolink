@@ -124,6 +124,14 @@ motion candidate
     `LTE_HTTP_READ_AT_FAILED`, narrowing the blocker to the SIM7670G
     `AT+HTTPREAD` command path. Runtime evidence is under
     `reports/field_validation/lte003-command-loop-fix3-20260629-081529/`.
+    Fix4 is implemented and build-verified as
+    `0.1.0-lte003-command-loop-fix4` /
+    `lte003-command-loop-fix4-20260629-084350`; source/build app commit is
+    `c8e1f59`, and the binary is at
+    `firmware/mqtt_heartbeat/build_lte003_command_loop_fix4/egolink_mqtt_heartbeat.bin`.
+    It tries `AT+HTTPREAD=0,<data_len>` before falling back to bare
+    `AT+HTTPREAD`, and separates HTTPREAD `ERROR` from timeout diagnostics.
+    Fix4 is not flashed or USB-Free runtime validated yet.
 
 ## USB-Free VPS Walking Skeleton Line
 
