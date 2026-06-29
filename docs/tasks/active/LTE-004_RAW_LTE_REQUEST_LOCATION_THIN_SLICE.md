@@ -113,12 +113,22 @@ derived view.
 ## Hardware Plan
 
 - Firmware version target: `0.1.0-lte004-raw-lte-location`.
-- Test run ID target: `lte004-raw-lte-location-<timestamp>`.
+- Test run ID: `lte004-raw-lte-location-20260629-213717`.
 - Build dir target: `build_lte004_raw_lte_location`.
-- Flash port: explicit operator confirmation required, expected currently
-  `COM4`.
+- Flash port: `COM4`; flashed after explicit operator confirmation on
+  2026-06-30.
 - Runtime validation: independent power with USB disconnected, operator
   confirmation required.
+
+## Flash Evidence
+
+- Board probe: `reports/board_validation/20260630-075007/probe.md`.
+- Flash report:
+  `reports/field_validation/lte004-raw-lte-location-20260629-213717/flash_report.md`.
+- Source/app commit: `1b1fd3a`.
+- Result: PASS; ESP32-S3 detected, bootloader/app/partition table written,
+  hashes verified, hard reset completed.
+- Boundary: runtime validation is still pending.
 
 ## Completion Boundary
 

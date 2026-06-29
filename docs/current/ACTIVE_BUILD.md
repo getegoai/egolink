@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-29
+last_verified: 2026-06-30
 verified_by: codex
 ---
 
@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | FW-003 raw-frame command-loop firmware currently flashed on COM4; LTE-004 raw request-location build is available but not flashed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-004 raw request-location firmware currently flashed on COM4; USB-Free LTE-004 runtime validation pending |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -501,6 +501,14 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `context_lint`, full `verify.ps1` with 282 tests, `git diff --check`, and
   guarded ESP-IDF prepare/build all passed. LTE-004 has not been flashed or
   USB-Free runtime validated yet.
+- LTE-004 was flashed on `COM4` after explicit operator confirmation. Board
+  probe evidence `reports/board_validation/20260630-075007/probe.md`
+  identified `COM4` as the ESP32-S3 CH343 console and SIM7670G AT candidates
+  `COM6` / `COM7` as registered/attached. Flash evidence is at
+  `reports/field_validation/lte004-raw-lte-location-20260629-213717/flash_report.md`.
+  `esptool.py` detected ESP32-S3, wrote bootloader, app, and partition table,
+  verified hashes, and hard reset the board. This is flash evidence only;
+  USB-Free LTE-004 runtime validation is still pending.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

@@ -1,10 +1,12 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-29
+last_verified: 2026-06-30
 verified_by: codex
 ---
 
 ## Latest Deployment Note
+
+2026-06-30: LTE-004 raw LTE request-location firmware was flashed on the connectivity node through `COM4` after explicit operator confirmation. Board probe evidence `reports/board_validation/20260630-075007/probe.md` identified `COM4` as the ESP32-S3 CH343 console for the Waveshare ESP32-S3-SIM7670G-4G connectivity node, with SIM7670G AT candidates `COM6` and `COM7` registered/attached. Flash used firmware version `0.1.0-lte004-raw-lte-location`, test run `lte004-raw-lte-location-20260629-213717`, source/app commit `1b1fd3a`, and binary `firmware/mqtt_heartbeat/build_lte004_raw_lte_location/egolink_mqtt_heartbeat.bin` (`296112` bytes). `esptool.py` detected ESP32-S3, wrote bootloader, app, and partition table, verified hashes, and completed hard reset. Flash evidence is recorded at `reports/field_validation/lte004-raw-lte-location-20260629-213717/flash_report.md`. This is flash evidence only; USB-Free LTE-004 runtime validation has not been performed yet.
 
 2026-06-29: LTE-004 raw LTE request-location thin slice is implemented, VPS-deployed, and build-verified, but not flashed or USB-Free runtime validated yet. The Message Hub on `203.0.113.10` was redeployed without touching GitLab and now derives `location_report` from stored raw `EGLK/1 type=event` key/value frames. VPS smoke `lte004-vps-raw-location-smoke-20260629-133701` posted a synthetic no-fix raw `location_report` for `ego-link-r0-lte004-raw-location-smoke`; parse status was `ok`, derived `event_type=location_report`, `fix=false`, `gnss_state=no_fix`, `transport.type=lte`, and `location_request_cmd_id=cmd-smoke-000001`. Firmware version `0.1.0-lte004-raw-lte-location` with test run `lte004-raw-lte-location-20260629-213717` was guarded-build verified with `CONFIG_EGOLINK_SIM7670_GNSS_ENABLED=y`, `CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y`, and `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=y`; binary is `firmware/mqtt_heartbeat/build_lte004_raw_lte_location/egolink_mqtt_heartbeat.bin` (`296112` bytes). Focused firmware/server/validator/runner tests passed with 36 tests, `context_lint` passed, full `verify.ps1` passed with 282 tests, `git diff --check` passed, and the guarded ESP-IDF prepare/build passed. The connectivity node is still physically running FW-003 until explicit `COM4` flash confirmation.
 
