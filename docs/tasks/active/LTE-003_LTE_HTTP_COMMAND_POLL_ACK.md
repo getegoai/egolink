@@ -428,5 +428,8 @@ runtime.
   274 tests before the amend; the amend only added a C `static` forward
   declaration needed by the ESP-IDF compiler.
 - `git diff --check` passed.
-- Flash result: not run. Requires explicit operator confirmation for `COM4`.
+- Flash result: PASS on `COM4` after explicit operator confirmation.
+- Flashed repo/app version: `b4eaa44`
+- Flash evidence:
+  `reports/field_validation/lte003-command-loop-fix4-20260629-084350/flash_report.md`
 - USB-Free runtime validation: not run.

@@ -131,7 +131,10 @@ motion candidate
     `firmware/mqtt_heartbeat/build_lte003_command_loop_fix4/egolink_mqtt_heartbeat.bin`.
     It tries `AT+HTTPREAD=0,<data_len>` before falling back to bare
     `AT+HTTPREAD`, and separates HTTPREAD `ERROR` from timeout diagnostics.
-    Fix4 is not flashed or USB-Free runtime validated yet.
+    Fix4 was flashed on `COM4` after explicit operator confirmation; flashed
+    repo/app version is `b4eaa44`, and flash evidence is under
+    `reports/field_validation/lte003-command-loop-fix4-20260629-084350/flash_report.md`.
+    Fix4 is not USB-Free runtime validated yet.
 
 ## USB-Free VPS Walking Skeleton Line
 
