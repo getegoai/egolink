@@ -119,6 +119,15 @@ motion candidate
     USB disconnected: the validator reused `cmd-000013`, the command remained
     pending, no ACK was received, and the latest diagnostic still reported HTTP
     poll status `200`, body length `592`, and `LTE_HTTP_READ_FAILED`.
+- `RAW-LTE-REPEAT-001 Short USB-Free Raw LTE Repeat Validation`
+  - Path: `docs/tasks/active/RAW-LTE-REPEAT-001_SHORT_USB_FREE_RAW_LTE_REPEAT.md`
+  - Status: active, waiting on operator-confirmed independent-power cold boot
+    for each repeat attempt.
+  - Goal: repeat the FW-003 raw-frame command/ACK loop over a few short
+    USB-Free cold-boot attempts before moving into long LTE stability or
+    GNSS-over-LTE work.
+  - Boundary: no firmware flash; no long stability claim; any failure must be
+    recorded as explainable evidence.
     Runtime evidence is under
     `reports/field_validation/lte003-command-loop-fix2-20260629-074709/`.
     Fix3 is build-verified and flashed as
@@ -250,6 +259,18 @@ motion candidate
     raw frames. The firmware was flashed on `COM4` after explicit operator
     confirmation, then USB-Free runtime validation passed with `cmd-000017`
     ACKed over LTE raw frames.
+- `OBS-002 Raw Frame Dashboard Observability`
+  - Path: `docs/tasks/done/OBS-002_RAW_FRAME_DASHBOARD_OBSERVABILITY.md`
+  - Status: completed.
+  - Goal: make the Message Hub Dashboard show recent raw-frame direction/type,
+    parse status, derived message type, frame ID, and receive time without
+    exposing raw payload bytes.
+  - Evidence: focused dashboard/server tests passed with 15 tests, full
+    `verify.ps1` passed with 279 tests, VPS deployment restarted
+    `egolink-message-hub.service`, `/` includes the Raw Frames panel,
+    unauthenticated `/api/state` remains `401`, and authenticated `/api/state`
+    includes redacted raw frames with latest `cmd-000017` parsed as `ok` /
+    `ack`.
 - `SERVER-001 VPS Message Service Minimal Loop`
   - Path: `docs/tasks/done/SERVER-001_VPS_MESSAGE_SERVICE_MINIMAL_LOOP.md`
   - Status: completed as a local deployable service baseline.

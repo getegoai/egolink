@@ -1740,6 +1740,10 @@ def render_dashboard() -> str:
         <h2>Commands</h2>
         <div id="commands"></div>
       </section>
+      <section>
+        <h2>Raw Frames</h2>
+        <div id="rawFrames"></div>
+      </section>
     </div>
     <div class="stack">
       <section>
@@ -1798,9 +1802,35 @@ def render_dashboard() -> str:
       localStorage.setItem('egolinkHubToken', tokenInput.value.trim());
       refresh();
     });
-    function latestFieldState(devices) {
+    function parseResult(rawFrame) {
+      return rawFrame.parse_result || {};
+    }
+    function framing(rawFrame) {
+      return rawFrame.framing || {};
+    }
+    function rawFrameStatus(rawFrame) {
+      return parseResult(rawFrame).status || rawFrame.parse_status || 'unknown';
+    }
+    function rawFrameClass(rawFrame) {
+      const status = rawFrameStatus(rawFrame);
+      if (status === 'ok') return 'ok';
+      if (status === 'partial' || status === 'not_attempted') return 'warn';
+      return 'bad';
+    }
+    function rawFrameSummary(rawFrame) {
+      const parsed = parseResult(rawFrame);
+      const frame = framing(rawFrame);
+      return `${rawFrame.direction || 'unknown'} ${frame.frame_type || rawFrame.frame_type || 'raw'} / ${rawFrameStatus(rawFrame)} / ${parsed.derived_message_type || 'unknown'}`;
+    }
+    function latestRawFrameForDevice(rawFrames, deviceId) {
+      return (rawFrames || []).find(frame => frame.device_id === deviceId) || {};
+    }
+    function latestFieldState(devices, rawFrames) {
       if (!devices.length) return '<span class="empty">No device data yet</span>';
       const d = devices[0];
+      const latestRaw = latestRawFrameForDevice(rawFrames, d.device_id);
+      const latestRawParsed = parseResult(latestRaw);
+      const latestRawFraming = framing(latestRaw);
       const obs = d.observability || {};
       const obsTransport = obs.transport || {};
       const obsRuntime = obs.runtime || {};
@@ -1841,6 +1871,9 @@ def render_dashboard() -> str:
         <div class="metric"><span>Runtime Reset</span><span>${escapeHtml(obsRuntime.last_reset_reason || 'unknown')}</span></div>
         <div class="metric"><span>Boot</span><span>${escapeHtml(obsRuntime.boot_id || 'unknown')}</span></div>
         <div class="metric"><span>Command</span><span>${escapeHtml(obsCommand.last_cmd_id || 'none')} / ${escapeHtml(obsCommand.last_ack_status || obsCommand.last_status || 'none')}</span></div>
+        <div class="metric"><span>Raw Frame</span><span class="${rawFrameClass(latestRaw)}">${escapeHtml(rawFrameSummary(latestRaw))}</span></div>
+        <div class="metric"><span>Raw Frame ID</span><span>${escapeHtml(latestRaw.frame_id || 'none')}</span></div>
+        <div class="metric"><span>Raw Derived</span><span>${escapeHtml(latestRawParsed.derived_message_type || 'unknown')} / ${escapeHtml(latestRawFraming.content_type || 'unknown')}</span></div>
         <div class="metric"><span>Power</span><span>${escapeHtml(obsPower.battery_mv ?? 'unknown')} mV / ${escapeHtml(obsPower.soc_pct ?? status.battery ?? 'unknown')}%</span></div>
         <div class="metric"><span>Cell</span><span>${escapeHtml(obsCell.rat || 'unknown')} ${escapeHtml(obsCell.cell_id || '')} RSRP ${escapeHtml(obsCell.rsrp ?? 'unknown')}</span></div>
         <div class="metric"><span>LTE</span><span>${escapeHtml(obsLte.registration_state || obsCell.registration_state || 'unknown')} / PDP ${escapeHtml(obsLte.pdp_state || obsCell.pdp_state || 'unknown')} / SIM ${escapeHtml(obsLte.sim_state || obsCell.sim_state || 'unknown')}</span></div>
@@ -1873,10 +1906,21 @@ def render_dashboard() -> str:
         <div class="metric"><span>Last Type</span><span>${escapeHtml(d.last_message_type)}</span></div>
         <div class="metric"><span>Seq</span><span>${escapeHtml(d.last_seq)}</span></div>
       `).join('') || '<span>No devices yet</span>';
-      fieldState.innerHTML = latestFieldState(data.devices);
+      fieldState.innerHTML = latestFieldState(data.devices, data.raw_frames || []);
       commands.innerHTML = data.commands.map(c => `
         <div class="metric"><span>${escapeHtml(c.cmd_id)}</span><span class="${c.status === 'ok' ? 'ok' : c.status === 'pending' ? 'warn' : 'bad'}">${escapeHtml(c.cmd)} / ${escapeHtml(c.status)}</span></div>
       `).join('') || '<span class="empty">No commands yet</span>';
+      rawFrames.innerHTML = (data.raw_frames || []).map(frame => {
+        const parsed = parseResult(frame);
+        const frameMeta = framing(frame);
+        const reason = parsed.reason || parsed.error_code || 'none';
+        return `
+          <div class="metric"><span>${escapeHtml(frame.frame_id || 'raw')}</span><span class="${rawFrameClass(frame)}">${escapeHtml(rawFrameSummary(frame))}</span></div>
+          <div class="metric"><span>Received</span><span>${escapeHtml(frame.server_received_at || 'unknown')}</span></div>
+          <div class="metric"><span>Payload</span><span>${escapeHtml(frameMeta.payload_len ?? 'unknown')} bytes / ${escapeHtml(frameMeta.payload_crc32 || 'unknown')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(reason)}</span></div>
+        `;
+      }).join('') || '<span class="empty">No raw frames yet</span>';
       messages.innerHTML = data.messages.map(m => `
         <tr>
           <td>${escapeHtml(m.device_id)}</td>

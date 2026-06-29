@@ -13,6 +13,12 @@ class MessageHubDashboardTests(unittest.TestCase):
 
         self.assertIn("Latest Field State", html)
         self.assertIn("Commands", html)
+        self.assertIn("Raw Frames", html)
+        self.assertIn("rawFrames", html)
+        self.assertIn("raw_frames", html)
+        self.assertIn("rawFrameStatus", html)
+        self.assertIn("Raw Frame ID", html)
+        self.assertIn("Raw Derived", html)
         self.assertIn("onlineLabel", html)
         self.assertIn("GNSS State", html)
         self.assertIn("gnssField", html)
@@ -53,6 +59,19 @@ class MessageHubDashboardTests(unittest.TestCase):
 
         self.assertEqual(commands[0]["cmd"], "set_report_interval")
         self.assertEqual(commands[0]["status"], "pending")
+
+    def test_state_api_raw_frames_are_redacted_and_explainable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            raw = message_hub.build_raw_frame("event", "raw-dashboard-test", b"event_type=dashboard_smoke\n")
+            record = store.ingest_raw_frame("ego-link-001", raw)
+            raw_frames = store.recent_raw_frames()
+
+        self.assertEqual(record["parse_result"]["status"], "ok")
+        self.assertEqual(raw_frames[0]["parse_result"]["status"], "ok")
+        self.assertEqual(raw_frames[0]["parse_result"]["derived_message_type"], "event")
+        self.assertTrue(raw_frames[0]["raw_payload"]["data_redacted"])
+        self.assertNotIn("data", raw_frames[0]["raw_payload"])
 
 
 if __name__ == "__main__":
