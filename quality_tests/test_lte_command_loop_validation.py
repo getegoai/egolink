@@ -65,6 +65,55 @@ class LteCommandLoopValidationTests(unittest.TestCase):
             self.assertTrue((Path(tmp) / "report" / "commands.json").is_file())
             self.assertTrue((Path(tmp) / "report" / "test_run_export.json").is_file())
 
+    def test_validation_accepts_explicit_firmware_ack_test_run_id_for_repeat(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            hub_url = f"http://127.0.0.1:{server.server_port}"
+            device_thread = threading.Thread(
+                target=self._poll_and_ack_once,
+                args=(hub_url,),
+                kwargs={
+                    "device_id": "ego-link-r1-test",
+                    "fw_version": "0.1.0-fw003-raw-command-loop",
+                    "test_run_id": "fw003-build-unit",
+                    "transport_type": "lte",
+                    "poll_reason_code": "LTE_HTTP_OK",
+                    "poll_status_code": 200,
+                },
+                daemon=True,
+            )
+            try:
+                device_thread.start()
+                report = validate_lte_command_loop.validate_lte_command_loop(
+                    hub_url=hub_url,
+                    device_id="ego-link-r1-test",
+                    token=None,
+                    output_dir=Path(tmp) / "report",
+                    test_run_id="raw-lte-repeat-unit",
+                    board_id="connectivity-node-001",
+                    connection_path="independent_power_usb_disconnected",
+                    timeout_sec=1.0,
+                    poll_interval_sec=0.05,
+                    expected_fw_version="0.1.0-fw003-raw-command-loop",
+                    expected_ack_test_run_id="fw003-build-unit",
+                    command_name="set_report_interval",
+                    interval_ms=10000,
+                )
+            finally:
+                device_thread.join(timeout=2)
+                server.shutdown()
+                server_thread.join(timeout=5)
+                server.server_close()
+
+            self.assertEqual(report["result"], "PASS")
+            self.assertEqual(report["test_run_id"], "raw-lte-repeat-unit")
+            self.assertEqual(report["expected_ack_test_run_id"], "fw003-build-unit")
+            self.assertEqual(report["effective_expected_ack_test_run_id"], "fw003-build-unit")
+            self.assertEqual(report["ack_summary"]["ack_test_run_id"], "fw003-build-unit")
+
     def test_validation_rejects_non_lte_ack(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")

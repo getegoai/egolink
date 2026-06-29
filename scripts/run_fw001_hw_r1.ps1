@@ -11,6 +11,8 @@ param(
     [string]$BuildDir = "build_fw001_hw",
     [string]$IdfExport = "C:\Espressif\v5.4.2\esp-idf\export.ps1",
     [string]$FlashPort = "",
+    [string]$ExistingCommandId = "",
+    [string]$ExpectedAckTestRunId = "",
     [int]$ValidationTimeoutSec = 180,
     [int]$ValidationPollIntervalSec = 5,
     [switch]$EnableSim7670Gnss,
@@ -85,6 +87,8 @@ $result = [ordered]@{
     firmware_dir = $firmwarePath
     build_dir = $buildPath
     binary_path = $binaryPath
+    existing_command_id = $ExistingCommandId
+    expected_ack_test_run_id = $ExpectedAckTestRunId
     prepare_build_ran = $false
     flash_ran = $false
     validate_ran = $false
@@ -192,6 +196,12 @@ if ($Validate) {
                 "--poll-interval-sec", [string]$ValidationPollIntervalSec,
                 "--json"
             )
+            if ($ExistingCommandId) {
+                $validationArgs += @("--existing-command-id", $ExistingCommandId)
+            }
+            if ($ExpectedAckTestRunId) {
+                $validationArgs += @("--expected-ack-test-run-id", $ExpectedAckTestRunId)
+            }
         } elseif ($EnableSim7670LteHttpProbe) {
             $validationArgs = @(
                 $lteHttpValidationScript,

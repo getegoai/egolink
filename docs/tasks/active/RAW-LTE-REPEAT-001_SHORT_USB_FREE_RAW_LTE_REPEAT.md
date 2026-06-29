@@ -60,6 +60,24 @@ one-shot firmware command task has already exited.
 - [ ] No USB serial runtime data path is used.
 - [ ] No firmware flash is performed.
 
+## Attempt Log
+
+- Attempt 1 (`raw-lte-repeat-001-a1-20260629-190720`) ran after the operator
+  cold-booted the connectivity node on independent power with USB disconnected.
+  The first validator invocation created `cmd-000018` and observed a healthy
+  raw LTE ACK, but returned FAIL because it compared the repeat attempt
+  `test_run_id` with the firmware build-time ACK `test_run_id`. That
+  false-negative is recorded in
+  `reports/field_validation/raw-lte-repeat-001-a1-20260629-190720/validation_reconciliation.md`.
+  After updating the validator to accept an explicit expected ACK
+  `test_run_id`, the same existing command was rechecked without queueing a
+  new command and passed. Evidence:
+  `reports/field_validation/raw-lte-repeat-001-a1-20260629-190720/lte_command_loop_report.md`.
+  The ACK showed `transport.type=lte`, `lte_http.phase=command_ack`,
+  `poll_reason_code=LTE_HTTP_OK`, `poll_status_code=200`,
+  `command.parse_status=raw_command_selected`, command status `ok`, and ACK
+  status `ok`.
+
 ## Completion Boundary
 
 This is still a short repeat gate. Passing it does not prove long LTE

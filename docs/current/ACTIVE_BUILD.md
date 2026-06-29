@@ -464,6 +464,16 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `450 ms`, `command.parse_status=raw_command_selected`, and command status
   `ok`. Runtime evidence is under
   `reports/field_validation/fw003-raw-command-loop-20260629-175608/`.
+- RAW-LTE-REPEAT-001 attempt 1 then passed as a short USB-Free repeat after an
+  operator-confirmed independent-power cold boot with USB disconnected. The
+  first validator invocation created `cmd-000018` and saw a healthy raw LTE
+  ACK, then returned a false-negative due to ACK `test_run_id` comparison
+  semantics. Reconciliation reused existing `cmd-000018` without queueing a new
+  command and passed with `transport.type=lte`,
+  `lte_http.phase=command_ack`, `LTE_HTTP_OK` / HTTP `200`,
+  `command.parse_status=raw_command_selected`, and command/ACK status `ok`.
+  Evidence is under
+  `reports/field_validation/raw-lte-repeat-001-a1-20260629-190720/`.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

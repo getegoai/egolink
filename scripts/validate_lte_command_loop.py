@@ -66,17 +66,20 @@ def ack_summary_errors(
     *,
     expected_fw_version: str | None,
     expected_test_run_id: str,
+    expected_ack_test_run_id: str | None = None,
 ) -> list[str]:
     errors: list[str] = []
+    effective_ack_test_run_id = expected_ack_test_run_id or expected_test_run_id
     if summary.get("command_status") != "ok":
         errors.append(f"command status did not become ok; got {summary.get('command_status')}")
     if summary.get("ack_status") != "ok":
         errors.append(f"ACK status did not become ok; got {summary.get('ack_status')}")
     if expected_fw_version and summary.get("ack_fw_version") != expected_fw_version:
         errors.append(f"ACK fw_version={summary.get('ack_fw_version')} did not match expected {expected_fw_version}")
-    if summary.get("ack_test_run_id") != expected_test_run_id:
+    if summary.get("ack_test_run_id") != effective_ack_test_run_id:
         errors.append(
-            f"ACK test_run_id={summary.get('ack_test_run_id')} did not match expected {expected_test_run_id}"
+            "ACK test_run_id="
+            f"{summary.get('ack_test_run_id')} did not match expected ACK test_run_id {effective_ack_test_run_id}"
         )
     if summary.get("transport_type") != "lte":
         errors.append(f"ACK transport.type={summary.get('transport_type')} did not become lte")
@@ -111,6 +114,7 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- Completed at: {report['completed_at']}",
         f"- Hub: {report['hub_url']}",
         f"- Firmware: {summary.get('ack_fw_version', 'unknown')}",
+        f"- Expected ACK test run ID: {report.get('effective_expected_ack_test_run_id', 'unknown')}",
         f"- Command: {command.get('cmd', 'not sent')}",
         f"- Command ID: {command.get('cmd_id', 'not sent')}",
         f"- Command status: {summary.get('command_status', 'unknown')}",
@@ -182,6 +186,7 @@ def validate_lte_command_loop(
     command_name: str,
     interval_ms: int,
     existing_command_id: str | None = None,
+    expected_ack_test_run_id: str | None = None,
 ) -> dict[str, Any]:
     client = HubClient(hub_url, token=token)
     started_at_text = utc_now()
@@ -242,6 +247,7 @@ def validate_lte_command_loop(
                 summary,
                 expected_fw_version=expected_fw_version,
                 expected_test_run_id=test_run_id,
+                expected_ack_test_run_id=expected_ack_test_run_id,
             )
             if not errors:
                 break
@@ -253,6 +259,7 @@ def validate_lte_command_loop(
                 summary,
                 expected_fw_version=expected_fw_version,
                 expected_test_run_id=test_run_id,
+                expected_ack_test_run_id=expected_ack_test_run_id,
             )]
             break
         time.sleep(poll_interval_sec)
@@ -276,6 +283,8 @@ def validate_lte_command_loop(
         "started_at": started_at_text,
         "completed_at": completed_at_text,
         "expected_fw_version": expected_fw_version,
+        "expected_ack_test_run_id": expected_ack_test_run_id,
+        "effective_expected_ack_test_run_id": expected_ack_test_run_id or test_run_id,
         "existing_command_id": existing_command_id,
         "health": health,
         "test_run": test_run,
@@ -310,6 +319,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--timeout-sec", type=float, default=240.0)
     parser.add_argument("--poll-interval-sec", type=float, default=5.0)
     parser.add_argument("--expected-fw-version", default="0.1.0-lte003-command-loop")
+    parser.add_argument(
+        "--expected-ack-test-run-id",
+        help=(
+            "Expected test_run_id inside the firmware ACK. Defaults to --test-run-id. "
+            "Use this for repeat validations against an already-flashed image whose "
+            "CONFIG_EGOLINK_TEST_RUN_ID is fixed at build time."
+        ),
+    )
     parser.add_argument("--command", default="set_report_interval")
     parser.add_argument("--interval-ms", type=int, default=10000)
     parser.add_argument(
@@ -335,6 +352,7 @@ def main(argv: list[str] | None = None) -> int:
             timeout_sec=args.timeout_sec,
             poll_interval_sec=args.poll_interval_sec,
             expected_fw_version=args.expected_fw_version,
+            expected_ack_test_run_id=args.expected_ack_test_run_id,
             command_name=args.command,
             interval_ms=args.interval_ms,
             existing_command_id=args.existing_command_id,
