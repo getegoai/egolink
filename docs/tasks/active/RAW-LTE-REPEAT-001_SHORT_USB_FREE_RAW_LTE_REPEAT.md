@@ -1,7 +1,7 @@
 ---
 id: RAW-LTE-REPEAT-001
 title: Short USB-Free Raw LTE Repeat Validation
-status: active
+status: completed
 priority: high
 requires_hardware: true
 created: 2026-06-29
@@ -51,14 +51,14 @@ one-shot firmware command task has already exited.
 
 ## Acceptance
 
-- [ ] Run at least two additional short USB-Free raw command/ACK attempts after
+- [x] Run at least two additional short USB-Free raw command/ACK attempts after
       separate independent-power cold boots.
-- [ ] Each PASS shows `transport.type=lte`,
+- [x] Each PASS shows `transport.type=lte`,
       `lte_http.phase=command_ack`, `poll_reason_code=LTE_HTTP_OK`,
       raw command parse status, command status, and evidence paths.
-- [ ] Any FAIL is recorded as explainable evidence, not hidden or overwritten.
-- [ ] No USB serial runtime data path is used.
-- [ ] No firmware flash is performed.
+- [x] Any FAIL is recorded as explainable evidence, not hidden or overwritten.
+- [x] No USB serial runtime data path is used.
+- [x] No firmware flash is performed.
 
 ## Attempt Log
 
@@ -77,6 +77,22 @@ one-shot firmware command task has already exited.
   `poll_reason_code=LTE_HTTP_OK`, `poll_status_code=200`,
   `command.parse_status=raw_command_selected`, command status `ok`, and ACK
   status `ok`.
+- Attempt 2 (`raw-lte-repeat-001-a2-20260629-210939`) ran after a separate
+  operator-confirmed independent-power cold boot with USB disconnected. The
+  validator created `cmd-000019` and passed without reconciliation. Evidence:
+  `reports/field_validation/raw-lte-repeat-001-a2-20260629-210939/lte_command_loop_report.md`.
+  The ACK showed `fw_version=0.1.0-fw003-raw-command-loop`,
+  `transport.type=lte`, `lte_http.phase=command_ack`,
+  `poll_reason_code=LTE_HTTP_OK`, `poll_status_code=200`,
+  `poll_action_elapsed_ms=680`, `command.parse_status=raw_command_selected`,
+  `command.command_count=1`, command status `ok`, and ACK status `ok`.
+
+## Completion Result
+
+RAW-LTE-REPEAT-001 is satisfied with two short USB-Free raw LTE repeats after
+separate independent-power cold boots. The next project step should remain a
+bounded Walking Skeleton increment; this result is not permission to skip into
+unbounded long-run stability testing.
 
 ## Completion Boundary
 

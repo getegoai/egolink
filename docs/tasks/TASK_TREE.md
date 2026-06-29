@@ -121,9 +121,8 @@ motion candidate
     poll status `200`, body length `592`, and `LTE_HTTP_READ_FAILED`.
 - `RAW-LTE-REPEAT-001 Short USB-Free Raw LTE Repeat Validation`
   - Path: `docs/tasks/active/RAW-LTE-REPEAT-001_SHORT_USB_FREE_RAW_LTE_REPEAT.md`
-  - Status: active; attempt 1 passed after an operator-confirmed
-    independent-power cold boot, and at least one more short repeat attempt is
-    still required.
+  - Status: completed as a short repeat gate; the task packet remains at the
+    active path until a later task-packet archival cleanup moves it.
   - Goal: repeat the FW-003 raw-frame command/ACK loop over a few short
     USB-Free cold-boot attempts before moving into long LTE stability or
     GNSS-over-LTE work.
@@ -139,6 +138,13 @@ motion candidate
     Reconciliation reused existing `cmd-000018` without queueing a new command
     and wrote the PASS report under
     `reports/field_validation/raw-lte-repeat-001-a1-20260629-190720/`.
+    Attempt 2 `raw-lte-repeat-001-a2-20260629-210939` ran after a separate
+    operator-confirmed independent-power cold boot, created `cmd-000019`, and
+    passed with `transport.type=lte`, `lte_http.phase=command_ack`,
+    `LTE_HTTP_OK` / HTTP `200`, `poll_action_elapsed_ms=680`,
+    `command.parse_status=raw_command_selected`, command status `ok`, and ACK
+    status `ok`; evidence is under
+    `reports/field_validation/raw-lte-repeat-001-a2-20260629-210939/`.
   - Boundary: no firmware flash; no long stability claim; any failure must be
     recorded as explainable evidence.
     Runtime evidence is under
