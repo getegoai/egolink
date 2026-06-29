@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix4 command-loop firmware currently flashed on COM4; fix5 is build-verified and pending explicit COM4 flash; USB-Free fix4 runtime validation failed at HTTPREAD body extraction |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix5 command-loop firmware currently flashed on COM4; USB-Free fix5 runtime validation pending; USB-Free fix4 runtime validation failed at HTTPREAD body extraction |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -366,8 +366,13 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `firmware/mqtt_heartbeat/build_lte003_command_loop_fix5/egolink_mqtt_heartbeat.bin`,
   and its size is `291872` bytes. Focused LTE/firmware tests,
   `context_lint`, `verify.ps1`, `git diff --check`, and the guarded
-  prepare/build passed. Fix5 has not been flashed or USB-Free runtime
-  validated yet.
+  prepare/build passed. The image was flashed on `COM4` after explicit
+  operator confirmation; ESP32-S3 was detected, bootloader/app/partition table
+  were written, hashes verified, and hard reset completed. The flashed
+  repo/app version is `efc9848` because the guarded flash re-ran CMake at the
+  documentation commit. Flash evidence is under
+  `reports/field_validation/lte003-command-loop-fix5-20260629-154839/flash_report.md`.
+  USB-Free runtime validation has not been run yet.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

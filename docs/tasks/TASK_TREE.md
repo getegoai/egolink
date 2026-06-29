@@ -145,8 +145,11 @@ motion candidate
     `729c78b`, and the binary is at
     `firmware/mqtt_heartbeat/build_lte003_command_loop_fix5/egolink_mqtt_heartbeat.bin`.
     It falls back to bare `AT+HTTPREAD` when positional HTTPREAD returns `OK`
-    without an extractable JSON body. Fix5 is not flashed or USB-Free runtime
-    validated yet.
+    without an extractable JSON body. Fix5 was flashed on `COM4` after
+    explicit operator confirmation; flashed repo/app version is `efc9848`, and
+    flash evidence is under
+    `reports/field_validation/lte003-command-loop-fix5-20260629-154839/flash_report.md`.
+    Fix5 is not USB-Free runtime validated yet.
 
 ## USB-Free VPS Walking Skeleton Line
 

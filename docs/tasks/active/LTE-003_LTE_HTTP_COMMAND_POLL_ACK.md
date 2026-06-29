@@ -354,7 +354,10 @@ runtime.
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
   274 tests.
 - `git diff --check` passed.
-- Flash result: not run. Requires explicit operator confirmation for `COM4`.
+- Flash result: PASS on `COM4` after explicit operator confirmation.
+- Flashed repo/app version: `efc9848`
+- Flash evidence:
+  `reports/field_validation/lte003-command-loop-fix5-20260629-154839/flash_report.md`
 - USB-Free runtime validation: not run.
 
 ## Fix3 Build Evidence
