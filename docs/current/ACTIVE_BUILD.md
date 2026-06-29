@@ -343,11 +343,18 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   repo/app version is `b4eaa44` because the guarded flash re-ran CMake at the
   documentation commit. Flash evidence is under
   `reports/field_validation/lte003-command-loop-fix4-20260629-084350/flash_report.md`.
-  USB-Free runtime validation has not been run yet.
+  USB-Free runtime validation failed from `2026-06-29T07:38:00Z` to
+  `2026-06-29T07:44:00Z` after the operator connected independent power and
+  disconnected USB. The validator reused `cmd-000013`; the command remained
+  pending and no ACK was received. The test-run export contained 37 LTE
+  diagnostic messages, with the latest reporting LTE ready, HTTP poll status
+  `200`, `poll_data_len=592`, and
+  `lte_http.poll_reason_code=LTE_HTTP_READ_BODY_PARSE_FAILED`. Evidence is
+  under `reports/field_validation/lte003-command-loop-fix4-20260629-084350/`.
 - LTE command polling/ACK, reconnect behavior, long-run LTE stability, product
   battery/charging accuracy, product power behavior, and final
   enclosure/mounting GNSS acceptance remain unverified. LTE-003 currently has
-  fix4 build/flash evidence and failed runtime attempts through fix3; it does
+  fix4 build/flash evidence and failed runtime attempts through fix4; it does
   not prove LTE command polling/ACK until the USB-Free Message Hub validator
   passes.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.

@@ -134,7 +134,11 @@ motion candidate
     Fix4 was flashed on `COM4` after explicit operator confirmation; flashed
     repo/app version is `b4eaa44`, and flash evidence is under
     `reports/field_validation/lte003-command-loop-fix4-20260629-084350/flash_report.md`.
-    Fix4 is not USB-Free runtime validated yet.
+    USB-Free runtime validation failed with `cmd-000013` still pending and no
+    ACK. The fix4 test-run export contained 37 diagnostic messages, with the
+    latest showing LTE ready, HTTP poll status `200`, body length `592`, and
+    `LTE_HTTP_READ_BODY_PARSE_FAILED`. Runtime evidence is under
+    `reports/field_validation/lte003-command-loop-fix4-20260629-084350/`.
 
 ## USB-Free VPS Walking Skeleton Line
 
