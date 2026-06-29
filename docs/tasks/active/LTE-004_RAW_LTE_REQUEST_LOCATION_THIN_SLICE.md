@@ -1,11 +1,11 @@
 ---
 id: LTE-004
 title: Raw LTE Request Location Thin Slice
-status: active
+status: completed
 priority: high
 requires_hardware: true
 created: 2026-06-29
-last_updated: 2026-06-29
+last_updated: 2026-06-30
 
 context:
   - docs/CONTEXT_INDEX.md
@@ -87,6 +87,8 @@ derived view.
 - [x] `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passes if
       behavior changes.
 - [x] ESP-IDF guarded prepare/build passes before any flash request.
+- [x] USB-Free runtime validation passes for raw LTE
+      `request_location -> location_report -> ACK`.
 
 ## Build And Deploy Evidence
 
@@ -118,7 +120,7 @@ derived view.
 - Flash port: `COM4`; flashed after explicit operator confirmation on
   2026-06-30.
 - Runtime validation: independent power with USB disconnected, operator
-  confirmation required.
+  confirmed and completed on 2026-06-30.
 
 ## Flash Evidence
 
@@ -128,7 +130,31 @@ derived view.
 - Source/app commit: `1b1fd3a`.
 - Result: PASS; ESP32-S3 detected, bootloader/app/partition table written,
   hashes verified, hard reset completed.
-- Boundary: runtime validation is still pending.
+- Boundary: flash evidence only; runtime evidence is recorded below.
+
+## Runtime Evidence
+
+- Validator:
+  `scripts/run_fw001_hw_r1.ps1` with `-Validate`,
+  `-LteCommandName request_location`, and `-RequireLteLocationReport`.
+- Result: PASS.
+- Command: `cmd-000020` / `request_location`.
+- Location report: `seq=30`, raw frame `loc-cmd-000020`,
+  `transport.type=lte`, `lte_http.phase=location_report`,
+  `source=sim7670g_firmware_gnss`, `source_status=unverified`,
+  `gnss_query_ok=true`, `gnss_state=no_fix`, `fix=false`, and
+  `location_request_cmd_id=cmd-000020`.
+- ACK: `seq=31`, `transport.type=lte`, `lte_http.phase=command_ack`,
+  `LTE_HTTP_OK` / HTTP `200`, `poll_action_elapsed_ms=560`,
+  `command.parse_status=raw_command_selected`, command status `ok`, and ACK
+  status `ok`.
+- Evidence:
+  `reports/field_validation/lte004-raw-lte-location-20260629-213717/lte_command_loop_report.json`,
+  `reports/field_validation/lte004-raw-lte-location-20260629-213717/lte_command_loop_report.md`,
+  `reports/field_validation/lte004-raw-lte-location-20260629-213717/device_state.json`,
+  `reports/field_validation/lte004-raw-lte-location-20260629-213717/commands.json`,
+  and
+  `reports/field_validation/lte004-raw-lte-location-20260629-213717/test_run_export.json`.
 
 ## Completion Boundary
 
