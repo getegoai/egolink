@@ -458,6 +458,70 @@ static bool copy_httpread_json_body(const char *response, char *body, size_t bod
 
 static void update_lte_http_raw(sim7670_lte_http_probe_result_t *result, const char *command, const char *response);
 
+static bool sim7670_send_httpread_json_labeled(
+    const char *command,
+    const char *log_label,
+    uint32_t timeout_ms,
+    char *response,
+    size_t response_size,
+    char *response_body,
+    size_t response_body_size)
+{
+    if (command == NULL || response == NULL || response_size == 0) {
+        return false;
+    }
+    response[0] = '\0';
+    if (response_body != NULL && response_body_size > 0) {
+        response_body[0] = '\0';
+    }
+    if (sim7670_gnss_init() != ESP_OK) {
+        return false;
+    }
+
+    uart_port_t uart_num = configured_uart_num();
+    if (xSemaphoreTake(s_uart_mutex, pdMS_TO_TICKS(timeout_ms + 500)) != pdTRUE) {
+        return false;
+    }
+    uart_flush_input(uart_num);
+    uart_write_bytes(uart_num, command, strlen(command));
+    uart_write_bytes(uart_num, "\r\n", 2);
+
+    uint8_t chunk[AT_READ_CHUNK_SIZE];
+    size_t length = 0;
+    bool body_ok = false;
+    bool saw_error = false;
+    bool saw_httpread = false;
+    bool saw_ok = false;
+    TickType_t last_read_tick = xTaskGetTickCount();
+    int64_t deadline = (int64_t)xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+    while ((int64_t)xTaskGetTickCount() < deadline) {
+        int read = uart_read_bytes(uart_num, chunk, sizeof(chunk), pdMS_TO_TICKS(100));
+        if (read > 0) {
+            append_at_response(response, response_size, &length, chunk, (size_t)read);
+            last_read_tick = xTaskGetTickCount();
+            saw_error = contains_token(response, "ERROR");
+            saw_httpread = contains_token(response, "+HTTPREAD");
+            saw_ok = contains_token(response, "OK");
+            body_ok = copy_httpread_json_body(response, response_body, response_body_size);
+            if (saw_error || body_ok) {
+                break;
+            }
+        } else if ((saw_httpread || saw_ok) &&
+                   (xTaskGetTickCount() - last_read_tick) >= pdMS_TO_TICKS(1200)) {
+            break;
+        }
+    }
+    xSemaphoreGive(s_uart_mutex);
+    ESP_LOGI(
+        TAG,
+        "SIM7670_AT_HTTPREAD command=%s body_ok=%s saw_httpread=%s saw_ok=%s",
+        log_label ? log_label : command,
+        body_ok ? "true" : "false",
+        saw_httpread ? "true" : "false",
+        saw_ok ? "true" : "false");
+    return !saw_error && (body_ok || saw_httpread || saw_ok);
+}
+
 static bool sim7670_lte_http_read_json_body(
     int data_len,
     char *response,
@@ -477,17 +541,17 @@ static bool sim7670_lte_http_read_json_body(
     char command[48];
     int written = snprintf(command, sizeof(command), "AT+HTTPREAD=0,%d", data_len);
     if (written > 0 && (size_t)written < sizeof(command)) {
-        if (sim7670_send_at_labeled(
+        if (sim7670_send_httpread_json_labeled(
                 command,
                 "AT+HTTPREAD=0,<len>",
-                "OK",
                 CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
                 response,
-                response_size)) {
+                response_size,
+                response_body,
+                response_body_size)) {
             result->http_read_ok = true;
             update_lte_http_raw(result, "AT+HTTPREAD=0,<len>", response);
-            bool positioned_body_ok = copy_httpread_json_body(response, response_body, response_body_size);
-            if (positioned_body_ok) {
+            if (response_body != NULL && response_body[0] != '\0') {
                 return true;
             }
         }
@@ -497,15 +561,17 @@ static bool sim7670_lte_http_read_json_body(
         }
     }
 
-    if (sim7670_send_at(
+    if (sim7670_send_httpread_json_labeled(
             "AT+HTTPREAD",
-            "OK",
+            "AT+HTTPREAD",
             CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
             response,
-            response_size)) {
+            response_size,
+            response_body,
+            response_body_size)) {
         result->http_read_ok = true;
         update_lte_http_raw(result, "AT+HTTPREAD", response);
-        return copy_httpread_json_body(response, response_body, response_body_size);
+        return response_body != NULL && response_body[0] != '\0';
     }
     update_lte_http_raw(result, "AT+HTTPREAD", response);
     if (saw_error != NULL && contains_token(response, "ERROR")) {
