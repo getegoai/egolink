@@ -223,6 +223,21 @@ motion candidate
     `shared/contracts/message_hub_ack.schema.json`,
     `shared/contracts/message_hub_error.schema.json`, and
     `quality_tests/test_message_hub_contracts.py`.
+- `FW-003 Raw Frame LTE Command Loop`
+  - Path: `docs/tasks/active/FW-003_RAW_FRAME_LTE_COMMAND_LOOP.md`
+  - Status: active.
+  - Goal: move the LTE command-loop firmware path to PROTO-002 raw-frame
+    poll/ACK over SIM7670G AT HTTP while keeping JSON views as derived
+    server/Web compatibility state.
+  - Current scope: build-verified firmware slice only; flashing and USB-Free
+    runtime validation still require explicit operator confirmation.
+  - Evidence: focused firmware/server tests passed with 24 tests,
+    `context_lint` passed, full `verify.ps1` passed with 278 tests,
+    `git diff --check` passed, guarded ESP-IDF prepare/build passed for
+    `0.1.0-fw003-raw-command-loop` /
+    `fw003-raw-command-loop-20260629-175608`, and VPS smoke
+    `fw003-raw-derived-smoke-20260629-175946` derived LTE ACK evidence from
+    raw frames.
 - `SERVER-001 VPS Message Service Minimal Loop`
   - Path: `docs/tasks/done/SERVER-001_VPS_MESSAGE_SERVICE_MINIMAL_LOOP.md`
   - Status: completed as a local deployable service baseline.

@@ -122,7 +122,19 @@ bool sim7670_lte_http_post_json(
     const char *bearer_token,
     const char *payload,
     sim7670_lte_http_probe_result_t *result);
+bool sim7670_lte_http_post_raw(
+    const char *url,
+    const char *bearer_token,
+    const char *payload,
+    const char *content_type,
+    sim7670_lte_http_probe_result_t *result);
 bool sim7670_lte_http_get_json(
+    const char *url,
+    const char *bearer_token,
+    char *response_body,
+    size_t response_body_size,
+    sim7670_lte_http_probe_result_t *result);
+bool sim7670_lte_http_get_raw(
     const char *url,
     const char *bearer_token,
     char *response_body,

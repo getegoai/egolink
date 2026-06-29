@@ -220,18 +220,21 @@ CONFIG_EGOLINK_TEST_RUN_ID="<lte003-test-run-id>"
 
 When enabled, firmware skips Wi-Fi as the runtime data path, waits for
 SIM7670G LTE readiness, polls
-`/api/v1/devices/<device_id>/commands/poll` through SIM7670G AT HTTP GET, and
-ACKs one harmless `set_report_interval` command through SIM7670G AT HTTP POST.
-The ACK includes additive `transport.type=lte`, `lte_http.phase=command_ack`,
-and poll HTTP status/reason fields so the VPS-side validator can prove the ACK
-did not use the earlier Wi-Fi Message Hub path.
+`/api/v1/devices/<device_id>/commands/poll.raw` through SIM7670G AT HTTP GET,
+verifies the `EGLK/1` raw-frame length and CRC32, parses compact key/value
+payloads, and ACKs one harmless `set_report_interval` command through
+`/api/v1/devices/<device_id>/commands/<cmd_id>/ack.raw`. The raw ACK carries
+additive `transport_type=lte`, `lte_http_phase=command_ack`, poll HTTP
+status/reason fields, firmware version, and test-run ID so the Message Hub can
+derive the existing JSON ACK view without making device runtime depend on JSON
+parsing.
 
 After the first USB-Free LTE-003 attempts produced no Message Hub traffic, the
 command-loop image also emits compact `lte_http_command_diag` telemetry over
 the same SIM7670G LTE HTTP POST path. These diagnostic events are intentionally
 not acceptance evidence for command ACK; they expose whether the image reached
-LTE readiness, attempted `/commands/poll`, and what poll HTTP reason/status was
-observed before a missing ACK.
+LTE readiness, attempted `/commands/poll.raw`, and what poll HTTP
+reason/status was observed before a missing ACK.
 
 Host-side validation for this slice is:
 

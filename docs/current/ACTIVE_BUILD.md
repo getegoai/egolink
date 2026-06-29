@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix7 command-loop firmware currently flashed on COM4; USB-Free fix7 runtime validation failed with `json_parse_failed`; fix8 is build-verified and pending explicit COM4 flash |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix7 command-loop firmware currently flashed on COM4; USB-Free fix7 runtime validation failed with `json_parse_failed`; FW-003 raw-frame command-loop firmware is build-verified and pending explicit COM4 flash |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -437,6 +437,22 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   and its size is `293216` bytes. Focused LTE/firmware tests,
   `context_lint`, `verify.ps1`, `git diff --check`, and the guarded
   prepare/build passed. Fix8 has not been flashed or USB-Free runtime
+  validated yet.
+- FW-003 raw-frame LTE command-loop firmware has been implemented and
+  build-verified as `0.1.0-fw003-raw-command-loop` /
+  `fw003-raw-command-loop-20260629-175608`. It keeps
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED`, skips Wi-Fi for that
+  image, polls `GET /commands/poll.raw`, verifies the `EGLK/1` raw-frame
+  length and CRC32, parses compact key/value commands, and posts raw ACK frames
+  to `POST /commands/{cmd_id}/ack.raw`. The binary is
+  `firmware/mqtt_heartbeat/build_fw003_raw_command_loop/egolink_mqtt_heartbeat.bin`,
+  and its size is `286176` bytes. Focused firmware/server tests passed with
+  24 tests, `context_lint` passed, full `verify.ps1` passed with 278 tests,
+  `git diff --check` passed, and the guarded ESP-IDF prepare/build passed. The
+  VPS Message Hub was redeployed after adding raw ACK derived LTE evidence; the
+  public smoke `fw003-raw-derived-smoke-20260629-175946` ACKed `cmd-000016`
+  through raw frames and derived `transport.type=lte` plus
+  `lte_http.phase=command_ack`. FW-003 has not been flashed or USB-Free runtime
   validated yet.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.

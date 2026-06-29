@@ -481,7 +481,21 @@ class MessageHubHttpTests(unittest.TestCase):
                     {"cmd": "set_report_interval", "payload": {"interval_ms": 5000}},
                 )["command"]
                 raw_command, content_type = get_bytes(base_url, "/api/v1/devices/ego-link-001/commands/poll.raw")
-                ack_payload = f"cmd_id={command['cmd_id']}\nstatus=ok\n".encode("utf-8")
+                ack_payload = (
+                    f"cmd_id={command['cmd_id']}\n"
+                    "status=ok\n"
+                    "message=lte raw command loop acknowledged set_report_interval\n"
+                    "fw_version=0.1.0-fw003-raw-command-loop\n"
+                    "test_run_id=raw-frame-test\n"
+                    "transport_type=lte\n"
+                    "lte_http_phase=command_ack\n"
+                    "lte_http_poll_reason_code=LTE_HTTP_OK\n"
+                    "lte_http_poll_status_code=200\n"
+                    "lte_http_poll_action_elapsed_ms=1234\n"
+                    "command_parse_status=raw_command_selected\n"
+                    "command_count=1\n"
+                    "duplicate_local_execution_prevented=false\n"
+                ).encode("utf-8")
                 raw_ack = message_hub.build_raw_frame("ack", command["cmd_id"], ack_payload)
                 ack = post_bytes(
                     base_url,
@@ -500,6 +514,14 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertIn("raw-frame.p0.v1", content_type)
         self.assertEqual(ack["raw_frame"]["parse_result"]["status"], "ok")
         self.assertEqual(commands[0]["status"], "ok")
+        self.assertEqual(commands[0]["ack"]["fw_version"], "0.1.0-fw003-raw-command-loop")
+        self.assertEqual(commands[0]["ack"]["test_run_id"], "raw-frame-test")
+        self.assertEqual(commands[0]["ack"]["transport"]["type"], "lte")
+        self.assertEqual(commands[0]["ack"]["lte_http"]["phase"], "command_ack")
+        self.assertEqual(commands[0]["ack"]["lte_http"]["poll_reason_code"], "LTE_HTTP_OK")
+        self.assertEqual(commands[0]["ack"]["lte_http"]["poll_status_code"], 200)
+        self.assertEqual(commands[0]["ack"]["command"]["parse_status"], "raw_command_selected")
+        self.assertFalse(commands[0]["ack"]["command"]["duplicate_local_execution_prevented"])
         self.assertGreaterEqual(len(raw_frames), 2)
         self.assertNotIn("data", raw_frames[0]["raw_payload"])
         self.assertIn("raw_frames", state)

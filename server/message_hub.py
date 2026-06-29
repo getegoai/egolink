@@ -1202,6 +1202,26 @@ def derive_raw_frame_message(
     }
     if frame_type == "ack":
         cmd_id = first_known(expected_cmd_id, kv_payload.get("cmd-id"), kv_payload.get("cmd_id"), record["frame_id"])
+        transport_type = kv_payload.get("transport-type")
+        lte_http = compact_dict(
+            {
+                "phase": kv_payload.get("lte-http-phase"),
+                "driver": kv_payload.get("lte-http-driver"),
+                "poll_reason_code": kv_payload.get("lte-http-poll-reason-code"),
+                "poll_status_code": parse_optional_int(kv_payload.get("lte-http-poll-status-code")),
+                "poll_action_elapsed_ms": parse_optional_int(kv_payload.get("lte-http-poll-action-elapsed-ms")),
+            }
+        )
+        command_obs = compact_dict(
+            {
+                "last_cmd_id": kv_payload.get("command-last-cmd-id"),
+                "parse_status": kv_payload.get("command-parse-status"),
+                "command_count": parse_optional_int(kv_payload.get("command-count")),
+                "duplicate_local_execution_prevented": parse_bool_or_text(
+                    kv_payload.get("duplicate-local-execution-prevented")
+                ),
+            }
+        )
         return compact_dict(
             {
                 **common,
@@ -1209,6 +1229,9 @@ def derive_raw_frame_message(
                 "cmd_id": cmd_id,
                 "status": first_known(kv_payload.get("status"), "ok"),
                 "message": first_known(kv_payload.get("message"), "raw-frame ack"),
+                "transport": compact_dict({"type": transport_type}) if transport_type else None,
+                "lte_http": lte_http or None,
+                "command": command_obs or None,
             }
         )
     if frame_type == "command":
@@ -1289,6 +1312,17 @@ def parse_number_or_text(value: Any) -> Any:
             return float(text)
         except ValueError:
             return text
+
+
+def parse_bool_or_text(value: Any) -> Any:
+    if value in (None, ""):
+        return None
+    text = str(value).strip().lower()
+    if text == "true":
+        return True
+    if text == "false":
+        return False
+    return value
 
 
 def compact_dict(payload: dict[str, Any]) -> dict[str, Any]:

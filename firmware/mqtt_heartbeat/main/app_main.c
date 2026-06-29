@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "cJSON.h"
@@ -1171,6 +1172,52 @@ static void set_lte_command_parse_status(const char *status)
     snprintf(s_lte_command_parse_status, sizeof(s_lte_command_parse_status), "%s", status ? status : "unknown");
 }
 
+typedef struct {
+    char cmd_id[64];
+    char cmd[48];
+} lte_raw_command_t;
+
+static uint32_t egolink_crc32(const uint8_t *data, size_t length)
+{
+    uint32_t crc = 0xFFFFFFFFu;
+    for (size_t index = 0; index < length; ++index) {
+        crc ^= (uint32_t)data[index];
+        for (int bit = 0; bit < 8; ++bit) {
+            uint32_t mask = 0u - (crc & 1u);
+            crc = (crc >> 1) ^ (0xEDB88320u & mask);
+        }
+    }
+    return ~crc;
+}
+
+static bool build_lte_raw_frame(
+    char *buffer,
+    size_t buffer_size,
+    const char *frame_type,
+    const char *frame_id,
+    uint32_t seq,
+    const char *payload)
+{
+    if (buffer == NULL || buffer_size == 0 || frame_type == NULL || frame_id == NULL || payload == NULL) {
+        return false;
+    }
+    size_t payload_len = strlen(payload);
+    uint32_t crc = egolink_crc32((const uint8_t *)payload, payload_len);
+    int written = snprintf(
+        buffer,
+        buffer_size,
+        "EGLK/1 type=%s id=%s seq=%" PRIu32 " len=%u crc32=%08" PRIX32 "\n"
+        "content-type=text/x-egolink-kv\n\n"
+        "%s",
+        frame_type,
+        frame_id,
+        seq,
+        (unsigned)payload_len,
+        crc,
+        payload);
+    return written > 0 && (size_t)written < buffer_size;
+}
+
 static void build_lte_command_ack_payload(
     char *buffer,
     size_t buffer_size,
@@ -1187,87 +1234,52 @@ static void build_lte_command_ack_payload(
         poll_result = &fallback;
     }
 
-    char escaped_cmd_id[96];
-    char escaped_status[32];
-    char escaped_message[160];
-    char escaped_reason[SIM7670_LTE_HTTP_REASON_MAX * 2];
-    char escaped_parse_status[96];
     char poll_status_code[16];
     char poll_action_elapsed_ms[16];
-    char rtt_ms[16];
-    char last_error_json[SIM7670_LTE_HTTP_REASON_MAX * 2 + 4];
-    bool poll_ok = strcmp(poll_result->reason_code, "LTE_HTTP_OK") == 0;
-
-    json_escape_summary(escaped_cmd_id, sizeof(escaped_cmd_id), cmd_id);
-    json_escape_summary(escaped_status, sizeof(escaped_status), status);
-    json_escape_summary(escaped_message, sizeof(escaped_message), message);
-    json_escape_summary(escaped_reason, sizeof(escaped_reason), poll_result->reason_code);
-    json_escape_summary(escaped_parse_status, sizeof(escaped_parse_status), s_lte_command_parse_status);
-    json_int_or_null(poll_status_code, sizeof(poll_status_code), poll_result->status_code_valid, poll_result->status_code);
-    json_int_or_null(
+    snprintf(
+        poll_status_code,
+        sizeof(poll_status_code),
+        "%d",
+        poll_result->status_code_valid ? poll_result->status_code : -1);
+    snprintf(
         poll_action_elapsed_ms,
         sizeof(poll_action_elapsed_ms),
-        poll_result->action_elapsed_ms_valid,
-        poll_result->action_elapsed_ms);
-    json_int_or_null(rtt_ms, sizeof(rtt_ms), poll_result->action_elapsed_ms_valid, poll_result->action_elapsed_ms);
-    if (!poll_ok) {
-        snprintf(last_error_json, sizeof(last_error_json), "\"%s\"", escaped_reason);
-    } else {
-        snprintf(last_error_json, sizeof(last_error_json), "null");
-    }
+        "%d",
+        poll_result->action_elapsed_ms_valid ? poll_result->action_elapsed_ms : -1);
 
     snprintf(
         buffer,
         buffer_size,
-        "{\"protocol_version\":\"egolink.p0.v1\","
-        "\"device_id\":\"%s\","
-        "\"ts\":\"uptime_ms:%" PRId64 "\","
-        "\"seq\":%" PRIu32 ","
-        "\"message_type\":\"ack\","
-        "\"fw_version\":\"%s\","
-        "\"cmd_id\":\"%s\","
-        "\"status\":\"%s\","
-        "\"message\":\"%s\","
-        "\"reset_reason\":\"%s\","
-        "\"boot_count\":%" PRIu32 ","
-        "\"boot_uptime_ms\":%" PRId64 ","
-        "\"transport\":{\"type\":\"lte\","
-        "\"rtt_ms\":%s,"
-        "\"last_error\":%s},"
-        "\"lte_http\":{\"phase\":\"command_ack\","
-        "\"driver\":\"%s\","
-        "\"poll_reason_code\":\"%s\","
-        "\"poll_status_code\":%s,"
-        "\"poll_action_elapsed_ms\":%s},"
-        "\"command\":{\"last_cmd_id\":\"%s\","
-        "\"parse_status\":\"%s\","
-        "\"command_count\":%d,"
-        "\"last_status\":\"%s\","
-        "\"last_ack_status\":\"%s\","
-        "\"duplicate_local_execution_prevented\":%s}",
-        CONFIG_EGOLINK_DEVICE_ID,
-        uptime_ms(),
-        seq,
+        "cmd_id=%s\n"
+        "status=%s\n"
+        "message=%s\n"
+        "fw_version=%s\n"
+        "test_run_id=%s\n"
+        "seq=%" PRIu32 "\n"
+        "transport_type=lte\n"
+        "lte_http_phase=command_ack\n"
+        "lte_http_driver=%s\n"
+        "lte_http_poll_reason_code=%s\n"
+        "lte_http_poll_status_code=%s\n"
+        "lte_http_poll_action_elapsed_ms=%s\n"
+        "command_last_cmd_id=%s\n"
+        "command_parse_status=%s\n"
+        "command_count=%d\n"
+        "duplicate_local_execution_prevented=%s\n",
+        cmd_id,
+        status,
+        message,
         CONFIG_EGOLINK_FW_VERSION,
-        escaped_cmd_id,
-        escaped_status,
-        escaped_message,
-        s_reset_reason,
-        s_boot_count,
-        uptime_ms(),
-        rtt_ms,
-        last_error_json,
+        CONFIG_EGOLINK_TEST_RUN_ID,
+        seq,
         sim7670_lte_http_backend_name(),
-        escaped_reason,
+        poll_result->reason_code,
         poll_status_code,
         poll_action_elapsed_ms,
-        escaped_cmd_id,
-        escaped_parse_status,
+        cmd_id,
+        s_lte_command_parse_status,
         s_lte_command_last_command_count,
-        escaped_status,
-        escaped_status,
         json_bool(duplicate_prevented));
-    append_test_run_id_and_close_json(buffer, buffer_size);
 }
 
 static bool lte_http_ack_command(
@@ -1280,13 +1292,14 @@ static bool lte_http_ack_command(
     char path[192];
     char url[288];
     char payload[1024];
+    char frame[1400];
     sim7670_lte_http_probe_result_t ack_result;
     uint32_t seq = next_seq();
 
     snprintf(
         path,
         sizeof(path),
-        "/api/v1/devices/%s/commands/%s/ack",
+        "/api/v1/devices/%s/commands/%s/ack.raw",
         CONFIG_EGOLINK_DEVICE_ID,
         cmd_id);
     build_message_hub_url(url, sizeof(url), path);
@@ -1299,11 +1312,20 @@ static bool lte_http_ack_command(
         message,
         poll_result,
         duplicate_prevented);
-    ESP_LOGI(TAG, "LTE_HTTP_COMMAND_ACK_PAYLOAD_BYTES=%u", (unsigned)strlen(payload));
-    bool ok = sim7670_lte_http_post_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, payload, &ack_result);
+    if (!build_lte_raw_frame(frame, sizeof(frame), "ack", cmd_id, seq, payload)) {
+        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_RAW_ACK_BUILD_FAILED cmd_id=%s", cmd_id);
+        return false;
+    }
+    ESP_LOGI(TAG, "LTE_HTTP_COMMAND_RAW_ACK_FRAME_BYTES=%u", (unsigned)strlen(frame));
+    bool ok = sim7670_lte_http_post_raw(
+        url,
+        CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN,
+        frame,
+        "text/x-egolink-frame; profile=raw-frame.p0.v1",
+        &ack_result);
     ESP_LOGI(
         TAG,
-        "LTE_HTTP_COMMAND_ACK_DONE cmd_id=%s seq=%" PRIu32 " ok=%s reason=%s status=%d",
+        "LTE_HTTP_COMMAND_RAW_ACK_DONE cmd_id=%s seq=%" PRIu32 " ok=%s reason=%s status=%d",
         cmd_id,
         seq,
         ok ? "true" : "false",
@@ -1468,40 +1490,209 @@ static bool lte_http_post_command_diag(
     return ok;
 }
 
-static bool lte_http_execute_and_ack_command(cJSON *command, const sim7670_lte_http_probe_result_t *poll_result)
+static char *split_lte_raw_frame_payload(char *frame)
 {
-    cJSON *cmd_id = cJSON_GetObjectItemCaseSensitive(command, "cmd_id");
-    if (!cJSON_IsString(cmd_id) || cmd_id->valuestring == NULL) {
-        set_lte_command_parse_status("missing_cmd_id");
-        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_INVALID missing_cmd_id=true");
+    char *separator = strstr(frame, "\r\n\r\n");
+    if (separator != NULL) {
+        separator[0] = '\0';
+        return separator + 4;
+    }
+    separator = strstr(frame, "\n\n");
+    if (separator != NULL) {
+        separator[0] = '\0';
+        return separator + 2;
+    }
+    return NULL;
+}
+
+static bool copy_lte_raw_token_value(const char *text, const char *key, char *buffer, size_t buffer_size)
+{
+    if (text == NULL || key == NULL || buffer == NULL || buffer_size == 0) {
         return false;
     }
-    cJSON *cmd = cJSON_GetObjectItemCaseSensitive(command, "cmd");
-    const char *cmd_name = cJSON_IsString(cmd) && cmd->valuestring != NULL ? cmd->valuestring : "unknown";
-    bool duplicate = s_lte_command_last_executed && strcmp(s_lte_command_last_cmd_id, cmd_id->valuestring) == 0;
+    size_t key_len = strlen(key);
+    const char *cursor = text;
+    while ((cursor = strstr(cursor, key)) != NULL) {
+        char previous = cursor == text ? ' ' : cursor[-1];
+        if ((previous == ' ' || previous == '\t' || previous == '\r' || previous == '\n') &&
+            cursor[key_len] == '=') {
+            const char *value_start = cursor + key_len + 1;
+            const char *value_end = value_start;
+            while (*value_end != '\0' && *value_end != ' ' && *value_end != '\t' && *value_end != '\r' &&
+                   *value_end != '\n') {
+                value_end++;
+            }
+            size_t length = (size_t)(value_end - value_start);
+            if (length >= buffer_size) {
+                length = buffer_size - 1;
+            }
+            memcpy(buffer, value_start, length);
+            buffer[length] = '\0';
+            return length > 0;
+        }
+        cursor += key_len;
+    }
+    return false;
+}
+
+static bool copy_lte_raw_kv_value(const char *payload, const char *key, char *buffer, size_t buffer_size)
+{
+    if (payload == NULL || key == NULL || buffer == NULL || buffer_size == 0) {
+        return false;
+    }
+    size_t key_len = strlen(key);
+    const char *cursor = payload;
+    while (*cursor != '\0') {
+        const char *line_end = strpbrk(cursor, "\r\n");
+        size_t line_len = line_end != NULL ? (size_t)(line_end - cursor) : strlen(cursor);
+        if (line_len > key_len && strncmp(cursor, key, key_len) == 0 && cursor[key_len] == '=') {
+            const char *value_start = cursor + key_len + 1;
+            size_t value_len = line_len - key_len - 1;
+            if (value_len >= buffer_size) {
+                value_len = buffer_size - 1;
+            }
+            memcpy(buffer, value_start, value_len);
+            buffer[value_len] = '\0';
+            return value_len > 0;
+        }
+        if (line_end == NULL) {
+            break;
+        }
+        cursor = line_end;
+        while (*cursor == '\r' || *cursor == '\n') {
+            cursor++;
+        }
+    }
+    return false;
+}
+
+static bool parse_lte_raw_u32(const char *text, uint32_t *value, int base)
+{
+    if (text == NULL || value == NULL || text[0] == '\0') {
+        return false;
+    }
+    char *end = NULL;
+    unsigned long parsed = strtoul(text, &end, base);
+    if (end == text || *end != '\0' || parsed > UINT32_MAX) {
+        return false;
+    }
+    *value = (uint32_t)parsed;
+    return true;
+}
+
+static bool parse_lte_raw_command_frame(char *frame, lte_raw_command_t *command)
+{
+    if (frame == NULL || command == NULL) {
+        set_lte_command_parse_status("raw_frame_missing");
+        return false;
+    }
+    memset(command, 0, sizeof(*command));
+    s_lte_command_last_command_count = 0;
+    if (strncmp(frame, "EGLK/1", 6) != 0) {
+        set_lte_command_parse_status("raw_unsupported_magic");
+        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_RAW_UNSUPPORTED_MAGIC");
+        return false;
+    }
+
+    char *payload = split_lte_raw_frame_payload(frame);
+    if (payload == NULL) {
+        set_lte_command_parse_status("raw_header_incomplete");
+        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_RAW_HEADER_INCOMPLETE");
+        return false;
+    }
+
+    char frame_type[24] = "";
+    if (!copy_lte_raw_token_value(frame, "type", frame_type, sizeof(frame_type)) ||
+        strcmp(frame_type, "command") != 0) {
+        set_lte_command_parse_status("raw_unsupported_type");
+        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_RAW_UNSUPPORTED_TYPE type=%s", frame_type);
+        return false;
+    }
+
+    char len_text[16];
+    char crc_text[16];
+    uint32_t declared_len = 0;
+    uint32_t declared_crc = 0;
+    if (!copy_lte_raw_token_value(frame, "len", len_text, sizeof(len_text)) ||
+        !copy_lte_raw_token_value(frame, "crc32", crc_text, sizeof(crc_text)) ||
+        !parse_lte_raw_u32(len_text, &declared_len, 10) ||
+        !parse_lte_raw_u32(crc_text, &declared_crc, 16)) {
+        set_lte_command_parse_status("raw_len_crc_missing");
+        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_RAW_LEN_CRC_MISSING");
+        return false;
+    }
+
+    size_t actual_len = strlen(payload);
+    if (actual_len != (size_t)declared_len) {
+        set_lte_command_parse_status("raw_len_mismatch");
+        ESP_LOGW(
+            TAG,
+            "LTE_HTTP_COMMAND_RAW_LEN_MISMATCH declared=%" PRIu32 " actual=%u",
+            declared_len,
+            (unsigned)actual_len);
+        return false;
+    }
+    uint32_t actual_crc = egolink_crc32((const uint8_t *)payload, actual_len);
+    if (actual_crc != declared_crc) {
+        set_lte_command_parse_status("raw_crc_mismatch");
+        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_RAW_CRC_MISMATCH declared=%08" PRIX32 " actual=%08" PRIX32, declared_crc, actual_crc);
+        return false;
+    }
+
+    if (!copy_lte_raw_kv_value(payload, "cmd", command->cmd, sizeof(command->cmd))) {
+        set_lte_command_parse_status("raw_missing_cmd");
+        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_RAW_MISSING_CMD");
+        return false;
+    }
+    if (strcmp(command->cmd, "none") == 0) {
+        set_lte_command_parse_status("raw_no_command");
+        ESP_LOGI(TAG, "LTE_HTTP_COMMAND_RAW_EMPTY");
+        return false;
+    }
+    if (!copy_lte_raw_kv_value(payload, "cmd_id", command->cmd_id, sizeof(command->cmd_id)) &&
+        !copy_lte_raw_kv_value(payload, "cmd-id", command->cmd_id, sizeof(command->cmd_id)) &&
+        !copy_lte_raw_token_value(frame, "id", command->cmd_id, sizeof(command->cmd_id))) {
+        set_lte_command_parse_status("raw_missing_cmd_id");
+        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_RAW_MISSING_CMD_ID");
+        return false;
+    }
+
+    s_lte_command_last_command_count = 1;
+    set_lte_command_parse_status("raw_command_selected");
+    return true;
+}
+
+static bool lte_http_execute_and_ack_raw_command(
+    const lte_raw_command_t *command,
+    const sim7670_lte_http_probe_result_t *poll_result)
+{
+    if (command == NULL || command->cmd_id[0] == '\0') {
+        set_lte_command_parse_status("raw_missing_cmd_id");
+        return false;
+    }
+    bool duplicate = s_lte_command_last_executed && strcmp(s_lte_command_last_cmd_id, command->cmd_id) == 0;
     const char *status = "ok";
-    const char *message = "lte command loop acknowledged set_report_interval";
+    const char *message = "lte raw command loop acknowledged set_report_interval";
 
     ESP_LOGI(
         TAG,
-        "LTE_HTTP_COMMAND_RECEIVED cmd_id=%s cmd=%s duplicate=%s",
-        cmd_id->valuestring,
-        cmd_name,
+        "LTE_HTTP_COMMAND_RAW_RECEIVED cmd_id=%s cmd=%s duplicate=%s",
+        command->cmd_id,
+        command->cmd,
         duplicate ? "true" : "false");
-    set_lte_command_parse_status("command_selected");
 
     if (!duplicate) {
-        snprintf(s_lte_command_last_cmd_id, sizeof(s_lte_command_last_cmd_id), "%s", cmd_id->valuestring);
+        snprintf(s_lte_command_last_cmd_id, sizeof(s_lte_command_last_cmd_id), "%s", command->cmd_id);
         s_lte_command_last_executed = true;
-        if (strcmp(cmd_name, "set_report_interval") != 0) {
+        if (strcmp(command->cmd, "set_report_interval") != 0) {
             status = "rejected";
-            message = "lte command loop only accepts set_report_interval in LTE-003";
+            message = "lte raw command loop only accepts set_report_interval in FW-003";
         }
     } else {
-        message = "lte command duplicate ignored after local execution";
+        message = "lte raw command duplicate ignored after local execution";
     }
 
-    return lte_http_ack_command(cmd_id->valuestring, status, message, poll_result, duplicate);
+    return lte_http_ack_command(command->cmd_id, status, message, poll_result, duplicate);
 }
 
 static bool lte_http_poll_commands_once(sim7670_lte_http_probe_result_t *poll_result)
@@ -1509,20 +1700,21 @@ static bool lte_http_poll_commands_once(sim7670_lte_http_probe_result_t *poll_re
     char path[160];
     char url[256];
     char response[2048];
+    lte_raw_command_t command;
     sim7670_lte_http_probe_result_t local_poll_result;
     if (poll_result == NULL) {
         poll_result = &local_poll_result;
     }
 
-    snprintf(path, sizeof(path), "/api/v1/devices/%s/commands/poll", CONFIG_EGOLINK_DEVICE_ID);
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/commands/poll.raw", CONFIG_EGOLINK_DEVICE_ID);
     build_message_hub_url(url, sizeof(url), path);
     bool poll_ok =
-        sim7670_lte_http_get_json(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, response, sizeof(response), poll_result);
+        sim7670_lte_http_get_raw(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, response, sizeof(response), poll_result);
     s_lte_command_last_command_count = 0;
-    set_lte_command_parse_status(poll_ok ? "http_ok_body_received" : "http_poll_failed");
+    set_lte_command_parse_status(poll_ok ? "raw_http_ok_body_received" : "http_poll_failed");
     ESP_LOGI(
         TAG,
-        "LTE_HTTP_COMMAND_POLL_DONE ok=%s reason=%s status=%d data_len=%d",
+        "LTE_HTTP_COMMAND_RAW_POLL_DONE ok=%s reason=%s status=%d data_len=%d",
         poll_ok ? "true" : "false",
         poll_result->reason_code,
         poll_result->status_code,
@@ -1530,41 +1722,10 @@ static bool lte_http_poll_commands_once(sim7670_lte_http_probe_result_t *poll_re
     if (!poll_ok) {
         return false;
     }
-
-    cJSON *root = cJSON_Parse(response);
-    if (root == NULL) {
-        set_lte_command_parse_status("json_parse_failed");
-        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_POLL_PARSE_FAIL");
+    if (!parse_lte_raw_command_frame(response, &command)) {
         return false;
     }
-    cJSON *commands = cJSON_GetObjectItemCaseSensitive(root, "commands");
-    if (!cJSON_IsArray(commands)) {
-        set_lte_command_parse_status("commands_array_missing");
-        ESP_LOGW(TAG, "LTE_HTTP_COMMAND_POLL_NO_COMMAND_ARRAY");
-        cJSON_Delete(root);
-        return false;
-    }
-    s_lte_command_last_command_count = cJSON_GetArraySize(commands);
-    if (s_lte_command_last_command_count <= 0) {
-        set_lte_command_parse_status("commands_empty");
-        ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_EMPTY");
-        cJSON_Delete(root);
-        return false;
-    }
-    set_lte_command_parse_status("commands_available");
-
-    cJSON *command = NULL;
-    bool acked = false;
-    cJSON_ArrayForEach(command, commands)
-    {
-        if (lte_http_execute_and_ack_command(command, poll_result)) {
-            acked = true;
-            break;
-        }
-        break;
-    }
-    cJSON_Delete(root);
-    return acked;
+    return lte_http_execute_and_ack_raw_command(&command, poll_result);
 }
 
 static void lte_http_command_task(void *arg)
