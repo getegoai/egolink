@@ -139,6 +139,14 @@ motion candidate
     latest showing LTE ready, HTTP poll status `200`, body length `592`, and
     `LTE_HTTP_READ_BODY_PARSE_FAILED`. Runtime evidence is under
     `reports/field_validation/lte003-command-loop-fix4-20260629-084350/`.
+    Fix5 is implemented and build-verified as
+    `0.1.0-lte003-command-loop-fix5` /
+    `lte003-command-loop-fix5-20260629-154839`; source/build app commit is
+    `729c78b`, and the binary is at
+    `firmware/mqtt_heartbeat/build_lte003_command_loop_fix5/egolink_mqtt_heartbeat.bin`.
+    It falls back to bare `AT+HTTPREAD` when positional HTTPREAD returns `OK`
+    without an extractable JSON body. Fix5 is not flashed or USB-Free runtime
+    validated yet.
 
 ## USB-Free VPS Walking Skeleton Line
 
