@@ -358,7 +358,41 @@ runtime.
 - Flash result: PASS on `COM4` after explicit operator confirmation.
 - Flash evidence:
   `reports/field_validation/lte003-command-loop-fix6-20260629-160859/flash_report.md`
-- USB-Free runtime validation: not run.
+- USB-Free runtime validation: FAIL as recorded in the fix6 runtime attempt.
+
+## Fix6 Runtime Attempt
+
+- Firmware version: `0.1.0-lte003-command-loop-fix6`
+- Test run ID: `lte003-command-loop-fix6-20260629-160859`
+- Validator mode: reused existing pending `cmd-000013` through
+  `--existing-command-id cmd-000013`.
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte003-command-loop-fix6-20260629-160859/lte_command_loop_report.json`
+- Result: FAIL.
+- Validator started at: `2026-06-29T08:31:32.859080+00:00`
+- Validator completed at: `2026-06-29T08:37:33.374450+00:00`
+- Command: `cmd-000013`, `set_report_interval`.
+- Failure: command remained `pending`; no ACK was received.
+- The test-run export contained 37 `lte_http_command_diag` messages from
+  `2026-06-29T08:18:30.645153+00:00` to
+  `2026-06-29T08:23:32.840189+00:00`.
+- Diagnostic summary: one `phase=ready` event and 36 `phase=poll_no_ack`
+  events. Latest diagnostic event had `fw_version=0.1.0-lte003-command-loop-fix6`,
+  `lte.reason_code=LTE_READY`, registration `registered_home`, assigned IP
+  `10.75.55.162`, `transport.type=lte`, `lte_http.poll_status_code=200`,
+  `lte_http.poll_data_len=592`, `lte_http.poll_reason_code=LTE_HTTP_OK`, and
+  empty `command.last_cmd_id`.
+- Interpretation: fix6 advanced the blocker from HTTPREAD body extraction to
+  command extraction/ACK. LTE, VPS, HTTPACTION, and HTTPREAD body capture are
+  healthy enough to return `LTE_HTTP_OK`, but the firmware still does not select
+  and ACK a command from the polled body.
+- Fix7 direction: add command parser diagnostics such as parse status and
+  command count, and increase the bounded poll window so validation is less
+  dependent on catching the boot-time command-loop window.
+- Keep acceptance strict: LTE-003 still passes only when the command is ACKed
+  with `transport.type=lte`, `lte_http.phase=command_ack`, and
+  `poll_reason_code=LTE_HTTP_OK`.
 
 ## Fix5 Build Evidence
 

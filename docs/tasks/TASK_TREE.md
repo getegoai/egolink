@@ -164,7 +164,12 @@ motion candidate
     passed after explicit operator confirmation; flashed repo/app version is
     `8d7395f`, and flash evidence is under
     `reports/field_validation/lte003-command-loop-fix6-20260629-160859/flash_report.md`.
-    USB-Free runtime validation has not been run yet.
+    USB-Free runtime validation failed with 37 fix6 diagnostics: HTTP poll
+    status `200`, body length `592`, and `LTE_HTTP_OK`, but empty
+    `command.last_cmd_id` and no ACK. Runtime evidence is under
+    `reports/field_validation/lte003-command-loop-fix6-20260629-160859/`.
+    Fix7 direction is command parser diagnostics plus a longer bounded poll
+    window.
 
 ## USB-Free VPS Walking Skeleton Line
 

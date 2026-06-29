@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix6 command-loop firmware currently flashed on COM4; USB-Free fix6 runtime validation pending; USB-Free fix5 runtime validation failed at HTTPREAD body extraction |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix6 command-loop firmware currently flashed on COM4; USB-Free fix6 runtime validation failed after HTTPREAD body capture, before command ACK; fix7 direction is command parser diagnostics plus longer bounded poll window |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -393,7 +393,14 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   confirmation; flashed repo/app version is `8d7395f`, and flash evidence is
   under
   `reports/field_validation/lte003-command-loop-fix6-20260629-160859/flash_report.md`.
-  USB-Free runtime validation has not been run yet.
+  USB-Free runtime validation failed: the validator reused pending `cmd-000013`
+  from `2026-06-29T08:31:32Z` to `2026-06-29T08:37:33Z`, the command remained
+  `pending`, and no ACK was received. The test-run export contained 37 fix6
+  diagnostics from `2026-06-29T08:18:30Z` to `2026-06-29T08:23:32Z`, with the
+  latest showing LTE ready, HTTP poll status `200`, body length `592`,
+  `LTE_HTTP_OK`, and empty `command.last_cmd_id`. Evidence is under
+  `reports/field_validation/lte003-command-loop-fix6-20260629-160859/`.
+  Fix7 should add command parser diagnostics and a longer bounded poll window.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.
