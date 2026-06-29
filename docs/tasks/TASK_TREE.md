@@ -154,6 +154,14 @@ motion candidate
     latest showing LTE ready, HTTP poll status `200`, body length `592`, and
     `LTE_HTTP_READ_BODY_PARSE_FAILED`. Runtime evidence is under
     `reports/field_validation/lte003-command-loop-fix5-20260629-154839/`.
+    Fix6 is implemented and build-verified as
+    `0.1.0-lte003-command-loop-fix6` /
+    `lte003-command-loop-fix6-20260629-160859`; source/build app commit is
+    `c1a90a0`, and the binary is at
+    `firmware/mqtt_heartbeat/build_lte003_command_loop_fix6/egolink_mqtt_heartbeat.bin`.
+    It adds an HTTPREAD-specific UART collection path that waits for the JSON
+    body instead of returning on the first generic `OK`. Fix6 is not flashed
+    or USB-Free runtime validated yet.
 
 ## USB-Free VPS Walking Skeleton Line
 
