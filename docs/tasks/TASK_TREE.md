@@ -149,7 +149,11 @@ motion candidate
     explicit operator confirmation; flashed repo/app version is `efc9848`, and
     flash evidence is under
     `reports/field_validation/lte003-command-loop-fix5-20260629-154839/flash_report.md`.
-    Fix5 is not USB-Free runtime validated yet.
+    USB-Free runtime validation failed with `cmd-000013` still pending and no
+    ACK. The fix5 test-run export contained 37 diagnostic messages, with the
+    latest showing LTE ready, HTTP poll status `200`, body length `592`, and
+    `LTE_HTTP_READ_BODY_PARSE_FAILED`. Runtime evidence is under
+    `reports/field_validation/lte003-command-loop-fix5-20260629-154839/`.
 
 ## USB-Free VPS Walking Skeleton Line
 

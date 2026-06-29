@@ -358,7 +358,46 @@ runtime.
 - Flashed repo/app version: `efc9848`
 - Flash evidence:
   `reports/field_validation/lte003-command-loop-fix5-20260629-154839/flash_report.md`
-- USB-Free runtime validation: not run.
+- USB-Free runtime validation: FAIL as recorded in the fix5 runtime attempt.
+
+## Fix5 Runtime Attempt
+
+- Firmware version: `0.1.0-lte003-command-loop-fix5`
+- Test run ID: `lte003-command-loop-fix5-20260629-154839`
+- Validator mode: reused existing pending `cmd-000013` through
+  `--existing-command-id cmd-000013`.
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte003-command-loop-fix5-20260629-154839/lte_command_loop_report.json`
+- Result: FAIL.
+- Validator started at: `2026-06-29T07:58:34.971916+00:00`
+- Validator completed at: `2026-06-29T08:04:36.479750+00:00`
+- Command: `cmd-000013`, `set_report_interval`.
+- Failure: command remained `pending`; no ACK was received.
+- The test-run export contained 37 `lte_http_command_diag` messages from
+  `2026-06-29T07:54:20.574708+00:00` to
+  `2026-06-29T07:59:29.170356+00:00`.
+- Diagnostic summary: one `phase=ready` event and 36 `phase=poll_no_ack`
+  events. The latest diagnostic event had
+  `fw_version=0.1.0-lte003-command-loop-fix5`, `seq=37`,
+  `lte.reason_code=LTE_READY`, `lte.registration_state=registered_home`,
+  assigned IP `10.75.55.162`, `lte_http.poll_status_code=200`,
+  `lte_http.poll_data_len=592`, and
+  `lte_http.poll_reason_code=LTE_HTTP_READ_BODY_PARSE_FAILED`.
+- Interpretation: fix5 did not prove LTE command polling/ACK. Falling through
+  from positional HTTPREAD to bare HTTPREAD did not change the runtime failure:
+  the firmware still reaches LTE, reaches the VPS, receives a 200 poll
+  response, and gets an AT-level HTTPREAD response, but it still does not
+  capture an extractable JSON body.
+
+## Fix6 Direction
+
+- Add an HTTPREAD-specific UART collection path that does not return as soon
+  as the generic AT helper sees `OK`; it should keep reading until the JSON
+  body is captured or the HTTP action timeout expires.
+- Keep acceptance strict: LTE-003 still passes only when the command is ACKed
+  with `transport.type=lte`, `lte_http.phase=command_ack`, and
+  `poll_reason_code=LTE_HTTP_OK`.
 
 ## Fix3 Build Evidence
 

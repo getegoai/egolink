@@ -372,7 +372,14 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   repo/app version is `efc9848` because the guarded flash re-ran CMake at the
   documentation commit. Flash evidence is under
   `reports/field_validation/lte003-command-loop-fix5-20260629-154839/flash_report.md`.
-  USB-Free runtime validation has not been run yet.
+  USB-Free runtime validation failed from `2026-06-29T07:58:34Z` to
+  `2026-06-29T08:04:36Z` after the operator connected independent power and
+  disconnected USB. The validator reused `cmd-000013`; the command remained
+  pending and no ACK was received. The test-run export contained 37 LTE
+  diagnostic messages, with the latest reporting LTE ready, HTTP poll status
+  `200`, `poll_data_len=592`, and
+  `lte_http.poll_reason_code=LTE_HTTP_READ_BODY_PARSE_FAILED`. Evidence is
+  under `reports/field_validation/lte003-command-loop-fix5-20260629-154839/`.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.
