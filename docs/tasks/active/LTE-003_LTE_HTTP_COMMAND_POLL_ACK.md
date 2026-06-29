@@ -2,7 +2,7 @@
 title: LTE HTTP Command Poll And ACK
 task_id: LTE-003
 status: active
-last_verified: 2026-06-28
+last_verified: 2026-06-29
 context:
   - docs/current/ACTIVE_BUILD.md
   - docs/current/STATUS.md
@@ -287,5 +287,48 @@ runtime.
   partition table were written, hashes verified, and hard reset completed.
 - Flash evidence:
   `reports/field_validation/lte003-command-loop-fix2-20260629-074709/flash_report.md`
-- USB-Free runtime validation: not run yet. Requires independent power, USB
-  disconnected, and a cold boot in that state.
+- USB-Free runtime validation: FAIL as recorded in the fix2 runtime attempt.
+
+## Fix2 Runtime Attempt
+
+- Firmware version: `0.1.0-lte003-command-loop-fix2`
+- Test run ID: `lte003-command-loop-fix2-20260629-074709`
+- Validator mode: reused existing pending `cmd-000013` through
+  `--existing-command-id cmd-000013`.
+- Connection path: independent power, USB disconnected, operator-confirmed,
+  with a cold reboot in that state before validation.
+- Evidence:
+  `reports/field_validation/lte003-command-loop-fix2-20260629-074709/lte_command_loop_report.json`
+- Result: FAIL.
+- Validator started at: `2026-06-28T23:58:07.293905+00:00`
+- Validator completed at: `2026-06-29T00:04:07.563167+00:00`
+- Command: `cmd-000013`, `set_report_interval`.
+- Failure: command remained `pending`; no ACK was received.
+- The test-run export contained 51 `lte_http_command_diag` messages from
+  `2026-06-28T23:55:12.777828+00:00` to
+  `2026-06-29T00:02:30.235865+00:00`.
+- Diagnostic summary: two `phase=ready` events and 49 `phase=poll_no_ack`
+  events. The latest diagnostic event had
+  `fw_version=0.1.0-lte003-command-loop-fix2`, `seq=37`,
+  `lte_http.poll_status_code=200`, `lte_http.poll_data_len=592`, and
+  `lte_http.poll_reason_code=LTE_HTTP_READ_FAILED`.
+- Interpretation: fix2 confirms the image boots, LTE is usable, diagnostics
+  reach the VPS over SIM7670G LTE HTTP, and `/commands/poll` returns HTTP 200
+  with a body. Increasing `AT_RESPONSE_BUFFER_SIZE` to `1536` did not resolve
+  the command-body read path. The next useful firmware increment should make
+  `AT+HTTPREAD` wait with the longer HTTP action timeout and split this failure
+  into AT-read versus JSON-body parse reason codes.
+
+## Fix3 Direction
+
+- Use `CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS` for the
+  command-poll `AT+HTTPREAD` call in `sim7670_lte_http_get_json`.
+- Replace the single `LTE_HTTP_READ_FAILED` result for HTTP 2xx command polls
+  with:
+  - `LTE_HTTP_READ_AT_FAILED` when the `AT+HTTPREAD` command does not return a
+    usable AT response.
+  - `LTE_HTTP_READ_BODY_PARSE_FAILED` when `AT+HTTPREAD` returns but the JSON
+    body cannot be extracted.
+- Keep acceptance strict: LTE-003 still passes only when the command is ACKed
+  with `transport.type=lte`, `lte_http.phase=command_ack`, and
+  `poll_reason_code=LTE_HTTP_OK`.

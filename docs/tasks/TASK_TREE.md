@@ -1,6 +1,6 @@
 ---
 document_status: current_task_tree
-generated_at: 2026-06-27
+generated_at: 2026-06-29
 generated_by: codex
 ---
 
@@ -103,7 +103,15 @@ motion candidate
     buffer increased to `1536`, rebuilt with app version `43f5f55`, and flashed
     on `COM4`. Flash evidence is under
     `reports/field_validation/lte003-command-loop-fix2-20260629-074709/flash_report.md`.
-    USB-Free runtime validation has not been run yet.
+    USB-Free runtime validation failed after independent-power cold reboot with
+    USB disconnected: the validator reused `cmd-000013`, the command remained
+    pending, no ACK was received, and the latest diagnostic still reported HTTP
+    poll status `200`, body length `592`, and `LTE_HTTP_READ_FAILED`.
+    Runtime evidence is under
+    `reports/field_validation/lte003-command-loop-fix2-20260629-074709/`.
+    Fix3 is in progress to make command-poll `AT+HTTPREAD` use the longer HTTP
+    action timeout and split the failure into AT-read versus body-parse reason
+    codes.
 
 ## USB-Free VPS Walking Skeleton Line
 

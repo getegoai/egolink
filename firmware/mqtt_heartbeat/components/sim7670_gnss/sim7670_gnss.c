@@ -1306,20 +1306,22 @@ bool sim7670_lte_http_get_json(
         return false;
     }
 
-    bool read_ok = false;
-    if (data_len > 0 && sim7670_send_at("AT+HTTPREAD", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
+    bool read_at_ok = false;
+    bool read_body_ok = false;
+    if (data_len > 0 && sim7670_send_at("AT+HTTPREAD", "OK", CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS, response, sizeof(response))) {
+        read_at_ok = true;
         result->http_read_ok = true;
         update_lte_http_raw(result, "AT+HTTPREAD", response);
-        read_ok = copy_httpread_json_body(response, response_body, response_body_size);
+        read_body_ok = copy_httpread_json_body(response, response_body, response_body_size);
     }
     (void)sim7670_send_at("AT+HTTPTERM", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
 
-    if (status_code >= 200 && status_code < 300 && read_ok) {
+    if (status_code >= 200 && status_code < 300 && read_body_ok) {
         set_lte_http_reason(result, "LTE_HTTP_OK");
         return true;
     }
     if (status_code >= 200 && status_code < 300) {
-        set_lte_http_reason(result, "LTE_HTTP_READ_FAILED");
+        set_lte_http_reason(result, read_at_ok ? "LTE_HTTP_READ_BODY_PARSE_FAILED" : "LTE_HTTP_READ_AT_FAILED");
         return false;
     }
     if (status_code >= 400 && status_code < 500) {

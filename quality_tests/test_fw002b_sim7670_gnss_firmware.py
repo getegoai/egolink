@@ -113,7 +113,9 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
     def test_lte_http_read_buffer_has_margin_for_command_poll_body(self) -> None:
         self.assertIn("#define AT_RESPONSE_BUFFER_SIZE 1536", self.source)
         self.assertIn("uart_driver_install(uart_num, AT_RESPONSE_BUFFER_SIZE * 2", self.source)
-        self.assertIn('set_lte_http_reason(result, "LTE_HTTP_READ_FAILED")', self.source)
+        self.assertIn('"AT+HTTPREAD", "OK", CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS', self.source)
+        self.assertIn("LTE_HTTP_READ_AT_FAILED", self.source)
+        self.assertIn("LTE_HTTP_READ_BODY_PARSE_FAILED", self.source)
 
     def test_component_sends_bounded_at_queries_and_parses_common_gnss_lines(self) -> None:
         combined = self.header + self.source

@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-27
+last_verified: 2026-06-29
 verified_by: codex
 ---
 
@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix2 command-loop firmware currently flashed on COM4; USB-Free fix2 runtime validation pending |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix2 command-loop firmware currently flashed on COM4; USB-Free fix2 runtime validation failed at SIM7670G `HTTPREAD`; fix3 diagnosis candidate in progress |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -295,12 +295,24 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   table were written, hashes verified, and hard reset completed. Flash evidence
   is under
   `reports/field_validation/lte003-command-loop-fix2-20260629-074709/flash_report.md`.
-  USB-Free runtime validation has not been run yet.
+  USB-Free runtime validation failed after the operator cold-booted the board
+  on independent power with USB disconnected. The validator reused
+  `cmd-000013` from `2026-06-28T23:58:07Z` to `2026-06-29T00:04:07Z`; the
+  command remained pending and no ACK was received. The test-run export
+  contained 51 LTE diagnostic messages, with the latest reporting HTTP poll
+  status `200`, `poll_data_len=592`, and
+  `lte_http.poll_reason_code=LTE_HTTP_READ_FAILED`. Evidence is under
+  `reports/field_validation/lte003-command-loop-fix2-20260629-074709/`.
+- LTE-003 fix3 is the current diagnosis candidate. It keeps LTE-003 acceptance
+  unchanged, but makes command-poll `AT+HTTPREAD` use the longer LTE HTTP
+  action timeout and splits the prior `LTE_HTTP_READ_FAILED` condition into
+  `LTE_HTTP_READ_AT_FAILED` and `LTE_HTTP_READ_BODY_PARSE_FAILED`.
 - LTE command polling/ACK, reconnect behavior, long-run LTE stability, product
   battery/charging accuracy, product power behavior, and final
   enclosure/mounting GNSS acceptance remain unverified. LTE-003 currently has
-  build/flash evidence plus two failed runtime attempts; it does not prove LTE
-  command polling/ACK until the USB-Free Message Hub validator passes.
+  build/flash evidence plus failed runtime attempts through fix2; it does not
+  prove LTE command polling/ACK until the USB-Free Message Hub validator
+  passes.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

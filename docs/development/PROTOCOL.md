@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-28
+last_verified: 2026-06-29
 verified_by: codex
 ---
 
@@ -194,7 +194,8 @@ Recommended additive fields:
 Expected LTE HTTP reason codes include `LTE_HTTP_OK`,
 `LTE_HTTP_AT_UNREACHABLE`, `LTE_HTTP_UART_INIT_FAILED`,
 `LTE_HTTP_INIT_FAILED`, `LTE_HTTP_DATA_FAILED`,
-`LTE_HTTP_ACTION_FAILED`, `LTE_HTTP_CLIENT_ERROR`,
+`LTE_HTTP_ACTION_FAILED`, `LTE_HTTP_READ_AT_FAILED`,
+`LTE_HTTP_READ_BODY_PARSE_FAILED`, `LTE_HTTP_CLIENT_ERROR`,
 `LTE_HTTP_SERVER_ERROR`, and `LTE_HTTP_STATUS_ERROR`.
 
 The first firmware slice sends `phase=attempt` followed by `phase=result` so
