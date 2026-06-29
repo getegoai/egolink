@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix7 command-loop firmware currently flashed on COM4; USB-Free fix7 runtime validation pending; USB-Free fix6 runtime validation failed after HTTPREAD body capture, before command ACK |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix7 command-loop firmware currently flashed on COM4; USB-Free fix7 runtime validation failed with `json_parse_failed`; fix8 direction is complete-JSON HTTPREAD body extraction |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -416,7 +416,17 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   confirmation; flashed repo/app version is `766f0d8`, and flash evidence is
   under
   `reports/field_validation/lte003-command-loop-fix7-20260629-164429/flash_report.md`.
-  USB-Free runtime validation has not been run yet.
+  USB-Free runtime validation failed: the validator reused pending `cmd-000013`
+  from `2026-06-29T08:54:55Z` to `2026-06-29T09:00:56Z`, the command remained
+  `pending`, and no ACK was received. The test-run export contained 66 fix7
+  diagnostics from `2026-06-29T08:51:43Z` to `2026-06-29T09:00:55Z`: one
+  `phase=ready` / `command.parse_status=not_polled`, then 65
+  `phase=poll_no_ack` with `command.parse_status=json_parse_failed`. Latest
+  diagnostics showed LTE ready, HTTP poll status `200`, body length `592`,
+  `LTE_HTTP_OK`, `command.command_count=0`, and empty `command.last_cmd_id`.
+  Evidence is under
+  `reports/field_validation/lte003-command-loop-fix7-20260629-164429/`.
+  Fix8 should make HTTPREAD body extraction wait for a complete JSON object.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

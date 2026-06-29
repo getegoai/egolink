@@ -425,7 +425,44 @@ runtime.
 - Flash result: PASS on `COM4` after explicit operator confirmation.
 - Flash evidence:
   `reports/field_validation/lte003-command-loop-fix7-20260629-164429/flash_report.md`
-- USB-Free runtime validation: not run.
+- USB-Free runtime validation: FAIL as recorded in the fix7 runtime attempt.
+
+## Fix7 Runtime Attempt
+
+- Firmware version: `0.1.0-lte003-command-loop-fix7`
+- Test run ID: `lte003-command-loop-fix7-20260629-164429`
+- Validator mode: reused existing pending `cmd-000013` through
+  `--existing-command-id cmd-000013`.
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte003-command-loop-fix7-20260629-164429/lte_command_loop_report.json`
+- Result: FAIL.
+- Validator started at: `2026-06-29T08:54:55.587398+00:00`
+- Validator completed at: `2026-06-29T09:00:56.942763+00:00`
+- Command: `cmd-000013`, `set_report_interval`.
+- Failure: command remained `pending`; no ACK was received.
+- The test-run export contained 66 `lte_http_command_diag` messages from
+  `2026-06-29T08:51:43.829342+00:00` to
+  `2026-06-29T09:00:55.414190+00:00`.
+- Diagnostic summary: one `phase=ready` event with
+  `command.parse_status=not_polled`, then 65 `phase=poll_no_ack` events with
+  `command.parse_status=json_parse_failed`. Latest diagnostic event had
+  `fw_version=0.1.0-lte003-command-loop-fix7`, `lte.reason_code=LTE_READY`,
+  registration `registered_home`, assigned IP `10.75.55.162`,
+  `transport.type=lte`, `lte_http.poll_status_code=200`,
+  `lte_http.poll_data_len=592`, `lte_http.poll_reason_code=LTE_HTTP_OK`,
+  `command.command_count=0`, and empty `command.last_cmd_id`.
+- A PC-side Message Hub fetch confirmed `/commands/poll` returns valid
+  592-byte JSON for `cmd-000013`.
+- Interpretation: LTE, VPS, HTTPACTION, and HTTPREAD body transfer are
+  healthy, but the firmware is handing `cJSON_Parse` an invalid body. The most
+  likely culprit is that the HTTPREAD extractor treats the first partial brace
+  pair as a complete JSON object before the full 592-byte body has arrived.
+- Fix8 direction: make HTTPREAD body extraction wait for a complete JSON object
+  before returning `LTE_HTTP_OK`.
+- Keep acceptance strict: LTE-003 still passes only when the command is ACKed
+  with `transport.type=lte`, `lte_http.phase=command_ack`, and
+  `poll_reason_code=LTE_HTTP_OK`.
 
 ## Fix5 Build Evidence
 

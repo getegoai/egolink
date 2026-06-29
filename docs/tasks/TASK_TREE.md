@@ -178,7 +178,12 @@ motion candidate
     Fix7 flash on `COM4` passed after explicit operator confirmation; flashed
     repo/app version is `766f0d8`, and flash evidence is under
     `reports/field_validation/lte003-command-loop-fix7-20260629-164429/flash_report.md`.
-    USB-Free runtime validation has not been run yet.
+    USB-Free runtime validation failed with 66 fix7 diagnostics: HTTP poll
+    status `200`, body length `592`, and `LTE_HTTP_OK`, but
+    `command.parse_status=json_parse_failed`, `command.command_count=0`, and
+    no ACK. Runtime evidence is under
+    `reports/field_validation/lte003-command-loop-fix7-20260629-164429/`.
+    Fix8 direction is complete-JSON HTTPREAD body extraction.
 
 ## USB-Free VPS Walking Skeleton Line
 
