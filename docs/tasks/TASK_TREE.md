@@ -118,7 +118,12 @@ motion candidate
     splits the failure into AT-read versus body-parse reason codes. Flash
     evidence is under
     `reports/field_validation/lte003-command-loop-fix3-20260629-081529/flash_report.md`.
-    USB-Free runtime validation has not been run yet.
+    USB-Free runtime validation failed with `cmd-000013` still pending and no
+    ACK. The fix3 test-run export contained 59 diagnostic messages, with the
+    latest showing HTTP poll status `200`, body length `592`, and
+    `LTE_HTTP_READ_AT_FAILED`, narrowing the blocker to the SIM7670G
+    `AT+HTTPREAD` command path. Runtime evidence is under
+    `reports/field_validation/lte003-command-loop-fix3-20260629-081529/`.
 
 ## USB-Free VPS Walking Skeleton Line
 

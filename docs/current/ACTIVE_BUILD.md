@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix3 command-loop firmware currently flashed on COM4; USB-Free fix3 runtime validation pending |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-003 fix3 command-loop firmware currently flashed on COM4; USB-Free fix3 runtime validation failed at SIM7670G `AT+HTTPREAD` |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -319,11 +319,18 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   partition table were written, hashes verified, and hard reset completed.
   Flash evidence is under
   `reports/field_validation/lte003-command-loop-fix3-20260629-081529/flash_report.md`.
-  USB-Free runtime validation has not been run yet.
+  USB-Free runtime validation failed from `2026-06-29T00:26:51Z` to
+  `2026-06-29T00:32:53Z` after the operator connected independent power and
+  disconnected USB. The validator reused `cmd-000013`; the command remained
+  pending and no ACK was received. The test-run export contained 59 LTE
+  diagnostic messages, with the latest reporting HTTP poll status `200`,
+  `poll_data_len=592`, and
+  `lte_http.poll_reason_code=LTE_HTTP_READ_AT_FAILED`. Evidence is under
+  `reports/field_validation/lte003-command-loop-fix3-20260629-081529/`.
 - LTE command polling/ACK, reconnect behavior, long-run LTE stability, product
   battery/charging accuracy, product power behavior, and final
   enclosure/mounting GNSS acceptance remain unverified. LTE-003 currently has
-  build/flash evidence plus failed runtime attempts through fix2; it does not
+  build/flash evidence plus failed runtime attempts through fix3; it does not
   prove LTE command polling/ACK until the USB-Free Message Hub validator
   passes.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.

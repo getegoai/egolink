@@ -362,5 +362,45 @@ runtime.
 - Flash completed at: `2026-06-29T00:22:36.3004908Z`
 - Flash evidence:
   `reports/field_validation/lte003-command-loop-fix3-20260629-081529/flash_report.md`
-- USB-Free runtime validation: not run. Requires independent power, USB
-  disconnected, and a cold boot in that state after flashing.
+- USB-Free runtime validation: FAIL as recorded in the fix3 runtime attempt.
+
+## Fix3 Runtime Attempt
+
+- Firmware version: `0.1.0-lte003-command-loop-fix3`
+- Test run ID: `lte003-command-loop-fix3-20260629-081529`
+- Validator mode: reused existing pending `cmd-000013` through
+  `--existing-command-id cmd-000013`.
+- Connection path: independent power, USB disconnected, operator-confirmed,
+  with a cold reboot in that state before validation.
+- Evidence:
+  `reports/field_validation/lte003-command-loop-fix3-20260629-081529/lte_command_loop_report.json`
+- Result: FAIL.
+- Validator started at: `2026-06-29T00:26:51.247061+00:00`
+- Validator completed at: `2026-06-29T00:32:53.249979+00:00`
+- Command: `cmd-000013`, `set_report_interval`.
+- Failure: command remained `pending`; no ACK was received.
+- The test-run export contained 59 `lte_http_command_diag` messages from
+  `2026-06-29T00:22:45.045416+00:00` to
+  `2026-06-29T00:31:02.529394+00:00`.
+- Diagnostic summary: two `phase=ready` events and 57 `phase=poll_no_ack`
+  events. The latest diagnostic event had
+  `fw_version=0.1.0-lte003-command-loop-fix3`, `seq=37`,
+  `lte_http.poll_status_code=200`, `lte_http.poll_data_len=592`, and
+  `lte_http.poll_reason_code=LTE_HTTP_READ_AT_FAILED`.
+- Interpretation: fix3 did not prove LTE command polling/ACK. It did prove the
+  failure is narrower than before: the device boots the fix3 image, LTE and
+  VPS telemetry work, and `/commands/poll` reaches HTTP 200 with a 592-byte
+  body, but the firmware does not get a usable `AT+HTTPREAD` response.
+
+## Fix4 Direction
+
+- Do not continue with timeout-only retries; fix3 already used the longer LTE
+  HTTP action timeout for `AT+HTTPREAD`.
+- Add a SIM7670G HTTPREAD strategy that can try bounded positional reads such
+  as `AT+HTTPREAD=0,<data_len>` for command-poll GET responses.
+- Keep raw command/response data out of normal telemetry, but expose enough
+  reason detail to distinguish `AT+HTTPREAD` returning `ERROR`, timing out,
+  or returning data without a JSON body.
+- Keep acceptance strict: LTE-003 still passes only when the command is ACKed
+  with `transport.type=lte`, `lte_http.phase=command_ack`, and
+  `poll_reason_code=LTE_HTTP_OK`.
