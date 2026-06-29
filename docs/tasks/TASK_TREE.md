@@ -168,8 +168,14 @@ motion candidate
     status `200`, body length `592`, and `LTE_HTTP_OK`, but empty
     `command.last_cmd_id` and no ACK. Runtime evidence is under
     `reports/field_validation/lte003-command-loop-fix6-20260629-160859/`.
-    Fix7 direction is command parser diagnostics plus a longer bounded poll
-    window.
+    Fix7 is implemented and build-verified as
+    `0.1.0-lte003-command-loop-fix7` /
+    `lte003-command-loop-fix7-20260629-164429`; source/build app commit is
+    `33b8503`, and the binary is at
+    `firmware/mqtt_heartbeat/build_lte003_command_loop_fix7/egolink_mqtt_heartbeat.bin`.
+    It adds command parser diagnostics (`command.parse_status` and
+    `command.command_count`) and raises the bounded poll window to 120 attempts.
+    Fix7 is not flashed or USB-Free runtime validated yet.
 
 ## USB-Free VPS Walking Skeleton Line
 
