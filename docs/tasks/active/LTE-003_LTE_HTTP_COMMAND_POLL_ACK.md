@@ -337,7 +337,8 @@ runtime.
 
 - Firmware version: `0.1.0-lte003-command-loop-fix6`
 - Test run ID: `lte003-command-loop-fix6-20260629-160859`
-- Source/build app commit: `c1a90a0`
+- Source fix commit: `c1a90a0`
+- Flashed repo/app version: `8d7395f`
 - Build directory: `firmware/mqtt_heartbeat/build_lte003_command_loop_fix6/`
 - Binary:
   `firmware/mqtt_heartbeat/build_lte003_command_loop_fix6/egolink_mqtt_heartbeat.bin`
@@ -354,7 +355,9 @@ runtime.
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
   274 tests.
 - `git diff --check` passed.
-- Flash result: not run. Requires explicit operator confirmation for `COM4`.
+- Flash result: PASS on `COM4` after explicit operator confirmation.
+- Flash evidence:
+  `reports/field_validation/lte003-command-loop-fix6-20260629-160859/flash_report.md`
 - USB-Free runtime validation: not run.
 
 ## Fix5 Build Evidence

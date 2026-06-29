@@ -160,8 +160,11 @@ motion candidate
     `c1a90a0`, and the binary is at
     `firmware/mqtt_heartbeat/build_lte003_command_loop_fix6/egolink_mqtt_heartbeat.bin`.
     It adds an HTTPREAD-specific UART collection path that waits for the JSON
-    body instead of returning on the first generic `OK`. Fix6 is not flashed
-    or USB-Free runtime validated yet.
+    body instead of returning on the first generic `OK`. Fix6 flash on `COM4`
+    passed after explicit operator confirmation; flashed repo/app version is
+    `8d7395f`, and flash evidence is under
+    `reports/field_validation/lte003-command-loop-fix6-20260629-160859/flash_report.md`.
+    USB-Free runtime validation has not been run yet.
 
 ## USB-Free VPS Walking Skeleton Line
 
