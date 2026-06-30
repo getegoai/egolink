@@ -106,6 +106,9 @@ Current increment:
 - LOC-003 completed the first VPS-side `location_memory` table and active
   `Predicted` belief gate for the case where a later GNSS report is no-fix but
   a prior memory exists.
+- LOC-004A completed the first raw LTE firmware-side SIM7670G cell/LTE
+  `location_observation` gate and KR-003 released it as an engineering Walking
+  Skeleton point.
 
 Definition of Done:
 
@@ -116,11 +119,15 @@ Definition of Done:
   "GPS success/failure";
 - VPS can query GNSS attempts, cell fingerprints, and belief records by
   `test_run_id`.
+- dataset tooling can rebuild observation windows from raw-frame lineage,
+  derived events, labels, and quality checks instead of using transient
+  Dashboard state.
 
 Remaining R2.5 work:
 
-- firmware-side real cell/Wi-Fi/IMU/power observation is still unverified;
-- known-place matching and richer rule-based belief updates remain LOC-004+;
+- firmware-side real Wi-Fi/IMU/power observation is still unverified;
+- known-place matching, dataset export, and richer rule-based belief updates
+  remain DATA-001/LOC-005+ work;
 - product GNSS, enclosure, LTE long-run, and battery/power acceptance remain
   R3 gates.
 

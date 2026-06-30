@@ -82,16 +82,28 @@ Future VPS tables should be introduced by task, not all at once:
 - `gnss_bad_zones`
 - `route_segments`
 - `location_beliefs`
+- `observation_windows`
+- `location_fusion_samples`
+- `dataset_exports`
+
+Training data must not be built from transient Dashboard state. The
+algorithm-facing data path is defined in `LOCATION_DATASET.md`: stored raw
+frames and derived events are rebuilt into replayable observation windows,
+then exported as labelled dataset samples with lineage, privacy class, split
+assignment, and generator versions.
 
 ## Near-Term Tasks
 
-1. `OBS-001`: expose observability fields in state and test-run export.
-2. `LOC-002`: add multi-source `location_observation` contract.
-3. `STAB-001`: run the short USB-Free baseline stability gate using the
-   observability and location-observation views.
-4. `LTE-001`: expose SIM7670G LTE registration and cell state.
-5. `LOC-003`: persist location memory tables on the VPS.
-6. `LOC-004`: implement the rule-based belief engine.
+1. `DATA-001`: establish location-fusion dataset sample/export baseline from
+   raw-frame lineage, derived events, labels, and quality checks.
+2. `LOC-005A`: add firmware-side real Wi-Fi/IMU/power observation as explicit
+   `observed`, `unknown`, or `unverified` inputs.
+3. `OBS-003`: make current run, key release, and failure reason visible from
+   Web/report surfaces.
+4. `STAB-001B`: run a short USB-Free KR-003 baseline after data/observability
+   gates can explain failures.
+5. `LTE-005`: add reconnect, retry, cache, stale-command, and duplicate
+   handling gates before long field tests.
 
 ## LOC-002 Baseline
 
@@ -143,6 +155,24 @@ set. During raw LTE `request_location`, firmware can upload a command-scoped
 `Unknown` belief. This makes weak/no-fix location attempts explainable without
 depending on USB logs. It still does not estimate a position from cell data;
 that belongs to later known-place and fusion tasks.
+
+## DATA-001 Fusion Dataset Baseline
+
+DATA-001 creates the data foundation for later fusion algorithms:
+
+- raw frames remain the transport truth;
+- derived `location_report`, `location_observation`, command, ACK, and
+  observability views remain explainable features;
+- training samples are observation windows with raw-frame references, not
+  single Dashboard snapshots;
+- failed and partial frames are retained as diagnosable samples;
+- labels keep their source, confidence, consent/training flags, and privacy
+  class;
+- train/validation/test splits avoid leakage across the same session, device,
+  place, or time block.
+
+Boundary: DATA-001 should not train a learned model, publish cell-only
+positioning accuracy, or change device wire fields.
 
 EALE does not replace the existing `request_location -> location_report -> ACK`
 loop. It extends it into an explainable location system.

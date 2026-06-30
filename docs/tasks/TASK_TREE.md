@@ -96,6 +96,22 @@ motion candidate
 
 ## Active Queue
 
+- `DATA-001 Location Fusion Dataset Baseline`
+  - Path:
+    `docs/tasks/active/DATA-001_LOCATION_FUSION_DATASET_BASELINE.md`
+  - Status: proposed.
+  - Goal: create the first repeatable data-export path for location fusion and
+    future model training by rebuilding observation windows from test-run
+    exports, raw-frame lineage, derived location/LTE/GNSS/IMU/power features,
+    labels, and quality checks.
+  - Current entry condition: KR-003 provides a released raw LTE
+    `request_location -> location_report -> location_observation -> ACK`
+    skeleton with real firmware-side SIM7670G cell/LTE observation; DATA-001
+    should turn those evidence shapes into dataset samples without changing
+    device wire fields.
+  - Boundary: no learned model training, no cell-only positioning accuracy
+    claim, no firmware flash, no long LTE stability, and no private coordinate,
+    Wi-Fi, audio, or image payloads copied into committed docs.
 - `LTE-003 LTE HTTP Command Poll And ACK`
   - Path: `docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md`
   - Status: raw-frame acceptance passed through FW-003; legacy JSON
@@ -741,6 +757,11 @@ motion candidate
 
 ## Data, Quality, And Replay
 
+- Location fusion dataset baseline
+  - Status: proposed as `DATA-001`.
+  - Current role: define how raw-frame lineage, derived location observations,
+    labels, quality checks, privacy class, and split assignment become
+    repeatable algorithm samples.
 - Session recording
   - Status: implemented.
   - Current role: converts event logs into structured recording directories.
@@ -771,16 +792,20 @@ motion candidate
 
 ## Current Recommended Execution Order
 
-1. Use OBS-001 observability and LOC-002 `location_observation` as the entry
-   condition for any longer field run.
-2. STAB-001A gate tooling is ready. The next physical stability step is a
-   short operator-confirmed USB-Free baseline run over the current Wi-Fi HTTP
-   path; do not treat it as product LTE acceptance.
-3. Continue LTE thin slices through LTE-004: LTE registration and cell state,
-   LTE HTTP telemetry uplink, raw LTE command polling and ACK, then raw LTE
-   `request_location -> location_report -> ACK`.
-4. LOC-002 is complete as a contract/server/simulator baseline, and LOC-003
-   now provides the first VPS location-memory gate. Next location work is
-   LOC-004 richer rule-based `Fine`/`Coarse`/`Predicted`/`Unknown` belief
-   updates plus firmware-side real cell/Wi-Fi/IMU/power observations, while
-   long LTE and product power/enclosure gates remain R3 work.
+1. Treat KR-003 as the current Walking Skeleton baseline: raw LTE command
+   queue, command-scoped no-fix GNSS report, real firmware-side SIM7670G
+   cell/LTE observation, raw ACK, Web/API derived view, and reboot-aware
+   validator workflow.
+2. Run `DATA-001` before serious fusion work: define observation-window
+   samples, raw-frame lineage, label/quality/privacy fields, and dataset
+   manifests so later large data collection can be reused for model training.
+3. Run `LOC-005A` after or alongside DATA-001 to add real firmware-side
+   Wi-Fi/IMU/power observations as explicit `observed`, `unknown`, or
+   `unverified` inputs, not as inferred capabilities.
+4. Add `OBS-003` Web/report visibility for current run, key release, and
+   failure reason so every runnable version remains demonstrable.
+5. Use `STAB-001B` only as a short KR-003 USB-Free baseline after the data and
+   observability gates can explain failures. Do not promote it into long
+   stability testing.
+6. Move to `LTE-005` reconnect/retry/cache/stale-command behavior and then
+   `KR-004` as the next key release candidate.
