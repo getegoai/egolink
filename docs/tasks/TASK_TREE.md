@@ -1,6 +1,6 @@
 ---
 document_status: current_task_tree
-generated_at: 2026-06-29
+generated_at: 2026-06-30
 generated_by: codex
 ---
 
@@ -73,30 +73,18 @@ motion candidate
   - Boundary: updates R2.1-R3.2 route and gate definitions only; no long
     stability run, LTE transport run, hardware flash, or hardware action was
     performed by the route update.
+- `REL-001 First Key Release Gate`
+  - Path: `docs/tasks/done/REL-001_FIRST_KEY_RELEASE_GATE.md`
+  - Status: completed.
+  - Evidence: `docs/current/KEY_RELEASES.md`,
+    `docs/current/key_releases/KR-001_USB_FREE_RAW_LTE_LOCATION.json`,
+    `scripts/run_key_release_gate.py`, and gate reports under
+    `reports/key_releases/KR-001/`.
+  - Boundary: publishes an engineering key release gate only; no new hardware
+    flash, runtime validation, long LTE stability, or product readiness claim.
 
 ## Active Queue
 
-- `LTE-004 Raw LTE Request Location Thin Slice`
-  - Path: `docs/tasks/active/LTE-004_RAW_LTE_REQUEST_LOCATION_THIN_SLICE.md`
-  - Status: completed; task packet remains in `active` until the next
-    archival cleanup.
-  - Goal: extend the proven raw LTE command/ACK loop from
-    `set_report_interval` to `request_location`, upload a raw-frame
-    `location_report` over SIM7670G LTE HTTP, derive the Web/API
-    `location_report`, and ACK through the raw LTE path.
-  - Current evidence: build `0.1.0-lte004-raw-lte-location` /
-    `lte004-raw-lte-location-20260629-213717` was flashed on `COM4`, then
-    passed USB-Free validation after independent power and USB disconnect.
-    Validator created `cmd-000020` (`request_location`), observed raw
-    `location_report seq=30` from frame `loc-cmd-000020` with
-    `transport.type=lte`, `lte_http.phase=location_report`,
-    `source=sim7670g_firmware_gnss`, `gnss_query_ok=true`,
-    `gnss_state=no_fix`, and `fix=false`, then observed raw ACK `seq=31` with
-    `lte_http.phase=command_ack`, `LTE_HTTP_OK` / HTTP `200`, and command/ACK
-    status `ok`. Evidence is under
-    `reports/field_validation/lte004-raw-lte-location-20260629-213717/`.
-  - Boundary: no long LTE stability claim, no product GNSS fix acceptance, and
-    no battery, power, or enclosure acceptance.
 - `LTE-003 LTE HTTP Command Poll And ACK`
   - Path: `docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md`
   - Status: raw-frame acceptance passed through FW-003; legacy JSON

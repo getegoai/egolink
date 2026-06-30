@@ -1,0 +1,168 @@
+{
+  "release_id": "KR-001",
+  "release_name": "P0 USB-Free Raw LTE Location Walking Skeleton",
+  "release_version": "0.1.0-key-release-001",
+  "status": "released",
+  "release_date": "2026-06-30",
+  "summary": "First Ego Link P0 engineering key release. It freezes the USB-Free, Message-First, raw-frame LTE request_location loop as the first demonstrable backbone.",
+  "firmware_version": "0.1.0-lte004-raw-lte-location",
+  "firmware_test_run_id": "lte004-raw-lte-location-20260629-213717",
+  "protocol_profiles": [
+    "egolink.p0.v1",
+    "raw-frame.p0.v1"
+  ],
+  "device_id": "ego-link-r1-connectivity-001",
+  "in_scope": [
+    "Public VPS Message Hub command queue and raw-frame ingest path",
+    "SIM7670G LTE HTTP raw command polling",
+    "request_location command execution over LTE",
+    "raw-frame location_report upload over LTE",
+    "raw-frame ACK over LTE",
+    "server-side raw storage before derived Web/API compatibility views",
+    "USB-Free runtime validation on independent power"
+  ],
+  "non_claims": [
+    "No product readiness claim",
+    "No long LTE stability or reconnect recovery claim",
+    "No outdoor real GNSS fix acceptance claim",
+    "No final enclosure, mounting, battery, charging, or power behavior claim",
+    "No emergency calling, SMS, dispatch, camera, audio, or storage acceptance claim",
+    "No final multi-source location memory or belief-engine acceptance claim"
+  ],
+  "gates": [
+    {
+      "id": "G1-CONTRACT",
+      "status": "PASS",
+      "summary": "raw-frame.p0.v1 and egolink.p0.v1 compatibility boundaries documented and tested"
+    },
+    {
+      "id": "G2-SERVER",
+      "status": "PASS",
+      "summary": "VPS Message Hub derives location_report only after raw frame storage"
+    },
+    {
+      "id": "G3-FIRMWARE-BUILD",
+      "status": "PASS",
+      "summary": "LTE-004 firmware guarded ESP-IDF build passed"
+    },
+    {
+      "id": "G4-FLASH",
+      "status": "PASS",
+      "summary": "LTE-004 firmware flashed to COM4 after explicit operator confirmation"
+    },
+    {
+      "id": "G5-USB-FREE-RUNTIME",
+      "status": "PASS",
+      "summary": "independent-power USB-Free request_location -> location_report -> ACK passed over LTE"
+    },
+    {
+      "id": "G6-REGRESSION",
+      "status": "PASS",
+      "summary": "context_lint, full verify, focused LTE validator tests, and git diff checks passed"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "status",
+      "path": "docs/current/STATUS.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "active_build",
+      "path": "docs/current/ACTIVE_BUILD.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "task_packet",
+      "path": "docs/tasks/done/LTE-004_RAW_LTE_REQUEST_LOCATION_THIN_SLICE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "protocol",
+      "path": "docs/development/PROTOCOL.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "transport_route",
+      "path": "docs/development/LTE_TRANSPORT.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "validation_script",
+      "path": "scripts/validate_lte_command_loop.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "runtime_report_json",
+      "path": "reports/field_validation/lte004-raw-lte-location-20260629-213717/lte_command_loop_report.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "runtime_report_markdown",
+      "path": "reports/field_validation/lte004-raw-lte-location-20260629-213717/lte_command_loop_report.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "test_run_export",
+      "path": "reports/field_validation/lte004-raw-lte-location-20260629-213717/test_run_export.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "flash_report",
+      "path": "reports/field_validation/lte004-raw-lte-location-20260629-213717/flash_report.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "board_probe",
+      "path": "reports/board_validation/20260630-075007/probe.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "firmware_binary",
+      "path": "firmware/mqtt_heartbeat/build_lte004_raw_lte_location/egolink_mqtt_heartbeat.bin",
+      "required": true,
+      "local_only": true
+    }
+  ],
+  "commits": [
+    {
+      "label": "raw LTE request_location implementation",
+      "commit": "1b1fd3a"
+    },
+    {
+      "label": "LTE-004 flash record",
+      "commit": "39c53fe"
+    },
+    {
+      "label": "LTE-004 USB-Free runtime pass",
+      "commit": "da75b46"
+    },
+    {
+      "label": "generic LTE command report gate",
+      "commit": "b642117"
+    }
+  ],
+  "validation_commands": [
+    "python -m unittest quality_tests.test_lte_command_loop_validation -v",
+    "powershell -ExecutionPolicy Bypass -File scripts\\verify.ps1",
+    "python scripts\\context_lint.py",
+    "git diff --check",
+    "python scripts\\run_key_release_gate.py --manifest docs/current/key_releases/KR-001_USB_FREE_RAW_LTE_LOCATION.json --json"
+  ],
+  "next_release_gates": [
+    "Define a reusable targeted-feature test matrix rather than repeating ad hoc short field runs",
+    "Add location memory or multi-source observation only behind a new versioned release manifest",
+    "Run long LTE stability only after the release gate can explain transport, reset, power, and command failures"
+  ]
+}

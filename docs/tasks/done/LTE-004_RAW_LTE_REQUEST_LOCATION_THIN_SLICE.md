@@ -27,7 +27,7 @@ allowed_paths:
   - docs/development/LTE_TRANSPORT.md
   - docs/development/PROTOCOL.md
   - docs/tasks/TASK_TREE.md
-  - docs/tasks/active/LTE-004_RAW_LTE_REQUEST_LOCATION_THIN_SLICE.md
+  - docs/tasks/done/LTE-004_RAW_LTE_REQUEST_LOCATION_THIN_SLICE.md
   - docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md
   - docs/tasks/done/RAW-LTE-REPEAT-001_SHORT_USB_FREE_RAW_LTE_REPEAT.md
   - firmware/mqtt_heartbeat/README.md
