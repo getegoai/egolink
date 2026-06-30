@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LOC-004A cell-observation firmware currently flashed on COM4; USB-Free LOC-004A runtime validation pending; LTE-004 request-location thin slice previously passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LOC-004A cell-observation firmware currently flashed on COM4; USB-Free LOC-004A runtime evidence reconciled PASS; LTE-004 request-location thin slice previously passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -524,11 +524,12 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   proves the bounded raw LTE `request_location -> location_report -> ACK`
   slice only; real GNSS fix, long LTE stability, reconnect recovery, battery,
   power, and enclosure behavior remain unverified.
-- LOC-004A real cell location observation is implemented, VPS-deployed, and
+- LOC-004A real cell location observation is implemented, VPS-deployed,
   build-verified as `0.1.0-loc004a-cell-observation` /
-  `loc004a-cell-observation-20260630-001`, and was flashed on `COM4` after
-  explicit operator confirmation, but it has not been USB-Free runtime
-  validated. Message Hub derives raw
+  `loc004a-cell-observation-20260630-001`, flashed on `COM4` after explicit
+  operator confirmation, and reconciled as a bounded USB-Free runtime PASS
+  after an independent-power reboot with USB disconnected. Message Hub derives
+  raw
   `event_type=location_observation` key/value frames into `cell`, `lte`,
   `transport`, `lte_http`, and `location_belief` fields after raw storage.
   Unknown observations preserve existing useful `location_memory` and can
@@ -550,10 +551,24 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 - LOC-004A flash evidence is recorded at
   `reports/field_validation/loc004a-cell-observation-20260630-001/flash_report.md`.
   `esptool.py` detected ESP32-S3 QFN56 rev v0.2 on `COM4`, wrote bootloader,
-  app, and partition table, verified hashes, and completed hard reset. This is
-  flash evidence only; `request_location -> location_report ->
-  location_observation -> ACK` over independent power with USB disconnected
-  remains pending.
+  app, and partition table, verified hashes, and completed hard reset.
+- LOC-004A USB-Free runtime evidence is reconciled as PASS after the operator
+  rebooted the connectivity node on independent power with USB disconnected.
+  The device consumed pending command `cmd-000021` and produced raw
+  `location_report` frame `loc-cmd-000021` (`seq=2`, `fix=false`,
+  `gnss_state=no_fix`, `gnss_query_ok=true`, `transport.type=lte`), raw
+  `location_observation` frame `obs-cmd-000021` (`seq=3`,
+  `cell.rat=LTE`, `cell.cell_id=180571649`, `cell.rsrp=-98`,
+  `lte.reason_code=LTE_READY`, assigned IP `10.91.147.246`,
+  `location_belief.state=Unknown`, `transport.type=lte`), and raw ACK
+  `cmd-000021` (`seq=4`, status `ok`, `LTE_HTTP_OK` / HTTP `200`). Evidence
+  is under
+  `reports/field_validation/loc004a-cell-observation-runtime-20260630-001/`.
+  A later stale `cmd-000022` from the second validator attempt was cancelled
+  server-side and is not hardware evidence. This validates only the bounded
+  raw LTE `request_location -> location_report -> location_observation -> ACK`
+  slice; long LTE stability, reconnect recovery, cell-only positioning,
+  battery/power, and product readiness remain unverified.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

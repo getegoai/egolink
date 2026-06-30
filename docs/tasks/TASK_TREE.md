@@ -532,8 +532,10 @@ motion candidate
     hardware action is claimed by this task.
 - `LOC-004A Real Cell Location Observation`
   - Path: `docs/tasks/done/LOC-004A_REAL_CELL_LOCATION_OBSERVATION.md`
-  - Status: completed as a build/deploy/flash candidate; USB-Free runtime
-    validation remains a separate explicit operator step.
+  - Status: completed as a bounded USB-Free runtime gate after
+    independent-power reboot with USB disconnected; the pass is reconciled
+    from actual VPS raw-frame evidence because the automatic validator
+    attempts hit a one-command-per-boot timing issue.
   - Goal: make raw LTE `request_location` produce both GNSS
     `location_report` and real firmware-side SIM7670G cell/LTE
     `location_observation` evidence without returning to device-side JSON.
@@ -545,9 +547,15 @@ motion candidate
     can gate command-scoped cell/LTE evidence.
     Flash evidence on `COM4` is recorded at
     `reports/field_validation/loc004a-cell-observation-20260630-001/flash_report.md`.
-  - Boundary: no USB-Free runtime pass, cell-only positioning, learned
-    known-place model, Wi-Fi/IMU/power fusion, LTE long-run stability,
-    battery/power behavior, or product readiness is claimed by this task.
+    Runtime evidence is recorded at
+    `reports/field_validation/loc004a-cell-observation-runtime-20260630-001/validation_reconciliation.md`:
+    `cmd-000021` produced raw LTE `location_report`, raw LTE
+    `location_observation`, and raw LTE ACK with command/ACK status `ok`;
+    stale `cmd-000022` was server-side cancelled and is not hardware evidence.
+  - Boundary: no cell-only positioning, learned known-place model,
+    Wi-Fi/IMU/power fusion, LTE long-run stability, reconnect recovery,
+    battery/power behavior, enclosure behavior, or product readiness is
+    claimed by this task.
 - `STAB-001A Short Baseline Gate Tooling`
   - Path: `docs/tasks/done/STAB-001A_SHORT_BASELINE_GATE_TOOLING.md`
   - Status: completed as gate tooling only.

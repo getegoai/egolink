@@ -6,6 +6,32 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: LOC-004A USB-Free runtime evidence is reconciled as PASS after the
+operator rebooted the connectivity node on independent power with USB
+disconnected. The first validator-created command `cmd-000021` was still
+pending when the reboot happened; after reboot the LOC-004A firmware consumed
+that command and produced the full raw LTE chain: raw `location_report`
+`loc-cmd-000021` (`seq=2`, `fix=false`, `gnss_state=no_fix`,
+`gnss_query_ok=true`, `transport.type=lte`, `lte_http.phase=location_report`),
+raw `location_observation` `obs-cmd-000021` (`seq=3`, `cell.rat=LTE`,
+`cell.cell_id=180571649`, `cell.rsrp=-98`,
+`lte.reason_code=LTE_READY`, assigned IP `10.91.147.246`,
+`location_belief.state=Unknown`, `transport.type=lte`,
+`lte_http.phase=location_observation`), and raw ACK `cmd-000021` (`seq=4`,
+ACK status `ok`, message `firmware uploaded SIM7670G GNSS location_report and
+cell location_observation`, `LTE_HTTP_OK` / HTTP `200`). Evidence is under
+`reports/field_validation/loc004a-cell-observation-runtime-20260630-001/`,
+including `validation_reconciliation.md`,
+`validation_reconciliation.json`, and refreshed test-run export. A second
+automatic validator attempt queued `cmd-000022` after the one-command-per-boot
+firmware loop had already stopped; that stale command was server-side
+cancelled as queue hygiene and is not counted as hardware evidence. This
+validates the bounded USB-Free raw LTE
+`request_location -> location_report -> location_observation -> ACK` slice;
+it does not validate long LTE stability, reconnect recovery, cell-only
+positioning, Wi-Fi/IMU/power fusion, battery/power behavior, enclosure
+behavior, or product readiness.
+
 2026-06-30: LOC-004A firmware was flashed on the connectivity node through
 `COM4` after explicit operator confirmation. Flash used firmware version
 `0.1.0-loc004a-cell-observation`, test run
@@ -18,9 +44,9 @@ binary
 app, and partition table, verified hashes, and completed hard reset. Flash
 evidence is recorded at
 `reports/field_validation/loc004a-cell-observation-20260630-001/flash_report.md`.
-This is flash evidence only; USB-Free runtime validation for
-`request_location -> location_report -> location_observation -> ACK` remains
-pending.
+This entry records flash evidence only; USB-Free runtime validation for
+`request_location -> location_report -> location_observation -> ACK` was
+performed afterward and is recorded above.
 
 2026-06-30: LOC-004A Real Cell Location Observation is implemented,
 VPS-deployed, and build-verified as the next explainability increment after
@@ -47,10 +73,10 @@ Firmware version `0.1.0-loc004a-cell-observation` with test run
 (`298416` bytes). Focused firmware/server/validator/runner tests passed with
 50 tests, `context_lint` passed, full `verify.ps1` passed with 292 tests,
 `git diff --check` passed, and the guarded ESP-IDF prepare/build passed.
-This does not claim hardware flash/runtime validation, cell-only positioning,
-learned known-place matching, Wi-Fi/IMU/power fusion, long LTE stability,
-reconnect recovery, battery/power behavior, enclosure behavior, or product
-readiness.
+Flash and USB-Free runtime validation were performed afterward and are recorded
+above. This does not claim cell-only positioning, learned known-place matching,
+Wi-Fi/IMU/power fusion, long LTE stability, reconnect recovery,
+battery/power behavior, enclosure behavior, or product readiness.
 
 2026-06-30: KR-002 Location Memory And Explainable No-Fix Gate is implemented
 as a release candidate and deployed to the VPS Message Hub at

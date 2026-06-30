@@ -89,6 +89,9 @@ no-fix location attempts inspectable from the VPS/Web path without USB logs.
 - [x] `python scripts/context_lint.py` passes.
 - [x] Full `scripts/verify.ps1` passes if behavior changes.
 - [x] Firmware flashes on `COM4` after explicit operator confirmation.
+- [x] USB-Free runtime evidence reconciles as PASS for
+      `request_location -> location_report -> location_observation -> ACK`
+      after independent-power reboot with USB disconnected.
 
 ## Evidence
 
@@ -132,13 +135,27 @@ no-fix location attempts inspectable from the VPS/Web path without USB logs.
   `reports/field_validation/loc004a-cell-observation-20260630-001/flash_report.md`
   records PASS on `COM4`; ESP32-S3 QFN56 rev v0.2 detected, bootloader/app/
   partition table written, hashes verified, and hard reset completed.
+- USB-Free runtime reconciliation:
+  `reports/field_validation/loc004a-cell-observation-runtime-20260630-001/validation_reconciliation.md`
+  records `RECONCILED_PASS` for `cmd-000021`. After the operator rebooted the
+  independent-powered device with USB disconnected, firmware consumed the
+  pending command and uploaded raw `location_report` frame `loc-cmd-000021`
+  (`seq=2`, `fix=false`, `gnss_state=no_fix`, `gnss_query_ok=true`,
+  `transport.type=lte`), raw `location_observation` frame `obs-cmd-000021`
+  (`seq=3`, `cell.rat=LTE`, `cell.cell_id=180571649`, `cell.rsrp=-98`,
+  `lte.reason_code=LTE_READY`, assigned IP `10.91.147.246`,
+  `location_belief.state=Unknown`, `transport.type=lte`), and raw ACK
+  `cmd-000021` (`seq=4`, command/ACK status `ok`, `LTE_HTTP_OK` / HTTP
+  `200`). Stale command `cmd-000022` from a later validator attempt was
+  server-side cancelled as queue hygiene and is not counted as hardware
+  evidence.
 
 ## Follow-Up Hardware Gate
 
-USB-Free runtime validation is intentionally a separate explicit operator
-step. The expected gate is the guarded runner with
-`-EnableSim7670LocationObservation`, `-LteCommandName request_location`,
-`-RequireLteLocationReport`, and `-RequireLteLocationObservation`.
+The bounded USB-Free runtime gate has passed by reconciliation. The automatic
+validator still needs a follow-up hardening task for one-command-per-boot
+timing: the first validator timed out before reboot, and the second queued
+`cmd-000022` after the firmware command loop had already stopped.
 
 ## Boundary
 
