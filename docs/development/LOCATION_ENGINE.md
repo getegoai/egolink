@@ -114,8 +114,9 @@ assignment, and generator versions.
    visibility from Web/report surfaces.
 6. `ALG-001`: completed optional server-side EALE-P0 derived
    `location_belief` view for current run, exports, and Dashboard visibility.
-7. `ALG-002`: run EALE-P0 over DATA-001 JSONL for evidence and failure
-   coverage metrics before KR-004 release-candidate preparation.
+7. `ALG-002`: completed offline EALE-P0 evaluation over DATA-001 JSONL for
+   evidence, failure, lineage, feature, privacy, and model-training readiness
+   metrics before KR-004 promotion review.
 8. `STAB-001B`: run a short USB-Free KR-003 baseline after data/observability
    gates can explain failures.
 9. `LTE-005`: add reconnect, retry, cache, stale-command, and duplicate

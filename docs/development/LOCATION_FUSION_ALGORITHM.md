@@ -480,7 +480,8 @@ Recommended acceptance:
 - `ALG-001`: completed optional server-side EALE-P0 derived
   `location_belief` visibility for current run, export, and Dashboard
   surfaces.
-- `ALG-002`: run EALE-P0 over DATA-001 JSONL for evidence and failure
-  coverage metrics.
+- `ALG-002`: completed offline EALE-P0 coverage evaluation over DATA-001
+  JSONL for evidence, failure, lineage, feature, privacy, and training
+  readiness metrics.
 - `ALG-003`: prototype learned source reliability only after sufficient real
   labelled samples exist.

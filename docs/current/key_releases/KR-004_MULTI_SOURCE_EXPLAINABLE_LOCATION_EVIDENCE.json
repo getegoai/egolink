@@ -328,7 +328,7 @@
     "python scripts\\run_key_release_gate.py --manifest docs/current/key_releases/KR-004_MULTI_SOURCE_EXPLAINABLE_LOCATION_EVIDENCE.json --json"
   ],
   "next_release_gates": [
-    "Run ALG-002 over DATA-001 JSONL for evidence and failure coverage metrics",
+    "Review the ALG-002 DATA-001 evidence/failure coverage report before KR-004 promotion",
     "Add LTE-005 reconnect, retry, cache, stale-command, and duplicate handling gates",
     "Add privacy-reviewed Wi-Fi fingerprints only after raw BSSID retention rules are explicit",
     "Add product-topology IMU and real battery/power instrumentation before those sources can raise confidence",

@@ -145,6 +145,28 @@ EALE-P0 consumes these windows as algorithm inputs. It should treat the
 dataset labels as evidence and quality annotations, not as permission to train
 a learned model or claim positioning accuracy.
 
+## Implemented ALG-002 Coverage Evaluation
+
+`ALG-002` adds an offline EALE-P0 dataset evaluator on top of DATA-001:
+
+- Evaluator: `scripts/evaluate_eale_p0_dataset.py`.
+- Input: DATA-001 `samples.jsonl` plus `manifest.json`.
+- Output: `eale_p0_dataset_report.json` plus
+  `eale_p0_dataset_report.md`; the default output root is ignored
+  runtime/report storage under `reports/location_fusion_eale/`.
+- Unit tests: `quality_tests/test_eale_p0_dataset_evaluation.py`.
+
+The evaluator reports sample counts, label states, failure modes, raw-frame
+lineage coverage, derived-event coverage, feature-group coverage, source-state
+coverage, privacy/training flags, and EALE-P0 review counters such as retained
+failure windows, no-fix Unknown samples, Fine candidates, and cell/LTE evidence
+that must not become a position by itself.
+
+This is a release-review and corpus-quality tool. It does not train a model,
+change DATA-001 schema, change device wire fields, or claim positioning
+accuracy. A dataset can be acceptable evidence for release review while still
+being explicitly not ready for learned-model training.
+
 ## DATA-001 Follow-On Direction
 
 The baseline leaves these deliberate next steps:

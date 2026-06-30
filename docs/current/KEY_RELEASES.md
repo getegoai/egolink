@@ -206,7 +206,8 @@ KR-003 raw LTE command/location/observation/ACK loop
 
 It is a release candidate because the gate now passes and Web/API identify the
 current LOC-005A run as `KR-004`, but formal promotion from `release_candidate`
-to `released` should happen after report review.
+to `released` should happen after report review. Post-candidate review now
+also uses the ALG-002 offline DATA-001 evidence/failure coverage report.
 
 ### Evidence Summary
 
@@ -225,6 +226,11 @@ to `released` should happen after report review.
   position.
 - DATA-001 readiness is visible as `failure_window` /
   `candidate_with_warnings`, with `training_allowed=false`.
+- ALG-002 can regenerate the DATA-001 JSONL shard for the LOC-005A export and
+  produce an offline EALE-P0 coverage report. The current local report is
+  `warn`: one retained `failure_window`, one `gnss_no_fix` failure mode,
+  raw-frame and derived-event lineage present, zero Fine candidates, and
+  `model_training_ready=false`.
 - KR-004 gate passed with JSON checks over LOC-005A runtime evidence and the
   authenticated current-run EALE-P0 snapshot.
 - The VPS Message Hub was redeployed with the KR-004 manifest; existing GitLab

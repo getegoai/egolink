@@ -6,6 +6,28 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: ALG-002 EALE-P0 Dataset Coverage Evaluation is implemented as
+an offline DATA-001 release-review increment after REL-004. New evaluator:
+`scripts/evaluate_eale_p0_dataset.py`; focused tests:
+`quality_tests/test_eale_p0_dataset_evaluation.py`. It reads DATA-001
+`samples.jsonl` plus `manifest.json` and writes JSON/Markdown coverage reports
+under ignored runtime/report storage `reports/location_fusion_eale/`. The
+current LOC-005A export was converted to DATA-001 under
+`reports/location_fusion_datasets/loc005a-source-states-20260630-001/` and
+evaluated under
+`reports/location_fusion_eale/loc005a-source-states-20260630-001/`. Result:
+`warn`, with one retained `failure_window`, one `gnss_no_fix` failure mode,
+one `Unknown` label state, raw-frame and derived-event lineage present,
+cell/LTE/Wi-Fi/IMU/power feature groups present, zero Fine candidates, and
+`model_training_ready=false`. Focused DATA-001/ALG-002 tests passed with 8
+tests, `python scripts/context_lint.py` passed, `scripts\verify.ps1` passed
+with 307 tests, `git diff --check` passed, and the KR-004 release gate still
+passed after updating the next-gate review text. This is useful release-review
+evidence, not a positioning-accuracy or model-training claim. No firmware,
+hardware, VPS, raw-frame profile, DATA-001 schema, Message Hub runtime
+behavior, learned model behavior, GNSS acceptance, LTE stability,
+battery/power behavior, or product readiness claim is changed.
+
 2026-06-30: REL-004 created the KR-004 Multi-Source Explainable Location
 Evidence release-candidate gate. New manifest:
 `docs/current/key_releases/KR-004_MULTI_SOURCE_EXPLAINABLE_LOCATION_EVIDENCE.json`.

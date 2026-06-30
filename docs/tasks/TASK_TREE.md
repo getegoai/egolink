@@ -829,6 +829,18 @@ motion candidate
     Dashboard Run Context panel.
   - Boundary: no firmware change, wire-protocol change, learned model,
     cell-only positioning claim, key release, or product-readiness claim.
+- EALE-P0 dataset coverage evaluation
+  - Path: `docs/tasks/done/ALG-002_EALE_P0_DATASET_COVERAGE_EVALUATION.md`
+  - Status: completed as `ALG-002`.
+  - Current role: reads DATA-001 `samples.jsonl` and `manifest.json`, then
+    reports evidence coverage, failure coverage, lineage, feature groups,
+    source states, privacy/training flags, and model-training readiness for
+    release review.
+  - Evidence: `scripts/evaluate_eale_p0_dataset.py`,
+    `quality_tests/test_eale_p0_dataset_evaluation.py`, and local reports
+    under `reports/location_fusion_eale/`.
+  - Boundary: no firmware change, wire-protocol change, DATA-001 schema
+    change, learned model, product accuracy claim, or product-readiness claim.
 - Session recording
   - Status: implemented.
   - Current role: converts event logs into structured recording directories.
@@ -883,9 +895,9 @@ motion candidate
 7. Treat `REL-004` as the completed KR-004 release-candidate gate. Review the
    generated KR-004 report before promoting it from `release_candidate` to
    `released`.
-8. Prepare `ALG-002` separately to run EALE-P0 over DATA-001 JSONL for
-   evidence/failure coverage metrics before release promotion or broader data
-   collection.
+8. Treat `ALG-002` as the completed offline DATA-001/EALE-P0 coverage
+   evaluator: use its JSON/Markdown report before KR-004 promotion review or
+   broader data collection.
 9. Use `STAB-001B` only as a short KR-003/KR-004 USB-Free baseline after the data and
    observability gates can explain failures. Do not promote it into long
    stability testing.
