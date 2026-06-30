@@ -8,6 +8,7 @@ verified_by: codex
 
 Ego Adaptive Location Engine (EALE) is the P0 location direction after the
 USB-Free Message Hub path and firmware-side SIM7670G real GNSS fix were proven.
+The frozen P0 algorithm baseline is `LOCATION_FUSION_ALGORITHM.md`.
 
 EALE is not "wait for GPS". It is:
 
@@ -70,6 +71,12 @@ Start with rules, not a complex model:
   bounded GNSS pulse.
 - Known GNSS-bad zone -> reduce GNSS attempt duration or trigger less often.
 
+The formal P0 rule/scoring design is EALE-P0 in
+`LOCATION_FUSION_ALGORITHM.md`. That document keeps the public states here
+(`Fine`, `Coarse`, `Predicted`, `Unknown`) and represents more detailed
+outcomes such as known-place, last-known hold, no-fix, stale, and runtime
+failure as reasons, substates, and quality flags.
+
 ## Data Assets
 
 Future VPS tables should be introduced by task, not all at once:
@@ -94,15 +101,18 @@ assignment, and generator versions.
 
 ## Near-Term Tasks
 
-1. `DATA-001`: establish location-fusion dataset sample/export baseline from
+1. `DATA-001`: completed location-fusion dataset sample/export baseline from
    raw-frame lineage, derived events, labels, and quality checks.
-2. `LOC-005A`: add firmware-side real Wi-Fi/IMU/power observation as explicit
+2. `ALG-000`: completed EALE-P0 location fusion algorithm design freeze.
+3. `LOC-005A`: add firmware-side real Wi-Fi/IMU/power observation as explicit
    `observed`, `unknown`, or `unverified` inputs.
-3. `OBS-003`: make current run, key release, and failure reason visible from
+4. `OBS-003`: make current run, key release, and failure reason visible from
    Web/report surfaces.
-4. `STAB-001B`: run a short USB-Free KR-003 baseline after data/observability
+5. `ALG-001`: add optional server-side derived `location_belief` generation
+   from DATA-001 observation windows.
+6. `STAB-001B`: run a short USB-Free KR-003 baseline after data/observability
    gates can explain failures.
-5. `LTE-005`: add reconnect, retry, cache, stale-command, and duplicate
+7. `LTE-005`: add reconnect, retry, cache, stale-command, and duplicate
    handling gates before long field tests.
 
 ## LOC-002 Baseline

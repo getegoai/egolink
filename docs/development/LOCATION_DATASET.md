@@ -8,7 +8,8 @@ verified_by: codex
 
 This document defines the data boundary for Ego Link P0 location fusion and
 future model-training collection. It extends the EALE direction in
-`LOCATION_ENGINE.md` without changing the live wire protocol.
+`LOCATION_ENGINE.md` and feeds the EALE-P0 algorithm baseline in
+`LOCATION_FUSION_ALGORITHM.md` without changing the live wire protocol.
 
 The current rule is:
 
@@ -139,6 +140,10 @@ The exporter currently builds command-scoped `location_request_window`,
 failure windows. It keeps raw payload bytes out of dataset samples, preserves
 raw-frame IDs and hashes, flags private coordinates, and blocks training by
 default when private location appears.
+
+EALE-P0 consumes these windows as algorithm inputs. It should treat the
+dataset labels as evidence and quality annotations, not as permission to train
+a learned model or claim positioning accuracy.
 
 ## DATA-001 Follow-On Direction
 

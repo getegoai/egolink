@@ -122,12 +122,14 @@ Definition of Done:
 - dataset tooling can rebuild observation windows from raw-frame lineage,
   derived events, labels, and quality checks instead of using transient
   Dashboard state.
+- EALE-P0 algorithm design is frozen as a server-side, derived-only,
+  explainable rule/scoring baseline.
 
 Remaining R2.5 work:
 
 - firmware-side real Wi-Fi/IMU/power observation is still unverified;
-- known-place matching, dataset export, and richer rule-based belief updates
-  remain DATA-001/LOC-005+ work;
+- known-place matching and richer rule-based belief updates remain
+  LOC-005+/ALG-001+ work;
 - product GNSS, enclosure, LTE long-run, and battery/power acceptance remain
   R3 gates.
 

@@ -750,6 +750,14 @@ motion candidate
   - Evidence: `shared/contracts/location_fusion_sample.schema.json`,
     `scripts/export_location_fusion_dataset.py`, and
     `quality_tests/test_location_fusion_dataset_export.py`.
+- Location fusion algorithm design
+  - Path: `docs/tasks/done/ALG-000_LOCATION_FUSION_ALGORITHM_DESIGN.md`
+  - Status: completed as `ALG-000`.
+  - Current role: freezes EALE-P0 as a server-side, derived-only,
+    explainable rule/scoring baseline that consumes DATA-001 observation
+    windows without changing firmware wire protocol or claiming positioning
+    accuracy.
+  - Evidence: `docs/development/LOCATION_FUSION_ALGORITHM.md`.
 - Session recording
   - Status: implemented.
   - Current role: converts event logs into structured recording directories.
@@ -788,13 +796,19 @@ motion candidate
    `scripts/export_location_fusion_dataset.py` to turn selected test-run
    exports into JSONL samples and manifests before large collection or model
    training.
-3. Run `LOC-005A` next to add real firmware-side
+3. Treat `ALG-000` as the completed EALE-P0 design freeze: use
+   `docs/development/LOCATION_FUSION_ALGORITHM.md` as the algorithm boundary
+   for KR-004 preparation.
+4. Run `LOC-005A` next to add real firmware-side
    Wi-Fi/IMU/power observations as explicit `observed`, `unknown`, or
    `unverified` inputs, not as inferred capabilities.
-4. Add `OBS-003` Web/report visibility for current run, key release, and
+5. Add `OBS-003` Web/report visibility for current run, key release, and
    failure reason so every runnable version remains demonstrable.
-5. Use `STAB-001B` only as a short KR-003 USB-Free baseline after the data and
+6. Prepare `ALG-001` separately as optional server-side derived
+   `location_belief` generation from observation windows; do not mix it into
+   firmware or DATA-001.
+7. Use `STAB-001B` only as a short KR-003 USB-Free baseline after the data and
    observability gates can explain failures. Do not promote it into long
    stability testing.
-6. Move to `LTE-005` reconnect/retry/cache/stale-command behavior and then
+8. Move to `LTE-005` reconnect/retry/cache/stale-command behavior and then
    `KR-004` as the next key release candidate.
