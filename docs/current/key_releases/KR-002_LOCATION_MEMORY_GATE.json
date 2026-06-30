@@ -118,6 +118,12 @@
       "local_only": true
     }
   ],
+  "commits": [
+    {
+      "label": "KR-002 location memory gate implementation",
+      "commit": "65acd60"
+    }
+  ],
   "validation_commands": [
     "python -m unittest quality_tests.test_message_hub_server quality_tests.test_message_hub_dashboard quality_tests.test_location_memory_gate -v",
     "python -m py_compile server/message_hub.py scripts/validate_location_memory_gate.py",
