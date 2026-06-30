@@ -173,6 +173,30 @@ states are `ok`, `warning`, `pending`, `failure`, and `unknown`.
 This context is a derived report/view contract. Devices continue to send the
 existing `egolink.p0.v1` JSON-derived messages or `raw-frame.p0.v1` frames.
 
+## ALG-001 EALE-P0 Derived Belief View
+
+ALG-001 adds an optional server-derived EALE-P0 view for current run and
+report/export surfaces. It does not change device wire messages, raw-frame
+profile, or DATA-001 sample schema.
+
+`GET /api/state.current_run.eale_p0`, test-run export
+`run_context.eale_p0`, and `observability_summary.eale_p0` include:
+
+- `location_belief`: conservative derived state, substate, source,
+  confidence bucket, reason, failure reason, quality flags, privacy, lineage,
+  and generator metadata;
+- `evidence`: normalized GNSS, cell/LTE, Wi-Fi, IMU, power, transport,
+  runtime, and memory source evidence;
+- `dataset_window`: DATA-001 window type/status, raw-frame and derived-event
+  counts, blockers, warnings, and `training_allowed=false` until privacy and
+  label policy are explicit.
+
+EALE-P0 is conservative. Trusted GNSS fixes may produce `Fine`; last-known
+memory plus no-fix may produce `Predicted`; cell/LTE-only evidence remains
+`Unknown` unless future memory supports a coarse-area candidate. Missing,
+partial, malformed, no-fix, and failed evidence remains visible as quality
+flags and dataset candidates.
+
 Typical derived state:
 
 ```json

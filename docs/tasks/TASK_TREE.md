@@ -802,6 +802,16 @@ motion candidate
     windows without changing firmware wire protocol or claiming positioning
     accuracy.
   - Evidence: `docs/development/LOCATION_FUSION_ALGORITHM.md`.
+- Server-derived EALE-P0 location belief
+  - Path: `docs/tasks/done/ALG-001_SERVER_DERIVED_LOCATION_BELIEF.md`
+  - Status: completed as `ALG-001`.
+  - Current role: exposes conservative EALE-P0 derived `location_belief`,
+    normalized source evidence, dataset-window readiness, and quality flags
+    through `/api/state.current_run.eale_p0`, test-run export
+    `run_context.eale_p0`, `observability_summary.eale_p0`, and the
+    Dashboard Run Context panel.
+  - Boundary: no firmware change, wire-protocol change, learned model,
+    cell-only positioning claim, key release, or product-readiness claim.
 - Session recording
   - Status: implemented.
   - Current role: converts event logs into structured recording directories.
@@ -849,11 +859,14 @@ motion candidate
 5. Treat `OBS-003` as the completed Web/report visibility increment: current
    run, key-release/baseline state, command/ACK chain, raw evidence, derived
    location, and failure reason are now visible through API/export/Dashboard.
-6. Prepare `ALG-001` separately as optional server-side derived
-   `location_belief` generation from observation windows; do not mix it into
-   firmware or DATA-001.
-7. Use `STAB-001B` only as a short KR-003 USB-Free baseline after the data and
+6. Treat `ALG-001` as the completed server-derived EALE-P0 visibility
+   increment: current run, export, and Dashboard can now explain conservative
+   location belief, source evidence, dataset-window readiness, and quality
+   flags without firmware or DATA-001 schema changes.
+7. Prepare `ALG-002` separately to run EALE-P0 over DATA-001 JSONL for
+   evidence/failure coverage metrics before KR-004 release-candidate work.
+8. Use `STAB-001B` only as a short KR-003 USB-Free baseline after the data and
    observability gates can explain failures. Do not promote it into long
    stability testing.
-8. Move to `LTE-005` reconnect/retry/cache/stale-command behavior and then
+9. Move to `LTE-005` reconnect/retry/cache/stale-command behavior and then
    `KR-004` as the next key release candidate.

@@ -464,20 +464,23 @@ Recommended acceptance:
 4. Web/API/report surfaces show current run, key release, command, ACK, raw
    frame, derived observation, and failure reason.
 5. EALE-P0 design is frozen by this document.
-6. Optional server-side `location_belief` generation is implemented separately
-   under ALG-001 and clearly marked experimental until release.
+6. Optional server-side `location_belief` generation is implemented
+   separately under ALG-001 and clearly marked as derived/conservative until
+   release.
 7. Failure windows are retained.
 8. No product readiness, GNSS acceptance, cell-only positioning, learned-model,
    or positioning-accuracy claim is made.
 
 ## Next Tasks
 
-- `LOC-005A`: connect firmware-side Wi-Fi, IMU, and power observation as
-  explicit observed/verified/unverified/unknown/mock/missing/failed evidence.
-- `OBS-003`: improve Web/API/report visibility for current run, key release,
+- `LOC-005A`: completed firmware-side Wi-Fi, IMU, and power observation
+  source-state slots as explicit evidence.
+- `OBS-003`: completed Web/API/report visibility for current run, key release,
   raw evidence, derived observation, command/ACK chain, and failure reason.
-- `ALG-001`: add optional server-side derived `location_belief` generation.
-- `ALG-002`: run EALE-P0 over DATA-001 JSONL for evidence and failure coverage
-  metrics.
+- `ALG-001`: completed optional server-side EALE-P0 derived
+  `location_belief` visibility for current run, export, and Dashboard
+  surfaces.
+- `ALG-002`: run EALE-P0 over DATA-001 JSONL for evidence and failure
+  coverage metrics.
 - `ALG-003`: prototype learned source reliability only after sufficient real
   labelled samples exist.

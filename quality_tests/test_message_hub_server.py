@@ -732,6 +732,8 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(exported["run_context"]["test_run_id"], "field-r1-test")
         self.assertEqual(exported["run_context"]["command"]["ack_status"], "ok")
         self.assertEqual(exported["run_context"]["failure"]["reason"], "GNSS_NO_OBSERVATION")
+        self.assertEqual(exported["run_context"]["eale_p0"]["location_belief"]["state"], "Unknown")
+        self.assertEqual(exported["observability_summary"]["eale_p0"]["location_belief"]["generator"]["name"], "EALE-P0")
         self.assertEqual(exported["observability_summary"]["failure_summary"]["reason"], "GNSS_NO_OBSERVATION")
 
     def test_state_api_includes_current_run_context(self) -> None:
@@ -785,7 +787,100 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(current_run["failure"]["state"], "warning")
         self.assertNotEqual(current_run["failure"]["reason"], "command_pending_ack_missing")
         self.assertIn("GNSS_NO_FIX", current_run["failure"]["reason_codes"])
+        self.assertEqual(current_run["eale_p0"]["location_belief"]["state"], "Unknown")
+        self.assertEqual(current_run["eale_p0"]["location_belief"]["failure_reason"], "GNSS_NO_FIX")
         self.assertEqual(current_run["evidence_counts"]["commands"], 0)
+
+    def test_eale_p0_summary_uses_source_states_and_dataset_window(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                post_json(base_url, "/api/v1/test-runs", {"test_run_id": "alg001-unit"})
+                command = post_json(
+                    base_url,
+                    "/api/v1/devices/ego-link-001/commands",
+                    {"cmd": "request_location", "test_run_id": "alg001-unit"},
+                )["command"]
+                post_json(
+                    base_url,
+                    "/api/v1/devices/ego-link-001/telemetry",
+                    protocol.event_message(
+                        "ego-link-001",
+                        "2026-06-30T00:00:01Z",
+                        1,
+                        "location_report",
+                        "normal",
+                        fw_version="0.1.0-loc005a-source-states",
+                        source="sim7670g_firmware_gnss",
+                        source_status="unverified",
+                        fix=False,
+                        gnss_state="no_fix",
+                        gnss_query_ok=True,
+                        location_request_cmd_id=command["cmd_id"],
+                        transport={"type": "lte"},
+                        test_run_id="alg001-unit",
+                    ),
+                )
+                post_json(
+                    base_url,
+                    "/api/v1/devices/ego-link-001/telemetry",
+                    protocol.event_message(
+                        "ego-link-001",
+                        "2026-06-30T00:00:02Z",
+                        2,
+                        "location_observation",
+                        "normal",
+                        fw_version="0.1.0-loc005a-source-states",
+                        location_request_cmd_id=command["cmd_id"],
+                        cell={"rat": "LTE", "cell_id": "180571649", "rsrp": -98},
+                        lte={"reason_code": "LTE_READY", "assigned_ip": "10.0.0.8"},
+                        wifi={"source_status": "disabled", "evidence_status": "missing"},
+                        imu={"source_status": "unverified", "evidence_status": "ok"},
+                        power={"source_status": "mock", "evidence_status": "ok"},
+                        location_belief={"state": "Unknown", "reason": "cell_lte_only"},
+                        transport={"type": "lte"},
+                        test_run_id="alg001-unit",
+                    ),
+                )
+                post_json(
+                    base_url,
+                    f"/api/v1/devices/ego-link-001/commands/{command['cmd_id']}/ack",
+                    {
+                        "device_id": "ego-link-001",
+                        "seq": 3,
+                        "status": "ok",
+                        "test_run_id": "alg001-unit",
+                        "transport": {"type": "lte"},
+                    },
+                )
+                state = get_json(base_url, "/api/state")
+                exported = get_json(base_url, "/api/v1/test-runs/alg001-unit/export")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        eale = state["current_run"]["eale_p0"]
+        belief = eale["location_belief"]
+        dataset = eale["dataset_window"]
+        self.assertEqual(belief["state"], "Unknown")
+        self.assertEqual(belief["substate"], "no_precise_fix")
+        self.assertEqual(belief["reason"], "gnss_no_fix_cell_lte_observed_no_position_memory")
+        self.assertEqual(belief["failure_reason"], "GNSS_NO_FIX")
+        self.assertIn("cell_lte", belief["source"])
+        self.assertIn("cell_lte_not_position_source", belief["quality_flags"])
+        self.assertIn("wifi_disabled", belief["quality_flags"])
+        self.assertIn("imu_unverified", belief["quality_flags"])
+        self.assertIn("power_mock", belief["quality_flags"])
+        self.assertEqual(dataset["sample_type"], "failure_window")
+        self.assertEqual(dataset["status"], "candidate_with_warnings")
+        self.assertFalse(dataset["training_allowed"])
+        self.assertEqual(exported["run_context"]["eale_p0"]["location_belief"]["reason"], belief["reason"])
+        self.assertEqual(exported["observability_summary"]["eale_p0"]["dataset_window"]["sample_type"], "failure_window")
 
     def test_get_api_requires_token_when_auth_is_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

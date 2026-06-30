@@ -33,6 +33,8 @@ DEFAULT_DB = REPO_ROOT / "server" / "runtime" / "message_hub.db"
 KEY_RELEASE_DIR = REPO_ROOT / "docs" / "current" / "key_releases"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
+EALE_P0_GENERATOR_NAME = "EALE-P0"
+EALE_P0_GENERATOR_VERSION = "0.1.0-alg001"
 
 
 def utc_now() -> str:
@@ -2426,6 +2428,385 @@ def unique_text(values: list[Any]) -> list[str]:
     return result
 
 
+def clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
+
+
+def confidence_bucket(value: Any) -> str:
+    score = as_number(value)
+    if score is None:
+        return "unknown"
+    if score >= 0.75:
+        return "high"
+    if score >= 0.45:
+        return "medium"
+    if score > 0:
+        return "low"
+    return "unknown"
+
+
+def eale_source_status(value: Any) -> str:
+    text = str(value or "unknown").strip().lower()
+    return text or "unknown"
+
+
+def eale_evidence_status(payload: dict[str, Any], source_status: str, present: bool) -> str:
+    explicit = str(payload.get("evidence_status") or "").strip().lower()
+    if explicit:
+        return explicit
+    if not present:
+        return "missing"
+    if source_status in {"disabled", "missing", "unknown"}:
+        return "missing"
+    if source_status in {"failed", "error"}:
+        return "failed"
+    if source_status in {"partial"}:
+        return "partial"
+    return "ok"
+
+
+def eale_source_evidence(
+    source: str,
+    payload: dict[str, Any],
+    *,
+    present: bool | None = None,
+    source_status: Any = None,
+    server_received_at: Any = None,
+    raw_frame_refs: list[dict[str, Any]] | None = None,
+    derived_event_refs: list[dict[str, Any]] | None = None,
+    privacy_class: str = "engineering",
+) -> dict[str, Any]:
+    status = eale_source_status(first_known(source_status, payload.get("source_status")))
+    has_payload = present if present is not None else bool(payload)
+    evidence_status = eale_evidence_status(payload, status, has_payload)
+    return {
+        "source": source,
+        "present": bool(has_payload),
+        "source_status": status,
+        "evidence_status": evidence_status,
+        "server_received_at": server_received_at,
+        "raw_frame_refs": raw_frame_refs or [],
+        "derived_event_refs": derived_event_refs or [],
+        "quality_flags": [],
+        "privacy_class": privacy_class,
+        "redaction_state": "hashed" if source == "wifi" else "none",
+    }
+
+
+def eale_raw_frame_ref(raw_frame: dict[str, Any]) -> dict[str, Any]:
+    raw_payload = as_dict(raw_frame.get("raw_payload"))
+    framing = as_dict(raw_frame.get("framing"))
+    parse = as_dict(raw_frame.get("parse_result"))
+    derived = as_dict(parse.get("derived_message"))
+    return compact_dict(
+        {
+            "frame_id": raw_frame.get("frame_id"),
+            "direction": raw_frame.get("direction"),
+            "device_id": first_known(raw_frame.get("device_id"), derived.get("device_id")),
+            "test_run_id": first_known(raw_frame.get("test_run_id"), derived.get("test_run_id")),
+            "cmd_id": first_known(raw_frame.get("cmd_id"), derived.get("cmd_id"), derived.get("location_request_cmd_id")),
+            "seq": first_known(raw_frame.get("seq"), derived.get("seq")),
+            "fw_version": first_known(raw_frame.get("fw_version"), derived.get("fw_version")),
+            "frame_type": raw_frame_type(raw_frame),
+            "server_received_at": raw_frame.get("server_received_at"),
+            "byte_len": raw_payload.get("byte_len"),
+            "sha256": raw_payload.get("sha256"),
+            "crc32": first_known(raw_payload.get("crc32"), framing.get("payload_crc32")),
+            "parse_status": raw_frame_parse_status(raw_frame),
+            "parser_version": parse.get("parser_version"),
+            "derived_message_type": raw_frame_derived_type(raw_frame),
+        }
+    )
+
+
+def eale_derived_event_ref(message: dict[str, Any]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "message_type": message.get("message_type"),
+            "event_type": message.get("event_type"),
+            "cmd_id": first_known(message.get("location_request_cmd_id"), message.get("cmd_id")),
+            "frame_id": dict_value(message, "raw_frame", "frame_id"),
+            "seq": message.get("seq"),
+            "server_received_at": message.get("server_received_at"),
+            "fw_version": message.get("fw_version"),
+            "test_run_id": message.get("test_run_id"),
+            "source": message.get("source"),
+            "source_status": message.get("source_status"),
+        }
+    )
+
+
+def eale_lineage_quality(raw_refs: list[dict[str, Any]], derived_refs: list[dict[str, Any]], anchor_cmd_id: Any, seq: Any) -> float:
+    if raw_refs and derived_refs and anchor_cmd_id and seq is not None:
+        return 1.0
+    if derived_refs and anchor_cmd_id:
+        return 0.7
+    if raw_refs or derived_refs:
+        return 0.4
+    return 0.0
+
+
+def eale_gnss_quality(report: dict[str, Any], lineage_quality: float, quality_flags: list[str]) -> tuple[float, float]:
+    hdop = as_number(first_known(report.get("hdop"), dict_value(report, "gnss", "hdop")))
+    satellites = as_number(first_known(report.get("satellites"), dict_value(report, "gnss", "satellites")))
+    if hdop is None:
+        hdop_score = 0.45
+        quality_flags.append("gnss_hdop_missing")
+    else:
+        hdop_score = clamp((8.0 - hdop) / 7.0, 0.0, 1.0)
+    if satellites is None:
+        satellite_score = 0.45
+        quality_flags.append("gnss_satellites_missing")
+    else:
+        satellite_score = clamp((satellites - 4.0) / 8.0, 0.0, 1.0)
+    source_status = eale_source_status(report.get("source_status"))
+    source_score = 1.0 if source_status in {"verified", "observed", "pc_side_verified"} else 0.5
+    score = clamp(hdop_score * satellite_score * source_score * lineage_quality, 0.0, 1.0)
+    radius = max(25.0, (hdop or 8.0) * 8.0)
+    return round(score, 3), round(radius, 1)
+
+
+def eale_latest_event(messages: list[dict[str, Any]], event_type: str) -> dict[str, Any]:
+    matches = [
+        message
+        for message in messages
+        if message.get("message_type") == "event" and message.get("event_type") == event_type
+    ]
+    return newest_record(matches, "server_received_at", "ts") if matches else {}
+
+
+def eale_dataset_window_status(
+    *,
+    command: dict[str, Any],
+    report: dict[str, Any],
+    observation: dict[str, Any],
+    raw_refs: list[dict[str, Any]],
+    derived_refs: list[dict[str, Any]],
+    failure_reason: Any,
+    quality_flags: list[str],
+) -> dict[str, Any]:
+    has_location_command = command.get("cmd") == "request_location" or bool(first_known(report.get("location_request_cmd_id"), observation.get("location_request_cmd_id")))
+    if report.get("fix") is True:
+        sample_type = "known_place_calibration_window"
+    elif failure_reason and str(failure_reason) not in {"none", "unknown"}:
+        sample_type = "failure_window"
+    elif has_location_command:
+        sample_type = "location_request_window"
+    else:
+        sample_type = "passive_observation_window"
+
+    blockers: list[str] = []
+    warnings: list[str] = []
+    if not raw_refs:
+        warnings.append("missing_raw_frame_lineage")
+    if not derived_refs:
+        blockers.append("missing_derived_location_event")
+    if command and command.get("status") == "pending":
+        warnings.append("command_pending")
+    if quality_flags:
+        warnings.extend(quality_flags)
+    status = "blocked" if blockers else ("candidate_with_warnings" if warnings else "candidate")
+    return {
+        "status": status,
+        "sample_type": sample_type,
+        "raw_frame_count": len(raw_refs),
+        "derived_event_count": len(derived_refs),
+        "training_allowed": False,
+        "training_reason": "training_requires_explicit_privacy_and_label_policy",
+        "blockers": unique_text(blockers),
+        "warnings": unique_text(warnings),
+    }
+
+
+def build_eale_p0_location_belief(
+    messages: list[dict[str, Any]],
+    commands: list[dict[str, Any]],
+    raw_frames: list[dict[str, Any]],
+    latest_observability: dict[str, Any],
+    failure_summary: dict[str, Any],
+) -> dict[str, Any]:
+    report = eale_latest_event(messages, "location_report")
+    observation = eale_latest_event(messages, "location_observation")
+    anchor = observation or report
+    command = newest_record(commands, "updated_at", "created_at") if commands else {}
+    raw_refs = [eale_raw_frame_ref(raw_frame) for raw_frame in raw_frames]
+    derived_refs = [eale_derived_event_ref(message) for message in messages if message.get("message_type") == "event" and message.get("event_type") in {"location_report", "location_observation"}]
+    anchor_cmd_id = first_known(
+        observation.get("location_request_cmd_id"),
+        report.get("location_request_cmd_id"),
+        command.get("cmd_id"),
+    )
+    anchor_seq = first_known(observation.get("seq"), report.get("seq"))
+    lineage_quality = eale_lineage_quality(raw_refs, derived_refs, anchor_cmd_id, anchor_seq)
+    location_memory = as_dict(latest_observability.get("location_memory"))
+
+    gnss = as_dict(first_known(report.get("gnss"), {}))
+    cell = as_dict(first_known(observation.get("cell"), report.get("cell")))
+    lte = as_dict(first_known(observation.get("lte"), report.get("lte")))
+    wifi = as_dict(first_known(observation.get("wifi"), report.get("wifi")))
+    imu = as_dict(first_known(observation.get("imu"), report.get("imu")))
+    power = as_dict(first_known(observation.get("power"), report.get("power")))
+    transport = as_dict(first_known(observation.get("transport"), report.get("transport"), dict_value(command, "ack", "transport")))
+    runtime = as_dict(first_known(observation.get("runtime"), report.get("runtime")))
+
+    evidence = {
+        "gnss": eale_source_evidence(
+            "gnss",
+            gnss or report,
+            present=bool(report),
+            source_status=report.get("source_status"),
+            server_received_at=report.get("server_received_at"),
+            raw_frame_refs=raw_refs,
+            derived_event_refs=[ref for ref in derived_refs if ref.get("event_type") == "location_report"],
+            privacy_class="private_location" if report.get("lat") is not None or report.get("lon") is not None else "engineering",
+        ),
+        "cell_lte": eale_source_evidence(
+            "cell_lte",
+            {**cell, **lte},
+            present=bool(cell or lte),
+            source_status=first_known(cell.get("source_status"), lte.get("source_status"), "observed" if cell or lte else None),
+            server_received_at=observation.get("server_received_at"),
+            raw_frame_refs=raw_refs,
+            derived_event_refs=[ref for ref in derived_refs if ref.get("event_type") == "location_observation"],
+        ),
+        "wifi": eale_source_evidence("wifi", wifi, present=bool(wifi), server_received_at=observation.get("server_received_at")),
+        "imu": eale_source_evidence("imu", imu, present=bool(imu), server_received_at=observation.get("server_received_at")),
+        "power": eale_source_evidence("power", power, present=bool(power), server_received_at=observation.get("server_received_at")),
+        "transport": eale_source_evidence("transport", transport, present=bool(transport), source_status=transport.get("type"), server_received_at=anchor.get("server_received_at")),
+        "runtime": eale_source_evidence("runtime", runtime, present=bool(runtime), server_received_at=anchor.get("server_received_at")),
+        "memory": eale_source_evidence("memory", location_memory, present=bool(location_memory), source_status=location_memory.get("state"), server_received_at=location_memory.get("updated_at")),
+    }
+
+    quality_flags: list[str] = []
+    for name, payload in (("wifi", wifi), ("imu", imu), ("power", power)):
+        source_status = eale_source_status(payload.get("source_status"))
+        evidence_status = eale_evidence_status(payload, source_status, bool(payload))
+        if evidence_status == "missing":
+            quality_flags.append(f"{name}_{source_status if source_status != 'unknown' else 'missing'}")
+        elif source_status in {"unverified", "mock"}:
+            quality_flags.append(f"{name}_{source_status}")
+        elif evidence_status in {"failed", "partial"}:
+            quality_flags.append(f"{name}_{evidence_status}")
+    if cell or lte:
+        quality_flags.append("cell_lte_not_position_source")
+    if lineage_quality < 1.0:
+        quality_flags.append("partial_lineage")
+
+    fix = first_known(report.get("fix"), gnss.get("fix"))
+    source_status = eale_source_status(report.get("source_status"))
+    failure_reason = failure_summary.get("reason") if failure_summary.get("state") != "ok" else None
+    state = "Unknown"
+    substate = "no_precise_fix"
+    source: list[str] = []
+    radius_m: float | None = None
+    confidence: float | None = None
+    reason = "no_location_evidence"
+
+    if fix is True and report.get("lat") is not None and report.get("lon") is not None:
+        if source_status in {"verified", "observed", "pc_side_verified"}:
+            confidence, radius_m = eale_gnss_quality(report, lineage_quality, quality_flags)
+            state = "Fine"
+            substate = "gnss_fix"
+            source = ["gnss"]
+            reason = "gnss_fix_valid"
+            failure_reason = None
+        else:
+            confidence = 0.2
+            state = "Unknown"
+            substate = "failure"
+            source = ["gnss"]
+            reason = "gnss_fix_untrusted_source"
+            failure_reason = "gnss_fix_untrusted_source"
+            quality_flags.append("gnss_source_untrusted")
+    elif has_predictable_location_memory(location_memory) and fix is False:
+        memory_confidence = as_number(location_memory.get("confidence"))
+        confidence = round(memory_confidence * 0.55, 3) if memory_confidence is not None else 0.35
+        radius_m = as_number(location_memory.get("radius_m"))
+        state = "Predicted"
+        substate = "last_known_hold"
+        source = merge_sources(location_memory.get("source"), "memory")
+        reason = "last_known_after_gnss_no_fix"
+        quality_flags.append("gnss_no_fix")
+    elif report and fix is False and (cell or lte):
+        confidence = 0.2
+        state = "Unknown"
+        substate = "no_precise_fix"
+        source = ["gnss", "cell_lte"]
+        reason = "gnss_no_fix_cell_lte_observed_no_position_memory"
+        quality_flags.append("gnss_no_fix")
+    elif report and fix is False:
+        confidence = 0.1
+        state = "Unknown"
+        substate = "failure"
+        source = ["gnss"]
+        reason = "gnss_no_fix"
+        quality_flags.append("gnss_no_fix")
+    elif command and not report:
+        confidence = 0.0
+        state = "Unknown"
+        substate = "failure"
+        source = ["runtime"]
+        reason = "missing_location_report_after_command"
+        failure_reason = first_known(failure_reason, "missing_location_report")
+        quality_flags.append("missing_location_report")
+    elif cell or lte:
+        confidence = 0.15
+        state = "Unknown"
+        substate = "no_precise_fix"
+        source = ["cell_lte"]
+        reason = "cell_lte_observed_without_position_memory"
+    else:
+        confidence = None
+        failure_reason = first_known(failure_reason, "no_runtime_evidence")
+
+    quality_flags = unique_text(quality_flags)
+    dataset_window = eale_dataset_window_status(
+        command=command,
+        report=report,
+        observation=observation,
+        raw_refs=raw_refs,
+        derived_refs=derived_refs,
+        failure_reason=failure_reason,
+        quality_flags=quality_flags,
+    )
+
+    return {
+        "location_belief": {
+            "state": state,
+            "substate": substate,
+            "source": source,
+            "lat": None,
+            "lon": None,
+            "place_id": None,
+            "radius_m": radius_m,
+            "confidence": confidence,
+            "confidence_bucket": confidence_bucket(confidence),
+            "freshness_s": None,
+            "reason": reason,
+            "failure_reason": failure_reason,
+            "quality_flags": quality_flags,
+            "evidence_refs": {
+                "raw_frame_refs": raw_refs,
+                "derived_event_refs": derived_refs,
+                "anchor_cmd_id": anchor_cmd_id,
+                "anchor_event_id": first_known(dict_value(observation, "raw_frame", "frame_id"), dict_value(report, "raw_frame", "frame_id")),
+            },
+            "privacy": {
+                "privacy_class": "private_location" if report.get("lat") is not None or report.get("lon") is not None else "engineering",
+                "redaction_state": "bounded_export_only" if report.get("lat") is not None or report.get("lon") is not None else "none",
+                "training_allowed": False,
+            },
+            "generator": {
+                "name": EALE_P0_GENERATOR_NAME,
+                "version": EALE_P0_GENERATOR_VERSION,
+                "config_hash": None,
+            },
+        },
+        "evidence": evidence,
+        "dataset_window": dataset_window,
+    }
+
+
 def build_failure_summary(
     messages: list[dict[str, Any]],
     commands: list[dict[str, Any]],
@@ -2571,6 +2952,13 @@ def build_run_context(
     raw_parse = as_dict(latest_raw.get("parse_result"))
     key_release = resolve_key_release_context(test_run_id, fw_version)
     failure = build_failure_summary(context_messages, context_commands, context_raw_frames, latest_observability)
+    eale_p0 = build_eale_p0_location_belief(
+        context_messages,
+        context_commands,
+        context_raw_frames,
+        latest_observability,
+        failure,
+    )
 
     return {
         "test_run_id": first_known(test_run_id, "unknown"),
@@ -2605,6 +2993,7 @@ def build_run_context(
             "belief_reason": location_belief.get("reason"),
         },
         "failure": failure,
+        "eale_p0": eale_p0,
         "evidence_counts": {
             "messages": len(context_messages),
             "commands": len(context_commands),
@@ -2621,11 +3010,13 @@ def summarize_test_run_observability(
     raw_frame_list = raw_frames or []
     if not messages:
         failure_summary = build_failure_summary([], commands, raw_frame_list, {})
+        eale_summary = build_eale_p0_location_belief([], commands, raw_frame_list, {}, failure_summary)
         return {
             "message_count": 0,
             "latest_observability": None,
             "reason_codes": failure_summary["reason_codes"],
             "failure_summary": failure_summary,
+            "eale_p0": eale_summary,
         }
     latest = messages[-1]
     device = {
@@ -2650,12 +3041,20 @@ def summarize_test_run_observability(
     for code in latest_observability["explainability"]["reason_codes"]:
         if code not in reason_codes:
             reason_codes.append(code)
+    failure_summary = build_failure_summary(messages, commands, raw_frame_list, latest_observability)
     return {
         "message_count": len(messages),
         "command_count": len(commands),
         "latest_observability": latest_observability,
         "reason_codes": reason_codes,
-        "failure_summary": build_failure_summary(messages, commands, raw_frame_list, latest_observability),
+        "failure_summary": failure_summary,
+        "eale_p0": build_eale_p0_location_belief(
+            messages,
+            commands,
+            raw_frame_list,
+            latest_observability,
+            failure_summary,
+        ),
     }
 
 
@@ -2813,6 +3212,9 @@ def render_dashboard() -> str:
       const rawFrame = run.raw_frame || {};
       const location = run.location || {};
       const failure = run.failure || {};
+      const eale = run.eale_p0 || {};
+      const ealeBelief = eale.location_belief || {};
+      const ealeDataset = eale.dataset_window || {};
       const counts = run.evidence_counts || {};
       return `
         <div class="metric"><span>Current Run</span><b>${escapeHtml(run.test_run_id || 'unknown')}</b></div>
@@ -2825,6 +3227,12 @@ def render_dashboard() -> str:
         <div class="metric"><span>Derived Location</span><span>${escapeHtml(location.event_type || 'none')} seq ${escapeHtml(location.seq ?? 'unknown')} / fix ${escapeHtml(location.fix ?? 'unknown')} / ${escapeHtml(location.gnss_state || 'unknown')}</span></div>
         <div class="metric"><span>Failure State</span><span class="${failure.state === 'ok' ? 'ok' : failure.state === 'pending' || failure.state === 'warning' ? 'warn' : 'bad'}">${escapeHtml(failure.state || 'unknown')}</span></div>
         <div class="metric"><span>Failure Reason</span><span>${escapeHtml(failure.reason || 'unknown')}</span></div>
+        <div class="metric"><span>EALE-P0</span><span>${escapeHtml(ealeBelief.state || 'unknown')} / ${escapeHtml(ealeBelief.substate || 'unknown')} / ${escapeHtml(ealeBelief.confidence_bucket || 'unknown')}</span></div>
+        <div class="metric"><span>EALE Reason</span><span>${escapeHtml(ealeBelief.reason || 'unknown')}</span></div>
+        <div class="metric"><span>EALE Failure</span><span>${escapeHtml(ealeBelief.failure_reason || 'none')}</span></div>
+        <div class="metric"><span>Dataset Window</span><span>${escapeHtml(ealeDataset.sample_type || 'unknown')} / ${escapeHtml(ealeDataset.status || 'unknown')}</span></div>
+        <div class="metric"><span>Dataset Training</span><span>${escapeHtml(ealeDataset.training_allowed ?? false)} / ${escapeHtml(ealeDataset.training_reason || 'unknown')}</span></div>
+        <div class="metric"><span>Quality Flags</span><span>${escapeHtml((ealeBelief.quality_flags || []).join(', ') || 'none')}</span></div>
         <div class="metric"><span>Evidence Counts</span><span>${escapeHtml(counts.messages ?? 0)} messages / ${escapeHtml(counts.commands ?? 0)} commands / ${escapeHtml(counts.raw_frames ?? 0)} raw_frames</span></div>
       `;
     }

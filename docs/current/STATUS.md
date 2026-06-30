@@ -6,6 +6,32 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: ALG-001 Server Derived EALE-P0 Location Belief is implemented as
+a Server-Web/report visibility increment after OBS-003 and LOC-005A.
+`/api/state.current_run.eale_p0`, test-run export `run_context.eale_p0`, and
+`observability_summary.eale_p0` now expose a conservative derived
+`location_belief`, normalized source evidence, and dataset-window readiness.
+The Dashboard Run Context now shows EALE-P0 state/substate/confidence bucket,
+EALE reason, EALE failure reason, DATA-001 window type/status, training flag,
+and quality flags. For the current LOC-005A shape, GNSS no-fix plus real
+cell/LTE evidence remains `Unknown` with reason
+`gnss_no_fix_cell_lte_observed_no_position_memory`; cell/LTE is not promoted
+to a precise position, and Wi-Fi/IMU/power source states remain explicit
+evidence/quality flags such as `wifi_disabled`, `imu_unverified`, and
+`power_mock`. Focused Message Hub server/dashboard tests passed with 21 tests,
+`python scripts/context_lint.py` passed, `scripts\verify.ps1` passed with 301
+tests, and `git diff --check` passed. The updated Message Hub/Web was deployed
+to `203.0.113.10:8790`; public `/health` returned `ok=true`, unauthenticated
+`/api/state` returned HTTP 401, public `/` contained `EALE-P0`,
+`EALE Reason`, `Dataset Window`, and `Quality Flags`, and authenticated
+`/api/state.current_run.eale_p0` reported current run
+`loc005a-source-states-20260630-001` as `Unknown` / `no_precise_fix`,
+dataset window `failure_window` / `candidate_with_warnings`, and
+`training_allowed=false`. Existing GitLab service remained active. This task
+does not change firmware, device wire protocol, raw-frame profile, DATA-001
+schema, key-release status, learned model behavior, LTE stability, GNSS
+behavior, battery/power behavior, or product readiness.
+
 2026-06-30: OBS-003 Current Run / Key Release / Failure Visibility is
 implemented as a Server-Web/report observability increment after LOC-005A.
 `/api/state` now includes top-level `current_run` with the current test-run ID,

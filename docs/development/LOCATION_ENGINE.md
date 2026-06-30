@@ -110,13 +110,15 @@ assignment, and generator versions.
 4. `LOC-005B+`: add privacy-reviewed Wi-Fi fingerprints, product-topology IMU
    observations, and real battery/power instrumentation behind those stable
    source-state slots.
-5. `OBS-003`: make current run, key release, and failure reason visible from
-   Web/report surfaces.
-6. `ALG-001`: add optional server-side derived `location_belief` generation
-   from DATA-001 observation windows.
-7. `STAB-001B`: run a short USB-Free KR-003 baseline after data/observability
+5. `OBS-003`: completed current run, key release, and failure reason
+   visibility from Web/report surfaces.
+6. `ALG-001`: completed optional server-side EALE-P0 derived
+   `location_belief` view for current run, exports, and Dashboard visibility.
+7. `ALG-002`: run EALE-P0 over DATA-001 JSONL for evidence and failure
+   coverage metrics before KR-004 release-candidate preparation.
+8. `STAB-001B`: run a short USB-Free KR-003 baseline after data/observability
    gates can explain failures.
-8. `LTE-005`: add reconnect, retry, cache, stale-command, and duplicate
+9. `LTE-005`: add reconnect, retry, cache, stale-command, and duplicate
    handling gates before long field tests.
 
 ## LOC-002 Baseline
