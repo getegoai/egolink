@@ -194,10 +194,42 @@ Definition of Done:
   is missing or not LTE-marked;
 - no product position is inferred from cell-only data in this slice.
 
+## LTE-005: Offline Reliability Gate Baseline
+
+Goal: make the next LTE/reconnect/stability work explainable before starting a
+long field run.
+
+Implementation shape:
+
+- `scripts/validate_lte_reliability_gate.py` reads an existing Message Hub
+  `test_run_export.json`;
+- the gate checks command lifecycle visibility, stale/pending command
+  explanation, duplicate local execution protection, LTE transport/reason-code
+  evidence, raw-frame retention, reconnect/reset observability,
+  cache/drop-message observability, and sequence reset/duplicate visibility;
+- the gate returns `FAIL` only for evidence risks such as missing LTE transport,
+  missing raw-frame retention, unexplained stale pending commands, or repeated
+  command execution without duplicate prevention;
+- behaviors not exercised by the current export, such as cache/drop-message
+  reporting, remain `WARN` or `NOT_OBSERVED` instead of being treated as a
+  stability claim.
+
+Definition of Done:
+
+- the gate can run offline against LOC-005A `test_run_export.json`;
+- the current LOC-005A export produces an explainable `WARN`, not a false
+  product-stability pass;
+- focused unit tests cover a KR-004-shaped export, stale pending command
+  visibility, duplicate-execution failure, and report writing;
+- no firmware, VPS runtime, protocol, hardware, or long-run stability behavior
+  is changed by this tooling baseline.
+
 ## R3.0 LTE Long-Run Gate
 
-Only after LTE-001 through LTE-004 pass should the project run a long LTE
-stability and reconnect gate. That gate must cover:
+Only after LTE-001 through LTE-005 pass should the project run a long LTE
+stability and reconnect gate. LTE-005 is a preflight gate: it proves that the
+export can explain failure modes, not that the device has already survived a
+long field run. The later long-run gate must cover:
 
 - LTE registration failure;
 - PDP activation failure;

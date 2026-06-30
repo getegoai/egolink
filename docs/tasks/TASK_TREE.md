@@ -126,6 +126,21 @@ motion candidate
   - Boundary: no firmware flash, runtime validation, model training, product
     readiness, positioning accuracy, long LTE stability, reconnect, GNSS
     acceptance, or battery/power claim.
+- `LTE-005 LTE Reliability Gate Baseline`
+  - Path: `docs/tasks/done/LTE-005_LTE_RELIABILITY_GATE_BASELINE.md`
+  - Status: completed as a non-hardware offline reliability gate baseline.
+  - Evidence: `scripts/validate_lte_reliability_gate.py`,
+    `quality_tests/test_lte_reliability_gate.py`, and local reports under
+    `reports/lte_reliability/loc005a-source-states-20260630-001/`.
+  - Current visible result: running the gate over the current LOC-005A export
+    returns `WARN`, with command lifecycle, LTE transport, LTE/HTTP reason
+    codes, duplicate guard fields, no-fix explanation, and raw-frame retention
+    visible. Cache/drop-message observability is not present in the export,
+    and sequence reset/duplicate behavior is visible for later long-run
+    planning.
+  - Boundary: no firmware flash, runtime validation, VPS deployment, protocol
+    change, long LTE stability, reconnect recovery, battery/power behavior,
+    enclosure behavior, or product-readiness claim.
 
 ## Active Queue
 

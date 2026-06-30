@@ -202,6 +202,19 @@ and a useful state instead of appearing empty.
 
 Goal: make field failures diagnosable without serial logs.
 
+Before starting a long field run, run the LTE-005 offline reliability gate over
+the most recent key-release export:
+
+```powershell
+python scripts\validate_lte_reliability_gate.py --input reports\field_validation\<test-run-id>\test_run_export.json --output-dir reports\lte_reliability\<test-run-id>
+```
+
+The gate must not be read as long-run acceptance. `PASS` means the export
+contains enough reliability evidence for the checked behaviors. `WARN` means
+one or more behaviors, such as reconnect, stale command, or cache/drop-message
+reporting, were not exercised and should be planned into the next field run.
+`FAIL` means the next field run would be blind or unsafe to interpret.
+
 Test at least:
 
 - short network loss and reconnect;

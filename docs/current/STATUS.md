@@ -6,6 +6,29 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: LTE-005 LTE Reliability Gate Baseline is implemented as a
+non-hardware offline release-gate/tooling increment after KR-004. New gate:
+`scripts/validate_lte_reliability_gate.py`; focused tests:
+`quality_tests/test_lte_reliability_gate.py`. The gate reads an existing
+Message Hub `test_run_export.json` and checks command lifecycle visibility,
+stale/pending command explanation, duplicate local execution guard fields, LTE
+transport and LTE/HTTP reason-code evidence, failure/no-fix explanation,
+reconnect/reset and cache/drop-message observability, raw-frame
+hash/length/CRC retention, and sequence reset/duplicate visibility. Running it
+against the current LOC-005A export wrote reports under
+`reports/lte_reliability/loc005a-source-states-20260630-001/` and returned
+`WARN`: command lifecycle, LTE transport, LTE/HTTP reason codes, duplicate
+guard fields, no-fix explanation, and raw-frame retention are visible; stale
+pending was not exercised; cache/drop-message observability is not present;
+message sequence reset/duplicate behavior is visible and should be planned
+into the later long-run gate. Focused LTE reliability/command-loop tests
+passed with 13 tests, `python scripts/context_lint.py` passed,
+`scripts\verify.ps1` passed with 311 tests, and `git diff --check` passed.
+This is an offline preflight gate only: no firmware, hardware, VPS runtime,
+protocol, raw-frame profile, DATA-001 schema, learned model behavior, long LTE
+stability, reconnect recovery, GNSS acceptance, battery/power behavior,
+enclosure behavior, or product-readiness claim is changed.
+
 2026-06-30: REL-005 promotes KR-004 Multi-Source Explainable Location
 Evidence Baseline from `release_candidate` to released engineering key version
 `0.1.0-key-release-004`. The promotion uses the existing LOC-005A USB-Free
