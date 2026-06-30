@@ -159,6 +159,22 @@ motion candidate
   - Boundary: no firmware flash, hardware runtime validation, VPS deployment,
     long LTE stability, reconnect recovery, cache durability, battery/power
     behavior, enclosure behavior, or product-readiness claim.
+- `LTE-006 Firmware-Side Reliability Non-Claim Observability`
+  - Path: `docs/tasks/done/LTE-006_FIRMWARE_SIDE_RELIABILITY_NONCLAIM_OBSERVABILITY.md`
+  - Status: completed as a firmware/static-build increment after OBS-004.
+  - Evidence: `firmware/mqtt_heartbeat/main/app_main.c`,
+    `scripts/validate_lte_reliability_gate.py`,
+    `quality_tests/test_mqtt_heartbeat_firmware.py`, and
+    `quality_tests/test_lte_reliability_gate.py`.
+  - Current visible result: raw LTE `location_observation` now reports
+    network mode/RSSI/state/last error plus explicit cache non-claim fields
+    (`cache_state=not_enabled`, `cache_source_status=unverified`,
+    `cache_last_drop_reason=cache_not_enabled`). LTE-005 classifies this as
+    explainable missing cache capability and keeps the gate at `WARN` until
+    concrete queue/drop counters or store-forward state are observed.
+  - Boundary: no firmware flash, hardware runtime validation, VPS deployment,
+    long LTE stability, reconnect recovery, cache durability, battery/power
+    behavior, enclosure behavior, or product-readiness claim.
 
 ## Active Queue
 

@@ -431,17 +431,25 @@ def failure_visibility_gate(export: dict[str, Any]) -> dict[str, Any]:
 
 
 def reconnect_cache_gate(export: dict[str, Any]) -> dict[str, Any]:
+    cache_nonclaim_states = {"not_enabled", "disabled", "unknown", "unverified", "not_implemented", "none"}
+    cache_nonclaim_reasons = {"cache_not_enabled", "cache_disabled", "not_enabled", "not_implemented", "none"}
     reconnect_hits: list[dict[str, Any]] = []
     cache_hits: list[dict[str, Any]] = []
+    cache_evidence_hits: list[dict[str, Any]] = []
+    cache_nonclaim_hits: list[dict[str, Any]] = []
     for source, record in runtime_records(export):
         for path, value in walk_json(record):
             normalized = path.lower()
-            if value in (None, ""):
+            normalized_field = normalized.replace("_", ".")
+            if value in (None, "") or isinstance(value, (dict, list)):
                 continue
             if (
                 "reconnect" in normalized
                 or normalized.endswith("last_network_error")
                 or normalized.endswith("network.last_error")
+                or normalized_field.endswith("network.last.error")
+                or normalized.endswith("network.state")
+                or normalized_field.endswith("network.state")
                 or normalized.endswith("runtime.last_reset_reason")
                 or normalized.endswith("reset_reason")
                 or normalized.endswith("boot_count")
@@ -455,26 +463,56 @@ def reconnect_cache_gate(export: dict[str, Any]) -> dict[str, Any]:
                 or "offline_queue" in normalized
                 or "store_forward" in normalized
             ):
-                cache_hits.append({"source": source, "path": path, "value": value})
+                hit = {"source": source, "path": path, "value": value}
+                cache_hits.append(hit)
+                value_text = str(value).strip().lower()
+                has_count_evidence = (
+                    ("queued_message" in normalized or "dropped_message" in normalized or "oldest_message_age" in normalized)
+                    and int_or_none(value) is not None
+                )
+                has_state_evidence = (
+                    (normalized.endswith("cache.state") or normalized_field.endswith("cache.state"))
+                    and value_text not in cache_nonclaim_states
+                )
+                has_drop_reason_evidence = (
+                    (normalized.endswith("last_drop_reason") or normalized_field.endswith("last.drop.reason"))
+                    and value_text not in cache_nonclaim_reasons
+                )
+                if has_count_evidence or has_state_evidence or has_drop_reason_evidence:
+                    cache_evidence_hits.append(hit)
+                else:
+                    cache_nonclaim_hits.append(hit)
 
     warnings: list[str] = []
     if not reconnect_hits:
         warnings.append("reconnect_or_reset_observability_not_observed")
-    if not cache_hits:
-        warnings.append("cache_or_dropped_message_observability_not_observed")
+    if not cache_evidence_hits:
+        if cache_nonclaim_hits:
+            warnings.append("cache_capability_not_enabled")
+        else:
+            warnings.append("cache_or_dropped_message_observability_not_observed")
     if warnings:
         return gate(
             "G6_RECONNECT_CACHE_OBSERVABILITY",
             "WARN",
             "Reconnect/cache observability is incomplete in this export.",
             warnings=warnings,
-            evidence={"reconnect_hits": reconnect_hits[:10], "cache_hits": cache_hits[:10]},
+            evidence={
+                "reconnect_hits": reconnect_hits[:10],
+                "cache_hits": cache_hits[:10],
+                "cache_evidence_hits": cache_evidence_hits[:10],
+                "cache_nonclaim_hits": cache_nonclaim_hits[:10],
+            },
         )
     return gate(
         "G6_RECONNECT_CACHE_OBSERVABILITY",
         "PASS",
-        "Reconnect/reset and cache/drop observability fields are visible.",
-        evidence={"reconnect_hits": reconnect_hits[:10], "cache_hits": cache_hits[:10]},
+        "Reconnect/reset and concrete cache/drop observability fields are visible.",
+        evidence={
+            "reconnect_hits": reconnect_hits[:10],
+            "cache_hits": cache_hits[:10],
+            "cache_evidence_hits": cache_evidence_hits[:10],
+        },
     )
 
 

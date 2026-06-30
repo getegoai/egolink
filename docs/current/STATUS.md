@@ -6,6 +6,31 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: LTE-006 Firmware-Side Reliability Non-Claim Observability is
+implemented as a firmware/static-build increment after OBS-004. The raw LTE
+`location_observation` KV payload now reports LTE network observability fields
+(`network_mode=LTE`, `network_rssi`, `network_state`, and
+`network_last_error`) plus explicit cache non-claim fields
+(`cache_state=not_enabled`, `cache_source_status=unverified`, and
+`cache_last_drop_reason=cache_not_enabled`). LTE-005 now distinguishes this
+non-claim from concrete cache/drop-message evidence: `cache_state=not_enabled`
+produces `cache_capability_not_enabled` and keeps
+`G6_RECONNECT_CACHE_OBSERVABILITY` at `WARN` until real queue/drop counters or
+store-forward state are observed. Focused firmware/LTE-gate tests passed with
+18 tests; `python scripts/context_lint.py` passed; ESP-IDF build passed with
+firmware version `0.1.0-lte006-reliability-nonclaim`, test run ID
+`lte006-reliability-nonclaim-20260630-001`, binary
+`firmware/mqtt_heartbeat/build_lte006_reliability_nonclaim/egolink_mqtt_heartbeat.bin`
+(`300496` bytes), and `flash_intentionally_not_run=true`; LTE-005 smoke over
+the existing LOC-005A export wrote
+`reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/`
+and returned expected `WARN`; `scripts\verify.ps1` passed with 313 tests; and
+`git diff --check` passed. No firmware flash, USB-Free runtime validation, VPS
+deployment, raw-frame framing change, required protocol-field change, durable
+offline cache, reconnect recovery, long LTE stability, GNSS acceptance,
+battery/power behavior, enclosure behavior, or product-readiness claim is
+changed.
+
 2026-06-30: OBS-004 Reliability Observability Baseline is implemented as a
 Server-Web/contract visibility increment after LTE-005. Message Hub now accepts
 additive `reliability.network` and `reliability.cache` groups on JSON status,

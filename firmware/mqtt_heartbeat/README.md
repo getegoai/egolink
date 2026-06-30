@@ -425,3 +425,16 @@ sequence.
 Those fields are evidence quality labels for the Message Hub and EALE-P0 data
 path. They do not validate privacy-reviewed Wi-Fi fingerprints, final-product
 IMU topology, battery accuracy, or power behavior.
+
+LTE-006 extends the same raw LTE `location_observation` with reliability
+non-claim fields. The payload reports `network_mode=LTE`, `network_rssi`,
+`network_state`, and `network_last_error` from the current SIM7670G LTE status
+query. It also reports `cache_state=not_enabled`,
+`cache_source_status=unverified`, and
+`cache_last_drop_reason=cache_not_enabled` to make the missing store-forward
+queue explicit.
+
+These fields are observability only. `cache_state=not_enabled` must not be
+counted as cache durability or dropped-message evidence, and this firmware path
+does not prove reconnect recovery, long LTE stability, battery behavior, or
+product readiness.

@@ -821,6 +821,13 @@ For raw-frame key/value payloads, use normalized keys such as
 `cache_dropped_message_count`, `cache_last_drop_reason`, and
 `cache_oldest_message_age_ms`.
 
+Firmware may also report a capability non-claim such as
+`cache_state=not_enabled`, `cache_source_status=unverified`, and
+`cache_last_drop_reason=cache_not_enabled` when the current image has no
+store-forward queue. This is an explanation of missing cache durability, not
+cache/drop-message evidence. LTE reliability gates must keep this state at
+`WARN` until concrete queue/drop counters or store-forward state are observed.
+
 Do not invent defaults. If reconnect/cache/drop behavior was not observed,
 omit these fields so the LTE-005 reliability gate can report `WARN` or
 `NOT_OBSERVED` instead of a false pass.
@@ -835,7 +842,9 @@ omit these fields so the LTE-005 reliability gate can report `WARN` or
 - Network fields should include mode, RSSI, reconnect count, and last network
   error when known.
 - Cache/store-forward fields should include queued message count, dropped
-  message count, oldest queued age, and last drop reason when known.
+  message count, oldest queued age, last drop reason, and cache capability
+  state when known. `cache_state=not_enabled` is a non-claim, not a passing
+  cache durability result.
 - Device state should use stable values such as `booting`, `idle`,
   `field_test`, `reconnecting`, `error`, or `unknown`.
 - Reset diagnostics may appear on `status` and `sensor_sample` messages as

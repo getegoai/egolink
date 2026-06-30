@@ -251,6 +251,34 @@ Definition of Done:
 - no firmware flash, VPS deploy, or long LTE stability run is part of this
   baseline.
 
+## LTE-006: Firmware-Side Reliability Non-Claim Observability
+
+Goal: let the raw LTE `location_observation` path explain current network and
+cache capability state without claiming long-run reliability.
+
+Implementation shape:
+
+- LOC-005A raw KV `location_observation` adds `network_mode`,
+  `network_rssi`, `network_state`, and `network_last_error`;
+- the same payload adds `cache_state=not_enabled`,
+  `cache_source_status=unverified`, and
+  `cache_last_drop_reason=cache_not_enabled`;
+- `cache_state=not_enabled` is a capability non-claim: the server may expose
+  it in `reliability.cache`, but LTE-005 must continue to return `WARN` until
+  concrete queue/drop counters or store-forward state are observed;
+- the firmware payload remains raw-frame/KV and does not introduce JSON as the
+  LTE wire payload.
+
+Definition of Done:
+
+- firmware static tests protect the raw KV fields;
+- LTE-005 tests prove `cache_state=not_enabled` does not pass cache/drop
+  observability;
+- ESP-IDF build passes without flashing;
+- no USB-Free runtime pass, reconnect recovery, cache durability, long LTE
+  stability, battery/power behavior, enclosure behavior, or product-readiness
+  claim is made until hardware validation is explicitly run.
+
 ## R3.0 LTE Long-Run Gate
 
 Only after LTE-001 through LTE-005 pass should the project run a long LTE

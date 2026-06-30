@@ -1486,6 +1486,14 @@ static void build_lte_location_observation_kv_payload(
     json_escape_summary(power_battery_source, sizeof(power_battery_source), power.battery_source);
     json_escape_summary(power_charging_source, sizeof(power_charging_source), power.charging_source);
     json_escape_summary(power_state, sizeof(power_state), platform_power_state_name(power.state));
+    const char *network_state = "query_failed";
+    const char *network_last_error = reason_code;
+    if (lte_query_ok && lte->registered && lte->pdp_active) {
+        network_state = "ready";
+        network_last_error = "none";
+    } else if (lte_query_ok) {
+        network_state = "degraded";
+    }
 
     snprintf(
         buffer,
@@ -1558,6 +1566,13 @@ static void build_lte_location_observation_kv_payload(
         "location_belief_source=cell,lte,wifi,imu,power\n"
         "location_belief_reason=cell_observation_without_position_fix\n"
         "transport_type=lte\n"
+        "network_mode=LTE\n"
+        "network_rssi=%s\n"
+        "network_state=%s\n"
+        "network_last_error=%s\n"
+        "cache_state=not_enabled\n"
+        "cache_source_status=unverified\n"
+        "cache_last_drop_reason=cache_not_enabled\n"
         "lte_http_phase=location_observation\n"
         "lte_http_driver=%s\n",
         CONFIG_EGOLINK_FW_VERSION,
@@ -1607,6 +1622,9 @@ static void build_lte_location_observation_kv_payload(
         power_charging_source,
         power_state,
         power.marker_seq,
+        rssi,
+        network_state,
+        network_last_error,
         sim7670_lte_http_backend_name());
 }
 
@@ -1615,8 +1633,8 @@ static bool lte_http_publish_raw_location_observation(const char *cmd_id)
     char path[160];
     char url[256];
     char frame_id[96];
-    char payload[1900];
-    char frame[2400];
+    char payload[2200];
+    char frame[2800];
     sim7670_lte_http_probe_result_t post_result;
     sim7670_lte_report_t lte;
     uint32_t seq = next_seq();

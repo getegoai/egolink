@@ -67,6 +67,26 @@ class LteReliabilityGateTests(unittest.TestCase):
         self.assertEqual(self._gate(report, "G2_STALE_PENDING_VISIBLE")["status"], "PASS")
         self.assertNotIn("stale_pending_command_without_failure_reason", report["errors"])
 
+    def test_cache_not_enabled_explains_but_does_not_pass_cache_observability(self) -> None:
+        export = self._loc005a_like_export()
+        export["messages"][1]["reliability"] = {
+            "network": {"mode": "LTE", "state": "ready", "last_error": "none"},
+            "cache": {
+                "state": "not_enabled",
+                "source_status": "unverified",
+                "last_drop_reason": "cache_not_enabled",
+            },
+        }
+
+        report = validate_lte_reliability_gate.evaluate_lte_reliability_export(export)
+        gate = self._gate(report, "G6_RECONNECT_CACHE_OBSERVABILITY")
+
+        self.assertEqual(report["result"], "WARN")
+        self.assertEqual(gate["status"], "WARN")
+        self.assertIn("cache_capability_not_enabled", gate["warnings"])
+        self.assertEqual(gate["evidence"]["cache_evidence_hits"], [])
+        self.assertTrue(gate["evidence"]["cache_nonclaim_hits"])
+
     def test_duplicate_command_without_prevention_fails(self) -> None:
         export = self._loc005a_like_export()
         export["commands"][0]["ack"]["command"]["command_count"] = 2
