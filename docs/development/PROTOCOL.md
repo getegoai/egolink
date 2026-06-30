@@ -784,6 +784,47 @@ Known P0 Message Hub commands:
 }
 ```
 
+## Reliability Observability Fields
+
+`status`, `event`, and raw-frame-derived ACK/event/status rows may carry an
+optional `reliability` object. The server stores the original message first,
+then exposes the same values under `observability.reliability`,
+`run_context.reliability`, and test-run exports.
+
+Recommended shape:
+
+```json
+{
+  "reliability": {
+    "network": {
+      "mode": "LTE",
+      "rssi": -89,
+      "reconnect_count": 2,
+      "last_error": "LTE_RECONNECT_TIMEOUT",
+      "last_reconnect_reason": "pdp_reactivate",
+      "state": "reconnecting"
+    },
+    "cache": {
+      "queued_message_count": 3,
+      "dropped_message_count": 1,
+      "last_drop_reason": "cache_full",
+      "oldest_message_age_ms": 42000,
+      "state": "store_forward"
+    }
+  }
+}
+```
+
+For raw-frame key/value payloads, use normalized keys such as
+`network_reconnect_count`, `network_last_error`,
+`network_last_reconnect_reason`, `cache_queued_message_count`,
+`cache_dropped_message_count`, `cache_last_drop_reason`, and
+`cache_oldest_message_age_ms`.
+
+Do not invent defaults. If reconnect/cache/drop behavior was not observed,
+omit these fields so the LTE-005 reliability gate can report `WARN` or
+`NOT_OBSERVED` instead of a false pass.
+
 ## Field Rules
 
 - GNSS must distinguish `fix=false` from no data. Do not silently omit failed
@@ -793,6 +834,8 @@ Known P0 Message Hub commands:
 - Power fields must label mock, estimated, measured, or unknown sources.
 - Network fields should include mode, RSSI, reconnect count, and last network
   error when known.
+- Cache/store-forward fields should include queued message count, dropped
+  message count, oldest queued age, and last drop reason when known.
 - Device state should use stable values such as `booting`, `idle`,
   `field_test`, `reconnecting`, `error`, or `unknown`.
 - Reset diagnostics may appear on `status` and `sensor_sample` messages as

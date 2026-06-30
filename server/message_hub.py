@@ -1377,6 +1377,36 @@ def raw_power_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
     )
 
 
+def raw_reliability_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
+    network = compact_dict(
+        {
+            "mode": kv_payload.get("network-mode"),
+            "rssi": parse_raw_scalar(kv_payload.get("network-rssi")),
+            "reconnect_count": parse_optional_int(
+                first_known(kv_payload.get("network-reconnect-count"), kv_payload.get("reconnect-count"))
+            ),
+            "last_error": first_known(kv_payload.get("network-last-error"), kv_payload.get("transport-last-error")),
+            "last_reconnect_reason": kv_payload.get("network-last-reconnect-reason"),
+            "state": kv_payload.get("network-state"),
+        }
+    )
+    cache = compact_dict(
+        {
+            "queued_message_count": parse_optional_int(
+                first_known(kv_payload.get("cache-queued-message-count"), kv_payload.get("queued-message-count"))
+            ),
+            "dropped_message_count": parse_optional_int(
+                first_known(kv_payload.get("cache-dropped-message-count"), kv_payload.get("dropped-message-count"))
+            ),
+            "last_drop_reason": first_known(kv_payload.get("cache-last-drop-reason"), kv_payload.get("last-drop-reason")),
+            "oldest_message_age_ms": parse_optional_int(kv_payload.get("cache-oldest-message-age-ms")),
+            "state": kv_payload.get("cache-state"),
+            "source_status": kv_payload.get("cache-source-status"),
+        }
+    )
+    return compact_dict({"network": network or None, "cache": cache or None})
+
+
 def raw_location_belief_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
     state = first_known(kv_payload.get("location-belief-state"), kv_payload.get("belief-state"))
     if state is None:
@@ -1422,6 +1452,7 @@ def derive_raw_frame_message(
     if frame_type == "ack":
         cmd_id = first_known(expected_cmd_id, kv_payload.get("cmd-id"), kv_payload.get("cmd_id"), record["frame_id"])
         transport_type = kv_payload.get("transport-type")
+        reliability = raw_reliability_from_kv(kv_payload)
         lte_http = compact_dict(
             {
                 "phase": kv_payload.get("lte-http-phase"),
@@ -1451,6 +1482,7 @@ def derive_raw_frame_message(
                 "transport": compact_dict({"type": transport_type}) if transport_type else None,
                 "lte_http": lte_http or None,
                 "command": command_obs or None,
+                "reliability": reliability or None,
             }
         )
     if frame_type == "command":
@@ -1468,6 +1500,7 @@ def derive_raw_frame_message(
             }
         )
     if frame_type == "status":
+        reliability = raw_reliability_from_kv(kv_payload)
         return compact_dict(
             {
                 **common,
@@ -1476,10 +1509,12 @@ def derive_raw_frame_message(
                 "link_type": first_known(kv_payload.get("link-type"), kv_payload.get("link_type"), "unknown"),
                 "guard_mode": first_known(kv_payload.get("guard-mode"), kv_payload.get("guard_mode"), "unknown"),
                 "queue_size": parse_optional_int(kv_payload.get("queue-size") or kv_payload.get("queue_size")) or 0,
+                "reliability": reliability or None,
             }
         )
     if frame_type == "event":
         event_type = first_known(kv_payload.get("event-type"), kv_payload.get("event_type"), "raw_event")
+        reliability = raw_reliability_from_kv(kv_payload)
         event = compact_dict(
             {
                 **common,
@@ -1488,6 +1523,7 @@ def derive_raw_frame_message(
                 "priority": first_known(kv_payload.get("priority"), "normal"),
                 "source": kv_payload.get("source"),
                 "source_status": kv_payload.get("source-status"),
+                "reliability": reliability or None,
             }
         )
         if event_type == "location_report":
@@ -2100,6 +2136,34 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
     imu = as_dict(first_known(field_message.get("imu"), telemetry.get("imu"), status.get("imu")))
     location_belief = active_location_belief(field_message, field_payload, location_memory)
     ack = as_dict(latest_command.get("ack"))
+    field_reliability = as_dict(field_message.get("reliability"))
+    telemetry_reliability = as_dict(telemetry.get("reliability"))
+    status_reliability = as_dict(status.get("reliability"))
+    ack_reliability = as_dict(ack.get("reliability"))
+    reliability_network = as_dict(
+        first_known(
+            field_reliability.get("network"),
+            telemetry_reliability.get("network"),
+            status_reliability.get("network"),
+            ack_reliability.get("network"),
+            field_message.get("network"),
+            telemetry.get("network"),
+            status.get("network"),
+            ack.get("network"),
+        )
+    )
+    reliability_cache = as_dict(
+        first_known(
+            field_reliability.get("cache"),
+            telemetry_reliability.get("cache"),
+            status_reliability.get("cache"),
+            ack_reliability.get("cache"),
+            field_message.get("cache"),
+            telemetry.get("cache"),
+            status.get("cache"),
+            ack.get("cache"),
+        )
+    )
 
     boot_count = first_known(status.get("boot_count"), telemetry.get("boot_count"), runtime.get("boot_count"))
     boot_id = first_known(status.get("boot_id"), telemetry.get("boot_id"), runtime.get("boot_id"))
@@ -2127,8 +2191,77 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
 
     transport_last_error = first_known(transport.get("last_error"), status.get("transport_last_error"), error_code)
     lte_reason = first_known(lte.get("reason_code"), cell.get("reason_code"))
+    reliability = compact_dict(
+        {
+            "network": compact_dict(
+                {
+                    "mode": first_known(
+                        reliability_network.get("mode"),
+                        status.get("network_mode"),
+                        telemetry.get("network_mode"),
+                    ),
+                    "rssi": first_known(reliability_network.get("rssi"), status.get("network_rssi"), telemetry.get("network_rssi")),
+                    "reconnect_count": first_known(
+                        reliability_network.get("reconnect_count"),
+                        status.get("network_reconnect_count"),
+                        telemetry.get("network_reconnect_count"),
+                        ack.get("network_reconnect_count"),
+                        status.get("reconnect_count"),
+                        telemetry.get("reconnect_count"),
+                    ),
+                    "last_error": first_known(
+                        reliability_network.get("last_error"),
+                        status.get("network_last_error"),
+                        telemetry.get("network_last_error"),
+                        ack.get("network_last_error"),
+                    ),
+                    "last_reconnect_reason": first_known(
+                        reliability_network.get("last_reconnect_reason"),
+                        status.get("network_last_reconnect_reason"),
+                        telemetry.get("network_last_reconnect_reason"),
+                    ),
+                    "state": reliability_network.get("state"),
+                }
+            )
+            or None,
+            "cache": compact_dict(
+                {
+                    "queued_message_count": first_known(
+                        reliability_cache.get("queued_message_count"),
+                        status.get("cache_queued_message_count"),
+                        telemetry.get("cache_queued_message_count"),
+                        ack.get("cache_queued_message_count"),
+                        status.get("queued_message_count"),
+                        telemetry.get("queued_message_count"),
+                    ),
+                    "dropped_message_count": first_known(
+                        reliability_cache.get("dropped_message_count"),
+                        status.get("cache_dropped_message_count"),
+                        telemetry.get("cache_dropped_message_count"),
+                        ack.get("cache_dropped_message_count"),
+                        status.get("dropped_message_count"),
+                        telemetry.get("dropped_message_count"),
+                    ),
+                    "last_drop_reason": first_known(
+                        reliability_cache.get("last_drop_reason"),
+                        status.get("cache_last_drop_reason"),
+                        telemetry.get("cache_last_drop_reason"),
+                    ),
+                    "oldest_message_age_ms": first_known(
+                        reliability_cache.get("oldest_message_age_ms"),
+                        status.get("cache_oldest_message_age_ms"),
+                        telemetry.get("cache_oldest_message_age_ms"),
+                    ),
+                    "state": reliability_cache.get("state"),
+                    "source_status": reliability_cache.get("source_status"),
+                }
+            )
+            or None,
+        }
+    )
     reason_codes: list[str] = []
-    for candidate in (error_code, transport_last_error, gnss_reason, lte_reason):
+    reliability_network_error = dict_value(reliability, "network", "last_error")
+    for candidate in (error_code, transport_last_error, reliability_network_error, gnss_reason, lte_reason):
         if candidate and candidate not in {"none", "unknown", "GNSS_FIX", "LTE_READY"} and candidate not in reason_codes:
             reason_codes.append(str(candidate))
 
@@ -2158,6 +2291,7 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
             "last_ack_status": ack.get("status"),
             "rtt_ms": command_rtt_ms,
         },
+        "reliability": reliability,
         "power": {
             "battery_mv": first_known(power.get("battery_mv"), status.get("battery_mv"), status_payload.get("battery_mv")),
             "soc_pct": first_known(power.get("soc_pct"), status.get("soc_pct"), status.get("battery_percent"), status.get("battery")),
@@ -2949,6 +3083,7 @@ def build_run_context(
     )
     command_ack = as_dict(latest_command.get("ack"))
     location_belief = as_dict(latest_observability.get("location_belief"))
+    reliability = as_dict(latest_observability.get("reliability"))
     raw_parse = as_dict(latest_raw.get("parse_result"))
     key_release = resolve_key_release_context(test_run_id, fw_version)
     failure = build_failure_summary(context_messages, context_commands, context_raw_frames, latest_observability)
@@ -2993,6 +3128,7 @@ def build_run_context(
             "belief_reason": location_belief.get("reason"),
         },
         "failure": failure,
+        "reliability": reliability,
         "eale_p0": eale_p0,
         "evidence_counts": {
             "messages": len(context_messages),
@@ -3212,6 +3348,9 @@ def render_dashboard() -> str:
       const rawFrame = run.raw_frame || {};
       const location = run.location || {};
       const failure = run.failure || {};
+      const reliability = run.reliability || {};
+      const relNetwork = reliability.network || {};
+      const relCache = reliability.cache || {};
       const eale = run.eale_p0 || {};
       const ealeBelief = eale.location_belief || {};
       const ealeDataset = eale.dataset_window || {};
@@ -3227,6 +3366,10 @@ def render_dashboard() -> str:
         <div class="metric"><span>Derived Location</span><span>${escapeHtml(location.event_type || 'none')} seq ${escapeHtml(location.seq ?? 'unknown')} / fix ${escapeHtml(location.fix ?? 'unknown')} / ${escapeHtml(location.gnss_state || 'unknown')}</span></div>
         <div class="metric"><span>Failure State</span><span class="${failure.state === 'ok' ? 'ok' : failure.state === 'pending' || failure.state === 'warning' ? 'warn' : 'bad'}">${escapeHtml(failure.state || 'unknown')}</span></div>
         <div class="metric"><span>Failure Reason</span><span>${escapeHtml(failure.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Network Reconnect</span><span>${escapeHtml(relNetwork.reconnect_count ?? 'unknown')} / ${escapeHtml(relNetwork.last_reconnect_reason || relNetwork.state || 'unknown')}</span></div>
+        <div class="metric"><span>Network Error</span><span>${escapeHtml(relNetwork.last_error || 'none')}</span></div>
+        <div class="metric"><span>Cache Queue</span><span>${escapeHtml(relCache.queued_message_count ?? 'unknown')} queued / ${escapeHtml(relCache.oldest_message_age_ms ?? 'unknown')} ms oldest</span></div>
+        <div class="metric"><span>Cache Drops</span><span>${escapeHtml(relCache.dropped_message_count ?? 'unknown')} / ${escapeHtml(relCache.last_drop_reason || 'none')}</span></div>
         <div class="metric"><span>EALE-P0</span><span>${escapeHtml(ealeBelief.state || 'unknown')} / ${escapeHtml(ealeBelief.substate || 'unknown')} / ${escapeHtml(ealeBelief.confidence_bucket || 'unknown')}</span></div>
         <div class="metric"><span>EALE Reason</span><span>${escapeHtml(ealeBelief.reason || 'unknown')}</span></div>
         <div class="metric"><span>EALE Failure</span><span>${escapeHtml(ealeBelief.failure_reason || 'none')}</span></div>
@@ -3252,6 +3395,9 @@ def render_dashboard() -> str:
       const obsLte = obs.lte || {};
       const obsWifi = obs.wifi || {};
       const obsImu = obs.imu || {};
+      const obsReliability = obs.reliability || {};
+      const obsRelNetwork = obsReliability.network || {};
+      const obsRelCache = obsReliability.cache || {};
       const obsBelief = obs.location_belief || {};
       const obsMemory = obs.location_memory || {};
       const obsExplainability = obs.explainability || {};
@@ -3283,6 +3429,10 @@ def render_dashboard() -> str:
         <div class="metric"><span>Source Status</span><span>${escapeHtml(gnssField(fieldTelemetry, 'source_status'))}</span></div>
         <div class="metric"><span>Transport</span><span>${escapeHtml(obsTransport.type || status.link_type || 'unknown')}</span></div>
         <div class="metric"><span>Transport Error</span><span>${escapeHtml(obsTransport.last_error || 'none')}</span></div>
+        <div class="metric"><span>Network Reconnect</span><span>${escapeHtml(obsRelNetwork.reconnect_count ?? 'unknown')} / ${escapeHtml(obsRelNetwork.last_reconnect_reason || obsRelNetwork.state || 'unknown')}</span></div>
+        <div class="metric"><span>Network Error</span><span>${escapeHtml(obsRelNetwork.last_error || 'none')}</span></div>
+        <div class="metric"><span>Cache Queue</span><span>${escapeHtml(obsRelCache.queued_message_count ?? 'unknown')} queued / ${escapeHtml(obsRelCache.oldest_message_age_ms ?? 'unknown')} ms oldest</span></div>
+        <div class="metric"><span>Cache Drops</span><span>${escapeHtml(obsRelCache.dropped_message_count ?? 'unknown')} / ${escapeHtml(obsRelCache.last_drop_reason || 'none')}</span></div>
         <div class="metric"><span>Runtime Reset</span><span>${escapeHtml(obsRuntime.last_reset_reason || 'unknown')}</span></div>
         <div class="metric"><span>Boot</span><span>${escapeHtml(obsRuntime.boot_id || 'unknown')}</span></div>
         <div class="metric"><span>Command</span><span>${escapeHtml(obsCommand.last_cmd_id || 'none')} / ${escapeHtml(obsCommand.last_ack_status || obsCommand.last_status || 'none')}</span></div>

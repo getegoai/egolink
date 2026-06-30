@@ -132,6 +132,20 @@
       "type": "object",
       "additionalProperties": true
     },
+    "reliability": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "network": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "cache": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
     "power": {
       "type": "object",
       "additionalProperties": true

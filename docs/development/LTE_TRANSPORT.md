@@ -224,6 +224,33 @@ Definition of Done:
 - no firmware, VPS runtime, protocol, hardware, or long-run stability behavior
   is changed by this tooling baseline.
 
+## OBS-004: Reliability Observability Baseline
+
+Goal: give firmware, simulator, and server/Web a shared place to surface
+reconnect/cache/drop-message evidence before long-run LTE testing.
+
+Implementation shape:
+
+- `status`, `event`, and raw-frame-derived rows may carry optional
+  `reliability.network` and `reliability.cache` groups;
+- Message Hub preserves the original message/raw frame, then derives
+  `observability.reliability` and `run_context.reliability`;
+- Dashboard shows network reconnect count/reason/error and cache queue/drop
+  counts;
+- machine-readable status/event contracts allow the additive `reliability`
+  object;
+- no default `reliability.cache` is synthesized when firmware has not
+  reported cache/drop-message evidence.
+
+Definition of Done:
+
+- server tests cover JSON `reliability` ingestion and raw-frame KV derivation;
+- Dashboard tests cover visible reconnect/cache labels;
+- LTE-005 still reports the current LOC-005A export as `WARN` until real
+  cache/drop-message evidence exists;
+- no firmware flash, VPS deploy, or long LTE stability run is part of this
+  baseline.
+
 ## R3.0 LTE Long-Run Gate
 
 Only after LTE-001 through LTE-005 pass should the project run a long LTE

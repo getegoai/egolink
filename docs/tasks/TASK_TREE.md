@@ -141,6 +141,24 @@ motion candidate
   - Boundary: no firmware flash, runtime validation, VPS deployment, protocol
     change, long LTE stability, reconnect recovery, battery/power behavior,
     enclosure behavior, or product-readiness claim.
+- `OBS-004 Reliability Observability Baseline`
+  - Path: `docs/tasks/done/OBS-004_RELIABILITY_OBSERVABILITY_BASELINE.md`
+  - Status: completed as a Server-Web/contract visibility baseline after
+    LTE-005.
+  - Evidence: `server/message_hub.py`,
+    `shared/contracts/message_hub_event.schema.json`,
+    `shared/contracts/message_hub_status.schema.json`,
+    `quality_tests/test_message_hub_server.py`, and
+    `quality_tests/test_message_hub_dashboard.py`.
+  - Current visible result: Message Hub accepts additive
+    `reliability.network` and `reliability.cache` groups on JSON messages and
+    raw-frame KV payloads, derives them into `observability.reliability` and
+    `run_context.reliability`, and Dashboard exposes network reconnect/error
+    plus cache queue/drop fields. The current LOC-005A export still remains
+    LTE-005 `WARN` until firmware reports real cache/drop-message evidence.
+  - Boundary: no firmware flash, hardware runtime validation, VPS deployment,
+    long LTE stability, reconnect recovery, cache durability, battery/power
+    behavior, enclosure behavior, or product-readiness claim.
 
 ## Active Queue
 

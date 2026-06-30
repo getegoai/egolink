@@ -6,6 +6,28 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: OBS-004 Reliability Observability Baseline is implemented as a
+Server-Web/contract visibility increment after LTE-005. Message Hub now accepts
+additive `reliability.network` and `reliability.cache` groups on JSON status,
+event, and raw-frame-derived rows, and derives them into
+`observability.reliability`, `run_context.reliability`, and the Dashboard. Raw
+KV payloads can use normalized fields such as `network_reconnect_count`,
+`network_last_error`, `network_last_reconnect_reason`,
+`cache_queued_message_count`, `cache_dropped_message_count`,
+`cache_last_drop_reason`, and `cache_oldest_message_age_ms`. Status/event
+schemas now allow the optional `reliability` object. The Dashboard exposes
+Network Reconnect, Network Error, Cache Queue, and Cache Drops rows in Run
+Context and Latest Field State. Focused Message Hub/Dashboard/LTE gate/schema
+tests passed with 31 tests; `python scripts/context_lint.py` passed;
+`scripts\verify.ps1` passed with 312 tests; and `git diff --check` passed.
+Running LTE-005 against the existing LOC-005A export still returns expected
+`WARN` because real cache/drop-message evidence is not present in that export;
+this task does not synthesize false cache evidence. No firmware, hardware, VPS
+runtime, raw-frame framing, required protocol fields, DATA-001 schema, learned
+model behavior, long LTE stability, reconnect recovery, cache durability, GNSS
+acceptance, battery/power behavior, enclosure behavior, or product-readiness
+claim is changed.
+
 2026-06-30: LTE-005 LTE Reliability Gate Baseline is implemented as a
 non-hardware offline release-gate/tooling increment after KR-004. New gate:
 `scripts/validate_lte_reliability_gate.py`; focused tests:

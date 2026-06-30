@@ -250,6 +250,11 @@ Definition of Done:
 - `network.mode`
 - `network.rssi`
 - `network.reconnect_count`
+- `reliability.network.last_error`
+- `reliability.network.last_reconnect_reason`
+- `reliability.cache.queued_message_count`
+- `reliability.cache.dropped_message_count`
+- `reliability.cache.last_drop_reason`
 - `power.battery_mv`
 - `power.battery_percent`
 - `message.seq`

@@ -132,6 +132,57 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(observability["lte"]["assigned_ip"], "10.1.2.3")
         self.assertEqual(observability["command"]["last_ack_status"], "ok")
 
+    def test_reliability_observability_exposes_network_and_cache_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.create_test_run({"test_run_id": "reliability-unit"})
+            store.ingest(
+                "ego-link-001",
+                "heartbeat",
+                protocol.status_message(
+                    "ego-link-001",
+                    "2026-06-27T00:00:00Z",
+                    1,
+                    battery=87,
+                    link_type="lte",
+                    guard_mode="field_test",
+                    queue_size=0,
+                    test_run_id="reliability-unit",
+                    transport={"type": "lte", "rtt_ms": 380, "last_error": None},
+                    reliability={
+                        "network": {
+                            "mode": "LTE",
+                            "rssi": -89,
+                            "reconnect_count": 2,
+                            "last_error": "LTE_RECONNECT_TIMEOUT",
+                            "last_reconnect_reason": "pdp_reactivate",
+                            "state": "reconnecting",
+                        },
+                        "cache": {
+                            "queued_message_count": 3,
+                            "dropped_message_count": 1,
+                            "last_drop_reason": "cache_full",
+                            "oldest_message_age_ms": 42000,
+                            "state": "store_forward",
+                        },
+                    },
+                ),
+            )
+            device = store.get_device("ego-link-001")
+            exported = store.export_test_run("reliability-unit")
+
+        reliability = device["observability"]["reliability"]
+        self.assertEqual(reliability["network"]["reconnect_count"], 2)
+        self.assertEqual(reliability["network"]["last_error"], "LTE_RECONNECT_TIMEOUT")
+        self.assertEqual(reliability["cache"]["queued_message_count"], 3)
+        self.assertEqual(reliability["cache"]["dropped_message_count"], 1)
+        self.assertIn("LTE_RECONNECT_TIMEOUT", device["observability"]["explainability"]["reason_codes"])
+        self.assertEqual(
+            exported["observability_summary"]["latest_observability"]["reliability"]["cache"]["last_drop_reason"],
+            "cache_full",
+        )
+        self.assertEqual(exported["run_context"]["reliability"]["network"]["last_reconnect_reason"], "pdp_reactivate")
+
     def test_error_ingest_updates_device_error_summary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -566,6 +617,15 @@ class MessageHubStoreTests(unittest.TestCase):
                 "power_state=upload\n"
                 "power_marker_seq=12\n"
                 "power_reason=platform_power_source_not_product_meter\n"
+                "network_mode=LTE\n"
+                "network_reconnect_count=2\n"
+                "network_last_error=LTE_RECONNECT_TIMEOUT\n"
+                "network_last_reconnect_reason=pdp_reactivate\n"
+                "cache_queued_message_count=3\n"
+                "cache_dropped_message_count=1\n"
+                "cache_last_drop_reason=cache_full\n"
+                "cache_oldest_message_age_ms=42000\n"
+                "cache_state=store_forward\n"
                 "location_belief_state=Unknown\n"
                 "location_belief_source=cell,lte,wifi,imu,power\n"
                 "location_belief_reason=cell_observation_without_position_fix\n"
@@ -602,6 +662,8 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(history[0]["power"]["evidence_status"], "mock")
         self.assertEqual(history[0]["power"]["soc_pct"], 87)
         self.assertEqual(history[0]["power"]["marker_seq"], 12)
+        self.assertEqual(history[0]["reliability"]["network"]["reconnect_count"], 2)
+        self.assertEqual(history[0]["reliability"]["cache"]["dropped_message_count"], 1)
         self.assertEqual(history[0]["location_belief"]["state"], "Unknown")
         self.assertEqual(history[0]["location_belief"]["source"], ["cell", "lte", "wifi", "imu", "power"])
         self.assertEqual(device["latest_location"]["event_type"], "location_observation")
@@ -610,6 +672,8 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(device["observability"]["wifi"]["evidence_status"], "missing")
         self.assertEqual(device["observability"]["imu"]["evidence_status"], "mock")
         self.assertEqual(device["observability"]["power"]["evidence_status"], "mock")
+        self.assertEqual(device["observability"]["reliability"]["network"]["last_error"], "LTE_RECONNECT_TIMEOUT")
+        self.assertEqual(device["observability"]["reliability"]["cache"]["queued_message_count"], 3)
         self.assertEqual(device["location_memory"]["state"], "Unknown")
         self.assertEqual(device["location_memory"]["reason"], "cell_observation_without_position_fix")
         self.assertEqual(exported["raw_frames"][0]["frame_id"], "obs-cmd-raw-observation")
