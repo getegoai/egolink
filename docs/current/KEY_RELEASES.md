@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-30
+last_verified: 2026-07-01
 verified_by: codex
 ---
 
@@ -251,6 +251,76 @@ preserving the model-training and positioning-accuracy non-claims.
 - No learned model, learned personal-place, route prediction, or
   positioning-accuracy claim.
 - No long LTE stability or reconnect recovery claim.
+- No final enclosure, mounting, camera, audio, storage, calling, SMS, or
+  dispatch claim.
+
+## KR-005 Reliability Explainability Preflight Baseline
+
+- Status: release candidate.
+- Release date: 2026-07-01.
+- Release version: `0.1.0-key-release-005-rc1`.
+- Firmware version: `0.1.0-lte006-reliability-nonclaim` build-verified only.
+- Firmware build/test run:
+  `lte006-reliability-nonclaim-20260630-001`.
+- Manifest:
+  `docs/current/key_releases/KR-005_RELIABILITY_EXPLAINABILITY_PREFLIGHT.json`.
+- Gate tool:
+  `python scripts\run_key_release_gate.py --manifest docs/current/key_releases/KR-005_RELIABILITY_EXPLAINABILITY_PREFLIGHT.json --json`.
+- Gate report:
+  `reports/key_releases/KR-005/release_gate_report.json` and
+  `reports/key_releases/KR-005/release_gate_report.md`.
+
+### Release-Candidate Meaning
+
+KR-005 freezes the reliability explainability preflight path:
+
+```text
+LTE-005 offline reliability gate
+-> OBS-004 reliability.network/cache visibility
+-> LTE-006 raw LTE location_observation network state + cache non-claim fields
+-> KR-005 release-candidate gate
+```
+
+It is a release candidate, not a released engineering key version, because
+LTE-006 has not yet been flashed or validated in USB-Free runtime. The point of
+the candidate is to stabilize the gate that the next hardware run will use.
+
+### Evidence Summary
+
+- LTE-005 checks command lifecycle visibility, stale/pending command
+  explanation, duplicate guard fields, LTE transport/reason codes, failure
+  explanation, reconnect/reset and cache/drop observability, raw-frame
+  retention, and sequence visibility.
+- OBS-004 exposes optional `reliability.network` and `reliability.cache`
+  fields through Message Hub storage, exports, current-run context, and Web
+  Dashboard.
+- LTE-006 firmware build passed with
+  `0.1.0-lte006-reliability-nonclaim`; the binary is
+  `firmware/mqtt_heartbeat/build_lte006_reliability_nonclaim/egolink_mqtt_heartbeat.bin`.
+- LTE-006 raw LTE `location_observation` adds `network_mode=LTE`,
+  `network_rssi`, `network_state`, `network_last_error`,
+  `cache_state=not_enabled`, `cache_source_status=unverified`, and
+  `cache_last_drop_reason=cache_not_enabled`.
+- LTE-005 smoke over the existing LOC-005A export returns expected `WARN`:
+  cache/drop-message evidence is still absent, raw-frame retention remains
+  `PASS`, and the gate does not synthesize false cache evidence.
+- KR-005 gate passed with one expected warning:
+  `gate G5-LTE006-USB-FREE-RUNTIME is NOT_RUN`.
+- KR-005 manifest marks LTE-006 USB-Free runtime as `NOT_RUN` pending explicit
+  operator hardware confirmation.
+
+### Non-Claims
+
+- No product readiness claim.
+- No LTE-006 USB-Free runtime validation claim.
+- No long LTE stability claim.
+- No reconnect recovery claim.
+- No durable offline cache or store-forward claim.
+- No cache/drop-message reliability claim.
+- No GNSS fix or outdoor GNSS acceptance claim.
+- No battery accuracy, charging, or product power behavior claim.
+- No learned model, learned personal-place, route prediction, or
+  positioning-accuracy claim.
 - No final enclosure, mounting, camera, audio, storage, calling, SMS, or
   dispatch claim.
 

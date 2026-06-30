@@ -1,10 +1,33 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-30
+last_verified: 2026-07-01
 verified_by: codex
 ---
 
 ## Latest Deployment Note
+
+2026-07-01: REL-006 creates KR-005 Reliability Explainability Preflight
+Baseline as a release-candidate gate after LTE-005, OBS-004, and LTE-006. New
+manifest:
+`docs/current/key_releases/KR-005_RELIABILITY_EXPLAINABILITY_PREFLIGHT.json`.
+KR-005 binds the LTE-005 offline reliability gate, OBS-004
+`reliability.network/cache` observability surface, LTE-006 firmware-side raw
+LTE `location_observation` network/cache non-claim fields, the local LTE-006
+ESP-IDF build output, and the LTE-005 smoke report over the existing LOC-005A
+export. The manifest intentionally marks LTE-006 USB-Free runtime as
+`NOT_RUN` until explicit operator hardware confirmation. KR-005 is therefore a
+release candidate, not a released engineering key version and not a runtime
+reliability acceptance. Validation passed: focused KR/LTE/firmware tests
+passed with 25 tests; `python scripts/context_lint.py` passed; LTE-005 smoke
+over the existing LOC-005A export returned expected `WARN`; KR-005 gate passed
+with one expected warning, `gate G5-LTE006-USB-FREE-RUNTIME is NOT_RUN`, and
+wrote `reports/key_releases/KR-005/release_gate_report.json` plus
+`reports/key_releases/KR-005/release_gate_report.md`;
+`scripts\verify.ps1` passed with 314 tests; and `git diff --check` passed. No
+firmware flash, USB-Free runtime validation, VPS deployment, GitLab change,
+durable offline cache, reconnect recovery, long LTE stability, GNSS
+acceptance, battery/power behavior, enclosure behavior, or product-readiness
+claim is changed.
 
 2026-06-30: LTE-006 Firmware-Side Reliability Non-Claim Observability is
 implemented as a firmware/static-build increment after OBS-004. The raw LTE

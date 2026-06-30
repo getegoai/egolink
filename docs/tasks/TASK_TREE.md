@@ -1,6 +1,6 @@
 ---
 document_status: current_task_tree
-generated_at: 2026-06-30
+generated_at: 2026-07-01
 generated_by: codex
 ---
 
@@ -126,6 +126,26 @@ motion candidate
   - Boundary: no firmware flash, runtime validation, model training, product
     readiness, positioning accuracy, long LTE stability, reconnect, GNSS
     acceptance, or battery/power claim.
+- `REL-006 KR-005 Reliability Explainability Release Gate`
+  - Path:
+    `docs/tasks/done/REL-006_KR005_RELIABILITY_EXPLAINABILITY_RELEASE_GATE.md`
+  - Status: completed as the KR-005 release-candidate gate after LTE-005,
+    OBS-004, and LTE-006.
+  - Evidence: `docs/current/KEY_RELEASES.md`,
+    `docs/current/key_releases/KR-005_RELIABILITY_EXPLAINABILITY_PREFLIGHT.json`,
+    `scripts/run_key_release_gate.py`,
+    `scripts/validate_lte_reliability_gate.py`, and local reports under
+    `reports/key_releases/KR-005/` and
+    `reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/`.
+  - Current visible result: KR-005 freezes the reliability explainability
+    preflight baseline. LTE-006 is build-verified and reports network state
+    plus cache non-claim fields in raw LTE `location_observation`; LTE-005
+    smoke over the existing LOC-005A export remains expected `WARN`; LTE-006
+    USB-Free runtime is explicitly `NOT_RUN` pending operator hardware
+    confirmation.
+  - Boundary: no firmware flash, runtime validation, VPS deployment, GitLab
+    change, product readiness, long LTE stability, reconnect recovery, cache
+    durability, GNSS acceptance, enclosure behavior, or battery/power claim.
 - `LTE-005 LTE Reliability Gate Baseline`
   - Path: `docs/tasks/done/LTE-005_LTE_RELIABILITY_GATE_BASELINE.md`
   - Status: completed as a non-hardware offline reliability gate baseline.

@@ -87,6 +87,27 @@ class KeyReleaseGateTests(unittest.TestCase):
             self.assertEqual(report["result"], "PASS")
             self.assertIn("local evidence missing but allowed: reports/local-only.json", report["warnings"])
 
+    def test_release_candidate_can_keep_not_run_gate_as_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            manifest = {
+                "release_id": "KR-UNIT",
+                "release_name": "Unit Candidate",
+                "release_version": "0.0.1-rc1",
+                "status": "release_candidate",
+                "gates": [
+                    {"id": "G1", "status": "PASS", "summary": "unit gate"},
+                    {"id": "G2-HARDWARE", "status": "NOT_RUN", "summary": "awaits operator"},
+                ],
+                "evidence": [],
+                "non_claims": ["not product acceptance"],
+            }
+
+            report = run_key_release_gate.evaluate_release_gate(manifest, repo_root=repo)
+
+            self.assertEqual(report["result"], "PASS")
+            self.assertIn("gate G2-HARDWARE is NOT_RUN", report["warnings"])
+
     def test_release_gate_passes_json_checks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)

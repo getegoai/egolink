@@ -1,0 +1,284 @@
+{
+  "release_id": "KR-005",
+  "release_name": "Reliability Explainability Preflight Baseline",
+  "release_version": "0.1.0-key-release-005-rc1",
+  "status": "release_candidate",
+  "release_date": "2026-07-01",
+  "summary": "Fifth Ego Link P0 engineering key-release candidate. It freezes the reliability explainability preflight path after LTE-005, OBS-004, and LTE-006: Message Hub/Web can surface reliability fields, firmware can report LTE network state and explicit cache non-claim fields in raw-frame KV, and the offline LTE reliability gate preserves expected WARN state until concrete cache/drop or long-run evidence exists.",
+  "firmware_version": "0.1.0-lte006-reliability-nonclaim",
+  "firmware_test_run_id": "lte006-reliability-nonclaim-20260630-001",
+  "protocol_profiles": [
+    "egolink.p0.v1",
+    "raw-frame.p0.v1"
+  ],
+  "device_id": "ego-link-r1-connectivity-001",
+  "in_scope": [
+    "LTE-005 offline reliability gate baseline",
+    "OBS-004 reliability.network and reliability.cache observability surface",
+    "LTE-006 firmware-side raw LTE location_observation network state fields",
+    "LTE-006 explicit cache non-claim fields",
+    "ESP-IDF build evidence for the LTE-006 firmware image",
+    "Offline LTE-005 smoke report over the existing LOC-005A export",
+    "Release-candidate manifest and gate report for reliability explainability"
+  ],
+  "non_claims": [
+    "No product readiness claim",
+    "No LTE-006 USB-Free runtime validation claim",
+    "No long LTE stability claim",
+    "No reconnect recovery claim",
+    "No durable offline cache or store-forward claim",
+    "No cache/drop-message reliability claim",
+    "No GNSS fix or outdoor GNSS acceptance claim",
+    "No battery accuracy, charging, or product power behavior claim",
+    "No learned model, learned personal-place, route prediction, or positioning-accuracy claim",
+    "No final enclosure, mounting, camera, audio, storage, calling, SMS, or dispatch claim"
+  ],
+  "gates": [
+    {
+      "id": "G1-LTE005-PREFLIGHT",
+      "status": "PASS",
+      "summary": "LTE-005 offline gate exists and detects command, LTE transport, failure reason, raw-frame retention, reconnect/reset, cache/drop, and sequence visibility"
+    },
+    {
+      "id": "G2-OBS004-RELIABILITY-SURFACE",
+      "status": "PASS",
+      "summary": "OBS-004 adds reliability.network/cache ingestion, derivation, export, and Dashboard visibility without synthesizing false cache evidence"
+    },
+    {
+      "id": "G3-LTE006-FIRMWARE-BUILD",
+      "status": "PASS",
+      "summary": "LTE-006 firmware build passed and raw LTE location_observation now includes network state plus cache non-claim fields"
+    },
+    {
+      "id": "G4-NONCLAIM-CLASSIFICATION",
+      "status": "PASS",
+      "summary": "LTE-005 distinguishes cache_state=not_enabled from concrete cache/drop-message evidence and keeps G6 at WARN until real evidence appears"
+    },
+    {
+      "id": "G5-LTE006-USB-FREE-RUNTIME",
+      "status": "NOT_RUN",
+      "summary": "LTE-006 has not been flashed or USB-Free runtime validated; this release candidate waits for explicit operator hardware confirmation"
+    },
+    {
+      "id": "G6-REGRESSION",
+      "status": "PASS",
+      "summary": "focused tests, context_lint, ESP-IDF build, LTE-005 smoke, full verify, and git diff checks passed during LTE-006"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "status",
+      "path": "docs/current/STATUS.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "active_build",
+      "path": "docs/current/ACTIVE_BUILD.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "release_index",
+      "path": "docs/current/KEY_RELEASES.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "protocol",
+      "path": "docs/development/PROTOCOL.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte_transport",
+      "path": "docs/development/LTE_TRANSPORT.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte005_task_packet",
+      "path": "docs/tasks/done/LTE-005_LTE_RELIABILITY_GATE_BASELINE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "obs004_task_packet",
+      "path": "docs/tasks/done/OBS-004_RELIABILITY_OBSERVABILITY_BASELINE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte006_task_packet",
+      "path": "docs/tasks/done/LTE-006_FIRMWARE_SIDE_RELIABILITY_NONCLAIM_OBSERVABILITY.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "rel006_task_packet",
+      "path": "docs/tasks/done/REL-006_KR005_RELIABILITY_EXPLAINABILITY_RELEASE_GATE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "release_gate_script",
+      "path": "scripts/run_key_release_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte_reliability_gate_script",
+      "path": "scripts/validate_lte_reliability_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_source",
+      "path": "firmware/mqtt_heartbeat/main/app_main.c",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_readme",
+      "path": "firmware/mqtt_heartbeat/README.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_static_tests",
+      "path": "quality_tests/test_mqtt_heartbeat_firmware.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte_reliability_tests",
+      "path": "quality_tests/test_lte_reliability_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "key_release_tests",
+      "path": "quality_tests/test_key_release_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_binary",
+      "path": "firmware/mqtt_heartbeat/build_lte006_reliability_nonclaim/egolink_mqtt_heartbeat.bin",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte005_smoke_report_json",
+      "path": "reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/lte_reliability_gate_report.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte005_smoke_report_markdown",
+      "path": "reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/lte_reliability_gate_report.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "loc005a_runtime_export",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/test_run_export.json",
+      "required": true,
+      "local_only": true
+    }
+  ],
+  "json_checks": [
+    {
+      "id": "LTE005-SMOKE-WARN",
+      "path": "reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/lte_reliability_gate_report.json",
+      "json_path": "$.result",
+      "operator": "equals",
+      "expected": "WARN",
+      "local_only": true
+    },
+    {
+      "id": "LTE005-SMOKE-NO-ERRORS",
+      "path": "reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/lte_reliability_gate_report.json",
+      "json_path": "$.errors",
+      "operator": "equals",
+      "expected": [],
+      "local_only": true
+    },
+    {
+      "id": "LTE005-G6-ID",
+      "path": "reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/lte_reliability_gate_report.json",
+      "json_path": "$.gates.5.id",
+      "operator": "equals",
+      "expected": "G6_RECONNECT_CACHE_OBSERVABILITY",
+      "local_only": true
+    },
+    {
+      "id": "LTE005-G6-WARN",
+      "path": "reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/lte_reliability_gate_report.json",
+      "json_path": "$.gates.5.status",
+      "operator": "equals",
+      "expected": "WARN",
+      "local_only": true
+    },
+    {
+      "id": "LTE005-G6-CACHE-MISSING-WARNING",
+      "path": "reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/lte_reliability_gate_report.json",
+      "json_path": "$.gates.5.warnings",
+      "operator": "contains",
+      "expected": "cache_or_dropped_message_observability_not_observed",
+      "local_only": true
+    },
+    {
+      "id": "LTE005-G6-NO-CACHE-EVIDENCE",
+      "path": "reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/lte_reliability_gate_report.json",
+      "json_path": "$.gates.5.evidence.cache_evidence_hits",
+      "operator": "equals",
+      "expected": [],
+      "local_only": true
+    },
+    {
+      "id": "LTE005-RAW-FRAME-RETENTION-PASS",
+      "path": "reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/lte_reliability_gate_report.json",
+      "json_path": "$.gates.6.status",
+      "operator": "equals",
+      "expected": "PASS",
+      "local_only": true
+    },
+    {
+      "id": "LTE005-EXPORT-FIRMWARE-IS-LOC005A",
+      "path": "reports/lte_reliability/loc005a-source-states-20260630-001-lte006-smoke/lte_reliability_gate_report.json",
+      "json_path": "$.firmware_versions.0",
+      "operator": "equals",
+      "expected": "0.1.0-loc005a-source-states",
+      "local_only": true
+    }
+  ],
+  "commits": [
+    {
+      "label": "LTE-005 reliability gate baseline",
+      "commit": "e23b2f2"
+    },
+    {
+      "label": "OBS-004 reliability observability surface",
+      "commit": "b68fbbc"
+    },
+    {
+      "label": "LTE-006 firmware reliability non-claim observability",
+      "commit": "3331db7"
+    }
+  ],
+  "validation_commands": [
+    "python -m unittest quality_tests.test_key_release_gate quality_tests.test_lte_reliability_gate quality_tests.test_mqtt_heartbeat_firmware -v",
+    "python scripts\\context_lint.py",
+    "python scripts\\validate_lte_reliability_gate.py --input reports\\field_validation\\loc005a-source-states-20260630-001\\test_run_export.json --output-dir reports\\lte_reliability\\loc005a-source-states-20260630-001-lte006-smoke --json",
+    "python scripts\\run_key_release_gate.py --manifest docs/current/key_releases/KR-005_RELIABILITY_EXPLAINABILITY_PREFLIGHT.json --json",
+    "powershell -ExecutionPolicy Bypass -File scripts\\verify.ps1",
+    "git diff --check"
+  ],
+  "next_release_gates": [
+    "Flash LTE-006 only after explicit operator confirmation and validate one USB-Free request_location run",
+    "Add real store-forward cache counters before treating cache/drop observability as PASS",
+    "Add reconnect recovery evidence before long LTE stability acceptance",
+    "Add a later long-run LTE reliability gate only after cache/reconnect evidence is visible"
+  ]
+}
