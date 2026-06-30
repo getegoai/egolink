@@ -569,9 +569,8 @@ motion candidate
     claimed by this task.
 - `LOC-005A Firmware-Side Observation Source States`
   - Path: `docs/tasks/done/LOC-005A_FIRMWARE_SIDE_OBSERVATION_SOURCE_STATES.md`
-  - Status: completed as a firmware/server/Web contract increment and COM4
-    flash gate; USB-Free hardware runtime validation is still pending an
-    independent-power run.
+  - Status: completed as a firmware/server/Web contract increment, COM4 flash
+    gate, and one-command USB-Free hardware runtime validation.
   - Goal: add Wi-Fi, IMU, and power source/evidence status slots to the raw
     LTE `location_observation` path without returning to device-side JSON or
     claiming unavailable sensor readiness.
@@ -584,7 +583,11 @@ motion candidate
     `build_loc005a_source_states/egolink_mqtt_heartbeat.bin`; Message Hub/Web
     was redeployed to `203.0.113.10:8790` without touching GitLab; COM4 flash
     passed with evidence under
-    `reports/field_validation/loc005a-source-states-20260630-001/flash_report.md`.
+    `reports/field_validation/loc005a-source-states-20260630-001/flash_report.md`;
+    independent-power USB-Free validation later reconciled existing
+    `cmd-000024` as PASS with raw LTE `location_report`, raw LTE
+    `location_observation`, and raw LTE ACK evidence under
+    `reports/field_validation/loc005a-source-states-20260630-001/`.
   - Boundary: Wi-Fi remains `disabled` / `missing` in the current LTE mode,
     default IMU remains mock/unverified, and default power remains a
     mock/log-backend source. No battery accuracy, product power behavior,
@@ -822,9 +825,9 @@ motion candidate
 3. Treat `ALG-000` as the completed EALE-P0 design freeze: use
    `docs/development/LOCATION_FUSION_ALGORITHM.md` as the algorithm boundary
    for KR-004 preparation.
-4. Run `LOC-005A` next to add real firmware-side
-   Wi-Fi/IMU/power observations as explicit `observed`, `unknown`, or
-   `unverified` inputs, not as inferred capabilities.
+4. Treat `LOC-005A` as the completed source-state increment: Wi-Fi/IMU/power
+   evidence is now present in the USB-Free raw LTE observation path with
+   explicit source labels, not inferred capabilities.
 5. Add `OBS-003` Web/report visibility for current run, key release, and
    failure reason so every runnable version remains demonstrable.
 6. Prepare `ALG-001` separately as optional server-side derived

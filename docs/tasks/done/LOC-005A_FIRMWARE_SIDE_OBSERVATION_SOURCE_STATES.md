@@ -68,8 +68,8 @@ ready. It preserves the raw-frame-first path and labels each source as
 - [x] Dashboard field state shows the new evidence statuses.
 - [x] Tests protect the firmware string contract and server derivation path.
 - [x] Hardware flashing passes after explicit operator confirmation.
-- [x] USB-Free runtime validation is explicitly left as a pending follow-up
-      and is not claimed by this flash evidence.
+- [x] USB-Free runtime validation passes after operator-confirmed independent
+      power and USB disconnect.
 
 ## Evidence
 
@@ -105,6 +105,23 @@ ready. It preserves the raw-frame-first path and labels each source as
   `esptool.py` detected ESP32-S3 QFN56 rev v0.2, wrote bootloader, app
   (`300448` bytes), and partition table, verified all hashes, and completed
   hard reset.
+- USB-Free runtime:
+  `powershell -ExecutionPolicy Bypass -File scripts\run_fw001_hw_r1.ps1 -HostName 203.0.113.10 -FwVersion 0.1.0-loc005a-source-states -TestRunId loc005a-source-states-20260630-001 -BuildDir build_loc005a_source_states -EnableSim7670Gnss -EnableSim7670LocationObservation -Validate -OperatorConfirmedIndependentPower -OperatorConfirmedUsbDisconnected -ExistingCommandId cmd-000024 -LteEvidenceSince command-created -LteCommandName request_location -RequireLteLocationReport -RequireLteLocationObservation -ExpectedAckTestRunId loc005a-source-states-20260630-001 -ExpectedMessageTestRunId loc005a-source-states-20260630-001 -ValidationTimeoutSec 420 -ValidationPollIntervalSec 5 -Json`
+  passed after the operator rebooted the board on independent power with USB
+  disconnected. Evidence:
+  `reports/field_validation/loc005a-source-states-20260630-001/lte_command_loop_report.md`.
+  The VPS retained the downlink raw command frame `cmd-000024`, then received
+  raw LTE `location_report` frame `loc-cmd-000024` (`seq=2`, `fix=false`,
+  `gnss_state=no_fix`, `gnss_query_ok=true`, `transport.type=lte`), raw LTE
+  `location_observation` frame `obs-cmd-000024` (`seq=3`, `cell.rat=LTE`,
+  `cell.cell_id=180571649`, `cell.rsrp=-96`,
+  `lte.reason_code=LTE_READY`, `location_belief.source=cell,lte,wifi,imu,power`,
+  `wifi.source_status=disabled`, `wifi.evidence_status=missing`,
+  `imu.source_status=unverified`, `imu.evidence_status=mock`,
+  `power.source_status=mock`, `power.evidence_status=mock`,
+  `transport.type=lte`), and raw LTE ACK frame `cmd-000024` (`seq=4`,
+  command/ACK status `ok`, `LTE_HTTP_OK` / HTTP `200`,
+  `poll_action_elapsed_ms=460`).
 
 ## Boundaries
 
@@ -122,8 +139,6 @@ ready. It preserves the raw-frame-first path and labels each source as
 
 ## Remaining Risks
 
-- The new LOC-005A firmware image has been flashed, but has not yet been
-  validated over independent power with USB disconnected.
 - A later source-specific task must add privacy-reviewed Wi-Fi fingerprints,
   product-topology IMU validation, and real battery/power instrumentation
   before these signals can drive user-visible location confidence.

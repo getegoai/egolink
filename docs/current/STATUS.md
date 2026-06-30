@@ -30,7 +30,24 @@ recorded at
 `reports/field_validation/loc005a-source-states-20260630-001/flash_report.md`:
 `esptool.py` detected ESP32-S3 QFN56 rev v0.2, wrote bootloader, app
 (`300448` bytes), and partition table, verified all hashes, and completed a
-hard reset. No independent-power USB-Free runtime validation, real Wi-Fi
+hard reset. After the operator rebooted the board on independent power with
+USB disconnected, the reboot-aware validator reconciled existing
+`cmd-000024` as PASS. Evidence is under
+`reports/field_validation/loc005a-source-states-20260630-001/`, including
+`lte_command_loop_report.md`, `lte_command_loop_report.json`,
+`device_state.json`, `commands.json`, and `test_run_export.json`. Runtime
+evidence: downlink raw command frame `cmd-000024`, raw LTE
+`location_report` frame `loc-cmd-000024` (`seq=2`, `fix=false`,
+`gnss_state=no_fix`, `gnss_query_ok=true`, `transport.type=lte`), raw LTE
+`location_observation` frame `obs-cmd-000024` (`seq=3`,
+`cell.rat=LTE`, `cell.cell_id=180571649`, `cell.rsrp=-96`,
+`lte.reason_code=LTE_READY`, `location_belief.source=cell,lte,wifi,imu,power`,
+`wifi.source_status=disabled`, `wifi.evidence_status=missing`,
+`imu.source_status=unverified`, `imu.evidence_status=mock`,
+`power.source_status=mock`, `power.evidence_status=mock`,
+`transport.type=lte`), and raw LTE ACK frame `cmd-000024` (`seq=4`,
+ACK status `ok`, command parse status `raw_command_selected`,
+`LTE_HTTP_OK` / HTTP `200`, `poll_action_elapsed_ms=460`). No real Wi-Fi
 fingerprinting, product-topology IMU validation, battery accuracy, long LTE
 stability, enclosure behavior, or product readiness is claimed by this entry.
 
