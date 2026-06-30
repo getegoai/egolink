@@ -624,6 +624,7 @@ class MessageHubDeployScriptTests(unittest.TestCase):
 
         self.assertIn("function Copy-ServerSource", script)
         self.assertIn('rm -rf \'$RemoteDir/server/runtime\' \'$RemoteDir/server/__pycache__\'', script)
+        self.assertIn('Copy-RelativePath "docs\\current\\key_releases"', script)
         self.assertNotIn('Copy-RelativePath "server"', script)
 
 
@@ -728,6 +729,63 @@ class MessageHubHttpTests(unittest.TestCase):
             "mock_4g_over_wifi",
         )
         self.assertIn("GNSS_NO_OBSERVATION", exported["observability_summary"]["reason_codes"])
+        self.assertEqual(exported["run_context"]["test_run_id"], "field-r1-test")
+        self.assertEqual(exported["run_context"]["command"]["ack_status"], "ok")
+        self.assertEqual(exported["run_context"]["failure"]["reason"], "GNSS_NO_OBSERVATION")
+        self.assertEqual(exported["observability_summary"]["failure_summary"]["reason"], "GNSS_NO_OBSERVATION")
+
+    def test_state_api_includes_current_run_context(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                post_json(base_url, "/api/v1/test-runs", {"test_run_id": "obs003-unit"})
+                post_json(
+                    base_url,
+                    "/api/v1/devices/ego-link-001/telemetry",
+                    protocol.event_message(
+                        "ego-link-001",
+                        "2026-06-30T00:00:01Z",
+                        1,
+                        "location_report",
+                        "normal",
+                        fw_version="0.1.0-loc005a-source-states",
+                        source="sim7670g_firmware_gnss",
+                        source_status="unverified",
+                        fix=False,
+                        gnss_state="no_fix",
+                        test_run_id="obs003-unit",
+                    ),
+                )
+                post_json(
+                    base_url,
+                    "/api/v1/devices/ego-link-001/commands",
+                    {
+                        "cmd": "set_report_interval",
+                        "test_run_id": "old-pending-run",
+                        "payload": {"interval_ms": 10000},
+                    },
+                )
+                state = get_json(base_url, "/api/state")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        current_run = state["current_run"]
+        self.assertEqual(current_run["test_run_id"], "obs003-unit")
+        self.assertEqual(current_run["fw_version"], "0.1.0-loc005a-source-states")
+        self.assertEqual(current_run["key_release"]["release_id"], "unreleased")
+        self.assertEqual(current_run["key_release"]["status"], "unreleased_run")
+        self.assertIn("baseline", current_run["key_release"])
+        self.assertEqual(current_run["location"]["event_type"], "location_report")
+        self.assertEqual(current_run["failure"]["state"], "warning")
+        self.assertNotEqual(current_run["failure"]["reason"], "command_pending_ack_missing")
+        self.assertIn("GNSS_NO_FIX", current_run["failure"]["reason_codes"])
+        self.assertEqual(current_run["evidence_counts"]["commands"], 0)
 
     def test_get_api_requires_token_when_auth_is_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

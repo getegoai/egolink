@@ -510,6 +510,24 @@ motion candidate
   - Boundary: OBS-001 is additive and compatible with existing
     `egolink.p0.v1` messages. It does not prove LTE data transport, battery
     accuracy, long-run reliability, or enclosure GNSS performance.
+- `OBS-003 Current Run Key Release Failure Visibility`
+  - Path: `docs/tasks/done/OBS-003_CURRENT_RUN_KEY_RELEASE_FAILURE_VISIBILITY.md`
+  - Status: completed as a Server-Web/report observability increment.
+  - Goal: make every runnable version demonstrable by showing current run,
+    key-release or unreleased/baseline state, command/ACK chain, raw evidence,
+    derived location, and failure reason in API, export, and Dashboard
+    surfaces.
+  - Evidence: `/api/state` includes top-level `current_run`; test-run export
+    includes top-level `run_context`; `observability_summary` includes
+    `failure_summary`; Dashboard renders a `Run Context` panel; the VPS deploy
+    package includes `docs/current/key_releases`; focused Message Hub
+    server/dashboard tests passed with 20 tests; full `scripts\verify.ps1`
+    passed with 300 tests; VPS smoke confirmed current LOC-005A run as
+    `unreleased` against baseline `KR-003`, `cmd-000024` command/ACK `ok`,
+    raw-frame parse `ok`, and failure reason `GNSS_NO_FIX`.
+  - Boundary: no firmware change, hardware action, new key release, long LTE
+    stability, battery/power behavior, enclosure behavior, or product
+    readiness is claimed.
 - `LOC-002 Location Observation Contract Baseline`
   - Path: `docs/tasks/done/LOC-002_LOCATION_OBSERVATION_CONTRACT_BASELINE.md`
   - Status: completed as a protocol/server/web/simulator baseline.
@@ -828,8 +846,9 @@ motion candidate
 4. Treat `LOC-005A` as the completed source-state increment: Wi-Fi/IMU/power
    evidence is now present in the USB-Free raw LTE observation path with
    explicit source labels, not inferred capabilities.
-5. Add `OBS-003` Web/report visibility for current run, key release, and
-   failure reason so every runnable version remains demonstrable.
+5. Treat `OBS-003` as the completed Web/report visibility increment: current
+   run, key-release/baseline state, command/ACK chain, raw evidence, derived
+   location, and failure reason are now visible through API/export/Dashboard.
 6. Prepare `ALG-001` separately as optional server-side derived
    `location_belief` generation from observation windows; do not mix it into
    firmware or DATA-001.

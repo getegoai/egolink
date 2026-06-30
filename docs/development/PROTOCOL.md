@@ -144,6 +144,35 @@ The Message Hub exposes the derived view as `device.observability` in
 values must remain `unknown` or absent; firmware and Web must not infer LTE,
 battery, or GNSS capability from board name alone.
 
+## OBS-003 Current Run Context And Failure Summary
+
+OBS-003 adds an additive server-derived run context for Web and report
+surfaces. It does not change device wire messages.
+
+`GET /api/state` includes top-level `current_run`:
+
+- `test_run_id`, `device_id`, `fw_version`, and `last_seen_at`;
+- `key_release`, with a manifest match when the current run belongs to a key
+  release, otherwise `release_id=unreleased` plus the latest released
+  baseline when key-release manifests are available;
+- `command` summary with command ID, command name, command status, ACK status,
+  ACK transport, and ACK test-run ID;
+- `raw_frame` summary with frame ID, direction, frame type, parse status,
+  derived message type, and parse reason;
+- `location` summary with event type, sequence, fix/no-fix, GNSS state,
+  command anchor, belief state, and belief reason;
+- `failure` summary with `state`, `reason`, `reason_codes`, and evidence;
+- `evidence_counts` for messages, commands, and raw frames in the current
+  view.
+
+`GET /api/v1/test-runs/{test_run_id}/export` includes the same shape as
+top-level `run_context`, and `observability_summary.failure_summary` carries
+the same failure classification used by the Dashboard. Typical failure summary
+states are `ok`, `warning`, `pending`, `failure`, and `unknown`.
+
+This context is a derived report/view contract. Devices continue to send the
+existing `egolink.p0.v1` JSON-derived messages or `raw-frame.p0.v1` frames.
+
 Typical derived state:
 
 ```json

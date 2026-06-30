@@ -30,6 +30,7 @@ from pc_simulator import protocol
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = REPO_ROOT / "server" / "runtime" / "message_hub.db"
+KEY_RELEASE_DIR = REPO_ROOT / "docs" / "current" / "key_releases"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 
@@ -700,15 +701,24 @@ class MessageHubStore:
             ).fetchall()
         if run is None:
             raise MessageHubError("test_run_not_found", f"unknown test run: {test_run_id}", status=404)
+        test_run = json.loads(run["metadata_json"])
         message_list = [json.loads(row["payload_json"]) for row in messages]
         command_list = [command_row(row) for row in commands]
         raw_frame_list = [redact_raw_frame_record(json.loads(row["record_json"])) for row in raw_frames]
+        observability_summary = summarize_test_run_observability(message_list, command_list, raw_frame_list)
         return {
-            "test_run": json.loads(run["metadata_json"]),
+            "test_run": test_run,
             "messages": message_list,
             "commands": command_list,
             "raw_frames": raw_frame_list,
-            "observability_summary": summarize_test_run_observability(message_list, command_list),
+            "observability_summary": observability_summary,
+            "run_context": build_run_context(
+                messages=message_list,
+                commands=command_list,
+                raw_frames=raw_frame_list,
+                test_run=test_run,
+                latest_observability=as_dict(observability_summary.get("latest_observability")),
+            ),
         }
 
 
@@ -805,12 +815,23 @@ def make_handler(store: MessageHubStore, *, token: str | None = None) -> type[Ba
             if segments and segments[0] == "api" and not authorized(self.headers.get("Authorization"), token):
                 raise MessageHubError("unauthorized", "missing or invalid bearer token", status=401)
             if path == "/api/state":
+                devices = store.list_devices()
+                messages = store.recent_messages(20)
+                commands = store.recent_commands(20)
+                raw_frames = store.recent_raw_frames(20)
                 self.respond_json(
                     {
-                        "devices": store.list_devices(),
-                        "messages": store.recent_messages(20),
-                        "commands": store.recent_commands(20),
-                        "raw_frames": store.recent_raw_frames(20),
+                        "devices": devices,
+                        "messages": messages,
+                        "commands": commands,
+                        "raw_frames": raw_frames,
+                        "current_run": build_run_context(
+                            messages=messages,
+                            commands=commands,
+                            raw_frames=raw_frames,
+                            devices=devices,
+                            test_runs=store.list_test_runs(),
+                        ),
                     }
                 )
                 return
@@ -2240,9 +2261,372 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
     }
 
 
-def summarize_test_run_observability(messages: list[dict[str, Any]], commands: list[dict[str, Any]]) -> dict[str, Any]:
+def load_key_release_manifests(root: Path = KEY_RELEASE_DIR) -> list[dict[str, Any]]:
+    if not root.exists():
+        return []
+    manifests: list[dict[str, Any]] = []
+    for path in sorted(root.glob("*.json")):
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        manifest["_manifest_path"] = relative_repo_path(path)
+        manifests.append(manifest)
+    manifests.sort(key=lambda item: (str(item.get("release_date") or ""), str(item.get("release_id") or "")))
+    return manifests
+
+
+def relative_repo_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def key_release_summary(manifest: dict[str, Any] | None) -> dict[str, Any]:
+    if not manifest:
+        return {}
+    return compact_dict(
+        {
+            "release_id": manifest.get("release_id"),
+            "release_name": manifest.get("release_name"),
+            "release_version": manifest.get("release_version"),
+            "status": manifest.get("status"),
+            "release_date": manifest.get("release_date"),
+            "firmware_version": manifest.get("firmware_version"),
+            "firmware_test_run_id": manifest.get("firmware_test_run_id"),
+            "manifest_path": manifest.get("_manifest_path"),
+        }
+    )
+
+
+def latest_released_manifest(manifests: list[dict[str, Any]]) -> dict[str, Any] | None:
+    released = [item for item in manifests if item.get("status") == "released"]
+    if released:
+        return released[-1]
+    return manifests[-1] if manifests else None
+
+
+def resolve_key_release_context(
+    test_run_id: Any,
+    fw_version: Any,
+    *,
+    manifests: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    manifest_list = manifests if manifests is not None else load_key_release_manifests()
+    test_run_text = str(test_run_id or "")
+    fw_text = str(fw_version or "")
+    for manifest in manifest_list:
+        if test_run_text and str(manifest.get("firmware_test_run_id") or "") == test_run_text:
+            return {
+                "match": "firmware_test_run_id",
+                **key_release_summary(manifest),
+            }
+    for manifest in manifest_list:
+        if fw_text and str(manifest.get("firmware_version") or "") == fw_text:
+            return {
+                "match": "firmware_version",
+                **key_release_summary(manifest),
+            }
+    baseline = key_release_summary(latest_released_manifest(manifest_list))
+    return {
+        "release_id": "unreleased",
+        "release_name": "Unreleased run",
+        "release_version": None,
+        "status": "unreleased_run" if manifest_list else "unknown",
+        "match": "none" if manifest_list else "manifest_unavailable",
+        "baseline": baseline,
+    }
+
+
+def newest_record(items: list[dict[str, Any]], *timestamp_keys: str) -> dict[str, Any]:
+    newest: dict[str, Any] = {}
+    newest_ts: datetime | None = None
+    for index, item in enumerate(items):
+        timestamp_value = first_known(*(item.get(key) for key in timestamp_keys))
+        parsed = parse_iso_timestamp(timestamp_value)
+        if parsed is None:
+            parsed = datetime.fromtimestamp(index, tz=timezone.utc)
+        if newest_ts is None or parsed >= newest_ts:
+            newest = item
+            newest_ts = parsed
+    return newest
+
+
+def command_test_run_id(command: dict[str, Any]) -> Any:
+    ack = as_dict(command.get("ack"))
+    return first_known(
+        command.get("test_run_id"),
+        dict_value(command, "payload", "test_run_id"),
+        ack.get("test_run_id"),
+        dict_value(ack, "payload", "test_run_id"),
+    )
+
+
+def command_matches_test_run(command: dict[str, Any], test_run_id: Any) -> bool:
+    if not test_run_id:
+        return True
+    test_run_text = str(test_run_id)
+    ack = as_dict(command.get("ack"))
+    candidates = [
+        command.get("test_run_id"),
+        dict_value(command, "payload", "test_run_id"),
+        ack.get("test_run_id"),
+        dict_value(ack, "payload", "test_run_id"),
+    ]
+    return test_run_text in {str(value) for value in candidates if value not in (None, "")}
+
+
+def raw_frame_test_run_id(raw_frame: dict[str, Any]) -> Any:
+    derived = as_dict(dict_value(raw_frame, "parse_result", "derived_message"))
+    return first_known(raw_frame.get("test_run_id"), derived.get("test_run_id"))
+
+
+def raw_frame_matches_test_run(raw_frame: dict[str, Any], test_run_id: Any) -> bool:
+    if not test_run_id:
+        return True
+    return str(raw_frame_test_run_id(raw_frame) or "") == str(test_run_id)
+
+
+def message_matches_test_run(message: dict[str, Any], test_run_id: Any) -> bool:
+    if not test_run_id:
+        return True
+    return str(message.get("test_run_id") or "") == str(test_run_id)
+
+
+def raw_frame_parse_status(raw_frame: dict[str, Any]) -> str:
+    return str(first_known(dict_value(raw_frame, "parse_result", "status"), raw_frame.get("parse_status"), "unknown"))
+
+
+def raw_frame_derived_type(raw_frame: dict[str, Any]) -> str:
+    return str(first_known(dict_value(raw_frame, "parse_result", "derived_message_type"), raw_frame.get("derived_message_type"), "unknown"))
+
+
+def raw_frame_type(raw_frame: dict[str, Any]) -> str:
+    return str(first_known(dict_value(raw_frame, "framing", "frame_type"), raw_frame.get("frame_type"), "unknown"))
+
+
+def raw_frame_problem(raw_frames: list[dict[str, Any]]) -> dict[str, Any]:
+    problems = [
+        raw_frame
+        for raw_frame in raw_frames
+        if raw_frame_parse_status(raw_frame) not in {"ok", "not_attempted", "unknown"}
+    ]
+    return newest_record(problems, "server_received_at") if problems else {}
+
+
+def unique_text(values: list[Any]) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        if value in (None, "", "none", "unknown"):
+            continue
+        text = str(value)
+        if text not in result:
+            result.append(text)
+    return result
+
+
+def build_failure_summary(
+    messages: list[dict[str, Any]],
+    commands: list[dict[str, Any]],
+    raw_frames: list[dict[str, Any]],
+    latest_observability: dict[str, Any],
+) -> dict[str, Any]:
+    reason_codes: list[str] = []
+    for message in messages:
+        if message.get("error_code"):
+            reason_codes = unique_text(reason_codes + [message.get("error_code")])
+        if message.get("message_type") == "event" and message.get("event_type") in {"location_report", "location_observation"}:
+            gnss = as_dict(message.get("gnss"))
+            gnss_reason = build_gnss_reason(
+                first_known(message.get("fix"), gnss.get("fix")),
+                first_known(message.get("gnss_state"), gnss.get("state"), gnss.get("result")),
+                message.get("error_code"),
+                message,
+            )
+            if gnss_reason not in {"GNSS_FIX", "GNSS_UNKNOWN"}:
+                reason_codes = unique_text(reason_codes + [gnss_reason])
+    reason_codes = unique_text(reason_codes + list(as_dict(latest_observability.get("explainability")).get("reason_codes") or []))
+
+    problem_frame = raw_frame_problem(raw_frames)
+    if problem_frame:
+        parse = as_dict(problem_frame.get("parse_result"))
+        code = first_known(parse.get("error_code"), raw_frame_parse_status(problem_frame))
+        return {
+            "state": "failure",
+            "reason": "raw_frame_parse_failed",
+            "reason_codes": unique_text([code] + reason_codes),
+            "evidence": {
+                "frame_id": problem_frame.get("frame_id"),
+                "parse_status": raw_frame_parse_status(problem_frame),
+                "parse_error_code": parse.get("error_code"),
+                "parse_reason": parse.get("reason"),
+            },
+        }
+
+    pending = [command for command in commands if command.get("status") == "pending"]
+    if pending:
+        command = newest_record(pending, "updated_at", "created_at")
+        return {
+            "state": "pending",
+            "reason": "command_pending_ack_missing",
+            "reason_codes": unique_text(["COMMAND_PENDING_ACK_MISSING"] + reason_codes),
+            "evidence": {
+                "cmd_id": command.get("cmd_id"),
+                "cmd": command.get("cmd"),
+                "created_at": command.get("created_at"),
+                "updated_at": command.get("updated_at"),
+            },
+        }
+
+    if not messages and not raw_frames:
+        return {
+            "state": "unknown",
+            "reason": "no_runtime_evidence",
+            "reason_codes": ["NO_RUNTIME_EVIDENCE"],
+            "evidence": {},
+        }
+
+    if reason_codes:
+        return {
+            "state": "warning",
+            "reason": reason_codes[0],
+            "reason_codes": reason_codes,
+            "evidence": {},
+        }
+
+    return {
+        "state": "ok",
+        "reason": "none",
+        "reason_codes": [],
+        "evidence": {},
+    }
+
+
+def build_run_context(
+    *,
+    messages: list[dict[str, Any]],
+    commands: list[dict[str, Any]],
+    raw_frames: list[dict[str, Any]],
+    devices: list[dict[str, Any]] | None = None,
+    test_run: dict[str, Any] | None = None,
+    test_runs: list[dict[str, Any]] | None = None,
+    latest_observability: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    devices = devices or []
+    test_run = test_run or {}
+    test_runs = test_runs or []
+    latest_device = newest_record(devices, "last_seen_at") if devices else {}
+    latest_message = newest_record(messages, "server_received_at", "ts") if messages else {}
+    latest_command = newest_record(commands, "updated_at", "created_at") if commands else {}
+    latest_raw = newest_record(raw_frames, "server_received_at") if raw_frames else {}
+    location_messages = [
+        message
+        for message in messages
+        if message.get("message_type") == "event" and message.get("event_type") in {"location_observation", "location_report"}
+    ]
+    latest_location = newest_record(location_messages, "server_received_at", "ts") if location_messages else {}
+    latest_observability = as_dict(latest_observability or latest_device.get("observability"))
+
+    test_run_id = first_known(
+        test_run.get("test_run_id"),
+        latest_location.get("test_run_id"),
+        latest_message.get("test_run_id"),
+        command_test_run_id(latest_command),
+        raw_frame_test_run_id(latest_raw),
+        dict_value(latest_observability, "location_memory", "last_test_run_id"),
+    )
+    if not test_run and test_run_id:
+        for candidate in test_runs:
+            if str(candidate.get("test_run_id") or "") == str(test_run_id):
+                test_run = candidate
+                break
+
+    context_messages = [message for message in messages if message_matches_test_run(message, test_run_id)]
+    context_commands = [command for command in commands if command_matches_test_run(command, test_run_id)]
+    context_raw_frames = [raw_frame for raw_frame in raw_frames if raw_frame_matches_test_run(raw_frame, test_run_id)]
+    if context_messages:
+        latest_message = newest_record(context_messages, "server_received_at", "ts")
+        location_messages = [
+            message
+            for message in context_messages
+            if message.get("message_type") == "event"
+            and message.get("event_type") in {"location_observation", "location_report"}
+        ]
+        latest_location = newest_record(location_messages, "server_received_at", "ts") if location_messages else {}
+    if context_commands:
+        latest_command = newest_record(context_commands, "updated_at", "created_at")
+    if context_raw_frames:
+        latest_raw = newest_record(context_raw_frames, "server_received_at")
+
+    fw_version = first_known(
+        latest_location.get("fw_version"),
+        latest_message.get("fw_version"),
+        latest_raw.get("fw_version"),
+        latest_device.get("fw_version"),
+        dict_value(latest_command, "ack", "fw_version"),
+    )
+    command_ack = as_dict(latest_command.get("ack"))
+    location_belief = as_dict(latest_observability.get("location_belief"))
+    raw_parse = as_dict(latest_raw.get("parse_result"))
+    key_release = resolve_key_release_context(test_run_id, fw_version)
+    failure = build_failure_summary(context_messages, context_commands, context_raw_frames, latest_observability)
+
+    return {
+        "test_run_id": first_known(test_run_id, "unknown"),
+        "test_run_status": first_known(test_run.get("status"), "unknown"),
+        "device_id": first_known(latest_device.get("device_id"), latest_message.get("device_id"), latest_raw.get("device_id"), "unknown"),
+        "fw_version": first_known(fw_version, "unknown"),
+        "last_seen_at": first_known(latest_device.get("last_seen_at"), latest_message.get("server_received_at"), latest_raw.get("server_received_at")),
+        "key_release": key_release,
+        "command": {
+            "cmd_id": latest_command.get("cmd_id"),
+            "cmd": latest_command.get("cmd"),
+            "status": latest_command.get("status"),
+            "ack_status": command_ack.get("status"),
+            "ack_transport": dict_value(command_ack, "transport", "type"),
+            "ack_test_run_id": command_ack.get("test_run_id"),
+        },
+        "raw_frame": {
+            "frame_id": latest_raw.get("frame_id"),
+            "direction": latest_raw.get("direction"),
+            "frame_type": raw_frame_type(latest_raw),
+            "parse_status": raw_frame_parse_status(latest_raw),
+            "derived_message_type": raw_frame_derived_type(latest_raw),
+            "parse_reason": first_known(raw_parse.get("reason"), raw_parse.get("error_code")),
+        },
+        "location": {
+            "event_type": latest_location.get("event_type"),
+            "seq": latest_location.get("seq"),
+            "fix": first_known(latest_location.get("fix"), dict_value(latest_location, "gnss", "fix")),
+            "gnss_state": first_known(latest_location.get("gnss_state"), dict_value(latest_location, "gnss", "state")),
+            "location_request_cmd_id": latest_location.get("location_request_cmd_id"),
+            "belief_state": location_belief.get("state"),
+            "belief_reason": location_belief.get("reason"),
+        },
+        "failure": failure,
+        "evidence_counts": {
+            "messages": len(context_messages),
+            "commands": len(context_commands),
+            "raw_frames": len(context_raw_frames),
+        },
+    }
+
+
+def summarize_test_run_observability(
+    messages: list[dict[str, Any]],
+    commands: list[dict[str, Any]],
+    raw_frames: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    raw_frame_list = raw_frames or []
     if not messages:
-        return {"message_count": 0, "latest_observability": None, "reason_codes": []}
+        failure_summary = build_failure_summary([], commands, raw_frame_list, {})
+        return {
+            "message_count": 0,
+            "latest_observability": None,
+            "reason_codes": failure_summary["reason_codes"],
+            "failure_summary": failure_summary,
+        }
     latest = messages[-1]
     device = {
         "device_id": latest.get("device_id"),
@@ -2271,6 +2655,7 @@ def summarize_test_run_observability(messages: list[dict[str, Any]], commands: l
         "command_count": len(commands),
         "latest_observability": latest_observability,
         "reason_codes": reason_codes,
+        "failure_summary": build_failure_summary(messages, commands, raw_frame_list, latest_observability),
     }
 
 
@@ -2319,6 +2704,10 @@ def render_dashboard() -> str:
       <section>
         <h2>Devices</h2>
         <div id="devices"></div>
+      </section>
+      <section>
+        <h2>Run Context</h2>
+        <div id="runContext"></div>
       </section>
       <section>
         <h2>Commands</h2>
@@ -2377,7 +2766,9 @@ def render_dashboard() -> str:
     function showStateMessage(message) {
       const html = `<span class="empty">${escapeHtml(message)}</span>`;
       devices.innerHTML = html;
+      runContext.innerHTML = html;
       commands.innerHTML = html;
+      rawFrames.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
     }
@@ -2408,6 +2799,34 @@ def render_dashboard() -> str:
     }
     function latestRawFrameForDevice(rawFrames, deviceId) {
       return (rawFrames || []).find(frame => frame.device_id === deviceId) || {};
+    }
+    function releaseLabel(release) {
+      if (!release || !release.release_id) return 'unknown';
+      const version = release.release_version ? ` / ${release.release_version}` : '';
+      const match = release.match ? ` / ${release.match}` : '';
+      return `${release.release_id}${version}${match}`;
+    }
+    function runContextPanel(run) {
+      const release = run.key_release || {};
+      const baseline = release.baseline || {};
+      const command = run.command || {};
+      const rawFrame = run.raw_frame || {};
+      const location = run.location || {};
+      const failure = run.failure || {};
+      const counts = run.evidence_counts || {};
+      return `
+        <div class="metric"><span>Current Run</span><b>${escapeHtml(run.test_run_id || 'unknown')}</b></div>
+        <div class="metric"><span>Key Release</span><span>${escapeHtml(releaseLabel(release))}</span></div>
+        <div class="metric"><span>Baseline</span><span>${escapeHtml(baseline.release_id || 'none')} ${escapeHtml(baseline.release_version || '')}</span></div>
+        <div class="metric"><span>Firmware</span><span>${escapeHtml(run.fw_version || 'unknown')}</span></div>
+        <div class="metric"><span>Run Device</span><span>${escapeHtml(run.device_id || 'unknown')}</span></div>
+        <div class="metric"><span>Command Chain</span><span>${escapeHtml(command.cmd_id || 'none')} / ${escapeHtml(command.cmd || 'none')} / ${escapeHtml(command.status || 'unknown')} / ACK ${escapeHtml(command.ack_status || 'none')}</span></div>
+        <div class="metric"><span>Raw Evidence</span><span>${escapeHtml(rawFrame.frame_id || 'none')} / ${escapeHtml(rawFrame.frame_type || 'unknown')} / ${escapeHtml(rawFrame.parse_status || 'unknown')} / ${escapeHtml(rawFrame.derived_message_type || 'unknown')}</span></div>
+        <div class="metric"><span>Derived Location</span><span>${escapeHtml(location.event_type || 'none')} seq ${escapeHtml(location.seq ?? 'unknown')} / fix ${escapeHtml(location.fix ?? 'unknown')} / ${escapeHtml(location.gnss_state || 'unknown')}</span></div>
+        <div class="metric"><span>Failure State</span><span class="${failure.state === 'ok' ? 'ok' : failure.state === 'pending' || failure.state === 'warning' ? 'warn' : 'bad'}">${escapeHtml(failure.state || 'unknown')}</span></div>
+        <div class="metric"><span>Failure Reason</span><span>${escapeHtml(failure.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Evidence Counts</span><span>${escapeHtml(counts.messages ?? 0)} messages / ${escapeHtml(counts.commands ?? 0)} commands / ${escapeHtml(counts.raw_frames ?? 0)} raw_frames</span></div>
+      `;
     }
     function latestFieldState(devices, rawFrames) {
       if (!devices.length) return '<span class="empty">No device data yet</span>';
@@ -2487,6 +2906,7 @@ def render_dashboard() -> str:
       }
       authStatus.textContent = 'connected';
       const data = await response.json();
+      runContext.innerHTML = runContextPanel(data.current_run || {});
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>
         <div class="metric"><span>Status</span><span class="${ageClass(d.last_seen_at)}">${escapeHtml(onlineLabel(d.last_seen_at))}</span></div>

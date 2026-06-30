@@ -6,6 +6,34 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: OBS-003 Current Run / Key Release / Failure Visibility is
+implemented as a Server-Web/report observability increment after LOC-005A.
+`/api/state` now includes top-level `current_run` with the current test-run ID,
+device, firmware, key-release match or `unreleased` state, latest released
+baseline, command/ACK summary, raw-frame summary, derived location summary,
+failure state/reason, reason codes, and evidence counts. Test-run export now
+includes top-level `run_context`, and `observability_summary` includes
+`failure_summary` so report consumers and dataset tooling can reuse the same
+classification as the Dashboard. The Dashboard now renders a `Run Context`
+panel with Current Run, Key Release, Baseline, Firmware, Command Chain, Raw
+Evidence, Derived Location, Failure State, Failure Reason, and Evidence
+Counts. The deploy package now copies `docs/current/key_releases` so the VPS
+service can derive key-release/baseline context without touching GitLab or
+runtime secrets. Focused Message Hub server/dashboard tests passed with 20
+tests, `python scripts/context_lint.py` passed, `git diff --check` passed with
+only the existing PowerShell line-ending warning, and full
+`scripts\verify.ps1` passed with 300 tests. The updated Message Hub/Web was
+deployed to `203.0.113.10:8790` with the existing remote token preserved;
+public `/health` returned `ok=true`, unauthenticated `/api/state` returned
+HTTP 401, `/` returned HTTP 200 and contained the Run Context fields, and
+authenticated `/api/state.current_run` reported
+`loc005a-source-states-20260630-001` as `unreleased` against baseline
+`KR-003`, command/ACK `cmd-000024` as `ok`, raw-frame parse status `ok`, and
+failure reason `GNSS_NO_FIX`. Existing GitLab service remained active. This
+task does not change firmware, device wire protocol, hardware state, GNSS
+behavior, LTE stability, battery/power behavior, enclosure behavior, or
+product readiness.
+
 2026-06-30: LOC-005A Firmware-Side Observation Source States is implemented
 as a static firmware/server/Web contract increment after KR-003. Raw LTE
 `location_observation` now carries compact Wi-Fi, IMU, and power source-state
