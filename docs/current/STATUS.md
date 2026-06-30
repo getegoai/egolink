@@ -6,6 +6,33 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: REL-005 promotes KR-004 Multi-Source Explainable Location
+Evidence Baseline from `release_candidate` to released engineering key version
+`0.1.0-key-release-004`. The promotion uses the existing LOC-005A USB-Free
+runtime evidence, KR-004 release gate, authenticated current-run EALE-P0
+snapshot, and the ALG-002 offline DATA-001 coverage report. The KR-004
+manifest now has `status=released`, includes ALG-002 evidence/report checks,
+and keeps all non-claims intact. Promotion review result: LOC-005A remains
+`Unknown` / `no_precise_fix`; DATA-001/ALG-002 report remains `warn` with one
+retained `failure_window`, one `gnss_no_fix`, zero Fine candidates, and
+`model_training_ready=false`; this is acceptable release-review evidence but
+not a learned-model, positioning-accuracy, GNSS acceptance, LTE stability,
+battery/power, or product-readiness claim. No firmware, hardware, raw-frame
+profile, DATA-001 schema, Message Hub runtime behavior, or model behavior is
+changed by this promotion.
+The updated Message Hub/Web manifest was deployed to `203.0.113.10:8790`
+without modifying GitLab. Public `/health` returned `ok=true`,
+unauthenticated `/api/state` returned HTTP 401, authenticated
+`/api/state.current_run.key_release` returned `KR-004` / `released` /
+`0.1.0-key-release-004`, and authenticated
+`/api/state.current_run.eale_p0` still reported `Unknown` /
+`no_precise_fix`, dataset window `failure_window`, and
+`training_allowed=false`. The existing GitLab service remained active.
+Promotion validation passed: focused release/Web/ALG-002 tests passed with 30
+tests, `python scripts/context_lint.py` passed, `scripts\verify.ps1` passed
+with 307 tests, `git diff --check` passed, and the KR-004 release gate passed
+with 7 gates and 18 JSON checks.
+
 2026-06-30: ALG-002 EALE-P0 Dataset Coverage Evaluation is implemented as
 an offline DATA-001 release-review increment after REL-004. New evaluator:
 `scripts/evaluate_eale_p0_dataset.py`; focused tests:

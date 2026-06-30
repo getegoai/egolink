@@ -110,6 +110,22 @@ motion candidate
     runtime validation, model training, product readiness, positioning
     accuracy, long LTE stability, reconnect, GNSS acceptance, or battery/power
     claim.
+- `REL-005 KR-004 Promotion Review`
+  - Path: `docs/tasks/done/REL-005_KR004_PROMOTION_REVIEW.md`
+  - Status: completed as the KR-004 promotion from `release_candidate` to
+    released engineering key version `0.1.0-key-release-004`.
+  - Evidence: `docs/current/KEY_RELEASES.md`,
+    `docs/current/key_releases/KR-004_MULTI_SOURCE_EXPLAINABLE_LOCATION_EVIDENCE.json`,
+    `docs/tasks/done/ALG-002_EALE_P0_DATASET_COVERAGE_EVALUATION.md`,
+    and local reports under `reports/key_releases/KR-004/` and
+    `reports/location_fusion_eale/loc005a-source-states-20260630-001/`.
+  - Current visible result: KR-004 remains `Unknown` / `no_precise_fix` with
+    retained DATA-001 `failure_window` evidence and
+    `model_training_ready=false`; the promotion is an engineering release
+    review only.
+  - Boundary: no firmware flash, runtime validation, model training, product
+    readiness, positioning accuracy, long LTE stability, reconnect, GNSS
+    acceptance, or battery/power claim.
 
 ## Active Queue
 
@@ -892,14 +908,14 @@ motion candidate
    increment: current run, export, and Dashboard can now explain conservative
    location belief, source evidence, dataset-window readiness, and quality
    flags without firmware or DATA-001 schema changes.
-7. Treat `REL-004` as the completed KR-004 release-candidate gate. Review the
-   generated KR-004 report before promoting it from `release_candidate` to
-   `released`.
+7. Treat `REL-004` and `REL-005` as the completed KR-004 release gate and
+   promotion review. KR-004 is now released as engineering key version
+   `0.1.0-key-release-004`.
 8. Treat `ALG-002` as the completed offline DATA-001/EALE-P0 coverage
-   evaluator: use its JSON/Markdown report before KR-004 promotion review or
+   evaluator: use its JSON/Markdown report for future release reviews and
    broader data collection.
 9. Use `STAB-001B` only as a short KR-003/KR-004 USB-Free baseline after the data and
    observability gates can explain failures. Do not promote it into long
    stability testing.
 10. Move to `LTE-005` reconnect/retry/cache/stale-command behavior after the
-    release-candidate gate remains explainable.
+    released KR-004 baseline remains explainable.

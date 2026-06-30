@@ -178,9 +178,9 @@ arm command
 
 ## KR-004 Multi-Source Explainable Location Evidence Baseline
 
-- Status: release candidate.
+- Status: released engineering key version.
 - Release date: 2026-06-30.
-- Release version: `0.1.0-key-release-004-rc1`.
+- Release version: `0.1.0-key-release-004`.
 - Firmware version: `0.1.0-loc005a-source-states`.
 - Device/test run: `ego-link-r1-connectivity-001` /
   `loc005a-source-states-20260630-001`.
@@ -192,7 +192,7 @@ arm command
   `reports/key_releases/KR-004/release_gate_report.json` and
   `reports/key_releases/KR-004/release_gate_report.md`.
 
-### Release-Candidate Meaning
+### Release Meaning
 
 KR-004 freezes the current explainable multi-source location evidence path:
 
@@ -204,10 +204,10 @@ KR-003 raw LTE command/location/observation/ACK loop
 -> DATA-001 dataset-window readiness with training disabled by default
 ```
 
-It is a release candidate because the gate now passes and Web/API identify the
-current LOC-005A run as `KR-004`, but formal promotion from `release_candidate`
-to `released` should happen after report review. Post-candidate review now
-also uses the ALG-002 offline DATA-001 evidence/failure coverage report.
+It is a released engineering key version because the KR-004 gate passes, Web/API
+identify the current LOC-005A run as `KR-004`, and the post-candidate ALG-002
+offline DATA-001 evidence/failure coverage report supports release review while
+preserving the model-training and positioning-accuracy non-claims.
 
 ### Evidence Summary
 
@@ -231,10 +231,13 @@ also uses the ALG-002 offline DATA-001 evidence/failure coverage report.
   `warn`: one retained `failure_window`, one `gnss_no_fix` failure mode,
   raw-frame and derived-event lineage present, zero Fine candidates, and
   `model_training_ready=false`.
-- KR-004 gate passed with JSON checks over LOC-005A runtime evidence and the
-  authenticated current-run EALE-P0 snapshot.
-- The VPS Message Hub was redeployed with the KR-004 manifest; existing GitLab
-  service remained active.
+- KR-004 gate passed with JSON checks over LOC-005A runtime evidence, the
+  authenticated current-run EALE-P0 snapshot, and the ALG-002 offline dataset
+  coverage report.
+- The VPS Message Hub was redeployed with the released KR-004 manifest; public
+  `/health` returned `ok=true`, unauthenticated `/api/state` returned HTTP
+  401, authenticated current-run key-release status returned `released`, and
+  existing GitLab service remained active.
 
 ### Non-Claims
 

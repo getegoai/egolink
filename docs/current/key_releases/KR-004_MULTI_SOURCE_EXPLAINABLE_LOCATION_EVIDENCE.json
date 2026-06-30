@@ -1,10 +1,10 @@
 {
   "release_id": "KR-004",
   "release_name": "Multi-Source Explainable Location Evidence Baseline",
-  "release_version": "0.1.0-key-release-004-rc1",
-  "status": "release_candidate",
+  "release_version": "0.1.0-key-release-004",
+  "status": "released",
   "release_date": "2026-06-30",
-  "summary": "Fourth Ego Link P0 engineering key-release candidate. It freezes the USB-Free raw LTE location loop with firmware-side Wi-Fi/IMU/power source states, current-run failure visibility, and server-derived EALE-P0 explainable location belief readiness.",
+  "summary": "Fourth Ego Link P0 engineering key release. It freezes the USB-Free raw LTE location loop with firmware-side Wi-Fi/IMU/power source states, current-run failure visibility, server-derived EALE-P0 explainable location belief readiness, and offline DATA-001/EALE-P0 coverage review.",
   "firmware_version": "0.1.0-loc005a-source-states",
   "firmware_test_run_id": "loc005a-source-states-20260630-001",
   "protocol_profiles": [
@@ -66,6 +66,11 @@
       "id": "G6-REGRESSION",
       "status": "PASS",
       "summary": "focused release-gate tests, context_lint, full verify, and git diff checks pass"
+    },
+    {
+      "id": "G7-PROMOTION-REVIEW",
+      "status": "PASS",
+      "summary": "ALG-002 offline DATA-001 coverage report supports release review while preserving no model-training or positioning-accuracy claims"
     }
   ],
   "evidence": [
@@ -182,6 +187,30 @@
       "path": "reports/key_releases/KR-004/current_run_eale_p0.json",
       "required": true,
       "local_only": true
+    },
+    {
+      "kind": "alg002_task_packet",
+      "path": "docs/tasks/done/ALG-002_EALE_P0_DATASET_COVERAGE_EVALUATION.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "alg002_evaluator_script",
+      "path": "scripts/evaluate_eale_p0_dataset.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "alg002_focused_tests",
+      "path": "quality_tests/test_eale_p0_dataset_evaluation.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "alg002_dataset_report_json",
+      "path": "reports/location_fusion_eale/loc005a-source-states-20260630-001/eale_p0_dataset_report.json",
+      "required": true,
+      "local_only": true
     }
   ],
   "json_checks": [
@@ -288,6 +317,46 @@
       "operator": "equals",
       "expected": false,
       "local_only": true
+    },
+    {
+      "id": "ALG002-REPORT-WARN",
+      "path": "reports/location_fusion_eale/loc005a-source-states-20260630-001/eale_p0_dataset_report.json",
+      "json_path": "$.result.status",
+      "operator": "equals",
+      "expected": "warn",
+      "local_only": true
+    },
+    {
+      "id": "ALG002-RELEASE-REVIEW-OK",
+      "path": "reports/location_fusion_eale/loc005a-source-states-20260630-001/eale_p0_dataset_report.json",
+      "json_path": "$.release_gate_usage.can_support_release_review",
+      "operator": "equals",
+      "expected": true,
+      "local_only": true
+    },
+    {
+      "id": "ALG002-MODEL-TRAINING-NOT-READY",
+      "path": "reports/location_fusion_eale/loc005a-source-states-20260630-001/eale_p0_dataset_report.json",
+      "json_path": "$.training_readiness.model_training_ready",
+      "operator": "equals",
+      "expected": false,
+      "local_only": true
+    },
+    {
+      "id": "ALG002-NO-FINE-CANDIDATES",
+      "path": "reports/location_fusion_eale/loc005a-source-states-20260630-001/eale_p0_dataset_report.json",
+      "json_path": "$.eale_p0.fine_candidates",
+      "operator": "equals",
+      "expected": 0,
+      "local_only": true
+    },
+    {
+      "id": "ALG002-NO-ACCURACY-CLAIM",
+      "path": "reports/location_fusion_eale/loc005a-source-states-20260630-001/eale_p0_dataset_report.json",
+      "json_path": "$.release_gate_usage.can_support_product_accuracy_claim",
+      "operator": "equals",
+      "expected": false,
+      "local_only": true
     }
   ],
   "commits": [
@@ -318,20 +387,24 @@
     {
       "label": "ALG-001 derived location belief view",
       "commit": "9341565"
+    },
+    {
+      "label": "ALG-002 DATA-001 coverage evaluation",
+      "commit": "f84a09a"
     }
   ],
   "validation_commands": [
-    "python -m unittest quality_tests.test_key_release_gate quality_tests.test_message_hub_server quality_tests.test_message_hub_dashboard -v",
+    "python -m unittest quality_tests.test_key_release_gate quality_tests.test_message_hub_server quality_tests.test_message_hub_dashboard quality_tests.test_eale_p0_dataset_evaluation -v",
     "python scripts\\context_lint.py",
     "powershell -ExecutionPolicy Bypass -File scripts\\verify.ps1",
     "git diff --check",
+    "python scripts\\evaluate_eale_p0_dataset.py --dataset-dir reports/location_fusion_datasets/loc005a-source-states-20260630-001 --output-dir reports/location_fusion_eale/loc005a-source-states-20260630-001 --json",
     "python scripts\\run_key_release_gate.py --manifest docs/current/key_releases/KR-004_MULTI_SOURCE_EXPLAINABLE_LOCATION_EVIDENCE.json --json"
   ],
   "next_release_gates": [
-    "Review the ALG-002 DATA-001 evidence/failure coverage report before KR-004 promotion",
     "Add LTE-005 reconnect, retry, cache, stale-command, and duplicate handling gates",
+    "Run STAB-001B only as a short KR-004 USB-Free baseline, not a long stability claim",
     "Add privacy-reviewed Wi-Fi fingerprints only after raw BSSID retention rules are explicit",
-    "Add product-topology IMU and real battery/power instrumentation before those sources can raise confidence",
-    "Promote KR-004 from release_candidate to released only after report review"
+    "Add product-topology IMU and real battery/power instrumentation before those sources can raise confidence"
   ]
 }
