@@ -164,6 +164,11 @@ class LteCommandLoopValidationTests(unittest.TestCase):
             self.assertEqual(report["location_report"]["location_request_cmd_id"], report["command"]["cmd_id"])
             self.assertEqual(report["location_report"]["transport"]["type"], "lte")
             self.assertIs(report["location_report"]["fix"], False)
+            markdown = (Path(tmp) / "report" / "lte_command_loop_report.md").read_text(encoding="utf-8")
+            self.assertIn("# LTE HTTP Command Loop Report", markdown)
+            self.assertIn("Command under validation: `request_location`", markdown)
+            self.assertIn("location_report transport only", markdown)
+            self.assertNotIn("The command is intentionally harmless: set_report_interval", markdown)
 
     def test_validation_rejects_non_lte_ack(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,8 +1,8 @@
-"""Validate LTE-003 SIM7670G LTE HTTP command poll and ACK.
+"""Validate SIM7670G LTE HTTP command/report/ACK thin slices.
 
 This script talks only to the HTTP Message Hub. It does not flash firmware,
 open serial ports, erase flash, or use USB as a runtime data path. It enqueues
-one harmless Message Hub command and waits for an LTE-marked ACK from the
+one Message Hub command and waits for LTE-marked evidence from the
 device.
 """
 
@@ -181,8 +181,9 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
     summary = report.get("ack_summary") or {}
     command = report.get("command") or {}
     location = report.get("location_report") or {}
+    command_name = str(command.get("cmd") or "unknown")
     lines = [
-        "# LTE-003 LTE HTTP Command Loop Report",
+        "# LTE HTTP Command Loop Report",
         "",
         f"- Result: {report['result']}",
         f"- Test run ID: {report['test_run_id']}",
@@ -219,11 +220,17 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
             "",
             "## Boundaries",
             "",
-            "- This report validates only the LTE HTTP command poll and ACK thin-slice.",
+            "- This report validates only the LTE HTTP command/report/ACK thin-slice.",
             "- Passing this report does not validate reconnect, long-run LTE stability, battery, power, or GNSS-over-LTE behavior.",
-            "- The command is intentionally harmless: set_report_interval.",
+            f"- Command under validation: `{command_name}`.",
         ]
     )
+    if command_name == "set_report_interval":
+        lines.append("- The command is intentionally harmless: set_report_interval.")
+    elif command_name == "request_location":
+        lines.append(
+            "- request_location validates command-scoped location_report transport only; GNSS fix requires --require-fix."
+        )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
