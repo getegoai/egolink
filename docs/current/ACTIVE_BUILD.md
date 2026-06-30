@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LOC-004A cell-observation firmware currently flashed on COM4; reboot-aware USB-Free validator smoke passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LOC-005A source-state firmware currently flashed on COM4; USB-Free runtime validation pending; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -583,6 +583,15 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   is under `reports/field_validation/loc004a-reboot-aware-20260630-001/`.
   This validates the FIELD-002 arm/reboot/reconcile workflow on one real
   USB-Free command; it is not a long LTE stability or product readiness claim.
+- LOC-005A source-state firmware has been build-verified, VPS-deployed, and
+  flashed on `COM4` as `0.1.0-loc005a-source-states` /
+  `loc005a-source-states-20260630-001`. It adds explicit Wi-Fi/IMU/power
+  source-state slots to raw LTE `location_observation` while preserving
+  raw-frame/KV transport. Flash evidence is under
+  `reports/field_validation/loc005a-source-states-20260630-001/flash_report.md`.
+  `esptool.py` detected ESP32-S3 QFN56 rev v0.2, wrote bootloader, app
+  (`300448` bytes), and partition table, verified hashes, and hard-reset the
+  board. USB-Free runtime validation for LOC-005A is still pending.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

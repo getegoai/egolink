@@ -24,10 +24,15 @@ build produced
 Hub/Web code was deployed by copying `server/message_hub.py` to
 `203.0.113.10:/opt/egolink-message-hub/server/message_hub.py` and restarting
 `egolink-message-hub.service`; local and public `/health` checks returned
-`ok=true`, and the existing GitLab service remained `active`. No COM4 flash,
-independent-power USB-Free runtime validation, real Wi-Fi fingerprinting,
-product-topology IMU validation, battery accuracy, long LTE stability,
-enclosure behavior, or product readiness is claimed by this entry.
+`ok=true`, and the existing GitLab service remained `active`. LOC-005A was
+then flashed on `COM4` after explicit operator confirmation. Flash evidence is
+recorded at
+`reports/field_validation/loc005a-source-states-20260630-001/flash_report.md`:
+`esptool.py` detected ESP32-S3 QFN56 rev v0.2, wrote bootloader, app
+(`300448` bytes), and partition table, verified all hashes, and completed a
+hard reset. No independent-power USB-Free runtime validation, real Wi-Fi
+fingerprinting, product-topology IMU validation, battery accuracy, long LTE
+stability, enclosure behavior, or product readiness is claimed by this entry.
 
 2026-06-30: KR-003 USB-Free Explainable LTE Location Observation Walking
 Skeleton is released as engineering key version `0.1.0-key-release-003`.

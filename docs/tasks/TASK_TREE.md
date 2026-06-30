@@ -569,8 +569,8 @@ motion candidate
     claimed by this task.
 - `LOC-005A Firmware-Side Observation Source States`
   - Path: `docs/tasks/done/LOC-005A_FIRMWARE_SIDE_OBSERVATION_SOURCE_STATES.md`
-  - Status: completed as a firmware/server/Web static contract increment;
-    USB-Free hardware runtime validation is still pending a COM4 flash and
+  - Status: completed as a firmware/server/Web contract increment and COM4
+    flash gate; USB-Free hardware runtime validation is still pending an
     independent-power run.
   - Goal: add Wi-Fi, IMU, and power source/evidence status slots to the raw
     LTE `location_observation` path without returning to device-side JSON or
@@ -582,7 +582,9 @@ motion candidate
     `evidence_status`; focused firmware/server/dashboard tests passed; full
     `scripts\verify.ps1` passed with 299 tests; guarded ESP-IDF build produced
     `build_loc005a_source_states/egolink_mqtt_heartbeat.bin`; Message Hub/Web
-    was redeployed to `203.0.113.10:8790` without touching GitLab.
+    was redeployed to `203.0.113.10:8790` without touching GitLab; COM4 flash
+    passed with evidence under
+    `reports/field_validation/loc005a-source-states-20260630-001/flash_report.md`.
   - Boundary: Wi-Fi remains `disabled` / `missing` in the current LTE mode,
     default IMU remains mock/unverified, and default power remains a
     mock/log-backend source. No battery accuracy, product power behavior,

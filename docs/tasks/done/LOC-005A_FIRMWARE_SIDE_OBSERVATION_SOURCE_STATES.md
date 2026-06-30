@@ -67,9 +67,9 @@ ready. It preserves the raw-frame-first path and labels each source as
       `evidence_status`.
 - [x] Dashboard field state shows the new evidence statuses.
 - [x] Tests protect the firmware string contract and server derivation path.
-- [x] Hardware flashing and USB-Free runtime validation remain pending until
-      the operator explicitly confirms the next COM4 flash and independent
-      power run.
+- [x] Hardware flashing passes after explicit operator confirmation.
+- [x] USB-Free runtime validation is explicitly left as a pending follow-up
+      and is not claimed by this flash evidence.
 
 ## Evidence
 
@@ -98,6 +98,13 @@ ready. It preserves the raw-frame-first path and labels each source as
   `egolink-message-hub.service`, and verified `/health` from both
   `127.0.0.1:8790` and `203.0.113.10:8790`. The existing GitLab service
   remained `active`.
+- Flash:
+  `powershell -ExecutionPolicy Bypass -File scripts\run_fw001_hw_r1.ps1 -HostName 203.0.113.10 -FwVersion 0.1.0-loc005a-source-states -TestRunId loc005a-source-states-20260630-001 -BuildDir build_loc005a_source_states -EnableSim7670Gnss -EnableSim7670LocationObservation -Flash -FlashPort COM4 -IUnderstandFlashWritesFirmware -Json`
+  passed after explicit operator confirmation. Evidence:
+  `reports/field_validation/loc005a-source-states-20260630-001/flash_report.md`.
+  `esptool.py` detected ESP32-S3 QFN56 rev v0.2, wrote bootloader, app
+  (`300448` bytes), and partition table, verified all hashes, and completed
+  hard reset.
 
 ## Boundaries
 
@@ -115,8 +122,8 @@ ready. It preserves the raw-frame-first path and labels each source as
 
 ## Remaining Risks
 
-- The new LOC-005A firmware image has not yet been flashed or validated over
-  independent power with USB disconnected.
+- The new LOC-005A firmware image has been flashed, but has not yet been
+  validated over independent power with USB disconnected.
 - A later source-specific task must add privacy-reviewed Wi-Fi fingerprints,
   product-topology IMU validation, and real battery/power instrumentation
   before these signals can drive user-visible location confidence.
