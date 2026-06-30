@@ -28,7 +28,7 @@ def utc_now() -> str:
 
 
 def load_json(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
@@ -55,6 +55,53 @@ def git_commit_exists(repo_root: Path, commit: str) -> bool:
         check=False,
     )
     return result.returncode == 0
+
+
+def json_path_value(payload: Any, path: str) -> tuple[bool, Any]:
+    """Resolve a small dot-path subset such as $.a.b.0.c."""
+    text = path.strip()
+    if text.startswith("$."):
+        text = text[2:]
+    elif text == "$":
+        return True, payload
+    if not text:
+        return True, payload
+    value = payload
+    for part in text.split("."):
+        if isinstance(value, dict):
+            if part not in value:
+                return False, None
+            value = value[part]
+            continue
+        if isinstance(value, list):
+            try:
+                index = int(part)
+            except ValueError:
+                return False, None
+            if index < 0 or index >= len(value):
+                return False, None
+            value = value[index]
+            continue
+        return False, None
+    return True, value
+
+
+def evaluate_json_check(actual: Any, operator: str, expected: Any) -> bool:
+    if operator == "equals":
+        return actual == expected
+    if operator == "not_equals":
+        return actual != expected
+    if operator == "contains":
+        if isinstance(actual, list):
+            return expected in actual
+        if isinstance(actual, str):
+            return str(expected) in actual
+        return False
+    if operator == "in":
+        return isinstance(expected, list) and actual in expected
+    if operator == "exists":
+        return actual is not None
+    return False
 
 
 def evaluate_release_gate(
@@ -127,6 +174,84 @@ def evaluate_release_gate(
         if not exists:
             errors.append(f"required commit missing: {commit}")
 
+    json_check_results: list[dict[str, Any]] = []
+    for item in as_list(manifest.get("json_checks")):
+        if not isinstance(item, dict):
+            errors.append("each json_check item must be an object")
+            continue
+        check_id = str(item.get("id") or "unknown")
+        json_path = str(item.get("path") or "")
+        value_path = str(item.get("json_path") or "")
+        operator = str(item.get("operator") or "equals")
+        expected = item.get("expected")
+        local_only = bool(item.get("local_only", False))
+        if not json_path or not value_path:
+            errors.append(f"json_check {check_id} requires path and json_path")
+            continue
+        resolved_path = repo_path(repo_root, json_path)
+        if not resolved_path.exists():
+            if local_only and allow_missing_local_evidence:
+                warnings.append(f"local json check evidence missing but allowed: {json_path}")
+                json_check_results.append(
+                    {
+                        "id": check_id,
+                        "path": json_path,
+                        "json_path": value_path,
+                        "operator": operator,
+                        "expected": expected,
+                        "actual": None,
+                        "status": "SKIPPED",
+                    }
+                )
+                continue
+            errors.append(f"json_check {check_id} evidence missing: {json_path}")
+            json_check_results.append(
+                {
+                    "id": check_id,
+                    "path": json_path,
+                    "json_path": value_path,
+                    "operator": operator,
+                    "expected": expected,
+                    "actual": None,
+                    "status": "FAIL",
+                }
+            )
+            continue
+        try:
+            payload = load_json(resolved_path)
+        except (OSError, json.JSONDecodeError) as exc:
+            errors.append(f"json_check {check_id} failed to read JSON: {json_path}: {exc}")
+            json_check_results.append(
+                {
+                    "id": check_id,
+                    "path": json_path,
+                    "json_path": value_path,
+                    "operator": operator,
+                    "expected": expected,
+                    "actual": None,
+                    "status": "FAIL",
+                }
+            )
+            continue
+        exists, actual = json_path_value(payload, value_path)
+        passed = exists and evaluate_json_check(actual, operator, expected)
+        json_check_results.append(
+            {
+                "id": check_id,
+                "path": json_path,
+                "json_path": value_path,
+                "operator": operator,
+                "expected": expected,
+                "actual": actual if exists else None,
+                "status": "PASS" if passed else "FAIL",
+            }
+        )
+        if not passed:
+            errors.append(
+                f"json_check {check_id} failed: {json_path} {value_path} "
+                f"{operator} {expected!r}, actual {actual!r}"
+            )
+
     non_claims = as_list(manifest.get("non_claims"))
     if not non_claims:
         warnings.append("manifest.non_claims is empty")
@@ -144,6 +269,7 @@ def evaluate_release_gate(
         "gate_count": len(gates),
         "evidence": evidence_results,
         "commits": commit_results,
+        "json_checks": json_check_results,
         "non_claim_count": len(non_claims),
     }
 
@@ -168,6 +294,15 @@ def write_markdown_report(path: Path, manifest: dict[str, Any], report: dict[str
     for item in report.get("evidence", []):
         marker = "ok" if item.get("exists") else "missing"
         lines.append(f"- {marker}: {item.get('path')} ({item.get('kind')})")
+    lines.extend(["", "## JSON Checks", ""])
+    if report.get("json_checks"):
+        for item in report["json_checks"]:
+            lines.append(
+                f"- {item.get('status')}: {item.get('id')} "
+                f"{item.get('path')} {item.get('json_path')}"
+            )
+    else:
+        lines.append("- none")
     lines.extend(["", "## Non-Claims", ""])
     for item in as_list(manifest.get("non_claims")):
         lines.append(f"- {item}")

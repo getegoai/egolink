@@ -1,0 +1,337 @@
+{
+  "release_id": "KR-004",
+  "release_name": "Multi-Source Explainable Location Evidence Baseline",
+  "release_version": "0.1.0-key-release-004-rc1",
+  "status": "release_candidate",
+  "release_date": "2026-06-30",
+  "summary": "Fourth Ego Link P0 engineering key-release candidate. It freezes the USB-Free raw LTE location loop with firmware-side Wi-Fi/IMU/power source states, current-run failure visibility, and server-derived EALE-P0 explainable location belief readiness.",
+  "firmware_version": "0.1.0-loc005a-source-states",
+  "firmware_test_run_id": "loc005a-source-states-20260630-001",
+  "protocol_profiles": [
+    "egolink.p0.v1",
+    "raw-frame.p0.v1"
+  ],
+  "device_id": "ego-link-r1-connectivity-001",
+  "in_scope": [
+    "Public VPS Message Hub command queue and raw-frame ingest path",
+    "SIM7670G LTE HTTP raw command polling",
+    "request_location command execution over LTE",
+    "raw LTE location_report upload over LTE",
+    "raw LTE location_observation upload with SIM7670G cell/LTE evidence",
+    "firmware-side Wi-Fi, IMU, and power source-state slots in location_observation",
+    "server-side raw storage before derived Web/API/report views",
+    "current_run key-release, command, ACK, raw evidence, derived location, and failure visibility",
+    "server-derived EALE-P0 conservative location_belief visibility",
+    "DATA-001 dataset-window readiness metadata with training disabled by default",
+    "USB-Free runtime validation on independent power"
+  ],
+  "non_claims": [
+    "No product readiness claim",
+    "No GNSS fix or outdoor GNSS acceptance claim",
+    "No cell-only positioning claim",
+    "No Wi-Fi positioning or raw BSSID retention claim",
+    "No product IMU mounting, calibration, or motion-classification acceptance claim",
+    "No battery accuracy, charging, or product power behavior claim",
+    "No learned model, learned personal-place, route prediction, or positioning-accuracy claim",
+    "No long LTE stability or reconnect recovery claim",
+    "No final enclosure, mounting, camera, audio, storage, calling, SMS, or dispatch claim"
+  ],
+  "gates": [
+    {
+      "id": "G1-KR003-BASELINE",
+      "status": "PASS",
+      "summary": "KR-003 raw LTE request_location -> location_report -> location_observation -> ACK loop remains the baseline"
+    },
+    {
+      "id": "G2-SOURCE-STATES",
+      "status": "PASS",
+      "summary": "LOC-005A adds explicit Wi-Fi disabled/missing, IMU unverified/mock, and power mock source-state evidence"
+    },
+    {
+      "id": "G3-CURRENT-RUN-VISIBILITY",
+      "status": "PASS",
+      "summary": "OBS-003 exposes current run, key-release/baseline, command/ACK chain, raw evidence, derived location, and failure reason"
+    },
+    {
+      "id": "G4-EALE-P0",
+      "status": "PASS",
+      "summary": "ALG-001 exposes conservative server-derived EALE-P0 location_belief and keeps cell/LTE-only evidence Unknown"
+    },
+    {
+      "id": "G5-DATASET-READINESS",
+      "status": "PASS",
+      "summary": "DATA-001 window readiness is visible; current no-fix evidence remains a retained failure_window candidate with training disabled"
+    },
+    {
+      "id": "G6-REGRESSION",
+      "status": "PASS",
+      "summary": "focused release-gate tests, context_lint, full verify, and git diff checks pass"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "status",
+      "path": "docs/current/STATUS.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "active_build",
+      "path": "docs/current/ACTIVE_BUILD.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "release_index",
+      "path": "docs/current/KEY_RELEASES.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "protocol",
+      "path": "docs/development/PROTOCOL.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "location_engine",
+      "path": "docs/development/LOCATION_ENGINE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "location_dataset",
+      "path": "docs/development/LOCATION_DATASET.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "location_fusion_algorithm",
+      "path": "docs/development/LOCATION_FUSION_ALGORITHM.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "data001_task_packet",
+      "path": "docs/tasks/done/DATA-001_LOCATION_FUSION_DATASET_BASELINE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "alg000_task_packet",
+      "path": "docs/tasks/done/ALG-000_LOCATION_FUSION_ALGORITHM_DESIGN.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "loc005a_task_packet",
+      "path": "docs/tasks/done/LOC-005A_FIRMWARE_SIDE_OBSERVATION_SOURCE_STATES.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "obs003_task_packet",
+      "path": "docs/tasks/done/OBS-003_CURRENT_RUN_KEY_RELEASE_FAILURE_VISIBILITY.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "alg001_task_packet",
+      "path": "docs/tasks/done/ALG-001_SERVER_DERIVED_LOCATION_BELIEF.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "release_gate_script",
+      "path": "scripts/run_key_release_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "runtime_report_json",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/lte_command_loop_report.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "runtime_report_markdown",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/lte_command_loop_report.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "runtime_test_run_export",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/test_run_export.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "flash_report",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/flash_report.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "firmware_binary",
+      "path": "firmware/mqtt_heartbeat/build_loc005a_source_states/egolink_mqtt_heartbeat.bin",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "alg001_current_run_snapshot",
+      "path": "reports/key_releases/KR-004/current_run_eale_p0.json",
+      "required": true,
+      "local_only": true
+    }
+  ],
+  "json_checks": [
+    {
+      "id": "LOC005A-RUNTIME-PASS",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/lte_command_loop_report.json",
+      "json_path": "$.result",
+      "operator": "equals",
+      "expected": "PASS",
+      "local_only": true
+    },
+    {
+      "id": "LOC005A-COMMAND-OK",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/lte_command_loop_report.json",
+      "json_path": "$.command.status",
+      "operator": "equals",
+      "expected": "ok",
+      "local_only": true
+    },
+    {
+      "id": "LOC005A-ACK-LTE",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/lte_command_loop_report.json",
+      "json_path": "$.command.ack.transport.type",
+      "operator": "equals",
+      "expected": "lte",
+      "local_only": true
+    },
+    {
+      "id": "LOC005A-GNSS-NO-FIX",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/lte_command_loop_report.json",
+      "json_path": "$.location_report.fix",
+      "operator": "equals",
+      "expected": false,
+      "local_only": true
+    },
+    {
+      "id": "LOC005A-CELL-LTE-OBSERVED",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.source_status",
+      "operator": "equals",
+      "expected": "observed",
+      "local_only": true
+    },
+    {
+      "id": "LOC005A-WIFI-DISABLED",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.wifi.source_status",
+      "operator": "equals",
+      "expected": "disabled",
+      "local_only": true
+    },
+    {
+      "id": "LOC005A-IMU-UNVERIFIED",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.imu.source_status",
+      "operator": "equals",
+      "expected": "unverified",
+      "local_only": true
+    },
+    {
+      "id": "LOC005A-POWER-MOCK",
+      "path": "reports/field_validation/loc005a-source-states-20260630-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.power.source_status",
+      "operator": "equals",
+      "expected": "mock",
+      "local_only": true
+    },
+    {
+      "id": "ALG001-CURRENT-RUN-KR004",
+      "path": "reports/key_releases/KR-004/current_run_eale_p0.json",
+      "json_path": "$.current_run.key_release.release_id",
+      "operator": "equals",
+      "expected": "KR-004",
+      "local_only": true
+    },
+    {
+      "id": "ALG001-EALE-UNKNOWN",
+      "path": "reports/key_releases/KR-004/current_run_eale_p0.json",
+      "json_path": "$.current_run.eale_p0.location_belief.state",
+      "operator": "equals",
+      "expected": "Unknown",
+      "local_only": true
+    },
+    {
+      "id": "ALG001-NO-PRECISE-FIX",
+      "path": "reports/key_releases/KR-004/current_run_eale_p0.json",
+      "json_path": "$.current_run.eale_p0.location_belief.substate",
+      "operator": "equals",
+      "expected": "no_precise_fix",
+      "local_only": true
+    },
+    {
+      "id": "ALG001-DATASET-FAILURE-WINDOW",
+      "path": "reports/key_releases/KR-004/current_run_eale_p0.json",
+      "json_path": "$.current_run.eale_p0.dataset_window.sample_type",
+      "operator": "equals",
+      "expected": "failure_window",
+      "local_only": true
+    },
+    {
+      "id": "ALG001-TRAINING-DISABLED",
+      "path": "reports/key_releases/KR-004/current_run_eale_p0.json",
+      "json_path": "$.current_run.eale_p0.dataset_window.training_allowed",
+      "operator": "equals",
+      "expected": false,
+      "local_only": true
+    }
+  ],
+  "commits": [
+    {
+      "label": "DATA-001 location fusion dataset export baseline",
+      "commit": "d08d2d7"
+    },
+    {
+      "label": "ALG-000 EALE-P0 algorithm design freeze",
+      "commit": "b21b666"
+    },
+    {
+      "label": "LOC-005A source-state implementation",
+      "commit": "1a9bc7f"
+    },
+    {
+      "label": "LOC-005A flash evidence",
+      "commit": "928709e"
+    },
+    {
+      "label": "LOC-005A USB-Free runtime evidence",
+      "commit": "bc40851"
+    },
+    {
+      "label": "OBS-003 current run and failure visibility",
+      "commit": "4b8e178"
+    },
+    {
+      "label": "ALG-001 derived location belief view",
+      "commit": "9341565"
+    }
+  ],
+  "validation_commands": [
+    "python -m unittest quality_tests.test_key_release_gate quality_tests.test_message_hub_server quality_tests.test_message_hub_dashboard -v",
+    "python scripts\\context_lint.py",
+    "powershell -ExecutionPolicy Bypass -File scripts\\verify.ps1",
+    "git diff --check",
+    "python scripts\\run_key_release_gate.py --manifest docs/current/key_releases/KR-004_MULTI_SOURCE_EXPLAINABLE_LOCATION_EVIDENCE.json --json"
+  ],
+  "next_release_gates": [
+    "Run ALG-002 over DATA-001 JSONL for evidence and failure coverage metrics",
+    "Add LTE-005 reconnect, retry, cache, stale-command, and duplicate handling gates",
+    "Add privacy-reviewed Wi-Fi fingerprints only after raw BSSID retention rules are explicit",
+    "Add product-topology IMU and real battery/power instrumentation before those sources can raise confidence",
+    "Promote KR-004 from release_candidate to released only after report review"
+  ]
+}

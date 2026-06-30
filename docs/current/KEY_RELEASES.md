@@ -176,6 +176,75 @@ arm command
 - No long LTE stability or reconnect recovery claim.
 - No final enclosure, mounting, battery, charging, or power behavior claim.
 
+## KR-004 Multi-Source Explainable Location Evidence Baseline
+
+- Status: release candidate.
+- Release date: 2026-06-30.
+- Release version: `0.1.0-key-release-004-rc1`.
+- Firmware version: `0.1.0-loc005a-source-states`.
+- Device/test run: `ego-link-r1-connectivity-001` /
+  `loc005a-source-states-20260630-001`.
+- Manifest:
+  `docs/current/key_releases/KR-004_MULTI_SOURCE_EXPLAINABLE_LOCATION_EVIDENCE.json`.
+- Gate tool:
+  `python scripts\run_key_release_gate.py --manifest docs/current/key_releases/KR-004_MULTI_SOURCE_EXPLAINABLE_LOCATION_EVIDENCE.json --json`.
+- Gate report:
+  `reports/key_releases/KR-004/release_gate_report.json` and
+  `reports/key_releases/KR-004/release_gate_report.md`.
+
+### Release-Candidate Meaning
+
+KR-004 freezes the current explainable multi-source location evidence path:
+
+```text
+KR-003 raw LTE command/location/observation/ACK loop
+-> LOC-005A Wi-Fi/IMU/power source-state evidence slots
+-> OBS-003 current_run and failure visibility
+-> ALG-001 server-derived EALE-P0 conservative location_belief
+-> DATA-001 dataset-window readiness with training disabled by default
+```
+
+It is a release candidate because the gate now passes and Web/API identify the
+current LOC-005A run as `KR-004`, but formal promotion from `release_candidate`
+to `released` should happen after report review.
+
+### Evidence Summary
+
+- LOC-005A USB-Free runtime evidence passed for `cmd-000024` on independent
+  power with USB disconnected.
+- Runtime evidence includes raw LTE `location_report`, raw LTE
+  `location_observation`, and raw LTE ACK.
+- Runtime `location_observation` includes SIM7670G cell/LTE evidence plus
+  explicit Wi-Fi `disabled` / `missing`, IMU `unverified` / `mock`, and power
+  `mock` source-state labels.
+- OBS-003 makes current run, key release, command/ACK chain, raw evidence,
+  derived location, and failure reason visible in Web/API/export surfaces.
+- ALG-001 makes EALE-P0 derived belief visible. The current run remains
+  `Unknown` / `no_precise_fix` with reason
+  `gnss_no_fix_cell_lte_observed_no_position_memory`, not a cell-only
+  position.
+- DATA-001 readiness is visible as `failure_window` /
+  `candidate_with_warnings`, with `training_allowed=false`.
+- KR-004 gate passed with JSON checks over LOC-005A runtime evidence and the
+  authenticated current-run EALE-P0 snapshot.
+- The VPS Message Hub was redeployed with the KR-004 manifest; existing GitLab
+  service remained active.
+
+### Non-Claims
+
+- No product readiness claim.
+- No GNSS fix or outdoor GNSS acceptance claim.
+- No cell-only positioning claim.
+- No Wi-Fi positioning or raw BSSID retention claim.
+- No product IMU mounting, calibration, or motion-classification acceptance
+  claim.
+- No battery accuracy, charging, or product power behavior claim.
+- No learned model, learned personal-place, route prediction, or
+  positioning-accuracy claim.
+- No long LTE stability or reconnect recovery claim.
+- No final enclosure, mounting, camera, audio, storage, calling, SMS, or
+  dispatch claim.
+
 ## Release Gate Policy
 
 Every key release should have:

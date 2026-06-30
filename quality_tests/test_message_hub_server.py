@@ -754,7 +754,7 @@ class MessageHubHttpTests(unittest.TestCase):
                         1,
                         "location_report",
                         "normal",
-                        fw_version="0.1.0-loc005a-source-states",
+                        fw_version="0.1.0-loc005a-source-states-unit",
                         source="sim7670g_firmware_gnss",
                         source_status="unverified",
                         fix=False,
@@ -779,7 +779,7 @@ class MessageHubHttpTests(unittest.TestCase):
 
         current_run = state["current_run"]
         self.assertEqual(current_run["test_run_id"], "obs003-unit")
-        self.assertEqual(current_run["fw_version"], "0.1.0-loc005a-source-states")
+        self.assertEqual(current_run["fw_version"], "0.1.0-loc005a-source-states-unit")
         self.assertEqual(current_run["key_release"]["release_id"], "unreleased")
         self.assertEqual(current_run["key_release"]["status"], "unreleased_run")
         self.assertIn("baseline", current_run["key_release"])

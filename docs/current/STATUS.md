@@ -6,6 +6,28 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: REL-004 created the KR-004 Multi-Source Explainable Location
+Evidence release-candidate gate. New manifest:
+`docs/current/key_releases/KR-004_MULTI_SOURCE_EXPLAINABLE_LOCATION_EVIDENCE.json`.
+The gate extends `scripts/run_key_release_gate.py` with JSON evidence
+assertions, then checks LOC-005A runtime evidence and an authenticated VPS
+`/api/state.current_run` EALE-P0 snapshot. The KR-004 gate passed with 6
+manifest gates and 13 JSON checks; focused release/Web tests passed with 27
+tests, `python scripts/context_lint.py` passed, `scripts\verify.ps1` passed
+with 304 tests, and `git diff --check` passed. Report paths are
+`reports/key_releases/KR-004/release_gate_report.json` and
+`reports/key_releases/KR-004/release_gate_report.md`. The VPS Message Hub was
+redeployed with the KR-004 manifest, and authenticated `/api/state.current_run`
+now identifies `loc005a-source-states-20260630-001` as `KR-004` /
+`release_candidate` by `firmware_test_run_id`; EALE-P0 remains `Unknown` /
+`no_precise_fix`, dataset window remains `failure_window` /
+`candidate_with_warnings`, and `training_allowed=false`. Public `/health`
+returned `ok=true`, unauthenticated `/api/state` returned HTTP 401, and the
+existing GitLab service remained active. This is a release-candidate gate only:
+no firmware, hardware, raw-frame profile, DATA-001 schema, model behavior,
+GNSS acceptance, LTE stability, reconnect recovery, battery/power behavior,
+positioning accuracy, or product readiness claim is changed.
+
 2026-06-30: ALG-001 Server Derived EALE-P0 Location Belief is implemented as
 a Server-Web/report visibility increment after OBS-003 and LOC-005A.
 `/api/state.current_run.eale_p0`, test-run export `run_context.eale_p0`, and
