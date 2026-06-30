@@ -411,3 +411,17 @@ or power-managed on the final product path. Real accel/gyro data remains
 unavailable for formal model training until mounting direction, final
 calibration, ODR, FIFO behavior, interrupt strategy, power impact, and sample
 quality statistics are verified in the product topology.
+
+LOC-005A extends the raw LTE `location_observation` payload with source-state
+slots for Wi-Fi, IMU, and power while keeping the wire payload as compact KV
+inside `raw-frame.p0.v1`. In LTE location-observation mode, Wi-Fi is reported
+as `wifi_source_status=disabled` and `wifi_evidence_status=missing` because the
+Wi-Fi runtime path remains skipped. IMU is reported from `platform_imu` with
+`imu_source_status`, `imu_evidence_status`, and mock/backend flags. Power is
+reported from `platform_power` with `power_source_status`,
+`power_evidence_status`, source labels, and current power-state marker
+sequence.
+
+Those fields are evidence quality labels for the Message Hub and EALE-P0 data
+path. They do not validate privacy-reviewed Wi-Fi fingerprints, final-product
+IMU topology, battery accuracy, or power behavior.

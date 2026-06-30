@@ -539,8 +539,35 @@ class MessageHubStoreTests(unittest.TestCase):
                 "lte_pdp_state=active\n"
                 "lte_assigned_ip=10.1.2.3\n"
                 "lte_reason_code=LTE_READY\n"
+                "wifi_source=esp_wifi_sta\n"
+                "wifi_source_status=disabled\n"
+                "wifi_evidence_status=missing\n"
+                "wifi_scan_enabled=false\n"
+                "wifi_ap_count=0\n"
+                "wifi_privacy=raw_bssid_not_collected\n"
+                "wifi_reason=wifi_disabled_in_lte_location_observation\n"
+                "imu_source=platform_imu\n"
+                "imu_source_status=unverified\n"
+                "imu_evidence_status=mock\n"
+                "imu_motion=unknown\n"
+                "imu_confidence=null\n"
+                "imu_hardware_present=false\n"
+                "imu_driver_enabled=false\n"
+                "imu_data_is_mock=true\n"
+                "imu_backend_status=mock_stationary\n"
+                "imu_reason=imu_backend_not_product_verified\n"
+                "power_source=platform_power\n"
+                "power_source_status=mock\n"
+                "power_evidence_status=mock\n"
+                "power_soc_pct=87\n"
+                "power_charging=false\n"
+                "power_battery_source=mock_battery_percent\n"
+                "power_charging_source=mock_charging_state\n"
+                "power_state=upload\n"
+                "power_marker_seq=12\n"
+                "power_reason=platform_power_source_not_product_meter\n"
                 "location_belief_state=Unknown\n"
-                "location_belief_source=cell,lte\n"
+                "location_belief_source=cell,lte,wifi,imu,power\n"
                 "location_belief_reason=cell_observation_without_position_fix\n"
                 "transport_type=lte\n"
                 "lte_http_phase=location_observation\n"
@@ -565,11 +592,24 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(history[0]["cell"]["rsrp"], -91)
         self.assertTrue(history[0]["lte"]["query_ok"])
         self.assertEqual(history[0]["lte"]["reason_code"], "LTE_READY")
+        self.assertFalse(history[0]["wifi"]["scan_enabled"])
+        self.assertEqual(history[0]["wifi"]["source_status"], "disabled")
+        self.assertEqual(history[0]["wifi"]["evidence_status"], "missing")
+        self.assertEqual(history[0]["wifi"]["ap_count"], 0)
+        self.assertEqual(history[0]["imu"]["evidence_status"], "mock")
+        self.assertEqual(history[0]["imu"]["motion"], "unknown")
+        self.assertTrue(history[0]["imu"]["data_is_mock"])
+        self.assertEqual(history[0]["power"]["evidence_status"], "mock")
+        self.assertEqual(history[0]["power"]["soc_pct"], 87)
+        self.assertEqual(history[0]["power"]["marker_seq"], 12)
         self.assertEqual(history[0]["location_belief"]["state"], "Unknown")
-        self.assertEqual(history[0]["location_belief"]["source"], ["cell", "lte"])
+        self.assertEqual(history[0]["location_belief"]["source"], ["cell", "lte", "wifi", "imu", "power"])
         self.assertEqual(device["latest_location"]["event_type"], "location_observation")
         self.assertEqual(device["observability"]["cell"]["cell_id"], "01AF23")
         self.assertEqual(device["observability"]["lte"]["reason_code"], "LTE_READY")
+        self.assertEqual(device["observability"]["wifi"]["evidence_status"], "missing")
+        self.assertEqual(device["observability"]["imu"]["evidence_status"], "mock")
+        self.assertEqual(device["observability"]["power"]["evidence_status"], "mock")
         self.assertEqual(device["location_memory"]["state"], "Unknown")
         self.assertEqual(device["location_memory"]["reason"], "cell_observation_without_position_fix")
         self.assertEqual(exported["raw_frames"][0]["frame_id"], "obs-cmd-raw-observation")

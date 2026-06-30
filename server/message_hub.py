@@ -1305,6 +1305,55 @@ def raw_gnss_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
     )
 
 
+def raw_wifi_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "source": kv_payload.get("wifi-source"),
+            "source_status": kv_payload.get("wifi-source-status"),
+            "evidence_status": kv_payload.get("wifi-evidence-status"),
+            "scan_enabled": parse_bool_or_text(kv_payload.get("wifi-scan-enabled")),
+            "ap_count": parse_optional_int(kv_payload.get("wifi-ap-count")),
+            "rssi": parse_raw_scalar(kv_payload.get("wifi-rssi")),
+            "privacy": kv_payload.get("wifi-privacy"),
+            "reason": kv_payload.get("wifi-reason"),
+        }
+    )
+
+
+def raw_imu_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "source": kv_payload.get("imu-source"),
+            "source_status": kv_payload.get("imu-source-status"),
+            "evidence_status": kv_payload.get("imu-evidence-status"),
+            "motion": kv_payload.get("imu-motion"),
+            "confidence": parse_raw_scalar(kv_payload.get("imu-confidence")),
+            "hardware_present": parse_bool_or_text(kv_payload.get("imu-hardware-present")),
+            "driver_enabled": parse_bool_or_text(kv_payload.get("imu-driver-enabled")),
+            "data_is_mock": parse_bool_or_text(kv_payload.get("imu-data-is-mock")),
+            "backend_status": kv_payload.get("imu-backend-status"),
+            "reason": kv_payload.get("imu-reason"),
+        }
+    )
+
+
+def raw_power_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "source": kv_payload.get("power-source"),
+            "source_status": kv_payload.get("power-source-status"),
+            "evidence_status": kv_payload.get("power-evidence-status"),
+            "soc_pct": parse_raw_scalar(kv_payload.get("power-soc-pct")),
+            "charging": parse_bool_or_text(kv_payload.get("power-charging")),
+            "battery_source": kv_payload.get("power-battery-source"),
+            "charging_source": kv_payload.get("power-charging-source"),
+            "state": kv_payload.get("power-state"),
+            "marker_seq": parse_optional_int(kv_payload.get("power-marker-seq")),
+            "reason": kv_payload.get("power-reason"),
+        }
+    )
+
+
 def raw_location_belief_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
     state = first_known(kv_payload.get("location-belief-state"), kv_payload.get("belief-state"))
     if state is None:
@@ -1455,6 +1504,9 @@ def derive_raw_frame_message(
             cell = raw_cell_from_kv(kv_payload)
             lte = raw_lte_from_kv(kv_payload)
             gnss = raw_gnss_from_kv(kv_payload)
+            wifi = raw_wifi_from_kv(kv_payload)
+            imu = raw_imu_from_kv(kv_payload)
+            power = raw_power_from_kv(kv_payload)
             location_belief = raw_location_belief_from_kv(kv_payload)
             event.update(
                 compact_dict(
@@ -1463,6 +1515,9 @@ def derive_raw_frame_message(
                         "cell": cell or None,
                         "lte": lte or None,
                         "gnss": gnss or None,
+                        "wifi": wifi or None,
+                        "imu": imu or None,
+                        "power": power or None,
                         "location_belief": location_belief or None,
                         "transport": compact_dict({"type": kv_payload.get("transport-type")})
                         if kv_payload.get("transport-type")
@@ -2014,7 +2069,7 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
     field_payload = as_dict(field_message.get("payload"))
     transport = as_dict(first_known(status.get("transport"), telemetry.get("transport"), field_message.get("transport")))
     runtime = as_dict(first_known(status.get("runtime"), telemetry.get("runtime")))
-    power = as_dict(first_known(status.get("power"), telemetry.get("power"), field_message.get("power")))
+    power = as_dict(first_known(field_message.get("power"), telemetry.get("power"), status.get("power")))
     gnss = as_dict(first_known(field_message.get("gnss"), field_payload.get("gnss"), telemetry_payload.get("gnss")))
     cell = as_dict(first_known(field_message.get("cell"), telemetry.get("cell"), status.get("cell")))
     lte = as_dict(first_known(field_message.get("lte"), telemetry.get("lte"), status.get("lte")))
@@ -2085,6 +2140,11 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
             "soc_pct": first_known(power.get("soc_pct"), status.get("soc_pct"), status.get("battery_percent"), status.get("battery")),
             "charging": first_known(power.get("charging"), status.get("charging")),
             "source": first_known(power.get("source"), status.get("battery_source"), "unknown"),
+            "source_status": first_known(power.get("source_status"), "unknown"),
+            "evidence_status": first_known(power.get("evidence_status"), "unknown"),
+            "state": power.get("state"),
+            "marker_seq": power.get("marker_seq"),
+            "reason": power.get("reason"),
         },
         "gnss": {
             "fix": fix,
@@ -2130,11 +2190,25 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
         },
         "wifi": {
             "scan_enabled": first_known(wifi.get("scan_enabled"), False if wifi.get("aps") == [] else None),
-            "ap_count": len(wifi.get("aps")) if isinstance(wifi.get("aps"), list) else None,
+            "ap_count": first_known(
+                wifi.get("ap_count"),
+                len(wifi.get("aps")) if isinstance(wifi.get("aps"), list) else None,
+            ),
+            "source_status": first_known(wifi.get("source_status"), "unknown"),
+            "evidence_status": first_known(wifi.get("evidence_status"), "unknown"),
+            "privacy": wifi.get("privacy"),
+            "reason": wifi.get("reason"),
         },
         "imu": {
             "motion": first_known(imu.get("motion"), imu.get("state")),
             "confidence": imu.get("confidence"),
+            "source_status": first_known(imu.get("source_status"), "unknown"),
+            "evidence_status": first_known(imu.get("evidence_status"), "unknown"),
+            "hardware_present": imu.get("hardware_present"),
+            "driver_enabled": imu.get("driver_enabled"),
+            "data_is_mock": imu.get("data_is_mock"),
+            "backend_status": imu.get("backend_status"),
+            "reason": imu.get("reason"),
         },
         "location_belief": {
             "state": first_known(location_belief.get("state"), "unknown"),
@@ -2388,12 +2462,12 @@ def render_dashboard() -> str:
         <div class="metric"><span>Raw Frame</span><span class="${rawFrameClass(latestRaw)}">${escapeHtml(rawFrameSummary(latestRaw))}</span></div>
         <div class="metric"><span>Raw Frame ID</span><span>${escapeHtml(latestRaw.frame_id || 'none')}</span></div>
         <div class="metric"><span>Raw Derived</span><span>${escapeHtml(latestRawParsed.derived_message_type || 'unknown')} / ${escapeHtml(latestRawFraming.content_type || 'unknown')}</span></div>
-        <div class="metric"><span>Power</span><span>${escapeHtml(obsPower.battery_mv ?? 'unknown')} mV / ${escapeHtml(obsPower.soc_pct ?? status.battery ?? 'unknown')}%</span></div>
+        <div class="metric"><span>Power</span><span>${escapeHtml(obsPower.battery_mv ?? 'unknown')} mV / ${escapeHtml(obsPower.soc_pct ?? status.battery ?? 'unknown')}% / ${escapeHtml(obsPower.evidence_status || obsPower.source_status || obsPower.source || 'unknown')}</span></div>
         <div class="metric"><span>Cell</span><span>${escapeHtml(obsCell.rat || 'unknown')} ${escapeHtml(obsCell.cell_id || '')} RSRP ${escapeHtml(obsCell.rsrp ?? 'unknown')}</span></div>
         <div class="metric"><span>LTE</span><span>${escapeHtml(obsLte.registration_state || obsCell.registration_state || 'unknown')} / PDP ${escapeHtml(obsLte.pdp_state || obsCell.pdp_state || 'unknown')} / SIM ${escapeHtml(obsLte.sim_state || obsCell.sim_state || 'unknown')}</span></div>
         <div class="metric"><span>LTE Reason</span><span>${escapeHtml(obsLte.reason_code || obsCell.reason_code || 'unknown')}</span></div>
-        <div class="metric"><span>Wi-Fi</span><span>${escapeHtml(obsWifi.scan_enabled ?? 'unknown')} / APs ${escapeHtml(obsWifi.ap_count ?? 'unknown')}</span></div>
-        <div class="metric"><span>IMU</span><span>${escapeHtml(obsImu.motion || 'unknown')} ${escapeHtml(obsImu.confidence ?? '')}</span></div>
+        <div class="metric"><span>Wi-Fi</span><span>${escapeHtml(obsWifi.scan_enabled ?? 'unknown')} / APs ${escapeHtml(obsWifi.ap_count ?? 'unknown')} / ${escapeHtml(obsWifi.evidence_status || obsWifi.source_status || 'unknown')}</span></div>
+        <div class="metric"><span>IMU</span><span>${escapeHtml(obsImu.motion || 'unknown')} ${escapeHtml(obsImu.confidence ?? '')} / ${escapeHtml(obsImu.evidence_status || obsImu.source_status || 'unknown')}</span></div>
         <div class="metric"><span>GNSS Reason</span><span>${escapeHtml(obsGnss.reason_code || 'unknown')}</span></div>
         <div class="metric"><span>Reason Codes</span><span>${escapeHtml((obsExplainability.reason_codes || []).join(', ') || 'none')}</span></div>
         <div class="metric"><span>Last Error</span><span>${escapeHtml(error.error_code || 'none')}</span></div>

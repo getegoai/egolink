@@ -109,6 +109,9 @@ Current increment:
 - LOC-004A completed the first raw LTE firmware-side SIM7670G cell/LTE
   `location_observation` gate and KR-003 released it as an engineering Walking
   Skeleton point.
+- LOC-005A completed the first firmware/server/Web source-state slots for
+  Wi-Fi, IMU, and power in raw LTE `location_observation`, with explicit
+  `disabled`, `missing`, `mock`, or `unverified` labels.
 
 Definition of Done:
 
@@ -127,7 +130,9 @@ Definition of Done:
 
 Remaining R2.5 work:
 
-- firmware-side real Wi-Fi/IMU/power observation is still unverified;
+- LOC-005A source-state fields are implemented, but privacy-reviewed Wi-Fi
+  fingerprints, product-topology IMU data, and real battery/power
+  instrumentation are still unverified;
 - known-place matching and richer rule-based belief updates remain
   LOC-005+/ALG-001+ work;
 - product GNSS, enclosure, LTE long-run, and battery/power acceptance remain

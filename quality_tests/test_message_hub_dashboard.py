@@ -44,6 +44,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("LTE Reason", html)
         self.assertIn("Wi-Fi", html)
         self.assertIn("IMU", html)
+        self.assertIn("evidence_status", html)
+        self.assertIn("source_status", html)
         self.assertIn("GNSS Reason", html)
         self.assertIn("Reason Codes", html)
         self.assertIn("observability", html)

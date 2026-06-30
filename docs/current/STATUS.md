@@ -6,6 +6,29 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: LOC-005A Firmware-Side Observation Source States is implemented
+as a static firmware/server/Web contract increment after KR-003. Raw LTE
+`location_observation` now carries compact Wi-Fi, IMU, and power source-state
+slots in KV/raw-frame form: Wi-Fi is explicitly `disabled` / `missing` in the
+current LTE path, IMU is surfaced through `platform_imu` status including
+mock/unverified labels, and power is surfaced through `platform_power` source
+labels instead of a battery-accuracy claim. Message Hub derives these raw
+fields into structured `wifi`, `imu`, and `power` groups, `/api/state`
+observability exposes their `source_status` and `evidence_status`, and the
+Dashboard displays those states in the latest field view. Focused
+firmware/server/dashboard tests passed with 32 tests; full
+`scripts\verify.ps1` passed with 299 tests; and the LOC-005A guarded ESP-IDF
+build produced
+`firmware/mqtt_heartbeat/build_loc005a_source_states/egolink_mqtt_heartbeat.bin`
+(`300448` bytes) with `flash_intentionally_not_run=true`. The updated Message
+Hub/Web code was deployed by copying `server/message_hub.py` to
+`203.0.113.10:/opt/egolink-message-hub/server/message_hub.py` and restarting
+`egolink-message-hub.service`; local and public `/health` checks returned
+`ok=true`, and the existing GitLab service remained `active`. No COM4 flash,
+independent-power USB-Free runtime validation, real Wi-Fi fingerprinting,
+product-topology IMU validation, battery accuracy, long LTE stability,
+enclosure behavior, or product readiness is claimed by this entry.
+
 2026-06-30: KR-003 USB-Free Explainable LTE Location Observation Walking
 Skeleton is released as engineering key version `0.1.0-key-release-003`.
 The release freezes the LOC-004A raw LTE

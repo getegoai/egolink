@@ -1432,6 +1432,19 @@ static void build_lte_location_observation_kv_payload(
         lte = &fallback;
     }
 
+    platform_power_snapshot_t power;
+    platform_power_get_snapshot(&power);
+    platform_imu_sample();
+    platform_imu_snapshot_t imu;
+    platform_imu_get_snapshot(&imu);
+
+    const char *imu_source_status =
+        (imu.hardware_present && imu.driver_enabled && !imu.data_is_mock) ? "observed" : "unverified";
+    const char *imu_evidence_status = imu.data_is_mock ? "mock" : (imu.hardware_present ? "observed" : "missing");
+    bool power_mock = power.battery_is_mock || power.charging_is_mock;
+    const char *power_source_status = power_mock ? "mock" : "observed";
+    const char *power_evidence_status = power_mock ? "mock" : "observed";
+
     char rssi[16];
     char rsrp[16];
     char rsrq[16];
@@ -1448,6 +1461,10 @@ static void build_lte_location_observation_kv_payload(
     char apn_state[SIM7670_LTE_STATUS_MAX * 2];
     char assigned_ip[SIM7670_LTE_IP_MAX * 2];
     char reason_code[SIM7670_LTE_STATUS_MAX * 2];
+    char imu_backend_status[64];
+    char power_battery_source[64];
+    char power_charging_source[64];
+    char power_state[32];
 
     json_int_or_null(rssi, sizeof(rssi), lte->rssi_valid, lte->rssi);
     json_int_or_null(rsrp, sizeof(rsrp), lte->rsrp_valid, lte->rsrp);
@@ -1465,6 +1482,10 @@ static void build_lte_location_observation_kv_payload(
     json_escape_summary(apn_state, sizeof(apn_state), lte->apn_state);
     json_escape_summary(assigned_ip, sizeof(assigned_ip), lte->assigned_ip);
     json_escape_summary(reason_code, sizeof(reason_code), lte->reason_code);
+    json_escape_summary(imu_backend_status, sizeof(imu_backend_status), imu.backend_status);
+    json_escape_summary(power_battery_source, sizeof(power_battery_source), power.battery_source);
+    json_escape_summary(power_charging_source, sizeof(power_charging_source), power.charging_source);
+    json_escape_summary(power_state, sizeof(power_state), platform_power_state_name(power.state));
 
     snprintf(
         buffer,
@@ -1506,8 +1527,35 @@ static void build_lte_location_observation_kv_payload(
         "lte_pdp_state=%s\n"
         "lte_assigned_ip=%s\n"
         "lte_reason_code=%s\n"
+        "wifi_source=esp_wifi_sta\n"
+        "wifi_source_status=disabled\n"
+        "wifi_evidence_status=missing\n"
+        "wifi_scan_enabled=false\n"
+        "wifi_ap_count=0\n"
+        "wifi_privacy=raw_bssid_not_collected\n"
+        "wifi_reason=wifi_disabled_in_lte_location_observation\n"
+        "imu_source=platform_imu\n"
+        "imu_source_status=%s\n"
+        "imu_evidence_status=%s\n"
+        "imu_motion=unknown\n"
+        "imu_confidence=null\n"
+        "imu_hardware_present=%s\n"
+        "imu_driver_enabled=%s\n"
+        "imu_data_is_mock=%s\n"
+        "imu_backend_status=%s\n"
+        "imu_reason=imu_backend_not_product_verified\n"
+        "power_source=platform_power\n"
+        "power_source_status=%s\n"
+        "power_evidence_status=%s\n"
+        "power_soc_pct=%d\n"
+        "power_charging=%s\n"
+        "power_battery_source=%s\n"
+        "power_charging_source=%s\n"
+        "power_state=%s\n"
+        "power_marker_seq=%" PRIu32 "\n"
+        "power_reason=platform_power_source_not_product_meter\n"
         "location_belief_state=Unknown\n"
-        "location_belief_source=cell,lte\n"
+        "location_belief_source=cell,lte,wifi,imu,power\n"
         "location_belief_reason=cell_observation_without_position_fix\n"
         "transport_type=lte\n"
         "lte_http_phase=location_observation\n"
@@ -1545,6 +1593,20 @@ static void build_lte_location_observation_kv_payload(
         pdp_state,
         assigned_ip,
         reason_code,
+        imu_source_status,
+        imu_evidence_status,
+        json_bool(imu.hardware_present),
+        json_bool(imu.driver_enabled),
+        json_bool(imu.data_is_mock),
+        imu_backend_status,
+        power_source_status,
+        power_evidence_status,
+        power.battery_percent,
+        json_bool(power.charging),
+        power_battery_source,
+        power_charging_source,
+        power_state,
+        power.marker_seq,
         sim7670_lte_http_backend_name());
 }
 
@@ -1553,8 +1615,8 @@ static bool lte_http_publish_raw_location_observation(const char *cmd_id)
     char path[160];
     char url[256];
     char frame_id[96];
-    char payload[1400];
-    char frame[1900];
+    char payload[1900];
+    char frame[2400];
     sim7670_lte_http_probe_result_t post_result;
     sim7670_lte_report_t lte;
     uint32_t seq = next_seq();

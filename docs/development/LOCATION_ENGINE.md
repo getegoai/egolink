@@ -104,15 +104,19 @@ assignment, and generator versions.
 1. `DATA-001`: completed location-fusion dataset sample/export baseline from
    raw-frame lineage, derived events, labels, and quality checks.
 2. `ALG-000`: completed EALE-P0 location fusion algorithm design freeze.
-3. `LOC-005A`: add firmware-side real Wi-Fi/IMU/power observation as explicit
-   `observed`, `unknown`, or `unverified` inputs.
-4. `OBS-003`: make current run, key release, and failure reason visible from
+3. `LOC-005A`: completed firmware-side Wi-Fi/IMU/power source-state slots in
+   raw LTE `location_observation` as explicit `disabled`, `missing`, `mock`,
+   `observed`, or `unverified` inputs.
+4. `LOC-005B+`: add privacy-reviewed Wi-Fi fingerprints, product-topology IMU
+   observations, and real battery/power instrumentation behind those stable
+   source-state slots.
+5. `OBS-003`: make current run, key release, and failure reason visible from
    Web/report surfaces.
-5. `ALG-001`: add optional server-side derived `location_belief` generation
+6. `ALG-001`: add optional server-side derived `location_belief` generation
    from DATA-001 observation windows.
-6. `STAB-001B`: run a short USB-Free KR-003 baseline after data/observability
+7. `STAB-001B`: run a short USB-Free KR-003 baseline after data/observability
    gates can explain failures.
-7. `LTE-005`: add reconnect, retry, cache, stale-command, and duplicate
+8. `LTE-005`: add reconnect, retry, cache, stale-command, and duplicate
    handling gates before long field tests.
 
 ## LOC-002 Baseline

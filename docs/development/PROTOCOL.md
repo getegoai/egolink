@@ -132,10 +132,12 @@ Recommended additive groups:
 | `transport` | `type`, `rtt_ms`, `last_error` |
 | `runtime` | `boot_id`, `uptime_s`, `free_heap`, `last_reset_reason`, `watchdog_count` |
 | `command` | `last_cmd_id`, `last_status`, `last_ack_status`, `rtt_ms` |
-| `power` | `battery_mv`, `soc_pct`, `charging`, `source` |
+| `power` | `battery_mv`, `soc_pct`, `charging`, `source`, `source_status`, `evidence_status`, `state`, `reason` |
 | `gnss` | `fix`, `state`, `hdop`, `satellites`, `attempt_ms`, `result`, `reason_code` |
 | `cell` | `rat`, `operator`, `mcc`, `mnc`, `tac`, `cell_id`, `rsrp`, `rsrq`, `rssi`, `sinr` |
 | `lte` | `driver`, `query_ok`, `sim_state`, `registration_state`, `apn_state`, `pdp_state`, `assigned_ip`, `reason_code` |
+| `wifi` | `source_status`, `evidence_status`, `scan_enabled`, `ap_count`, `privacy`, `reason` |
+| `imu` | `source_status`, `evidence_status`, `motion`, `confidence`, `hardware_present`, `driver_enabled`, `data_is_mock`, `backend_status`, `reason` |
 
 The Message Hub exposes the derived view as `device.observability` in
 `/api/state` and includes `observability_summary` in test-run exports. Unknown

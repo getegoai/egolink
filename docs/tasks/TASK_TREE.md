@@ -567,6 +567,27 @@ motion candidate
     Wi-Fi/IMU/power fusion, LTE long-run stability, reconnect recovery,
     battery/power behavior, enclosure behavior, or product readiness is
     claimed by this task.
+- `LOC-005A Firmware-Side Observation Source States`
+  - Path: `docs/tasks/done/LOC-005A_FIRMWARE_SIDE_OBSERVATION_SOURCE_STATES.md`
+  - Status: completed as a firmware/server/Web static contract increment;
+    USB-Free hardware runtime validation is still pending a COM4 flash and
+    independent-power run.
+  - Goal: add Wi-Fi, IMU, and power source/evidence status slots to the raw
+    LTE `location_observation` path without returning to device-side JSON or
+    claiming unavailable sensor readiness.
+  - Evidence: firmware raw KV observations now include explicit
+    `wifi_*`, `imu_*`, and `power_*` source/evidence fields; Message Hub
+    derives them into structured `wifi`, `imu`, and `power` groups; `/api/state`
+    and Dashboard observability expose their `source_status` and
+    `evidence_status`; focused firmware/server/dashboard tests passed; full
+    `scripts\verify.ps1` passed with 299 tests; guarded ESP-IDF build produced
+    `build_loc005a_source_states/egolink_mqtt_heartbeat.bin`; Message Hub/Web
+    was redeployed to `203.0.113.10:8790` without touching GitLab.
+  - Boundary: Wi-Fi remains `disabled` / `missing` in the current LTE mode,
+    default IMU remains mock/unverified, and default power remains a
+    mock/log-backend source. No battery accuracy, product power behavior,
+    Wi-Fi fingerprinting, learned fusion, long LTE stability, enclosure, or
+    product readiness is claimed.
 - `FIELD-002 USB-Free Reboot-Aware Command Validator`
   - Path: `docs/tasks/done/FIELD-002_USB_FREE_REBOOT_AWARE_COMMAND_VALIDATOR.md`
   - Status: completed as field-validation tooling only; no hardware action was
