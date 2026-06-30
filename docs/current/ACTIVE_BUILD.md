@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-004 raw request-location firmware currently flashed on COM4; USB-Free LTE-004 request-location thin slice passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-004 raw request-location firmware currently flashed on COM4; USB-Free LTE-004 request-location thin slice passed; LOC-004A cell-observation image is build-verified but not flashed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -524,6 +524,28 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   proves the bounded raw LTE `request_location -> location_report -> ACK`
   slice only; real GNSS fix, long LTE stability, reconnect recovery, battery,
   power, and enclosure behavior remain unverified.
+- LOC-004A real cell location observation is implemented, VPS-deployed, and
+  build-verified as `0.1.0-loc004a-cell-observation` /
+  `loc004a-cell-observation-20260630-001`, but it has not been flashed or
+  USB-Free runtime validated. Message Hub derives raw
+  `event_type=location_observation` key/value frames into `cell`, `lte`,
+  `transport`, `lte_http`, and `location_belief` fields after raw storage.
+  Unknown observations preserve existing useful `location_memory` and can
+  derive active belief `Predicted` with reason
+  `last_known_after_unknown_location_observation`. VPS smoke
+  `loc004a-vps-cell-observation-smoke-20260630-012442` passed with
+  `cell.rat=LTE`, `cell.cell_id=01AF23`,
+  `lte.reason_code=LTE_READY`, `transport.type=lte`, and
+  `location_belief.state=Unknown`; evidence is under
+  `reports/location_observation/loc004a-vps-cell-observation-smoke-20260630-012442/`.
+  The build used `CONFIG_EGOLINK_SIM7670_GNSS_ENABLED=y`,
+  `CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y`,
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=y`, and
+  `CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED=y`; binary is
+  `firmware/mqtt_heartbeat/build_loc004a_cell_observation/egolink_mqtt_heartbeat.bin`
+  (`298416` bytes). Focused tests passed with 50 tests, `context_lint` passed,
+  full `verify.ps1` passed with 292 tests, `git diff --check` passed, and the
+  guarded ESP-IDF prepare/build passed.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

@@ -20,6 +20,7 @@ param(
     [switch]$EnableSim7670LteStatus,
     [switch]$EnableSim7670LteHttpProbe,
     [switch]$EnableSim7670LteHttpCommandLoop,
+    [switch]$EnableSim7670LocationObservation,
     [switch]$PrepareBuild,
     [switch]$Flash,
     [switch]$IUnderstandFlashWritesFirmware,
@@ -27,6 +28,7 @@ param(
     [switch]$OperatorConfirmedIndependentPower,
     [switch]$OperatorConfirmedUsbDisconnected,
     [switch]$RequireLteLocationReport,
+    [switch]$RequireLteLocationObservation,
     [switch]$RequireLocationFix,
     [switch]$Json
 )
@@ -73,7 +75,8 @@ $lteCommandValidationScript = Resolve-RepoPath "scripts/validate_lte_command_loo
 $tokenPath = Resolve-RepoPath $TokenFile
 $buildPath = Join-Path $firmwarePath $BuildDir
 $binaryPath = Join-Path $buildPath "egolink_mqtt_heartbeat.bin"
-$effectiveEnableSim7670LteStatus = [bool]($EnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $EnableSim7670LteHttpCommandLoop)
+$effectiveEnableSim7670LteHttpCommandLoop = [bool]($EnableSim7670LteHttpCommandLoop -or $EnableSim7670LocationObservation)
+$effectiveEnableSim7670LteStatus = [bool]($EnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop)
 
 $result = [ordered]@{
     ok = $true
@@ -86,7 +89,8 @@ $result = [ordered]@{
     sim7670_gnss_enabled = [bool]$EnableSim7670Gnss
     sim7670_lte_status_enabled = [bool]$effectiveEnableSim7670LteStatus
     sim7670_lte_http_probe_enabled = [bool]$EnableSim7670LteHttpProbe
-    sim7670_lte_http_command_loop_enabled = [bool]$EnableSim7670LteHttpCommandLoop
+    sim7670_lte_http_command_loop_enabled = [bool]$effectiveEnableSim7670LteHttpCommandLoop
+    sim7670_location_observation_enabled = [bool]$EnableSim7670LocationObservation
     firmware_dir = $firmwarePath
     build_dir = $buildPath
     binary_path = $binaryPath
@@ -94,6 +98,7 @@ $result = [ordered]@{
     expected_ack_test_run_id = $ExpectedAckTestRunId
     lte_command_name = $LteCommandName
     require_lte_location_report = [bool]($RequireLteLocationReport -or $RequireLocationFix)
+    require_lte_location_observation = [bool]$RequireLteLocationObservation
     require_location_fix = [bool]$RequireLocationFix
     prepare_build_ran = $false
     flash_ran = $false
@@ -143,6 +148,7 @@ if ($PrepareBuild) {
     Add-If $prepareArgs $EnableSim7670LteStatus "-EnableSim7670LteStatus"
     Add-If $prepareArgs $EnableSim7670LteHttpProbe "-EnableSim7670LteHttpProbe"
     Add-If $prepareArgs $EnableSim7670LteHttpCommandLoop "-EnableSim7670LteHttpCommandLoop"
+    Add-If $prepareArgs $EnableSim7670LocationObservation "-EnableSim7670LocationObservation"
     $prepareOutput = & powershell @prepareArgs
     if ($LASTEXITCODE -ne 0) {
         throw "prepare_fw001_hw_config.ps1 failed with exit code $LASTEXITCODE"
@@ -191,7 +197,7 @@ if ($Validate) {
     $oldToken = $env:EGOLINK_MESSAGE_HUB_TOKEN
     $env:EGOLINK_MESSAGE_HUB_TOKEN = (Get-Content -LiteralPath $tokenPath -Raw).Trim()
     try {
-        if ($EnableSim7670LteHttpCommandLoop) {
+        if ($effectiveEnableSim7670LteHttpCommandLoop) {
             $validationArgs = @(
                 $lteCommandValidationScript,
                 "--hub", $hubUrl,
@@ -211,6 +217,9 @@ if ($Validate) {
             }
             if ($RequireLteLocationReport -or $RequireLocationFix) {
                 $validationArgs += "--require-location-report"
+            }
+            if ($RequireLteLocationObservation) {
+                $validationArgs += "--require-location-observation"
             }
             if ($RequireLocationFix) {
                 $validationArgs += "--require-fix"

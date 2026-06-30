@@ -41,10 +41,12 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertFalse(payload["sim7670_lte_status_enabled"])
         self.assertFalse(payload["sim7670_lte_http_probe_enabled"])
         self.assertFalse(payload["sim7670_lte_http_command_loop_enabled"])
+        self.assertFalse(payload["sim7670_location_observation_enabled"])
         self.assertEqual(payload["existing_command_id"], "")
         self.assertEqual(payload["expected_ack_test_run_id"], "")
         self.assertEqual(payload["lte_command_name"], "set_report_interval")
         self.assertFalse(payload["require_lte_location_report"])
+        self.assertFalse(payload["require_lte_location_observation"])
         self.assertFalse(payload["require_location_fix"])
         self.assertIn("IUnderstandFlashWritesFirmware", payload["flash_guard"])
 
@@ -82,16 +84,22 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertIn("[switch]$EnableSim7670LteStatus", self.script_text)
         self.assertIn("[switch]$EnableSim7670LteHttpProbe", self.script_text)
         self.assertIn("[switch]$EnableSim7670LteHttpCommandLoop", self.script_text)
+        self.assertIn("[switch]$EnableSim7670LocationObservation", self.script_text)
         self.assertIn("[string]$ExistingCommandId", self.script_text)
         self.assertIn("[string]$ExpectedAckTestRunId", self.script_text)
         self.assertIn("[string]$LteCommandName", self.script_text)
         self.assertIn("[switch]$RequireLteLocationReport", self.script_text)
+        self.assertIn("[switch]$RequireLteLocationObservation", self.script_text)
         self.assertIn("[switch]$RequireLocationFix", self.script_text)
         self.assertIn('Add-If $prepareArgs $EnableSim7670Gnss "-EnableSim7670Gnss"', self.script_text)
         self.assertIn('Add-If $prepareArgs $EnableSim7670LteStatus "-EnableSim7670LteStatus"', self.script_text)
         self.assertIn('Add-If $prepareArgs $EnableSim7670LteHttpProbe "-EnableSim7670LteHttpProbe"', self.script_text)
         self.assertIn(
             'Add-If $prepareArgs $EnableSim7670LteHttpCommandLoop "-EnableSim7670LteHttpCommandLoop"',
+            self.script_text,
+        )
+        self.assertIn(
+            'Add-If $prepareArgs $EnableSim7670LocationObservation "-EnableSim7670LocationObservation"',
             self.script_text,
         )
         self.assertIn("validate_lte_http_probe.py", self.script_text)
@@ -101,6 +109,7 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertIn("--expected-ack-test-run-id", self.script_text)
         self.assertIn("--command", self.script_text)
         self.assertIn("--require-location-report", self.script_text)
+        self.assertIn("--require-location-observation", self.script_text)
         self.assertIn("--require-fix", self.script_text)
         self.assertIn("ForEach-Object { $prepareArgs.Add([string]$_) }", self.script_text)
         self.assertNotIn("$prepareArgs.AddRange(@(", self.script_text)

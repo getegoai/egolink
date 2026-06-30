@@ -83,6 +83,23 @@ def is_fresh_location_report(
     return received_at is not None and received_at >= started_at
 
 
+def is_fresh_location_observation(
+    message: dict[str, Any],
+    started_at: datetime,
+    *,
+    test_run_id: str,
+    cmd_id: str,
+) -> bool:
+    if message.get("message_type") != "event" or message.get("event_type") != "location_observation":
+        return False
+    if message.get("test_run_id") != test_run_id:
+        return False
+    if str(message.get("location_request_cmd_id") or "") not in {"", cmd_id}:
+        return False
+    received_at = parse_timestamp(message.get("server_received_at"))
+    return received_at is not None and received_at >= started_at
+
+
 def validate_location_report(report: dict[str, Any], *, require_fix: bool) -> list[str]:
     errors: list[str] = []
     if "fix" not in report:
@@ -114,6 +131,44 @@ def validate_location_report(report: dict[str, Any], *, require_fix: bool) -> li
     return errors
 
 
+def validate_location_observation(observation: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    source_status = str(observation.get("source_status") or "")
+    if source_status not in LOCATION_SOURCE_STATUSES:
+        errors.append(
+            "location_observation source_status must be one of "
+            + ", ".join(sorted(LOCATION_SOURCE_STATUSES))
+        )
+
+    cell = as_dict(observation.get("cell"))
+    lte = as_dict(observation.get("lte"))
+    if not cell:
+        errors.append("location_observation must include a cell object")
+    if not lte:
+        errors.append("location_observation must include an lte object")
+    if not cell.get("rat"):
+        errors.append("location_observation.cell.rat is required")
+    if not first_present(cell.get("cell_id"), cell.get("tac"), cell.get("registration_state")):
+        errors.append("location_observation.cell must include cell_id, tac, or registration_state")
+    if not first_present(lte.get("reason_code"), cell.get("reason_code")):
+        errors.append("location_observation must include an LTE reason_code")
+
+    transport = as_dict(observation.get("transport"))
+    if transport.get("type") != "lte":
+        errors.append(f"location_observation transport.type={transport.get('type')} did not become lte")
+    lte_http = as_dict(observation.get("lte_http"))
+    if lte_http.get("phase") != "location_observation":
+        errors.append(f"location_observation lte_http.phase={lte_http.get('phase')} did not become location_observation")
+    return errors
+
+
+def first_present(*values: object) -> object | None:
+    for value in values:
+        if value not in (None, ""):
+            return value
+    return None
+
+
 def wait_for_location_report(
     client: HubClient,
     *,
@@ -136,6 +191,32 @@ def wait_for_location_report(
                 return message, validate_location_report(message, require_fix=require_fix)
         if time.monotonic() >= deadline:
             return {}, [f"timed out waiting for LTE location_report from {device_id}; observed {last_count} recent messages"]
+        time.sleep(poll_interval_sec)
+
+
+def wait_for_location_observation(
+    client: HubClient,
+    *,
+    device_id: str,
+    started_at: datetime,
+    test_run_id: str,
+    cmd_id: str,
+    timeout_sec: float,
+    poll_interval_sec: float,
+) -> tuple[dict[str, Any], list[str]]:
+    deadline = time.monotonic() + timeout_sec
+    last_count = 0
+    while True:
+        history = client.get(f"/api/v1/devices/{device_id}/telemetry/history").get("telemetry") or []
+        messages = [item for item in history if isinstance(item, dict)]
+        last_count = len(messages)
+        for message in messages:
+            if is_fresh_location_observation(message, started_at, test_run_id=test_run_id, cmd_id=cmd_id):
+                return message, validate_location_observation(message)
+        if time.monotonic() >= deadline:
+            return {}, [
+                f"timed out waiting for LTE location_observation from {device_id}; observed {last_count} recent messages"
+            ]
         time.sleep(poll_interval_sec)
 
 
@@ -181,6 +262,9 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
     summary = report.get("ack_summary") or {}
     command = report.get("command") or {}
     location = report.get("location_report") or {}
+    observation = report.get("location_observation") or {}
+    observation_cell = as_dict(observation.get("cell"))
+    observation_lte = as_dict(observation.get("lte"))
     command_name = str(command.get("cmd") or "unknown")
     lines = [
         "# LTE HTTP Command Loop Report",
@@ -205,6 +289,9 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- Location fix: {location.get('fix', 'not required')}",
         f"- GNSS state: {location.get('gnss_state', 'not required')}",
         f"- Location transport: {as_dict(location.get('transport')).get('type', 'not required')}",
+        f"- Observation seq: {observation.get('seq', 'not required')}",
+        f"- Observation cell: {observation_cell.get('rat', 'not required')} / {observation_cell.get('cell_id', 'unknown')}",
+        f"- Observation LTE reason: {observation_lte.get('reason_code', 'not required')}",
         f"- Test-run export path: {report.get('test_run_export_path', 'not written')}",
         "",
         "## Errors",
@@ -231,6 +318,8 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         lines.append(
             "- request_location validates command-scoped location_report transport only; GNSS fix requires --require-fix."
         )
+        if report.get("require_location_observation"):
+            lines.append("- location_observation validates command-scoped firmware-side cell/LTE evidence.")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -278,6 +367,7 @@ def validate_lte_command_loop(
     existing_command_id: str | None = None,
     expected_ack_test_run_id: str | None = None,
     require_location_report: bool = False,
+    require_location_observation: bool = False,
     require_fix: bool = False,
 ) -> dict[str, Any]:
     client = HubClient(hub_url, token=token)
@@ -327,6 +417,7 @@ def validate_lte_command_loop(
     final_commands: list[dict[str, Any]] = []
     final_device: dict[str, Any] = {}
     location_report: dict[str, Any] = {}
+    location_observation: dict[str, Any] = {}
     summary: dict[str, Any] = command_ack_summary(created)
     errors: list[str] = [f"command {cmd_id} remained pending"]
 
@@ -378,6 +469,18 @@ def validate_lte_command_loop(
         )
         errors.extend(location_errors)
 
+    if not errors and require_location_observation:
+        location_observation, observation_errors = wait_for_location_observation(
+            client,
+            device_id=device_id,
+            started_at=started_at,
+            test_run_id=test_run_id,
+            cmd_id=cmd_id,
+            timeout_sec=timeout_sec,
+            poll_interval_sec=poll_interval_sec,
+        )
+        errors.extend(observation_errors)
+
     completed_at_text = utc_now()
     result = "PASS" if not errors else "FAIL"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -400,12 +503,14 @@ def validate_lte_command_loop(
         "expected_ack_test_run_id": expected_ack_test_run_id,
         "effective_expected_ack_test_run_id": expected_ack_test_run_id or test_run_id,
         "require_location_report": require_location_report,
+        "require_location_observation": require_location_observation,
         "require_fix": require_fix,
         "existing_command_id": existing_command_id,
         "health": health,
         "test_run": test_run,
         "command": final_command,
         "location_report": location_report,
+        "location_observation": location_observation,
         "ack_summary": summary,
         "errors": errors,
         "device_state_path": str(device_path),
@@ -452,6 +557,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Require a fresh LTE-marked location_report for the command ID before passing.",
     )
     parser.add_argument(
+        "--require-location-observation",
+        action="store_true",
+        help="Require a fresh LTE-marked location_observation with firmware-side cell/LTE evidence.",
+    )
+    parser.add_argument(
         "--require-fix",
         action="store_true",
         help="Require location_report fix=true with observed/verified coordinates.",
@@ -484,6 +594,7 @@ def main(argv: list[str] | None = None) -> int:
             interval_ms=args.interval_ms,
             existing_command_id=args.existing_command_id,
             require_location_report=args.require_location_report or args.require_fix,
+            require_location_observation=args.require_location_observation,
             require_fix=args.require_fix,
         )
     except FieldValidationError as exc:

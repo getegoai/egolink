@@ -494,7 +494,9 @@ static void message_hub_ack_command(const char *cmd_id, const char *status, cons
 #if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
 static const char *message_hub_location_ack_message(void)
 {
-#if CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+#if CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+    return "firmware uploaded SIM7670G GNSS location_report and cell location_observation";
+#elif CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
     return "firmware uploaded SIM7670G GNSS location_report";
 #else
     return "firmware uploaded location_report scaffold";
@@ -1414,6 +1416,177 @@ static bool lte_http_publish_raw_location_report(const char *cmd_id)
         post_result.status_code);
     return ok;
 }
+
+#if CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+static void build_lte_location_observation_kv_payload(
+    char *buffer,
+    size_t buffer_size,
+    uint32_t seq,
+    const char *cmd_id,
+    const sim7670_lte_report_t *lte,
+    bool lte_query_ok)
+{
+    sim7670_lte_report_t fallback;
+    if (lte == NULL) {
+        sim7670_lte_report_init(&fallback);
+        lte = &fallback;
+    }
+
+    char rssi[16];
+    char rsrp[16];
+    char rsrq[16];
+    char sinr[16];
+    char operator_name[SIM7670_LTE_OPERATOR_MAX * 2];
+    char rat[SIM7670_LTE_RAT_MAX * 2];
+    char mcc[SIM7670_LTE_ID_MAX * 2];
+    char mnc[SIM7670_LTE_ID_MAX * 2];
+    char tac[SIM7670_LTE_ID_MAX * 2];
+    char cell_id[SIM7670_LTE_ID_MAX * 2];
+    char sim_state[SIM7670_LTE_STATUS_MAX * 2];
+    char registration_state[SIM7670_LTE_STATUS_MAX * 2];
+    char pdp_state[SIM7670_LTE_STATUS_MAX * 2];
+    char apn_state[SIM7670_LTE_STATUS_MAX * 2];
+    char assigned_ip[SIM7670_LTE_IP_MAX * 2];
+    char reason_code[SIM7670_LTE_STATUS_MAX * 2];
+
+    json_int_or_null(rssi, sizeof(rssi), lte->rssi_valid, lte->rssi);
+    json_int_or_null(rsrp, sizeof(rsrp), lte->rsrp_valid, lte->rsrp);
+    json_int_or_null(rsrq, sizeof(rsrq), lte->rsrq_valid, lte->rsrq);
+    json_int_or_null(sinr, sizeof(sinr), lte->sinr_valid, lte->sinr);
+    json_escape_summary(operator_name, sizeof(operator_name), lte->operator_name);
+    json_escape_summary(rat, sizeof(rat), lte->rat);
+    json_escape_summary(mcc, sizeof(mcc), lte->mcc);
+    json_escape_summary(mnc, sizeof(mnc), lte->mnc);
+    json_escape_summary(tac, sizeof(tac), lte->tac);
+    json_escape_summary(cell_id, sizeof(cell_id), lte->cell_id);
+    json_escape_summary(sim_state, sizeof(sim_state), lte->sim_state);
+    json_escape_summary(registration_state, sizeof(registration_state), lte->registration_state);
+    json_escape_summary(pdp_state, sizeof(pdp_state), lte->pdp_state);
+    json_escape_summary(apn_state, sizeof(apn_state), lte->apn_state);
+    json_escape_summary(assigned_ip, sizeof(assigned_ip), lte->assigned_ip);
+    json_escape_summary(reason_code, sizeof(reason_code), lte->reason_code);
+
+    snprintf(
+        buffer,
+        buffer_size,
+        "event_type=location_observation\n"
+        "priority=normal\n"
+        "fw_version=%s\n"
+        "test_run_id=%s\n"
+        "seq=%" PRIu32 "\n"
+        "source=sim7670g_firmware_cell\n"
+        "source_status=observed\n"
+        "location_request_cmd_id=%s\n"
+        "cell_rat=%s\n"
+        "cell_operator=%s\n"
+        "cell_mcc=%s\n"
+        "cell_mnc=%s\n"
+        "cell_tac=%s\n"
+        "cell_id=%s\n"
+        "cell_rssi=%s\n"
+        "cell_rsrp=%s\n"
+        "cell_rsrq=%s\n"
+        "cell_sinr=%s\n"
+        "cell_sim_state=%s\n"
+        "cell_registration_state=%s\n"
+        "cell_pdp_state=%s\n"
+        "cell_reason_code=%s\n"
+        "lte_driver=%s\n"
+        "lte_query_ok=%s\n"
+        "lte_uart_ready=%s\n"
+        "lte_at_ok=%s\n"
+        "lte_sim_ready=%s\n"
+        "lte_registered=%s\n"
+        "lte_attached=%s\n"
+        "lte_pdp_active=%s\n"
+        "lte_ip_valid=%s\n"
+        "lte_sim_state=%s\n"
+        "lte_registration_state=%s\n"
+        "lte_apn_state=%s\n"
+        "lte_pdp_state=%s\n"
+        "lte_assigned_ip=%s\n"
+        "lte_reason_code=%s\n"
+        "location_belief_state=Unknown\n"
+        "location_belief_source=cell,lte\n"
+        "location_belief_reason=cell_observation_without_position_fix\n"
+        "transport_type=lte\n"
+        "lte_http_phase=location_observation\n"
+        "lte_http_driver=%s\n",
+        CONFIG_EGOLINK_FW_VERSION,
+        CONFIG_EGOLINK_TEST_RUN_ID,
+        seq,
+        cmd_id,
+        rat,
+        operator_name,
+        mcc,
+        mnc,
+        tac,
+        cell_id,
+        rssi,
+        rsrp,
+        rsrq,
+        sinr,
+        sim_state,
+        registration_state,
+        pdp_state,
+        reason_code,
+        sim7670_lte_backend_name(),
+        json_bool(lte_query_ok),
+        json_bool(lte->uart_ready),
+        json_bool(lte->at_ok),
+        json_bool(lte->sim_ready),
+        json_bool(lte->registered),
+        json_bool(lte->attached),
+        json_bool(lte->pdp_active),
+        json_bool(lte->ip_valid),
+        sim_state,
+        registration_state,
+        apn_state,
+        pdp_state,
+        assigned_ip,
+        reason_code,
+        sim7670_lte_http_backend_name());
+}
+
+static bool lte_http_publish_raw_location_observation(const char *cmd_id)
+{
+    char path[160];
+    char url[256];
+    char frame_id[96];
+    char payload[1400];
+    char frame[1900];
+    sim7670_lte_http_probe_result_t post_result;
+    sim7670_lte_report_t lte;
+    uint32_t seq = next_seq();
+
+    sim7670_lte_report_init(&lte);
+    bool lte_query_ok = sim7670_lte_query_status(&lte);
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/raw-ingest", CONFIG_EGOLINK_DEVICE_ID);
+    build_message_hub_url(url, sizeof(url), path);
+    snprintf(frame_id, sizeof(frame_id), "obs-%s", cmd_id);
+    build_lte_location_observation_kv_payload(payload, sizeof(payload), seq, cmd_id, &lte, lte_query_ok);
+    if (!build_lte_raw_frame(frame, sizeof(frame), "event", frame_id, seq, payload)) {
+        ESP_LOGW(TAG, "LTE_HTTP_LOCATION_OBSERVATION_RAW_FRAME_BUILD_FAILED cmd_id=%s", cmd_id);
+        return false;
+    }
+    ESP_LOGI(TAG, "LTE_HTTP_LOCATION_OBSERVATION_RAW_FRAME_BYTES=%u", (unsigned)strlen(frame));
+    bool ok = sim7670_lte_http_post_raw(
+        url,
+        CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN,
+        frame,
+        "text/x-egolink-frame; profile=raw-frame.p0.v1",
+        &post_result);
+    ESP_LOGI(
+        TAG,
+        "LTE_HTTP_LOCATION_OBSERVATION_RAW_POST_DONE cmd_id=%s seq=%" PRIu32 " ok=%s reason=%s status=%d",
+        cmd_id,
+        seq,
+        ok ? "true" : "false",
+        post_result.reason_code,
+        post_result.status_code);
+    return ok;
+}
+#endif
 #endif
 
 static void build_lte_command_ack_payload(
@@ -1888,8 +2061,16 @@ static bool lte_http_execute_and_ack_raw_command(
 #if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
         } else if (strcmp(command->cmd, "request_location") == 0) {
             bool location_ok = lte_http_publish_raw_location_report(command->cmd_id);
+#if CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+            bool observation_ok = location_ok ? lte_http_publish_raw_location_observation(command->cmd_id) : false;
+            status = (location_ok && observation_ok) ? "ok" : "error";
+            message = !location_ok ? "lte raw location_report upload failed"
+                                   : (observation_ok ? message_hub_location_ack_message()
+                                                     : "lte raw location_observation upload failed");
+#else
             status = location_ok ? "ok" : "error";
             message = location_ok ? message_hub_location_ack_message() : "lte raw location_report upload failed";
+#endif
 #endif
         } else {
             status = "rejected";

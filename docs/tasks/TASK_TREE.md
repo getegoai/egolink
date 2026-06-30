@@ -530,6 +530,22 @@ motion candidate
   - Boundary: no firmware-side multi-source collection, learned known-place
     model, LTE long-run, product GNSS acceptance, battery/power behavior, or
     hardware action is claimed by this task.
+- `LOC-004A Real Cell Location Observation`
+  - Path: `docs/tasks/done/LOC-004A_REAL_CELL_LOCATION_OBSERVATION.md`
+  - Status: completed as a build/deploy candidate; hardware runtime
+    validation remains a separate explicit operator step.
+  - Goal: make raw LTE `request_location` produce both GNSS
+    `location_report` and real firmware-side SIM7670G cell/LTE
+    `location_observation` evidence without returning to device-side JSON.
+  - Evidence: Message Hub derives raw key/value `location_observation` into
+    `cell`, `lte`, `transport`, `lte_http`, and `location_belief`; Unknown
+    observations preserve existing useful `location_memory`; firmware adds
+    opt-in `CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED`; and
+    `scripts/validate_lte_command_loop.py --require-location-observation`
+    can gate command-scoped cell/LTE evidence.
+  - Boundary: no hardware flash/runtime pass, cell-only positioning,
+    learned known-place model, Wi-Fi/IMU/power fusion, LTE long-run stability,
+    battery/power behavior, or product readiness is claimed by this task.
 - `STAB-001A Short Baseline Gate Tooling`
   - Path: `docs/tasks/done/STAB-001A_SHORT_BASELINE_GATE_TOOLING.md`
   - Status: completed as gate tooling only.

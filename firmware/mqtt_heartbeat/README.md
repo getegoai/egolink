@@ -288,6 +288,47 @@ This validates only the LTE HTTP command poll and ACK thin-slice. It does not
 prove reconnect recovery, long-run LTE stability, GNSS-over-LTE, battery,
 charging, or product power behavior.
 
+## LOC-004A raw LTE cell location_observation
+
+LOC-004A keeps the LTE-004 raw `request_location` loop and adds an opt-in
+firmware-side cell/LTE observation frame:
+
+```text
+CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED=y
+CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=y
+CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y
+CONFIG_EGOLINK_SIM7670_GNSS_ENABLED=y
+CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED=y
+CONFIG_EGOLINK_FW_VERSION="0.1.0-loc004a-cell-observation"
+CONFIG_EGOLINK_TEST_RUN_ID="<loc004a-test-run-id>"
+```
+
+The default remains disabled. When enabled, a raw `request_location` command
+uploads the existing raw `event_type=location_report`, then queries SIM7670G
+LTE status and uploads a second raw `event_type=location_observation` with
+cell RAT, operator/MCC/MNC/TAC/cell ID when available, signal metrics,
+registration/PDP state, LTE reason code, `transport_type=lte`, and
+`location_belief_state=Unknown`. The Message Hub stores the raw frame first,
+then derives `cell`, `lte`, `transport`, and `location_belief` fields for Web
+and validators.
+
+Host-side validation can require both raw location evidence frames:
+
+```powershell
+python ..\..\scripts\validate_lte_command_loop.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id ego-link-r1-connectivity-001 `
+  --test-run-id <same-test-run-id> `
+  --expected-fw-version 0.1.0-loc004a-cell-observation `
+  --command request_location `
+  --require-location-report `
+  --require-location-observation
+```
+
+This does not infer a position from cell-only data and does not prove long LTE
+stability, reconnect behavior, battery/power behavior, or product location
+readiness.
+
 Host-side validation for the FW-002 location scaffold is:
 
 ```powershell

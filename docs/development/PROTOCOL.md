@@ -378,6 +378,56 @@ A no-fix report is acceptable for this transport slice when the report is
 explicit and diagnosable. A malformed or checksum-failed location frame remains
 raw evidence and must not be silently dropped.
 
+## LOC-004A Raw LTE Cell Location Observation
+
+LOC-004A keeps LTE-004's `request_location -> location_report -> ACK` loop and
+adds a second raw `event` frame for firmware-side cell/LTE observation. The
+device/server wire truth remains `EGLK/1` raw-frame bytes. The Message Hub
+stores the original frame first, then derives a compatible
+`event_type=location_observation` JSON/Web/API view.
+
+The raw observation payload uses compact key/value content:
+
+```text
+event_type=location_observation
+priority=normal
+fw_version=0.1.0-loc004a-cell-observation
+test_run_id=loc004a-cell-observation-20260630-001
+seq=43
+source=sim7670g_firmware_cell
+source_status=observed
+location_request_cmd_id=cmd-000021
+cell_rat=LTE
+cell_mcc=460
+cell_mnc=01
+cell_tac=2A0B
+cell_id=01AF23
+cell_rsrp=-91
+cell_rsrq=-12
+cell_sinr=17
+cell_registration_state=registered_home
+cell_pdp_state=active
+cell_reason_code=LTE_READY
+lte_driver=sim7670g_uart_at
+lte_query_ok=true
+lte_registered=true
+lte_pdp_active=true
+lte_assigned_ip=10.1.2.3
+lte_reason_code=LTE_READY
+location_belief_state=Unknown
+location_belief_source=cell,lte
+location_belief_reason=cell_observation_without_position_fix
+transport_type=lte
+lte_http_phase=location_observation
+lte_http_driver=sim7670g_uart_at_http
+```
+
+`location_belief_state=Unknown` means the firmware produced real cell/LTE
+evidence but did not infer a user position. The server must retain the evidence
+without erasing prior useful `location_memory`. If usable memory already exists,
+the active belief may be derived as `Predicted` with reason
+`last_known_after_unknown_location_observation`.
+
 ## LOC-002 Location Observation Event
 
 LOC-002 adds the compatible `event_type=location_observation` event. It keeps
@@ -479,9 +529,15 @@ The server updates memory from existing location evidence:
 - `location_report fix=true` creates a `Fine` GNSS calibration memory.
 - `location_report fix=false` stores `last_no_fix` but does not erase the last
   valid memory.
+- `location_observation.location_belief.state=Unknown` stores
+  `last_unknown_observation` but does not erase an existing `Fine`, `Coarse`,
+  or `Predicted` memory.
 - If the latest report is no-fix but memory exists,
   `observability.location_belief.state` becomes `Predicted` and the reason is
   `last_known_after_gnss_no_fix`.
+- If the latest observation is explicit `Unknown` but memory exists,
+  `observability.location_belief.state` becomes `Predicted` and the reason is
+  `last_known_after_unknown_location_observation`.
 
 The raw-frame rule remains unchanged: original frames are stored first, then
 the Message Hub derives JSON/Web/API views. Location memory is derived state,

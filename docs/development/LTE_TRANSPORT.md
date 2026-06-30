@@ -160,6 +160,40 @@ Definition of Done:
 - no-fix is acceptable only when the GNSS state and source status explain the
   failure.
 
+## LOC-004A: Raw Cell Location Observation
+
+Goal: make LTE/GNSS location attempts explainable before long-run LTE testing
+by uploading real firmware-side SIM7670G cell/LTE observation over the same
+raw-frame Message Hub path.
+
+Implementation shape:
+
+- Web/VPS enqueues `request_location`.
+- firmware posts the LTE-004 raw `location_report` for GNSS fix/no-fix;
+- when `CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED=y`, firmware then
+  queries SIM7670G LTE status and posts a second `EGLK/1 type=event` raw frame
+  with `event_type=location_observation`;
+- the observation includes cell RAT, MCC/MNC/TAC/cell ID when available,
+  signal metrics, registration/PDP state, LTE reason code, and
+  `location_belief_state=Unknown`;
+- Message Hub stores the raw frame first, derives `cell`, `lte`, `transport`,
+  `lte_http`, and `location_belief` fields, and preserves prior useful
+  `location_memory` when the new belief is `Unknown`;
+- the host validator can require a command-scoped LTE `location_observation`
+  in addition to the LTE `location_report` and ACK.
+
+Definition of Done:
+
+- firmware build can enable the opt-in observation path without changing the
+  default LTE-004 image;
+- raw `location_observation` is visible in Message Hub raw-frame evidence;
+- Web/API `latest_location_observation`, `observability.cell`,
+  `observability.lte`, and `observability.location_belief` update from the
+  derived event;
+- validator `--require-location-observation` fails if the cell/LTE observation
+  is missing or not LTE-marked;
+- no product position is inferred from cell-only data in this slice.
+
 ## R3.0 LTE Long-Run Gate
 
 Only after LTE-001 through LTE-004 pass should the project run a long LTE

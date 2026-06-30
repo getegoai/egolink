@@ -1248,6 +1248,84 @@ def parse_kv_payload(payload: bytes) -> dict[str, str]:
     return result
 
 
+def raw_cell_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "rat": kv_payload.get("cell-rat"),
+            "operator": kv_payload.get("cell-operator"),
+            "mcc": kv_payload.get("cell-mcc"),
+            "mnc": kv_payload.get("cell-mnc"),
+            "tac": kv_payload.get("cell-tac"),
+            "cell_id": kv_payload.get("cell-id"),
+            "rssi": parse_raw_scalar(kv_payload.get("cell-rssi")),
+            "rsrp": parse_raw_scalar(kv_payload.get("cell-rsrp")),
+            "rsrq": parse_raw_scalar(kv_payload.get("cell-rsrq")),
+            "sinr": parse_raw_scalar(kv_payload.get("cell-sinr")),
+            "sim_state": kv_payload.get("cell-sim-state"),
+            "registration_state": kv_payload.get("cell-registration-state"),
+            "pdp_state": kv_payload.get("cell-pdp-state"),
+            "reason_code": first_known(kv_payload.get("cell-reason-code"), kv_payload.get("lte-reason-code")),
+        }
+    )
+
+
+def raw_lte_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "driver": first_known(kv_payload.get("lte-driver"), kv_payload.get("lte-http-driver")),
+            "query_ok": parse_bool_or_text(kv_payload.get("lte-query-ok")),
+            "uart_ready": parse_bool_or_text(kv_payload.get("lte-uart-ready")),
+            "at_ok": parse_bool_or_text(kv_payload.get("lte-at-ok")),
+            "sim_ready": parse_bool_or_text(kv_payload.get("lte-sim-ready")),
+            "registered": parse_bool_or_text(kv_payload.get("lte-registered")),
+            "attached": parse_bool_or_text(kv_payload.get("lte-attached")),
+            "pdp_active": parse_bool_or_text(kv_payload.get("lte-pdp-active")),
+            "ip_valid": parse_bool_or_text(kv_payload.get("lte-ip-valid")),
+            "sim_state": kv_payload.get("lte-sim-state"),
+            "registration_state": kv_payload.get("lte-registration-state"),
+            "apn_state": kv_payload.get("lte-apn-state"),
+            "pdp_state": kv_payload.get("lte-pdp-state"),
+            "assigned_ip": kv_payload.get("lte-assigned-ip"),
+            "reason_code": kv_payload.get("lte-reason-code"),
+        }
+    )
+
+
+def raw_gnss_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "fix": parse_bool_or_text(kv_payload.get("gnss-fix")),
+            "state": kv_payload.get("gnss-state"),
+            "source": kv_payload.get("gnss-source"),
+            "driver": kv_payload.get("gnss-driver"),
+            "query_ok": parse_bool_or_text(kv_payload.get("gnss-query-ok")),
+            "hdop": parse_raw_scalar(kv_payload.get("gnss-hdop")),
+            "satellites": parse_raw_scalar(kv_payload.get("gnss-satellites")),
+        }
+    )
+
+
+def raw_location_belief_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
+    state = first_known(kv_payload.get("location-belief-state"), kv_payload.get("belief-state"))
+    if state is None:
+        return {}
+    source_value = first_known(kv_payload.get("location-belief-source"), kv_payload.get("belief-source"))
+    sources = [item.strip() for item in str(source_value or "").split(",") if item.strip()]
+    return compact_dict(
+        {
+            "state": state,
+            "radius_m": parse_raw_scalar(
+                first_known(kv_payload.get("location-belief-radius-m"), kv_payload.get("belief-radius-m"))
+            ),
+            "confidence": parse_raw_scalar(
+                first_known(kv_payload.get("location-belief-confidence"), kv_payload.get("belief-confidence"))
+            ),
+            "source": sources or None,
+            "reason": first_known(kv_payload.get("location-belief-reason"), kv_payload.get("belief-reason")),
+        }
+    )
+
+
 def derive_raw_frame_message(
     record: dict[str, Any],
     kv_payload: dict[str, str],
@@ -1361,6 +1439,31 @@ def derive_raw_frame_message(
                         "utc_date": kv_payload.get("utc-date"),
                         "utc_time": kv_payload.get("utc-time"),
                         "location_request_cmd_id": kv_payload.get("location-request-cmd-id"),
+                        "transport": compact_dict({"type": kv_payload.get("transport-type")})
+                        if kv_payload.get("transport-type")
+                        else None,
+                        "lte_http": compact_dict(
+                            {
+                                "phase": kv_payload.get("lte-http-phase"),
+                                "driver": kv_payload.get("lte-http-driver"),
+                            }
+                        ),
+                    }
+                )
+            )
+        if event_type == "location_observation":
+            cell = raw_cell_from_kv(kv_payload)
+            lte = raw_lte_from_kv(kv_payload)
+            gnss = raw_gnss_from_kv(kv_payload)
+            location_belief = raw_location_belief_from_kv(kv_payload)
+            event.update(
+                compact_dict(
+                    {
+                        "location_request_cmd_id": kv_payload.get("location-request-cmd-id"),
+                        "cell": cell or None,
+                        "lte": lte or None,
+                        "gnss": gnss or None,
+                        "location_belief": location_belief or None,
                         "transport": compact_dict({"type": kv_payload.get("transport-type")})
                         if kv_payload.get("transport-type")
                         else None,
@@ -1609,6 +1712,10 @@ def merge_sources(*values: Any) -> list[str]:
     return merged
 
 
+def has_predictable_location_memory(memory: dict[str, Any]) -> bool:
+    return memory.get("state") in {"Fine", "Coarse", "Predicted"}
+
+
 def derived_gnss_radius_m(message: dict[str, Any]) -> float:
     gnss = as_dict(message.get("gnss"))
     hdop = as_number(first_known(message.get("hdop"), gnss.get("hdop")))
@@ -1638,6 +1745,8 @@ def location_position(message: dict[str, Any]) -> dict[str, Any]:
 
 def location_evidence_summary(message: dict[str, Any], server_received_at: str) -> dict[str, Any]:
     gnss = as_dict(message.get("gnss"))
+    cell = as_dict(message.get("cell"))
+    lte = as_dict(message.get("lte"))
     transport = as_dict(message.get("transport"))
     lte_http = as_dict(message.get("lte_http"))
     return compact_dict(
@@ -1652,6 +1761,10 @@ def location_evidence_summary(message: dict[str, Any], server_received_at: str) 
             "fix": first_known(message.get("fix"), gnss.get("fix")),
             "gnss_state": first_known(message.get("gnss_state"), gnss.get("state"), gnss.get("result")),
             "gnss_query_ok": first_known(message.get("gnss_query_ok"), gnss.get("query_ok")),
+            "cell_rat": cell.get("rat"),
+            "cell_id": first_known(cell.get("cell_id"), cell.get("scell_id"), cell.get("scellid")),
+            "cell_registration_state": cell.get("registration_state"),
+            "lte_reason_code": first_known(lte.get("reason_code"), cell.get("reason_code")),
             "location_request_cmd_id": message.get("location_request_cmd_id"),
             "transport_type": transport.get("type"),
             "lte_http_phase": lte_http.get("phase"),
@@ -1683,6 +1796,14 @@ def build_location_memory(
 
     if belief:
         state = normalize_location_state(belief.get("state")) or "Unknown"
+        if state == "Unknown" and has_predictable_location_memory(memory):
+            memory["updated_at"] = server_received_at
+            memory["last_test_run_id"] = first_known(message.get("test_run_id"), memory.get("last_test_run_id"))
+            memory["last_unknown_observation"] = evidence
+            memory["last_evidence"] = evidence
+            if fix is False:
+                memory["last_no_fix"] = evidence
+            return memory
         memory.update(
             compact_dict(
                 {
@@ -1755,6 +1876,16 @@ def active_location_belief(
     explicit = as_dict(first_known(field_message.get("location_belief"), field_payload.get("location_belief")))
     if explicit:
         state = normalize_location_state(explicit.get("state")) or first_known(explicit.get("state"), "unknown")
+        if state == "Unknown" and has_predictable_location_memory(location_memory):
+            confidence = as_number(location_memory.get("confidence"))
+            return {
+                "state": "Predicted",
+                "radius_m": location_memory.get("radius_m"),
+                "confidence": round(confidence * 0.75, 3) if confidence is not None else None,
+                "source": merge_sources(location_memory.get("source"), "memory"),
+                "reason": "last_known_after_unknown_location_observation",
+                "updated_at": first_known(field_message.get("server_received_at"), location_memory.get("updated_at")),
+            }
         return {
             "state": state,
             "radius_m": explicit.get("radius_m"),

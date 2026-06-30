@@ -6,6 +6,36 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: LOC-004A Real Cell Location Observation is implemented,
+VPS-deployed, and build-verified as the next explainability increment after
+KR-002. The Message Hub on `203.0.113.10:8790` was redeployed without touching
+GitLab and now derives raw key/value `event_type=location_observation` frames
+into structured `cell`, `lte`, `transport`, `lte_http`, and
+`location_belief` fields after storing the original raw frame. Unknown
+observations now preserve existing useful `location_memory` and can derive an
+active `Predicted` belief with reason
+`last_known_after_unknown_location_observation`. VPS synthetic smoke
+`loc004a-vps-cell-observation-smoke-20260630-012442` passed with raw parse
+status `ok`, derived `event_type=location_observation`, `cell.rat=LTE`,
+`cell.cell_id=01AF23`, `lte.reason_code=LTE_READY`, `transport.type=lte`,
+`location_belief.state=Unknown`, and redacted raw payload in export; evidence
+is under
+`reports/location_observation/loc004a-vps-cell-observation-smoke-20260630-012442/`.
+Firmware version `0.1.0-loc004a-cell-observation` with test run
+`loc004a-cell-observation-20260630-001` was guarded-build verified with
+`CONFIG_EGOLINK_SIM7670_GNSS_ENABLED=y`,
+`CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y`,
+`CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=y`, and
+`CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED=y`; binary is
+`firmware/mqtt_heartbeat/build_loc004a_cell_observation/egolink_mqtt_heartbeat.bin`
+(`298416` bytes). Focused firmware/server/validator/runner tests passed with
+50 tests, `context_lint` passed, full `verify.ps1` passed with 292 tests,
+`git diff --check` passed, and the guarded ESP-IDF prepare/build passed.
+This does not claim hardware flash/runtime validation, cell-only positioning,
+learned known-place matching, Wi-Fi/IMU/power fusion, long LTE stability,
+reconnect recovery, battery/power behavior, enclosure behavior, or product
+readiness.
+
 2026-06-30: KR-002 Location Memory And Explainable No-Fix Gate is implemented
 as a release candidate and deployed to the VPS Message Hub at
 `203.0.113.10:8790` without touching GitLab. The server now persists

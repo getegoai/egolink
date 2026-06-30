@@ -306,6 +306,60 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(exported["observability_summary"]["latest_observability"]["location_belief"]["state"], "Predicted")
         self.assertEqual(exported["observability_summary"]["latest_observability"]["location_memory"]["state"], "Fine")
 
+    def test_unknown_location_observation_preserves_prior_location_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.ingest(
+                "ego-link-001",
+                "telemetry",
+                protocol.event_message(
+                    "ego-link-001",
+                    "2026-06-27T00:00:01Z",
+                    1,
+                    "location_report",
+                    "normal",
+                    source="sim7670g_firmware_gnss",
+                    source_status="observed",
+                    fix=True,
+                    lat=22.5431,
+                    lon=114.0579,
+                    hdop=0.9,
+                    satellites=12,
+                    gnss_state="fix",
+                ),
+            )
+            store.ingest(
+                "ego-link-001",
+                "telemetry",
+                protocol.event_message(
+                    "ego-link-001",
+                    "2026-06-27T00:02:01Z",
+                    2,
+                    "location_observation",
+                    "normal",
+                    source="sim7670g_firmware_cell",
+                    source_status="observed",
+                    cell={"rat": "LTE", "cell_id": "cell-002", "registration_state": "registered_home"},
+                    lte={"reason_code": "LTE_READY", "query_ok": True},
+                    location_belief={
+                        "state": "Unknown",
+                        "source": ["cell"],
+                        "reason": "cell_observation_without_position_fix",
+                    },
+                ),
+            )
+            device = store.get_device("ego-link-001")
+
+        self.assertEqual(device["latest_location"]["event_type"], "location_observation")
+        self.assertEqual(device["location_memory"]["state"], "Fine")
+        self.assertEqual(device["location_memory"]["reason"], "gnss_fix_calibration")
+        self.assertEqual(device["location_memory"]["last_unknown_observation"]["cell_id"], "cell-002")
+        self.assertEqual(device["observability"]["location_belief"]["state"], "Predicted")
+        self.assertEqual(
+            device["observability"]["location_belief"]["reason"],
+            "last_known_after_unknown_location_observation",
+        )
+
     def test_lte_reason_code_is_part_of_observability_explainability(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -444,6 +498,81 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(device["location_memory"]["state"], "Unknown")
         self.assertEqual(device["location_memory"]["reason"], "gnss_no_fix_no_location_memory")
         self.assertEqual(exported["raw_frames"][0]["frame_id"], "loc-cmd-raw-location")
+        self.assertTrue(exported["raw_frames"][0]["raw_payload"]["data_redacted"])
+
+    def test_raw_location_observation_derives_cell_lte_after_raw_storage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.create_test_run({"test_run_id": "raw-cell-observation-test"})
+            payload = (
+                "event_type=location_observation\n"
+                "priority=normal\n"
+                "fw_version=0.1.0-loc004a-cell-observation\n"
+                "test_run_id=raw-cell-observation-test\n"
+                "seq=43\n"
+                "source=sim7670g_firmware_cell\n"
+                "source_status=observed\n"
+                "location_request_cmd_id=cmd-raw-observation\n"
+                "cell_rat=LTE\n"
+                "cell_mcc=460\n"
+                "cell_mnc=01\n"
+                "cell_tac=2A0B\n"
+                "cell_id=01AF23\n"
+                "cell_rssi=-63\n"
+                "cell_rsrp=-91\n"
+                "cell_rsrq=-12\n"
+                "cell_sinr=17\n"
+                "cell_registration_state=registered_home\n"
+                "cell_pdp_state=active\n"
+                "lte_driver=sim7670g_uart_at\n"
+                "lte_query_ok=true\n"
+                "lte_uart_ready=true\n"
+                "lte_at_ok=true\n"
+                "lte_sim_ready=true\n"
+                "lte_registered=true\n"
+                "lte_attached=true\n"
+                "lte_pdp_active=true\n"
+                "lte_ip_valid=true\n"
+                "lte_sim_state=READY\n"
+                "lte_registration_state=registered_home\n"
+                "lte_apn_state=configured\n"
+                "lte_pdp_state=active\n"
+                "lte_assigned_ip=10.1.2.3\n"
+                "lte_reason_code=LTE_READY\n"
+                "location_belief_state=Unknown\n"
+                "location_belief_source=cell,lte\n"
+                "location_belief_reason=cell_observation_without_position_fix\n"
+                "transport_type=lte\n"
+                "lte_http_phase=location_observation\n"
+                "lte_http_driver=sim7670g_uart_at_http\n"
+            ).encode("utf-8")
+            frame = message_hub.build_raw_frame(
+                "event",
+                "obs-cmd-raw-observation",
+                payload,
+                metadata={"test-run-id": "raw-cell-observation-test"},
+            )
+            record = store.ingest_raw_frame("ego-link-001", frame)
+            history = store.telemetry_history("ego-link-001")
+            device = store.get_device("ego-link-001")
+            exported = store.export_test_run("raw-cell-observation-test")
+
+        self.assertEqual(record["parse_result"]["status"], "ok")
+        self.assertEqual(record["parse_result"]["derived_message_type"], "event")
+        self.assertEqual(history[0]["event_type"], "location_observation")
+        self.assertEqual(history[0]["cell"]["rat"], "LTE")
+        self.assertEqual(history[0]["cell"]["cell_id"], "01AF23")
+        self.assertEqual(history[0]["cell"]["rsrp"], -91)
+        self.assertTrue(history[0]["lte"]["query_ok"])
+        self.assertEqual(history[0]["lte"]["reason_code"], "LTE_READY")
+        self.assertEqual(history[0]["location_belief"]["state"], "Unknown")
+        self.assertEqual(history[0]["location_belief"]["source"], ["cell", "lte"])
+        self.assertEqual(device["latest_location"]["event_type"], "location_observation")
+        self.assertEqual(device["observability"]["cell"]["cell_id"], "01AF23")
+        self.assertEqual(device["observability"]["lte"]["reason_code"], "LTE_READY")
+        self.assertEqual(device["location_memory"]["state"], "Unknown")
+        self.assertEqual(device["location_memory"]["reason"], "cell_observation_without_position_fix")
+        self.assertEqual(exported["raw_frames"][0]["frame_id"], "obs-cmd-raw-observation")
         self.assertTrue(exported["raw_frames"][0]["raw_payload"]["data_redacted"])
 
 

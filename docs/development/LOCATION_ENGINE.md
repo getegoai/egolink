@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-28
+last_verified: 2026-06-30
 verified_by: codex
 ---
 
@@ -119,9 +119,15 @@ LOC-003 adds the first VPS-side memory table and a small active-belief rule:
 - `location_report fix=true` creates a `Fine` GNSS calibration memory.
 - `location_report fix=false` records `last_no_fix` but does not erase the
   last useful memory.
+- `location_observation.location_belief.state=Unknown` records
+  `last_unknown_observation` but does not erase a useful `Fine`, `Coarse`, or
+  `Predicted` memory.
 - When the latest location report is no-fix but memory exists, the active
   `observability.location_belief` becomes `Predicted` with reason
   `last_known_after_gnss_no_fix`.
+- When the latest location observation is explicit `Unknown` but memory exists,
+  the active `observability.location_belief` becomes `Predicted` with reason
+  `last_known_after_unknown_location_observation`.
 - `/api/state`, Dashboard, and test-run export expose both active belief and
   preserved memory.
 - `scripts/validate_location_memory_gate.py` can rerun this gate with a
@@ -130,6 +136,13 @@ LOC-003 adds the first VPS-side memory table and a small active-belief rule:
 Boundary: this is not final EALE. It does not prove firmware-side cell/Wi-Fi/
 IMU/power collection, learned personal places, route prediction, real outdoor
 GNSS acceptance, LTE long-run reliability, or product readiness.
+
+LOC-004A adds the first firmware-side cell/LTE observation path to this rule
+set. During raw LTE `request_location`, firmware can upload a command-scoped
+`location_observation` with real SIM7670G cell/LTE evidence and an explicit
+`Unknown` belief. This makes weak/no-fix location attempts explainable without
+depending on USB logs. It still does not estimate a position from cell data;
+that belongs to later known-place and fusion tasks.
 
 EALE does not replace the existing `request_location -> location_report -> ACK`
 loop. It extends it into an explainable location system.

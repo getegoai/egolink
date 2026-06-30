@@ -170,6 +170,64 @@ class LteCommandLoopValidationTests(unittest.TestCase):
             self.assertIn("location_report transport only", markdown)
             self.assertNotIn("The command is intentionally harmless: set_report_interval", markdown)
 
+    def test_validation_can_require_lte_location_observation_for_request_location(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            hub_url = f"http://127.0.0.1:{server.server_port}"
+            device_thread = threading.Thread(
+                target=self._poll_and_ack_once,
+                args=(hub_url,),
+                kwargs={
+                    "device_id": "ego-link-r1-test",
+                    "fw_version": "0.1.0-loc004a-cell-observation",
+                    "test_run_id": "loc004a-unit",
+                    "transport_type": "lte",
+                    "poll_reason_code": "LTE_HTTP_OK",
+                    "poll_status_code": 200,
+                    "post_location_report": True,
+                    "post_location_observation": True,
+                },
+                daemon=True,
+            )
+            try:
+                device_thread.start()
+                report = validate_lte_command_loop.validate_lte_command_loop(
+                    hub_url=hub_url,
+                    device_id="ego-link-r1-test",
+                    token=None,
+                    output_dir=Path(tmp) / "report",
+                    test_run_id="loc004a-unit",
+                    board_id="connectivity-node-001",
+                    connection_path="independent_power_usb_disconnected",
+                    timeout_sec=1.0,
+                    poll_interval_sec=0.05,
+                    expected_fw_version="0.1.0-loc004a-cell-observation",
+                    command_name="request_location",
+                    interval_ms=10000,
+                    require_location_report=True,
+                    require_location_observation=True,
+                )
+            finally:
+                device_thread.join(timeout=2)
+                server.shutdown()
+                server_thread.join(timeout=5)
+                server.server_close()
+
+            self.assertEqual(report["result"], "PASS")
+            self.assertTrue(report["require_location_observation"])
+            self.assertEqual(report["location_observation"]["event_type"], "location_observation")
+            self.assertEqual(
+                report["location_observation"]["location_request_cmd_id"],
+                report["command"]["cmd_id"],
+            )
+            self.assertEqual(report["location_observation"]["cell"]["rat"], "LTE")
+            self.assertEqual(report["location_observation"]["lte"]["reason_code"], "LTE_READY")
+            markdown = (Path(tmp) / "report" / "lte_command_loop_report.md").read_text(encoding="utf-8")
+            self.assertIn("location_observation validates command-scoped firmware-side cell/LTE evidence", markdown)
+
     def test_validation_rejects_non_lte_ack(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -327,6 +385,7 @@ class LteCommandLoopValidationTests(unittest.TestCase):
         poll_reason_code: str,
         poll_status_code: int,
         post_location_report: bool = False,
+        post_location_observation: bool = False,
     ) -> None:
         client = HubClient(hub_url)
         deadline = time.monotonic() + 2.0
@@ -365,6 +424,47 @@ class LteCommandLoopValidationTests(unittest.TestCase):
                     "location_request_cmd_id": command["cmd_id"],
                     "transport": {"type": "lte"},
                     "lte_http": {"phase": "location_report", "driver": "sim7670g_uart_at_http"},
+                },
+            )
+        if post_location_observation:
+            client.post(
+                f"/api/v1/devices/{device_id}/telemetry",
+                {
+                    "protocol_version": "egolink.p0.v1",
+                    "device_id": device_id,
+                    "ts": "uptime_ms:2200",
+                    "seq": 7,
+                    "message_type": "event",
+                    "event_type": "location_observation",
+                    "priority": "normal",
+                    "fw_version": fw_version,
+                    "test_run_id": test_run_id,
+                    "source": "sim7670g_firmware_cell",
+                    "source_status": "observed",
+                    "location_request_cmd_id": command["cmd_id"],
+                    "cell": {
+                        "rat": "LTE",
+                        "cell_id": "unit-cell-001",
+                        "registration_state": "registered_home",
+                        "pdp_state": "active",
+                        "reason_code": "LTE_READY",
+                    },
+                    "lte": {
+                        "driver": "sim7670g_uart_at",
+                        "query_ok": True,
+                        "sim_state": "READY",
+                        "registration_state": "registered_home",
+                        "pdp_state": "active",
+                        "assigned_ip": "10.1.2.3",
+                        "reason_code": "LTE_READY",
+                    },
+                    "location_belief": {
+                        "state": "Unknown",
+                        "source": ["cell", "lte"],
+                        "reason": "cell_observation_without_position_fix",
+                    },
+                    "transport": {"type": "lte"},
+                    "lte_http": {"phase": "location_observation", "driver": "sim7670g_uart_at_http"},
                 },
             )
         ack = protocol.ack_message(device_id, "uptime_ms:2000", 7, str(command["cmd_id"]), "ok")

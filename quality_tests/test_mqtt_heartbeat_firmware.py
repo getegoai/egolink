@@ -216,6 +216,7 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "LTE_HTTP_COMMAND_DIAG_POST_DONE",
             'strcmp(command->cmd, "request_location")',
             "lte raw location_report upload failed",
+            "lte raw location_observation upload failed",
             '"ready"',
             '"poll_no_ack"',
             '"command_ack_observed"',
@@ -235,6 +236,40 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertIn("xTaskCreate(lte_http_command_task", command_branch)
         self.assertNotIn("start_wifi()", command_branch)
         self.assertNotIn("xTaskCreate(command_poll_task", command_branch)
+
+    def test_raw_lte_location_observation_mode_is_opt_in_and_explainable(self) -> None:
+        for token in [
+            "config EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED",
+            "CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED",
+            "build_lte_location_observation_kv_payload",
+            "lte_http_publish_raw_location_observation",
+            "event_type=location_observation",
+            "source=sim7670g_firmware_cell",
+            "source_status=observed",
+            "cell_rat=%s",
+            "cell_id=%s",
+            "cell_rsrp=%s",
+            "cell_registration_state=%s",
+            "cell_reason_code=%s",
+            "lte_query_ok=%s",
+            "lte_uart_ready=%s",
+            "lte_registered=%s",
+            "lte_pdp_active=%s",
+            "lte_reason_code=%s",
+            "location_belief_state=Unknown",
+            "location_belief_source=cell,lte",
+            "location_belief_reason=cell_observation_without_position_fix",
+            "lte_http_phase=location_observation",
+            "LTE_HTTP_LOCATION_OBSERVATION_RAW_FRAME_BYTES",
+            "LTE_HTTP_LOCATION_OBSERVATION_RAW_POST_DONE",
+            "firmware uploaded SIM7670G GNSS location_report and cell location_observation",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.app_main + self.sim7670_kconfig)
+        self.assertIn(
+            "depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED",
+            self.sim7670_kconfig,
+        )
 
     def test_lte_http_probe_payload_stays_compact_for_simcom_httpdata(self) -> None:
         probe_payload = self.app_main.split("static void build_lte_http_probe_payload", 1)[1].split(
