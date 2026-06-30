@@ -6,6 +6,24 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: KR-002 Location Memory And Explainable No-Fix Gate is implemented
+as a release candidate and deployed to the VPS Message Hub at
+`203.0.113.10:8790` without touching GitLab. The server now persists
+`location_memory`, exposes `location_memory` and
+`observability.location_memory` in `/api/state`, derives active
+`observability.location_belief=Predicted` when the latest GNSS report is
+no-fix but prior memory exists, and keeps the prior memory instead of erasing
+it. VPS synthetic gate `location-memory-gate-kr002-20260630` passed with latest
+report `fix=false` / `gnss_state=no_fix`, active belief `Predicted` /
+`last_known_after_gnss_no_fix`, and memory `Fine`; report is under
+`reports/location_memory/location-memory-gate-kr002-20260630/`. Focused
+Message Hub/Dashboard/location-memory tests passed, `context_lint` passed,
+full `scripts\verify.ps1` passed with 287 tests, `git diff --check` passed,
+and the KR-002 release gate passed. This is a server/Web/API gate only; it does
+not validate firmware-side multi-source collection, outdoor GNSS acceptance,
+long LTE stability, reconnect recovery, battery/power behavior, enclosure
+behavior, or product readiness.
+
 2026-06-30: LTE-004 USB-Free runtime validation passed after the operator connected independent power and disconnected USB. Validator run `lte004-raw-lte-location-20260629-213717` ran from `2026-06-29T23:54:57.128649+00:00` to `2026-06-29T23:55:02.666656+00:00`, created `cmd-000020` (`request_location`), required a matching LTE `location_report`, and passed. Raw derived location evidence: `location_report seq=30`, raw frame `loc-cmd-000020`, `fw_version=0.1.0-lte004-raw-lte-location`, `transport.type=lte`, `lte_http.phase=location_report`, `source=sim7670g_firmware_gnss`, `source_status=unverified`, `gnss_query_ok=true`, `gnss_state=no_fix`, `fix=false`, and `location_request_cmd_id=cmd-000020`. Raw ACK evidence: `seq=31`, `transport.type=lte`, `lte_http.phase=command_ack`, `lte_http.poll_reason_code=LTE_HTTP_OK`, HTTP status `200`, `poll_action_elapsed_ms=560`, `command.parse_status=raw_command_selected`, command status `ok`, ACK status `ok`, and message `firmware uploaded SIM7670G GNSS location_report`. Evidence is under `reports/field_validation/lte004-raw-lte-location-20260629-213717/`, including `lte_command_loop_report.json`, `lte_command_loop_report.md`, `device_state.json`, `commands.json`, and `test_run_export.json`. This validates the bounded USB-Free raw LTE `request_location -> location_report -> ACK` thin slice; it does not validate real GNSS fix, long LTE stability, reconnect recovery, battery/power behavior, enclosure behavior, or product readiness.
 
 2026-06-30: LTE-004 raw LTE request-location firmware was flashed on the connectivity node through `COM4` after explicit operator confirmation. Board probe evidence `reports/board_validation/20260630-075007/probe.md` identified `COM4` as the ESP32-S3 CH343 console for the Waveshare ESP32-S3-SIM7670G-4G connectivity node, with SIM7670G AT candidates `COM6` and `COM7` registered/attached. Flash used firmware version `0.1.0-lte004-raw-lte-location`, test run `lte004-raw-lte-location-20260629-213717`, source/app commit `1b1fd3a`, and binary `firmware/mqtt_heartbeat/build_lte004_raw_lte_location/egolink_mqtt_heartbeat.bin` (`296112` bytes). `esptool.py` detected ESP32-S3, wrote bootloader, app, and partition table, verified hashes, and completed hard reset. Flash evidence is recorded at `reports/field_validation/lte004-raw-lte-location-20260629-213717/flash_report.md`. Runtime validation was later performed and is recorded above.

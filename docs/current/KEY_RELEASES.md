@@ -60,6 +60,57 @@ VPS command queue
   SMS, or dispatch claim.
 - No final multi-source location memory or belief-engine acceptance claim.
 
+## KR-002 Location Memory And Explainable No-Fix Gate
+
+- Status: release candidate.
+- Release date: 2026-06-30.
+- Release version: `0.1.0-key-release-002-rc1`.
+- Firmware version: unchanged from KR-001 for this server/Web/API gate.
+- Manifest:
+  `docs/current/key_releases/KR-002_LOCATION_MEMORY_GATE.json`.
+- Gate tool:
+  `python scripts\run_key_release_gate.py --manifest docs/current/key_releases/KR-002_LOCATION_MEMORY_GATE.json --json`.
+
+### Release-Candidate Meaning
+
+KR-002 adds the first VPS-side location memory and explainable no-fix gate:
+
+```text
+location_report fix=true or location_observation.location_belief
+-> location_memory
+-> later location_report fix=false records last_no_fix
+-> active observability.location_belief becomes Predicted
+-> Web/API/export remain explainable
+```
+
+It does not change the device wire protocol. Raw-frame storage remains the
+transport truth; `location_memory` is a derived Message Hub view.
+
+### Evidence Summary
+
+- Message Hub has a persistent `location_memory` table.
+- `/api/state` exposes `location_memory` and
+  `observability.location_memory`.
+- Test-run export rebuilds the same derived location memory summary.
+- Dashboard renders memory state, memory update time, and memory reason.
+- `scripts/validate_location_memory_gate.py` can rerun the gate with a
+  synthetic device and no hardware or USB runtime dependency.
+- Focused Message Hub, Dashboard, and location-memory gate tests pass.
+- Full `scripts\verify.ps1` passes with 287 tests.
+- VPS Message Hub was redeployed to `203.0.113.10:8790` without touching
+  GitLab.
+- VPS synthetic gate `location-memory-gate-kr002-20260630` passed:
+  latest report no-fix, active belief `Predicted`, memory `Fine`.
+
+### Non-Claims
+
+- No product readiness claim.
+- No firmware-side multi-source collection claim.
+- No learned personal-place or route-prediction claim.
+- No outdoor GNSS acceptance claim.
+- No long LTE stability or reconnect recovery claim.
+- No final enclosure, mounting, battery, charging, or power behavior claim.
+
 ## Release Gate Policy
 
 Every key release should have:

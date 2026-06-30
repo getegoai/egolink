@@ -99,6 +99,14 @@ Definition of Done:
 Goal: move from coordinate-only GNSS reporting to a multi-source observation
 and belief model.
 
+Current increment:
+
+- LOC-002 completed the `location_observation` contract/server/simulator
+  baseline.
+- LOC-003 completed the first VPS-side `location_memory` table and active
+  `Predicted` belief gate for the case where a later GNSS report is no-fix but
+  a prior memory exists.
+
 Definition of Done:
 
 - device or simulator can upload `location_observation` or additive
@@ -108,6 +116,13 @@ Definition of Done:
   "GPS success/failure";
 - VPS can query GNSS attempts, cell fingerprints, and belief records by
   `test_run_id`.
+
+Remaining R2.5 work:
+
+- firmware-side real cell/Wi-Fi/IMU/power observation is still unverified;
+- known-place matching and richer rule-based belief updates remain LOC-004+;
+- product GNSS, enclosure, LTE long-run, and battery/power acceptance remain
+  R3 gates.
 
 ### R3.0-R3.2 Product Gates
 

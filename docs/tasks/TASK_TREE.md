@@ -514,6 +514,22 @@ motion candidate
   - Boundary: no firmware-side cell, Wi-Fi, IMU fusion, battery accuracy,
     location-memory table, rule-engine, LTE transport, or hardware action is
     claimed by this task.
+- `LOC-003 Location Memory Gate`
+  - Path: `docs/tasks/done/LOC-003_LOCATION_MEMORY_GATE.md`
+  - Status: completed as a server/Web/API gate and small rule baseline.
+  - Goal: persist VPS-side location memory and make a later GNSS no-fix
+    explainable without erasing the prior useful calibration.
+  - Evidence: Message Hub has a persistent `location_memory` table;
+    `/api/state` exposes `location_memory` and
+    `observability.location_memory`; `observability.location_belief` derives
+    `Predicted` with reason `last_known_after_gnss_no_fix` when the latest
+    report is no-fix but memory exists; test-run export rebuilds the same
+    summary; Dashboard renders memory state/update/reason; and
+    `scripts/validate_location_memory_gate.py` provides a hardware-free
+    rerunnable gate.
+  - Boundary: no firmware-side multi-source collection, learned known-place
+    model, LTE long-run, product GNSS acceptance, battery/power behavior, or
+    hardware action is claimed by this task.
 - `STAB-001A Short Baseline Gate Tooling`
   - Path: `docs/tasks/done/STAB-001A_SHORT_BASELINE_GATE_TOOLING.md`
   - Status: completed as gate tooling only.
@@ -694,7 +710,8 @@ motion candidate
 3. Continue LTE thin slices through LTE-004: LTE registration and cell state,
    LTE HTTP telemetry uplink, raw LTE command polling and ACK, then raw LTE
    `request_location -> location_report -> ACK`.
-4. LOC-002 is complete as a contract/server/simulator baseline. Next location
-   work is LOC-003 VPS location memory tables and LOC-004 rule-based
-   `Fine`/`Coarse`/`Predicted`/`Unknown` belief engine after the short
-   baseline gate and LTE thin-slices are in motion.
+4. LOC-002 is complete as a contract/server/simulator baseline, and LOC-003
+   now provides the first VPS location-memory gate. Next location work is
+   LOC-004 richer rule-based `Fine`/`Coarse`/`Predicted`/`Unknown` belief
+   updates plus firmware-side real cell/Wi-Fi/IMU/power observations, while
+   long LTE and product power/enclosure gates remain R3 work.

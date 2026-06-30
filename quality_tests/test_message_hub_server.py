@@ -244,6 +244,67 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(observability["imu"]["motion"], "stationary")
         self.assertEqual(observability["location_belief"]["state"], "Coarse")
         self.assertEqual(observability["location_belief"]["radius_m"], 180)
+        self.assertEqual(device["location_memory"]["state"], "Coarse")
+        self.assertEqual(device["location_memory"]["reason"], "matched_mock_known_place")
+        self.assertEqual(observability["location_memory"]["state"], "Coarse")
+
+    def test_location_memory_preserves_calibration_after_later_no_fix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.create_test_run({"test_run_id": "location-memory-unit"})
+            store.ingest(
+                "ego-link-001",
+                "telemetry",
+                protocol.event_message(
+                    "ego-link-001",
+                    "2026-06-27T00:00:01Z",
+                    1,
+                    "location_report",
+                    "normal",
+                    source="sim7670g_firmware_gnss",
+                    source_status="observed",
+                    fix=True,
+                    lat=22.5431,
+                    lon=114.0579,
+                    hdop=0.9,
+                    satellites=12,
+                    gnss_state="fix",
+                    test_run_id="location-memory-unit",
+                ),
+            )
+            store.ingest(
+                "ego-link-001",
+                "telemetry",
+                protocol.event_message(
+                    "ego-link-001",
+                    "2026-06-27T00:01:01Z",
+                    2,
+                    "location_report",
+                    "normal",
+                    source="sim7670g_firmware_gnss",
+                    source_status="unverified",
+                    fix=False,
+                    lat=None,
+                    lon=None,
+                    gnss_state="no_fix",
+                    gnss_query_ok=True,
+                    test_run_id="location-memory-unit",
+                    location_request_cmd_id="cmd-location-memory",
+                ),
+            )
+            device = store.get_device("ego-link-001")
+            exported = store.export_test_run("location-memory-unit")
+
+        self.assertEqual(device["latest_location"]["gnss_state"], "no_fix")
+        self.assertEqual(device["location_memory"]["state"], "Fine")
+        self.assertEqual(device["location_memory"]["reason"], "gnss_fix_calibration")
+        self.assertEqual(device["location_memory"]["last_no_fix"]["gnss_state"], "no_fix")
+        self.assertEqual(device["location_memory"]["last_known_location"]["lat"], 22.5431)
+        self.assertEqual(device["observability"]["location_belief"]["state"], "Predicted")
+        self.assertEqual(device["observability"]["location_belief"]["reason"], "last_known_after_gnss_no_fix")
+        self.assertEqual(device["observability"]["location_memory"]["state"], "Fine")
+        self.assertEqual(exported["observability_summary"]["latest_observability"]["location_belief"]["state"], "Predicted")
+        self.assertEqual(exported["observability_summary"]["latest_observability"]["location_memory"]["state"], "Fine")
 
     def test_lte_reason_code_is_part_of_observability_explainability(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -380,6 +441,8 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(history[0]["transport"]["type"], "lte")
         self.assertEqual(history[0]["lte_http"]["phase"], "location_report")
         self.assertEqual(device["latest_location"]["event_type"], "location_report")
+        self.assertEqual(device["location_memory"]["state"], "Unknown")
+        self.assertEqual(device["location_memory"]["reason"], "gnss_no_fix_no_location_memory")
         self.assertEqual(exported["raw_frames"][0]["frame_id"], "loc-cmd-raw-location")
         self.assertTrue(exported["raw_frames"][0]["raw_payload"]["data_redacted"])
 

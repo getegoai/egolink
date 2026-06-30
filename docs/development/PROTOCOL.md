@@ -462,6 +462,31 @@ Dashboard and export. This is a contract/server/simulator baseline only; it
 does not claim firmware-side cell, Wi-Fi, IMU, or power observation until those
 sources are exercised by later tasks.
 
+## LOC-003 Derived Location Memory View
+
+LOC-003 does not add a required device wire field. It adds a Message Hub
+derived view:
+
+- `devices[].location_memory` in `/api/state`.
+- `devices[].observability.location_memory` in `/api/state`.
+- `observability_summary.latest_observability.location_memory` in test-run
+  exports.
+
+The server updates memory from existing location evidence:
+
+- `location_observation.location_belief` updates memory state, radius,
+  confidence, source, and reason.
+- `location_report fix=true` creates a `Fine` GNSS calibration memory.
+- `location_report fix=false` stores `last_no_fix` but does not erase the last
+  valid memory.
+- If the latest report is no-fix but memory exists,
+  `observability.location_belief.state` becomes `Predicted` and the reason is
+  `last_known_after_gnss_no_fix`.
+
+The raw-frame rule remains unchanged: original frames are stored first, then
+the Message Hub derives JSON/Web/API views. Location memory is derived state,
+not a replacement for retained raw evidence.
+
 ## Message Types
 
 ### Heartbeat / Status

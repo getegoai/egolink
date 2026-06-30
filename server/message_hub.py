@@ -155,6 +155,22 @@ class MessageHubStore:
 
                 CREATE INDEX IF NOT EXISTS idx_raw_frames_test_run
                 ON raw_frames (test_run_id, id);
+
+                CREATE TABLE IF NOT EXISTS location_memory (
+                    device_id TEXT PRIMARY KEY,
+                    state TEXT NOT NULL,
+                    radius_m REAL,
+                    confidence REAL,
+                    source_json TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    belief_updated_at TEXT,
+                    last_test_run_id TEXT,
+                    memory_json TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_location_memory_updated
+                ON location_memory (updated_at DESC);
                 """
             )
 
@@ -238,6 +254,8 @@ class MessageHubStore:
                     "UPDATE devices SET latest_telemetry_json = ? WHERE device_id = ?",
                     (message_json, device_id),
                 )
+                if event_type in {"location_report", "location_observation"}:
+                    self._record_location_memory(db, device_id, message, server_received_at)
             elif message_type == "ack":
                 self._record_ack(db, device_id, message, server_received_at, message_json)
             elif message_type == "error":
@@ -283,6 +301,49 @@ class MessageHubStore:
         db.execute(
             "UPDATE devices SET last_error_json = ? WHERE device_id = ?",
             (message_json, device_id),
+        )
+
+    def _record_location_memory(
+        self,
+        db: sqlite3.Connection,
+        device_id: str,
+        message: dict[str, Any],
+        server_received_at: str,
+    ) -> None:
+        existing = self._location_memory(db, device_id)
+        memory = build_location_memory(device_id, message, server_received_at, existing)
+        if not memory:
+            return
+        db.execute(
+            """
+            INSERT INTO location_memory (
+                device_id, state, radius_m, confidence, source_json, reason,
+                updated_at, belief_updated_at, last_test_run_id, memory_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(device_id) DO UPDATE SET
+                state = excluded.state,
+                radius_m = excluded.radius_m,
+                confidence = excluded.confidence,
+                source_json = excluded.source_json,
+                reason = excluded.reason,
+                updated_at = excluded.updated_at,
+                belief_updated_at = excluded.belief_updated_at,
+                last_test_run_id = excluded.last_test_run_id,
+                memory_json = excluded.memory_json
+            """,
+            (
+                device_id,
+                str(memory.get("state") or "Unknown"),
+                memory.get("radius_m"),
+                memory.get("confidence"),
+                dumps(memory.get("source") if isinstance(memory.get("source"), list) else []),
+                str(memory.get("reason") or "no_location_memory"),
+                str(memory.get("updated_at") or server_received_at),
+                memory.get("belief_updated_at"),
+                memory.get("last_test_run_id"),
+                dumps(memory),
+            ),
         )
 
     def next_seq(self, device_id: str) -> int:
@@ -359,9 +420,17 @@ class MessageHubStore:
         device = device_row(row)
         device["latest_location"] = self._latest_location_event(db, device["device_id"])
         device["latest_location_observation"] = self._latest_event(db, device["device_id"], "location_observation")
+        device["location_memory"] = self._location_memory(db, device["device_id"])
         device["last_command"] = self._latest_command(db, device["device_id"])
         device["observability"] = build_observability(device, device["last_command"])
         return device
+
+    def _location_memory(self, db: sqlite3.Connection, device_id: str) -> dict[str, Any] | None:
+        row = db.execute(
+            "SELECT memory_json FROM location_memory WHERE device_id = ?",
+            (device_id,),
+        ).fetchone()
+        return json.loads(row["memory_json"]) if row else None
 
     def _latest_event(self, db: sqlite3.Connection, device_id: str, event_type: str) -> dict[str, Any] | None:
         row = db.execute(
@@ -1500,6 +1569,250 @@ def as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def as_number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if value in (None, ""):
+        return None
+    try:
+        return float(str(value))
+    except ValueError:
+        return None
+
+
+def normalize_location_state(value: Any) -> str | None:
+    text = str(value or "").strip().lower()
+    return {
+        "fine": "Fine",
+        "coarse": "Coarse",
+        "predicted": "Predicted",
+        "unknown": "Unknown",
+    }.get(text)
+
+
+def source_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if item not in (None, "")]
+    if value not in (None, ""):
+        return [str(value)]
+    return []
+
+
+def merge_sources(*values: Any) -> list[str]:
+    merged: list[str] = []
+    for value in values:
+        for item in source_list(value):
+            if item not in merged:
+                merged.append(item)
+    return merged
+
+
+def derived_gnss_radius_m(message: dict[str, Any]) -> float:
+    gnss = as_dict(message.get("gnss"))
+    hdop = as_number(first_known(message.get("hdop"), gnss.get("hdop")))
+    if hdop and hdop > 0:
+        return round(max(8.0, hdop * 10.0), 1)
+    return 25.0
+
+
+def location_position(message: dict[str, Any]) -> dict[str, Any]:
+    lat = first_known(message.get("lat"), dict_value(message, "location", "lat"))
+    lon = first_known(message.get("lon"), dict_value(message, "location", "lon"))
+    if lat is None or lon is None:
+        return {}
+    return compact_dict(
+        {
+            "lat": lat,
+            "lon": lon,
+            "altitude_m": first_known(message.get("altitude_m"), dict_value(message, "location", "altitude_m")),
+            "speed_mps": message.get("speed_mps"),
+            "course_deg": message.get("course_deg"),
+            "hdop": first_known(message.get("hdop"), dict_value(message, "gnss", "hdop")),
+            "satellites": first_known(message.get("satellites"), dict_value(message, "gnss", "satellites")),
+            "source_status": message.get("source_status"),
+        }
+    )
+
+
+def location_evidence_summary(message: dict[str, Any], server_received_at: str) -> dict[str, Any]:
+    gnss = as_dict(message.get("gnss"))
+    transport = as_dict(message.get("transport"))
+    lte_http = as_dict(message.get("lte_http"))
+    return compact_dict(
+        {
+            "event_type": message.get("event_type"),
+            "seq": message.get("seq"),
+            "ts": message.get("ts"),
+            "server_received_at": server_received_at,
+            "test_run_id": message.get("test_run_id"),
+            "source": message.get("source"),
+            "source_status": message.get("source_status"),
+            "fix": first_known(message.get("fix"), gnss.get("fix")),
+            "gnss_state": first_known(message.get("gnss_state"), gnss.get("state"), gnss.get("result")),
+            "gnss_query_ok": first_known(message.get("gnss_query_ok"), gnss.get("query_ok")),
+            "location_request_cmd_id": message.get("location_request_cmd_id"),
+            "transport_type": transport.get("type"),
+            "lte_http_phase": lte_http.get("phase"),
+        }
+    )
+
+
+def build_location_memory(
+    device_id: str,
+    message: dict[str, Any],
+    server_received_at: str,
+    existing: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    event_type = str(message.get("event_type") or "")
+    if event_type not in {"location_report", "location_observation"}:
+        return {}
+
+    memory = dict(existing or {})
+    memory["device_id"] = device_id
+    memory["updated_at"] = server_received_at
+    memory["last_test_run_id"] = first_known(message.get("test_run_id"), memory.get("last_test_run_id"))
+
+    evidence = location_evidence_summary(message, server_received_at)
+    position = location_position(message)
+    gnss = as_dict(message.get("gnss"))
+    payload = as_dict(message.get("payload"))
+    belief = as_dict(first_known(message.get("location_belief"), payload.get("location_belief")))
+    fix = first_known(message.get("fix"), gnss.get("fix"))
+
+    if belief:
+        state = normalize_location_state(belief.get("state")) or "Unknown"
+        memory.update(
+            compact_dict(
+                {
+                    "state": state,
+                    "radius_m": belief.get("radius_m"),
+                    "confidence": belief.get("confidence"),
+                    "source": merge_sources(belief.get("source")),
+                    "reason": first_known(belief.get("reason"), "location_observation_belief"),
+                    "belief_updated_at": server_received_at,
+                    "last_evidence": evidence,
+                }
+            )
+        )
+        if position:
+            memory["last_known_location"] = {**position, "updated_at": server_received_at}
+        if fix is False:
+            memory["last_no_fix"] = evidence
+        return memory
+
+    if fix is True:
+        source_status = str(message.get("source_status") or "unknown")
+        confidence = 0.92 if source_status in {"verified", "observed", "pc_side_verified"} else 0.72
+        memory.update(
+            compact_dict(
+                {
+                    "state": "Fine",
+                    "radius_m": derived_gnss_radius_m(message),
+                    "confidence": confidence,
+                    "source": merge_sources("gnss", message.get("source")),
+                    "reason": "gnss_fix_calibration"
+                    if source_status in {"verified", "observed", "pc_side_verified"}
+                    else "gnss_fix_unverified",
+                    "belief_updated_at": server_received_at,
+                    "last_evidence": evidence,
+                }
+            )
+        )
+        if position:
+            memory["last_known_location"] = {**position, "updated_at": server_received_at}
+        return memory
+
+    if fix is False:
+        memory["last_no_fix"] = evidence
+        memory.setdefault("state", "Unknown")
+        memory.setdefault("radius_m", None)
+        memory.setdefault("confidence", None)
+        memory.setdefault("source", [])
+        memory.setdefault("reason", "gnss_no_fix_no_location_memory")
+        return memory
+
+    if not memory:
+        memory.update(
+            {
+                "state": "Unknown",
+                "radius_m": None,
+                "confidence": None,
+                "source": [],
+                "reason": "location_observation_without_belief",
+                "last_evidence": evidence,
+            }
+        )
+    return memory
+
+
+def active_location_belief(
+    field_message: dict[str, Any],
+    field_payload: dict[str, Any],
+    location_memory: dict[str, Any],
+) -> dict[str, Any]:
+    explicit = as_dict(first_known(field_message.get("location_belief"), field_payload.get("location_belief")))
+    if explicit:
+        state = normalize_location_state(explicit.get("state")) or first_known(explicit.get("state"), "unknown")
+        return {
+            "state": state,
+            "radius_m": explicit.get("radius_m"),
+            "confidence": explicit.get("confidence"),
+            "source": source_list(explicit.get("source")),
+            "reason": first_known(explicit.get("reason"), "location_observation_belief"),
+            "updated_at": first_known(field_message.get("server_received_at"), explicit.get("updated_at")),
+        }
+
+    if not location_memory:
+        return {
+            "state": "unknown",
+            "radius_m": None,
+            "confidence": None,
+            "source": [],
+            "reason": "no_location_belief",
+            "updated_at": field_message.get("server_received_at"),
+        }
+
+    gnss = as_dict(field_message.get("gnss"))
+    fix = first_known(field_message.get("fix"), gnss.get("fix"))
+    if fix is False and location_memory.get("state") in {"Fine", "Coarse", "Predicted"}:
+        confidence = as_number(location_memory.get("confidence"))
+        return {
+            "state": "Predicted",
+            "radius_m": location_memory.get("radius_m"),
+            "confidence": round(confidence * 0.75, 3) if confidence is not None else None,
+            "source": merge_sources(location_memory.get("source"), "memory"),
+            "reason": "last_known_after_gnss_no_fix",
+            "updated_at": first_known(field_message.get("server_received_at"), location_memory.get("updated_at")),
+        }
+
+    return {
+        "state": first_known(location_memory.get("state"), "unknown"),
+        "radius_m": location_memory.get("radius_m"),
+        "confidence": location_memory.get("confidence"),
+        "source": source_list(location_memory.get("source")),
+        "reason": first_known(location_memory.get("reason"), "location_memory"),
+        "updated_at": first_known(location_memory.get("belief_updated_at"), location_memory.get("updated_at")),
+    }
+
+
+def summarize_location_memory(messages: list[dict[str, Any]]) -> dict[str, Any]:
+    memory: dict[str, Any] = {}
+    for message in messages:
+        if message.get("message_type") != "event":
+            continue
+        if message.get("event_type") not in {"location_report", "location_observation"}:
+            continue
+        memory = build_location_memory(
+            str(message.get("device_id") or ""),
+            message,
+            str(message.get("server_received_at") or message.get("ts") or utc_now()),
+            memory,
+        )
+    return memory
+
+
 def parse_iso_timestamp(value: Any) -> datetime | None:
     if not value:
         return None
@@ -1560,6 +1873,7 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
     telemetry = as_dict(device.get("latest_telemetry"))
     latest_location = as_dict(device.get("latest_location"))
     latest_location_observation = as_dict(device.get("latest_location_observation"))
+    location_memory = as_dict(device.get("location_memory"))
     field_message = latest_location if latest_location else telemetry
     error = as_dict(device.get("last_error"))
     latest_command = as_dict(latest_command)
@@ -1575,7 +1889,7 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
     lte = as_dict(first_known(field_message.get("lte"), telemetry.get("lte"), status.get("lte")))
     wifi = as_dict(first_known(field_message.get("wifi"), telemetry.get("wifi"), status.get("wifi")))
     imu = as_dict(first_known(field_message.get("imu"), telemetry.get("imu"), status.get("imu")))
-    location_belief = as_dict(first_known(field_message.get("location_belief"), field_payload.get("location_belief")))
+    location_belief = active_location_belief(field_message, field_payload, location_memory)
     ack = as_dict(latest_command.get("ack"))
 
     boot_count = first_known(status.get("boot_count"), telemetry.get("boot_count"), runtime.get("boot_count"))
@@ -1697,7 +2011,22 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
             "confidence": location_belief.get("confidence"),
             "source": location_belief.get("source") if isinstance(location_belief.get("source"), list) else [],
             "reason": first_known(location_belief.get("reason"), "no_location_belief"),
-            "updated_at": first_known(field_message.get("server_received_at"), latest_location_observation.get("server_received_at")),
+            "updated_at": first_known(
+                location_belief.get("updated_at"),
+                field_message.get("server_received_at"),
+                latest_location_observation.get("server_received_at"),
+            ),
+        },
+        "location_memory": {
+            "state": first_known(location_memory.get("state"), "unknown"),
+            "radius_m": location_memory.get("radius_m"),
+            "confidence": location_memory.get("confidence"),
+            "source": location_memory.get("source") if isinstance(location_memory.get("source"), list) else [],
+            "reason": first_known(location_memory.get("reason"), "no_location_memory"),
+            "updated_at": location_memory.get("updated_at"),
+            "belief_updated_at": location_memory.get("belief_updated_at"),
+            "last_test_run_id": location_memory.get("last_test_run_id"),
+            "last_no_fix_at": dict_value(location_memory, "last_no_fix", "server_received_at"),
         },
         "explainability": {
             "state": "warning" if reason_codes else "ok",
@@ -1720,6 +2049,7 @@ def summarize_test_run_observability(messages: list[dict[str, Any]], commands: l
         "latest_telemetry": latest_message(messages, message_type="event"),
         "latest_location": latest_location_message(messages),
         "latest_location_observation": latest_message(messages, message_type="event", event_type="location_observation"),
+        "location_memory": summarize_location_memory(messages),
         "last_error": latest_message(messages, message_type="error"),
     }
     latest_observability = build_observability(device, commands[-1] if commands else None)
@@ -1891,6 +2221,7 @@ def render_dashboard() -> str:
       const obsWifi = obs.wifi || {};
       const obsImu = obs.imu || {};
       const obsBelief = obs.location_belief || {};
+      const obsMemory = obs.location_memory || {};
       const obsExplainability = obs.explainability || {};
       const location = d.latest_location || {};
       const telemetry = d.latest_telemetry || {};
@@ -1909,6 +2240,9 @@ def render_dashboard() -> str:
         <div class="metric"><span>Belief</span><span>${escapeHtml(obsBelief.confidence ?? 'unknown')} / ${escapeHtml(obsBelief.radius_m ?? 'unknown')} m</span></div>
         <div class="metric"><span>Belief Source</span><span>${escapeHtml((obsBelief.source || []).join(', ') || 'none')}</span></div>
         <div class="metric"><span>Belief Reason</span><span>${escapeHtml(obsBelief.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Memory State</span><span>${escapeHtml(obsMemory.state || 'unknown')}</span></div>
+        <div class="metric"><span>Memory Updated</span><span>${escapeHtml(obsMemory.belief_updated_at || obsMemory.updated_at || 'none')}</span></div>
+        <div class="metric"><span>Memory Reason</span><span>${escapeHtml(obsMemory.reason || 'unknown')}</span></div>
         <div class="metric"><span>GNSS State</span><span>${escapeHtml(gnssField(fieldTelemetry, 'gnss_state', fieldTelemetry.event_type || status.gnss_state || 'unknown'))}</span></div>
         <div class="metric"><span>Fix</span><span>${escapeHtml(gnssField(fieldTelemetry, 'fix'))}</span></div>
         <div class="metric"><span>Position</span><span>${escapeHtml(lat)}, ${escapeHtml(lon)}</span></div>

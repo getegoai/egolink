@@ -110,5 +110,26 @@ Boundary: LOC-002 does not prove firmware-side cell fingerprint collection,
 real Wi-Fi scanning, real IMU fusion, battery accuracy, location-memory tables,
 or a rule engine. Those remain later tasks.
 
+## LOC-003 / LOC-004A Server Memory Gate Baseline
+
+LOC-003 adds the first VPS-side memory table and a small active-belief rule:
+
+- `location_observation` with `location_belief` updates persistent
+  `location_memory`.
+- `location_report fix=true` creates a `Fine` GNSS calibration memory.
+- `location_report fix=false` records `last_no_fix` but does not erase the
+  last useful memory.
+- When the latest location report is no-fix but memory exists, the active
+  `observability.location_belief` becomes `Predicted` with reason
+  `last_known_after_gnss_no_fix`.
+- `/api/state`, Dashboard, and test-run export expose both active belief and
+  preserved memory.
+- `scripts/validate_location_memory_gate.py` can rerun this gate with a
+  synthetic device and no hardware action.
+
+Boundary: this is not final EALE. It does not prove firmware-side cell/Wi-Fi/
+IMU/power collection, learned personal places, route prediction, real outdoor
+GNSS acceptance, LTE long-run reliability, or product readiness.
+
 EALE does not replace the existing `request_location -> location_report -> ACK`
 loop. It extends it into an explainable location system.
