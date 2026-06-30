@@ -1,0 +1,218 @@
+{
+  "release_id": "KR-003",
+  "release_name": "USB-Free Explainable LTE Location Observation Walking Skeleton",
+  "release_version": "0.1.0-key-release-003",
+  "status": "released",
+  "release_date": "2026-06-30",
+  "summary": "Third Ego Link P0 engineering key release. It freezes the USB-Free raw LTE request_location loop with real firmware-side SIM7670G cell/LTE location_observation evidence and a reboot-aware field validator flow.",
+  "firmware_version": "0.1.0-loc004a-cell-observation",
+  "firmware_test_run_id": "loc004a-cell-observation-20260630-001",
+  "protocol_profiles": [
+    "egolink.p0.v1",
+    "raw-frame.p0.v1"
+  ],
+  "device_id": "ego-link-r1-connectivity-001",
+  "in_scope": [
+    "Public VPS Message Hub command queue and raw-frame ingest path",
+    "SIM7670G LTE HTTP raw command polling",
+    "request_location command execution over LTE",
+    "raw-frame location_report upload over LTE",
+    "raw-frame location_observation upload with SIM7670G cell/LTE evidence",
+    "server-side raw storage before derived Web/API compatibility views",
+    "derived cell, LTE, transport, lte_http, and location_belief fields",
+    "reboot-aware arm/reboot/reconcile validator workflow",
+    "USB-Free runtime validation on independent power"
+  ],
+  "non_claims": [
+    "No product readiness claim",
+    "No GNSS fix or outdoor GNSS acceptance claim",
+    "No cell-only positioning claim",
+    "No learned personal-place, route prediction, or final fusion-engine claim",
+    "No long LTE stability or reconnect recovery claim",
+    "No final enclosure, mounting, battery, charging, or power behavior claim",
+    "No emergency calling, SMS, dispatch, camera, audio, or storage acceptance claim"
+  ],
+  "gates": [
+    {
+      "id": "G1-CONTRACT",
+      "status": "PASS",
+      "summary": "raw-frame.p0.v1 and egolink.p0.v1 compatibility boundaries support location_report, location_observation, and ACK views"
+    },
+    {
+      "id": "G2-SERVER",
+      "status": "PASS",
+      "summary": "VPS Message Hub stores raw location_observation frames before deriving cell, LTE, transport, and belief evidence"
+    },
+    {
+      "id": "G3-FIRMWARE-BUILD",
+      "status": "PASS",
+      "summary": "LOC-004A firmware guarded ESP-IDF build passed with GNSS, LTE status, LTE command loop, and location observation enabled"
+    },
+    {
+      "id": "G4-FLASH",
+      "status": "PASS",
+      "summary": "LOC-004A firmware flashed to COM4 after explicit operator confirmation"
+    },
+    {
+      "id": "G5-USB-FREE-RUNTIME",
+      "status": "PASS",
+      "summary": "independent-power USB-Free request_location -> location_report -> location_observation -> ACK passed over LTE"
+    },
+    {
+      "id": "G6-REBOOT-AWARE-VALIDATOR",
+      "status": "PASS",
+      "summary": "FIELD-002A armed cmd-000023, operator rebooted USB-disconnected hardware, and existing-command reconciliation passed"
+    },
+    {
+      "id": "G7-REGRESSION",
+      "status": "PASS",
+      "summary": "focused validator tests, context_lint, full verify, and git diff checks passed"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "status",
+      "path": "docs/current/STATUS.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "active_build",
+      "path": "docs/current/ACTIVE_BUILD.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "release_index",
+      "path": "docs/current/KEY_RELEASES.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "loc004a_task_packet",
+      "path": "docs/tasks/done/LOC-004A_REAL_CELL_LOCATION_OBSERVATION.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "field002_task_packet",
+      "path": "docs/tasks/done/FIELD-002_USB_FREE_REBOOT_AWARE_COMMAND_VALIDATOR.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "field002a_task_packet",
+      "path": "docs/tasks/done/FIELD-002A_REBOOT_AWARE_VALIDATOR_USB_FREE_SMOKE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "protocol",
+      "path": "docs/development/PROTOCOL.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "location_engine",
+      "path": "docs/development/LOCATION_ENGINE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte_transport",
+      "path": "docs/development/LTE_TRANSPORT.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_readme",
+      "path": "firmware/mqtt_heartbeat/README.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "validation_script",
+      "path": "scripts/validate_lte_command_loop.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "runner_script",
+      "path": "scripts/run_fw001_hw_r1.ps1",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "runtime_reconciliation_json",
+      "path": "reports/field_validation/loc004a-cell-observation-runtime-20260630-001/validation_reconciliation.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "runtime_reconciliation_markdown",
+      "path": "reports/field_validation/loc004a-cell-observation-runtime-20260630-001/validation_reconciliation.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "reboot_aware_runtime_report_json",
+      "path": "reports/field_validation/loc004a-reboot-aware-20260630-001/lte_command_loop_report.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "reboot_aware_runtime_report_markdown",
+      "path": "reports/field_validation/loc004a-reboot-aware-20260630-001/lte_command_loop_report.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "reboot_aware_test_run_export",
+      "path": "reports/field_validation/loc004a-reboot-aware-20260630-001/test_run_export.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "flash_report",
+      "path": "reports/field_validation/loc004a-cell-observation-20260630-001/flash_report.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "firmware_binary",
+      "path": "firmware/mqtt_heartbeat/build_loc004a_cell_observation/egolink_mqtt_heartbeat.bin",
+      "required": true,
+      "local_only": true
+    }
+  ],
+  "commits": [
+    {
+      "label": "LOC-004A raw cell observation implementation",
+      "commit": "d9e4389"
+    },
+    {
+      "label": "LOC-004A runtime evidence record",
+      "commit": "6ada672"
+    },
+    {
+      "label": "FIELD-002 reboot-aware validator implementation",
+      "commit": "f948061"
+    },
+    {
+      "label": "FIELD-002A reboot-aware USB-Free smoke record",
+      "commit": "10eacf0"
+    }
+  ],
+  "validation_commands": [
+    "python -m unittest quality_tests.test_lte_command_loop_validation quality_tests.test_fw001_hw_runner -v",
+    "python scripts\\context_lint.py",
+    "powershell -ExecutionPolicy Bypass -File scripts\\verify.ps1",
+    "git diff --check",
+    "python scripts\\run_key_release_gate.py --manifest docs/current/key_releases/KR-003_EXPLAINABLE_LTE_LOCATION_OBSERVATION.json --json"
+  ],
+  "next_release_gates": [
+    "Add firmware-side real Wi-Fi, IMU, and power observations behind explicit tasks",
+    "Add richer rule-based Fine/Coarse/Predicted/Unknown belief transitions without claiming learned place recognition",
+    "Run long LTE stability only after transport, reset, power, command, and location failures remain explainable through VPS evidence"
+  ]
+}

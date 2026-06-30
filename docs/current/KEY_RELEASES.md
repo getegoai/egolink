@@ -111,6 +111,71 @@ transport truth; `location_memory` is a derived Message Hub view.
 - No long LTE stability or reconnect recovery claim.
 - No final enclosure, mounting, battery, charging, or power behavior claim.
 
+## KR-003 USB-Free Explainable LTE Location Observation Walking Skeleton
+
+- Status: released engineering key version.
+- Release date: 2026-06-30.
+- Release version: `0.1.0-key-release-003`.
+- Firmware version: `0.1.0-loc004a-cell-observation`.
+- Device/test runs: `ego-link-r1-connectivity-001` /
+  `loc004a-cell-observation-runtime-20260630-001` and
+  `loc004a-reboot-aware-20260630-001`.
+- Manifest:
+  `docs/current/key_releases/KR-003_EXPLAINABLE_LTE_LOCATION_OBSERVATION.json`.
+- Gate tool:
+  `python scripts\run_key_release_gate.py --manifest docs/current/key_releases/KR-003_EXPLAINABLE_LTE_LOCATION_OBSERVATION.json --json`.
+- Gate report:
+  `reports/key_releases/KR-003/release_gate_report.json` and
+  `reports/key_releases/KR-003/release_gate_report.md`.
+
+### Release Meaning
+
+KR-003 freezes the first USB-Free raw LTE location loop that carries both GNSS
+attempt evidence and real firmware-side SIM7670G cell/LTE observation:
+
+```text
+VPS command queue
+-> SIM7670G LTE raw command poll
+-> request_location
+-> raw LTE location_report
+-> raw LTE location_observation
+-> server raw storage then derived cell/LTE/belief Web/API view
+-> raw LTE ACK
+```
+
+It also freezes the field-test workflow for one-command-per-boot slices:
+
+```text
+arm command
+-> operator reboots USB-disconnected device on independent power
+-> reconcile same cmd_id from VPS evidence
+```
+
+### Evidence Summary
+
+- LOC-004A implementation, VPS deployment, guarded build, and COM4 flash
+  passed.
+- USB-Free runtime evidence reconciled PASS for `cmd-000021`: raw
+  `location_report`, raw `location_observation`, and raw ACK all arrived over
+  LTE.
+- FIELD-002 reboot-aware validator tooling passed focused and full regression
+  gates.
+- FIELD-002A hardware smoke passed for `cmd-000023` after the operator rebooted
+  on independent power with USB disconnected. The validator reused the same
+  command ID and matched command-created location evidence.
+- Runtime `location_observation` showed LTE cell ID `180571649`, LTE-ready
+  reason code, assigned LTE IP, `transport.type=lte`, and
+  `location_belief.state=Unknown`.
+
+### Non-Claims
+
+- No product readiness claim.
+- No GNSS fix or outdoor GNSS acceptance claim.
+- No cell-only positioning claim.
+- No learned personal-place, route prediction, or final fusion-engine claim.
+- No long LTE stability or reconnect recovery claim.
+- No final enclosure, mounting, battery, charging, or power behavior claim.
+
 ## Release Gate Policy
 
 Every key release should have:

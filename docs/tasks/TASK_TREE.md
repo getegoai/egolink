@@ -82,6 +82,17 @@ motion candidate
     `reports/key_releases/KR-001/`.
   - Boundary: publishes an engineering key release gate only; no new hardware
     flash, runtime validation, long LTE stability, or product readiness claim.
+- `REL-002 Explainable LTE Location Observation Release Gate`
+  - Path:
+    `docs/tasks/done/REL-002_EXPLAINABLE_LTE_LOCATION_OBSERVATION_RELEASE_GATE.md`
+  - Status: completed.
+  - Evidence: `docs/current/KEY_RELEASES.md`,
+    `docs/current/key_releases/KR-003_EXPLAINABLE_LTE_LOCATION_OBSERVATION.json`,
+    `scripts/run_key_release_gate.py`, and gate reports under
+    `reports/key_releases/KR-003/`.
+  - Boundary: publishes KR-003 as an engineering key release only; no new
+    firmware flash, runtime validation, long LTE stability, reconnect,
+    battery/power, enclosure behavior, or product readiness claim.
 
 ## Active Queue
 

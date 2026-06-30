@@ -6,6 +6,20 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: KR-003 USB-Free Explainable LTE Location Observation Walking
+Skeleton is released as engineering key version `0.1.0-key-release-003`.
+The release freezes the LOC-004A raw LTE
+`request_location -> location_report -> location_observation -> ACK` loop plus
+the FIELD-002 reboot-aware arm/reboot/reconcile validator workflow. Manifest:
+`docs/current/key_releases/KR-003_EXPLAINABLE_LTE_LOCATION_OBSERVATION.json`.
+Gate command
+`python scripts\run_key_release_gate.py --manifest docs/current/key_releases/KR-003_EXPLAINABLE_LTE_LOCATION_OBSERVATION.json --json`
+passed with 7 gates, 19 evidence items, 4 required commits, no errors, and no
+warnings; report is under `reports/key_releases/KR-003/`. This is an
+engineering key release only: no GNSS fix, cell-only positioning, learned
+location fusion, long LTE stability, reconnect recovery, battery/power,
+enclosure behavior, or product readiness is claimed.
+
 2026-06-30: FIELD-002A reboot-aware validator USB-Free smoke passed on the
 real LOC-004A connectivity-node firmware after the operator rebooted the board
 on independent power with USB disconnected. The new FIELD-002 flow first
