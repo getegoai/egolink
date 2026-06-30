@@ -6,6 +6,30 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: FIELD-002A reboot-aware validator USB-Free smoke passed on the
+real LOC-004A connectivity-node firmware after the operator rebooted the board
+on independent power with USB disconnected. The new FIELD-002 flow first
+armed `cmd-000023` (`request_location`) under test run
+`loc004a-reboot-aware-20260630-001`, then reconciled that same command with
+`--existing-command-id cmd-000023`, `--evidence-since command-created`,
+`--expected-ack-test-run-id loc004a-cell-observation-20260630-001`, and
+`--expected-message-test-run-id loc004a-cell-observation-20260630-001`.
+Result: PASS. Evidence is under
+`reports/field_validation/loc004a-reboot-aware-20260630-001/`, including
+`lte_command_loop_report.md`, `lte_command_loop_report.json`,
+`device_state.json`, `commands.json`, and `test_run_export.json`.
+Runtime evidence: raw `location_report` frame `loc-cmd-000023` (`seq=2`,
+`fix=false`, `gnss_state=no_fix`, `gnss_query_ok=true`,
+`transport.type=lte`), raw `location_observation` frame `obs-cmd-000023`
+(`seq=3`, `cell.rat=LTE`, `cell.cell_id=180571649`, `cell.rsrp=-97`,
+`lte.reason_code=LTE_READY`, assigned IP `10.31.138.19`,
+`location_belief.state=Unknown`, `transport.type=lte`), and raw ACK frame
+`cmd-000023` (`seq=4`, command/ACK status `ok`, `LTE_HTTP_OK` / HTTP `200`,
+`poll_action_elapsed_ms=530`). This validates the reboot-aware validator
+workflow on one real USB-Free command; it does not validate GNSS fix,
+cell-only positioning, long LTE stability, reconnect recovery, battery/power,
+enclosure behavior, or product readiness.
+
 2026-06-30: FIELD-002 USB-Free Reboot-Aware Command Validator is implemented
 as tooling for one-command-per-boot field slices. `scripts/validate_lte_command_loop.py`
 now supports `--arm-only`, which creates or selects a command and writes an

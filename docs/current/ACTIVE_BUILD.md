@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LOC-004A cell-observation firmware currently flashed on COM4; USB-Free LOC-004A runtime evidence reconciled PASS; LTE-004 request-location thin slice previously passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LOC-004A cell-observation firmware currently flashed on COM4; reboot-aware USB-Free validator smoke passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -569,6 +569,20 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   raw LTE `request_location -> location_report -> location_observation -> ACK`
   slice; long LTE stability, reconnect recovery, cell-only positioning,
   battery/power, and product readiness remain unverified.
+- FIELD-002A then passed a reboot-aware USB-Free validator smoke against the
+  same LOC-004A firmware without flashing. The validator armed `cmd-000023`
+  under `loc004a-reboot-aware-20260630-001`, the operator rebooted on
+  independent power with USB disconnected, and reconciliation reused
+  `cmd-000023` with command-created evidence anchoring. The run produced raw
+  `location_report` frame `loc-cmd-000023` (`seq=2`, `fix=false`,
+  `gnss_state=no_fix`, `transport.type=lte`), raw `location_observation`
+  frame `obs-cmd-000023` (`seq=3`, `cell.rat=LTE`,
+  `cell.cell_id=180571649`, `cell.rsrp=-97`, `lte.reason_code=LTE_READY`,
+  assigned IP `10.31.138.19`, `location_belief.state=Unknown`), and raw ACK
+  `cmd-000023` (`seq=4`, status `ok`, `LTE_HTTP_OK` / HTTP `200`). Evidence
+  is under `reports/field_validation/loc004a-reboot-aware-20260630-001/`.
+  This validates the FIELD-002 arm/reboot/reconcile workflow on one real
+  USB-Free command; it is not a long LTE stability or product readiness claim.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

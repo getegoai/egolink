@@ -104,3 +104,6 @@ FIELD-002 is tooling only. It did not touch firmware, flash hardware, enqueue a
 real VPS command, modify the VPS service, or claim a new runtime hardware pass.
 It reduces false negatives in later USB-Free field runs by preserving the
 actual command ID and evidence time window.
+
+The follow-on hardware smoke for this tooling is recorded separately as
+`FIELD-002A Reboot-Aware Validator USB-Free Smoke`.

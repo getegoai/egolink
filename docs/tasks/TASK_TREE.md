@@ -573,6 +573,21 @@ motion candidate
   - Boundary: no firmware flash, real VPS command enqueue, hardware runtime
     pass, long LTE stability, reconnect, battery/power, enclosure behavior, or
     product readiness is claimed.
+- `FIELD-002A Reboot-Aware Validator USB-Free Smoke`
+  - Path: `docs/tasks/done/FIELD-002A_REBOOT_AWARE_VALIDATOR_USB_FREE_SMOKE.md`
+  - Status: completed as a bounded hardware smoke of the FIELD-002
+    arm/reboot/reconcile workflow.
+  - Goal: prove the new validator flow on the real LOC-004A connectivity-node
+    firmware without USB as the runtime data path.
+  - Evidence: validator armed `cmd-000023` for
+    `loc004a-reboot-aware-20260630-001`, the operator rebooted on independent
+    power with USB disconnected, and existing-command reconciliation passed
+    with raw LTE `location_report`, raw LTE `location_observation`, and raw LTE
+    ACK. Evidence is under
+    `reports/field_validation/loc004a-reboot-aware-20260630-001/`.
+  - Boundary: no firmware flash, GNSS fix, cell-only positioning, long LTE
+    stability, reconnect recovery, battery/power behavior, enclosure behavior,
+    or product readiness is claimed.
 - `STAB-001A Short Baseline Gate Tooling`
   - Path: `docs/tasks/done/STAB-001A_SHORT_BASELINE_GATE_TOOLING.md`
   - Status: completed as gate tooling only.
