@@ -325,6 +325,36 @@ python ..\..\scripts\validate_lte_command_loop.py `
   --require-location-observation
 ```
 
+For one-command-per-boot field slices, arm the command before the operator
+reboots the USB-disconnected device, then reconcile the same command ID:
+
+```powershell
+python ..\..\scripts\validate_lte_command_loop.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id ego-link-r1-connectivity-001 `
+  --test-run-id <same-test-run-id> `
+  --expected-fw-version 0.1.0-loc004a-cell-observation `
+  --command request_location `
+  --require-location-report `
+  --require-location-observation `
+  --arm-only `
+  --json
+
+python ..\..\scripts\validate_lte_command_loop.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id ego-link-r1-connectivity-001 `
+  --test-run-id <same-test-run-id> `
+  --expected-fw-version 0.1.0-loc004a-cell-observation `
+  --expected-ack-test-run-id <firmware-test-run-id-if-different> `
+  --expected-message-test-run-id <firmware-test-run-id-if-different> `
+  --command request_location `
+  --existing-command-id <cmd-id-from-arm-report> `
+  --require-location-report `
+  --require-location-observation `
+  --evidence-since command-created `
+  --json
+```
+
 This does not infer a position from cell-only data and does not prove long LTE
 stability, reconnect behavior, battery/power behavior, or product location
 readiness.

@@ -13,6 +13,9 @@ param(
     [string]$FlashPort = "",
     [string]$ExistingCommandId = "",
     [string]$ExpectedAckTestRunId = "",
+    [string]$ExpectedMessageTestRunId = "",
+    [ValidateSet("command-created", "validator-start", "test-run-created")]
+    [string]$LteEvidenceSince = "command-created",
     [string]$LteCommandName = "set_report_interval",
     [int]$ValidationTimeoutSec = 180,
     [int]$ValidationPollIntervalSec = 5,
@@ -25,6 +28,7 @@ param(
     [switch]$Flash,
     [switch]$IUnderstandFlashWritesFirmware,
     [switch]$Validate,
+    [switch]$ArmLteCommandOnly,
     [switch]$OperatorConfirmedIndependentPower,
     [switch]$OperatorConfirmedUsbDisconnected,
     [switch]$RequireLteLocationReport,
@@ -96,6 +100,8 @@ $result = [ordered]@{
     binary_path = $binaryPath
     existing_command_id = $ExistingCommandId
     expected_ack_test_run_id = $ExpectedAckTestRunId
+    expected_message_test_run_id = $ExpectedMessageTestRunId
+    lte_evidence_since = $LteEvidenceSince
     lte_command_name = $LteCommandName
     require_lte_location_report = [bool]($RequireLteLocationReport -or $RequireLocationFix)
     require_lte_location_observation = [bool]$RequireLteLocationObservation
@@ -103,6 +109,7 @@ $result = [ordered]@{
     prepare_build_ran = $false
     flash_ran = $false
     validate_ran = $false
+    arm_lte_command_only = [bool]$ArmLteCommandOnly
     flash_guard = "requires -Flash -FlashPort <port> -IUnderstandFlashWritesFirmware"
     validation_guard = "requires -Validate -OperatorConfirmedIndependentPower -OperatorConfirmedUsbDisconnected"
 }
@@ -214,6 +221,13 @@ if ($Validate) {
             }
             if ($ExpectedAckTestRunId) {
                 $validationArgs += @("--expected-ack-test-run-id", $ExpectedAckTestRunId)
+            }
+            if ($ExpectedMessageTestRunId) {
+                $validationArgs += @("--expected-message-test-run-id", $ExpectedMessageTestRunId)
+            }
+            $validationArgs += @("--evidence-since", $LteEvidenceSince)
+            if ($ArmLteCommandOnly) {
+                $validationArgs += "--arm-only"
             }
             if ($RequireLteLocationReport -or $RequireLocationFix) {
                 $validationArgs += "--require-location-report"

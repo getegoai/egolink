@@ -152,10 +152,11 @@ no-fix location attempts inspectable from the VPS/Web path without USB logs.
 
 ## Follow-Up Hardware Gate
 
-The bounded USB-Free runtime gate has passed by reconciliation. The automatic
-validator still needs a follow-up hardening task for one-command-per-boot
-timing: the first validator timed out before reboot, and the second queued
-`cmd-000022` after the firmware command loop had already stopped.
+The bounded USB-Free runtime gate has passed by reconciliation. The
+one-command-per-boot validator timing issue observed during this run is tracked
+and addressed by `FIELD-002 USB-Free Reboot-Aware Command Validator`, which
+adds `--arm-only` plus command-created evidence anchoring for existing-command
+reconciliation.
 
 ## Boundary
 

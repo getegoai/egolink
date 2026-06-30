@@ -228,6 +228,127 @@ class LteCommandLoopValidationTests(unittest.TestCase):
             markdown = (Path(tmp) / "report" / "lte_command_loop_report.md").read_text(encoding="utf-8")
             self.assertIn("location_observation validates command-scoped firmware-side cell/LTE evidence", markdown)
 
+    def test_existing_command_reconciliation_accepts_pre_validator_location_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            hub_url = f"http://127.0.0.1:{server.server_port}"
+            client = HubClient(hub_url)
+            try:
+                client.post(
+                    "/api/v1/test-runs",
+                    {
+                        "test_run_id": "loc004a-runtime-unit",
+                        "task_id": "LOC-004A",
+                        "board_id": "connectivity-node-001",
+                        "device_id": "ego-link-r1-test",
+                        "connection_path": "independent_power_usb_disconnected",
+                        "started_at": "2026-06-30T00:00:00+00:00",
+                        "status": "active",
+                        "goal": "existing command location reconciliation",
+                    },
+                )
+                command = client.post(
+                    "/api/v1/devices/ego-link-r1-test/commands",
+                    {
+                        "cmd": "request_location",
+                        "test_run_id": "loc004a-runtime-unit",
+                        "payload": {
+                            "reason": "loc004a_reconcile_unit",
+                            "test_run_id": "loc004a-runtime-unit",
+                        },
+                    },
+                )["command"]
+                device_thread = threading.Thread(
+                    target=self._poll_and_ack_once,
+                    args=(hub_url,),
+                    kwargs={
+                        "device_id": "ego-link-r1-test",
+                        "fw_version": "0.1.0-loc004a-cell-observation",
+                        "test_run_id": "loc004a-firmware-unit",
+                        "transport_type": "lte",
+                        "poll_reason_code": "LTE_HTTP_OK",
+                        "poll_status_code": 200,
+                        "post_location_report": True,
+                        "post_location_observation": True,
+                    },
+                    daemon=True,
+                )
+                device_thread.start()
+                device_thread.join(timeout=2)
+
+                report = validate_lte_command_loop.validate_lte_command_loop(
+                    hub_url=hub_url,
+                    device_id="ego-link-r1-test",
+                    token=None,
+                    output_dir=Path(tmp) / "report",
+                    test_run_id="loc004a-runtime-unit",
+                    board_id="connectivity-node-001",
+                    connection_path="independent_power_usb_disconnected",
+                    timeout_sec=1.0,
+                    poll_interval_sec=0.05,
+                    expected_fw_version="0.1.0-loc004a-cell-observation",
+                    expected_ack_test_run_id="loc004a-firmware-unit",
+                    expected_message_test_run_id="loc004a-firmware-unit",
+                    command_name="request_location",
+                    interval_ms=10000,
+                    existing_command_id=str(command["cmd_id"]),
+                    require_location_report=True,
+                    require_location_observation=True,
+                )
+            finally:
+                server.shutdown()
+                server_thread.join(timeout=5)
+                server.server_close()
+
+            self.assertEqual(report["result"], "PASS")
+            self.assertEqual(report["evidence_since"], "command_created")
+            self.assertEqual(report["evidence_since_resolution"], "command_created")
+            self.assertEqual(report["effective_expected_ack_test_run_id"], "loc004a-firmware-unit")
+            self.assertEqual(report["effective_expected_message_test_run_id"], "loc004a-firmware-unit")
+            self.assertEqual(report["command"]["cmd_id"], command["cmd_id"])
+            self.assertEqual(report["location_report"]["location_request_cmd_id"], command["cmd_id"])
+            self.assertEqual(report["location_observation"]["location_request_cmd_id"], command["cmd_id"])
+
+    def test_arm_only_creates_command_without_waiting_for_ack(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            hub_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                report = validate_lte_command_loop.validate_lte_command_loop(
+                    hub_url=hub_url,
+                    device_id="ego-link-r1-test",
+                    token=None,
+                    output_dir=Path(tmp) / "report",
+                    test_run_id="loc004a-arm-unit",
+                    board_id="connectivity-node-001",
+                    connection_path="independent_power_usb_disconnected",
+                    timeout_sec=1.0,
+                    poll_interval_sec=0.05,
+                    expected_fw_version="0.1.0-loc004a-cell-observation",
+                    command_name="request_location",
+                    interval_ms=10000,
+                    require_location_report=True,
+                    require_location_observation=True,
+                    arm_only=True,
+                )
+            finally:
+                server.shutdown()
+                server_thread.join(timeout=5)
+                server.server_close()
+
+            self.assertEqual(report["result"], "ARMED")
+            self.assertTrue(report["arm_only"])
+            self.assertEqual(report["command"]["cmd"], "request_location")
+            self.assertEqual(report["command"]["status"], "pending")
+            markdown = (Path(tmp) / "report" / "lte_command_loop_report.md").read_text(encoding="utf-8")
+            self.assertIn("Arm-only mode enqueued or selected the command", markdown)
+
     def test_validation_rejects_non_lte_ack(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")

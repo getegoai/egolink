@@ -6,6 +6,28 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: FIELD-002 USB-Free Reboot-Aware Command Validator is implemented
+as tooling for one-command-per-boot field slices. `scripts/validate_lte_command_loop.py`
+now supports `--arm-only`, which creates or selects a command and writes an
+`ARMED` report without waiting for runtime evidence, and
+`--evidence-since command-created|validator-start|test-run-created`, defaulting
+to `command-created` so an existing-command reconciliation can include raw
+`location_report` / `location_observation` frames uploaded during a manual
+USB-Free reboot before the validator process restarted. The validator also
+adds `--expected-message-test-run-id` for cases where required
+`location_report` / `location_observation` messages use the firmware image
+test-run ID rather than the command batch ID. `scripts/run_fw001_hw_r1.ps1`
+passes these through as `-ArmLteCommandOnly`, `-LteEvidenceSince`, and
+`-ExpectedMessageTestRunId`.
+Documentation in `docs/development/FIELD_TEST.md` and
+`firmware/mqtt_heartbeat/README.md` now records the arm/reboot/reconcile flow.
+Focused tests passed with 14 tests, `context_lint` passed, full
+`scripts\verify.ps1` passed with 294 tests, and `git diff --check` passed
+with only the existing PowerShell line-ending normalization warning. This is
+tooling only: no firmware flash, real VPS command enqueue, hardware runtime
+pass, long LTE stability, reconnect, battery/power, enclosure behavior, or
+product readiness is claimed.
+
 2026-06-30: LOC-004A USB-Free runtime evidence is reconciled as PASS after the
 operator rebooted the connectivity node on independent power with USB
 disconnected. The first validator-created command `cmd-000021` was still

@@ -70,12 +70,12 @@ def is_fresh_location_report(
     message: dict[str, Any],
     started_at: datetime,
     *,
-    test_run_id: str,
+    expected_message_test_run_id: str,
     cmd_id: str,
 ) -> bool:
     if message.get("message_type") != "event" or message.get("event_type") != "location_report":
         return False
-    if message.get("test_run_id") != test_run_id:
+    if message.get("test_run_id") != expected_message_test_run_id:
         return False
     if str(message.get("location_request_cmd_id") or "") not in {"", cmd_id}:
         return False
@@ -87,12 +87,12 @@ def is_fresh_location_observation(
     message: dict[str, Any],
     started_at: datetime,
     *,
-    test_run_id: str,
+    expected_message_test_run_id: str,
     cmd_id: str,
 ) -> bool:
     if message.get("message_type") != "event" or message.get("event_type") != "location_observation":
         return False
-    if message.get("test_run_id") != test_run_id:
+    if message.get("test_run_id") != expected_message_test_run_id:
         return False
     if str(message.get("location_request_cmd_id") or "") not in {"", cmd_id}:
         return False
@@ -174,7 +174,7 @@ def wait_for_location_report(
     *,
     device_id: str,
     started_at: datetime,
-    test_run_id: str,
+    expected_message_test_run_id: str,
     cmd_id: str,
     timeout_sec: float,
     poll_interval_sec: float,
@@ -187,7 +187,12 @@ def wait_for_location_report(
         messages = [item for item in history if isinstance(item, dict)]
         last_count = len(messages)
         for message in messages:
-            if is_fresh_location_report(message, started_at, test_run_id=test_run_id, cmd_id=cmd_id):
+            if is_fresh_location_report(
+                message,
+                started_at,
+                expected_message_test_run_id=expected_message_test_run_id,
+                cmd_id=cmd_id,
+            ):
                 return message, validate_location_report(message, require_fix=require_fix)
         if time.monotonic() >= deadline:
             return {}, [f"timed out waiting for LTE location_report from {device_id}; observed {last_count} recent messages"]
@@ -199,7 +204,7 @@ def wait_for_location_observation(
     *,
     device_id: str,
     started_at: datetime,
-    test_run_id: str,
+    expected_message_test_run_id: str,
     cmd_id: str,
     timeout_sec: float,
     poll_interval_sec: float,
@@ -211,7 +216,12 @@ def wait_for_location_observation(
         messages = [item for item in history if isinstance(item, dict)]
         last_count = len(messages)
         for message in messages:
-            if is_fresh_location_observation(message, started_at, test_run_id=test_run_id, cmd_id=cmd_id):
+            if is_fresh_location_observation(
+                message,
+                started_at,
+                expected_message_test_run_id=expected_message_test_run_id,
+                cmd_id=cmd_id,
+            ):
                 return message, validate_location_observation(message)
         if time.monotonic() >= deadline:
             return {}, [
@@ -258,6 +268,41 @@ def find_command(commands: list[dict[str, Any]], cmd_id: str) -> dict[str, Any]:
     return {}
 
 
+def resolve_evidence_start(
+    *,
+    evidence_since: str,
+    validation_started_at: datetime,
+    validation_started_at_text: str,
+    command: dict[str, Any],
+    test_run: dict[str, Any],
+) -> tuple[datetime, str, str]:
+    candidates = {
+        "command_created": command.get("created_at"),
+        "test_run_created": test_run.get("created_at") or test_run.get("started_at"),
+        "validator_start": validation_started_at_text,
+    }
+    selected = candidates.get(evidence_since)
+    parsed = parse_timestamp(selected)
+    if parsed is not None:
+        return parsed, str(selected), evidence_since
+    return validation_started_at, validation_started_at_text, f"{evidence_since}_fallback_validator_start"
+
+
+def get_device_state(client: HubClient, device_id: str) -> dict[str, Any]:
+    try:
+        return as_dict(client.get(f"/api/v1/devices/{device_id}").get("device"))
+    except FieldValidationError:
+        return {}
+
+
+def list_device_commands(client: HubClient, device_id: str) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in (client.get(f"/api/v1/devices/{device_id}/commands").get("commands") or [])
+        if isinstance(item, dict)
+    ]
+
+
 def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
     summary = report.get("ack_summary") or {}
     command = report.get("command") or {}
@@ -276,9 +321,11 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- Connection path: {report['connection_path']}",
         f"- Started at: {report['started_at']}",
         f"- Completed at: {report['completed_at']}",
+        f"- Evidence since: {report.get('evidence_started_at', 'unknown')} ({report.get('evidence_since_resolution', 'unknown')})",
         f"- Hub: {report['hub_url']}",
         f"- Firmware: {summary.get('ack_fw_version', 'unknown')}",
         f"- Expected ACK test run ID: {report.get('effective_expected_ack_test_run_id', 'unknown')}",
+        f"- Expected message test run ID: {report.get('effective_expected_message_test_run_id', 'unknown')}",
         f"- Command: {command.get('cmd', 'not sent')}",
         f"- Command ID: {command.get('cmd_id', 'not sent')}",
         f"- Command status: {summary.get('command_status', 'unknown')}",
@@ -320,6 +367,9 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         )
         if report.get("require_location_observation"):
             lines.append("- location_observation validates command-scoped firmware-side cell/LTE evidence.")
+    if report.get("arm_only"):
+        lines.append("- Arm-only mode enqueued or selected the command but did not wait for runtime evidence.")
+        lines.append("- Reconcile with the same command ID after the operator reboots the USB-disconnected device.")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -369,6 +419,9 @@ def validate_lte_command_loop(
     require_location_report: bool = False,
     require_location_observation: bool = False,
     require_fix: bool = False,
+    expected_message_test_run_id: str | None = None,
+    evidence_since: str = "command_created",
+    arm_only: bool = False,
 ) -> dict[str, Any]:
     client = HubClient(hub_url, token=token)
     started_at_text = utc_now()
@@ -376,6 +429,7 @@ def validate_lte_command_loop(
     if started_at is None:
         raise FieldValidationError("failed to create validation start timestamp")
     health = client.get("/health")
+    effective_expected_message_test_run_id = expected_message_test_run_id or test_run_id
     test_run = create_or_reuse_test_run(
         client,
         test_run_id=test_run_id,
@@ -412,6 +466,13 @@ def validate_lte_command_loop(
             },
         )["command"]
     cmd_id = str(created["cmd_id"])
+    evidence_started_at, evidence_started_at_text, evidence_since_resolution = resolve_evidence_start(
+        evidence_since=evidence_since,
+        validation_started_at=started_at,
+        validation_started_at_text=started_at_text,
+        command=created,
+        test_run=test_run,
+    )
     deadline = time.monotonic() + timeout_sec
     final_command: dict[str, Any] = created
     final_commands: list[dict[str, Any]] = []
@@ -419,49 +480,52 @@ def validate_lte_command_loop(
     location_report: dict[str, Any] = {}
     location_observation: dict[str, Any] = {}
     summary: dict[str, Any] = command_ack_summary(created)
-    errors: list[str] = [f"command {cmd_id} remained pending"]
+    errors: list[str] = []
 
-    while True:
-        try:
-            final_device = as_dict(client.get(f"/api/v1/devices/{device_id}").get("device"))
-        except FieldValidationError:
-            final_device = {}
-        final_commands = [
-            item
-            for item in (client.get(f"/api/v1/devices/{device_id}/commands").get("commands") or [])
-            if isinstance(item, dict)
-        ]
+    if arm_only:
+        final_device = get_device_state(client, device_id)
+        final_commands = list_device_commands(client, device_id)
         final_command = find_command(final_commands, cmd_id) or final_command
         summary = command_ack_summary(final_command)
-        status = str(final_command.get("status") or "")
-        if status == "ok":
-            errors = ack_summary_errors(
-                summary,
-                expected_fw_version=expected_fw_version,
-                expected_test_run_id=test_run_id,
-                expected_ack_test_run_id=expected_ack_test_run_id,
-            )
-            if not errors:
+    else:
+        errors = [f"command {cmd_id} remained pending"]
+        while True:
+            final_device = get_device_state(client, device_id)
+            final_commands = list_device_commands(client, device_id)
+            final_command = find_command(final_commands, cmd_id) or final_command
+            summary = command_ack_summary(final_command)
+            status = str(final_command.get("status") or "")
+            if status == "ok":
+                errors = ack_summary_errors(
+                    summary,
+                    expected_fw_version=expected_fw_version,
+                    expected_test_run_id=test_run_id,
+                    expected_ack_test_run_id=expected_ack_test_run_id,
+                )
+                if not errors:
+                    break
+            elif status not in {"pending", ""}:
+                errors = [f"command {cmd_id} finished with non-ok status: {status}"]
                 break
-        elif status not in {"pending", ""}:
-            errors = [f"command {cmd_id} finished with non-ok status: {status}"]
-            break
-        if time.monotonic() >= deadline:
-            errors = [f"timed out waiting for LTE ACK for command {cmd_id}", *ack_summary_errors(
-                summary,
-                expected_fw_version=expected_fw_version,
-                expected_test_run_id=test_run_id,
-                expected_ack_test_run_id=expected_ack_test_run_id,
-            )]
-            break
-        time.sleep(poll_interval_sec)
+            if time.monotonic() >= deadline:
+                errors = [
+                    f"timed out waiting for LTE ACK for command {cmd_id}",
+                    *ack_summary_errors(
+                        summary,
+                        expected_fw_version=expected_fw_version,
+                        expected_test_run_id=test_run_id,
+                        expected_ack_test_run_id=expected_ack_test_run_id,
+                    ),
+                ]
+                break
+            time.sleep(poll_interval_sec)
 
-    if not errors and require_location_report:
+    if not arm_only and not errors and require_location_report:
         location_report, location_errors = wait_for_location_report(
             client,
             device_id=device_id,
-            started_at=started_at,
-            test_run_id=test_run_id,
+            started_at=evidence_started_at,
+            expected_message_test_run_id=effective_expected_message_test_run_id,
             cmd_id=cmd_id,
             timeout_sec=timeout_sec,
             poll_interval_sec=poll_interval_sec,
@@ -469,12 +533,12 @@ def validate_lte_command_loop(
         )
         errors.extend(location_errors)
 
-    if not errors and require_location_observation:
+    if not arm_only and not errors and require_location_observation:
         location_observation, observation_errors = wait_for_location_observation(
             client,
             device_id=device_id,
-            started_at=started_at,
-            test_run_id=test_run_id,
+            started_at=evidence_started_at,
+            expected_message_test_run_id=effective_expected_message_test_run_id,
             cmd_id=cmd_id,
             timeout_sec=timeout_sec,
             poll_interval_sec=poll_interval_sec,
@@ -482,7 +546,7 @@ def validate_lte_command_loop(
         errors.extend(observation_errors)
 
     completed_at_text = utc_now()
-    result = "PASS" if not errors else "FAIL"
+    result = "ARMED" if arm_only else ("PASS" if not errors else "FAIL")
     output_dir.mkdir(parents=True, exist_ok=True)
     report_path = output_dir / "lte_command_loop_report.json"
     markdown_path = output_dir / "lte_command_loop_report.md"
@@ -499,12 +563,18 @@ def validate_lte_command_loop(
         "test_run_id": test_run_id,
         "started_at": started_at_text,
         "completed_at": completed_at_text,
+        "evidence_since": evidence_since,
+        "evidence_started_at": evidence_started_at_text,
+        "evidence_since_resolution": evidence_since_resolution,
         "expected_fw_version": expected_fw_version,
         "expected_ack_test_run_id": expected_ack_test_run_id,
         "effective_expected_ack_test_run_id": expected_ack_test_run_id or test_run_id,
+        "expected_message_test_run_id": expected_message_test_run_id,
+        "effective_expected_message_test_run_id": effective_expected_message_test_run_id,
         "require_location_report": require_location_report,
         "require_location_observation": require_location_observation,
         "require_fix": require_fix,
+        "arm_only": arm_only,
         "existing_command_id": existing_command_id,
         "health": health,
         "test_run": test_run,
@@ -549,6 +619,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "CONFIG_EGOLINK_TEST_RUN_ID is fixed at build time."
         ),
     )
+    parser.add_argument(
+        "--expected-message-test-run-id",
+        help=(
+            "Expected test_run_id inside required location_report/location_observation messages. "
+            "Defaults to --test-run-id. Use this when command test-run identity differs from "
+            "the firmware image CONFIG_EGOLINK_TEST_RUN_ID."
+        ),
+    )
     parser.add_argument("--command", default="set_report_interval")
     parser.add_argument("--interval-ms", type=int, default=10000)
     parser.add_argument(
@@ -570,6 +648,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--existing-command-id",
         help="Wait for an already queued command instead of creating a new command.",
     )
+    parser.add_argument(
+        "--evidence-since",
+        choices=["command-created", "validator-start", "test-run-created"],
+        default="command-created",
+        help=(
+            "Timestamp anchor for required location evidence. command-created lets "
+            "reconciliation include frames uploaded during a manual USB-Free reboot "
+            "before the validator was restarted."
+        ),
+    )
+    parser.add_argument(
+        "--arm-only",
+        action="store_true",
+        help="Create or select the command, write a report with its cmd_id, and exit without waiting for ACK.",
+    )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
@@ -590,12 +683,15 @@ def main(argv: list[str] | None = None) -> int:
             poll_interval_sec=args.poll_interval_sec,
             expected_fw_version=args.expected_fw_version,
             expected_ack_test_run_id=args.expected_ack_test_run_id,
+            expected_message_test_run_id=args.expected_message_test_run_id,
             command_name=args.command,
             interval_ms=args.interval_ms,
             existing_command_id=args.existing_command_id,
             require_location_report=args.require_location_report or args.require_fix,
             require_location_observation=args.require_location_observation,
             require_fix=args.require_fix,
+            evidence_since=args.evidence_since.replace("-", "_"),
+            arm_only=args.arm_only,
         )
     except FieldValidationError as exc:
         print(f"FAIL LTE-003 command loop validation: {exc}", file=sys.stderr)
@@ -603,10 +699,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
-        print(
-            "PASS LTE-003 command loop validation "
-            f"device={report['device_id']} cmd_id={report['ack_summary']['cmd_id']}"
-        )
+        if report["result"] == "ARMED":
+            print(
+                "ARMED LTE command validation "
+                f"device={report['device_id']} cmd_id={report['command']['cmd_id']}"
+            )
+        else:
+            print(
+                "PASS LTE-003 command loop validation "
+                f"device={report['device_id']} cmd_id={report['ack_summary']['cmd_id']}"
+            )
         print(f"Report: {report['markdown_report_path']}")
     return 0
 

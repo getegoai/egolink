@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-28
+last_verified: 2026-06-30
 verified_by: codex
 ---
 
@@ -31,6 +31,55 @@ It is not allowed as the formal runtime path or the only acceptance evidence.
 [ ] Real device has passed R1 before R2 outdoor testing.
 [ ] test_run_id has been created.
 ```
+
+## Reboot-Aware Command Validation
+
+Some firmware slices intentionally consume one command per independent-power
+boot. For those gates, do not keep enqueueing new commands after the boot-time
+command loop has already exited. Use a two-step validator flow.
+
+First arm exactly one command on the VPS and record the command ID:
+
+```powershell
+python scripts\validate_lte_command_loop.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id <device-id> `
+  --test-run-id <test-run-id> `
+  --expected-fw-version <firmware-version> `
+  --command request_location `
+  --require-location-report `
+  --require-location-observation `
+  --arm-only `
+  --json
+```
+
+Then the operator reboots the device on independent power with USB
+disconnected. After the device has had time to poll and upload evidence,
+reconcile the same command instead of creating another one:
+
+```powershell
+python scripts\validate_lte_command_loop.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id <device-id> `
+  --test-run-id <test-run-id> `
+  --expected-fw-version <firmware-version> `
+  --expected-ack-test-run-id <firmware-test-run-id> `
+  --expected-message-test-run-id <firmware-test-run-id> `
+  --command request_location `
+  --existing-command-id <cmd-id> `
+  --require-location-report `
+  --require-location-observation `
+  --evidence-since command-created `
+  --json
+```
+
+`command-created` is the default freshness anchor. It lets reconciliation count
+raw-frame evidence uploaded during the USB-Free reboot before the validator
+process was restarted. Use `--evidence-since validator-start` only when the
+test specifically requires evidence after the current validator invocation.
+When the command/test-run batch ID differs from the firmware image's
+`CONFIG_EGOLINK_TEST_RUN_ID`, set both `--expected-ack-test-run-id` and
+`--expected-message-test-run-id` to the firmware-side value.
 
 ## R2.1 Observability Completion Gate
 

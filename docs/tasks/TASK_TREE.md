@@ -556,6 +556,23 @@ motion candidate
     Wi-Fi/IMU/power fusion, LTE long-run stability, reconnect recovery,
     battery/power behavior, enclosure behavior, or product readiness is
     claimed by this task.
+- `FIELD-002 USB-Free Reboot-Aware Command Validator`
+  - Path: `docs/tasks/done/FIELD-002_USB_FREE_REBOOT_AWARE_COMMAND_VALIDATOR.md`
+  - Status: completed as field-validation tooling only; no hardware action was
+    performed by this task.
+  - Goal: make one-command-per-boot USB-Free slices validate through a stable
+    arm/reboot/reconcile workflow instead of repeated ad hoc command enqueueing.
+  - Evidence: `scripts/validate_lte_command_loop.py` supports `--arm-only`
+    reports and `--evidence-since command-created|validator-start|test-run-created`;
+    required location messages can use `--expected-message-test-run-id`;
+    `scripts/run_fw001_hw_r1.ps1` exposes `-ArmLteCommandOnly`,
+    `-LteEvidenceSince`, and `-ExpectedMessageTestRunId`;
+    `docs/development/FIELD_TEST.md` and
+    `firmware/mqtt_heartbeat/README.md` document the flow. Focused tests passed
+    with 14 tests, and full `scripts\verify.ps1` passed with 294 tests.
+  - Boundary: no firmware flash, real VPS command enqueue, hardware runtime
+    pass, long LTE stability, reconnect, battery/power, enclosure behavior, or
+    product readiness is claimed.
 - `STAB-001A Short Baseline Gate Tooling`
   - Path: `docs/tasks/done/STAB-001A_SHORT_BASELINE_GATE_TOOLING.md`
   - Status: completed as gate tooling only.
