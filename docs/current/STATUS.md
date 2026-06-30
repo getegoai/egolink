@@ -6,6 +6,22 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-06-30: LOC-004A firmware was flashed on the connectivity node through
+`COM4` after explicit operator confirmation. Flash used firmware version
+`0.1.0-loc004a-cell-observation`, test run
+`loc004a-cell-observation-20260630-001`, source/app commit `d9e4389`, and
+binary
+`firmware/mqtt_heartbeat/build_loc004a_cell_observation/egolink_mqtt_heartbeat.bin`
+(`298416` bytes, SHA256
+`9D6E94A2DB1EAC435BAE4B65B88B8F7D7431EEECAA42C0008D271097ED1E68A9`).
+`esptool.py` detected an ESP32-S3 QFN56 rev v0.2 on `COM4`, wrote bootloader,
+app, and partition table, verified hashes, and completed hard reset. Flash
+evidence is recorded at
+`reports/field_validation/loc004a-cell-observation-20260630-001/flash_report.md`.
+This is flash evidence only; USB-Free runtime validation for
+`request_location -> location_report -> location_observation -> ACK` remains
+pending.
+
 2026-06-30: LOC-004A Real Cell Location Observation is implemented,
 VPS-deployed, and build-verified as the next explainability increment after
 KR-002. The Message Hub on `203.0.113.10:8790` was redeployed without touching

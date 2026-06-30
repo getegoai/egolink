@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-004 raw request-location firmware currently flashed on COM4; USB-Free LTE-004 request-location thin slice passed; LOC-004A cell-observation image is build-verified but not flashed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LOC-004A cell-observation firmware currently flashed on COM4; USB-Free LOC-004A runtime validation pending; LTE-004 request-location thin slice previously passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -526,8 +526,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   power, and enclosure behavior remain unverified.
 - LOC-004A real cell location observation is implemented, VPS-deployed, and
   build-verified as `0.1.0-loc004a-cell-observation` /
-  `loc004a-cell-observation-20260630-001`, but it has not been flashed or
-  USB-Free runtime validated. Message Hub derives raw
+  `loc004a-cell-observation-20260630-001`, and was flashed on `COM4` after
+  explicit operator confirmation, but it has not been USB-Free runtime
+  validated. Message Hub derives raw
   `event_type=location_observation` key/value frames into `cell`, `lte`,
   `transport`, `lte_http`, and `location_belief` fields after raw storage.
   Unknown observations preserve existing useful `location_memory` and can
@@ -546,6 +547,13 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   (`298416` bytes). Focused tests passed with 50 tests, `context_lint` passed,
   full `verify.ps1` passed with 292 tests, `git diff --check` passed, and the
   guarded ESP-IDF prepare/build passed.
+- LOC-004A flash evidence is recorded at
+  `reports/field_validation/loc004a-cell-observation-20260630-001/flash_report.md`.
+  `esptool.py` detected ESP32-S3 QFN56 rev v0.2 on `COM4`, wrote bootloader,
+  app, and partition table, verified hashes, and completed hard reset. This is
+  flash evidence only; `request_location -> location_report ->
+  location_observation -> ACK` over independent power with USB disconnected
+  remains pending.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

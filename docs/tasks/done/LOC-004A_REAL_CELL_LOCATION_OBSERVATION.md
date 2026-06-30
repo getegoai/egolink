@@ -88,6 +88,7 @@ no-fix location attempts inspectable from the VPS/Web path without USB logs.
 - [x] Focused firmware/server/validator/runner tests pass.
 - [x] `python scripts/context_lint.py` passes.
 - [x] Full `scripts/verify.ps1` passes if behavior changes.
+- [x] Firmware flashes on `COM4` after explicit operator confirmation.
 
 ## Evidence
 
@@ -127,11 +128,15 @@ no-fix location attempts inspectable from the VPS/Web path without USB logs.
   `scripts\prepare_fw001_hw_config.ps1` with
   `-EnableSim7670Gnss -EnableSim7670LocationObservation -BuildDir
   build_loc004a_cell_observation -Build` PASS.
+- Flash:
+  `reports/field_validation/loc004a-cell-observation-20260630-001/flash_report.md`
+  records PASS on `COM4`; ESP32-S3 QFN56 rev v0.2 detected, bootloader/app/
+  partition table written, hashes verified, and hard reset completed.
 
 ## Follow-Up Hardware Gate
 
-Flash and USB-Free runtime validation are intentionally a separate explicit
-operator step. The expected gate is the guarded runner with
+USB-Free runtime validation is intentionally a separate explicit operator
+step. The expected gate is the guarded runner with
 `-EnableSim7670LocationObservation`, `-LteCommandName request_location`,
 `-RequireLteLocationReport`, and `-RequireLteLocationObservation`.
 
