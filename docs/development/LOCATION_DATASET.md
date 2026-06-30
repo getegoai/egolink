@@ -32,7 +32,7 @@ derived events, labels, and a manifest.
 | Derived event view | `message_hub_event.schema.json` and Message Hub events | Provide normalized `location_report`, `location_observation`, LTE, GNSS, power, IMU, Wi-Fi, and belief fields for Web/API/export compatibility. |
 | Test-run export | `/api/v1/test-runs/{test_run_id}/export` | Rebuild a bounded run with messages, raw-frame summaries, observability summary, commands, ACKs, and failure explanations. |
 | Session recording | PC Simulator recording directories | Preserve replayable safety-loop windows, sensor frames, events, annotations, quality reports, and replay outputs. |
-| Dataset sample | future `DATA-001` output | Immutable algorithm sample that links raw evidence, derived features, labels, privacy class, split assignment, and generator versions. |
+| Dataset sample | `shared/contracts/location_fusion_sample.schema.json` and `scripts/export_location_fusion_dataset.py` | Immutable algorithm sample that links raw evidence, derived features, labels, privacy class, split assignment, and generator versions. |
 
 ## Current Algorithm-Relevant Inputs
 
@@ -122,21 +122,37 @@ payloads.
 - Dataset exports under `model_artifacts/` or runtime directories are not
   committed unless explicitly converted into small synthetic fixtures.
 
-## DATA-001 Implementation Direction
+## Implemented DATA-001 Baseline
 
-`DATA-001` should establish the first dataset-generation path:
+`DATA-001` establishes the first dataset-generation path without changing the
+live device wire protocol:
 
-1. Define a small `location_fusion_sample` contract or JSONL manifest shape.
-2. Add a server or script export that builds observation windows from a
-   `test_run_id` export.
-3. Preserve raw-frame lineage by ID, byte length, SHA-256, CRC, and parse
-   status without copying raw private payload bytes into normal reports.
-4. Include failure windows, not only successful GNSS or LTE runs.
-5. Add quality checks for missing timestamps, sequence regressions, duplicate
-   command execution, stale commands, privacy class, label source, and split
-   leakage.
-6. Keep the first output as JSONL plus manifest. Parquet or a database-backed
-   feature store can follow after the schema stabilizes.
+- Contract: `shared/contracts/location_fusion_sample.schema.json`.
+- Exporter: `scripts/export_location_fusion_dataset.py`.
+- Input: a Message Hub test-run export JSON object.
+- Output: `samples.jsonl` plus `manifest.json`; the default output root is
+  ignored runtime/report storage under `reports/location_fusion_datasets/`.
+- Unit tests: `quality_tests/test_location_fusion_dataset_export.py`.
+
+The exporter currently builds command-scoped `location_request_window`,
+`known_place_calibration_window`, passive observation windows, and raw-frame
+failure windows. It keeps raw payload bytes out of dataset samples, preserves
+raw-frame IDs and hashes, flags private coordinates, and blocks training by
+default when private location appears.
+
+## DATA-001 Follow-On Direction
+
+The baseline leaves these deliberate next steps:
+
+1. Add operator labels and known-place calibration labels as explicit inputs.
+2. Add split-leakage checks across multiple sessions, devices, places, and
+   time blocks.
+3. Extend feature extraction as real firmware-side Wi-Fi, IMU, and power
+   observations become verified.
+4. Add Parquet or a database-backed feature store after the JSONL contract
+   stabilizes.
+5. Add model-training dataset manifests only after consent and privacy policy
+   are explicit for the selected runs.
 
 DATA-001 is a data foundation task. It should not introduce a learned fusion
 model, change device wire fields, or claim product positioning accuracy.

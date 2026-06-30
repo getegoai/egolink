@@ -96,22 +96,6 @@ motion candidate
 
 ## Active Queue
 
-- `DATA-001 Location Fusion Dataset Baseline`
-  - Path:
-    `docs/tasks/active/DATA-001_LOCATION_FUSION_DATASET_BASELINE.md`
-  - Status: proposed.
-  - Goal: create the first repeatable data-export path for location fusion and
-    future model training by rebuilding observation windows from test-run
-    exports, raw-frame lineage, derived location/LTE/GNSS/IMU/power features,
-    labels, and quality checks.
-  - Current entry condition: KR-003 provides a released raw LTE
-    `request_location -> location_report -> location_observation -> ACK`
-    skeleton with real firmware-side SIM7670G cell/LTE observation; DATA-001
-    should turn those evidence shapes into dataset samples without changing
-    device wire fields.
-  - Boundary: no learned model training, no cell-only positioning accuracy
-    claim, no firmware flash, no long LTE stability, and no private coordinate,
-    Wi-Fi, audio, or image payloads copied into committed docs.
 - `LTE-003 LTE HTTP Command Poll And ACK`
   - Path: `docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md`
   - Status: raw-frame acceptance passed through FW-003; legacy JSON
@@ -758,10 +742,14 @@ motion candidate
 ## Data, Quality, And Replay
 
 - Location fusion dataset baseline
-  - Status: proposed as `DATA-001`.
-  - Current role: define how raw-frame lineage, derived location observations,
-    labels, quality checks, privacy class, and split assignment become
-    repeatable algorithm samples.
+  - Path: `docs/tasks/done/DATA-001_LOCATION_FUSION_DATASET_BASELINE.md`
+  - Status: completed as `DATA-001`.
+  - Current role: exports Message Hub test-run JSON into JSONL observation
+    windows plus a manifest, preserving raw-frame lineage, labels, quality
+    checks, privacy class, and split assignment for future fusion work.
+  - Evidence: `shared/contracts/location_fusion_sample.schema.json`,
+    `scripts/export_location_fusion_dataset.py`, and
+    `quality_tests/test_location_fusion_dataset_export.py`.
 - Session recording
   - Status: implemented.
   - Current role: converts event logs into structured recording directories.
@@ -796,10 +784,11 @@ motion candidate
    queue, command-scoped no-fix GNSS report, real firmware-side SIM7670G
    cell/LTE observation, raw ACK, Web/API derived view, and reboot-aware
    validator workflow.
-2. Run `DATA-001` before serious fusion work: define observation-window
-   samples, raw-frame lineage, label/quality/privacy fields, and dataset
-   manifests so later large data collection can be reused for model training.
-3. Run `LOC-005A` after or alongside DATA-001 to add real firmware-side
+2. Treat `DATA-001` as the completed dataset baseline: use
+   `scripts/export_location_fusion_dataset.py` to turn selected test-run
+   exports into JSONL samples and manifests before large collection or model
+   training.
+3. Run `LOC-005A` next to add real firmware-side
    Wi-Fi/IMU/power observations as explicit `observed`, `unknown`, or
    `unverified` inputs, not as inferred capabilities.
 4. Add `OBS-003` Web/report visibility for current run, key release, and
