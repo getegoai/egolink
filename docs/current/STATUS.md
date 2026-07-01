@@ -6,6 +6,35 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: LTE-008 USB-Free runtime validation attempt 1 produced an
+explainable FAIL after the operator connected independent power and
+disconnected USB. Validator command `cmd-000029` was received and selected by
+the device; raw LTE `location_report seq=4` reached the VPS, and raw LTE ACK
+`seq=6` also reached the VPS with `transport.type=lte`, poll HTTP
+`LTE_HTTP_OK` / HTTP `200`, and `command.parse_status=raw_command_selected`.
+The command correctly ended as `error` because firmware reported
+`lte raw location_observation upload failed`; ACK reliability showed
+`cache_state=volatile_outbox`, `cache_retry_policy=single_retry_current_boot`,
+raw POST `1/1/0`, `cache_dropped_message_count=1`, and
+`cache_last_drop_reason=location_observation_payload_truncated`. Evidence is
+under
+`reports/field_validation/lte008-bounded-raw-retry-20260701-001/`. LTE-008
+fix1 was then implemented as a firmware payload compaction: optional long
+Wi-Fi/IMU/power reason lines were removed from raw LTE
+`location_observation` while preserving source/evidence status, belief,
+network, cache, and retry fields. Focused firmware/LTE tests passed with 20
+tests, `python scripts/context_lint.py` passed, `git diff --check` passed, and
+full `scripts/verify.ps1` passed with 316 tests. Guarded ESP-IDF build passed
+with firmware
+`0.1.0-lte008-bounded-raw-retry-fix1`, test run
+`lte008-bounded-raw-retry-fix1-20260701-001`, binary
+`firmware/mqtt_heartbeat/build_lte008_bounded_raw_retry_fix1/egolink_mqtt_heartbeat.bin`
+(`301680` bytes), and `flash_intentionally_not_run=true`. LTE-008 fix1 has
+not been flashed or USB-Free runtime validated yet. No GitLab change, durable
+offline cache, reconnect recovery, long LTE stability, GNSS acceptance,
+battery/power behavior, enclosure behavior, learned model behavior, or
+product-readiness claim is changed.
+
 2026-07-01: LTE-008 Bounded Raw POST Retry Observability is implemented as a
 firmware/server-Web build-verified increment after LTE-007. Firmware raw LTE
 `location_report`, `location_observation`, and ACK uploads now share a bounded

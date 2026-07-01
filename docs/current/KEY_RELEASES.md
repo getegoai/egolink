@@ -343,13 +343,15 @@ claiming those mechanisms are implemented.
   plus observed cache drop counters. The Message Hub/Web derivation was
   redeployed without touching GitLab, and LTE-005 now sees G6 cache/drop
   observability as `PASS` on the LTE-007 export.
-- LTE-008 has since added a build-verified bounded current-boot raw POST retry
-  and Cache Retry visibility. COM4 flash has passed, and it still needs
-  operator-confirmed USB-Free runtime validation before it can be promoted into
-  a key-release runtime baseline.
-- The next gate should validate bounded retry visibility on hardware runtime,
-  then move toward reconnect recovery or bounded store-forward design before
-  any long LTE stability gate.
+- LTE-008 has since added bounded current-boot raw POST retry and Cache Retry
+  visibility. COM4 flash passed, but USB-Free runtime attempt 1 failed in an
+  explainable way with `location_observation_payload_truncated`. LTE-008 fix1
+  is build-verified and still needs operator-confirmed COM4 flash plus
+  USB-Free runtime validation before it can be promoted into a key-release
+  runtime baseline.
+- The next gate should validate LTE-008 fix1 on hardware runtime, then move
+  toward reconnect recovery or bounded store-forward design before any long
+  LTE stability gate.
 
 ## Release Gate Policy
 

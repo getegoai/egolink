@@ -108,11 +108,36 @@ across power loss.
   records `COM4` flash PASS for ESP32-S3 QFN56 rev v0.2, MAC
   `02:00:00:00:00:03`, app size `301824` bytes, and verified bootloader/app/
   partition hashes.
+- USB-Free runtime attempt 1:
+  `reports/field_validation/lte008-bounded-raw-retry-20260701-001/` records
+  FAIL for `cmd-000029`. The device selected the raw `request_location`
+  command, uploaded raw LTE `location_report seq=4`, and ACKed over LTE
+  (`seq=6`, `LTE_HTTP_OK` / HTTP `200`), but command/ACK status is `error`
+  because raw LTE `location_observation` payload construction was truncated.
+  The ACK retained useful reliability evidence:
+  `cache_state=volatile_outbox`,
+  `cache_retry_policy=single_retry_current_boot`, raw POST `1/1/0`,
+  `cache_dropped_message_count=1`, and
+  `cache_last_drop_reason=location_observation_payload_truncated`.
+- LTE-008 fix1 build:
+  optional long Wi-Fi/IMU/power reason lines were removed from raw LTE
+  `location_observation` to preserve source/evidence status, belief,
+  network, cache, and retry fields while keeping the payload within the
+  existing compact buffer. Focused firmware/LTE tests passed with 20 tests.
+  Guarded ESP-IDF build passed with firmware
+  `0.1.0-lte008-bounded-raw-retry-fix1`, test run
+  `lte008-bounded-raw-retry-fix1-20260701-001`, binary
+  `firmware/mqtt_heartbeat/build_lte008_bounded_raw_retry_fix1/egolink_mqtt_heartbeat.bin`
+  (`301680` bytes). After the fix1 code/docs update,
+  `python scripts/context_lint.py` passed, `git diff --check` passed, and full
+  `scripts/verify.ps1` passed with 316 tests. The fix1 image has not been
+  flashed.
 
 ## Completion Boundary
 
 LTE-008 is a firmware/server-Web observability and bounded retry increment
-with COM4 flash evidence. It does not prove USB-Free runtime behavior, modify
-GitLab, implement durable offline cache, prove reconnect recovery, prove long
-LTE stability, prove battery/power behavior, prove GNSS acceptance, or make
-any product-readiness claim.
+with COM4 flash evidence and one explainable USB-Free runtime failure. Fix1 is
+build-verified but not flashed. This task does not prove successful USB-Free
+runtime behavior, modify GitLab, implement durable offline cache, prove
+reconnect recovery, prove long LTE stability, prove battery/power behavior,
+prove GNSS acceptance, or make any product-readiness claim.
