@@ -6,6 +6,34 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: REL-007 promotes KR-005 Reliability Explainability Preflight
+Baseline to released engineering key version `0.1.0-key-release-005` after
+LTE-006 fix1 USB-Free runtime validation. LTE-006 fix1 compacts the raw LTE
+`location_observation` payload while preserving cell/LTE evidence, Wi-Fi/IMU/
+power source-state labels, `reliability.network` fields, and explicit cache
+non-claim fields. Build passed with firmware
+`0.1.0-lte006-reliability-nonclaim-fix1`, test run
+`lte006-reliability-nonclaim-fix1-20260701-001`, and binary
+`firmware/mqtt_heartbeat/build_lte006_reliability_nonclaim_fix1/egolink_mqtt_heartbeat.bin`
+(`299824` bytes). COM4 flash passed after explicit operator confirmation.
+USB-Free runtime validation passed after the operator connected independent
+power and disconnected USB: command `cmd-000026` produced raw LTE
+`location_report seq=60`, raw LTE `location_observation seq=61`, and raw LTE
+ACK `seq=62`, all under the fix1 test run. The observation showed
+`LTE_READY`, cell ID `180571649`, assigned IP `10.141.88.185`, Wi-Fi
+`disabled` / `missing`, IMU `unverified` / `mock`, power `mock`, and
+`location_belief.state=Unknown`. LTE-005 over the fix1 export returned
+expected `WARN` because concrete cache/drop-message evidence remains absent.
+KR-005 manifest now has all gates `PASS`; local report is under
+`reports/key_releases/KR-005/`. Validation passed: focused KR/LTE/firmware
+tests passed with 25 tests; `python scripts/context_lint.py` passed; guarded
+ESP-IDF build passed; USB-Free runtime validation passed; LTE-005 fix1 runtime
+gate returned expected `WARN`; `scripts\verify.ps1` passed with 314 tests; and
+KR-005 release gate passed with no warnings; `git diff --check` passed. No VPS
+deployment, GitLab change, durable offline cache, reconnect recovery, long LTE
+stability, GNSS acceptance, battery/power behavior, enclosure behavior,
+learned model behavior, or product-readiness claim is changed.
+
 2026-07-01: REL-006 creates KR-005 Reliability Explainability Preflight
 Baseline as a release-candidate gate after LTE-005, OBS-004, and LTE-006. New
 manifest:

@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LOC-005A source-state firmware currently flashed on COM4 and USB-Free runtime validated with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-006 fix1 reliability non-claim firmware currently flashed on COM4 and USB-Free runtime validated with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -601,6 +601,28 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `wifi.source_status=disabled`, `imu.source_status=unverified`,
   `power.source_status=mock`, `transport.type=lte`), and raw LTE ACK `seq=4`
   (`cmd_id=cmd-000024`, status `ok`, `LTE_HTTP_OK` / HTTP `200`).
+- LTE-006 fix1 reliability non-claim firmware has been implemented,
+  build-verified, flashed on `COM4`, and USB-Free runtime validated as
+  `0.1.0-lte006-reliability-nonclaim-fix1` /
+  `lte006-reliability-nonclaim-fix1-20260701-001`. It compacts the raw LTE
+  `location_observation` payload to stay below the known SIM7670G large HTTP
+  payload risk range while preserving network state, cache non-claim, source
+  state, transport, and belief explanation fields. Flash on `COM4` passed
+  after explicit operator confirmation; `esptool.py` detected ESP32-S3 QFN56
+  rev v0.2, wrote bootloader, app (`299824` bytes), and partition table, and
+  verified hashes. USB-Free runtime validation passed after the operator
+  connected independent power and disconnected USB. Evidence is under
+  `reports/field_validation/lte006-reliability-nonclaim-fix1-20260701-001/`:
+  raw LTE `location_report seq=60` (`fix=false`, `gnss_state=no_fix`,
+  `transport.type=lte`), raw LTE `location_observation seq=61`
+  (`cell.cell_id=180571649`, `lte.reason_code=LTE_READY`, assigned IP
+  `10.141.88.185`, `wifi.source_status=disabled`,
+  `imu.source_status=unverified`, `power.source_status=mock`,
+  `location_belief.state=Unknown`, `transport.type=lte`), and raw LTE ACK
+  `seq=62` (`cmd_id=cmd-000026`, status `ok`, `LTE_HTTP_OK` / HTTP `200`).
+  LTE-005 over the fix1 export returns expected `WARN` because real cache/drop
+  evidence remains absent; this is not a long LTE stability, reconnect
+  recovery, durable cache, or product-readiness claim.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

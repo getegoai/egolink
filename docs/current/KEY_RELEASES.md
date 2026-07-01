@@ -256,12 +256,12 @@ preserving the model-training and positioning-accuracy non-claims.
 
 ## KR-005 Reliability Explainability Preflight Baseline
 
-- Status: release candidate.
+- Status: released engineering key version.
 - Release date: 2026-07-01.
-- Release version: `0.1.0-key-release-005-rc1`.
-- Firmware version: `0.1.0-lte006-reliability-nonclaim` build-verified only.
-- Firmware build/test run:
-  `lte006-reliability-nonclaim-20260630-001`.
+- Release version: `0.1.0-key-release-005`.
+- Firmware version: `0.1.0-lte006-reliability-nonclaim-fix1`.
+- Device/test run: `ego-link-r1-connectivity-001` /
+  `lte006-reliability-nonclaim-fix1-20260701-001`.
 - Manifest:
   `docs/current/key_releases/KR-005_RELIABILITY_EXPLAINABILITY_PREFLIGHT.json`.
 - Gate tool:
@@ -270,20 +270,23 @@ preserving the model-training and positioning-accuracy non-claims.
   `reports/key_releases/KR-005/release_gate_report.json` and
   `reports/key_releases/KR-005/release_gate_report.md`.
 
-### Release-Candidate Meaning
+### Release Meaning
 
 KR-005 freezes the reliability explainability preflight path:
 
 ```text
 LTE-005 offline reliability gate
 -> OBS-004 reliability.network/cache visibility
--> LTE-006 raw LTE location_observation network state + cache non-claim fields
--> KR-005 release-candidate gate
+-> LTE-006 fix1 compact raw LTE location_observation network/cache non-claim fields
+-> USB-Free request_location runtime evidence over SIM7670G LTE
+-> KR-005 release gate
 ```
 
-It is a release candidate, not a released engineering key version, because
-LTE-006 has not yet been flashed or validated in USB-Free runtime. The point of
-the candidate is to stabilize the gate that the next hardware run will use.
+It is a released engineering key version because the compact LTE-006 fix1
+payload passed a real USB-Free runtime command on independent power with USB
+disconnected, and the KR-005 gate now binds that evidence. It is still a
+preflight baseline: it explains missing cache/reconnect capability rather than
+claiming those mechanisms are implemented.
 
 ### Evidence Summary
 
@@ -294,25 +297,34 @@ the candidate is to stabilize the gate that the next hardware run will use.
 - OBS-004 exposes optional `reliability.network` and `reliability.cache`
   fields through Message Hub storage, exports, current-run context, and Web
   Dashboard.
-- LTE-006 firmware build passed with
-  `0.1.0-lte006-reliability-nonclaim`; the binary is
-  `firmware/mqtt_heartbeat/build_lte006_reliability_nonclaim/egolink_mqtt_heartbeat.bin`.
-- LTE-006 raw LTE `location_observation` adds `network_mode=LTE`,
+- LTE-006 fix1 firmware build passed with
+  `0.1.0-lte006-reliability-nonclaim-fix1`; the binary is
+  `firmware/mqtt_heartbeat/build_lte006_reliability_nonclaim_fix1/egolink_mqtt_heartbeat.bin`.
+- LTE-006 fix1 compacts raw LTE `location_observation` to stay below the
+  SIM7670G HTTP payload danger zone while preserving `network_mode=LTE`,
   `network_rssi`, `network_state`, `network_last_error`,
-  `cache_state=not_enabled`, `cache_source_status=unverified`, and
-  `cache_last_drop_reason=cache_not_enabled`.
-- LTE-005 smoke over the existing LOC-005A export returns expected `WARN`:
+  `cache_state=not_enabled`, `cache_source_status=unverified`,
+  `cache_last_drop_reason=cache_not_enabled`, source-state labels, and belief
+  explanation.
+- COM4 flash passed after explicit operator confirmation; app image size was
+  `299824` bytes and bootloader/app/partition hashes verified.
+- USB-Free runtime validation passed after the operator connected independent
+  power and disconnected USB. Command `cmd-000026` produced raw LTE
+  `location_report seq=60`, raw LTE `location_observation seq=61`, and raw
+  LTE ACK `seq=62`, all with test run
+  `lte006-reliability-nonclaim-fix1-20260701-001`.
+- Runtime `location_observation` showed LTE `reason_code=LTE_READY`, cell ID
+  `180571649`, RSSI `-92`, RSRP `-97`, assigned IP `10.141.88.185`, Wi-Fi
+  `disabled` / `missing`, IMU `unverified` / `mock`, power `mock`, and
+  `location_belief.state=Unknown`.
+- LTE-005 over the fix1 runtime export returns expected `WARN`: concrete
   cache/drop-message evidence is still absent, raw-frame retention remains
   `PASS`, and the gate does not synthesize false cache evidence.
-- KR-005 gate passed with one expected warning:
-  `gate G5-LTE006-USB-FREE-RUNTIME is NOT_RUN`.
-- KR-005 manifest marks LTE-006 USB-Free runtime as `NOT_RUN` pending explicit
-  operator hardware confirmation.
+- KR-005 gate passed with all manifest gates `PASS`.
 
 ### Non-Claims
 
 - No product readiness claim.
-- No LTE-006 USB-Free runtime validation claim.
 - No long LTE stability claim.
 - No reconnect recovery claim.
 - No durable offline cache or store-forward claim.

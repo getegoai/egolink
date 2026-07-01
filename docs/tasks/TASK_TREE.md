@@ -126,6 +126,28 @@ motion candidate
   - Boundary: no firmware flash, runtime validation, model training, product
     readiness, positioning accuracy, long LTE stability, reconnect, GNSS
     acceptance, or battery/power claim.
+- `REL-007 KR-005 Reliability Explainability Release`
+  - Path:
+    `docs/tasks/done/REL-007_KR005_RELIABILITY_EXPLAINABILITY_RELEASE.md`
+  - Status: completed as the KR-005 release promotion after LTE-006 fix1
+    USB-Free runtime validation.
+  - Evidence: LTE-006 fix1 source commit `98781de`, binary
+    `firmware/mqtt_heartbeat/build_lte006_reliability_nonclaim_fix1/egolink_mqtt_heartbeat.bin`,
+    USB-Free runtime evidence under
+    `reports/field_validation/lte006-reliability-nonclaim-fix1-20260701-001/`,
+    LTE-005 reliability report under
+    `reports/lte_reliability/lte006-reliability-nonclaim-fix1-20260701-001/`,
+    and updated KR-005 manifest
+    `docs/current/key_releases/KR-005_RELIABILITY_EXPLAINABILITY_PREFLIGHT.json`.
+  - Current visible result: KR-005 is a released engineering key version for
+    the reliability explainability preflight slice. LTE-006 fix1 passed one
+    USB-Free `request_location -> location_report -> location_observation ->
+    ACK` runtime over SIM7670G LTE with explicit network state and cache
+    non-claim fields. LTE-005 over the fix1 export remains expected `WARN`
+    because concrete cache/drop-message evidence is still absent.
+  - Boundary: no VPS deployment, GitLab change, product readiness, long LTE
+    stability, reconnect recovery, cache durability, cache/drop-message
+    reliability, GNSS acceptance, enclosure behavior, or battery/power claim.
 - `REL-006 KR-005 Reliability Explainability Release Gate`
   - Path:
     `docs/tasks/done/REL-006_KR005_RELIABILITY_EXPLAINABILITY_RELEASE_GATE.md`
