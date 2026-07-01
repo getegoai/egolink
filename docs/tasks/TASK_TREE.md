@@ -291,8 +291,9 @@ motion candidate
     `scripts\verify.ps1` passed with 319 tests after the validator-gate
     addition; guarded ESP-IDF build produced
     `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
-    (`301776` bytes) with the fail-once test switch enabled. Message Hub was
-    deployed to the VPS after commit `10e28fe`; public health/auth checks and
+    (`301776` bytes) with the fail-once test switch enabled, then was rerun
+    after the validator-gate commit with app version `85d799a`. Message Hub
+    was deployed to the VPS after commit `10e28fe`; public health/auth checks and
     a VPS-local in-memory fail-once smoke passed. No firmware flash or
     USB-Free runtime validation has been performed yet.
 

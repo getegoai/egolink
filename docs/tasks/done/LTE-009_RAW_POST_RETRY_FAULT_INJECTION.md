@@ -107,8 +107,8 @@ reposts the same raw frame successfully.
   `powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 -HostName 203.0.113.10 -FwVersion 0.1.0-lte009-raw-post-retry-fault -TestRunId lte009-raw-post-retry-fault-20260701-001 -BuildDir build_lte009_raw_post_retry_fault -EnableSim7670Gnss -EnableSim7670LocationObservation -EnableRawPostFailOnceTest -Build -Json`
   passed and generated
   `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
-  (`301776` bytes) from app version `10e28fe`. The script did not flash
-  hardware.
+  (`301776` bytes). After the validator-gate commit, the guarded build was
+  rerun and produced app version `85d799a`. The script did not flash hardware.
 - VPS deployment:
   `scripts/deploy_message_hub_vps.ps1 -HostName 203.0.113.10 -SshKey <local ignored key> -Public`
   deployed the Message Hub to `/opt/egolink-message-hub` and restarted

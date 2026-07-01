@@ -687,8 +687,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   a Message Hub fail-once raw-ingest path that retains the first marked raw
   frame as `injected_failure` before returning HTTP 503. The binary is
   `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
-  (`301776` bytes). The updated Message Hub was deployed to the VPS after
-  commit `10e28fe`; `/health`, unauthenticated `/api/state` = `401`,
+  (`301776` bytes), rebuilt after the validator-gate commit with app version
+  `85d799a`. The updated Message Hub was deployed to the VPS after commit
+  `10e28fe`; `/health`, unauthenticated `/api/state` = `401`,
   authenticated `/api/state`, and a VPS-local in-memory fail-once smoke all
   passed. This image has not been flashed or USB-Free runtime validated.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.

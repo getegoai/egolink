@@ -16,8 +16,10 @@ a later `ok` retry-derived `location_report` for the same command.
 `-RequireRawPostFailOnce`, so the eventual LTE-009 USB-Free hardware run can
 be executed as a fixed gate rather than a manual Web inspection. Focused
 validator/runner tests passed with 16 tests, and full `scripts\verify.ps1`
-passed with 319 tests. No firmware flash or hardware runtime validation was
-performed by this tooling update.
+passed with 319 tests. The LTE-009 guarded ESP-IDF build was rerun after this
+commit, producing the same binary path and size with app version `85d799a` and
+`flash_intentionally_not_run=true`. No firmware flash or hardware runtime
+validation was performed by this tooling update.
 
 2026-07-01: LTE-009 Raw POST Retry Fault Injection is implemented and
 build-verified as the next slice after LTE-008 fix1. Message Hub now supports
