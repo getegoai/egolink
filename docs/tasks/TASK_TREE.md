@@ -246,8 +246,7 @@ motion candidate
     `docs/tasks/done/LTE-008_BOUNDED_RAW_POST_RETRY_OBSERVABILITY.md`
   - Status: completed as a firmware/server-Web build-verified increment after
     LTE-007 with `COM4` flash evidence and one explainable USB-Free runtime
-    failure; fix1 is build-verified and flashed, but not USB-Free runtime
-    validated.
+    failure; fix1 is build-verified, flashed, and USB-Free runtime validated.
   - Evidence: firmware adds
     `CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_RETRY_MAX=1` by default for the
     raw LTE command-loop path, shares a bounded raw POST retry helper across
@@ -267,10 +266,13 @@ motion candidate
     `firmware/mqtt_heartbeat/build_lte008_bounded_raw_retry_fix1/egolink_mqtt_heartbeat.bin`
     (`301680` bytes). Fix1 flash on `COM4` passed with evidence under
     `reports/field_validation/lte008-bounded-raw-retry-fix1-20260701-001/flash_report.md`.
-  - Boundary: no successful USB-Free runtime validation, durable cache,
-    reconnect recovery, long LTE stability, battery/power behavior, enclosure
-    behavior, GNSS acceptance, learned model behavior, or product-readiness
-    claim.
+    Fix1 USB-Free runtime validation passed with `cmd-000030`: raw LTE
+    `location_report seq=15`, raw LTE `location_observation seq=16`, and raw
+    LTE ACK `seq=17` reached the VPS with matching firmware/test-run IDs,
+    retry visibility, and ACK status `ok`.
+  - Boundary: no actual retry-after-failure case, durable cache, reconnect
+    recovery, long LTE stability, battery/power behavior, enclosure behavior,
+    GNSS acceptance, learned model behavior, or product-readiness claim.
 
 ## Active Queue
 
@@ -1062,15 +1064,12 @@ motion candidate
 9. Treat `REL-007` as the completed KR-005 release: the reliability
    explainability preflight baseline is released, but it still does not claim
    durable cache, reconnect recovery, or long LTE stability.
-10. Treat `LTE-007` as the current runtime-validated reliability visibility
-    slice: volatile cache/drop counters are present in firmware payloads,
-    derived by Message Hub/Web, and proven once through USB-Free raw LTE
-    runtime evidence. This still is not durable store-forward, reconnect
-    recovery, or long LTE stability.
-11. Treat `LTE-008 fix1` as the current flashed next slice: it fixes the first
-    LTE-008 runtime blocker (`location_observation_payload_truncated`) and
-    still needs independent-power USB-Free runtime validation before it can
-    replace LTE-007 as the runtime baseline.
-12. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
+10. Treat `LTE-008 fix1` as the current runtime-validated reliability
+    visibility slice: volatile cache/drop counters and bounded retry counters
+    are present in firmware payloads, derived by Message Hub/Web, and proven
+    once through USB-Free raw LTE runtime evidence. This still is not durable
+    store-forward, reconnect recovery, actual retry-after-failure evidence, or
+    long LTE stability.
+11. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
     data and observability gates can explain failures. Do not promote it into
     long stability testing.

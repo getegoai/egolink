@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-008 fix1 bounded raw POST retry observability firmware is currently flashed on COM4; USB-Free runtime validation is pending. The earlier LTE-008 image's first USB-Free runtime validation failed with `location_observation_payload_truncated`. LTE-007 volatile cache/drop observability firmware previously passed USB-Free runtime with `cmd-000028`; LTE-006 fix1 reliability non-claim firmware previously passed USB-Free runtime with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-008 fix1 bounded raw POST retry observability firmware is currently flashed on COM4 and passed USB-Free runtime with `cmd-000030`; the earlier LTE-008 image's first USB-Free runtime validation failed with `location_observation_payload_truncated`. LTE-007 volatile cache/drop observability firmware previously passed USB-Free runtime with `cmd-000028`; LTE-006 fix1 reliability non-claim firmware previously passed USB-Free runtime with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -643,7 +643,8 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   reported raw POST `2/2/0`. This is not durable offline cache, reconnect
   recovery, long LTE stability, or product-readiness evidence.
 - LTE-008 bounded raw POST retry observability has been implemented,
-  build-verified, and flashed on `COM4`, but not USB-Free runtime validated.
+  build-verified, flashed on `COM4`, failed once in an explainable way, and
+  passed USB-Free runtime after the fix1 payload compaction.
   Firmware
   version `0.1.0-lte008-bounded-raw-retry` / test run
   `lte008-bounded-raw-retry-20260701-001` builds to
@@ -671,7 +672,13 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   operator confirmation; ESP32-S3 QFN56 rev v0.2 was detected, app size was
   `301680` bytes, hashes were verified, and flash evidence is under
   `reports/field_validation/lte008-bounded-raw-retry-fix1-20260701-001/flash_report.md`.
-  This is not successful USB-Free runtime, durable offline cache, reconnect
+  USB-Free runtime validation then passed with command `cmd-000030`: raw LTE
+  `location_report seq=15`, raw LTE `location_observation seq=16`, and raw
+  LTE ACK `seq=17` reached the VPS with matching firmware/test-run IDs,
+  `transport.type=lte`, `cache_retry_policy=single_retry_current_boot`,
+  retry counters `0/0/0`, and ACK status `ok`. Evidence is under
+  `reports/field_validation/lte008-bounded-raw-retry-fix1-20260701-001/`.
+  This is not actual retry-after-failure, durable offline cache, reconnect
   recovery, long LTE stability, or product-readiness evidence.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.

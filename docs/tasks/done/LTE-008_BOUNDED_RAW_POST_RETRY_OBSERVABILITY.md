@@ -139,13 +139,25 @@ across power loss.
   detected ESP32-S3 QFN56 rev v0.2, MAC `02:00:00:00:00:03`, wrote
   bootloader, app (`301680` bytes), and partition table, verified hashes, and
   completed hard reset.
+- LTE-008 fix1 USB-Free runtime:
+  `reports/field_validation/lte008-bounded-raw-retry-fix1-20260701-001/`
+  records PASS after the operator connected independent power and disconnected
+  USB. Validator command `cmd-000030` selected raw `request_location`; raw LTE
+  `location_report seq=15`, raw LTE `location_observation seq=16`, and raw LTE
+  ACK `seq=17` reached the VPS with matching
+  `fw_version=0.1.0-lte008-bounded-raw-retry-fix1`,
+  `test_run_id=lte008-bounded-raw-retry-fix1-20260701-001`, and
+  `transport.type=lte`. The observation reported
+  `cache_state=volatile_outbox`,
+  `cache_retry_policy=single_retry_current_boot`, retry counters `0/0/0`, raw
+  POST counters `1/1/0`, and `cache_last_drop_reason=none`; ACK reported raw
+  POST counters `2/2/0` and status `ok`.
 
 ## Completion Boundary
 
 LTE-008 is a firmware/server-Web observability and bounded retry increment
-with COM4 flash evidence and one explainable USB-Free runtime failure. Fix1 is
-build-verified and flashed, but not USB-Free runtime validated. This task does
-not prove successful USB-Free runtime behavior, modify GitLab, implement
-durable offline cache, prove reconnect recovery, prove long LTE stability,
-prove battery/power behavior, prove GNSS acceptance, or make any
-product-readiness claim.
+with COM4 flash evidence, one explainable USB-Free runtime failure, and a
+fix1 USB-Free runtime PASS. This task does not prove an actual
+retry-after-failure case, modify GitLab, implement durable offline cache,
+prove reconnect recovery, prove long LTE stability, prove battery/power
+behavior, prove GNSS acceptance, or make any product-readiness claim.

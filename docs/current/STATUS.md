@@ -6,6 +6,30 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: LTE-008 fix1 USB-Free runtime validation passed after the
+operator connected independent power and disconnected USB. Validator command
+`cmd-000030` (`request_location`) was created at
+`2026-07-01T11:57:20Z`, selected by firmware, and completed `ok`. Raw LTE
+`location_report seq=15` reached the VPS with
+`fw_version=0.1.0-lte008-bounded-raw-retry-fix1`,
+`test_run_id=lte008-bounded-raw-retry-fix1-20260701-001`,
+`transport.type=lte`, `source=sim7670g_firmware_gnss`,
+`gnss_state=no_fix`, and `fix=false`. Raw LTE
+`location_observation seq=16` also reached the VPS with
+`cell.cell_id=180571649`, `lte.reason_code=LTE_READY`, assigned IP
+`10.13.10.229`, `location_belief.state=Unknown`,
+`cache_state=volatile_outbox`, `cache_retry_policy=single_retry_current_boot`,
+retry counters `0/0/0`, and raw POST counters `1/1/0`. Raw LTE ACK `seq=17`
+reported `status=ok`, HTTP `LTE_HTTP_OK` / `200`, and ACK raw POST counters
+`2/2/0`. Evidence is under
+`reports/field_validation/lte008-bounded-raw-retry-fix1-20260701-001/`,
+including `lte_command_loop_report.json` and `lte_command_loop_report.md`.
+This promotes LTE-008 fix1 to the current USB-Free runtime-validated
+reliability visibility slice. It does not prove an actual retry-after-failure
+case, durable offline cache, reconnect recovery, long LTE stability, GNSS
+acceptance, battery/power behavior, enclosure behavior, learned model
+behavior, or product-readiness.
+
 2026-07-01: LTE-008 USB-Free runtime validation attempt 1 produced an
 explainable FAIL after the operator connected independent power and
 disconnected USB. Validator command `cmd-000029` was received and selected by
@@ -35,8 +59,8 @@ detected ESP32-S3 QFN56 rev v0.2, MAC `02:00:00:00:00:03`, wrote bootloader,
 app (`301680` bytes), and partition table, verified hashes, and hard-reset the
 board. Flash evidence is under
 `reports/field_validation/lte008-bounded-raw-retry-fix1-20260701-001/flash_report.md`.
-LTE-008 fix1 has not been USB-Free runtime validated yet. No GitLab change,
-durable offline cache, reconnect recovery, long LTE stability, GNSS
+LTE-008 fix1 was later USB-Free runtime validated as recorded above. No GitLab
+change, durable offline cache, reconnect recovery, long LTE stability, GNSS
 acceptance, battery/power behavior, enclosure behavior, learned model
 behavior, or product-readiness claim is changed.
 
