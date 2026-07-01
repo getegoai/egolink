@@ -122,6 +122,27 @@ class LteReliabilityGateTests(unittest.TestCase):
         self.assertIn("duplicate_command_execution_risk", report["errors"])
         self.assertEqual(self._gate(report, "G3_DUPLICATE_EXECUTION_GUARD")["status"], "FAIL")
 
+    def test_aggregate_command_count_without_cmd_id_does_not_fail_duplicate_guard(self) -> None:
+        export = self._loc005a_like_export()
+        second_command = json.loads(json.dumps(export["commands"][0]))
+        second_command["cmd_id"] = "cmd-000025"
+        second_command["ack"]["cmd_id"] = "cmd-000025"
+        second_command["ack"]["command"]["last_cmd_id"] = "cmd-000025"
+        export["commands"].append(second_command)
+        export["observability_summary"] = {
+            "latest_observability": {
+                "command": {
+                    "command_count": 2,
+                    "last_status": "ok",
+                }
+            }
+        }
+
+        report = validate_lte_reliability_gate.evaluate_lte_reliability_export(export)
+
+        self.assertNotIn("duplicate_command_execution_risk", report["errors"])
+        self.assertNotEqual(self._gate(report, "G3_DUPLICATE_EXECUTION_GUARD")["status"], "FAIL")
+
     def test_cli_writes_json_and_markdown_reports_for_warn_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

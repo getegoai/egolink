@@ -338,12 +338,13 @@ claiming those mechanisms are implemented.
 
 ### Next Gates
 
-- LTE-007 adds build-verified current-boot volatile outbox counters:
-  POST attempt/success/failure counts plus observed cache drop counters. This
-  is the next firmware slice after KR-005, not a KR-005 release change.
-- LTE-007 has since been operator-confirmed flashed on `COM4`; USB-Free
-  runtime validation should prove the counters in real VPS raw-frame evidence
-  before any long LTE stability or reconnect gate.
+- LTE-007 has since added build-verified and USB-Free runtime-validated
+  current-boot volatile outbox counters: POST attempt/success/failure counts
+  plus observed cache drop counters. The Message Hub/Web derivation was
+  redeployed without touching GitLab, and LTE-005 now sees G6 cache/drop
+  observability as `PASS` on the LTE-007 export.
+- The next gate should move from visibility to behavior: reconnect recovery or
+  bounded store-forward design, still before any long LTE stability gate.
 
 ## Release Gate Policy
 

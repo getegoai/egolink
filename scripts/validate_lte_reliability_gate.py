@@ -289,6 +289,7 @@ def duplicate_gate(export: dict[str, Any]) -> dict[str, Any]:
         marker
         for marker in markers
         if (marker.get("command_count") or 0) > 1 and marker.get("duplicate_local_execution_prevented") is not True
+        and marker.get("cmd_id") not in (None, "")
     ]
     if risky:
         return gate(
@@ -299,7 +300,9 @@ def duplicate_gate(export: dict[str, Any]) -> dict[str, Any]:
             evidence={"marker_count": len(markers), "sample_markers": markers[:10], "risky_markers": risky},
         )
 
-    exercised = any((marker.get("command_count") or 0) > 1 for marker in markers)
+    exercised = any(
+        (marker.get("command_count") or 0) > 1 and marker.get("cmd_id") not in (None, "") for marker in markers
+    )
     summary = (
         "Duplicate command execution was exercised and prevented."
         if exercised

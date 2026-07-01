@@ -6,6 +6,37 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: LTE-007 USB-Free runtime validation passed after the operator
+rebooted the connectivity node on independent power with USB disconnected.
+The first LTE-007 runtime command `cmd-000027` passed the raw LTE
+`request_location -> location_report -> location_observation -> ACK` loop.
+The Message Hub/Web was then updated and redeployed to `203.0.113.10:8790`
+without modifying GitLab so raw KV fields
+`network_raw_post_attempt_count`, `network_raw_post_success_count`,
+`network_raw_post_failure_count`, and `cache_*` derive into
+`reliability.network/cache` and Dashboard `Raw POST` visibility. Public
+`/health` returned `ok=true`, unauthenticated `/api/state` returned HTTP 401,
+and the existing GitLab service remained `active`. After a second
+independent-power reboot, existing command `cmd-000028` reconciled PASS with
+raw LTE `location_report seq=2`, raw LTE `location_observation seq=3`, and
+raw LTE ACK `seq=4`. Runtime observation showed LTE `LTE_READY`, cell ID
+`180571649`, assigned IP `10.7.108.215`, `location_belief.state=Unknown`,
+`reliability.network.raw_post_attempt_count=1`,
+`raw_post_success_count=1`, `raw_post_failure_count=0`,
+`reliability.cache.state=volatile_outbox`,
+`cache_source_status=observed`, `cache_queued_message_count=0`,
+`cache_dropped_message_count=0`, and `cache_last_drop_reason=none`; ACK
+reported raw POST `2/2/0`. LTE-005 over the LTE-007 export now has G6
+`PASS` and overall expected `WARN` only because sequence reset/duplicate
+visibility remains visible across the reboot/retry window. Validation passed:
+focused Message Hub/Dashboard/LTE tests passed with 29 tests; LTE-007
+USB-Free runtime validation passed; LTE-005 gate returned expected `WARN`
+with no errors; `python scripts/context_lint.py` passed; `scripts\verify.ps1`
+passed with 316 tests; and `git diff --check` passed. No durable offline
+cache, reconnect recovery, long LTE stability, GNSS acceptance, battery/power
+behavior, enclosure behavior, learned model behavior, or product-readiness
+claim is changed.
+
 2026-07-01: LTE-007 was flashed on `COM4` after explicit operator
 confirmation. The flashed image is
 `0.1.0-lte007-volatile-cache-observe` /

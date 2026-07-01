@@ -220,9 +220,12 @@ motion candidate
 - `LTE-007 Volatile Cache Drop Observability`
   - Path:
     `docs/tasks/done/LTE-007_VOLATILE_CACHE_DROP_OBSERVABILITY.md`
-  - Status: completed as a firmware/static-build increment after KR-005.
+  - Status: completed as a firmware/server-Web/runtime increment after KR-005.
   - Evidence: `firmware/mqtt_heartbeat/main/app_main.c`,
-    `quality_tests/test_mqtt_heartbeat_firmware.py`, and
+    `server/message_hub.py`, `scripts/validate_lte_reliability_gate.py`,
+    `quality_tests/test_mqtt_heartbeat_firmware.py`,
+    `quality_tests/test_message_hub_server.py`,
+    `quality_tests/test_message_hub_dashboard.py`, and
     `quality_tests/test_lte_reliability_gate.py`.
   - Current visible result: raw LTE `location_observation` and raw LTE ACK
     payloads now report current-boot volatile raw-outbox counters, including
@@ -230,11 +233,14 @@ motion candidate
     observed source status, zero queued durable messages, drop count, oldest
     age, and last-drop reason. LTE-005 treats these counters as cache/drop
     observability evidence while preserving the no-durable-cache boundary.
-    LTE-007 has since been flashed on `COM4`; USB-Free runtime validation is
-    pending.
-  - Boundary: no hardware runtime validation, VPS deployment, long LTE
-    stability, reconnect recovery, durable cache, battery/power behavior,
-    enclosure behavior, or product-readiness claim.
+    LTE-007 was flashed on `COM4`, the Message Hub/Web derivation was
+    redeployed without touching GitLab, and USB-Free runtime validation passed
+    with `cmd-000028` after independent-power reboot. LTE-005 over the export
+    now has G6 `PASS` and overall expected `WARN` only for visible
+    reboot-window sequence reset/duplicate evidence.
+  - Boundary: no long LTE stability, reconnect recovery, durable cache,
+    battery/power behavior, enclosure behavior, GNSS acceptance, learned model
+    behavior, or product-readiness claim.
 
 ## Active Queue
 
@@ -1026,9 +1032,10 @@ motion candidate
 9. Treat `REL-007` as the completed KR-005 release: the reliability
    explainability preflight baseline is released, but it still does not claim
    durable cache, reconnect recovery, or long LTE stability.
-10. Treat `LTE-007` as the current flashed next slice: volatile cache/drop
-    counters are now present in firmware payloads, but USB-Free runtime
-    validation is still pending independent-power/USB-disconnect testing.
+10. Treat `LTE-007` as the current validated next slice: volatile cache/drop
+    counters are present in firmware payloads, derived by Message Hub/Web, and
+    proven once through USB-Free raw LTE runtime evidence. This still is not
+    durable store-forward, reconnect recovery, or long LTE stability.
 11. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
     data and observability gates can explain failures. Do not promote it into
     long stability testing.

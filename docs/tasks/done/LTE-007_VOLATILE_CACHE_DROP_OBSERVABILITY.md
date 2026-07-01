@@ -3,7 +3,7 @@ id: LTE-007
 title: Volatile Cache Drop Observability
 status: completed
 priority: high
-requires_hardware: false
+requires_hardware: true
 created: 2026-07-01
 last_updated: 2026-07-01
 
@@ -16,6 +16,7 @@ context:
   - docs/tasks/done/LTE-005_LTE_RELIABILITY_GATE_BASELINE.md
   - docs/tasks/done/OBS-004_RELIABILITY_OBSERVABILITY_BASELINE.md
   - docs/tasks/done/LTE-006_FIRMWARE_SIDE_RELIABILITY_NONCLAIM_OBSERVABILITY.md
+  - docs/development/VPS_MESSAGE_HUB.md
   - firmware/AGENTS.md
   - firmware/mqtt_heartbeat/README.md
 
@@ -27,14 +28,17 @@ allowed_paths:
   - docs/development/LTE_TRANSPORT.md
   - docs/tasks/TASK_TREE.md
   - docs/tasks/done/LTE-007_VOLATILE_CACHE_DROP_OBSERVABILITY.md
+  - server/message_hub.py
+  - scripts/validate_lte_reliability_gate.py
   - firmware/mqtt_heartbeat/main/app_main.c
   - quality_tests/test_mqtt_heartbeat_firmware.py
+  - quality_tests/test_message_hub_server.py
+  - quality_tests/test_message_hub_dashboard.py
   - quality_tests/test_lte_reliability_gate.py
 
 out_of_scope:
   - flashing firmware without explicit operator confirmation
-  - claiming USB-Free hardware runtime validation
-  - VPS deployment or GitLab changes
+  - modifying GitLab or unrelated VPS services
   - changing raw-frame framing or required protocol fields
   - implementing durable store-forward cache
   - claiming reconnect recovery, long LTE stability, battery/power behavior,
@@ -68,9 +72,15 @@ it does not retain unsent frames across reboot or network outage.
       volatile reliability counters.
 - [x] LTE-005 treats observed volatile queue/drop counters as cache/drop
       observability evidence while preserving the no-durability boundary.
+- [x] Message Hub derives the LTE-007 raw KV fields into
+      `reliability.network/cache`.
+- [x] Dashboard exposes raw POST and cache/drop visibility for current run and
+      latest field state.
 - [x] The LTE wire payload remains raw-frame/KV, not JSON.
 - [x] Focused tests, guarded ESP-IDF build, and full regression tests pass
       without flashing.
+- [x] `COM4` flash passes after explicit operator confirmation.
+- [x] USB-Free runtime validation passes after independent-power reboot.
 
 ## Evidence
 
@@ -94,13 +104,39 @@ it does not retain unsent frames across reboot or network outage.
   (`301056` bytes). The script did not flash hardware.
 - Full regression:
   `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` PASS,
-  315 tests.
+  316 tests.
+- Flash:
+  `reports/field_validation/lte007-volatile-cache-20260701-001/flash_report.md`
+  records `COM4` flash PASS for ESP32-S3 QFN56 rev v0.2, MAC
+  `02:00:00:00:00:03`, app size `301056` bytes, and verified bootloader/app/
+  partition hashes.
+- VPS/Web deployment:
+  Message Hub/Web was redeployed to `203.0.113.10:8790` without modifying
+  GitLab. Public `/health` returned `ok=true`, unauthenticated `/api/state`
+  returned HTTP 401, authenticated current run exposed raw POST and
+  `volatile_outbox` cache fields, and GitLab remained `active`.
+- USB-Free runtime:
+  `reports/field_validation/lte007-volatile-cache-20260701-001/` records
+  PASS for existing command `cmd-000028` after independent-power reboot with
+  USB disconnected. Evidence: raw LTE `location_report seq=2`, raw LTE
+  `location_observation seq=3`, raw LTE ACK `seq=4`, LTE `LTE_READY`, cell ID
+  `180571649`, assigned IP `10.7.108.215`, `location_belief.state=Unknown`,
+  observation reliability raw POST `1/1/0`, ACK reliability raw POST `2/2/0`,
+  `cache_state=volatile_outbox`, zero queued/dropped messages, and
+  `cache_last_drop_reason=none`.
+- LTE-005 gate:
+  `reports/lte_reliability/lte007-volatile-cache-20260701-001/` returns
+  expected `WARN` with no errors: G6 cache/drop observability is `PASS`; only
+  sequence reset/duplicate visibility remains `WARN` across the reboot/retry
+  window.
+- Final repository gates:
+  `python scripts/context_lint.py` PASS; `git diff --check` PASS.
 - Formatting:
   `git diff --check` PASS.
 
 ## Completion Boundary
 
-LTE-007 is a firmware/static-build observability increment. It does not flash
-hardware, run a USB-Free validation, deploy to the VPS, implement durable
-offline cache, prove reconnect recovery, prove long LTE stability, prove
-battery/power behavior, or make any product-readiness claim.
+LTE-007 is a bounded firmware/server-Web/runtime observability increment. It
+does not implement durable offline cache, prove reconnect recovery, prove long
+LTE stability, prove battery/power behavior, prove GNSS acceptance, or make
+any product-readiness claim.

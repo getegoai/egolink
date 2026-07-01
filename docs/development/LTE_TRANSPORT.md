@@ -299,18 +299,23 @@ Implementation shape:
 - LTE-005 can treat the volatile queue/drop counters as cache/drop
   observability evidence, while release docs still reject any cache durability
   or reconnect recovery claim;
+- Message Hub derives these raw KV fields into `reliability.network/cache` and
+  Dashboard exposes Raw POST plus cache queue/drop fields;
 - the firmware payload remains raw-frame/KV and does not introduce JSON as the
   LTE wire payload.
 
 Definition of Done:
 
 - focused firmware tests protect the volatile counter fields;
+- Message Hub/Dashboard tests protect the derived reliability and Raw POST
+  display fields;
 - LTE-005 tests prove `cache_state=volatile_outbox` with concrete counters can
   pass `G6_RECONNECT_CACHE_OBSERVABILITY`;
-- ESP-IDF build passes without flashing;
-- no USB-Free runtime pass, durable offline cache, reconnect recovery, long LTE
-  stability, battery/power behavior, enclosure behavior, or product-readiness
-  claim is made until hardware validation is explicitly run.
+- ESP-IDF build, operator-confirmed flash, and one USB-Free runtime validation
+  pass;
+- no durable offline cache, reconnect recovery, long LTE stability,
+  battery/power behavior, enclosure behavior, GNSS acceptance, or
+  product-readiness claim is made.
 
 ## R3.0 LTE Long-Run Gate
 

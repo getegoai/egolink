@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-007 volatile cache/drop observability firmware currently flashed on COM4, USB-Free runtime validation pending; LTE-006 fix1 reliability non-claim firmware previously passed USB-Free runtime with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-007 volatile cache/drop observability firmware currently flashed on COM4 and USB-Free runtime validated with `cmd-000028`; LTE-006 fix1 reliability non-claim firmware previously passed USB-Free runtime with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -624,8 +624,7 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   evidence remains absent; this is not a long LTE stability, reconnect
   recovery, durable cache, or product-readiness claim.
 - LTE-007 volatile cache/drop observability firmware has been implemented,
-  build-verified, and flashed on `COM4`, but not USB-Free runtime validated.
-  Firmware
+  build-verified, flashed on `COM4`, and USB-Free runtime validated. Firmware
   version `0.1.0-lte007-volatile-cache-observe` / test run
   `lte007-volatile-cache-20260701-001` builds to
   `firmware/mqtt_heartbeat/build_lte007_volatile_cache_observe/egolink_mqtt_heartbeat.bin`
@@ -634,10 +633,15 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   bootloader, app, and partition table, and verified hashes. Local flash
   evidence is under
   `reports/field_validation/lte007-volatile-cache-20260701-001/flash_report.md`.
-  It adds current-boot raw LTE POST attempt/success/failure counters plus
-  observed volatile outbox drop fields to raw `location_observation` and ACK
-  payloads. This is not USB-Free runtime validation, durable offline cache,
-  reconnect recovery, long LTE stability, or product-readiness evidence.
+  USB-Free runtime validation passed after independent-power/USB-disconnected
+  reboot using existing command `cmd-000028`: raw LTE `location_report seq=2`,
+  raw LTE `location_observation seq=3`, and raw LTE ACK `seq=4` all arrived
+  with LTE transport and matching test run ID. The VPS/Web deployment now
+  derives `reliability.network/cache` from LTE-007 raw KV fields; the
+  observation reported `cache_state=volatile_outbox`, zero queued/dropped
+  messages, `cache_last_drop_reason=none`, and raw POST `1/1/0`, while ACK
+  reported raw POST `2/2/0`. This is not durable offline cache, reconnect
+  recovery, long LTE stability, or product-readiness evidence.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

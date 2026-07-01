@@ -618,6 +618,9 @@ class MessageHubStoreTests(unittest.TestCase):
                 "power_marker_seq=12\n"
                 "power_reason=platform_power_source_not_product_meter\n"
                 "network_mode=LTE\n"
+                "network_raw_post_attempt_count=5\n"
+                "network_raw_post_success_count=4\n"
+                "network_raw_post_failure_count=1\n"
                 "network_reconnect_count=2\n"
                 "network_last_error=LTE_RECONNECT_TIMEOUT\n"
                 "network_last_reconnect_reason=pdp_reactivate\n"
@@ -662,6 +665,9 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(history[0]["power"]["evidence_status"], "mock")
         self.assertEqual(history[0]["power"]["soc_pct"], 87)
         self.assertEqual(history[0]["power"]["marker_seq"], 12)
+        self.assertEqual(history[0]["reliability"]["network"]["raw_post_attempt_count"], 5)
+        self.assertEqual(history[0]["reliability"]["network"]["raw_post_success_count"], 4)
+        self.assertEqual(history[0]["reliability"]["network"]["raw_post_failure_count"], 1)
         self.assertEqual(history[0]["reliability"]["network"]["reconnect_count"], 2)
         self.assertEqual(history[0]["reliability"]["cache"]["dropped_message_count"], 1)
         self.assertEqual(history[0]["location_belief"]["state"], "Unknown")
@@ -673,6 +679,7 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(device["observability"]["imu"]["evidence_status"], "mock")
         self.assertEqual(device["observability"]["power"]["evidence_status"], "mock")
         self.assertEqual(device["observability"]["reliability"]["network"]["last_error"], "LTE_RECONNECT_TIMEOUT")
+        self.assertEqual(device["observability"]["reliability"]["network"]["raw_post_success_count"], 4)
         self.assertEqual(device["observability"]["reliability"]["cache"]["queued_message_count"], 3)
         self.assertEqual(device["location_memory"]["state"], "Unknown")
         self.assertEqual(device["location_memory"]["reason"], "cell_observation_without_position_fix")
