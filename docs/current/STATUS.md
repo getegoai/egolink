@@ -29,11 +29,16 @@ with firmware
 `0.1.0-lte008-bounded-raw-retry-fix1`, test run
 `lte008-bounded-raw-retry-fix1-20260701-001`, binary
 `firmware/mqtt_heartbeat/build_lte008_bounded_raw_retry_fix1/egolink_mqtt_heartbeat.bin`
-(`301680` bytes), and `flash_intentionally_not_run=true`. LTE-008 fix1 has
-not been flashed or USB-Free runtime validated yet. No GitLab change, durable
-offline cache, reconnect recovery, long LTE stability, GNSS acceptance,
-battery/power behavior, enclosure behavior, learned model behavior, or
-product-readiness claim is changed.
+(`301680` bytes), and `flash_intentionally_not_run=true`. LTE-008 fix1 was
+then flashed on `COM4` after explicit operator confirmation. `esptool.py`
+detected ESP32-S3 QFN56 rev v0.2, MAC `02:00:00:00:00:03`, wrote bootloader,
+app (`301680` bytes), and partition table, verified hashes, and hard-reset the
+board. Flash evidence is under
+`reports/field_validation/lte008-bounded-raw-retry-fix1-20260701-001/flash_report.md`.
+LTE-008 fix1 has not been USB-Free runtime validated yet. No GitLab change,
+durable offline cache, reconnect recovery, long LTE stability, GNSS
+acceptance, battery/power behavior, enclosure behavior, learned model
+behavior, or product-readiness claim is changed.
 
 2026-07-01: LTE-008 Bounded Raw POST Retry Observability is implemented as a
 firmware/server-Web build-verified increment after LTE-007. Firmware raw LTE

@@ -346,9 +346,8 @@ claiming those mechanisms are implemented.
 - LTE-008 has since added bounded current-boot raw POST retry and Cache Retry
   visibility. COM4 flash passed, but USB-Free runtime attempt 1 failed in an
   explainable way with `location_observation_payload_truncated`. LTE-008 fix1
-  is build-verified and still needs operator-confirmed COM4 flash plus
-  USB-Free runtime validation before it can be promoted into a key-release
-  runtime baseline.
+  is build-verified and flashed on COM4, and still needs USB-Free runtime
+  validation before it can be promoted into a key-release runtime baseline.
 - The next gate should validate LTE-008 fix1 on hardware runtime, then move
   toward reconnect recovery or bounded store-forward design before any long
   LTE stability gate.

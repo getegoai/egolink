@@ -130,14 +130,22 @@ across power loss.
   `firmware/mqtt_heartbeat/build_lte008_bounded_raw_retry_fix1/egolink_mqtt_heartbeat.bin`
   (`301680` bytes). After the fix1 code/docs update,
   `python scripts/context_lint.py` passed, `git diff --check` passed, and full
-  `scripts/verify.ps1` passed with 316 tests. The fix1 image has not been
-  flashed.
+  `scripts/verify.ps1` passed with 316 tests. The fix1 image was subsequently
+  flashed as recorded below.
+- LTE-008 fix1 flash:
+  `reports/field_validation/lte008-bounded-raw-retry-fix1-20260701-001/flash_report.md`
+  records `COM4` flash PASS for firmware
+  `0.1.0-lte008-bounded-raw-retry-fix1` at commit `194ee86`. `esptool.py`
+  detected ESP32-S3 QFN56 rev v0.2, MAC `02:00:00:00:00:03`, wrote
+  bootloader, app (`301680` bytes), and partition table, verified hashes, and
+  completed hard reset.
 
 ## Completion Boundary
 
 LTE-008 is a firmware/server-Web observability and bounded retry increment
 with COM4 flash evidence and one explainable USB-Free runtime failure. Fix1 is
-build-verified but not flashed. This task does not prove successful USB-Free
-runtime behavior, modify GitLab, implement durable offline cache, prove
-reconnect recovery, prove long LTE stability, prove battery/power behavior,
-prove GNSS acceptance, or make any product-readiness claim.
+build-verified and flashed, but not USB-Free runtime validated. This task does
+not prove successful USB-Free runtime behavior, modify GitLab, implement
+durable offline cache, prove reconnect recovery, prove long LTE stability,
+prove battery/power behavior, prove GNSS acceptance, or make any
+product-readiness claim.
