@@ -1405,6 +1405,10 @@ def raw_reliability_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
             "oldest_message_age_ms": parse_optional_int(kv_payload.get("cache-oldest-message-age-ms")),
             "state": kv_payload.get("cache-state"),
             "source_status": kv_payload.get("cache-source-status"),
+            "retry_policy": kv_payload.get("cache-retry-policy"),
+            "retry_attempt_count": parse_optional_int(kv_payload.get("cache-retry-attempt-count")),
+            "retry_success_count": parse_optional_int(kv_payload.get("cache-retry-success-count")),
+            "retry_failure_count": parse_optional_int(kv_payload.get("cache-retry-failure-count")),
         }
     )
     return compact_dict({"network": network or None, "cache": cache or None})
@@ -2275,6 +2279,30 @@ def build_observability(device: dict[str, Any], latest_command: dict[str, Any] |
                     ),
                     "state": reliability_cache.get("state"),
                     "source_status": reliability_cache.get("source_status"),
+                    "retry_policy": first_known(
+                        reliability_cache.get("retry_policy"),
+                        status.get("cache_retry_policy"),
+                        telemetry.get("cache_retry_policy"),
+                        ack.get("cache_retry_policy"),
+                    ),
+                    "retry_attempt_count": first_known(
+                        reliability_cache.get("retry_attempt_count"),
+                        status.get("cache_retry_attempt_count"),
+                        telemetry.get("cache_retry_attempt_count"),
+                        ack.get("cache_retry_attempt_count"),
+                    ),
+                    "retry_success_count": first_known(
+                        reliability_cache.get("retry_success_count"),
+                        status.get("cache_retry_success_count"),
+                        telemetry.get("cache_retry_success_count"),
+                        ack.get("cache_retry_success_count"),
+                    ),
+                    "retry_failure_count": first_known(
+                        reliability_cache.get("retry_failure_count"),
+                        status.get("cache_retry_failure_count"),
+                        telemetry.get("cache_retry_failure_count"),
+                        ack.get("cache_retry_failure_count"),
+                    ),
                 }
             )
             or None,
@@ -3391,6 +3419,7 @@ def render_dashboard() -> str:
         <div class="metric"><span>Network Error</span><span>${escapeHtml(relNetwork.last_error || 'none')}</span></div>
         <div class="metric"><span>Raw POST</span><span>${escapeHtml(relNetwork.raw_post_success_count ?? 'unknown')} ok / ${escapeHtml(relNetwork.raw_post_failure_count ?? 'unknown')} fail / ${escapeHtml(relNetwork.raw_post_attempt_count ?? 'unknown')} attempts</span></div>
         <div class="metric"><span>Cache Queue</span><span>${escapeHtml(relCache.queued_message_count ?? 'unknown')} queued / ${escapeHtml(relCache.oldest_message_age_ms ?? 'unknown')} ms oldest</span></div>
+        <div class="metric"><span>Cache Retry</span><span>${escapeHtml(relCache.retry_success_count ?? 'unknown')} ok / ${escapeHtml(relCache.retry_failure_count ?? 'unknown')} fail / ${escapeHtml(relCache.retry_attempt_count ?? 'unknown')} attempts / ${escapeHtml(relCache.retry_policy || 'none')}</span></div>
         <div class="metric"><span>Cache Drops</span><span>${escapeHtml(relCache.dropped_message_count ?? 'unknown')} / ${escapeHtml(relCache.last_drop_reason || 'none')}</span></div>
         <div class="metric"><span>EALE-P0</span><span>${escapeHtml(ealeBelief.state || 'unknown')} / ${escapeHtml(ealeBelief.substate || 'unknown')} / ${escapeHtml(ealeBelief.confidence_bucket || 'unknown')}</span></div>
         <div class="metric"><span>EALE Reason</span><span>${escapeHtml(ealeBelief.reason || 'unknown')}</span></div>
@@ -3455,6 +3484,7 @@ def render_dashboard() -> str:
         <div class="metric"><span>Network Error</span><span>${escapeHtml(obsRelNetwork.last_error || 'none')}</span></div>
         <div class="metric"><span>Raw POST</span><span>${escapeHtml(obsRelNetwork.raw_post_success_count ?? 'unknown')} ok / ${escapeHtml(obsRelNetwork.raw_post_failure_count ?? 'unknown')} fail / ${escapeHtml(obsRelNetwork.raw_post_attempt_count ?? 'unknown')} attempts</span></div>
         <div class="metric"><span>Cache Queue</span><span>${escapeHtml(obsRelCache.queued_message_count ?? 'unknown')} queued / ${escapeHtml(obsRelCache.oldest_message_age_ms ?? 'unknown')} ms oldest</span></div>
+        <div class="metric"><span>Cache Retry</span><span>${escapeHtml(obsRelCache.retry_success_count ?? 'unknown')} ok / ${escapeHtml(obsRelCache.retry_failure_count ?? 'unknown')} fail / ${escapeHtml(obsRelCache.retry_attempt_count ?? 'unknown')} attempts / ${escapeHtml(obsRelCache.retry_policy || 'none')}</span></div>
         <div class="metric"><span>Cache Drops</span><span>${escapeHtml(obsRelCache.dropped_message_count ?? 'unknown')} / ${escapeHtml(obsRelCache.last_drop_reason || 'none')}</span></div>
         <div class="metric"><span>Runtime Reset</span><span>${escapeHtml(obsRuntime.last_reset_reason || 'unknown')}</span></div>
         <div class="metric"><span>Boot</span><span>${escapeHtml(obsRuntime.boot_id || 'unknown')}</span></div>

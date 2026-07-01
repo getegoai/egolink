@@ -241,6 +241,27 @@ motion candidate
   - Boundary: no long LTE stability, reconnect recovery, durable cache,
     battery/power behavior, enclosure behavior, GNSS acceptance, learned model
     behavior, or product-readiness claim.
+- `LTE-008 Bounded Raw POST Retry Observability`
+  - Path:
+    `docs/tasks/done/LTE-008_BOUNDED_RAW_POST_RETRY_OBSERVABILITY.md`
+  - Status: completed as a firmware/server-Web build-verified increment after
+    LTE-007; hardware flash/runtime validation is pending explicit operator
+    confirmation.
+  - Evidence: firmware adds
+    `CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_RETRY_MAX=1` by default for the
+    raw LTE command-loop path, shares a bounded raw POST retry helper across
+    raw `location_report`, `location_observation`, and ACK uploads, separates
+    HTTP attempt failure from final drop accounting, and reports
+    `cache_retry_policy=single_retry_current_boot` plus retry attempt/success/
+    failure counters. Message Hub/Web derive and display Cache Retry, and the
+    visibility update was deployed to `203.0.113.10:8790` without modifying
+    GitLab. Focused tests passed with 42 tests, and guarded ESP-IDF build produced
+    `firmware/mqtt_heartbeat/build_lte008_bounded_raw_retry/egolink_mqtt_heartbeat.bin`
+    (`301824` bytes).
+  - Boundary: no firmware flash, USB-Free runtime validation, durable cache,
+    reconnect recovery, long LTE stability, battery/power behavior, enclosure
+    behavior, GNSS acceptance, learned model behavior, or product-readiness
+    claim.
 
 ## Active Queue
 
@@ -1032,10 +1053,15 @@ motion candidate
 9. Treat `REL-007` as the completed KR-005 release: the reliability
    explainability preflight baseline is released, but it still does not claim
    durable cache, reconnect recovery, or long LTE stability.
-10. Treat `LTE-007` as the current validated next slice: volatile cache/drop
-    counters are present in firmware payloads, derived by Message Hub/Web, and
-    proven once through USB-Free raw LTE runtime evidence. This still is not
-    durable store-forward, reconnect recovery, or long LTE stability.
-11. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
+10. Treat `LTE-007` as the current runtime-validated reliability visibility
+    slice: volatile cache/drop counters are present in firmware payloads,
+    derived by Message Hub/Web, and proven once through USB-Free raw LTE
+    runtime evidence. This still is not durable store-forward, reconnect
+    recovery, or long LTE stability.
+11. Treat `LTE-008` as the current build-verified next slice: one bounded
+    current-boot raw POST retry is implemented and visible, but it still needs
+    operator-confirmed COM4 flash and USB-Free runtime validation before it can
+    replace LTE-007 as the hardware baseline.
+12. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
     data and observability gates can explain failures. Do not promote it into
     long stability testing.

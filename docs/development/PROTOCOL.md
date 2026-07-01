@@ -837,6 +837,14 @@ Firmware may report observed current-boot volatile outbox counters with
 observability evidence for the current boot, not durable offline cache or
 store-forward recovery. A reboot may reset these counters.
 
+Firmware may also report bounded current-boot retry visibility with
+`cache_retry_policy=single_retry_current_boot`,
+`cache_retry_attempt_count`, `cache_retry_success_count`, and
+`cache_retry_failure_count`. These fields mean a raw-frame LTE HTTP POST may be
+retried immediately within the same boot before the message is finally counted
+as dropped. They do not imply an offline queue, durable cache, reconnect
+supervisor, or store-forward recovery.
+
 Do not invent defaults. If reconnect/cache/drop behavior was not observed,
 omit these fields so the LTE-005 reliability gate can report `WARN` or
 `NOT_OBSERVED` instead of a false pass.

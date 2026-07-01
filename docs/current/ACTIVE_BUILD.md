@@ -642,6 +642,20 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   messages, `cache_last_drop_reason=none`, and raw POST `1/1/0`, while ACK
   reported raw POST `2/2/0`. This is not durable offline cache, reconnect
   recovery, long LTE stability, or product-readiness evidence.
+- LTE-008 bounded raw POST retry observability has been implemented and
+  build-verified, but not flashed or USB-Free runtime validated. Firmware
+  version `0.1.0-lte008-bounded-raw-retry` / test run
+  `lte008-bounded-raw-retry-20260701-001` builds to
+  `firmware/mqtt_heartbeat/build_lte008_bounded_raw_retry/egolink_mqtt_heartbeat.bin`
+  (`301824` bytes) with
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_RETRY_MAX=1`,
+  SIM7670G GNSS enabled, LTE status enabled, raw LTE command loop enabled, and
+  location observation enabled. The image retries one failed raw-frame LTE HTTP
+  POST within the current boot before final drop accounting, and reports
+  `cache_retry_policy=single_retry_current_boot` plus retry attempt/success/
+  failure counters in raw LTE `location_observation` and ACK payloads. This is
+  not durable offline cache, reconnect recovery, long LTE stability, or
+  product-readiness evidence.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

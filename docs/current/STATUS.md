@@ -6,6 +6,35 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: LTE-008 Bounded Raw POST Retry Observability is implemented as a
+firmware/server-Web build-verified increment after LTE-007. Firmware raw LTE
+`location_report`, `location_observation`, and ACK uploads now share a bounded
+raw POST helper with default
+`CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_RETRY_MAX=1`, so one failed
+raw-frame LTE HTTP POST is retried once within the current boot before final
+drop accounting. Raw POST attempt/success/failure counters now count individual
+HTTP attempts, while `cache_dropped_message_count` increments only after frame
+build failure or after the bounded retry policy is exhausted. Raw LTE
+`location_observation` and raw LTE ACK payloads now include
+`cache_retry_policy=single_retry_current_boot`,
+`cache_retry_attempt_count`, `cache_retry_success_count`, and
+`cache_retry_failure_count`. Message Hub derives these raw KV fields into
+`reliability.cache`, and the Dashboard exposes Cache Retry in current-run and
+latest-field-state views. Focused firmware/server/dashboard/LTE tests passed
+with 42 tests. Guarded ESP-IDF build passed with firmware
+`0.1.0-lte008-bounded-raw-retry`, test run
+`lte008-bounded-raw-retry-20260701-001`, binary
+`firmware/mqtt_heartbeat/build_lte008_bounded_raw_retry/egolink_mqtt_heartbeat.bin`
+(`301824` bytes), and `flash_intentionally_not_run=true`. Message Hub/Web was
+redeployed to `203.0.113.10:8790` without modifying GitLab; public `/health`
+returned `ok=true`, unauthenticated `/api/state` returned HTTP 401, the public
+Dashboard HTML contained `Cache Retry`, `egolink-message-hub.service` remained
+`active`, and the existing GitLab service remained `active`. No firmware
+flash, USB-Free runtime validation, GitLab change, durable offline cache,
+reconnect recovery, long LTE stability, GNSS acceptance, battery/power
+behavior, enclosure behavior, learned model behavior, or product-readiness
+claim is changed.
+
 2026-07-01: LTE-007 USB-Free runtime validation passed after the operator
 rebooted the connectivity node on independent power with USB disconnected.
 The first LTE-007 runtime command `cmd-000027` passed the raw LTE

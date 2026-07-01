@@ -629,6 +629,10 @@ class MessageHubStoreTests(unittest.TestCase):
                 "cache_last_drop_reason=cache_full\n"
                 "cache_oldest_message_age_ms=42000\n"
                 "cache_state=store_forward\n"
+                "cache_retry_policy=single_retry_current_boot\n"
+                "cache_retry_attempt_count=2\n"
+                "cache_retry_success_count=1\n"
+                "cache_retry_failure_count=1\n"
                 "location_belief_state=Unknown\n"
                 "location_belief_source=cell,lte,wifi,imu,power\n"
                 "location_belief_reason=cell_observation_without_position_fix\n"
@@ -670,6 +674,10 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(history[0]["reliability"]["network"]["raw_post_failure_count"], 1)
         self.assertEqual(history[0]["reliability"]["network"]["reconnect_count"], 2)
         self.assertEqual(history[0]["reliability"]["cache"]["dropped_message_count"], 1)
+        self.assertEqual(history[0]["reliability"]["cache"]["retry_policy"], "single_retry_current_boot")
+        self.assertEqual(history[0]["reliability"]["cache"]["retry_attempt_count"], 2)
+        self.assertEqual(history[0]["reliability"]["cache"]["retry_success_count"], 1)
+        self.assertEqual(history[0]["reliability"]["cache"]["retry_failure_count"], 1)
         self.assertEqual(history[0]["location_belief"]["state"], "Unknown")
         self.assertEqual(history[0]["location_belief"]["source"], ["cell", "lte", "wifi", "imu", "power"])
         self.assertEqual(device["latest_location"]["event_type"], "location_observation")
@@ -681,6 +689,7 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(device["observability"]["reliability"]["network"]["last_error"], "LTE_RECONNECT_TIMEOUT")
         self.assertEqual(device["observability"]["reliability"]["network"]["raw_post_success_count"], 4)
         self.assertEqual(device["observability"]["reliability"]["cache"]["queued_message_count"], 3)
+        self.assertEqual(device["observability"]["reliability"]["cache"]["retry_attempt_count"], 2)
         self.assertEqual(device["location_memory"]["state"], "Unknown")
         self.assertEqual(device["location_memory"]["reason"], "cell_observation_without_position_fix")
         self.assertEqual(exported["raw_frames"][0]["frame_id"], "obs-cmd-raw-observation")
