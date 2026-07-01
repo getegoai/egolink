@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-008 fix1 bounded raw POST retry observability firmware is currently flashed on COM4 and passed USB-Free runtime with `cmd-000030`; LTE-009 raw POST retry fault-injection firmware is build-verified and the Message Hub side is VPS-deployed/smoke-verified, but the firmware image is not flashed. The earlier LTE-008 image's first USB-Free runtime validation failed with `location_observation_payload_truncated`. LTE-007 volatile cache/drop observability firmware previously passed USB-Free runtime with `cmd-000028`; LTE-006 fix1 reliability non-claim firmware previously passed USB-Free runtime with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-009 raw POST retry fault-injection firmware is currently flashed on `COM4` and passed USB-Free runtime with `cmd-000031`; LTE-008 fix1 bounded raw POST retry observability firmware previously passed USB-Free runtime with `cmd-000030`. The earlier LTE-008 image's first USB-Free runtime validation failed with `location_observation_payload_truncated`. LTE-007 volatile cache/drop observability firmware previously passed USB-Free runtime with `cmd-000028`; LTE-006 fix1 reliability non-claim firmware previously passed USB-Free runtime with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -680,18 +680,28 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `reports/field_validation/lte008-bounded-raw-retry-fix1-20260701-001/`.
   This is not actual retry-after-failure, durable offline cache, reconnect
   recovery, long LTE stability, or product-readiness evidence.
-- LTE-009 raw POST retry fault injection has been implemented and build-
-  verified as `0.1.0-lte009-raw-post-retry-fault` /
+- LTE-009 raw POST retry fault injection has been implemented, VPS-deployed,
+  flashed on `COM4`, and USB-Free runtime validated as
+  `0.1.0-lte009-raw-post-retry-fault` /
   `lte009-raw-post-retry-fault-20260701-001`. It adds a default-off firmware
   test switch, `CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST`, and
   a Message Hub fail-once raw-ingest path that retains the first marked raw
   frame as `injected_failure` before returning HTTP 503. The binary is
   `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
-  (`301776` bytes), rebuilt after the validator-gate commit with app version
-  `85d799a`. The updated Message Hub was deployed to the VPS after commit
+  (`301776` bytes). It was rebuilt during the flash with app version `88945b9`.
+  The updated Message Hub was deployed to the VPS after commit
   `10e28fe`; `/health`, unauthenticated `/api/state` = `401`,
   authenticated `/api/state`, and a VPS-local in-memory fail-once smoke all
-  passed. This image has not been flashed or USB-Free runtime validated.
+  passed. Flash evidence is under
+  `reports/field_validation/lte009-raw-post-retry-fault-20260701-001/flash_report.md`.
+  USB-Free runtime validation passed after the operator connected independent
+  power and disconnected USB: validator command `cmd-000031` produced retained
+  raw LTE `location_report` frame `loc-cmd-000031` first as
+  `injected_failure`, then as retry `ok`, followed by raw LTE
+  `location_observation seq=28` and raw LTE ACK `seq=29`. Retry evidence showed
+  `cache_retry_policy=single_retry_current_boot`, retry counters `1/1/0`, and
+  final raw POST counters `3/2/1`. Evidence is under
+  `reports/field_validation/lte009-raw-post-retry-fault-20260701-001/`.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

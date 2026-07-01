@@ -6,6 +6,36 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: LTE-009 Raw POST Retry Fault Injection was flashed on `COM4` and
+passed the USB-Free hardware runtime gate after the operator connected
+independent power and disconnected USB. The flash used firmware
+`0.1.0-lte009-raw-post-retry-fault`, test run
+`lte009-raw-post-retry-fault-20260701-001`, binary
+`firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
+(`301776` bytes), and the flash-time app version was `88945b9` because CMake
+reran at current HEAD. Flash evidence is under
+`reports/field_validation/lte009-raw-post-retry-fault-20260701-001/flash_report.md`.
+The USB-Free validator created `cmd-000031` (`request_location`) at
+`2026-07-01T13:37:05Z` and passed from `2026-07-01T13:37:04Z` to
+`2026-07-01T13:37:19Z`. Runtime evidence is under
+`reports/field_validation/lte009-raw-post-retry-fault-20260701-001/`,
+including `lte_command_loop_report.json`, `lte_command_loop_report.md`,
+`device_state.json`, `commands.json`, and `test_run_export.json`. The first raw
+LTE `location_report` frame `loc-cmd-000031` was retained with
+`parse_result.status=injected_failure` / `RAW_POST_FAIL_ONCE_INJECTED`; the
+same frame then retried successfully and derived `location_report seq=27`.
+The follow-up raw LTE `location_observation seq=28` reached the VPS with
+`cell.cell_id=180571649`, LTE `reason_code=LTE_READY`, assigned IP
+`10.13.10.229`, `location_belief.state=Unknown`,
+`cache_retry_policy=single_retry_current_boot`, retry counters `1/1/0`, and
+raw POST counters `2/1/1`. Raw LTE ACK `seq=29` completed `cmd-000031` as
+`ok` with `transport.type=lte`, poll HTTP `LTE_HTTP_OK` / `200`, retry counters
+`1/1/0`, and raw POST counters `3/2/1`. This validates the bounded current-boot
+raw POST retry path for one injected first-POST failure. It does not prove
+durable offline cache, reconnect recovery, long LTE stability, GNSS acceptance,
+battery/power behavior, enclosure behavior, learned model behavior, or
+product-readiness.
+
 2026-07-01: LTE-009 release-gate tooling now has a reusable raw retry
 validator. `scripts/validate_lte_command_loop.py` accepts
 `--require-raw-post-fail-once`, which implies a command-scoped LTE
@@ -18,8 +48,9 @@ be executed as a fixed gate rather than a manual Web inspection. Focused
 validator/runner tests passed with 16 tests, and full `scripts\verify.ps1`
 passed with 319 tests. The LTE-009 guarded ESP-IDF build was rerun after this
 commit, producing the same binary path and size with app version `85d799a` and
-`flash_intentionally_not_run=true`. No firmware flash or hardware runtime
-validation was performed by this tooling update.
+`flash_intentionally_not_run=true`. This tooling-only update itself did not
+perform firmware flash or hardware runtime validation; the later LTE-009 flash
+and runtime pass are recorded above.
 
 2026-07-01: LTE-009 Raw POST Retry Fault Injection is implemented and
 build-verified as the next slice after LTE-008 fix1. Message Hub now supports
@@ -49,8 +80,9 @@ returned current state. A VPS-local in-memory smoke using the deployed code
 verified first POST HTTP `503` / `raw_post_fail_once_injected`, retained raw
 status `injected_failure`, zero derived messages after the failed attempt, then
 second POST success with one derived `location_report`; exported raw statuses
-were `injected_failure` and `ok`. LTE-009 firmware has not been flashed or
-USB-Free runtime validated yet. It does not prove durable offline cache,
+were `injected_failure` and `ok`. At that point LTE-009 firmware had not been
+flashed or USB-Free runtime validated yet; the later flash and runtime pass are
+recorded above. This build/deploy step did not prove durable offline cache,
 reconnect recovery, long LTE stability, GNSS acceptance, battery/power
 behavior, enclosure behavior, learned model behavior, or product-readiness.
 

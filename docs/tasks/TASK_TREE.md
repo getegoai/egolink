@@ -276,8 +276,8 @@ motion candidate
 - `LTE-009 Raw POST Retry Fault Injection`
   - Path:
     `docs/tasks/done/LTE-009_RAW_POST_RETRY_FAULT_INJECTION.md`
-  - Status: in progress as the next build- and VPS-smoke-verified slice after
-    LTE-008 fix1; hardware flash/runtime is still pending.
+  - Status: completed as a build-, VPS-smoke-, flash-, and USB-Free runtime-
+    verified slice after LTE-008 fix1.
   - Goal: prove the bounded current-boot raw POST retry path using a
     controlled VPS-visible HTTP 503 on the first raw `location_report` POST,
     while retaining the failed raw frame and deriving the event only after the
@@ -292,10 +292,16 @@ motion candidate
     addition; guarded ESP-IDF build produced
     `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
     (`301776` bytes) with the fail-once test switch enabled, then was rerun
-    after the validator-gate commit with app version `85d799a`. Message Hub
-    was deployed to the VPS after commit `10e28fe`; public health/auth checks and
-    a VPS-local in-memory fail-once smoke passed. No firmware flash or
-    USB-Free runtime validation has been performed yet.
+    after the validator-gate commit with app version `85d799a`; flash reran
+    CMake at HEAD and flashed app version `88945b9`. Message Hub was deployed
+    to the VPS after commit `10e28fe`; public health/auth checks and a VPS-
+    local in-memory fail-once smoke passed. Flash evidence and USB-Free runtime
+    evidence are under
+    `reports/field_validation/lte009-raw-post-retry-fault-20260701-001/`.
+    Runtime validation passed with `cmd-000031`: first raw LTE
+    `location_report` was retained as `injected_failure`, retry derived
+    `location_report seq=27`, raw LTE `location_observation seq=28` and raw LTE
+    ACK `seq=29` reached the VPS, and retry counters were `1/1/0`.
 
 ## Active Queue
 
@@ -1093,9 +1099,10 @@ motion candidate
     once through USB-Free raw LTE runtime evidence. This still is not durable
     store-forward, reconnect recovery, actual retry-after-failure evidence, or
     long LTE stability.
-11. Treat `LTE-009` as the current build path: inject one server-side raw POST
-    failure, retain that failed raw frame, and prove the existing bounded retry
-    can recover before starting reconnect or store-forward work.
+11. `LTE-009` has proved one server-side raw POST injected failure, retained
+    the failed raw frame, and recovered through the existing bounded current-
+    boot retry. Use this as the entry condition before reconnect or
+    store-forward work.
 12. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
     data and observability gates can explain failures. Do not promote it into
     long stability testing.

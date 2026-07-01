@@ -1,7 +1,7 @@
 ---
 id: LTE-009
 title: Raw POST Retry Fault Injection
-status: in_progress
+status: completed
 priority: high
 requires_hardware: true
 created: 2026-07-01
@@ -70,7 +70,7 @@ reposts the same raw frame successfully.
 - [x] VPS deployment keeps GitLab untouched and smoke-verifies the deployed
       fail-once code path without writing synthetic device rows into the live
       service database.
-- [ ] Optional hardware gate flashes only after explicit operator
+- [x] Optional hardware gate flashes only after explicit operator
       confirmation and validates the fail-once retry path over independent
       power with USB disconnected.
 
@@ -108,7 +108,14 @@ reposts the same raw frame successfully.
   passed and generated
   `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
   (`301776` bytes). After the validator-gate commit, the guarded build was
-  rerun and produced app version `85d799a`. The script did not flash hardware.
+  rerun and produced app version `85d799a`. During the later explicit flash,
+  CMake reran at HEAD and produced flashed app version `88945b9`.
+- Hardware flash:
+  `scripts/run_fw001_hw_r1.ps1` flashed LTE-009 on `COM4` after explicit
+  operator confirmation. ESP32-S3 QFN56 rev v0.2 was detected, bootloader/app/
+  partition table writes completed, hashes were verified, hard reset
+  completed, and flash evidence is under
+  `reports/field_validation/lte009-raw-post-retry-fault-20260701-001/flash_report.md`.
 - VPS deployment:
   `scripts/deploy_message_hub_vps.ps1 -HostName 203.0.113.10 -SshKey <local ignored key> -Public`
   deployed the Message Hub to `/opt/egolink-message-hub` and restarted
@@ -121,6 +128,17 @@ reposts the same raw frame successfully.
   `raw_post_fail_once_injected`, retained raw status `injected_failure`, no
   derived telemetry after the failed attempt, second POST success, one derived
   `location_report`, and exported raw statuses `injected_failure` plus `ok`.
+- USB-Free runtime:
+  after the operator connected independent power and disconnected USB,
+  `scripts/run_fw001_hw_r1.ps1 -Validate -LteCommandName request_location -RequireRawPostFailOnce -RequireLteLocationObservation`
+  passed. Validator command `cmd-000031` produced retained raw LTE
+  `location_report` frame `loc-cmd-000031` first as `injected_failure` /
+  `RAW_POST_FAIL_ONCE_INJECTED`, then as retry `ok` with derived
+  `location_report seq=27`; raw LTE `location_observation seq=28` and raw LTE
+  ACK `seq=29` also reached the VPS. ACK status was `ok`, LTE poll was
+  `LTE_HTTP_OK` / HTTP `200`, retry counters were `1/1/0`, final raw POST
+  counters were `3/2/1`, and evidence is under
+  `reports/field_validation/lte009-raw-post-retry-fault-20260701-001/`.
 
 ## Completion Boundary
 
