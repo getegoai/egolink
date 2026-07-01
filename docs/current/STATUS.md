@@ -6,6 +6,21 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: LTE-007 was flashed on `COM4` after explicit operator
+confirmation. The flashed image is
+`0.1.0-lte007-volatile-cache-observe` /
+`lte007-volatile-cache-20260701-001`, built from commit `e6f70cf`, with binary
+`firmware/mqtt_heartbeat/build_lte007_volatile_cache_observe/egolink_mqtt_heartbeat.bin`
+(`301056` bytes). `esptool.py` detected ESP32-S3 QFN56 rev v0.2, MAC
+`02:00:00:00:00:03`, wrote bootloader, app, and partition table, verified all
+hashes, and completed hard reset. Local flash evidence is under
+`reports/field_validation/lte007-volatile-cache-20260701-001/flash_report.md`.
+USB-Free runtime validation is still pending operator independent-power and
+USB-disconnect confirmation. No VPS deployment, GitLab change, durable offline
+cache, reconnect recovery, long LTE stability, GNSS acceptance, battery/power
+behavior, enclosure behavior, learned model behavior, or product-readiness
+claim is changed.
+
 2026-07-01: LTE-007 Volatile Cache Drop Observability is implemented as a
 firmware/static-build increment after KR-005. The raw LTE
 `location_observation` and raw LTE ACK payloads now report current-boot raw

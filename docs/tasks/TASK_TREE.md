@@ -230,9 +230,11 @@ motion candidate
     observed source status, zero queued durable messages, drop count, oldest
     age, and last-drop reason. LTE-005 treats these counters as cache/drop
     observability evidence while preserving the no-durable-cache boundary.
-  - Boundary: no firmware flash, hardware runtime validation, VPS deployment,
-    long LTE stability, reconnect recovery, durable cache, battery/power
-    behavior, enclosure behavior, or product-readiness claim.
+    LTE-007 has since been flashed on `COM4`; USB-Free runtime validation is
+    pending.
+  - Boundary: no hardware runtime validation, VPS deployment, long LTE
+    stability, reconnect recovery, durable cache, battery/power behavior,
+    enclosure behavior, or product-readiness claim.
 
 ## Active Queue
 
@@ -1024,9 +1026,9 @@ motion candidate
 9. Treat `REL-007` as the completed KR-005 release: the reliability
    explainability preflight baseline is released, but it still does not claim
    durable cache, reconnect recovery, or long LTE stability.
-10. Treat `LTE-007` as the current build-verified next slice: volatile
-    cache/drop counters are now present in firmware payloads, but USB-Free
-    runtime validation is still pending explicit operator flash and test.
+10. Treat `LTE-007` as the current flashed next slice: volatile cache/drop
+    counters are now present in firmware payloads, but USB-Free runtime
+    validation is still pending independent-power/USB-disconnect testing.
 11. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
     data and observability gates can explain failures. Do not promote it into
     long stability testing.

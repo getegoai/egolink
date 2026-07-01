@@ -341,9 +341,9 @@ claiming those mechanisms are implemented.
 - LTE-007 adds build-verified current-boot volatile outbox counters:
   POST attempt/success/failure counts plus observed cache drop counters. This
   is the next firmware slice after KR-005, not a KR-005 release change.
-- A later operator-confirmed COM4 flash and USB-Free runtime validation should
-  prove the LTE-007 counters in real VPS raw-frame evidence before any long
-  LTE stability or reconnect gate.
+- LTE-007 has since been operator-confirmed flashed on `COM4`; USB-Free
+  runtime validation should prove the counters in real VPS raw-frame evidence
+  before any long LTE stability or reconnect gate.
 
 ## Release Gate Policy
 
