@@ -29,11 +29,16 @@ with 42 tests. Guarded ESP-IDF build passed with firmware
 redeployed to `203.0.113.10:8790` without modifying GitLab; public `/health`
 returned `ok=true`, unauthenticated `/api/state` returned HTTP 401, the public
 Dashboard HTML contained `Cache Retry`, `egolink-message-hub.service` remained
-`active`, and the existing GitLab service remained `active`. No firmware
-flash, USB-Free runtime validation, GitLab change, durable offline cache,
-reconnect recovery, long LTE stability, GNSS acceptance, battery/power
-behavior, enclosure behavior, learned model behavior, or product-readiness
-claim is changed.
+`active`, and the existing GitLab service remained `active`. LTE-008 was then
+flashed on `COM4` after explicit operator confirmation. `esptool.py` detected
+ESP32-S3 QFN56 rev v0.2, MAC `02:00:00:00:00:03`, wrote bootloader, app
+(`301824` bytes), and partition table, verified all hashes, and completed
+hard reset. Local flash evidence is under
+`reports/field_validation/lte008-bounded-raw-retry-20260701-001/flash_report.md`.
+USB-Free runtime validation remains pending. No GitLab change, durable offline
+cache, reconnect recovery, long LTE stability, GNSS acceptance,
+battery/power behavior, enclosure behavior, learned model behavior, or
+product-readiness claim is changed.
 
 2026-07-01: LTE-007 USB-Free runtime validation passed after the operator
 rebooted the connectivity node on independent power with USB disconnected.

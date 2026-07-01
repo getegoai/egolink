@@ -3,7 +3,7 @@ id: LTE-008
 title: Bounded Raw POST Retry Observability
 status: completed
 priority: high
-requires_hardware: false
+requires_hardware: true
 created: 2026-07-01
 last_updated: 2026-07-01
 
@@ -74,6 +74,7 @@ across power loss.
       views.
 - [x] The LTE wire payload remains raw-frame/KV, not JSON.
 - [x] Focused tests and guarded ESP-IDF build pass without flashing.
+- [x] `COM4` flash passes after explicit operator confirmation.
 
 ## Evidence
 
@@ -102,12 +103,16 @@ across power loss.
   passed and generated
   `firmware/mqtt_heartbeat/build_lte008_bounded_raw_retry/egolink_mqtt_heartbeat.bin`
   (`301824` bytes). The script did not flash hardware.
+- Flash:
+  `reports/field_validation/lte008-bounded-raw-retry-20260701-001/flash_report.md`
+  records `COM4` flash PASS for ESP32-S3 QFN56 rev v0.2, MAC
+  `02:00:00:00:00:03`, app size `301824` bytes, and verified bootloader/app/
+  partition hashes.
 
 ## Completion Boundary
 
-LTE-008 is a build-verified firmware/server-Web observability and bounded retry
-increment. It deploys the Message Hub/Web visibility update only. It does not
-flash hardware, prove USB-Free runtime behavior, modify GitLab, implement
-durable offline cache, prove reconnect recovery, prove long LTE stability,
-prove battery/power behavior, prove GNSS acceptance, or make any
-product-readiness claim.
+LTE-008 is a firmware/server-Web observability and bounded retry increment
+with COM4 flash evidence. It does not prove USB-Free runtime behavior, modify
+GitLab, implement durable offline cache, prove reconnect recovery, prove long
+LTE stability, prove battery/power behavior, prove GNSS acceptance, or make
+any product-readiness claim.

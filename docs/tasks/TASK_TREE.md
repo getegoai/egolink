@@ -245,8 +245,8 @@ motion candidate
   - Path:
     `docs/tasks/done/LTE-008_BOUNDED_RAW_POST_RETRY_OBSERVABILITY.md`
   - Status: completed as a firmware/server-Web build-verified increment after
-    LTE-007; hardware flash/runtime validation is pending explicit operator
-    confirmation.
+    LTE-007 with `COM4` flash evidence; USB-Free runtime validation is pending
+    explicit operator independent-power/USB-disconnect confirmation.
   - Evidence: firmware adds
     `CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_RETRY_MAX=1` by default for the
     raw LTE command-loop path, shares a bounded raw POST retry helper across
@@ -257,11 +257,11 @@ motion candidate
     visibility update was deployed to `203.0.113.10:8790` without modifying
     GitLab. Focused tests passed with 42 tests, and guarded ESP-IDF build produced
     `firmware/mqtt_heartbeat/build_lte008_bounded_raw_retry/egolink_mqtt_heartbeat.bin`
-    (`301824` bytes).
-  - Boundary: no firmware flash, USB-Free runtime validation, durable cache,
-    reconnect recovery, long LTE stability, battery/power behavior, enclosure
-    behavior, GNSS acceptance, learned model behavior, or product-readiness
-    claim.
+    (`301824` bytes). COM4 flash passed with evidence under
+    `reports/field_validation/lte008-bounded-raw-retry-20260701-001/flash_report.md`.
+  - Boundary: no USB-Free runtime validation, durable cache, reconnect
+    recovery, long LTE stability, battery/power behavior, enclosure behavior,
+    GNSS acceptance, learned model behavior, or product-readiness claim.
 
 ## Active Queue
 
@@ -1058,10 +1058,10 @@ motion candidate
     derived by Message Hub/Web, and proven once through USB-Free raw LTE
     runtime evidence. This still is not durable store-forward, reconnect
     recovery, or long LTE stability.
-11. Treat `LTE-008` as the current build-verified next slice: one bounded
+11. Treat `LTE-008` as the current flashed next slice: one bounded
     current-boot raw POST retry is implemented and visible, but it still needs
-    operator-confirmed COM4 flash and USB-Free runtime validation before it can
-    replace LTE-007 as the hardware baseline.
+    operator-confirmed independent-power USB-Free runtime validation before it
+    can replace LTE-007 as the runtime baseline.
 12. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
     data and observability gates can explain failures. Do not promote it into
     long stability testing.
