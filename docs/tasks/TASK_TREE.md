@@ -276,7 +276,8 @@ motion candidate
 - `LTE-009 Raw POST Retry Fault Injection`
   - Path:
     `docs/tasks/done/LTE-009_RAW_POST_RETRY_FAULT_INJECTION.md`
-  - Status: in progress as the next build-verified slice after LTE-008 fix1.
+  - Status: in progress as the next build- and VPS-smoke-verified slice after
+    LTE-008 fix1; hardware flash/runtime is still pending.
   - Goal: prove the bounded current-boot raw POST retry path using a
     controlled VPS-visible HTTP 503 on the first raw `location_report` POST,
     while retaining the failed raw frame and deriving the event only after the
@@ -285,10 +286,13 @@ motion candidate
     battery/power behavior, enclosure behavior, GNSS acceptance, learned model
     behavior, or product-readiness claim.
   - Current evidence: focused server/firmware/script tests passed with 47
-    tests; guarded ESP-IDF build produced
+    tests; full `scripts\verify.ps1` passed with 317 tests; guarded ESP-IDF
+    build produced
     `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
-    (`301776` bytes) with the fail-once test switch enabled. No VPS deploy,
-    flash, or USB-Free runtime validation has been performed yet.
+    (`301776` bytes) with the fail-once test switch enabled. Message Hub was
+    deployed to the VPS after commit `10e28fe`; public health/auth checks and
+    a VPS-local in-memory fail-once smoke passed. No firmware flash or
+    USB-Free runtime validation has been performed yet.
 
 ## Active Queue
 

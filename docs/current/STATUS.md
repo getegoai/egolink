@@ -26,11 +26,18 @@ with firmware `0.1.0-lte009-raw-post-retry-fault`, test run
 (`301776` bytes), and `flash_intentionally_not_run=true`. The build enabled
 SIM7670G GNSS, LTE status, raw LTE command loop, location observation,
 `CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_RETRY_MAX=1`, and
-`CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST=y`. LTE-009 has not
-been deployed to the VPS, flashed, or USB-Free runtime validated yet. It does
-not prove durable offline cache, reconnect recovery, long LTE stability, GNSS
-acceptance, battery/power behavior, enclosure behavior, learned model
-behavior, or product-readiness.
+`CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST=y`. After commit
+`10e28fe`, the Message Hub was deployed to the VPS at `203.0.113.10:8790`
+without touching GitLab. Public checks passed: `/health` returned OK,
+unauthenticated `/api/state` returned `401`, and authenticated `/api/state`
+returned current state. A VPS-local in-memory smoke using the deployed code
+verified first POST HTTP `503` / `raw_post_fail_once_injected`, retained raw
+status `injected_failure`, zero derived messages after the failed attempt, then
+second POST success with one derived `location_report`; exported raw statuses
+were `injected_failure` and `ok`. LTE-009 firmware has not been flashed or
+USB-Free runtime validated yet. It does not prove durable offline cache,
+reconnect recovery, long LTE stability, GNSS acceptance, battery/power
+behavior, enclosure behavior, learned model behavior, or product-readiness.
 
 2026-07-01: LTE-008 fix1 USB-Free runtime validation passed after the
 operator connected independent power and disconnected USB. Validator command

@@ -65,6 +65,9 @@ reposts the same raw frame successfully.
 - [x] Build/runner scripts can enable the switch through an explicit
       `-EnableRawPostFailOnceTest` flag.
 - [x] Guarded ESP-IDF build passes without flashing.
+- [x] VPS deployment keeps GitLab untouched and smoke-verifies the deployed
+      fail-once code path without writing synthetic device rows into the live
+      service database.
 - [ ] Optional hardware gate flashes only after explicit operator
       confirmation and validates the fail-once retry path over independent
       power with USB disconnected.
@@ -93,7 +96,20 @@ reposts the same raw frame successfully.
   `powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 -HostName 203.0.113.10 -FwVersion 0.1.0-lte009-raw-post-retry-fault -TestRunId lte009-raw-post-retry-fault-20260701-001 -BuildDir build_lte009_raw_post_retry_fault -EnableSim7670Gnss -EnableSim7670LocationObservation -EnableRawPostFailOnceTest -Build -Json`
   passed and generated
   `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
-  (`301776` bytes). The script did not flash hardware.
+  (`301776` bytes) from app version `10e28fe`. The script did not flash
+  hardware.
+- VPS deployment:
+  `scripts/deploy_message_hub_vps.ps1 -HostName 203.0.113.10 -SshKey <local ignored key> -Public`
+  deployed the Message Hub to `/opt/egolink-message-hub` and restarted
+  `egolink-message-hub.service` on `0.0.0.0:8790` without touching GitLab.
+  Public checks passed: `/health` OK, unauthenticated `/api/state` returned
+  `401`, and authenticated `/api/state` returned current state.
+- VPS-local smoke:
+  a temporary in-memory store using the deployed `/opt/egolink-message-hub`
+  code verified first raw POST HTTP `503` /
+  `raw_post_fail_once_injected`, retained raw status `injected_failure`, no
+  derived telemetry after the failed attempt, second POST success, one derived
+  `location_report`, and exported raw statuses `injected_failure` plus `ok`.
 
 ## Completion Boundary
 
