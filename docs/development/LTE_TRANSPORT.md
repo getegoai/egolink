@@ -391,6 +391,38 @@ Definition of Done:
 - a later hardware gate may flash and validate the fail-once retry path over
   independent power with USB disconnected.
 
+## LTE-010: Reconnect Store-Forward Gate Baseline
+
+Goal: define the offline evidence gate that later reconnect/store-forward
+firmware must pass before any long LTE stability run can be treated as more
+than a blind soak.
+
+Implementation shape:
+
+- `scripts/validate_lte_reconnect_store_forward_gate.py` reads an existing
+  Message Hub `test_run_export.json`;
+- the gate requires LTE runtime/raw evidence before judging reconnect state;
+- reconnect recovery is PASS only when the export contains reconnect attempt
+  count/reason evidence, a concrete network/LTE/HTTP failure reason, and a
+  later successful LTE ACK after reconnect evidence;
+- durable store-forward is PASS only when the export contains observed
+  `cache_state=store_forward` or equivalent offline-queue state plus queue,
+  drop, and oldest-age counters;
+- volatile current-boot outbox evidence from LTE-007/LTE-008/LTE-009 remains
+  WARN for durable store-forward, not PASS;
+- missing reconnect/store-forward exercise is WARN, while claiming reconnect
+  or store-forward without enough evidence is FAIL.
+
+Definition of Done:
+
+- focused tests cover LTE-009-shaped WARN, synthetic full PASS, reconnect
+  claim without later ACK FAIL, and store-forward claim without counters FAIL;
+- running the gate over the LTE-009 export returns expected `WARN`, proving the
+  current key release is explainable but not reconnect/store-forward
+  acceptance;
+- no firmware flash, runtime hardware test, VPS deploy, or long stability run
+  is part of this baseline.
+
 ## R3.0 LTE Long-Run Gate
 
 Only after the LTE reliability preflight path has concrete observability should
@@ -399,8 +431,10 @@ gate: it proves that the export can explain failure modes, not that the device
 has already survived a long field run. LTE-007 adds current-boot volatile
 outbox counters, LTE-008 adds one bounded current-boot raw POST retry, and
 LTE-009 exercises that retry path through controlled fail-once injection, but
-none of these are durable store-forward or reconnect acceptance. The later
-long-run gate must cover:
+none of these are durable store-forward or reconnect acceptance. LTE-010 adds
+the offline reconnect/store-forward gate that later firmware evidence must
+pass before a long-run gate can claim recovery behavior. The later long-run
+gate must cover:
 
 - LTE registration failure;
 - PDP activation failure;

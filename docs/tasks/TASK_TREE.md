@@ -322,6 +322,23 @@ motion candidate
     `location_report` was retained as `injected_failure`, retry derived
     `location_report seq=27`, raw LTE `location_observation seq=28` and raw LTE
     ACK `seq=29` reached the VPS, and retry counters were `1/1/0`.
+- `LTE-010 Reconnect Store-Forward Gate Baseline`
+  - Path:
+    `docs/tasks/done/LTE-010_RECONNECT_STORE_FORWARD_GATE_BASELINE.md`
+  - Status: completed as a non-hardware offline gate baseline after KR-006.
+  - Evidence: `scripts/validate_lte_reconnect_store_forward_gate.py`,
+    `quality_tests/test_lte_reconnect_store_forward_gate.py`, and the expected
+    WARN report over the LTE-009 export under
+    `reports/lte_reconnect_store_forward/lte009-raw-post-retry-fault-20260701-001/`.
+  - Current visible result: LTE-010 can distinguish explainable current
+    evidence from actual reconnect/store-forward acceptance. LTE-009-shaped
+    exports WARN because reconnect was not exercised and `volatile_outbox` is
+    not durable store-forward; synthetic complete evidence can PASS; reconnect
+    or store-forward claims without enough evidence FAIL.
+  - Boundary: no firmware flash, runtime validation, VPS deployment, GitLab
+    change, modem reconnect implementation, durable local storage, long LTE
+    stability, GNSS acceptance, enclosure behavior, battery/power behavior, or
+    product-readiness claim.
 
 ## Active Queue
 
@@ -1123,6 +1140,9 @@ motion candidate
     server-side raw POST injected failure, retained the failed raw frame, and
     recovered through the existing bounded current-boot retry. Use KR-006 as
     the entry condition before reconnect or store-forward work.
-12. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
+12. Treat `LTE-010` as the completed offline reconnect/store-forward gate
+    baseline. Future firmware evidence must pass this gate before reconnect or
+    durable store-forward can be treated as accepted.
+13. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
     data and observability gates can explain failures. Do not promote it into
     long stability testing.

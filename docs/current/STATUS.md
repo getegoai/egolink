@@ -6,6 +6,25 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: LTE-010 Reconnect Store-Forward Gate Baseline is implemented as a
+non-hardware offline gate after KR-006. New script:
+`scripts/validate_lte_reconnect_store_forward_gate.py`. The gate reads an
+existing Message Hub `test_run_export.json` and requires LTE runtime/raw
+evidence, reconnect attempt count and reason, concrete network/LTE/HTTP
+failure reason, a later successful LTE ACK after reconnect evidence, and
+observed store-forward queue/drop/age counters before returning PASS. Missing
+reconnect/store-forward exercise returns WARN; claiming reconnect or
+store-forward without enough evidence returns FAIL. Focused tests passed with
+5 tests. Running the gate over
+`reports/field_validation/lte009-raw-post-retry-fault-20260701-001/test_run_export.json`
+returned expected `WARN`: LTE runtime evidence passed, reconnect gates were
+`NOT_OBSERVED`, and store-forward remained WARN because current evidence is
+`volatile_outbox`, not durable store-forward. Report is under
+`reports/lte_reconnect_store_forward/lte009-raw-post-retry-fault-20260701-001/`.
+This does not flash firmware, contact hardware, deploy to the VPS, implement
+modem reconnect recovery, implement durable local storage, prove long LTE
+stability, or change product-readiness.
+
 2026-07-01: REL-008 promotes KR-006 Raw POST Retry Fault Injection Baseline
 to released engineering key version `0.1.0-key-release-006`. KR-006 binds the
 LTE-009 build, VPS fail-once smoke, COM4 flash, USB-Free runtime evidence, and

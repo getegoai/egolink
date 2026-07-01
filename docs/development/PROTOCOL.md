@@ -845,6 +845,16 @@ retried immediately within the same boot before the message is finally counted
 as dropped. They do not imply an offline queue, durable cache, reconnect
 supervisor, or store-forward recovery.
 
+Reconnect recovery evidence must pair `network_reconnect_count`,
+`network_last_error`, `network_last_reconnect_reason`, and a later successful
+LTE ACK in the same test-run export. Store-forward evidence must use an
+observed cache state such as `cache_state=store_forward` with queue/drop/age
+counters such as `cache_queued_message_count`, `cache_dropped_message_count`,
+and `cache_oldest_message_age_ms`. Optional flush counters may be added
+additively as `cache_flush_attempt_count`, `cache_flush_success_count`, and
+`cache_flush_failure_count`. A volatile current-boot outbox remains useful
+diagnostic evidence, but it is not durable store-forward proof.
+
 Test-only raw-frame payloads may include
 `test_inject_raw_post_fail_once=true` when a named LTE fault-injection task
 explicitly enables it. Message Hub must retain the first matching raw frame as
