@@ -6,6 +6,28 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: REL-008 promotes KR-006 Raw POST Retry Fault Injection Baseline
+to released engineering key version `0.1.0-key-release-006`. KR-006 binds the
+LTE-009 build, VPS fail-once smoke, COM4 flash, USB-Free runtime evidence, and
+raw-frame export into a reusable release gate:
+`docs/current/key_releases/KR-006_RAW_POST_RETRY_FAULT_INJECTION.json`.
+The gate verifies that the LTE-009 runtime used independent power with USB
+disconnected, created command `cmd-000031`, retained the first raw LTE
+`location_report` frame `loc-cmd-000031` as
+`parse_result.status=injected_failure` /
+`RAW_POST_FAIL_ONCE_INJECTED`, accepted the same raw frame on retry as a
+derived `location_report seq=27`, received raw LTE
+`location_observation seq=28`, and completed raw LTE ACK `seq=29` with HTTP
+`LTE_HTTP_OK` / `200`.
+Local KR-006 report is under `reports/key_releases/KR-006/`. Validation
+passed: `python scripts\run_key_release_gate.py --manifest
+docs/current/key_releases/KR-006_RAW_POST_RETRY_FAULT_INJECTION.json --json`,
+`python scripts/context_lint.py`, and `git diff --check`. This release does
+not perform new flashing or runtime validation beyond the already recorded
+LTE-009 evidence, and does not prove reconnect recovery, durable offline cache,
+long LTE stability, GNSS acceptance, battery/power behavior, enclosure
+behavior, learned model behavior, or product-readiness.
+
 2026-07-01: LTE-009 Raw POST Retry Fault Injection was flashed on `COM4` and
 passed the USB-Free hardware runtime gate after the operator connected
 independent power and disconnected USB. The flash used firmware

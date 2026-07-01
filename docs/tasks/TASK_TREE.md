@@ -148,6 +148,26 @@ motion candidate
   - Boundary: no VPS deployment, GitLab change, product readiness, long LTE
     stability, reconnect recovery, cache durability, cache/drop-message
     reliability, GNSS acceptance, enclosure behavior, or battery/power claim.
+- `REL-008 KR-006 Raw POST Retry Fault Injection Release`
+  - Path:
+    `docs/tasks/done/REL-008_KR006_RAW_POST_RETRY_FAULT_RELEASE.md`
+  - Status: completed as the KR-006 release promotion after LTE-009
+    USB-Free runtime validation.
+  - Evidence: LTE-009 source/deploy/validator commits, binary
+    `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`,
+    USB-Free runtime evidence under
+    `reports/field_validation/lte009-raw-post-retry-fault-20260701-001/`,
+    and KR-006 manifest
+    `docs/current/key_releases/KR-006_RAW_POST_RETRY_FAULT_INJECTION.json`.
+  - Current visible result: KR-006 is a released engineering key version for
+    the controlled raw POST fail-once retry slice. LTE-009 proved one
+    command-scoped retained `injected_failure` raw frame, a retry-derived
+    `location_report`, raw LTE `location_observation`, and ACK over SIM7670G
+    LTE with bounded current-boot retry counters.
+  - Boundary: no new firmware flash, runtime validation, VPS deployment,
+    GitLab change, product readiness, long LTE stability, reconnect recovery,
+    durable offline cache, GNSS acceptance, enclosure behavior, or
+    battery/power claim.
 - `REL-006 KR-005 Reliability Explainability Release Gate`
   - Path:
     `docs/tasks/done/REL-006_KR005_RELIABILITY_EXPLAINABILITY_RELEASE_GATE.md`
@@ -1093,16 +1113,16 @@ motion candidate
 9. Treat `REL-007` as the completed KR-005 release: the reliability
    explainability preflight baseline is released, but it still does not claim
    durable cache, reconnect recovery, or long LTE stability.
-10. Treat `LTE-008 fix1` as the current runtime-validated reliability
+10. Treat `LTE-008 fix1` as the completed runtime-validated reliability
     visibility slice: volatile cache/drop counters and bounded retry counters
     are present in firmware payloads, derived by Message Hub/Web, and proven
     once through USB-Free raw LTE runtime evidence. This still is not durable
     store-forward, reconnect recovery, actual retry-after-failure evidence, or
     long LTE stability.
-11. `LTE-009` has proved one server-side raw POST injected failure, retained
-    the failed raw frame, and recovered through the existing bounded current-
-    boot retry. Use this as the entry condition before reconnect or
-    store-forward work.
+11. Treat `REL-008` as the completed KR-006 release: LTE-009 proved one
+    server-side raw POST injected failure, retained the failed raw frame, and
+    recovered through the existing bounded current-boot retry. Use KR-006 as
+    the entry condition before reconnect or store-forward work.
 12. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
     data and observability gates can explain failures. Do not promote it into
     long stability testing.

@@ -351,9 +351,103 @@ claiming those mechanisms are implemented.
   reached the VPS with matching firmware/test-run IDs and retry visibility.
   This proves the healthy-link retry-visibility slice, not an actual
   retry-after-failure case.
-- The next gate should move toward reconnect recovery or bounded store-forward
-  design before any long LTE stability gate. LTE-009 is the current build path
-  for a controlled raw POST fail-once retry proof before that next gate.
+- LTE-009 has since proved a controlled raw POST fail-once retry and is frozen
+  as KR-006 below. The next gate should move toward reconnect recovery or
+  bounded store-forward design before any long LTE stability gate.
+
+## KR-006 Raw POST Retry Fault Injection Baseline
+
+- Status: released engineering key version.
+- Release date: 2026-07-01.
+- Release version: `0.1.0-key-release-006`.
+- Firmware version: `0.1.0-lte009-raw-post-retry-fault`.
+- Device/test run: `ego-link-r1-connectivity-001` /
+  `lte009-raw-post-retry-fault-20260701-001`.
+- Manifest:
+  `docs/current/key_releases/KR-006_RAW_POST_RETRY_FAULT_INJECTION.json`.
+- Gate tool:
+  `python scripts\run_key_release_gate.py --manifest docs/current/key_releases/KR-006_RAW_POST_RETRY_FAULT_INJECTION.json --json`.
+- Gate report:
+  `reports/key_releases/KR-006/release_gate_report.json` and
+  `reports/key_releases/KR-006/release_gate_report.md`.
+
+### Release Meaning
+
+KR-006 freezes the first controlled retry-fault proof on the USB-Free raw LTE
+location backbone:
+
+```text
+VPS command queue
+-> SIM7670G LTE raw command poll
+-> request_location
+-> first raw LTE location_report retained as injected_failure / HTTP 503
+-> same raw frame retried and derived as location_report
+-> raw LTE location_observation carries retry counters
+-> raw LTE ACK completes the command
+-> KR-006 release gate
+```
+
+It is a released engineering key version because LTE-009 passed one real
+USB-Free runtime on independent power with USB disconnected, and the KR-006
+manifest now checks both derived runtime fields and retained raw-frame evidence.
+It is still a bounded current-boot retry slice: it proves one injected
+first-POST failure recovery, not reconnect recovery or durable store-forward.
+
+### Evidence Summary
+
+- LTE-008 fix1 provides the bounded current-boot raw POST retry helper and
+  retry counter visibility.
+- LTE-009 adds a default-off firmware fail-once test switch and a Message Hub
+  raw-ingest fail-once path. The first marked raw frame is retained as
+  `parse_result.status=injected_failure` and HTTP `503` is returned without
+  deriving a Web/API message; the repeated frame is accepted and derived.
+- Message Hub was deployed to `203.0.113.10:8790` without touching GitLab.
+  Public health/auth checks passed, and a VPS-local in-memory smoke proved
+  first POST `503`, retained raw failure, no derived telemetry from the failed
+  attempt, then retry success.
+- Guarded ESP-IDF build produced
+  `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
+  (`301776` bytes).
+- COM4 flash passed after explicit operator confirmation. Flash evidence is
+  under
+  `reports/field_validation/lte009-raw-post-retry-fault-20260701-001/flash_report.md`.
+- USB-Free runtime validation passed after the operator connected independent
+  power and disconnected USB. Command `cmd-000031` produced retained raw LTE
+  `location_report` failure, retry-derived `location_report seq=27`, raw LTE
+  `location_observation seq=28`, and raw LTE ACK `seq=29`.
+- Runtime `location_observation` showed LTE `reason_code=LTE_READY`, cell ID
+  `180571649`, assigned IP `10.13.10.229`,
+  `location_belief.state=Unknown`, retry policy
+  `single_retry_current_boot`, retry counters `1/1/0`, and raw POST counters
+  `2/1/1`.
+- Raw LTE ACK completed the command as `ok` with `LTE_HTTP_OK` / HTTP `200`,
+  retry counters `1/1/0`, and raw POST counters `3/2/1`.
+- KR-006 gate passed with raw-frame checks proving the retained failed frame
+  and the retry-derived frame share the same `loc-cmd-000031` payload hash.
+
+### Non-Claims
+
+- No product readiness claim.
+- No long LTE stability claim.
+- No reconnect recovery claim.
+- No durable offline cache or store-forward claim.
+- No multi-message outage recovery claim.
+- No GNSS fix or outdoor GNSS acceptance claim.
+- No battery accuracy, charging, or product power behavior claim.
+- No learned model, learned personal-place, route prediction, or
+  positioning-accuracy claim.
+- No final enclosure, mounting, camera, audio, storage, calling, SMS, or
+  dispatch claim.
+
+### Next Gates
+
+- Design reconnect recovery evidence before treating modem/network
+  interruptions as recovered.
+- Design bounded store-forward semantics before claiming durable offline cache.
+- Add a later long-run LTE reliability gate only after reconnect and
+  store-forward evidence are visible.
+- Keep GNSS acceptance, battery/power behavior, and enclosure behavior outside
+  this retry gate.
 
 ## Release Gate Policy
 
