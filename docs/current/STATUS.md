@@ -6,6 +6,32 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: LTE-009 Raw POST Retry Fault Injection is implemented and
+build-verified as the next slice after LTE-008 fix1. Message Hub now supports
+a test-only raw-ingest fail-once path: when a raw KV frame contains
+`test_inject_raw_post_fail_once=true`, the first matching raw frame is
+retained with `parse_result.status=injected_failure` and HTTP 503 is returned
+without deriving a Web/API message; a repeated POST of the same frame is then
+accepted and derived normally. Firmware adds default-off
+`CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST`, and test builds add
+the injection marker only to raw LTE `location_report` payloads so the
+subsequent raw LTE `location_observation` can carry retry counters after the
+first POST fails and retry succeeds. Build/runner scripts expose the explicit
+`-EnableRawPostFailOnceTest` flag. Focused server/firmware/script tests passed
+with 47 tests; `python scripts/context_lint.py` passed; `git diff --check`
+passed with only Windows line-ending warnings. Guarded ESP-IDF build passed
+with firmware `0.1.0-lte009-raw-post-retry-fault`, test run
+`lte009-raw-post-retry-fault-20260701-001`, binary
+`firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
+(`301776` bytes), and `flash_intentionally_not_run=true`. The build enabled
+SIM7670G GNSS, LTE status, raw LTE command loop, location observation,
+`CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_RETRY_MAX=1`, and
+`CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST=y`. LTE-009 has not
+been deployed to the VPS, flashed, or USB-Free runtime validated yet. It does
+not prove durable offline cache, reconnect recovery, long LTE stability, GNSS
+acceptance, battery/power behavior, enclosure behavior, learned model
+behavior, or product-readiness.
+
 2026-07-01: LTE-008 fix1 USB-Free runtime validation passed after the
 operator connected independent power and disconnected USB. Validator command
 `cmd-000030` (`request_location`) was created at

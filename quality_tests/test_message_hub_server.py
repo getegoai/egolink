@@ -871,6 +871,70 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(current_run["eale_p0"]["location_belief"]["failure_reason"], "GNSS_NO_FIX")
         self.assertEqual(current_run["evidence_counts"]["commands"], 0)
 
+    def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            payload = (
+                "event_type=location_report\n"
+                "priority=normal\n"
+                "fw_version=0.1.0-lte009-raw-post-retry-fault\n"
+                "test_run_id=lte009-fail-once-unit\n"
+                "seq=7\n"
+                "source=sim7670g_firmware_gnss\n"
+                "source_status=unverified\n"
+                "fix=false\n"
+                "gnss_state=no_fix\n"
+                "location_request_cmd_id=cmd-fail-once\n"
+                "transport_type=lte\n"
+                "lte_http_phase=location_report\n"
+                "test_inject_raw_post_fail_once=true\n"
+            ).encode("utf-8")
+            frame = message_hub.build_raw_frame(
+                "event",
+                "loc-cmd-fail-once",
+                payload,
+                seq=7,
+                metadata={"test-run-id": "lte009-fail-once-unit"},
+            )
+            try:
+                post_json(base_url, "/api/v1/test-runs", {"test_run_id": "lte009-fail-once-unit"})
+                with self.assertRaises(error.HTTPError) as raised:
+                    post_bytes(base_url, "/api/v1/devices/ego-link-001/raw-ingest", frame)
+                failure_body = json.loads(raised.exception.read().decode("utf-8"))
+                raw_after_fail = get_json(base_url, "/api/v1/devices/ego-link-001/raw-frames")["raw_frames"]
+                history_after_fail = get_json(base_url, "/api/v1/devices/ego-link-001/telemetry/history")[
+                    "telemetry"
+                ]
+
+                success = post_bytes(base_url, "/api/v1/devices/ego-link-001/raw-ingest", frame)
+                history_after_retry = get_json(base_url, "/api/v1/devices/ego-link-001/telemetry/history")[
+                    "telemetry"
+                ]
+                exported = get_json(base_url, "/api/v1/test-runs/lte009-fail-once-unit/export")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(raised.exception.code, 503)
+        self.assertFalse(failure_body["ok"])
+        self.assertEqual(failure_body["error"], "raw_post_fail_once_injected")
+        self.assertEqual(failure_body["raw_frame"]["parse_result"]["status"], "injected_failure")
+        self.assertEqual(raw_after_fail[0]["parse_result"]["status"], "injected_failure")
+        self.assertEqual(raw_after_fail[0]["parse_result"]["error_code"], "RAW_POST_FAIL_ONCE_INJECTED")
+        self.assertEqual(history_after_fail, [])
+        self.assertTrue(success["ok"])
+        self.assertEqual(success["raw_frame"]["parse_result"]["status"], "ok")
+        self.assertEqual(history_after_retry[0]["event_type"], "location_report")
+        self.assertEqual(history_after_retry[0]["raw_frame"]["frame_id"], "loc-cmd-fail-once")
+        raw_statuses = [frame["parse_result"]["status"] for frame in exported["raw_frames"]]
+        self.assertIn("injected_failure", raw_statuses)
+        self.assertIn("ok", raw_statuses)
+
     def test_eale_p0_summary_uses_source_states_and_dataset_window(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")

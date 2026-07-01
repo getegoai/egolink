@@ -287,6 +287,8 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "cache_dropped_message_count=%",
             "cache_oldest_message_age_ms=0",
             "cache_last_drop_reason=%s",
+            "CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST",
+            "test_inject_raw_post_fail_once=true",
             "retry_attempt_count",
             "retry_success_count",
             "retry_failure_count",
@@ -338,6 +340,9 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         ]:
             with self.subTest(compact_token=token):
                 self.assertNotIn(token, observation_payload)
+        self.assertIn("config EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST", self.sim7670_kconfig)
+        self.assertIn("default n", self.sim7670_kconfig)
+        self.assertIn("Test-only LTE-009 switch", self.sim7670_kconfig)
 
     def test_lte_http_probe_payload_stays_compact_for_simcom_httpdata(self) -> None:
         probe_payload = self.app_main.split("static void build_lte_http_probe_payload", 1)[1].split(

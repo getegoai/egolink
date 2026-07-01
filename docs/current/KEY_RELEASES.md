@@ -352,7 +352,8 @@ claiming those mechanisms are implemented.
   This proves the healthy-link retry-visibility slice, not an actual
   retry-after-failure case.
 - The next gate should move toward reconnect recovery or bounded store-forward
-  design before any long LTE stability gate.
+  design before any long LTE stability gate. LTE-009 is the current build path
+  for a controlled raw POST fail-once retry proof before that next gate.
 
 ## Release Gate Policy
 

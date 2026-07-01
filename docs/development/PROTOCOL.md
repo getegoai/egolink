@@ -845,6 +845,14 @@ retried immediately within the same boot before the message is finally counted
 as dropped. They do not imply an offline queue, durable cache, reconnect
 supervisor, or store-forward recovery.
 
+Test-only raw-frame payloads may include
+`test_inject_raw_post_fail_once=true` when a named LTE fault-injection task
+explicitly enables it. Message Hub must retain the first matching raw frame as
+raw evidence and mark it as an injected failure, but must not derive the normal
+Web/API message from that rejected attempt. A later retry may derive normally.
+This field is not product telemetry and must remain disabled outside named
+retry-validation builds.
+
 Do not invent defaults. If reconnect/cache/drop behavior was not observed,
 omit these fields so the LTE-005 reliability gate can report `WARN` or
 `NOT_OBSERVED` instead of a false pass.

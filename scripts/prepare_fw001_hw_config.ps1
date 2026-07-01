@@ -20,6 +20,7 @@ param(
     [switch]$EnableSim7670LteHttpProbe,
     [switch]$EnableSim7670LteHttpCommandLoop,
     [switch]$EnableSim7670LocationObservation,
+    [switch]$EnableRawPostFailOnceTest,
     [int]$Sim7670UartNum = 1,
     [int]$Sim7670UartRxGpio = 17,
     [int]$Sim7670UartTxGpio = 18,
@@ -152,6 +153,11 @@ if ($EnableSim7670LocationObservation) {
 } else {
     $lines += "# CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED is not set"
 }
+if ($EnableRawPostFailOnceTest) {
+    $lines += "CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST=y"
+} else {
+    $lines += "# CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST is not set"
+}
 if ($EnableSim7670Gnss -or $effectiveEnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop -or $EnableSim7670LocationObservation) {
     $lines += @(
         "CONFIG_EGOLINK_SIM7670_UART_NUM=$Sim7670UartNum",
@@ -214,6 +220,7 @@ $result = [pscustomobject]@{
     sim7670_lte_http_probe_enabled = [bool]$EnableSim7670LteHttpProbe
     sim7670_lte_http_command_loop_enabled = [bool]$effectiveEnableSim7670LteHttpCommandLoop
     sim7670_location_observation_enabled = [bool]$EnableSim7670LocationObservation
+    raw_post_fail_once_test_enabled = [bool]$EnableRawPostFailOnceTest
     build_command = $buildCommand
     flash_intentionally_not_run = $true
 }

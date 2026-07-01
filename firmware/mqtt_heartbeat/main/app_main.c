@@ -1500,6 +1500,12 @@ static void build_lte_location_report_kv_payload(
         raw_response,
         cmd_id,
         sim7670_lte_http_backend_name());
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST
+    size_t used = strlen(buffer);
+    if (used < buffer_size) {
+        snprintf(buffer + used, buffer_size - used, "test_inject_raw_post_fail_once=true\n");
+    }
+#endif
 }
 
 static bool lte_http_publish_raw_location_report(const char *cmd_id)

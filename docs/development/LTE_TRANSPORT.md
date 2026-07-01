@@ -354,15 +354,48 @@ Definition of Done:
   `request_location -> location_report -> location_observation -> ACK` loop
   over independent power with USB disconnected.
 
+## LTE-009: Raw POST Retry Fault Injection
+
+Goal: prove the LTE-008 retry path with a controlled, VPS-visible HTTP failure
+before moving toward reconnect recovery or durable store-forward.
+
+Implementation shape:
+
+- firmware adds a default-off test switch
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST`;
+- when that switch is enabled, raw LTE `location_report` payloads include
+  `test_inject_raw_post_fail_once=true`;
+- Message Hub `raw-ingest` retains the first matching raw frame as
+  `parse_result.status=injected_failure` and returns HTTP 503 without deriving
+  a Web/API event from that failed attempt;
+- the firmware's existing bounded current-boot retry reposts the same raw
+  frame, and the retry can then be ingested and derived normally;
+- the subsequent raw LTE `location_observation` and ACK should expose concrete
+  retry evidence, such as raw POST failures plus
+  `cache_retry_attempt_count=1` and `cache_retry_success_count=1`.
+
+Definition of Done:
+
+- server tests prove the injected-failure raw bytes are retained but not
+  derived until retry succeeds;
+- firmware/static tests prove the switch is default-off and only test builds
+  request the injection;
+- guarded ESP-IDF build passes without flashing;
+- docs preserve the no-durable-cache, no-reconnect-recovery, and no-long-
+  stability boundaries;
+- a later hardware gate may flash and validate the fail-once retry path over
+  independent power with USB disconnected.
+
 ## R3.0 LTE Long-Run Gate
 
 Only after the LTE reliability preflight path has concrete observability should
 the project run a long LTE stability and reconnect gate. LTE-005 is a preflight
 gate: it proves that the export can explain failure modes, not that the device
 has already survived a long field run. LTE-007 adds current-boot volatile
-outbox counters, and LTE-008 adds one bounded current-boot raw POST retry, but
-neither is durable store-forward or reconnect acceptance. The later long-run
-gate must cover:
+outbox counters, LTE-008 adds one bounded current-boot raw POST retry, and
+LTE-009 exercises that retry path through controlled fail-once injection, but
+none of these are durable store-forward or reconnect acceptance. The later
+long-run gate must cover:
 
 - LTE registration failure;
 - PDP activation failure;

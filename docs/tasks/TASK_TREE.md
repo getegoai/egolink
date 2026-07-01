@@ -273,6 +273,22 @@ motion candidate
   - Boundary: no actual retry-after-failure case, durable cache, reconnect
     recovery, long LTE stability, battery/power behavior, enclosure behavior,
     GNSS acceptance, learned model behavior, or product-readiness claim.
+- `LTE-009 Raw POST Retry Fault Injection`
+  - Path:
+    `docs/tasks/done/LTE-009_RAW_POST_RETRY_FAULT_INJECTION.md`
+  - Status: in progress as the next build-verified slice after LTE-008 fix1.
+  - Goal: prove the bounded current-boot raw POST retry path using a
+    controlled VPS-visible HTTP 503 on the first raw `location_report` POST,
+    while retaining the failed raw frame and deriving the event only after the
+    retry succeeds.
+  - Boundary: no durable cache, reconnect recovery, long LTE stability,
+    battery/power behavior, enclosure behavior, GNSS acceptance, learned model
+    behavior, or product-readiness claim.
+  - Current evidence: focused server/firmware/script tests passed with 47
+    tests; guarded ESP-IDF build produced
+    `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
+    (`301776` bytes) with the fail-once test switch enabled. No VPS deploy,
+    flash, or USB-Free runtime validation has been performed yet.
 
 ## Active Queue
 
@@ -1070,6 +1086,9 @@ motion candidate
     once through USB-Free raw LTE runtime evidence. This still is not durable
     store-forward, reconnect recovery, actual retry-after-failure evidence, or
     long LTE stability.
-11. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
+11. Treat `LTE-009` as the current build path: inject one server-side raw POST
+    failure, retain that failed raw frame, and prove the existing bounded retry
+    can recover before starting reconnect or store-forward work.
+12. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
     data and observability gates can explain failures. Do not promote it into
     long stability testing.

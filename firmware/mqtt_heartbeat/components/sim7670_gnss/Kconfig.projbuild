@@ -166,6 +166,17 @@ config EGOLINK_SIM7670_LTE_HTTP_RAW_POST_RETRY_MAX
         fails. This is a bounded current-boot retry, not durable offline
         cache or store-forward recovery.
 
+config EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST
+    bool "Inject one server-side raw POST failure for retry validation"
+    default n
+    depends on EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    help
+        Test-only LTE-009 switch. When enabled, raw LTE location_report
+        payloads request one Message Hub fail-once injection so the first
+        POST is retained as raw evidence and rejected with HTTP 503, then the
+        bounded current-boot retry can succeed. Do not enable this for normal
+        field runtime or product demos.
+
 config EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
     bool "Send AT+CGNSSPWR=1 before GNSS query"
     default y

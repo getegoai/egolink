@@ -19,6 +19,7 @@ from pathlib import Path
 import re
 import sqlite3
 import sys
+import threading
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -52,6 +53,8 @@ class MessageHubStore:
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._raw_post_fail_once_seen: set[str] = set()
+        self._raw_post_fail_once_lock = threading.Lock()
         self._init_schema()
 
     def connect(self) -> sqlite3.Connection:
@@ -539,6 +542,53 @@ class MessageHubStore:
         self._update_raw_frame(raw_id, record)
         return record
 
+    def claim_raw_post_fail_once(self, device_id: str, raw_body: bytes) -> dict[str, Any] | None:
+        probe = parse_raw_frame_probe(device_id, raw_body)
+        kv_payload = as_dict(probe.get("kv_payload"))
+        if parse_bool_or_text(kv_payload.get("test-inject-raw-post-fail-once")) is not True:
+            return None
+        frame_id = str(probe.get("frame_id") or "unknown")
+        key = f"{device_id}|{frame_id}|{probe['raw_payload_sha256']}"
+        with self._raw_post_fail_once_lock:
+            if key in self._raw_post_fail_once_seen:
+                return None
+            self._raw_post_fail_once_seen.add(key)
+        return {"key": key, "frame_id": frame_id, "test_run_id": probe.get("test_run_id")}
+
+    def ingest_raw_frame_injected_failure(
+        self,
+        device_id: str,
+        raw_body: bytes,
+        *,
+        injection: dict[str, Any],
+        direction: str = "uplink",
+        expected_frame_type: str | None = None,
+        expected_cmd_id: str | None = None,
+    ) -> dict[str, Any]:
+        server_received_at = utc_now()
+        raw_id, initial = self._insert_raw_frame_initial(device_id, raw_body, direction, server_received_at)
+        record = parse_raw_frame_record(
+            initial,
+            raw_body,
+            expected_frame_type=expected_frame_type,
+            expected_cmd_id=expected_cmd_id,
+        )
+        original_parse = as_dict(record.get("parse_result"))
+        record["parse_result"] = {
+            "status": "injected_failure",
+            "error_code": "RAW_POST_FAIL_ONCE_INJECTED",
+            "reason": "test requested fail-once raw POST injection; raw frame retained without deriving message",
+            "derived_message_type": "unknown",
+            "suppressed_derived_message_type": original_parse.get("derived_message_type"),
+        }
+        record["injection"] = {
+            "name": "raw_post_fail_once",
+            "status": "injected_failure",
+            "key": injection.get("key"),
+        }
+        self._update_raw_frame(raw_id, record)
+        return record
+
     def _insert_raw_frame_initial(
         self,
         device_id: str,
@@ -890,7 +940,21 @@ def make_handler(store: MessageHubStore, *, token: str | None = None) -> type[Ba
             segments = split_path(urlparse(self.path).path)
             if len(segments) == 5 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "raw-ingest":
                 device_id = segments[3]
-                record = store.ingest_raw_frame(device_id, self.read_raw_body())
+                raw_body = self.read_raw_body()
+                injection = store.claim_raw_post_fail_once(device_id, raw_body)
+                if injection:
+                    record = store.ingest_raw_frame_injected_failure(device_id, raw_body, injection=injection)
+                    self.respond_json(
+                        {
+                            "ok": False,
+                            "error": "raw_post_fail_once_injected",
+                            "detail": "test requested fail-once raw POST injection",
+                            "raw_frame": redact_raw_frame_record(record),
+                        },
+                        status=503,
+                    )
+                    return
+                record = store.ingest_raw_frame(device_id, raw_body)
                 self.respond_json({"ok": True, "raw_frame": redact_raw_frame_record(record)})
                 return
             if (
@@ -1132,6 +1196,40 @@ def parse_raw_frame_record(
             )
     record["parse_result"] = parse_result
     return record
+
+
+def parse_raw_frame_probe(device_id: str, raw_body: bytes) -> dict[str, Any]:
+    initial = initial_raw_frame_record(device_id, raw_body, "uplink", utc_now())
+    header_bytes, payload, has_separator = split_raw_frame_bytes(raw_body)
+    result: dict[str, Any] = {
+        "device_id": device_id,
+        "frame_id": initial["frame_id"],
+        "raw_payload_sha256": initial["raw_payload"]["sha256"],
+        "kv_payload": {},
+        "test_run_id": None,
+    }
+    if not has_separator:
+        return result
+    header = parse_raw_header(header_bytes)
+    fields = header["fields"]
+    metadata = header["metadata"]
+    content_type = str(
+        first_known(
+            fields.get("content-type"),
+            fields.get("content_type"),
+            metadata.get("content-type"),
+            "application/octet-stream",
+        )
+    )
+    kv_payload = parse_kv_payload(payload) if content_type.startswith("text/x-egolink-kv") else {}
+    result.update(
+        {
+            "frame_id": str(first_known(fields.get("id"), fields.get("frame-id"), initial["frame_id"])),
+            "kv_payload": kv_payload,
+            "test_run_id": first_known(kv_payload.get("test-run-id"), fields.get("test-run-id")),
+        }
+    )
+    return result
 
 
 def split_raw_frame_bytes(raw_body: bytes) -> tuple[bytes, bytes, bool]:

@@ -24,6 +24,7 @@ param(
     [switch]$EnableSim7670LteHttpProbe,
     [switch]$EnableSim7670LteHttpCommandLoop,
     [switch]$EnableSim7670LocationObservation,
+    [switch]$EnableRawPostFailOnceTest,
     [switch]$PrepareBuild,
     [switch]$Flash,
     [switch]$IUnderstandFlashWritesFirmware,
@@ -95,6 +96,7 @@ $result = [ordered]@{
     sim7670_lte_http_probe_enabled = [bool]$EnableSim7670LteHttpProbe
     sim7670_lte_http_command_loop_enabled = [bool]$effectiveEnableSim7670LteHttpCommandLoop
     sim7670_location_observation_enabled = [bool]$EnableSim7670LocationObservation
+    raw_post_fail_once_test_enabled = [bool]$EnableRawPostFailOnceTest
     firmware_dir = $firmwarePath
     build_dir = $buildPath
     binary_path = $binaryPath
@@ -156,6 +158,7 @@ if ($PrepareBuild) {
     Add-If $prepareArgs $EnableSim7670LteHttpProbe "-EnableSim7670LteHttpProbe"
     Add-If $prepareArgs $EnableSim7670LteHttpCommandLoop "-EnableSim7670LteHttpCommandLoop"
     Add-If $prepareArgs $EnableSim7670LocationObservation "-EnableSim7670LocationObservation"
+    Add-If $prepareArgs $EnableRawPostFailOnceTest "-EnableRawPostFailOnceTest"
     $prepareOutput = & powershell @prepareArgs
     if ($LASTEXITCODE -ne 0) {
         throw "prepare_fw001_hw_config.ps1 failed with exit code $LASTEXITCODE"
