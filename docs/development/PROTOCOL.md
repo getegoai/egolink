@@ -828,6 +828,15 @@ store-forward queue. This is an explanation of missing cache durability, not
 cache/drop-message evidence. LTE reliability gates must keep this state at
 `WARN` until concrete queue/drop counters or store-forward state are observed.
 
+Firmware may report observed current-boot volatile outbox counters with
+`cache_state=volatile_outbox`, `cache_source_status=observed`,
+`cache_queued_message_count=0`, `cache_dropped_message_count`,
+`cache_oldest_message_age_ms=0`, `cache_last_drop_reason`, and companion
+`network_raw_post_attempt_count`, `network_raw_post_success_count`, and
+`network_raw_post_failure_count` fields. This is cache/drop-message
+observability evidence for the current boot, not durable offline cache or
+store-forward recovery. A reboot may reset these counters.
+
 Do not invent defaults. If reconnect/cache/drop behavior was not observed,
 omit these fields so the LTE-005 reliability gate can report `WARN` or
 `NOT_OBSERVED` instead of a false pass.

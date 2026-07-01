@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-28
+last_verified: 2026-07-01
 verified_by: codex
 ---
 
@@ -279,12 +279,47 @@ Definition of Done:
   stability, battery/power behavior, enclosure behavior, or product-readiness
   claim is made until hardware validation is explicitly run.
 
+## LTE-007: Volatile Cache Drop Observability
+
+Goal: make the current raw LTE send/drop path observable before long LTE
+stability or reconnect testing, without claiming durable store-forward.
+
+Implementation shape:
+
+- firmware keeps current-boot raw LTE POST counters for attempts, successes,
+  failures, and drops;
+- raw LTE `location_observation` and raw LTE ACK payloads include
+  `network_raw_post_attempt_count`, `network_raw_post_success_count`,
+  `network_raw_post_failure_count`, `cache_state=volatile_outbox`,
+  `cache_source_status=observed`, `cache_queued_message_count=0`,
+  `cache_dropped_message_count`, `cache_oldest_message_age_ms=0`, and
+  `cache_last_drop_reason`;
+- frame-build failures, payload truncation, and HTTP POST failures update the
+  volatile drop counters and last-drop reason;
+- LTE-005 can treat the volatile queue/drop counters as cache/drop
+  observability evidence, while release docs still reject any cache durability
+  or reconnect recovery claim;
+- the firmware payload remains raw-frame/KV and does not introduce JSON as the
+  LTE wire payload.
+
+Definition of Done:
+
+- focused firmware tests protect the volatile counter fields;
+- LTE-005 tests prove `cache_state=volatile_outbox` with concrete counters can
+  pass `G6_RECONNECT_CACHE_OBSERVABILITY`;
+- ESP-IDF build passes without flashing;
+- no USB-Free runtime pass, durable offline cache, reconnect recovery, long LTE
+  stability, battery/power behavior, enclosure behavior, or product-readiness
+  claim is made until hardware validation is explicitly run.
+
 ## R3.0 LTE Long-Run Gate
 
-Only after LTE-001 through LTE-005 pass should the project run a long LTE
-stability and reconnect gate. LTE-005 is a preflight gate: it proves that the
-export can explain failure modes, not that the device has already survived a
-long field run. The later long-run gate must cover:
+Only after the LTE reliability preflight path has concrete observability should
+the project run a long LTE stability and reconnect gate. LTE-005 is a preflight
+gate: it proves that the export can explain failure modes, not that the device
+has already survived a long field run. LTE-007 adds current-boot volatile
+outbox counters, but it still is not durable store-forward or reconnect
+acceptance. The later long-run gate must cover:
 
 - LTE registration failure;
 - PDP activation failure;

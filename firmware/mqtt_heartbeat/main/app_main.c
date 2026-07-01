@@ -70,6 +70,17 @@ static char s_lte_command_parse_status[64] = "not_polled";
 static char s_lte_command_diag_payload[1536];
 static bool s_lte_command_last_executed;
 static int s_lte_command_last_command_count;
+typedef struct {
+    uint32_t post_attempt_count;
+    uint32_t post_success_count;
+    uint32_t post_failure_count;
+    uint32_t dropped_message_count;
+    char last_drop_reason[64];
+    char last_error[SIM7670_LTE_HTTP_REASON_MAX];
+} lte_raw_outbox_counters_t;
+
+static lte_raw_outbox_counters_t s_lte_raw_outbox;
+static portMUX_TYPE s_lte_raw_outbox_mux = portMUX_INITIALIZER_UNLOCKED;
 #endif
 
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
@@ -1174,6 +1185,64 @@ static void set_lte_command_parse_status(const char *status)
     snprintf(s_lte_command_parse_status, sizeof(s_lte_command_parse_status), "%s", status ? status : "unknown");
 }
 
+static void lte_raw_outbox_copy_text(char *buffer, size_t buffer_size, const char *value, const char *fallback)
+{
+    if (buffer == NULL || buffer_size == 0) {
+        return;
+    }
+    snprintf(buffer, buffer_size, "%s", value && value[0] != '\0' ? value : fallback);
+}
+
+static void lte_raw_outbox_record_drop(const char *reason)
+{
+    char reason_copy[64];
+    lte_raw_outbox_copy_text(reason_copy, sizeof(reason_copy), reason, "unknown_drop");
+
+    portENTER_CRITICAL(&s_lte_raw_outbox_mux);
+    s_lte_raw_outbox.dropped_message_count += 1;
+    memcpy(s_lte_raw_outbox.last_drop_reason, reason_copy, sizeof(s_lte_raw_outbox.last_drop_reason));
+    portEXIT_CRITICAL(&s_lte_raw_outbox_mux);
+}
+
+static void lte_raw_outbox_record_post_result(bool ok, const sim7670_lte_http_probe_result_t *result)
+{
+    const char *reason = result ? result->reason_code : "unknown_http_result";
+    char drop_reason[64];
+    char error_reason[SIM7670_LTE_HTTP_REASON_MAX];
+    if (!ok) {
+        lte_raw_outbox_copy_text(drop_reason, sizeof(drop_reason), "lte_http_post_failed", "lte_http_post_failed");
+        lte_raw_outbox_copy_text(error_reason, sizeof(error_reason), reason, "unknown_http_result");
+    }
+
+    portENTER_CRITICAL(&s_lte_raw_outbox_mux);
+    s_lte_raw_outbox.post_attempt_count += 1;
+    if (ok) {
+        s_lte_raw_outbox.post_success_count += 1;
+    } else {
+        s_lte_raw_outbox.post_failure_count += 1;
+        s_lte_raw_outbox.dropped_message_count += 1;
+        memcpy(s_lte_raw_outbox.last_drop_reason, drop_reason, sizeof(s_lte_raw_outbox.last_drop_reason));
+        memcpy(s_lte_raw_outbox.last_error, error_reason, sizeof(s_lte_raw_outbox.last_error));
+    }
+    portEXIT_CRITICAL(&s_lte_raw_outbox_mux);
+}
+
+static void lte_raw_outbox_snapshot(lte_raw_outbox_counters_t *snapshot)
+{
+    if (snapshot == NULL) {
+        return;
+    }
+    portENTER_CRITICAL(&s_lte_raw_outbox_mux);
+    *snapshot = s_lte_raw_outbox;
+    portEXIT_CRITICAL(&s_lte_raw_outbox_mux);
+    if (snapshot->last_drop_reason[0] == '\0') {
+        lte_raw_outbox_copy_text(snapshot->last_drop_reason, sizeof(snapshot->last_drop_reason), "none", "none");
+    }
+    if (snapshot->last_error[0] == '\0') {
+        lte_raw_outbox_copy_text(snapshot->last_error, sizeof(snapshot->last_error), "none", "none");
+    }
+}
+
 typedef struct {
     char cmd_id[64];
     char cmd[48];
@@ -1397,6 +1466,7 @@ static bool lte_http_publish_raw_location_report(const char *cmd_id)
     build_lte_location_report_kv_payload(payload, sizeof(payload), seq, cmd_id, &gnss, gnss_query_ok);
     if (!build_lte_raw_frame(frame, sizeof(frame), "event", frame_id, seq, payload)) {
         ESP_LOGW(TAG, "LTE_HTTP_LOCATION_RAW_FRAME_BUILD_FAILED cmd_id=%s", cmd_id);
+        lte_raw_outbox_record_drop("location_report_frame_build_failed");
         return false;
     }
     ESP_LOGI(TAG, "LTE_HTTP_LOCATION_RAW_FRAME_BYTES=%u", (unsigned)strlen(frame));
@@ -1406,6 +1476,7 @@ static bool lte_http_publish_raw_location_report(const char *cmd_id)
         frame,
         "text/x-egolink-frame; profile=raw-frame.p0.v1",
         &post_result);
+    lte_raw_outbox_record_post_result(ok, &post_result);
     ESP_LOGI(
         TAG,
         "LTE_HTTP_LOCATION_RAW_POST_DONE cmd_id=%s seq=%" PRIu32 " ok=%s reason=%s status=%d",
@@ -1437,6 +1508,8 @@ static bool build_lte_location_observation_kv_payload(
     platform_imu_sample();
     platform_imu_snapshot_t imu;
     platform_imu_get_snapshot(&imu);
+    lte_raw_outbox_counters_t outbox;
+    lte_raw_outbox_snapshot(&outbox);
 
     const char *imu_source_status =
         (imu.hardware_present && imu.driver_enabled && !imu.data_is_mock) ? "observed" : "unverified";
@@ -1533,9 +1606,15 @@ static bool build_lte_location_observation_kv_payload(
         "network_rssi=%s\n"
         "network_state=%s\n"
         "network_last_error=%s\n"
-        "cache_state=not_enabled\n"
-        "cache_source_status=unverified\n"
-        "cache_last_drop_reason=cache_not_enabled\n"
+        "network_raw_post_attempt_count=%" PRIu32 "\n"
+        "network_raw_post_success_count=%" PRIu32 "\n"
+        "network_raw_post_failure_count=%" PRIu32 "\n"
+        "cache_state=volatile_outbox\n"
+        "cache_source_status=observed\n"
+        "cache_queued_message_count=0\n"
+        "cache_dropped_message_count=%" PRIu32 "\n"
+        "cache_oldest_message_age_ms=0\n"
+        "cache_last_drop_reason=%s\n"
         "lte_http_phase=location_observation\n"
         "lte_http_driver=%s\n",
         CONFIG_EGOLINK_FW_VERSION,
@@ -1569,6 +1648,11 @@ static bool build_lte_location_observation_kv_payload(
         rssi,
         network_state,
         network_last_error,
+        outbox.post_attempt_count,
+        outbox.post_success_count,
+        outbox.post_failure_count,
+        outbox.dropped_message_count,
+        outbox.last_drop_reason,
         sim7670_lte_http_backend_name());
     return written > 0 && (size_t)written < buffer_size;
 }
@@ -1578,7 +1662,7 @@ static bool lte_http_publish_raw_location_observation(const char *cmd_id)
     char path[160];
     char url[256];
     char frame_id[96];
-    char payload[1600];
+    char payload[1750];
     char frame[2100];
     sim7670_lte_http_probe_result_t post_result;
     sim7670_lte_report_t lte;
@@ -1591,10 +1675,12 @@ static bool lte_http_publish_raw_location_observation(const char *cmd_id)
     snprintf(frame_id, sizeof(frame_id), "obs-%s", cmd_id);
     if (!build_lte_location_observation_kv_payload(payload, sizeof(payload), seq, cmd_id, &lte, lte_query_ok)) {
         ESP_LOGW(TAG, "LTE_HTTP_LOCATION_OBSERVATION_PAYLOAD_TRUNCATED cmd_id=%s", cmd_id);
+        lte_raw_outbox_record_drop("location_observation_payload_truncated");
         return false;
     }
     if (!build_lte_raw_frame(frame, sizeof(frame), "event", frame_id, seq, payload)) {
         ESP_LOGW(TAG, "LTE_HTTP_LOCATION_OBSERVATION_RAW_FRAME_BUILD_FAILED cmd_id=%s", cmd_id);
+        lte_raw_outbox_record_drop("location_observation_frame_build_failed");
         return false;
     }
     ESP_LOGI(TAG, "LTE_HTTP_LOCATION_OBSERVATION_RAW_FRAME_BYTES=%u", (unsigned)strlen(frame));
@@ -1604,6 +1690,7 @@ static bool lte_http_publish_raw_location_observation(const char *cmd_id)
         frame,
         "text/x-egolink-frame; profile=raw-frame.p0.v1",
         &post_result);
+    lte_raw_outbox_record_post_result(ok, &post_result);
     ESP_LOGI(
         TAG,
         "LTE_HTTP_LOCATION_OBSERVATION_RAW_POST_DONE cmd_id=%s seq=%" PRIu32 " ok=%s reason=%s status=%d",
@@ -1635,6 +1722,8 @@ static void build_lte_command_ack_payload(
 
     char poll_status_code[16];
     char poll_action_elapsed_ms[16];
+    lte_raw_outbox_counters_t outbox;
+    lte_raw_outbox_snapshot(&outbox);
     snprintf(
         poll_status_code,
         sizeof(poll_status_code),
@@ -1664,7 +1753,16 @@ static void build_lte_command_ack_payload(
         "command_last_cmd_id=%s\n"
         "command_parse_status=%s\n"
         "command_count=%d\n"
-        "duplicate_local_execution_prevented=%s\n",
+        "duplicate_local_execution_prevented=%s\n"
+        "network_raw_post_attempt_count=%" PRIu32 "\n"
+        "network_raw_post_success_count=%" PRIu32 "\n"
+        "network_raw_post_failure_count=%" PRIu32 "\n"
+        "cache_state=volatile_outbox\n"
+        "cache_source_status=observed\n"
+        "cache_queued_message_count=0\n"
+        "cache_dropped_message_count=%" PRIu32 "\n"
+        "cache_oldest_message_age_ms=0\n"
+        "cache_last_drop_reason=%s\n",
         cmd_id,
         status,
         message,
@@ -1678,7 +1776,12 @@ static void build_lte_command_ack_payload(
         cmd_id,
         s_lte_command_parse_status,
         s_lte_command_last_command_count,
-        json_bool(duplicate_prevented));
+        json_bool(duplicate_prevented),
+        outbox.post_attempt_count,
+        outbox.post_success_count,
+        outbox.post_failure_count,
+        outbox.dropped_message_count,
+        outbox.last_drop_reason);
 }
 
 static bool lte_http_ack_command(
@@ -1690,8 +1793,8 @@ static bool lte_http_ack_command(
 {
     char path[192];
     char url[288];
-    char payload[1024];
-    char frame[1400];
+    char payload[1200];
+    char frame[1600];
     sim7670_lte_http_probe_result_t ack_result;
     uint32_t seq = next_seq();
 
@@ -1713,6 +1816,7 @@ static bool lte_http_ack_command(
         duplicate_prevented);
     if (!build_lte_raw_frame(frame, sizeof(frame), "ack", cmd_id, seq, payload)) {
         ESP_LOGW(TAG, "LTE_HTTP_COMMAND_RAW_ACK_BUILD_FAILED cmd_id=%s", cmd_id);
+        lte_raw_outbox_record_drop("command_ack_frame_build_failed");
         return false;
     }
     ESP_LOGI(TAG, "LTE_HTTP_COMMAND_RAW_ACK_FRAME_BYTES=%u", (unsigned)strlen(frame));
@@ -1722,6 +1826,7 @@ static bool lte_http_ack_command(
         frame,
         "text/x-egolink-frame; profile=raw-frame.p0.v1",
         &ack_result);
+    lte_raw_outbox_record_post_result(ok, &ack_result);
     ESP_LOGI(
         TAG,
         "LTE_HTTP_COMMAND_RAW_ACK_DONE cmd_id=%s seq=%" PRIu32 " ok=%s reason=%s status=%d",

@@ -336,6 +336,15 @@ claiming those mechanisms are implemented.
 - No final enclosure, mounting, camera, audio, storage, calling, SMS, or
   dispatch claim.
 
+### Next Gates
+
+- LTE-007 adds build-verified current-boot volatile outbox counters:
+  POST attempt/success/failure counts plus observed cache drop counters. This
+  is the next firmware slice after KR-005, not a KR-005 release change.
+- A later operator-confirmed COM4 flash and USB-Free runtime validation should
+  prove the LTE-007 counters in real VPS raw-frame evidence before any long
+  LTE stability or reconnect gate.
+
 ## Release Gate Policy
 
 Every key release should have:

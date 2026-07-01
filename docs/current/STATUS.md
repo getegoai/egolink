@@ -6,6 +6,26 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: LTE-007 Volatile Cache Drop Observability is implemented as a
+firmware/static-build increment after KR-005. The raw LTE
+`location_observation` and raw LTE ACK payloads now report current-boot raw
+outbox counters: `network_raw_post_attempt_count`,
+`network_raw_post_success_count`, `network_raw_post_failure_count`,
+`cache_state=volatile_outbox`, `cache_source_status=observed`,
+`cache_queued_message_count=0`, `cache_dropped_message_count`,
+`cache_oldest_message_age_ms=0`, and `cache_last_drop_reason`. LTE-005 now
+recognizes observed volatile queue/drop counters as cache/drop observability
+evidence without treating them as durable store-forward or reconnect recovery.
+Focused firmware/LTE-gate tests passed with 19 tests; guarded ESP-IDF build
+passed with firmware `0.1.0-lte007-volatile-cache-observe`, test run
+`lte007-volatile-cache-20260701-001`, and binary
+`firmware/mqtt_heartbeat/build_lte007_volatile_cache_observe/egolink_mqtt_heartbeat.bin`
+(`301056` bytes); `scripts\verify.ps1` passed with 315 tests; and
+`git diff --check` passed. No firmware flash, USB-Free runtime validation, VPS
+deployment, GitLab change, durable offline cache, reconnect recovery, long LTE
+stability, GNSS acceptance, battery/power behavior, enclosure behavior,
+learned model behavior, or product-readiness claim is changed.
+
 2026-07-01: REL-007 promotes KR-005 Reliability Explainability Preflight
 Baseline to released engineering key version `0.1.0-key-release-005` after
 LTE-006 fix1 USB-Free runtime validation. LTE-006 fix1 compacts the raw LTE

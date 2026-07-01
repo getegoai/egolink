@@ -217,6 +217,22 @@ motion candidate
   - Boundary: no firmware flash, hardware runtime validation, VPS deployment,
     long LTE stability, reconnect recovery, cache durability, battery/power
     behavior, enclosure behavior, or product-readiness claim.
+- `LTE-007 Volatile Cache Drop Observability`
+  - Path:
+    `docs/tasks/done/LTE-007_VOLATILE_CACHE_DROP_OBSERVABILITY.md`
+  - Status: completed as a firmware/static-build increment after KR-005.
+  - Evidence: `firmware/mqtt_heartbeat/main/app_main.c`,
+    `quality_tests/test_mqtt_heartbeat_firmware.py`, and
+    `quality_tests/test_lte_reliability_gate.py`.
+  - Current visible result: raw LTE `location_observation` and raw LTE ACK
+    payloads now report current-boot volatile raw-outbox counters, including
+    POST attempt/success/failure counts, `cache_state=volatile_outbox`,
+    observed source status, zero queued durable messages, drop count, oldest
+    age, and last-drop reason. LTE-005 treats these counters as cache/drop
+    observability evidence while preserving the no-durable-cache boundary.
+  - Boundary: no firmware flash, hardware runtime validation, VPS deployment,
+    long LTE stability, reconnect recovery, durable cache, battery/power
+    behavior, enclosure behavior, or product-readiness claim.
 
 ## Active Queue
 
@@ -1005,8 +1021,12 @@ motion candidate
 8. Treat `ALG-002` as the completed offline DATA-001/EALE-P0 coverage
    evaluator: use its JSON/Markdown report for future release reviews and
    broader data collection.
-9. Use `STAB-001B` only as a short KR-003/KR-004 USB-Free baseline after the data and
-   observability gates can explain failures. Do not promote it into long
-   stability testing.
-10. Move to `LTE-005` reconnect/retry/cache/stale-command behavior after the
-    released KR-004 baseline remains explainable.
+9. Treat `REL-007` as the completed KR-005 release: the reliability
+   explainability preflight baseline is released, but it still does not claim
+   durable cache, reconnect recovery, or long LTE stability.
+10. Treat `LTE-007` as the current build-verified next slice: volatile
+    cache/drop counters are now present in firmware payloads, but USB-Free
+    runtime validation is still pending explicit operator flash and test.
+11. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
+    data and observability gates can explain failures. Do not promote it into
+    long stability testing.

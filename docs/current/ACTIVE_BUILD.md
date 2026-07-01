@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-30
+last_verified: 2026-07-01
 verified_by: codex
 ---
 
@@ -623,6 +623,15 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   LTE-005 over the fix1 export returns expected `WARN` because real cache/drop
   evidence remains absent; this is not a long LTE stability, reconnect
   recovery, durable cache, or product-readiness claim.
+- LTE-007 volatile cache/drop observability firmware has been implemented and
+  build-verified, but not flashed or USB-Free runtime validated. Firmware
+  version `0.1.0-lte007-volatile-cache-observe` / test run
+  `lte007-volatile-cache-20260701-001` builds to
+  `firmware/mqtt_heartbeat/build_lte007_volatile_cache_observe/egolink_mqtt_heartbeat.bin`
+  (`301056` bytes). It adds current-boot raw LTE POST attempt/success/failure
+  counters plus observed volatile outbox drop fields to raw
+  `location_observation` and ACK payloads. This is not durable offline cache,
+  reconnect recovery, long LTE stability, or product-readiness evidence.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.

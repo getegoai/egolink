@@ -87,6 +87,28 @@ class LteReliabilityGateTests(unittest.TestCase):
         self.assertEqual(gate["evidence"]["cache_evidence_hits"], [])
         self.assertTrue(gate["evidence"]["cache_nonclaim_hits"])
 
+    def test_volatile_cache_counters_pass_cache_observability(self) -> None:
+        export = self._loc005a_like_export()
+        export["messages"][1]["reliability"] = {
+            "network": {"mode": "LTE", "state": "ready", "last_error": "none"},
+            "cache": {
+                "state": "volatile_outbox",
+                "source_status": "observed",
+                "queued_message_count": 0,
+                "dropped_message_count": 0,
+                "oldest_message_age_ms": 0,
+                "last_drop_reason": "none",
+            },
+        }
+
+        report = validate_lte_reliability_gate.evaluate_lte_reliability_export(export)
+        gate = self._gate(report, "G6_RECONNECT_CACHE_OBSERVABILITY")
+
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(gate["status"], "PASS")
+        self.assertEqual(gate["warnings"], [])
+        self.assertTrue(gate["evidence"]["cache_evidence_hits"])
+
     def test_duplicate_command_without_prevention_fails(self) -> None:
         export = self._loc005a_like_export()
         export["commands"][0]["ack"]["command"]["command_count"] = 2
