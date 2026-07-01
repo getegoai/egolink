@@ -373,6 +373,9 @@ Implementation shape:
 - the subsequent raw LTE `location_observation` and ACK should expose concrete
   retry evidence, such as raw POST failures plus
   `cache_retry_attempt_count=1` and `cache_retry_success_count=1`.
+- `scripts/validate_lte_command_loop.py --require-raw-post-fail-once` checks
+  the test-run raw-frame export for the retained `injected_failure` frame and
+  a later `ok` retry-derived `location_report` for the same command.
 
 Definition of Done:
 
@@ -380,6 +383,8 @@ Definition of Done:
   derived until retry succeeds;
 - firmware/static tests prove the switch is default-off and only test builds
   request the injection;
+- validation tests prove the release gate can require fail-once raw retry
+  evidence without using USB as a runtime dependency;
 - guarded ESP-IDF build passes without flashing;
 - docs preserve the no-durable-cache, no-reconnect-recovery, and no-long-
   stability boundaries;

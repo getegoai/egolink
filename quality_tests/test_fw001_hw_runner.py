@@ -52,7 +52,23 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertFalse(payload["require_lte_location_report"])
         self.assertFalse(payload["require_lte_location_observation"])
         self.assertFalse(payload["require_location_fix"])
+        self.assertFalse(payload["require_raw_post_fail_once"])
         self.assertIn("IUnderstandFlashWritesFirmware", payload["flash_guard"])
+
+    def test_raw_post_fail_once_validation_implies_location_report_requirement(self) -> None:
+        result = self.run_runner(
+            "-HostName",
+            "example.invalid",
+            "-TestRunId",
+            "lte009-unit",
+            "-RequireRawPostFailOnce",
+            "-Json",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["require_lte_location_report"])
+        self.assertTrue(payload["require_raw_post_fail_once"])
 
     def test_flash_requires_explicit_confirmation_and_port(self) -> None:
         result = self.run_runner("-HostName", "example.invalid", "-Flash", "-Json")
@@ -99,6 +115,7 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertIn("[switch]$RequireLteLocationReport", self.script_text)
         self.assertIn("[switch]$RequireLteLocationObservation", self.script_text)
         self.assertIn("[switch]$RequireLocationFix", self.script_text)
+        self.assertIn("[switch]$RequireRawPostFailOnce", self.script_text)
         self.assertIn('Add-If $prepareArgs $EnableSim7670Gnss "-EnableSim7670Gnss"', self.script_text)
         self.assertIn('Add-If $prepareArgs $EnableSim7670LteStatus "-EnableSim7670LteStatus"', self.script_text)
         self.assertIn('Add-If $prepareArgs $EnableSim7670LteHttpProbe "-EnableSim7670LteHttpProbe"', self.script_text)
@@ -123,6 +140,7 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertIn("--require-location-report", self.script_text)
         self.assertIn("--require-location-observation", self.script_text)
         self.assertIn("--require-fix", self.script_text)
+        self.assertIn("--require-raw-post-fail-once", self.script_text)
         self.assertIn("ForEach-Object { $prepareArgs.Add([string]$_) }", self.script_text)
         self.assertNotIn("$prepareArgs.AddRange(@(", self.script_text)
         self.assertIn("function ConvertFrom-LastJsonObject", self.script_text)

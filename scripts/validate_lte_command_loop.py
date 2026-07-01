@@ -303,6 +303,84 @@ def list_device_commands(client: HubClient, device_id: str) -> list[dict[str, An
     ]
 
 
+def raw_frame_status(raw_frame: dict[str, Any]) -> str:
+    parse_result = as_dict(raw_frame.get("parse_result"))
+    return str(first_present(parse_result.get("status"), raw_frame.get("parse_status"), "unknown"))
+
+
+def raw_frame_error_code(raw_frame: dict[str, Any]) -> str:
+    parse_result = as_dict(raw_frame.get("parse_result"))
+    return str(first_present(parse_result.get("error_code"), raw_frame.get("parse_error_code"), ""))
+
+
+def raw_frame_derived_event_type(raw_frame: dict[str, Any]) -> str:
+    parse_result = as_dict(raw_frame.get("parse_result"))
+    derived = as_dict(parse_result.get("derived_message"))
+    return str(derived.get("event_type") or "")
+
+
+def raw_frame_location_request_cmd_id(raw_frame: dict[str, Any]) -> str:
+    frame_id = str(raw_frame.get("frame_id") or "")
+    if frame_id.startswith("loc-cmd-"):
+        return frame_id.removeprefix("loc-")
+    parse_result = as_dict(raw_frame.get("parse_result"))
+    derived = as_dict(parse_result.get("derived_message"))
+    return str(derived.get("location_request_cmd_id") or "")
+
+
+def raw_frame_matches_location_command(raw_frame: dict[str, Any], cmd_id: str) -> bool:
+    frame_id = str(raw_frame.get("frame_id") or "")
+    return frame_id == f"loc-{cmd_id}" or raw_frame_location_request_cmd_id(raw_frame) == cmd_id
+
+
+def validate_raw_post_fail_once(
+    raw_frames: list[dict[str, Any]],
+    *,
+    cmd_id: str,
+) -> tuple[dict[str, Any], list[str]]:
+    matched = [frame for frame in raw_frames if raw_frame_matches_location_command(frame, cmd_id)]
+    statuses = [raw_frame_status(frame) for frame in matched]
+    summary: dict[str, Any] = {
+        "required": True,
+        "cmd_id": cmd_id,
+        "matched_raw_frame_count": len(matched),
+        "frame_ids": [frame.get("frame_id") for frame in matched],
+        "statuses": statuses,
+        "injected_failure_count": 0,
+        "ok_location_report_count": 0,
+        "first_injected_failure_index": None,
+        "first_ok_location_report_index": None,
+    }
+    errors: list[str] = []
+    failure_index: int | None = None
+    ok_index: int | None = None
+    injected_count = 0
+    ok_count = 0
+    for index, frame in enumerate(matched):
+        status = raw_frame_status(frame)
+        if status == "injected_failure" and raw_frame_error_code(frame) == "RAW_POST_FAIL_ONCE_INJECTED":
+            injected_count += 1
+            if failure_index is None:
+                failure_index = index
+        if status == "ok" and raw_frame_derived_event_type(frame) == "location_report":
+            ok_count += 1
+            if ok_index is None:
+                ok_index = index
+    summary["injected_failure_count"] = injected_count
+    summary["ok_location_report_count"] = ok_count
+    summary["first_injected_failure_index"] = failure_index
+    summary["first_ok_location_report_index"] = ok_index
+    if injected_count < 1:
+        errors.append(
+            f"raw POST fail-once evidence missing for {cmd_id}; expected injected_failure with RAW_POST_FAIL_ONCE_INJECTED"
+        )
+    if ok_count < 1:
+        errors.append(f"raw POST retry success missing for {cmd_id}; expected ok raw location_report after failure")
+    if failure_index is not None and ok_index is not None and ok_index <= failure_index:
+        errors.append("raw POST retry success did not occur after the injected failure frame")
+    return summary, errors
+
+
 def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
     summary = report.get("ack_summary") or {}
     command = report.get("command") or {}
@@ -339,6 +417,7 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- Observation seq: {observation.get('seq', 'not required')}",
         f"- Observation cell: {observation_cell.get('rat', 'not required')} / {observation_cell.get('cell_id', 'unknown')}",
         f"- Observation LTE reason: {observation_lte.get('reason_code', 'not required')}",
+        f"- Raw retry fail-once: {as_dict(report.get('raw_post_retry')).get('status', 'not required')}",
         f"- Test-run export path: {report.get('test_run_export_path', 'not written')}",
         "",
         "## Errors",
@@ -367,6 +446,15 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         )
         if report.get("require_location_observation"):
             lines.append("- location_observation validates command-scoped firmware-side cell/LTE evidence.")
+        if report.get("require_raw_post_fail_once"):
+            raw_retry = as_dict(report.get("raw_post_retry"))
+            lines.append(
+                "- raw POST fail-once validates retained failed raw evidence before the successful retry-derived location_report."
+            )
+            lines.append(
+                "- Raw retry statuses: "
+                + ", ".join(str(item) for item in raw_retry.get("statuses", []) or ["none"])
+            )
     if report.get("arm_only"):
         lines.append("- Arm-only mode enqueued or selected the command but did not wait for runtime evidence.")
         lines.append("- Reconcile with the same command ID after the operator reboots the USB-disconnected device.")
@@ -419,6 +507,7 @@ def validate_lte_command_loop(
     require_location_report: bool = False,
     require_location_observation: bool = False,
     require_fix: bool = False,
+    require_raw_post_fail_once: bool = False,
     expected_message_test_run_id: str | None = None,
     evidence_since: str = "command_created",
     arm_only: bool = False,
@@ -430,6 +519,7 @@ def validate_lte_command_loop(
         raise FieldValidationError("failed to create validation start timestamp")
     health = client.get("/health")
     effective_expected_message_test_run_id = expected_message_test_run_id or test_run_id
+    require_location_report = require_location_report or require_fix or require_raw_post_fail_once
     test_run = create_or_reuse_test_run(
         client,
         test_run_id=test_run_id,
@@ -480,6 +570,7 @@ def validate_lte_command_loop(
     location_report: dict[str, Any] = {}
     location_observation: dict[str, Any] = {}
     summary: dict[str, Any] = command_ack_summary(created)
+    raw_post_retry: dict[str, Any] = {"required": require_raw_post_fail_once, "status": "not_required"}
     errors: list[str] = []
 
     if arm_only:
@@ -545,8 +636,6 @@ def validate_lte_command_loop(
         )
         errors.extend(observation_errors)
 
-    completed_at_text = utc_now()
-    result = "ARMED" if arm_only else ("PASS" if not errors else "FAIL")
     output_dir.mkdir(parents=True, exist_ok=True)
     report_path = output_dir / "lte_command_loop_report.json"
     markdown_path = output_dir / "lte_command_loop_report.md"
@@ -554,6 +643,21 @@ def validate_lte_command_loop(
     commands_path = output_dir / "commands.json"
     export_path = output_dir / "test_run_export.json"
     export = client.get(f"/api/v1/test-runs/{test_run_id}/export")
+    if require_raw_post_fail_once and command_name != "request_location":
+        errors.append("--require-raw-post-fail-once is only valid with request_location")
+    if require_raw_post_fail_once:
+        if arm_only:
+            raw_post_retry = {"required": True, "status": "not_checked_arm_only", "cmd_id": cmd_id}
+        else:
+            raw_post_retry, raw_errors = validate_raw_post_fail_once(
+                [item for item in (export.get("raw_frames") or []) if isinstance(item, dict)],
+                cmd_id=cmd_id,
+            )
+            raw_post_retry["status"] = "ok" if not raw_errors else "failed"
+            errors.extend(raw_errors)
+
+    completed_at_text = utc_now()
+    result = "ARMED" if arm_only else ("PASS" if not errors else "FAIL")
     report = {
         "result": result,
         "hub_url": hub_url,
@@ -574,6 +678,7 @@ def validate_lte_command_loop(
         "require_location_report": require_location_report,
         "require_location_observation": require_location_observation,
         "require_fix": require_fix,
+        "require_raw_post_fail_once": require_raw_post_fail_once,
         "arm_only": arm_only,
         "existing_command_id": existing_command_id,
         "health": health,
@@ -581,6 +686,7 @@ def validate_lte_command_loop(
         "command": final_command,
         "location_report": location_report,
         "location_observation": location_observation,
+        "raw_post_retry": raw_post_retry,
         "ack_summary": summary,
         "errors": errors,
         "device_state_path": str(device_path),
@@ -645,6 +751,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Require location_report fix=true with observed/verified coordinates.",
     )
     parser.add_argument(
+        "--require-raw-post-fail-once",
+        action="store_true",
+        help=(
+            "Require retained first raw location_report POST failure and a later "
+            "successful retry-derived location_report."
+        ),
+    )
+    parser.add_argument(
         "--existing-command-id",
         help="Wait for an already queued command instead of creating a new command.",
     )
@@ -687,9 +801,10 @@ def main(argv: list[str] | None = None) -> int:
             command_name=args.command,
             interval_ms=args.interval_ms,
             existing_command_id=args.existing_command_id,
-            require_location_report=args.require_location_report or args.require_fix,
+            require_location_report=args.require_location_report or args.require_fix or args.require_raw_post_fail_once,
             require_location_observation=args.require_location_observation,
             require_fix=args.require_fix,
+            require_raw_post_fail_once=args.require_raw_post_fail_once,
             evidence_since=args.evidence_since.replace("-", "_"),
             arm_only=args.arm_only,
         )

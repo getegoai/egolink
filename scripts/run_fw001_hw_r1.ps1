@@ -35,6 +35,7 @@ param(
     [switch]$RequireLteLocationReport,
     [switch]$RequireLteLocationObservation,
     [switch]$RequireLocationFix,
+    [switch]$RequireRawPostFailOnce,
     [switch]$Json
 )
 
@@ -105,9 +106,10 @@ $result = [ordered]@{
     expected_message_test_run_id = $ExpectedMessageTestRunId
     lte_evidence_since = $LteEvidenceSince
     lte_command_name = $LteCommandName
-    require_lte_location_report = [bool]($RequireLteLocationReport -or $RequireLocationFix)
+    require_lte_location_report = [bool]($RequireLteLocationReport -or $RequireLocationFix -or $RequireRawPostFailOnce)
     require_lte_location_observation = [bool]$RequireLteLocationObservation
     require_location_fix = [bool]$RequireLocationFix
+    require_raw_post_fail_once = [bool]$RequireRawPostFailOnce
     prepare_build_ran = $false
     flash_ran = $false
     validate_ran = $false
@@ -240,6 +242,9 @@ if ($Validate) {
             }
             if ($RequireLocationFix) {
                 $validationArgs += "--require-fix"
+            }
+            if ($RequireRawPostFailOnce) {
+                $validationArgs += "--require-raw-post-fail-once"
             }
         } elseif ($EnableSim7670LteHttpProbe) {
             $validationArgs = @(

@@ -6,6 +6,19 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-01: LTE-009 release-gate tooling now has a reusable raw retry
+validator. `scripts/validate_lte_command_loop.py` accepts
+`--require-raw-post-fail-once`, which implies a command-scoped LTE
+`location_report` and verifies the test-run raw-frame export contains a
+retained `injected_failure` / `RAW_POST_FAIL_ONCE_INJECTED` frame followed by
+a later `ok` retry-derived `location_report` for the same command.
+`scripts/run_fw001_hw_r1.ps1` exposes the hardware-runner switch
+`-RequireRawPostFailOnce`, so the eventual LTE-009 USB-Free hardware run can
+be executed as a fixed gate rather than a manual Web inspection. Focused
+validator/runner tests passed with 16 tests, and full `scripts\verify.ps1`
+passed with 319 tests. No firmware flash or hardware runtime validation was
+performed by this tooling update.
+
 2026-07-01: LTE-009 Raw POST Retry Fault Injection is implemented and
 build-verified as the next slice after LTE-008 fix1. Message Hub now supports
 a test-only raw-ingest fail-once path: when a raw KV frame contains

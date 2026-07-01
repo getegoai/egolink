@@ -6,6 +6,8 @@ import tempfile
 import threading
 import time
 from http.server import ThreadingHTTPServer
+import urllib.error
+import urllib.request
 import unittest
 
 from pc_simulator import protocol
@@ -227,6 +229,61 @@ class LteCommandLoopValidationTests(unittest.TestCase):
             self.assertEqual(report["location_observation"]["lte"]["reason_code"], "LTE_READY")
             markdown = (Path(tmp) / "report" / "lte_command_loop_report.md").read_text(encoding="utf-8")
             self.assertIn("location_observation validates command-scoped firmware-side cell/LTE evidence", markdown)
+
+    def test_validation_can_require_raw_post_fail_once_retry_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+            server_thread.start()
+            hub_url = f"http://127.0.0.1:{server.server_port}"
+            device_thread = threading.Thread(
+                target=self._poll_and_ack_once,
+                args=(hub_url,),
+                kwargs={
+                    "device_id": "ego-link-r1-test",
+                    "fw_version": "0.1.0-lte009-raw-post-retry-fault",
+                    "test_run_id": "lte009-unit",
+                    "transport_type": "lte",
+                    "poll_reason_code": "LTE_HTTP_OK",
+                    "poll_status_code": 200,
+                    "post_raw_location_report_fail_once": True,
+                },
+                daemon=True,
+            )
+            try:
+                device_thread.start()
+                report = validate_lte_command_loop.validate_lte_command_loop(
+                    hub_url=hub_url,
+                    device_id="ego-link-r1-test",
+                    token=None,
+                    output_dir=Path(tmp) / "report",
+                    test_run_id="lte009-unit",
+                    board_id="connectivity-node-001",
+                    connection_path="independent_power_usb_disconnected",
+                    timeout_sec=1.0,
+                    poll_interval_sec=0.05,
+                    expected_fw_version="0.1.0-lte009-raw-post-retry-fault",
+                    command_name="request_location",
+                    interval_ms=10000,
+                    require_raw_post_fail_once=True,
+                )
+            finally:
+                device_thread.join(timeout=2)
+                server.shutdown()
+                server_thread.join(timeout=5)
+                server.server_close()
+
+            self.assertEqual(report["result"], "PASS")
+            self.assertTrue(report["require_location_report"])
+            self.assertTrue(report["require_raw_post_fail_once"])
+            self.assertEqual(report["location_report"]["event_type"], "location_report")
+            self.assertEqual(report["raw_post_retry"]["status"], "ok")
+            self.assertEqual(report["raw_post_retry"]["statuses"], ["injected_failure", "ok"])
+            self.assertEqual(report["raw_post_retry"]["injected_failure_count"], 1)
+            self.assertEqual(report["raw_post_retry"]["ok_location_report_count"], 1)
+            markdown = (Path(tmp) / "report" / "lte_command_loop_report.md").read_text(encoding="utf-8")
+            self.assertIn("raw POST fail-once validates retained failed raw evidence", markdown)
 
     def test_existing_command_reconciliation_accepts_pre_validator_location_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -507,6 +564,7 @@ class LteCommandLoopValidationTests(unittest.TestCase):
         poll_status_code: int,
         post_location_report: bool = False,
         post_location_observation: bool = False,
+        post_raw_location_report_fail_once: bool = False,
     ) -> None:
         client = HubClient(hub_url)
         deadline = time.monotonic() + 2.0
@@ -519,7 +577,46 @@ class LteCommandLoopValidationTests(unittest.TestCase):
             time.sleep(0.05)
         if command is None:
             return
-        if post_location_report:
+        if post_raw_location_report_fail_once:
+            payload = (
+                "event_type=location_report\n"
+                "seq=6\n"
+                f"device_id={device_id}\n"
+                f"fw_version={fw_version}\n"
+                f"test_run_id={test_run_id}\n"
+                "source=sim7670g_firmware_gnss\n"
+                "source_status=unverified\n"
+                "fix=false\n"
+                "gnss_state=no_fix\n"
+                "gnss_source=sim7670g_uart_at\n"
+                "gnss_driver=uart_at\n"
+                "gnss_query_ok=true\n"
+                f"location_request_cmd_id={command['cmd_id']}\n"
+                "transport_type=lte\n"
+                "lte_http_phase=location_report\n"
+                "lte_http_driver=sim7670g_uart_at_http\n"
+                "test_inject_raw_post_fail_once=true\n"
+            ).encode("utf-8")
+            frame = message_hub.build_raw_frame(
+                "event",
+                f"loc-{command['cmd_id']}",
+                payload,
+                seq=6,
+                metadata={"test-run-id": test_run_id},
+            )
+            LteCommandLoopValidationTests._post_raw_frame_expect_status(
+                hub_url,
+                device_id,
+                frame,
+                expected_status=503,
+            )
+            LteCommandLoopValidationTests._post_raw_frame_expect_status(
+                hub_url,
+                device_id,
+                frame,
+                expected_status=200,
+            )
+        elif post_location_report:
             client.post(
                 f"/api/v1/devices/{device_id}/telemetry",
                 {
@@ -611,6 +708,24 @@ class LteCommandLoopValidationTests(unittest.TestCase):
             }
         )
         client.post(f"/api/v1/devices/{device_id}/commands/{command['cmd_id']}/ack", ack)
+
+    @staticmethod
+    def _post_raw_frame_expect_status(hub_url: str, device_id: str, frame: bytes, *, expected_status: int) -> None:
+        req = urllib.request.Request(
+            f"{hub_url}/api/v1/devices/{device_id}/raw-ingest",
+            data=frame,
+            headers={"Content-Type": "text/x-egolink-frame"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=2) as response:
+                body = response.read()
+                status = response.status
+        except urllib.error.HTTPError as exc:
+            body = exc.read()
+            status = exc.code
+        if status != expected_status:
+            raise AssertionError(f"raw frame POST returned HTTP {status}, expected {expected_status}: {body!r}")
 
 
 if __name__ == "__main__":

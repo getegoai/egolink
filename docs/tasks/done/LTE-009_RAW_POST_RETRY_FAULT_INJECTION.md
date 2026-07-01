@@ -64,6 +64,8 @@ reposts the same raw frame successfully.
       `location_report` payloads while normal builds leave it disabled.
 - [x] Build/runner scripts can enable the switch through an explicit
       `-EnableRawPostFailOnceTest` flag.
+- [x] USB-Free validator can require retained fail-once raw retry evidence
+      through `--require-raw-post-fail-once` / `-RequireRawPostFailOnce`.
 - [x] Guarded ESP-IDF build passes without flashing.
 - [x] VPS deployment keeps GitLab untouched and smoke-verifies the deployed
       fail-once code path without writing synthetic device rows into the live
@@ -85,10 +87,19 @@ reposts the same raw frame successfully.
   `test_inject_raw_post_fail_once=true` only when that switch is enabled.
 - Build/runner:
   `scripts/prepare_fw001_hw_config.ps1` and `scripts/run_fw001_hw_r1.ps1`
-  expose `-EnableRawPostFailOnceTest`.
+  expose `-EnableRawPostFailOnceTest`; `scripts/validate_lte_command_loop.py`
+  and `scripts/run_fw001_hw_r1.ps1` expose the validation gate
+  `--require-raw-post-fail-once` / `-RequireRawPostFailOnce`.
 - Focused tests:
   `python -m unittest quality_tests.test_message_hub_server quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_fw001_hw_config quality_tests.test_fw001_hw_runner -v`
   passed with 47 tests.
+- Validator focused tests:
+  `python -m unittest quality_tests.test_lte_command_loop_validation quality_tests.test_fw001_hw_runner -v`
+  passed with 16 tests and covered retained `injected_failure` raw evidence,
+  later `ok` retry-derived `location_report`, and runner flag propagation.
+- Full verification:
+  `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
+  319 tests after adding the validator gate.
 - Context and whitespace:
   `python scripts/context_lint.py` passed; `git diff --check` passed with only
   Windows line-ending warnings.

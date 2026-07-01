@@ -286,8 +286,10 @@ motion candidate
     battery/power behavior, enclosure behavior, GNSS acceptance, learned model
     behavior, or product-readiness claim.
   - Current evidence: focused server/firmware/script tests passed with 47
-    tests; full `scripts\verify.ps1` passed with 317 tests; guarded ESP-IDF
-    build produced
+    tests; focused validator/runner tests passed with 16 tests after adding
+    `--require-raw-post-fail-once` / `-RequireRawPostFailOnce`; full
+    `scripts\verify.ps1` passed with 319 tests after the validator-gate
+    addition; guarded ESP-IDF build produced
     `firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin`
     (`301776` bytes) with the fail-once test switch enabled. Message Hub was
     deployed to the VPS after commit `10e28fe`; public health/auth checks and
