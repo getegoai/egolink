@@ -1418,7 +1418,7 @@ static bool lte_http_publish_raw_location_report(const char *cmd_id)
 }
 
 #if CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
-static void build_lte_location_observation_kv_payload(
+static bool build_lte_location_observation_kv_payload(
     char *buffer,
     size_t buffer_size,
     uint32_t seq,
@@ -1449,42 +1449,26 @@ static void build_lte_location_observation_kv_payload(
     char rsrp[16];
     char rsrq[16];
     char sinr[16];
-    char operator_name[SIM7670_LTE_OPERATOR_MAX * 2];
     char rat[SIM7670_LTE_RAT_MAX * 2];
-    char mcc[SIM7670_LTE_ID_MAX * 2];
-    char mnc[SIM7670_LTE_ID_MAX * 2];
-    char tac[SIM7670_LTE_ID_MAX * 2];
     char cell_id[SIM7670_LTE_ID_MAX * 2];
-    char sim_state[SIM7670_LTE_STATUS_MAX * 2];
     char registration_state[SIM7670_LTE_STATUS_MAX * 2];
     char pdp_state[SIM7670_LTE_STATUS_MAX * 2];
-    char apn_state[SIM7670_LTE_STATUS_MAX * 2];
     char assigned_ip[SIM7670_LTE_IP_MAX * 2];
     char reason_code[SIM7670_LTE_STATUS_MAX * 2];
     char imu_backend_status[64];
-    char power_battery_source[64];
-    char power_charging_source[64];
     char power_state[32];
 
     json_int_or_null(rssi, sizeof(rssi), lte->rssi_valid, lte->rssi);
     json_int_or_null(rsrp, sizeof(rsrp), lte->rsrp_valid, lte->rsrp);
     json_int_or_null(rsrq, sizeof(rsrq), lte->rsrq_valid, lte->rsrq);
     json_int_or_null(sinr, sizeof(sinr), lte->sinr_valid, lte->sinr);
-    json_escape_summary(operator_name, sizeof(operator_name), lte->operator_name);
     json_escape_summary(rat, sizeof(rat), lte->rat);
-    json_escape_summary(mcc, sizeof(mcc), lte->mcc);
-    json_escape_summary(mnc, sizeof(mnc), lte->mnc);
-    json_escape_summary(tac, sizeof(tac), lte->tac);
     json_escape_summary(cell_id, sizeof(cell_id), lte->cell_id);
-    json_escape_summary(sim_state, sizeof(sim_state), lte->sim_state);
     json_escape_summary(registration_state, sizeof(registration_state), lte->registration_state);
     json_escape_summary(pdp_state, sizeof(pdp_state), lte->pdp_state);
-    json_escape_summary(apn_state, sizeof(apn_state), lte->apn_state);
     json_escape_summary(assigned_ip, sizeof(assigned_ip), lte->assigned_ip);
     json_escape_summary(reason_code, sizeof(reason_code), lte->reason_code);
     json_escape_summary(imu_backend_status, sizeof(imu_backend_status), imu.backend_status);
-    json_escape_summary(power_battery_source, sizeof(power_battery_source), power.battery_source);
-    json_escape_summary(power_charging_source, sizeof(power_charging_source), power.charging_source);
     json_escape_summary(power_state, sizeof(power_state), platform_power_state_name(power.state));
     const char *network_state = "query_failed";
     const char *network_last_error = reason_code;
@@ -1495,7 +1479,7 @@ static void build_lte_location_observation_kv_payload(
         network_state = "degraded";
     }
 
-    snprintf(
+    int written = snprintf(
         buffer,
         buffer_size,
         "event_type=location_observation\n"
@@ -1507,32 +1491,18 @@ static void build_lte_location_observation_kv_payload(
         "source_status=observed\n"
         "location_request_cmd_id=%s\n"
         "cell_rat=%s\n"
-        "cell_operator=%s\n"
-        "cell_mcc=%s\n"
-        "cell_mnc=%s\n"
-        "cell_tac=%s\n"
         "cell_id=%s\n"
         "cell_rssi=%s\n"
         "cell_rsrp=%s\n"
         "cell_rsrq=%s\n"
         "cell_sinr=%s\n"
-        "cell_sim_state=%s\n"
         "cell_registration_state=%s\n"
         "cell_pdp_state=%s\n"
         "cell_reason_code=%s\n"
         "lte_driver=%s\n"
         "lte_query_ok=%s\n"
-        "lte_uart_ready=%s\n"
-        "lte_at_ok=%s\n"
-        "lte_sim_ready=%s\n"
         "lte_registered=%s\n"
-        "lte_attached=%s\n"
         "lte_pdp_active=%s\n"
-        "lte_ip_valid=%s\n"
-        "lte_sim_state=%s\n"
-        "lte_registration_state=%s\n"
-        "lte_apn_state=%s\n"
-        "lte_pdp_state=%s\n"
         "lte_assigned_ip=%s\n"
         "lte_reason_code=%s\n"
         "wifi_source=esp_wifi_sta\n"
@@ -1545,10 +1515,6 @@ static void build_lte_location_observation_kv_payload(
         "imu_source=platform_imu\n"
         "imu_source_status=%s\n"
         "imu_evidence_status=%s\n"
-        "imu_motion=unknown\n"
-        "imu_confidence=null\n"
-        "imu_hardware_present=%s\n"
-        "imu_driver_enabled=%s\n"
         "imu_data_is_mock=%s\n"
         "imu_backend_status=%s\n"
         "imu_reason=imu_backend_not_product_verified\n"
@@ -1557,10 +1523,7 @@ static void build_lte_location_observation_kv_payload(
         "power_evidence_status=%s\n"
         "power_soc_pct=%d\n"
         "power_charging=%s\n"
-        "power_battery_source=%s\n"
-        "power_charging_source=%s\n"
         "power_state=%s\n"
-        "power_marker_seq=%" PRIu32 "\n"
         "power_reason=platform_power_source_not_product_meter\n"
         "location_belief_state=Unknown\n"
         "location_belief_source=cell,lte,wifi,imu,power\n"
@@ -1580,52 +1543,34 @@ static void build_lte_location_observation_kv_payload(
         seq,
         cmd_id,
         rat,
-        operator_name,
-        mcc,
-        mnc,
-        tac,
         cell_id,
         rssi,
         rsrp,
         rsrq,
         sinr,
-        sim_state,
         registration_state,
         pdp_state,
         reason_code,
         sim7670_lte_backend_name(),
         json_bool(lte_query_ok),
-        json_bool(lte->uart_ready),
-        json_bool(lte->at_ok),
-        json_bool(lte->sim_ready),
         json_bool(lte->registered),
-        json_bool(lte->attached),
         json_bool(lte->pdp_active),
-        json_bool(lte->ip_valid),
-        sim_state,
-        registration_state,
-        apn_state,
-        pdp_state,
         assigned_ip,
         reason_code,
         imu_source_status,
         imu_evidence_status,
-        json_bool(imu.hardware_present),
-        json_bool(imu.driver_enabled),
         json_bool(imu.data_is_mock),
         imu_backend_status,
         power_source_status,
         power_evidence_status,
         power.battery_percent,
         json_bool(power.charging),
-        power_battery_source,
-        power_charging_source,
         power_state,
-        power.marker_seq,
         rssi,
         network_state,
         network_last_error,
         sim7670_lte_http_backend_name());
+    return written > 0 && (size_t)written < buffer_size;
 }
 
 static bool lte_http_publish_raw_location_observation(const char *cmd_id)
@@ -1633,8 +1578,8 @@ static bool lte_http_publish_raw_location_observation(const char *cmd_id)
     char path[160];
     char url[256];
     char frame_id[96];
-    char payload[2200];
-    char frame[2800];
+    char payload[1600];
+    char frame[2100];
     sim7670_lte_http_probe_result_t post_result;
     sim7670_lte_report_t lte;
     uint32_t seq = next_seq();
@@ -1644,7 +1589,10 @@ static bool lte_http_publish_raw_location_observation(const char *cmd_id)
     snprintf(path, sizeof(path), "/api/v1/devices/%s/raw-ingest", CONFIG_EGOLINK_DEVICE_ID);
     build_message_hub_url(url, sizeof(url), path);
     snprintf(frame_id, sizeof(frame_id), "obs-%s", cmd_id);
-    build_lte_location_observation_kv_payload(payload, sizeof(payload), seq, cmd_id, &lte, lte_query_ok);
+    if (!build_lte_location_observation_kv_payload(payload, sizeof(payload), seq, cmd_id, &lte, lte_query_ok)) {
+        ESP_LOGW(TAG, "LTE_HTTP_LOCATION_OBSERVATION_PAYLOAD_TRUNCATED cmd_id=%s", cmd_id);
+        return false;
+    }
     if (!build_lte_raw_frame(frame, sizeof(frame), "event", frame_id, seq, payload)) {
         ESP_LOGW(TAG, "LTE_HTTP_LOCATION_OBSERVATION_RAW_FRAME_BUILD_FAILED cmd_id=%s", cmd_id);
         return false;

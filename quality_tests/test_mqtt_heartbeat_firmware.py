@@ -252,7 +252,6 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "cell_registration_state=%s",
             "cell_reason_code=%s",
             "lte_query_ok=%s",
-            "lte_uart_ready=%s",
             "lte_registered=%s",
             "lte_pdp_active=%s",
             "lte_reason_code=%s",
@@ -279,6 +278,9 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "cache_state=not_enabled",
             "cache_source_status=unverified",
             "cache_last_drop_reason=cache_not_enabled",
+            "char payload[1600]",
+            "char frame[2100]",
+            "LTE_HTTP_LOCATION_OBSERVATION_PAYLOAD_TRUNCATED",
             "LTE_HTTP_LOCATION_OBSERVATION_RAW_FRAME_BYTES",
             "LTE_HTTP_LOCATION_OBSERVATION_RAW_POST_DONE",
             "firmware uploaded SIM7670G GNSS location_report and cell location_observation",
@@ -289,6 +291,30 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED",
             self.sim7670_kconfig,
         )
+        observation_payload = self.app_main.split("static bool build_lte_location_observation_kv_payload", 1)[1].split(
+            "static bool lte_http_publish_raw_location_observation", 1
+        )[0]
+        for token in [
+            "cell_operator=%s",
+            "cell_mcc=%s",
+            "cell_mnc=%s",
+            "cell_tac=%s",
+            "cell_sim_state=%s",
+            "lte_uart_ready=%s",
+            "lte_at_ok=%s",
+            "lte_sim_ready=%s",
+            "lte_attached=%s",
+            "lte_ip_valid=%s",
+            "lte_sim_state=%s",
+            "lte_registration_state=%s",
+            "lte_apn_state=%s",
+            "lte_pdp_state=%s",
+            "power_battery_source=%s",
+            "power_charging_source=%s",
+            "power_marker_seq=%",
+        ]:
+            with self.subTest(compact_token=token):
+                self.assertNotIn(token, observation_payload)
 
     def test_lte_http_probe_payload_stays_compact_for_simcom_httpdata(self) -> None:
         probe_payload = self.app_main.split("static void build_lte_http_probe_payload", 1)[1].split(
