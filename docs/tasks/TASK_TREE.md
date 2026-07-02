@@ -181,6 +181,25 @@ motion candidate
   - Boundary: no firmware, hardware, VPS deployment, protocol, learned model,
     product-readiness, reconnect recovery, durable store-forward, GNSS
     acceptance, enclosure, or battery/power claim.
+- `REL-010 KR-007 Reconnect Store-Forward Evidence Release Gate`
+  - Path:
+    `docs/tasks/done/REL-010_KR007_RECONNECT_STORE_FORWARD_EVIDENCE_RELEASE_GATE.md`
+  - Status: completed as the KR-007 release-candidate gate after LTE-011 fix1
+    USB-Free runtime validation and LTE-010 gate pass.
+  - Evidence: KR-007 manifest
+    `docs/current/key_releases/KR-007_RECONNECT_STORE_FORWARD_EVIDENCE.json`,
+    LTE-011 fix1 runtime evidence under
+    `reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/`,
+    LTE-010 gate evidence under
+    `reports/lte_reconnect_store_forward/lte011-fix1-20260702-001/`, and KR-007
+    gate reports under `reports/key_releases/KR-007/`.
+  - Current visible result: KR-007 is a release candidate for the
+    reconnect/store-forward evidence baseline. It freezes test-mode evidence
+    shape and gate checks, not real modem reconnect recovery or durable
+    store-forward.
+  - Boundary: no firmware, hardware, VPS deployment, protocol, learned model,
+    product-readiness, real reconnect recovery, durable store-forward, GNSS
+    acceptance, enclosure, or battery/power claim.
 - `REL-006 KR-005 Reliability Explainability Release Gate`
   - Path:
     `docs/tasks/done/REL-006_KR005_RELIABILITY_EXPLAINABILITY_RELEASE_GATE.md`
@@ -1182,10 +1201,10 @@ motion candidate
     location_observation -> ACK` over LTE and the LTE-010 offline
     reconnect/store-forward gate, but it is still test-mode evidence, not real
     reconnect recovery or durable store-forward acceptance.
-14. Treat the next release-track step as `KR-007` candidate preparation:
-    create a manifest and release gate for the LTE-011 fix1
-    reconnect/store-forward evidence baseline before doing broader stability
-    work.
+14. Treat `REL-010` as the completed KR-007 release-candidate gate: the
+    LTE-011 fix1 reconnect/store-forward evidence baseline now has a manifest
+    and evidence-first gate, but remains a test-mode evidence baseline rather
+    than real reconnect or durable store-forward acceptance.
 15. Treat the user-described product-demo closed loop as a later `KR-008` or
     `DEMO-001` candidate, not the already-released KR-006. Its intended flow is
     user trigger or safety event -> device location/status request -> LTE

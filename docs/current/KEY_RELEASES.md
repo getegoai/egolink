@@ -449,17 +449,27 @@ first-POST failure recovery, not reconnect recovery or durable store-forward.
 - Keep GNSS acceptance, battery/power behavior, and enclosure behavior outside
   this retry gate.
 
-## Planned Gates After KR-006
+## KR-007 Reconnect Store-Forward Evidence Baseline
 
-KR-006 is already assigned to the raw POST retry fault-injection baseline. It
-must not be renamed into the product-demo release. The product-demo loop from
-the user-provided fusion-algorithm discussion remains valid, but it belongs to
-a later gate.
+- Status: release candidate.
+- Release date: 2026-07-02.
+- Release version: `0.1.0-key-release-007-rc1`.
+- Firmware version:
+  `0.1.0-lte011-reconnect-store-forward-test-fix1`.
+- Device/test run: `ego-link-r1-connectivity-001` /
+  `lte011-reconnect-store-forward-test-fix1-20260702-001`.
+- Manifest:
+  `docs/current/key_releases/KR-007_RECONNECT_STORE_FORWARD_EVIDENCE.json`.
+- Gate tool:
+  `python scripts\run_key_release_gate.py --manifest docs/current/key_releases/KR-007_RECONNECT_STORE_FORWARD_EVIDENCE.json --json`.
+- Gate report:
+  `reports/key_releases/KR-007/release_gate_report.json` and
+  `reports/key_releases/KR-007/release_gate_report.md`.
 
-### KR-007 Reconnect / Store-Forward Evidence Baseline Candidate
+### Release-Candidate Meaning
 
-KR-007 should freeze the current LTE-011 fix1 result only after a manifest and
-release gate are created:
+KR-007 freezes the current LTE-011 fix1 reconnect/store-forward evidence
+baseline:
 
 ```text
 LTE raw request_location loop
@@ -469,10 +479,70 @@ LTE raw request_location loop
 -> LTE-010 offline reconnect/store-forward gate PASS
 ```
 
-KR-007 may claim a versioned reconnect/store-forward evidence baseline. It
-must not claim real modem reconnect recovery, durable local storage, queue
-replay, long LTE stability, GNSS acceptance, battery/power behavior, enclosure
-behavior, learned model behavior, or product readiness.
+It is a release candidate because LTE-011 fix1 passed one real USB-Free
+runtime on independent power with USB disconnected, and the LTE-010 offline
+gate passed over that export. It is still a default-off test-mode evidence
+slice: it proves the evidence shape needed for reconnect/store-forward review,
+not real modem reconnect recovery or durable store-forward.
+
+### Evidence Summary
+
+- LTE-011 base image produced an explainable FAIL for `cmd-000032`: the device
+  uploaded raw LTE `location_report` and ACK, but the raw LTE
+  `location_observation` was dropped before POST with
+  `location_observation_payload_truncated`.
+- LTE-011 fix1 increased only the raw LTE `location_observation` local
+  payload/frame buffers to `2050`/`2400` bytes.
+- COM4 flash passed after explicit operator confirmation. Flash evidence is
+  under
+  `reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/flash_report.md`.
+- USB-Free runtime validation passed after the operator connected independent
+  power and disconnected USB. Command `cmd-000033` produced raw LTE
+  `location_report seq=28`, raw LTE `location_observation seq=29`, and raw LTE
+  ACK `seq=30`.
+- Runtime `location_observation` showed reconnect count `1`, reconnect reason
+  `pdp_reactivate`, network failure reason `LTE_HTTP_ACTION_FAILED`,
+  `cache_state=store_forward`, queued message count `1`, oldest age
+  `12000 ms`, and dropped message count `0`.
+- ACK completed as `ok` with `LTE_HTTP_OK` / HTTP `200`, network
+  `ready_after_reconnect`, raw POST counters `2/2/0`, and cache queue drained
+  to `0`.
+- LTE-010 offline gate passed all five gates over the LTE-011 fix1 export:
+  LTE runtime chain, reconnect attempt visibility, failure reason visibility,
+  post-reconnect ACK, and store-forward evidence.
+
+### Non-Claims
+
+- No product readiness claim.
+- No real modem reconnect recovery claim.
+- No durable local storage or durable offline cache claim.
+- No queue replay or multi-message outage recovery claim.
+- No long LTE stability claim.
+- No GNSS fix or outdoor GNSS acceptance claim.
+- No battery accuracy, charging, or product power behavior claim.
+- No learned model, learned personal-place, route prediction, or
+  positioning-accuracy claim.
+- No final enclosure, mounting, camera, audio, storage, calling, SMS, or
+  dispatch claim.
+
+### Next Gates
+
+- Promote KR-007 from release candidate to released after review.
+- Design real reconnect recovery evidence before treating modem/network
+  interruptions as recovered.
+- Design durable bounded store-forward semantics before claiming offline cache
+  or replay.
+- Add a later long-run LTE reliability gate only after real reconnect and
+  store-forward evidence are visible.
+- Track the product-demo closed loop as KR-008 or `DEMO-001`, not KR-006 or
+  KR-007.
+
+## Planned Gates After KR-007
+
+KR-006 remains assigned to raw POST retry fault injection, and KR-007 is a
+reconnect/store-forward evidence candidate. The product-demo loop from the
+user-provided fusion-algorithm discussion remains valid, but it belongs to a
+later gate.
 
 ### KR-008 / DEMO-001 Product Demo Closed Loop Candidate
 
