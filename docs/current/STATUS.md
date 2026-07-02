@@ -26,6 +26,20 @@ acceptance, long LTE stability, real reconnect, durable store-forward,
 battery/power behavior, enclosure behavior, learned model behavior, calling,
 SMS, or dispatch.
 
+2026-07-02: DEMO-009 was then deployed to the VPS Message Hub at
+`203.0.113.10:8790` after commit `4145b84`. The deployment used the existing
+message-hub deployment script and SSH key, restarted
+`egolink-message-hub.service`, and copied the DEMO-008 report directory to
+`/opt/egolink-message-hub/reports/product_demo/`. GitLab was not modified.
+Public smoke checks passed: `/health` returned `ok=true`;
+`/api/v1/product-demo/latest` returned `available=true`, `status=warn`,
+candidate `KR-008 / DEMO-008 Product Demo Closed Loop`,
+`evidence_mode=composite_existing_evidence`, and Web Review gate `not_run`;
+`/api/state` returned `product_demo.status=warn`; and `/` returned HTTP 200
+with Dashboard HTML containing the Product Demo panel. This makes the current
+composite DEMO-008 report visible on the Web Dashboard, but it still is not a
+KR-008 release or a same-run product demo.
+
 2026-07-02: DEMO-008 Product Demo Closed Loop Report Baseline is implemented
 as the first KR-008 product-demo composition artifact. New script
 `scripts/build_product_demo_report.py` consumes an existing Message Hub

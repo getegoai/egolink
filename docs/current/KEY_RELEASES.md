@@ -581,7 +581,10 @@ that report is visible through the Web Dashboard.
 a bounded product-demo summary, and the Dashboard renders a Product Demo panel.
 This makes DEMO-008 reviewable from Web/API, but it still does not create a
 KR-008 release because the first report remains composite evidence and not a
-same-run product scenario.
+same-run product scenario. The DEMO-009 Dashboard surface has also been
+deployed to the VPS Message Hub with the DEMO-008 report copied under
+`/opt/egolink-message-hub/reports/product_demo/`; this is deployment evidence,
+not a KR-008 release manifest.
 
 ## Release Gate Policy
 

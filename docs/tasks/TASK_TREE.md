@@ -246,10 +246,14 @@ motion candidate
     the Dashboard renders a Product Demo panel with result, evidence mode,
     location belief, flow gate counts, Web Review status, report path, and
     warnings.
+  - VPS result: after commit `4145b84`, the Message Hub service was deployed
+    to `203.0.113.10:8790` and the DEMO-008 report directory was copied under
+    `/opt/egolink-message-hub/reports/product_demo/`; public smoke checks
+    confirmed Product Demo data in `/api/state` and the Dashboard HTML.
   - Boundary: this makes the existing report reviewable through Web/API. It
     does not make the composite report a same-run product scenario, create or
-    promote KR-008, generate new field evidence, deploy to VPS by itself, or
-    claim product readiness.
+    promote KR-008, generate new field evidence, modify GitLab, or claim
+    product readiness.
 - `REL-006 KR-005 Reliability Explainability Release Gate`
   - Path:
     `docs/tasks/done/REL-006_KR005_RELIABILITY_EXPLAINABILITY_RELEASE_GATE.md`
@@ -1121,8 +1125,8 @@ motion candidate
     same-run product scenario.
 - `DEMO-009 Product Demo Dashboard Review Baseline`
   - Path: `docs/tasks/done/DEMO-009_PRODUCT_DEMO_DASHBOARD_REVIEW.md`
-  - Status: completed as local Web/API support for reviewing the DEMO-008
-    report.
+  - Status: completed and deployed as Web/API support for reviewing the
+    DEMO-008 report.
   - Result: Message Hub state and Dashboard can display the latest
     `product_demo_report.json`.
   - Boundary: Web visibility is present, but KR-008 release remains pending

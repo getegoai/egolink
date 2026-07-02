@@ -76,6 +76,25 @@ DEMO-008 product_demo_report.json
 - Missing reports return explicit `not_available` state rather than a server
   error.
 
+## VPS Deployment
+
+After commit `4145b84`, the Message Hub service was deployed to the VPS
+`203.0.113.10` using the existing SSH key and deployment script. GitLab was not
+modified. The DEMO-008 report directory
+`reports/product_demo/kr008-demo008-composite-20260702-001/` was copied to
+`/opt/egolink-message-hub/reports/product_demo/` so the deployed Dashboard can
+load it.
+
+Smoke checks against the public service passed:
+
+- `/health`: `ok=true`.
+- `/api/v1/product-demo/latest`: `available=true`, `status=warn`,
+  candidate `KR-008 / DEMO-008 Product Demo Closed Loop`,
+  `evidence_mode=composite_existing_evidence`, Web Review gate `not_run`.
+- `/api/state`: `product_demo.status=warn`, `product_demo.available=true`.
+- `/`: HTTP `200`, Dashboard HTML contains `Product Demo`, `productDemoPanel`,
+  and `KR-008`.
+
 ## Acceptance
 
 - [x] Web/API can show the DEMO-008 report state without contacting hardware.
