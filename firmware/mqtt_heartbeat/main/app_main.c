@@ -1820,8 +1820,8 @@ static bool lte_http_publish_raw_location_observation(const char *cmd_id)
     char path[160];
     char url[256];
     char frame_id[96];
-    char payload[1750];
-    char frame[2100];
+    char payload[2050];
+    char frame[2400];
     sim7670_lte_http_probe_result_t post_result;
     sim7670_lte_report_t lte;
     uint32_t seq = next_seq();

@@ -6,6 +6,31 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-02: LTE-011 first USB-Free runtime validation produced an explainable
+FAIL instead of a silent link failure. Validator command `cmd-000032` was
+created for `lte011-reconnect-store-forward-test-20260702-001`; after an
+operator-confirmed independent-power reboot with USB disconnected, the device
+processed the command and uploaded raw LTE `location_report` frame
+`loc-cmd-000032` (`seq=2`, `fix=false`, `gnss_state=no_fix`) plus raw LTE ACK
+`seq=4`. The ACK reached the VPS over LTE HTTP with `LTE_HTTP_OK` / HTTP
+`200`, but command status was `error` because the firmware-side
+`location_observation` frame was never posted:
+`cache_last_drop_reason=location_observation_payload_truncated`. Evidence is
+under
+`reports/field_validation/lte011-reconnect-store-forward-test-20260702-001/`.
+LTE-011 fix1 is build-verified as
+`0.1.0-lte011-reconnect-store-forward-test-fix1` /
+`lte011-reconnect-store-forward-test-fix1-20260702-001`; it only increases the
+local raw LTE `location_observation` payload/frame buffers from `1750`/`2100`
+bytes to `2050`/`2400` bytes. Focused firmware tests passed with 13 tests, and
+the guarded ESP-IDF build produced
+`firmware/mqtt_heartbeat/build_lte011_reconnect_store_forward_test_fix1/egolink_mqtt_heartbeat.bin`
+(`302528` bytes) with `flash_intentionally_not_run=true`. The fix1 image has
+not been flashed or USB-Free runtime validated yet, so this does not prove the
+LTE-010 gate, real modem reconnect recovery, durable local storage, queue
+replay, long LTE stability, GNSS acceptance, battery/power behavior, enclosure
+behavior, learned model behavior, or product readiness.
+
 2026-07-02: LTE-011 Reconnect Store-Forward Evidence Test Mode was flashed on
 the connectivity node through `COM4` after explicit operator confirmation.
 The flash used firmware `0.1.0-lte011-reconnect-store-forward-test`, test run
