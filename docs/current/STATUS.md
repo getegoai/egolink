@@ -6,6 +6,22 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-02: LTE-011 fix1 Observation Payload Margin was flashed on the
+connectivity node through `COM4` after explicit operator confirmation. The
+flash used firmware `0.1.0-lte011-reconnect-store-forward-test-fix1`, test run
+`lte011-reconnect-store-forward-test-fix1-20260702-001`, commit/app version
+`c110a5e`, binary
+`firmware/mqtt_heartbeat/build_lte011_reconnect_store_forward_test_fix1/egolink_mqtt_heartbeat.bin`
+(`302528` bytes), and `CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST=y`.
+`esptool.py` detected ESP32-S3 QFN56 rev v0.2 on `COM4`, MAC
+`02:00:00:00:00:03`, wrote bootloader/app/partition table, verified all
+hashes, and hard-reset the board. Flash evidence is under
+`reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/flash_report.md`.
+USB-Free runtime validation has not been run yet, so this does not prove the
+LTE-010 gate, real modem reconnect recovery, durable local storage, queue
+replay, long LTE stability, GNSS acceptance, battery/power behavior, enclosure
+behavior, learned model behavior, or product readiness.
+
 2026-07-02: LTE-011 first USB-Free runtime validation produced an explainable
 FAIL instead of a silent link failure. Validator command `cmd-000032` was
 created for `lte011-reconnect-store-forward-test-20260702-001`; after an
@@ -25,11 +41,12 @@ local raw LTE `location_observation` payload/frame buffers from `1750`/`2100`
 bytes to `2050`/`2400` bytes. Focused firmware tests passed with 13 tests, and
 the guarded ESP-IDF build produced
 `firmware/mqtt_heartbeat/build_lte011_reconnect_store_forward_test_fix1/egolink_mqtt_heartbeat.bin`
-(`302528` bytes) with `flash_intentionally_not_run=true`. The fix1 image has
-not been flashed or USB-Free runtime validated yet, so this does not prove the
-LTE-010 gate, real modem reconnect recovery, durable local storage, queue
-replay, long LTE stability, GNSS acceptance, battery/power behavior, enclosure
-behavior, learned model behavior, or product readiness.
+(`302528` bytes) with `flash_intentionally_not_run=true`. The fix1 image was
+later flashed as recorded above, but USB-Free runtime has not yet been
+validated, so this does not prove the LTE-010 gate, real modem reconnect
+recovery, durable local storage, queue replay, long LTE stability, GNSS
+acceptance, battery/power behavior, enclosure behavior, learned model
+behavior, or product readiness.
 
 2026-07-02: LTE-011 Reconnect Store-Forward Evidence Test Mode was flashed on
 the connectivity node through `COM4` after explicit operator confirmation.

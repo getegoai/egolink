@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-011 reconnect/store-forward evidence test mode is currently flashed on `COM4` after explicit operator confirmation. Its first USB-Free runtime validation with `cmd-000032` failed explainably at firmware-side `location_observation_payload_truncated`; LTE-011 fix1 is build-verified but not flashed. LTE-009 raw POST retry fault-injection firmware previously passed USB-Free runtime with `cmd-000031`. LTE-008 fix1 bounded raw POST retry observability firmware previously passed USB-Free runtime with `cmd-000030`. The earlier LTE-008 image's first USB-Free runtime validation failed with `location_observation_payload_truncated`. LTE-007 volatile cache/drop observability firmware previously passed USB-Free runtime with `cmd-000028`; LTE-006 fix1 reliability non-claim firmware previously passed USB-Free runtime with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-011 fix1 observation payload margin is currently flashed on `COM4` after explicit operator confirmation, and USB-Free runtime validation is pending. The prior LTE-011 runtime validation with `cmd-000032` failed explainably at firmware-side `location_observation_payload_truncated`. LTE-009 raw POST retry fault-injection firmware previously passed USB-Free runtime with `cmd-000031`. LTE-008 fix1 bounded raw POST retry observability firmware previously passed USB-Free runtime with `cmd-000030`. The earlier LTE-008 image's first USB-Free runtime validation failed with `location_observation_payload_truncated`. LTE-007 volatile cache/drop observability firmware previously passed USB-Free runtime with `cmd-000028`; LTE-006 fix1 reliability non-claim firmware previously passed USB-Free runtime with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -733,10 +733,14 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `2050`/`2400` bytes; focused firmware tests passed with 13 tests, and the
   guarded ESP-IDF build produced
   `firmware/mqtt_heartbeat/build_lte011_reconnect_store_forward_test_fix1/egolink_mqtt_heartbeat.bin`
-  (`302528` bytes). Fix1 has not been flashed or USB-Free runtime validated
-  and does not prove real modem reconnect recovery, durable local storage,
-  queue replay, long LTE stability, GNSS acceptance, power behavior, enclosure
-  behavior, or product readiness.
+  (`302528` bytes). Fix1 was then flashed on `COM4` after explicit operator
+  confirmation; ESP32-S3 QFN56 rev v0.2, MAC `02:00:00:00:00:03`, was
+  detected and bootloader/app/partition-table hashes were verified. Flash
+  evidence is under
+  `reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/flash_report.md`.
+  Fix1 has not been USB-Free runtime validated and does not prove real modem
+  reconnect recovery, durable local storage, queue replay, long LTE stability,
+  GNSS acceptance, power behavior, enclosure behavior, or product readiness.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.
