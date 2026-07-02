@@ -6,6 +6,22 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-02: LTE-011 Reconnect Store-Forward Evidence Test Mode was flashed on
+the connectivity node through `COM4` after explicit operator confirmation.
+The flash used firmware `0.1.0-lte011-reconnect-store-forward-test`, test run
+`lte011-reconnect-store-forward-test-20260702-001`, commit/app version
+`3b3151d`, binary
+`firmware/mqtt_heartbeat/build_lte011_reconnect_store_forward_test/egolink_mqtt_heartbeat.bin`
+(`302496` bytes), and `CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST=y`.
+`esptool.py` detected ESP32-S3 QFN56 rev v0.2 on `COM4`, MAC
+`02:00:00:00:00:03`, wrote bootloader/app/partition table, verified all
+hashes, and hard-reset the board. Flash evidence is under
+`reports/field_validation/lte011-reconnect-store-forward-test-20260702-001/flash_report.md`.
+USB-Free runtime validation has not been run yet, so this does not prove the
+LTE-010 gate, real modem reconnect recovery, durable local storage, queue
+replay, long LTE stability, GNSS acceptance, battery/power behavior, enclosure
+behavior, learned model behavior, or product readiness.
+
 2026-07-02: LTE-011 Reconnect Store-Forward Evidence Test Mode is implemented
 and build-verified as the next no-hardware slice after LTE-010. Firmware adds
 default-off `CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST`; when
