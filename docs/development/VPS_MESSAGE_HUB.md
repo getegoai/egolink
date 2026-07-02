@@ -103,6 +103,7 @@ GET  /api/v1/devices/{device_id}/commands
 GET  /api/v1/test-runs
 POST /api/v1/test-runs
 GET  /api/v1/test-runs/{test_run_id}/export
+GET  /api/v1/product-demo/latest
 
 GET  /health
 WS   /ws/dashboard

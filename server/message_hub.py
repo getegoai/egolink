@@ -32,6 +32,7 @@ from pc_simulator import protocol
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = REPO_ROOT / "server" / "runtime" / "message_hub.db"
 KEY_RELEASE_DIR = REPO_ROOT / "docs" / "current" / "key_releases"
+DEFAULT_PRODUCT_DEMO_REPORTS = REPO_ROOT / "reports" / "product_demo"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -831,7 +832,12 @@ def normalize_message(
     raise MessageHubError("unknown_endpoint_type", f"unknown endpoint type: {endpoint_type}", status=500)
 
 
-def make_handler(store: MessageHubStore, *, token: str | None = None) -> type[BaseHTTPRequestHandler]:
+def make_handler(
+    store: MessageHubStore,
+    *,
+    token: str | None = None,
+    product_demo_root: Path = DEFAULT_PRODUCT_DEMO_REPORTS,
+) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
 
@@ -871,12 +877,14 @@ def make_handler(store: MessageHubStore, *, token: str | None = None) -> type[Ba
                 messages = store.recent_messages(20)
                 commands = store.recent_commands(20)
                 raw_frames = store.recent_raw_frames(20)
+                product_demo = load_latest_product_demo_report(product_demo_root)
                 self.respond_json(
                     {
                         "devices": devices,
                         "messages": messages,
                         "commands": commands,
                         "raw_frames": raw_frames,
+                        "product_demo": product_demo,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -933,6 +941,9 @@ def make_handler(store: MessageHubStore, *, token: str | None = None) -> type[Ba
                 return
             if len(segments) == 5 and segments[:3] == ["api", "v1", "test-runs"] and segments[4] == "export":
                 self.respond_json(store.export_test_run(segments[3]))
+                return
+            if segments == ["api", "v1", "product-demo", "latest"]:
+                self.respond_json({"product_demo": load_latest_product_demo_report(product_demo_root)})
                 return
             raise MessageHubError("not_found", "route not found", status=404)
 
@@ -2580,6 +2591,111 @@ def load_key_release_manifests(root: Path = KEY_RELEASE_DIR) -> list[dict[str, A
     return manifests
 
 
+def product_demo_unavailable(reason: str = "no_product_demo_report") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "candidate": "KR-008 / DEMO-008 Product Demo Closed Loop",
+        "reason": reason,
+        "ready_for_kr008_release": False,
+        "warnings": [reason],
+        "flow": {},
+        "flow_status_counts": {},
+        "location": {},
+        "paths": {},
+        "next_step": "Generate a DEMO-008 product demo report before Web review.",
+    }
+
+
+def latest_product_demo_report_path(root: Path = DEFAULT_PRODUCT_DEMO_REPORTS) -> Path | None:
+    if not root.exists():
+        return None
+    try:
+        candidates = [path for path in root.glob("**/product_demo_report.json") if path.is_file()]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: (path.stat().st_mtime, str(path)))
+
+
+def load_latest_product_demo_report(root: Path = DEFAULT_PRODUCT_DEMO_REPORTS) -> dict[str, Any]:
+    path = latest_product_demo_report_path(root)
+    if path is None:
+        return product_demo_unavailable()
+    try:
+        report = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return product_demo_unavailable("product_demo_report_unreadable")
+    if not isinstance(report, dict):
+        return product_demo_unavailable("product_demo_report_invalid")
+
+    result = as_dict(report.get("result"))
+    demo = as_dict(report.get("demo"))
+    source = as_dict(report.get("source"))
+    evidence = as_dict(report.get("evidence_summary"))
+    paths = as_dict(report.get("paths"))
+    flow = as_dict(report.get("flow"))
+    summarized_flow = {
+        step: compact_dict(
+            {
+                "status": as_dict(gate).get("status"),
+                "summary": as_dict(gate).get("summary"),
+                "warnings": as_dict(gate).get("warnings"),
+                "next_step": as_dict(gate).get("next_step"),
+            }
+        )
+        for step, gate in flow.items()
+    }
+    markdown_path = paths.get("product_demo_report_markdown")
+    if not markdown_path:
+        markdown_candidate = path.with_suffix(".md")
+        markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    return compact_dict(
+        {
+            "available": True,
+            "status": result.get("status", "unknown"),
+            "candidate": demo.get("candidate", "KR-008 / DEMO-008 Product Demo Closed Loop"),
+            "mode": demo.get("mode"),
+            "product_ready": demo.get("product_ready", False),
+            "ready_for_kr008_release": result.get("ready_for_kr008_release", False),
+            "why_not_release_ready": result.get("why_not_release_ready"),
+            "warnings": result.get("warnings"),
+            "errors": result.get("errors"),
+            "test_run_id": source.get("test_run_id"),
+            "safety_session_id": source.get("safety_session_id"),
+            "evidence_mode": source.get("evidence_mode"),
+            "dataset_samples": source.get("dataset_samples"),
+            "location": report.get("location"),
+            "flow": summarized_flow,
+            "flow_order": report.get("flow_order"),
+            "flow_status_counts": evidence.get("flow_status_counts"),
+            "feature_groups": evidence.get("feature_groups"),
+            "raw_frame_refs": evidence.get("raw_frame_refs"),
+            "derived_event_refs": evidence.get("derived_event_refs"),
+            "training_readiness": evidence.get("training_readiness"),
+            "release_gate_usage": evidence.get("release_gate_usage"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "paths": {
+                key: value
+                for key, value in paths.items()
+                if key
+                in {
+                    "product_demo_report_json",
+                    "product_demo_report_markdown",
+                    "dataset_samples",
+                    "dataset_manifest",
+                    "eale_report_json",
+                    "eale_report_markdown",
+                }
+            },
+            "next_gates": report.get("next_gates"),
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -3423,6 +3539,10 @@ def render_dashboard() -> str:
     </div>
     <div class="stack">
       <section>
+        <h2>Product Demo</h2>
+        <div id="productDemo"></div>
+      </section>
+      <section>
         <h2>Latest Field State</h2>
         <div id="fieldState"></div>
       </section>
@@ -3472,6 +3592,7 @@ def render_dashboard() -> str:
       runContext.innerHTML = html;
       commands.innerHTML = html;
       rawFrames.innerHTML = html;
+      productDemo.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
     }
@@ -3548,6 +3669,41 @@ def render_dashboard() -> str:
         <div class="metric"><span>Dataset Training</span><span>${escapeHtml(ealeDataset.training_allowed ?? false)} / ${escapeHtml(ealeDataset.training_reason || 'unknown')}</span></div>
         <div class="metric"><span>Quality Flags</span><span>${escapeHtml((ealeBelief.quality_flags || []).join(', ') || 'none')}</span></div>
         <div class="metric"><span>Evidence Counts</span><span>${escapeHtml(counts.messages ?? 0)} messages / ${escapeHtml(counts.commands ?? 0)} commands / ${escapeHtml(counts.raw_frames ?? 0)} raw_frames</span></div>
+      `;
+    }
+    function statusClass(status) {
+      if (status === 'pass' || status === 'released') return 'ok';
+      if (status === 'warn' || status === 'not_run' || status === 'release_candidate') return 'warn';
+      return status === 'not_available' ? 'empty' : 'bad';
+    }
+    function productDemoPanel(demo) {
+      if (!demo || !demo.available) {
+        return `
+          <div class="metric"><span>Candidate</span><b>KR-008 / DEMO-008</b></div>
+          <div class="metric"><span>Result</span><span class="empty">${escapeHtml(demo && demo.status || 'not_available')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(demo && demo.next_step || 'Generate a product demo report')}</span></div>
+        `;
+      }
+      const location = demo.location || {};
+      const training = demo.training_readiness || {};
+      const webGate = (demo.flow || {}).web_console_replay_review || {};
+      const counts = demo.flow_status_counts || {};
+      const warnings = demo.warnings || [];
+      return `
+        <div class="metric"><span>Candidate</span><b>${escapeHtml(demo.candidate || 'KR-008 / DEMO-008')}</b></div>
+        <div class="metric"><span>Result</span><span class="${statusClass(demo.status)}">${escapeHtml(demo.status || 'unknown')}</span></div>
+        <div class="metric"><span>Release Ready</span><span>${escapeHtml(demo.ready_for_kr008_release ?? false)}</span></div>
+        <div class="metric"><span>Evidence Mode</span><span>${escapeHtml(demo.evidence_mode || 'unknown')}</span></div>
+        <div class="metric"><span>Test Run</span><span>${escapeHtml(demo.test_run_id || 'unknown')}</span></div>
+        <div class="metric"><span>Safety Session</span><span>${escapeHtml(demo.safety_session_id || 'none')}</span></div>
+        <div class="metric"><span>Location Belief</span><span>${escapeHtml(location.state || 'Unknown')} / ${escapeHtml(location.belief_reason || (location.failure_modes || []).join(', ') || 'unknown')}</span></div>
+        <div class="metric"><span>GNSS</span><span>fix ${escapeHtml(location.gnss_fix ?? 'unknown')} / ${escapeHtml(location.gnss_state || 'unknown')}</span></div>
+        <div class="metric"><span>Flow Gates</span><span>${escapeHtml(counts.pass ?? 0)} pass / ${escapeHtml(counts.warn ?? 0)} warn / ${escapeHtml(counts.not_run ?? 0)} not_run / ${escapeHtml(counts.fail ?? 0)} fail</span></div>
+        <div class="metric"><span>Web Review</span><span class="${statusClass(webGate.status)}">${escapeHtml(webGate.status || 'unknown')} / ${escapeHtml(webGate.summary || 'unknown')}</span></div>
+        <div class="metric"><span>Raw Evidence</span><span>${escapeHtml(demo.raw_frame_refs ?? 0)} raw refs / ${escapeHtml(demo.derived_event_refs ?? 0)} derived refs</span></div>
+        <div class="metric"><span>Dataset Training</span><span>${escapeHtml(training.model_training_ready ?? false)} / ${escapeHtml(training.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(demo.markdown_path || demo.report_path || 'unknown')}</span></div>
+        <div class="metric"><span>Warnings</span><span>${escapeHtml(warnings.join(', ') || 'none')}</span></div>
       `;
     }
     function latestFieldState(devices, rawFrames) {
@@ -3639,6 +3795,7 @@ def render_dashboard() -> str:
       authStatus.textContent = 'connected';
       const data = await response.json();
       runContext.innerHTML = runContextPanel(data.current_run || {});
+      productDemo.innerHTML = productDemoPanel(data.product_demo || {});
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>
         <div class="metric"><span>Status</span><span class="${ageClass(d.last_seen_at)}">${escapeHtml(onlineLabel(d.last_seen_at))}</span></div>

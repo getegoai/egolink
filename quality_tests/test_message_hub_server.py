@@ -883,6 +883,84 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(current_run["eale_p0"]["location_belief"]["failure_reason"], "GNSS_NO_FIX")
         self.assertEqual(current_run["evidence_counts"]["commands"], 0)
 
+    def test_state_api_and_product_demo_route_include_latest_demo_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report_root = tmp_path / "product_demo"
+            report_dir = report_root / "kr008-unit"
+            report_dir.mkdir(parents=True)
+            (report_dir / "product_demo_report.json").write_text(
+                json.dumps(
+                    {
+                        "demo": {
+                            "candidate": "KR-008 / DEMO-008 Product Demo Closed Loop",
+                            "mode": "offline_evidence_composition",
+                            "product_ready": False,
+                        },
+                        "source": {
+                            "test_run_id": "lte011-unit",
+                            "safety_session_id": "demo-unit",
+                            "evidence_mode": "composite_existing_evidence",
+                            "dataset_samples": 1,
+                        },
+                        "result": {
+                            "status": "warn",
+                            "ready_for_kr008_release": False,
+                            "warnings": ["web_console_product_demo_review_pending"],
+                            "errors": [],
+                            "why_not_release_ready": ["web_console_product_demo_review_pending"],
+                        },
+                        "location": {
+                            "state": "Unknown",
+                            "gnss_fix": False,
+                            "gnss_state": "no_fix",
+                            "belief_reason": "cell_observation_without_position_fix",
+                        },
+                        "flow": {
+                            "report_export": {"status": "pass", "summary": "report exported"},
+                            "web_console_replay_review": {"status": "not_run", "summary": "pending"},
+                        },
+                        "evidence_summary": {
+                            "flow_status_counts": {"pass": 7, "not_run": 1},
+                            "feature_groups": ["gnss", "cell", "lte"],
+                            "raw_frame_refs": 3,
+                            "derived_event_refs": 2,
+                            "training_readiness": {"model_training_ready": False, "reason": "not_ready"},
+                            "release_gate_usage": {"can_support_release_review": True},
+                        },
+                        "paths": {
+                            "product_demo_report_json": "reports/product_demo/kr008-unit/product_demo_report.json",
+                            "product_demo_report_markdown": "reports/product_demo/kr008-unit/product_demo_report.md",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, product_demo_root=report_root),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                latest = get_json(base_url, "/api/v1/product-demo/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["product_demo"]["status"], "warn")
+        self.assertEqual(state["product_demo"]["candidate"], "KR-008 / DEMO-008 Product Demo Closed Loop")
+        self.assertEqual(state["product_demo"]["flow"]["web_console_replay_review"]["status"], "not_run")
+        self.assertFalse(state["product_demo"]["ready_for_kr008_release"])
+        self.assertEqual(latest["product_demo"]["test_run_id"], "lte011-unit")
+        self.assertEqual(latest["product_demo"]["evidence_mode"], "composite_existing_evidence")
+
     def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")

@@ -6,6 +6,26 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-02: DEMO-009 Product Demo Dashboard Review Baseline is implemented
+locally after DEMO-008. Message Hub now summarizes the latest
+`reports/product_demo/**/product_demo_report.json`; `/api/state` includes a
+bounded `product_demo` summary; `/api/v1/product-demo/latest` returns the same
+summary; and the Dashboard renders a Product Demo panel with KR-008/DEMO-008
+candidate, result, release-readiness, evidence mode, test run, safety session,
+location belief, GNSS state, flow-gate counts, Web Review status, raw/derived
+evidence counts, dataset training readiness, report path, and warnings.
+Missing reports are surfaced as explicit `not_available` state. Validation
+passed: `python -m unittest quality_tests.test_message_hub_dashboard
+quality_tests.test_message_hub_server quality_tests.test_product_demo_report
+-v`, `python scripts/context_lint.py`, `git diff --check`, and
+`powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` (329 tests).
+This is Web/API review support for the existing composite report only; it does
+not contact hardware, modify GitLab, flash firmware, create/promote a KR-008
+manifest, generate same-run field evidence, or claim product readiness, GNSS
+acceptance, long LTE stability, real reconnect, durable store-forward,
+battery/power behavior, enclosure behavior, learned model behavior, calling,
+SMS, or dispatch.
+
 2026-07-02: DEMO-008 Product Demo Closed Loop Report Baseline is implemented
 as the first KR-008 product-demo composition artifact. New script
 `scripts/build_product_demo_report.py` consumes an existing Message Hub

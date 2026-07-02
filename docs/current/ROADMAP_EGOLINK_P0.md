@@ -333,6 +333,10 @@ Current implementation baseline:
 - The first report is a `WARN` composite-evidence artifact, not a KR-008
   release. It keeps `web_console_replay_review` pending until the Dashboard can
   show the same review path.
+- `DEMO-009` adds that first Dashboard review path: `/api/state` includes
+  `product_demo`, `/api/v1/product-demo/latest` returns a bounded summary, and
+  the Dashboard renders a Product Demo panel. KR-008 still needs a same-run or
+  explicitly accepted demo scenario plus a manifest before release.
 
 Outputs:
 

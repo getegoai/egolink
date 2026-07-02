@@ -576,6 +576,13 @@ current `Unknown` / `gnss_no_fix` location belief, and marks Web console
 replay/review as pending. KR-008 should not be manifested or promoted until
 that report is visible through the Web Dashboard.
 
+`DEMO-009` adds the first Message Hub Dashboard review surface for that report:
+`/api/state` now includes `product_demo`, `/api/v1/product-demo/latest` returns
+a bounded product-demo summary, and the Dashboard renders a Product Demo panel.
+This makes DEMO-008 reviewable from Web/API, but it still does not create a
+KR-008 release because the first report remains composite evidence and not a
+same-run product scenario.
+
 ## Release Gate Policy
 
 Every key release should have:

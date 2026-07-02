@@ -233,6 +233,23 @@ motion candidate
     makes no product-readiness, Web console, GNSS acceptance, long LTE
     stability, real reconnect, durable store-forward, learned-model,
     enclosure, or battery/power claim.
+- `DEMO-009 Product Demo Dashboard Review Baseline`
+  - Path:
+    `docs/tasks/done/DEMO-009_PRODUCT_DEMO_DASHBOARD_REVIEW.md`
+  - Status: completed as the first Web/API review surface for the DEMO-008
+    product-demo report.
+  - Evidence: `server/message_hub.py`,
+    `quality_tests/test_message_hub_dashboard.py`, and
+    `quality_tests/test_message_hub_server.py`.
+  - Current visible result: `/api/state` includes `product_demo`,
+    `/api/v1/product-demo/latest` returns a bounded product-demo summary, and
+    the Dashboard renders a Product Demo panel with result, evidence mode,
+    location belief, flow gate counts, Web Review status, report path, and
+    warnings.
+  - Boundary: this makes the existing report reviewable through Web/API. It
+    does not make the composite report a same-run product scenario, create or
+    promote KR-008, generate new field evidence, deploy to VPS by itself, or
+    claim product readiness.
 - `REL-006 KR-005 Reliability Explainability Release Gate`
   - Path:
     `docs/tasks/done/REL-006_KR005_RELIABILITY_EXPLAINABILITY_RELEASE_GATE.md`
@@ -1102,6 +1119,14 @@ motion candidate
   - Boundary: current result is `WARN` because Web console replay/review is
     pending and the first local output uses composite existing evidence, not a
     same-run product scenario.
+- `DEMO-009 Product Demo Dashboard Review Baseline`
+  - Path: `docs/tasks/done/DEMO-009_PRODUCT_DEMO_DASHBOARD_REVIEW.md`
+  - Status: completed as local Web/API support for reviewing the DEMO-008
+    report.
+  - Result: Message Hub state and Dashboard can display the latest
+    `product_demo_report.json`.
+  - Boundary: Web visibility is present, but KR-008 release remains pending
+    because the first report is composite evidence.
 
 ## Hardware Evidence Line
 
@@ -1253,8 +1278,10 @@ motion candidate
     user trigger or safety event -> device location/status request -> LTE
     raw-frame uplink -> multi-source evidence -> EALE-P0 location belief ->
     user confirmation or safety rule -> report export -> Web replay/review.
-16. Next KR-008 work should expose the DEMO-008 report through the Message Hub
-    Dashboard before creating or promoting a KR-008 manifest.
+16. Treat `DEMO-009` as the completed local Dashboard review baseline for the
+    DEMO-008 report. Next KR-008 work should either deploy/copy the report to
+    the VPS Dashboard for operator viewing or create a same-run product demo
+    scenario before any KR-008 manifest.
 17. Use `STAB-001B` only as a short KR-005/KR-006/KR-007 USB-Free baseline
     after the data and observability gates can explain failures. Do not
     promote it into long stability testing.
