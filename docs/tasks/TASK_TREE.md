@@ -339,6 +339,27 @@ motion candidate
     change, modem reconnect implementation, durable local storage, long LTE
     stability, GNSS acceptance, enclosure behavior, battery/power behavior, or
     product-readiness claim.
+- `LTE-011 Reconnect Store-Forward Evidence Test Mode`
+  - Path:
+    `docs/tasks/done/LTE-011_RECONNECT_STORE_FORWARD_EVIDENCE_TEST_MODE.md`
+  - Status: completed as a build-verified, no-hardware evidence-mode slice
+    after LTE-010.
+  - Evidence: firmware default-off
+    `CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST`,
+    `scripts/prepare_fw001_hw_config.ps1`,
+    `scripts/run_fw001_hw_r1.ps1`, Message Hub `cache_flush_*` raw KV
+    derivation, Dashboard Cache Flush display, focused tests, and guarded
+    ESP-IDF build
+    `firmware/mqtt_heartbeat/build_lte011_reconnect_store_forward_test/egolink_mqtt_heartbeat.bin`
+    (`302496` bytes).
+  - Current visible result: a named LTE-011 build can emit
+    reconnect/store-forward-shaped raw KV evidence for exercising the LTE-010
+    offline gate and Web/API observability path. Normal firmware remains on
+    volatile outbox evidence unless the explicit test switch is enabled.
+  - Boundary: no firmware flash, USB-Free runtime validation, VPS deployment,
+    GitLab change, real modem reconnect implementation, durable local storage,
+    queue replay, long LTE stability, GNSS acceptance, enclosure behavior,
+    battery/power behavior, or product-readiness claim.
 
 ## Active Queue
 
@@ -1143,6 +1164,14 @@ motion candidate
 12. Treat `LTE-010` as the completed offline reconnect/store-forward gate
     baseline. Future firmware evidence must pass this gate before reconnect or
     durable store-forward can be treated as accepted.
-13. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
+13. Treat `LTE-011` as the completed build-verified evidence-mode slice: it
+    can exercise the reconnect/store-forward field shape and Dashboard
+    visibility when explicitly enabled, but it is not real reconnect recovery
+    or durable store-forward acceptance.
+14. Next suitable operator-assisted step is an LTE-011 flash/runtime attempt
+    only if the operator explicitly confirms the COM port and independent
+    power flow; otherwise continue with no-hardware real reconnect/cache design
+    tasks.
+15. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
     data and observability gates can explain failures. Do not promote it into
     long stability testing.

@@ -1254,6 +1254,77 @@ static void lte_raw_outbox_snapshot(lte_raw_outbox_counters_t *snapshot)
     }
 }
 
+typedef struct {
+    const char *network_state;
+    const char *network_last_error;
+    uint32_t network_reconnect_count;
+    const char *network_last_reconnect_reason;
+    const char *cache_state;
+    const char *cache_source_status;
+    uint32_t cache_queued_message_count;
+    uint32_t cache_oldest_message_age_ms;
+    uint32_t cache_flush_attempt_count;
+    uint32_t cache_flush_success_count;
+    uint32_t cache_flush_failure_count;
+} lte_reliability_evidence_fields_t;
+
+static lte_reliability_evidence_fields_t lte_reliability_evidence_fields_default(
+    const char *network_state,
+    const char *network_last_error)
+{
+    lte_reliability_evidence_fields_t fields = {
+        .network_state = network_state ? network_state : "unknown",
+        .network_last_error = network_last_error ? network_last_error : "unknown",
+        .network_reconnect_count = 0,
+        .network_last_reconnect_reason = "",
+        .cache_state = "volatile_outbox",
+        .cache_source_status = "observed",
+        .cache_queued_message_count = 0,
+        .cache_oldest_message_age_ms = 0,
+        .cache_flush_attempt_count = 0,
+        .cache_flush_success_count = 0,
+        .cache_flush_failure_count = 0,
+    };
+    return fields;
+}
+
+static lte_reliability_evidence_fields_t lte_reliability_evidence_fields_for_observation(
+    const char *network_state,
+    const char *network_last_error)
+{
+    lte_reliability_evidence_fields_t fields =
+        lte_reliability_evidence_fields_default(network_state, network_last_error);
+#if CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST
+    fields.network_state = "reconnecting";
+    fields.network_last_error = "LTE_HTTP_ACTION_FAILED";
+    fields.network_reconnect_count = 1;
+    fields.network_last_reconnect_reason = "pdp_reactivate";
+    fields.cache_state = "store_forward";
+    fields.cache_source_status = "observed";
+    fields.cache_queued_message_count = 1;
+    fields.cache_oldest_message_age_ms = 12000;
+#endif
+    return fields;
+}
+
+static lte_reliability_evidence_fields_t lte_reliability_evidence_fields_for_ack(void)
+{
+    lte_reliability_evidence_fields_t fields =
+        lte_reliability_evidence_fields_default("ready", "none");
+#if CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST
+    fields.network_state = "ready_after_reconnect";
+    fields.network_last_error = "none";
+    fields.network_reconnect_count = 1;
+    fields.network_last_reconnect_reason = "pdp_reactivate";
+    fields.cache_state = "store_forward";
+    fields.cache_source_status = "observed";
+    fields.cache_flush_attempt_count = 1;
+    fields.cache_flush_success_count = 1;
+    fields.cache_flush_failure_count = 0;
+#endif
+    return fields;
+}
+
 static bool lte_raw_outbox_post_raw_with_retry(
     const char *url,
     const char *bearer_token,
@@ -1618,6 +1689,8 @@ static bool build_lte_location_observation_kv_payload(
     } else if (lte_query_ok) {
         network_state = "degraded";
     }
+    lte_reliability_evidence_fields_t reliability =
+        lte_reliability_evidence_fields_for_observation(network_state, network_last_error);
 
     int written = snprintf(
         buffer,
@@ -1670,19 +1743,24 @@ static bool build_lte_location_observation_kv_payload(
         "network_rssi=%s\n"
         "network_state=%s\n"
         "network_last_error=%s\n"
+        "network_reconnect_count=%" PRIu32 "\n"
+        "network_last_reconnect_reason=%s\n"
         "network_raw_post_attempt_count=%" PRIu32 "\n"
         "network_raw_post_success_count=%" PRIu32 "\n"
         "network_raw_post_failure_count=%" PRIu32 "\n"
-        "cache_state=volatile_outbox\n"
-        "cache_source_status=observed\n"
+        "cache_state=%s\n"
+        "cache_source_status=%s\n"
         "cache_retry_policy=single_retry_current_boot\n"
         "cache_retry_attempt_count=%" PRIu32 "\n"
         "cache_retry_success_count=%" PRIu32 "\n"
         "cache_retry_failure_count=%" PRIu32 "\n"
-        "cache_queued_message_count=0\n"
+        "cache_queued_message_count=%" PRIu32 "\n"
         "cache_dropped_message_count=%" PRIu32 "\n"
-        "cache_oldest_message_age_ms=0\n"
+        "cache_oldest_message_age_ms=%" PRIu32 "\n"
         "cache_last_drop_reason=%s\n"
+        "cache_flush_attempt_count=%" PRIu32 "\n"
+        "cache_flush_success_count=%" PRIu32 "\n"
+        "cache_flush_failure_count=%" PRIu32 "\n"
         "lte_http_phase=location_observation\n"
         "lte_http_driver=%s\n",
         CONFIG_EGOLINK_FW_VERSION,
@@ -1714,16 +1792,25 @@ static bool build_lte_location_observation_kv_payload(
         json_bool(power.charging),
         power_state,
         rssi,
-        network_state,
-        network_last_error,
+        reliability.network_state,
+        reliability.network_last_error,
+        reliability.network_reconnect_count,
+        reliability.network_last_reconnect_reason,
         outbox.post_attempt_count,
         outbox.post_success_count,
         outbox.post_failure_count,
+        reliability.cache_state,
+        reliability.cache_source_status,
         outbox.retry_attempt_count,
         outbox.retry_success_count,
         outbox.retry_failure_count,
+        reliability.cache_queued_message_count,
         outbox.dropped_message_count,
+        reliability.cache_oldest_message_age_ms,
         outbox.last_drop_reason,
+        reliability.cache_flush_attempt_count,
+        reliability.cache_flush_success_count,
+        reliability.cache_flush_failure_count,
         sim7670_lte_http_backend_name());
     return written > 0 && (size_t)written < buffer_size;
 }
@@ -1797,6 +1884,7 @@ static void build_lte_command_ack_payload(
     char poll_action_elapsed_ms[16];
     lte_raw_outbox_counters_t outbox;
     lte_raw_outbox_snapshot(&outbox);
+    lte_reliability_evidence_fields_t reliability = lte_reliability_evidence_fields_for_ack();
     snprintf(
         poll_status_code,
         sizeof(poll_status_code),
@@ -1827,19 +1915,26 @@ static void build_lte_command_ack_payload(
         "command_parse_status=%s\n"
         "command_count=%d\n"
         "duplicate_local_execution_prevented=%s\n"
+        "network_state=%s\n"
+        "network_last_error=%s\n"
+        "network_reconnect_count=%" PRIu32 "\n"
+        "network_last_reconnect_reason=%s\n"
         "network_raw_post_attempt_count=%" PRIu32 "\n"
         "network_raw_post_success_count=%" PRIu32 "\n"
         "network_raw_post_failure_count=%" PRIu32 "\n"
-        "cache_state=volatile_outbox\n"
-        "cache_source_status=observed\n"
+        "cache_state=%s\n"
+        "cache_source_status=%s\n"
         "cache_retry_policy=single_retry_current_boot\n"
         "cache_retry_attempt_count=%" PRIu32 "\n"
         "cache_retry_success_count=%" PRIu32 "\n"
         "cache_retry_failure_count=%" PRIu32 "\n"
-        "cache_queued_message_count=0\n"
+        "cache_queued_message_count=%" PRIu32 "\n"
         "cache_dropped_message_count=%" PRIu32 "\n"
-        "cache_oldest_message_age_ms=0\n"
-        "cache_last_drop_reason=%s\n",
+        "cache_oldest_message_age_ms=%" PRIu32 "\n"
+        "cache_last_drop_reason=%s\n"
+        "cache_flush_attempt_count=%" PRIu32 "\n"
+        "cache_flush_success_count=%" PRIu32 "\n"
+        "cache_flush_failure_count=%" PRIu32 "\n",
         cmd_id,
         status,
         message,
@@ -1854,14 +1949,25 @@ static void build_lte_command_ack_payload(
         s_lte_command_parse_status,
         s_lte_command_last_command_count,
         json_bool(duplicate_prevented),
+        reliability.network_state,
+        reliability.network_last_error,
+        reliability.network_reconnect_count,
+        reliability.network_last_reconnect_reason,
         outbox.post_attempt_count,
         outbox.post_success_count,
         outbox.post_failure_count,
+        reliability.cache_state,
+        reliability.cache_source_status,
         outbox.retry_attempt_count,
         outbox.retry_success_count,
         outbox.retry_failure_count,
+        reliability.cache_queued_message_count,
         outbox.dropped_message_count,
-        outbox.last_drop_reason);
+        reliability.cache_oldest_message_age_ms,
+        outbox.last_drop_reason,
+        reliability.cache_flush_attempt_count,
+        reliability.cache_flush_success_count,
+        reliability.cache_flush_failure_count);
 }
 
 static bool lte_http_ack_command(

@@ -274,21 +274,34 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "network_rssi=%s",
             "network_state=%s",
             "network_last_error=%s",
+            "network_reconnect_count=%",
+            "network_last_reconnect_reason=%s",
             "network_raw_post_attempt_count=%",
             "network_raw_post_success_count=%",
             "network_raw_post_failure_count=%",
-            "cache_state=volatile_outbox",
-            "cache_source_status=observed",
+            "cache_state=%s",
+            "cache_source_status=%s",
             "cache_retry_policy=single_retry_current_boot",
             "cache_retry_attempt_count=%",
             "cache_retry_success_count=%",
             "cache_retry_failure_count=%",
-            "cache_queued_message_count=0",
+            "cache_queued_message_count=%",
             "cache_dropped_message_count=%",
-            "cache_oldest_message_age_ms=0",
+            "cache_oldest_message_age_ms=%",
             "cache_last_drop_reason=%s",
+            "cache_flush_attempt_count=%",
+            "cache_flush_success_count=%",
+            "cache_flush_failure_count=%",
             "CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST",
+            "CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST",
             "test_inject_raw_post_fail_once=true",
+            "lte_reliability_evidence_fields_for_observation",
+            "lte_reliability_evidence_fields_for_ack",
+            "volatile_outbox",
+            "store_forward",
+            "ready_after_reconnect",
+            "LTE_HTTP_ACTION_FAILED",
+            "pdp_reactivate",
             "retry_attempt_count",
             "retry_success_count",
             "retry_failure_count",
@@ -343,6 +356,8 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertIn("config EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST", self.sim7670_kconfig)
         self.assertIn("default n", self.sim7670_kconfig)
         self.assertIn("Test-only LTE-009 switch", self.sim7670_kconfig)
+        self.assertIn("config EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST", self.sim7670_kconfig)
+        self.assertIn("Test-only LTE-011 switch", self.sim7670_kconfig)
 
     def test_lte_http_probe_payload_stays_compact_for_simcom_httpdata(self) -> None:
         probe_payload = self.app_main.split("static void build_lte_http_probe_payload", 1)[1].split(

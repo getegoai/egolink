@@ -21,6 +21,7 @@ param(
     [switch]$EnableSim7670LteHttpCommandLoop,
     [switch]$EnableSim7670LocationObservation,
     [switch]$EnableRawPostFailOnceTest,
+    [switch]$EnableReconnectStoreForwardTest,
     [int]$Sim7670UartNum = 1,
     [int]$Sim7670UartRxGpio = 17,
     [int]$Sim7670UartTxGpio = 18,
@@ -102,7 +103,8 @@ if (-not $Token) {
     throw "Message Hub token is required. Pass -Token, set EGOLINK_MESSAGE_HUB_TOKEN, or provide the ignored token file."
 }
 
-$effectiveEnableSim7670LteHttpCommandLoop = [bool]($EnableSim7670LteHttpCommandLoop -or $EnableSim7670LocationObservation)
+$effectiveEnableSim7670LocationObservation = [bool]($EnableSim7670LocationObservation -or $EnableReconnectStoreForwardTest)
+$effectiveEnableSim7670LteHttpCommandLoop = [bool]($EnableSim7670LteHttpCommandLoop -or $effectiveEnableSim7670LocationObservation)
 $effectiveEnableSim7670LteStatus = [bool]($EnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop)
 
 $wifiSource = "parameters"
@@ -148,7 +150,7 @@ if ($effectiveEnableSim7670LteHttpCommandLoop) {
 } else {
     $lines += "# CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED is not set"
 }
-if ($EnableSim7670LocationObservation) {
+if ($effectiveEnableSim7670LocationObservation) {
     $lines += "CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED=y"
 } else {
     $lines += "# CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED is not set"
@@ -158,7 +160,12 @@ if ($EnableRawPostFailOnceTest) {
 } else {
     $lines += "# CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST is not set"
 }
-if ($EnableSim7670Gnss -or $effectiveEnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop -or $EnableSim7670LocationObservation) {
+if ($EnableReconnectStoreForwardTest) {
+    $lines += "CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST=y"
+} else {
+    $lines += "# CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST is not set"
+}
+if ($EnableSim7670Gnss -or $effectiveEnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop -or $effectiveEnableSim7670LocationObservation) {
     $lines += @(
         "CONFIG_EGOLINK_SIM7670_UART_NUM=$Sim7670UartNum",
         "CONFIG_EGOLINK_SIM7670_UART_RX_GPIO=$Sim7670UartRxGpio",
@@ -219,8 +226,9 @@ $result = [pscustomobject]@{
     sim7670_lte_status_enabled = [bool]$effectiveEnableSim7670LteStatus
     sim7670_lte_http_probe_enabled = [bool]$EnableSim7670LteHttpProbe
     sim7670_lte_http_command_loop_enabled = [bool]$effectiveEnableSim7670LteHttpCommandLoop
-    sim7670_location_observation_enabled = [bool]$EnableSim7670LocationObservation
+    sim7670_location_observation_enabled = [bool]$effectiveEnableSim7670LocationObservation
     raw_post_fail_once_test_enabled = [bool]$EnableRawPostFailOnceTest
+    reconnect_store_forward_test_enabled = [bool]$EnableReconnectStoreForwardTest
     build_command = $buildCommand
     flash_intentionally_not_run = $true
 }

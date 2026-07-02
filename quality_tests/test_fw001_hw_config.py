@@ -72,6 +72,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertFalse(payload["sim7670_lte_http_probe_enabled"])
         self.assertFalse(payload["sim7670_lte_http_command_loop_enabled"])
         self.assertFalse(payload["sim7670_location_observation_enabled"])
+        self.assertFalse(payload["reconnect_store_forward_test_enabled"])
         self.assertNotIn("unit-secret-token", result.stdout)
         self.assertIn('CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED=y', config)
         self.assertIn('CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL="http://example.invalid:8790"', config)
@@ -84,6 +85,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED is not set", config)
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED is not set", config)
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED is not set", config)
+        self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST is not set", config)
         self.assertIn("SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.vps.local", payload["build_command"])
         self.assertNotIn("flash", payload["build_command"].lower())
         self.assertFalse(config_bytes.startswith(b"\xef\xbb\xbf"))
@@ -323,6 +325,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
                     str(source_sdkconfig),
                     "-EnableSim7670LocationObservation",
                     "-EnableRawPostFailOnceTest",
+                    "-EnableReconnectStoreForwardTest",
                     "-Json",
                 ],
                 cwd=self.repo_root,
@@ -340,11 +343,13 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertTrue(payload["sim7670_lte_http_command_loop_enabled"])
         self.assertTrue(payload["sim7670_location_observation_enabled"])
         self.assertTrue(payload["raw_post_fail_once_test_enabled"])
+        self.assertTrue(payload["reconnect_store_forward_test_enabled"])
         self.assertNotIn("unit-secret-token", result.stdout)
         self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=y", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED=y", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST=y", config)
+        self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST=y", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_NUM=1", config)
 
     def test_script_rejects_tracked_config_path_shape(self) -> None:
@@ -391,6 +396,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("[switch]$EnableSim7670LteHttpCommandLoop", script_text)
         self.assertIn("[switch]$EnableSim7670LocationObservation", script_text)
         self.assertIn("[switch]$EnableRawPostFailOnceTest", script_text)
+        self.assertIn("[switch]$EnableReconnectStoreForwardTest", script_text)
 
     def test_gitignore_keeps_local_vps_config_and_build_output_untracked(self) -> None:
         gitignore = (self.repo_root / ".gitignore").read_text(encoding="utf-8")

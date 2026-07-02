@@ -423,6 +423,42 @@ Definition of Done:
 - no firmware flash, runtime hardware test, VPS deploy, or long stability run
   is part of this baseline.
 
+## LTE-011: Reconnect Store-Forward Evidence Test Mode
+
+Goal: make the LTE-010 evidence chain executable in a controlled default-off
+test build before implementing real modem reconnect recovery or durable local
+storage.
+
+Implementation shape:
+
+- firmware adds default-off
+  `CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST`;
+- build and guarded-runner scripts expose
+  `-EnableReconnectStoreForwardTest`;
+- when enabled, raw LTE `location_observation` may report
+  `network_state=reconnecting`, `network_reconnect_count=1`,
+  `network_last_error=LTE_HTTP_ACTION_FAILED`,
+  `network_last_reconnect_reason=pdp_reactivate`, and
+  `cache_state=store_forward` with queue/drop/age evidence;
+- the later raw LTE ACK may report `network_state=ready_after_reconnect` and
+  `cache_flush_attempt_count`, `cache_flush_success_count`, and
+  `cache_flush_failure_count`;
+- Message Hub derives `cache_flush_*` raw KV fields into
+  `reliability.cache`, and the Dashboard exposes Cache Flush alongside Cache
+  Retry;
+- the LTE wire payload remains raw-frame/KV and does not introduce JSON as the
+  device wire format.
+
+Definition of Done:
+
+- focused firmware/server/dashboard/script tests protect the default-off
+  switch, additive fields, and server derivation;
+- ESP-IDF build passes without flashing;
+- docs explicitly preserve the no-real-reconnect, no-durable-cache, no-queue-
+  replay, no-long-stability, and no-product-readiness boundaries;
+- a later hardware gate may flash a named LTE-011 image only after explicit
+  operator confirmation.
+
 ## R3.0 LTE Long-Run Gate
 
 Only after the LTE reliability preflight path has concrete observability should
@@ -433,8 +469,10 @@ outbox counters, LTE-008 adds one bounded current-boot raw POST retry, and
 LTE-009 exercises that retry path through controlled fail-once injection, but
 none of these are durable store-forward or reconnect acceptance. LTE-010 adds
 the offline reconnect/store-forward gate that later firmware evidence must
-pass before a long-run gate can claim recovery behavior. The later long-run
-gate must cover:
+pass before a long-run gate can claim recovery behavior. LTE-011 may exercise
+the evidence shape in an explicit test build, but it is still not real
+reconnect or durable store-forward acceptance. The later long-run gate must
+cover:
 
 - LTE registration failure;
 - PDP activation failure;

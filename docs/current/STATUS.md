@@ -1,10 +1,30 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-01
+last_verified: 2026-07-02
 verified_by: codex
 ---
 
 ## Latest Deployment Note
+
+2026-07-02: LTE-011 Reconnect Store-Forward Evidence Test Mode is implemented
+and build-verified as the next no-hardware slice after LTE-010. Firmware adds
+default-off `CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST`; when
+enabled, raw LTE `location_observation` and ACK payloads can emit
+reconnect/store-forward-shaped evidence fields including
+`network_reconnect_count`, `network_last_reconnect_reason`,
+`cache_state=store_forward`, and `cache_flush_*` counters. Build/runner
+scripts expose `-EnableReconnectStoreForwardTest`. Message Hub raw KV
+derivation now preserves `cache_flush_*` in `reliability.cache`, and the
+Dashboard exposes Cache Flush. Focused firmware/script/server/dashboard tests
+passed with 51 tests. Guarded ESP-IDF build passed with firmware
+`0.1.0-lte011-reconnect-store-forward-test`, test run
+`lte011-reconnect-store-forward-test-20260702-001`, binary
+`firmware/mqtt_heartbeat/build_lte011_reconnect_store_forward_test/egolink_mqtt_heartbeat.bin`
+(`302496` bytes), and `flash_intentionally_not_run=true`. No firmware flash,
+USB-Free runtime validation, VPS deployment, GitLab change, real modem
+reconnect recovery, durable local storage, queue replay, long LTE stability,
+GNSS acceptance, battery/power behavior, enclosure behavior, learned model
+behavior, or product-readiness claim is changed.
 
 2026-07-01: LTE-010 Reconnect Store-Forward Gate Baseline is implemented as a
 non-hardware offline gate after KR-006. New script:

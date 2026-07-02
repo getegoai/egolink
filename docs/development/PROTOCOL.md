@@ -809,7 +809,10 @@ Recommended shape:
       "dropped_message_count": 1,
       "last_drop_reason": "cache_full",
       "oldest_message_age_ms": 42000,
-      "state": "store_forward"
+      "state": "store_forward",
+      "flush_attempt_count": 1,
+      "flush_success_count": 1,
+      "flush_failure_count": 0
     }
   }
 }
@@ -819,7 +822,9 @@ For raw-frame key/value payloads, use normalized keys such as
 `network_reconnect_count`, `network_last_error`,
 `network_last_reconnect_reason`, `cache_queued_message_count`,
 `cache_dropped_message_count`, `cache_last_drop_reason`, and
-`cache_oldest_message_age_ms`.
+`cache_oldest_message_age_ms`. Store-forward flush visibility may add
+`cache_flush_attempt_count`, `cache_flush_success_count`, and
+`cache_flush_failure_count`.
 
 Firmware may also report a capability non-claim such as
 `cache_state=not_enabled`, `cache_source_status=unverified`, and
@@ -862,6 +867,15 @@ raw evidence and mark it as an injected failure, but must not derive the normal
 Web/API message from that rejected attempt. A later retry may derive normally.
 This field is not product telemetry and must remain disabled outside named
 retry-validation builds.
+
+Test-only LTE-011 evidence builds may emit reconnect/store-forward-shaped raw
+KV fields such as `network_reconnect_count=1`,
+`network_last_reconnect_reason=pdp_reactivate`,
+`cache_state=store_forward`, and `cache_flush_success_count=1` so the
+Message Hub, Dashboard, and LTE-010 offline gate can be exercised end to end.
+This mode must be explicit in the firmware version/test-run and does not prove
+real modem reconnect recovery, durable storage, queue replay, long LTE
+stability, or product readiness.
 
 Do not invent defaults. If reconnect/cache/drop behavior was not observed,
 omit these fields so the LTE-005 reliability gate can report `WARN` or

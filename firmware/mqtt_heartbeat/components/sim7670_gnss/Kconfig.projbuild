@@ -177,6 +177,16 @@ config EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST
         bounded current-boot retry can succeed. Do not enable this for normal
         field runtime or product demos.
 
+config EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST
+    bool "Emit LTE-011 reconnect/store-forward evidence test fields"
+    default n
+    depends on EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    help
+        Test-only LTE-011 switch. When enabled, raw LTE location observation
+        and ACK payloads emit reconnect/store-forward evidence fields in the
+        shape required by the offline LTE-010 gate. This does not implement
+        real modem reconnect recovery, durable storage, or queue replay.
+
 config EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
     bool "Send AT+CGNSSPWR=1 before GNSS query"
     default y

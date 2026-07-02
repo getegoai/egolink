@@ -43,6 +43,7 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertFalse(payload["sim7670_lte_http_command_loop_enabled"])
         self.assertFalse(payload["sim7670_location_observation_enabled"])
         self.assertFalse(payload["raw_post_fail_once_test_enabled"])
+        self.assertFalse(payload["reconnect_store_forward_test_enabled"])
         self.assertEqual(payload["existing_command_id"], "")
         self.assertEqual(payload["expected_ack_test_run_id"], "")
         self.assertEqual(payload["expected_message_test_run_id"], "")
@@ -106,6 +107,7 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertIn("[switch]$EnableSim7670LteHttpCommandLoop", self.script_text)
         self.assertIn("[switch]$EnableSim7670LocationObservation", self.script_text)
         self.assertIn("[switch]$EnableRawPostFailOnceTest", self.script_text)
+        self.assertIn("[switch]$EnableReconnectStoreForwardTest", self.script_text)
         self.assertIn("[string]$ExistingCommandId", self.script_text)
         self.assertIn("[string]$ExpectedAckTestRunId", self.script_text)
         self.assertIn("[string]$ExpectedMessageTestRunId", self.script_text)
@@ -128,6 +130,10 @@ class FW001HardwareRunnerTests(unittest.TestCase):
             self.script_text,
         )
         self.assertIn('Add-If $prepareArgs $EnableRawPostFailOnceTest "-EnableRawPostFailOnceTest"', self.script_text)
+        self.assertIn(
+            'Add-If $prepareArgs $EnableReconnectStoreForwardTest "-EnableReconnectStoreForwardTest"',
+            self.script_text,
+        )
         self.assertIn("validate_lte_http_probe.py", self.script_text)
         self.assertIn("validate_lte_command_loop.py", self.script_text)
         self.assertIn("--expected-fw-version", self.script_text)
