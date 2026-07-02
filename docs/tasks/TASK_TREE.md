@@ -1,6 +1,6 @@
 ---
 document_status: current_task_tree
-generated_at: 2026-07-02
+generated_at: 2026-07-03
 generated_by: codex
 ---
 
@@ -253,6 +253,23 @@ motion candidate
   - Boundary: this makes the existing report reviewable through Web/API. It
     does not make the composite report a same-run product scenario, create or
     promote KR-008, generate new field evidence, modify GitLab, or claim
+    product readiness.
+- `DEMO-010 Product Demo Web Review Gate`
+  - Path:
+    `docs/tasks/done/DEMO-010_PRODUCT_DEMO_WEB_REVIEW_GATE.md`
+  - Status: completed as the repeatable no-hardware Web/API gate after
+    DEMO-009.
+  - Evidence: `scripts/validate_product_demo_web_review.py`,
+    `quality_tests/test_product_demo_web_review.py`, and read-only VPS gate
+    report under
+    `reports/product_demo_web_review/demo010-vps-20260703-001/`.
+  - Current visible result: the gate checks `/health`,
+    `/api/v1/product-demo/latest`, `/api/state` Product Demo consistency,
+    Dashboard Product Demo markers, and release-boundary consistency. The VPS
+    run `demo010-vps-20260703-001` passed against `203.0.113.10:8790`.
+  - Boundary: this proves Web/API reviewability only. It does not send device
+    commands, contact hardware, flash firmware, deploy to the VPS, modify
+    GitLab, regenerate same-run evidence, create/promote KR-008, or claim
     product readiness.
 - `REL-006 KR-005 Reliability Explainability Release Gate`
   - Path:
@@ -1131,6 +1148,15 @@ motion candidate
     `product_demo_report.json`.
   - Boundary: Web visibility is present, but KR-008 release remains pending
     because the first report is composite evidence.
+- `DEMO-010 Product Demo Web Review Gate`
+  - Path: `docs/tasks/done/DEMO-010_PRODUCT_DEMO_WEB_REVIEW_GATE.md`
+  - Status: completed as a repeatable no-hardware Web/API gate for the
+    DEMO-008/DEMO-009 report surface.
+  - Result: `scripts/validate_product_demo_web_review.py` writes
+    `product_demo_web_review_report.json` / `.md`; the read-only VPS run
+    `demo010-vps-20260703-001` passed.
+  - Boundary: proves Web/API reviewability only; KR-008 remains pending until a
+    same-run or regenerated product-demo report and manifest bind the evidence.
 
 ## Hardware Evidence Line
 
@@ -1282,10 +1308,11 @@ motion candidate
     user trigger or safety event -> device location/status request -> LTE
     raw-frame uplink -> multi-source evidence -> EALE-P0 location belief ->
     user confirmation or safety rule -> report export -> Web replay/review.
-16. Treat `DEMO-009` as the completed local Dashboard review baseline for the
-    DEMO-008 report. Next KR-008 work should either deploy/copy the report to
-    the VPS Dashboard for operator viewing or create a same-run product demo
-    scenario before any KR-008 manifest.
-17. Use `STAB-001B` only as a short KR-005/KR-006/KR-007 USB-Free baseline
+16. Treat `DEMO-009` as the completed Dashboard review baseline for the
+    DEMO-008 report, with VPS deployment evidence recorded.
+17. Treat `DEMO-010` as the completed repeatable Web/API review gate. Next
+    KR-008 work should create a same-run product-demo scenario or regenerate
+    the product-demo report with DEMO-010 evidence before any KR-008 manifest.
+18. Use `STAB-001B` only as a short KR-005/KR-006/KR-007 USB-Free baseline
     after the data and observability gates can explain failures. Do not
     promote it into long stability testing.

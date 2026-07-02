@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-02
+last_verified: 2026-07-03
 verified_by: codex
 ---
 
@@ -573,8 +573,10 @@ test-run export with an existing safety-demo summary and produce
 outputs. The first local report is intentionally `WARN`: it uses composite
 existing evidence rather than a same-run product scenario, preserves the
 current `Unknown` / `gnss_no_fix` location belief, and marks Web console
-replay/review as pending. KR-008 should not be manifested or promoted until
-that report is visible through the Web Dashboard.
+replay/review as pending. Dashboard visibility is now handled by DEMO-009 and
+the repeatable DEMO-010 gate, but KR-008 should still not be manifested or
+promoted until a same-run or regenerated product-demo report binds that Web
+review evidence and clears the release blockers.
 
 `DEMO-009` adds the first Message Hub Dashboard review surface for that report:
 `/api/state` now includes `product_demo`, `/api/v1/product-demo/latest` returns
@@ -585,6 +587,17 @@ same-run product scenario. The DEMO-009 Dashboard surface has also been
 deployed to the VPS Message Hub with the DEMO-008 report copied under
 `/opt/egolink-message-hub/reports/product_demo/`; this is deployment evidence,
 not a KR-008 release manifest.
+
+`DEMO-010` adds a repeatable Product Demo Web review gate through
+`scripts/validate_product_demo_web_review.py`. The gate checks `/health`,
+`/api/v1/product-demo/latest`, `/api/state` consistency, Dashboard Product Demo
+markers, and the explicit release boundary. The read-only VPS run
+`demo010-vps-20260703-001` passed against `203.0.113.10:8790`, confirming that
+the current report is Web/API reviewable while preserving
+`ready_for_kr008_release=false`. The underlying DEMO-008 report remains a
+`WARN` composite artifact, and its internal `web_console_replay_review` field
+still says `not_run` until a later same-run or regenerated product-demo report
+binds this gate evidence.
 
 ## Release Gate Policy
 

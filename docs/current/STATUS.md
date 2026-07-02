@@ -1,10 +1,32 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-02
+last_verified: 2026-07-03
 verified_by: codex
 ---
 
 ## Latest Deployment Note
+
+2026-07-03: DEMO-010 Product Demo Web Review Gate is implemented as the
+repeatable no-hardware gate after DEMO-009. New script
+`scripts/validate_product_demo_web_review.py` checks `/health`,
+`/api/v1/product-demo/latest`, `/api/state` Product Demo consistency,
+Dashboard Product Demo markers, and the explicit KR-008 release boundary, then
+writes `product_demo_web_review_report.json` / `.md`. New tests are in
+`quality_tests/test_product_demo_web_review.py`. A read-only run against the
+public VPS Message Hub at `203.0.113.10:8790` passed as
+`demo010-vps-20260703-001`; it confirmed the current Product Demo report is
+available through Web/API and Dashboard HTML, with status `warn`,
+`evidence_mode=composite_existing_evidence`, and KR-008 release readiness
+`false`. Evidence is under
+`reports/product_demo_web_review/demo010-vps-20260703-001/`. This gate did
+not send device commands, contact hardware, flash firmware, deploy to the VPS,
+modify GitLab, regenerate same-run field evidence, create/promote a KR-008
+manifest, or claim product readiness. Validation passed: `python -m unittest
+quality_tests.test_product_demo_web_review -v`, `python -m unittest
+quality_tests.test_message_hub_dashboard quality_tests.test_message_hub_server
+quality_tests.test_product_demo_report -v`, `python scripts/context_lint.py`,
+`git diff --check`, and `powershell -ExecutionPolicy Bypass -File
+scripts\verify.ps1` (332 tests).
 
 2026-07-02: DEMO-009 Product Demo Dashboard Review Baseline is implemented
 locally after DEMO-008. Message Hub now summarizes the latest

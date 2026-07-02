@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-27
+last_verified: 2026-07-03
 verified_by: codex
 ---
 
@@ -108,6 +108,21 @@ GET  /api/v1/product-demo/latest
 GET  /health
 WS   /ws/dashboard
 ```
+
+## Product Demo Review Gate
+
+The KR-008 product-demo path uses a separate no-hardware Web review gate:
+
+```powershell
+python scripts/validate_product_demo_web_review.py --hub-url http://203.0.113.10:8790 --review-id <review-id> --output-dir reports/product_demo_web_review/<review-id> --json
+```
+
+The gate checks Message Hub health, `/api/v1/product-demo/latest`,
+`/api/state` Product Demo consistency, Dashboard Product Demo markers, and the
+explicit KR-008 release boundary. It is read-only from the Message Hub
+perspective: it must not send device commands, flash firmware, deploy code, or
+touch GitLab. A PASS means the latest product-demo report is reviewable through
+Web/API; it is not a KR-008 release claim.
 
 ## Minimal MQTT Topics
 

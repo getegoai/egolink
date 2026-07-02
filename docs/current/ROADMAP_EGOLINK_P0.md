@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-02
+last_verified: 2026-07-03
 verified_by: codex
 ---
 
@@ -331,12 +331,18 @@ Current implementation baseline:
   summary, then writes `product_demo_report.json` / `.md` plus supporting
   DATA-001 and EALE-P0 reports.
 - The first report is a `WARN` composite-evidence artifact, not a KR-008
-  release. It keeps `web_console_replay_review` pending until the Dashboard can
-  show the same review path.
+  release. Its internal `web_console_replay_review` remains pending until a
+  later regenerated or same-run report binds DEMO-010 Web review evidence.
 - `DEMO-009` adds that first Dashboard review path: `/api/state` includes
   `product_demo`, `/api/v1/product-demo/latest` returns a bounded summary, and
   the Dashboard renders a Product Demo panel. KR-008 still needs a same-run or
   explicitly accepted demo scenario plus a manifest before release.
+- `DEMO-010` adds a repeatable Product Demo Web review gate:
+  `scripts/validate_product_demo_web_review.py` checks Message Hub health, the
+  Product Demo API, `/api/state` consistency, Dashboard markers, and the
+  release-readiness boundary. The first read-only VPS gate passed as
+  `demo010-vps-20260703-001`, but KR-008 still remains unreleased because the
+  report is WARN/composite and not a same-run product scenario.
 
 Outputs:
 
