@@ -6,6 +6,33 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-02: LTE-011 fix1 passed USB-Free runtime validation and the LTE-010
+offline reconnect/store-forward evidence gate. The operator connected
+independent power and disconnected USB, then validator run
+`lte011-reconnect-store-forward-test-fix1-20260702-001` created
+`request_location` command `cmd-000033`. The device returned raw LTE
+`location_report` frame `loc-cmd-000033` (`seq=28`, `fix=false`,
+`gnss_state=no_fix`), raw LTE `location_observation` frame `obs-cmd-000033`
+(`seq=29`, `cell.cell_id=180571649`, `lte.reason_code=LTE_READY`, assigned IP
+`10.55.187.235`, `transport.type=lte`), and raw LTE ACK `seq=30`
+(`status=ok`, `LTE_HTTP_OK` / HTTP `200`). The observation carried LTE-011
+test-mode reliability evidence: `network_reconnect_count=1`,
+`network_last_reconnect_reason=pdp_reactivate`, network
+`last_error=LTE_HTTP_ACTION_FAILED`, `cache_state=store_forward`,
+`cache_queued_message_count=1`, `cache_oldest_message_age_ms=12000`, and
+`cache_dropped_message_count=0`; the ACK reported post-reconnect
+`network_state=ready_after_reconnect`, raw POST counters `2/2/0`, and cache
+queue drained to `0`. Runtime evidence is under
+`reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/`.
+The offline LTE-010 gate over that export returned PASS for all five gates:
+LTE runtime chain, reconnect attempt visibility, failure reason visibility,
+post-reconnect ACK, and store-forward evidence. Gate report is under
+`reports/lte_reconnect_store_forward/lte011-fix1-20260702-001/`. This is a
+test-mode evidence pass and does not prove real modem reconnect recovery,
+durable local storage, queue replay, long LTE stability, GNSS acceptance,
+battery/power behavior, enclosure behavior, learned model behavior, or product
+readiness.
+
 2026-07-02: LTE-011 fix1 Observation Payload Margin was flashed on the
 connectivity node through `COM4` after explicit operator confirmation. The
 flash used firmware `0.1.0-lte011-reconnect-store-forward-test-fix1`, test run
@@ -17,10 +44,10 @@ flash used firmware `0.1.0-lte011-reconnect-store-forward-test-fix1`, test run
 `02:00:00:00:00:03`, wrote bootloader/app/partition table, verified all
 hashes, and hard-reset the board. Flash evidence is under
 `reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/flash_report.md`.
-USB-Free runtime validation has not been run yet, so this does not prove the
-LTE-010 gate, real modem reconnect recovery, durable local storage, queue
-replay, long LTE stability, GNSS acceptance, battery/power behavior, enclosure
-behavior, learned model behavior, or product readiness.
+USB-Free runtime validation later passed as recorded above; the flash evidence
+itself does not prove real modem reconnect recovery, durable local storage,
+queue replay, long LTE stability, GNSS acceptance, battery/power behavior,
+enclosure behavior, learned model behavior, or product readiness.
 
 2026-07-02: LTE-011 first USB-Free runtime validation produced an explainable
 FAIL instead of a silent link failure. Validator command `cmd-000032` was
@@ -42,11 +69,10 @@ bytes to `2050`/`2400` bytes. Focused firmware tests passed with 13 tests, and
 the guarded ESP-IDF build produced
 `firmware/mqtt_heartbeat/build_lte011_reconnect_store_forward_test_fix1/egolink_mqtt_heartbeat.bin`
 (`302528` bytes) with `flash_intentionally_not_run=true`. The fix1 image was
-later flashed as recorded above, but USB-Free runtime has not yet been
-validated, so this does not prove the LTE-010 gate, real modem reconnect
-recovery, durable local storage, queue replay, long LTE stability, GNSS
-acceptance, battery/power behavior, enclosure behavior, learned model
-behavior, or product readiness.
+later flashed and USB-Free runtime validated as recorded above, but this still
+does not prove real modem reconnect recovery, durable local storage, queue
+replay, long LTE stability, GNSS acceptance, battery/power behavior, enclosure
+behavior, learned model behavior, or product readiness.
 
 2026-07-02: LTE-011 Reconnect Store-Forward Evidence Test Mode was flashed on
 the connectivity node through `COM4` after explicit operator confirmation.

@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-011 fix1 observation payload margin is currently flashed on `COM4` after explicit operator confirmation, and USB-Free runtime validation is pending. The prior LTE-011 runtime validation with `cmd-000032` failed explainably at firmware-side `location_observation_payload_truncated`. LTE-009 raw POST retry fault-injection firmware previously passed USB-Free runtime with `cmd-000031`. LTE-008 fix1 bounded raw POST retry observability firmware previously passed USB-Free runtime with `cmd-000030`. The earlier LTE-008 image's first USB-Free runtime validation failed with `location_observation_payload_truncated`. LTE-007 volatile cache/drop observability firmware previously passed USB-Free runtime with `cmd-000028`; LTE-006 fix1 reliability non-claim firmware previously passed USB-Free runtime with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-011 fix1 observation payload margin is currently flashed on `COM4` after explicit operator confirmation and passed USB-Free runtime validation with `cmd-000033`; the LTE-010 offline reconnect/store-forward evidence gate passed over that export. The prior LTE-011 runtime validation with `cmd-000032` failed explainably at firmware-side `location_observation_payload_truncated`. LTE-009 raw POST retry fault-injection firmware previously passed USB-Free runtime with `cmd-000031`. LTE-008 fix1 bounded raw POST retry observability firmware previously passed USB-Free runtime with `cmd-000030`. The earlier LTE-008 image's first USB-Free runtime validation failed with `location_observation_payload_truncated`. LTE-007 volatile cache/drop observability firmware previously passed USB-Free runtime with `cmd-000028`; LTE-006 fix1 reliability non-claim firmware previously passed USB-Free runtime with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -738,9 +738,24 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   detected and bootloader/app/partition-table hashes were verified. Flash
   evidence is under
   `reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/flash_report.md`.
-  Fix1 has not been USB-Free runtime validated and does not prove real modem
-  reconnect recovery, durable local storage, queue replay, long LTE stability,
-  GNSS acceptance, power behavior, enclosure behavior, or product readiness.
+  USB-Free runtime validation passed after the operator connected independent
+  power and disconnected USB: command `cmd-000033` produced raw LTE
+  `location_report` frame `loc-cmd-000033` (`seq=28`, `fix=false`,
+  `gnss_state=no_fix`), raw LTE `location_observation` frame
+  `obs-cmd-000033` (`seq=29`, `cell.cell_id=180571649`,
+  `lte.reason_code=LTE_READY`, assigned IP `10.55.187.235`), and raw LTE ACK
+  `seq=30` (`status=ok`, `LTE_HTTP_OK` / HTTP `200`). LTE-011 test-mode
+  reliability evidence showed reconnect count `1`, reason `pdp_reactivate`,
+  network failure reason `LTE_HTTP_ACTION_FAILED`, store-forward queue count
+  `1`, oldest age `12000 ms`, and then ACK-side cache queue drained to `0`.
+  Evidence is under
+  `reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/`.
+  The LTE-010 offline reconnect/store-forward evidence gate then returned
+  PASS over the export, with report under
+  `reports/lte_reconnect_store_forward/lte011-fix1-20260702-001/`. This is a
+  test-mode evidence pass and does not prove real modem reconnect recovery,
+  durable local storage, queue replay, long LTE stability, GNSS acceptance,
+  power behavior, enclosure behavior, or product readiness.
 - Full Demo v0.5 audio evidence is structured mock-only; real microphone capture and audio acceptance remain unverified.
 - The latest Demo v0.3/v0.5 motion candidate can use real AMOLED QMI8658 `motion_event` evidence, but it is still a demo-only heuristic, not MotionNet output.
 - Formal IMU product acceptance remains false until final mounting/calibration gates are met.
