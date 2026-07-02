@@ -451,9 +451,9 @@ first-POST failure recovery, not reconnect recovery or durable store-forward.
 
 ## KR-007 Reconnect Store-Forward Evidence Baseline
 
-- Status: release candidate.
+- Status: released engineering key version.
 - Release date: 2026-07-02.
-- Release version: `0.1.0-key-release-007-rc1`.
+- Release version: `0.1.0-key-release-007`.
 - Firmware version:
   `0.1.0-lte011-reconnect-store-forward-test-fix1`.
 - Device/test run: `ego-link-r1-connectivity-001` /
@@ -466,7 +466,7 @@ first-POST failure recovery, not reconnect recovery or durable store-forward.
   `reports/key_releases/KR-007/release_gate_report.json` and
   `reports/key_releases/KR-007/release_gate_report.md`.
 
-### Release-Candidate Meaning
+### Release Meaning
 
 KR-007 freezes the current LTE-011 fix1 reconnect/store-forward evidence
 baseline:
@@ -479,11 +479,12 @@ LTE raw request_location loop
 -> LTE-010 offline reconnect/store-forward gate PASS
 ```
 
-It is a release candidate because LTE-011 fix1 passed one real USB-Free
-runtime on independent power with USB disconnected, and the LTE-010 offline
-gate passed over that export. It is still a default-off test-mode evidence
-slice: it proves the evidence shape needed for reconnect/store-forward review,
-not real modem reconnect recovery or durable store-forward.
+It is a released engineering key version because LTE-011 fix1 passed one real
+USB-Free runtime on independent power with USB disconnected, the LTE-010
+offline gate passed over that export, and the KR-007 manifest gate passed after
+promotion. It is still a default-off test-mode evidence slice: it proves the
+evidence shape needed for reconnect/store-forward review, not real modem
+reconnect recovery or durable store-forward.
 
 ### Evidence Summary
 
@@ -527,7 +528,6 @@ not real modem reconnect recovery or durable store-forward.
 
 ### Next Gates
 
-- Promote KR-007 from release candidate to released after review.
 - Design real reconnect recovery evidence before treating modem/network
   interruptions as recovered.
 - Design durable bounded store-forward semantics before claiming offline cache

@@ -6,6 +6,17 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-02: KR-007 Reconnect Store-Forward Evidence Baseline is promoted to
+released engineering key version `0.1.0-key-release-007`. The release binds
+LTE-011 fix1 build/flash/runtime evidence, command `cmd-000033`, raw LTE
+`location_report`, raw LTE `location_observation`, ACK, reconnect evidence,
+store-forward evidence, the LTE-010 offline PASS report, and the KR-007
+manifest gate. Promotion did not contact hardware or the VPS and does not
+change the test-mode evidence boundary: no real modem reconnect recovery,
+durable local storage, queue replay, long LTE stability, GNSS acceptance,
+battery/power behavior, enclosure behavior, learned model behavior, or product
+readiness is claimed.
+
 2026-07-02: KR-007 Reconnect Store-Forward Evidence Baseline is created as
 release candidate `0.1.0-key-release-007-rc1`. The manifest
 `docs/current/key_releases/KR-007_RECONNECT_STORE_FORWARD_EVIDENCE.json`

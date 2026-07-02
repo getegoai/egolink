@@ -1,10 +1,10 @@
 {
   "release_id": "KR-007",
   "release_name": "Reconnect Store-Forward Evidence Baseline",
-  "release_version": "0.1.0-key-release-007-rc1",
-  "status": "release_candidate",
+  "release_version": "0.1.0-key-release-007",
+  "status": "released",
   "release_date": "2026-07-02",
-  "summary": "Seventh Ego Link P0 engineering key release candidate. It freezes the LTE-011 fix1 reconnect/store-forward evidence baseline: a USB-Free request_location run over SIM7670G LTE produced raw location_report, raw location_observation, and raw ACK evidence; the observation carried reconnect/store-forward-shaped evidence; the ACK showed post-reconnect ready/cache-drained evidence; and the LTE-010 offline reconnect/store-forward gate passed over the export.",
+  "summary": "Seventh Ego Link P0 engineering key release. It freezes the LTE-011 fix1 reconnect/store-forward evidence baseline: a USB-Free request_location run over SIM7670G LTE produced raw location_report, raw location_observation, and raw ACK evidence; the observation carried reconnect/store-forward-shaped evidence; the ACK showed post-reconnect ready/cache-drained evidence; and the LTE-010 offline reconnect/store-forward gate passed over the export.",
   "firmware_version": "0.1.0-lte011-reconnect-store-forward-test-fix1",
   "firmware_test_run_id": "lte011-reconnect-store-forward-test-fix1-20260702-001",
   "protocol_profiles": [
@@ -19,7 +19,7 @@
     "COM4 flash evidence for LTE-011 fix1",
     "USB-Free LTE-011 fix1 request_location runtime evidence over SIM7670G LTE",
     "LTE-010 gate PASS over the LTE-011 fix1 export",
-    "Release-candidate manifest and gate report for reconnect/store-forward evidence"
+    "Released manifest and gate report for reconnect/store-forward evidence"
   ],
   "non_claims": [
     "No product readiness claim",
@@ -110,6 +110,12 @@
     {
       "kind": "rel010_task_packet",
       "path": "docs/tasks/done/REL-010_KR007_RECONNECT_STORE_FORWARD_EVIDENCE_RELEASE_GATE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "rel011_task_packet",
+      "path": "docs/tasks/done/REL-011_KR007_RECONNECT_STORE_FORWARD_EVIDENCE_RELEASE.md",
       "required": true,
       "local_only": false
     },
@@ -378,6 +384,10 @@
     {
       "label": "Product demo release path alignment",
       "commit": "5e47a82"
+    },
+    {
+      "label": "KR-007 release candidate",
+      "commit": "517f973"
     }
   ],
   "validation_commands": [
@@ -392,7 +402,6 @@
     "git diff --check"
   ],
   "next_release_gates": [
-    "Promote KR-007 from release_candidate to released after review",
     "Design real reconnect recovery evidence before treating modem/network interruptions as recovered",
     "Design durable bounded store-forward semantics before claiming offline cache or replay",
     "Add a later long-run LTE reliability gate only after real reconnect and store-forward evidence are visible",
