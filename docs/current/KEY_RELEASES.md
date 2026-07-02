@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-01
+last_verified: 2026-07-02
 verified_by: codex
 ---
 
@@ -448,6 +448,54 @@ first-POST failure recovery, not reconnect recovery or durable store-forward.
   store-forward evidence are visible.
 - Keep GNSS acceptance, battery/power behavior, and enclosure behavior outside
   this retry gate.
+
+## Planned Gates After KR-006
+
+KR-006 is already assigned to the raw POST retry fault-injection baseline. It
+must not be renamed into the product-demo release. The product-demo loop from
+the user-provided fusion-algorithm discussion remains valid, but it belongs to
+a later gate.
+
+### KR-007 Reconnect / Store-Forward Evidence Baseline Candidate
+
+KR-007 should freeze the current LTE-011 fix1 result only after a manifest and
+release gate are created:
+
+```text
+LTE raw request_location loop
+-> raw LTE location_report
+-> raw LTE location_observation carries reconnect/store-forward evidence
+-> raw LTE ACK shows post-reconnect recovery/cache drain evidence
+-> LTE-010 offline reconnect/store-forward gate PASS
+```
+
+KR-007 may claim a versioned reconnect/store-forward evidence baseline. It
+must not claim real modem reconnect recovery, durable local storage, queue
+replay, long LTE stability, GNSS acceptance, battery/power behavior, enclosure
+behavior, learned model behavior, or product readiness.
+
+### KR-008 / DEMO-001 Product Demo Closed Loop Candidate
+
+The product-demo closed loop should be tracked after KR-007, or as a named
+`DEMO-001` gate if it is better treated as a demo release rather than a
+reliability release:
+
+```text
+user trigger or safety event
+-> device requests location/status
+-> LTE raw-frame uplink
+-> multi-source evidence aggregation
+-> EALE-P0 location_belief generation
+-> user confirmation or safety rule decision
+-> report export
+-> Web console replay/review
+```
+
+This gate should combine the existing raw LTE backbone, DATA-001 observation
+windows, EALE-P0 derived belief, Safety Companion/user-confirmation records,
+report export, and Web replay/review. It should still avoid product-readiness
+claims unless R3 reliability, battery/power, enclosure, and GNSS acceptance
+gates have also passed.
 
 ## Release Gate Policy
 

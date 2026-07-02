@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-28
+last_verified: 2026-07-02
 verified_by: codex
 ---
 
@@ -299,10 +299,30 @@ Definition of Done:
 
 Goal: make a non-developer understandable product prototype demo.
 
+The product-demo closed loop is not the current KR-006. KR-006 is already the
+raw POST retry fault-injection baseline. The demo loop should be tracked after
+the reconnect/store-forward evidence baseline, as `KR-008` or a named
+`DEMO-001` gate:
+
+```text
+user trigger or safety event
+-> device requests location/status
+-> LTE raw-frame uplink
+-> multi-source evidence aggregation
+-> EALE-P0 location_belief generation
+-> user confirmation or safety rule decision
+-> report export
+-> Web console replay/review
+```
+
 Inputs:
 
 - R3 reliability baseline;
 - at least one repeatable field test.
+- raw LTE command/report/observation/ACK backbone;
+- DATA-001 observation windows and EALE-P0 derived belief;
+- user confirmation or Safety Companion event records;
+- report export and replay evidence.
 
 Outputs:
 
@@ -311,7 +331,10 @@ Outputs:
 - map and track history;
 - message log;
 - command and ACK history;
+- current-run location belief and source evidence;
+- safety/user-confirmation decision trail;
 - field-test report export;
+- demo-session replay/review page;
 - basic remote configuration.
 
 Modules:
@@ -331,4 +354,7 @@ Definition of Done:
 
 - a product demo can be completed from Web Dashboard only;
 - online, location, track, command, ACK, error, and report states are visible;
-- non-developers can understand whether the device is working.
+- user trigger or safety-event flow can request location/status and produce a
+  reviewable report;
+- non-developers can understand whether the device is working, what the
+  location belief means, and why a failure or no-fix happened.

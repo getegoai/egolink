@@ -1,6 +1,6 @@
 ---
 document_status: current_task_tree
-generated_at: 2026-07-01
+generated_at: 2026-07-02
 generated_by: codex
 ---
 
@@ -168,6 +168,19 @@ motion candidate
     GitLab change, product readiness, long LTE stability, reconnect recovery,
     durable offline cache, GNSS acceptance, enclosure behavior, or
     battery/power claim.
+- `REL-009 Product Demo Closed Loop Roadmap Alignment`
+  - Path:
+    `docs/tasks/done/REL-009_PRODUCT_DEMO_CLOSED_LOOP_ROADMAP_ALIGNMENT.md`
+  - Status: completed as a release-route correction after reviewing the
+    user-provided fusion-algorithm discussion.
+  - Evidence: `docs/current/KEY_RELEASES.md`,
+    `docs/current/ROADMAP_EGOLINK_P0.md`, and this task tree now keep KR-006
+    assigned to raw POST retry fault injection, route LTE-011 fix1 toward a
+    KR-007 reconnect/store-forward evidence candidate, and route the product
+    demo closed loop toward KR-008 or `DEMO-001`.
+  - Boundary: no firmware, hardware, VPS deployment, protocol, learned model,
+    product-readiness, reconnect recovery, durable store-forward, GNSS
+    acceptance, enclosure, or battery/power claim.
 - `REL-006 KR-005 Reliability Explainability Release Gate`
   - Path:
     `docs/tasks/done/REL-006_KR005_RELIABILITY_EXPLAINABILITY_RELEASE_GATE.md`
@@ -1164,14 +1177,20 @@ motion candidate
 12. Treat `LTE-010` as the completed offline reconnect/store-forward gate
     baseline. Future firmware evidence must pass this gate before reconnect or
     durable store-forward can be treated as accepted.
-13. Treat `LTE-011` as the completed build-verified evidence-mode slice: it
-    can exercise the reconnect/store-forward field shape and Dashboard
-    visibility when explicitly enabled, but it is not real reconnect recovery
-    or durable store-forward acceptance.
-14. Next suitable operator-assisted step is an LTE-011 flash/runtime attempt
-    only if the operator explicitly confirms the COM port and independent
-    power flow; otherwise continue with no-hardware real reconnect/cache design
-    tasks.
-15. Use `STAB-001B` only as a short KR-005/KR-006 USB-Free baseline after the
-    data and observability gates can explain failures. Do not promote it into
-    long stability testing.
+13. Treat `LTE-011 fix1` as the completed USB-Free reconnect/store-forward
+    evidence-mode slice: it passed `request_location -> location_report ->
+    location_observation -> ACK` over LTE and the LTE-010 offline
+    reconnect/store-forward gate, but it is still test-mode evidence, not real
+    reconnect recovery or durable store-forward acceptance.
+14. Treat the next release-track step as `KR-007` candidate preparation:
+    create a manifest and release gate for the LTE-011 fix1
+    reconnect/store-forward evidence baseline before doing broader stability
+    work.
+15. Treat the user-described product-demo closed loop as a later `KR-008` or
+    `DEMO-001` candidate, not the already-released KR-006. Its intended flow is
+    user trigger or safety event -> device location/status request -> LTE
+    raw-frame uplink -> multi-source evidence -> EALE-P0 location belief ->
+    user confirmation or safety rule -> report export -> Web replay/review.
+16. Use `STAB-001B` only as a short KR-005/KR-006/KR-007 USB-Free baseline
+    after the data and observability gates can explain failures. Do not
+    promote it into long stability testing.
