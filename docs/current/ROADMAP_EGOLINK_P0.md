@@ -301,8 +301,8 @@ Goal: make a non-developer understandable product prototype demo.
 
 The product-demo closed loop is not the current KR-006. KR-006 is already the
 raw POST retry fault-injection baseline. The demo loop should be tracked after
-the reconnect/store-forward evidence baseline, as `KR-008` or a named
-`DEMO-001` gate:
+the reconnect/store-forward evidence baseline, as `KR-008` with the first
+demo-report baseline tracked by `DEMO-008`:
 
 ```text
 user trigger or safety event
@@ -323,6 +323,16 @@ Inputs:
 - DATA-001 observation windows and EALE-P0 derived belief;
 - user confirmation or Safety Companion event records;
 - report export and replay evidence.
+
+Current implementation baseline:
+
+- `DEMO-008` adds an offline product-demo report generator that composes an
+  existing Message Hub test-run export with an existing full safety-demo
+  summary, then writes `product_demo_report.json` / `.md` plus supporting
+  DATA-001 and EALE-P0 reports.
+- The first report is a `WARN` composite-evidence artifact, not a KR-008
+  release. It keeps `web_console_replay_review` pending until the Dashboard can
+  show the same review path.
 
 Outputs:
 

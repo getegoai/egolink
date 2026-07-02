@@ -177,7 +177,7 @@ motion candidate
     `docs/current/ROADMAP_EGOLINK_P0.md`, and this task tree now keep KR-006
     assigned to raw POST retry fault injection, route LTE-011 fix1 toward a
     KR-007 reconnect/store-forward evidence candidate, and route the product
-    demo closed loop toward KR-008 or `DEMO-001`.
+    demo closed loop toward KR-008 / `DEMO-008`.
   - Boundary: no firmware, hardware, VPS deployment, protocol, learned model,
     product-readiness, reconnect recovery, durable store-forward, GNSS
     acceptance, enclosure, or battery/power claim.
@@ -216,6 +216,23 @@ motion candidate
   - Boundary: no firmware, hardware, VPS deployment, protocol, learned model,
     product-readiness, real reconnect recovery, durable store-forward, GNSS
     acceptance, enclosure, or battery/power claim.
+- `DEMO-008 Product Demo Closed Loop Report Baseline`
+  - Path:
+    `docs/tasks/done/DEMO-008_PRODUCT_DEMO_REPORT_BASELINE.md`
+  - Status: completed as the first KR-008/DEMO product-demo report baseline.
+  - Evidence: `scripts/build_product_demo_report.py`,
+    `quality_tests/test_product_demo_report.py`, and local composite report
+    output under
+    `reports/product_demo/kr008-demo008-composite-20260702-001/`.
+  - Current visible result: existing safety-demo evidence and KR-007/LTE raw
+    evidence can be composed into a product-demo-shaped review report with
+    DATA-001 lineage, EALE-P0 `location_belief`, user confirmation, report
+    export, and explicit Web-review pending state.
+  - Boundary: the first report is `WARN`, not a KR-008 release. It uses
+    composite existing evidence rather than a same-run product scenario and
+    makes no product-readiness, Web console, GNSS acceptance, long LTE
+    stability, real reconnect, durable store-forward, learned-model,
+    enclosure, or battery/power claim.
 - `REL-006 KR-005 Reliability Explainability Release Gate`
   - Path:
     `docs/tasks/done/REL-006_KR005_RELIABILITY_EXPLAINABILITY_RELEASE_GATE.md`
@@ -1076,6 +1093,15 @@ motion candidate
 - `DEMO-007 Stability / Reconnect / Long-Run Demo Gate`
   - Status: proposed.
   - Goal: repeat full demo under bounded reconnect/retry/longer capture windows.
+- `DEMO-008 Product Demo Closed Loop Report Baseline`
+  - Path: `docs/tasks/done/DEMO-008_PRODUCT_DEMO_REPORT_BASELINE.md`
+  - Status: completed as a no-hardware report baseline for KR-008.
+  - Result: `scripts/build_product_demo_report.py` composes existing safety
+    demo and Message Hub test-run export evidence into a product-demo-shaped
+    JSON/Markdown report with DATA-001 and EALE-P0 supporting outputs.
+  - Boundary: current result is `WARN` because Web console replay/review is
+    pending and the first local output uses composite existing evidence, not a
+    same-run product scenario.
 
 ## Hardware Evidence Line
 
@@ -1221,11 +1247,14 @@ motion candidate
     reconnect/store-forward evidence baseline is released as an engineering
     key version, but remains a test-mode evidence baseline rather than real
     reconnect or durable store-forward acceptance.
-15. Treat the user-described product-demo closed loop as a later `KR-008` or
-    `DEMO-001` candidate, not the already-released KR-006. Its intended flow is
+15. Treat the user-described product-demo closed loop as `KR-008` with
+    `DEMO-008` as the first report baseline, not the already-released KR-006.
+    Its intended flow is
     user trigger or safety event -> device location/status request -> LTE
     raw-frame uplink -> multi-source evidence -> EALE-P0 location belief ->
     user confirmation or safety rule -> report export -> Web replay/review.
-16. Use `STAB-001B` only as a short KR-005/KR-006/KR-007 USB-Free baseline
+16. Next KR-008 work should expose the DEMO-008 report through the Message Hub
+    Dashboard before creating or promoting a KR-008 manifest.
+17. Use `STAB-001B` only as a short KR-005/KR-006/KR-007 USB-Free baseline
     after the data and observability gates can explain failures. Do not
     promote it into long stability testing.

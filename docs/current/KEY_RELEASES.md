@@ -534,7 +534,7 @@ reconnect recovery or durable store-forward.
   or replay.
 - Add a later long-run LTE reliability gate only after real reconnect and
   store-forward evidence are visible.
-- Track the product-demo closed loop as KR-008 or `DEMO-001`, not KR-006 or
+- Track the product-demo closed loop as KR-008 / `DEMO-008`, not KR-006 or
   KR-007.
 
 ## Planned Gates After KR-007
@@ -544,11 +544,10 @@ reconnect/store-forward evidence candidate. The product-demo loop from the
 user-provided fusion-algorithm discussion remains valid, but it belongs to a
 later gate.
 
-### KR-008 / DEMO-001 Product Demo Closed Loop Candidate
+### KR-008 / DEMO-008 Product Demo Closed Loop Candidate
 
-The product-demo closed loop should be tracked after KR-007, or as a named
-`DEMO-001` gate if it is better treated as a demo release rather than a
-reliability release:
+The product-demo closed loop should be tracked after KR-007 as KR-008, with
+`DEMO-008` carrying the first demo-report baseline:
 
 ```text
 user trigger or safety event
@@ -566,6 +565,16 @@ windows, EALE-P0 derived belief, Safety Companion/user-confirmation records,
 report export, and Web replay/review. It should still avoid product-readiness
 claims unless R3 reliability, battery/power, enclosure, and GNSS acceptance
 gates have also passed.
+
+`DEMO-008` now provides the first offline report baseline through
+`scripts/build_product_demo_report.py`. It can compose an existing Message Hub
+test-run export with an existing safety-demo summary and produce
+`product_demo_report.json` / `.md` plus supporting DATA-001 and EALE-P0
+outputs. The first local report is intentionally `WARN`: it uses composite
+existing evidence rather than a same-run product scenario, preserves the
+current `Unknown` / `gnss_no_fix` location belief, and marks Web console
+replay/review as pending. KR-008 should not be manifested or promoted until
+that report is visible through the Web Dashboard.
 
 ## Release Gate Policy
 

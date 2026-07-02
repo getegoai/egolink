@@ -6,6 +6,29 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-02: DEMO-008 Product Demo Closed Loop Report Baseline is implemented
+as the first KR-008 product-demo composition artifact. New script
+`scripts/build_product_demo_report.py` consumes an existing Message Hub
+test-run export plus an optional full safety-demo summary and writes
+`product_demo_report.json` / `.md` with supporting DATA-001 samples, DATA-001
+manifest, and EALE-P0 evaluation reports. The first local report was generated
+under `reports/product_demo/kr008-demo008-composite-20260702-001/` from the
+KR-007/LTE-011 fix1 export and the existing full Demo v0.5 safety summary.
+It is intentionally `WARN`, not a KR-008 release: seven flow gates pass, Web
+console replay/review is pending, the evidence is composite rather than a
+same-run product scenario, the location belief remains `Unknown` /
+`gnss_no_fix`, and model training is not ready. Validation passed:
+`python -m unittest quality_tests.test_product_demo_report
+quality_tests.test_location_fusion_dataset_export
+quality_tests.test_eale_p0_dataset_evaluation -v`, `python
+scripts/context_lint.py`, `git diff --check`, and
+`powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` (326 tests).
+This did not contact hardware, deploy to the VPS, modify GitLab, flash
+firmware, create/promote a KR-008 manifest, or claim product readiness, Web
+console completion, GNSS acceptance, long LTE stability, real reconnect,
+durable store-forward, battery/power behavior, enclosure behavior, learned
+model behavior, calling, SMS, or dispatch.
+
 2026-07-02: KR-007 Reconnect Store-Forward Evidence Baseline is promoted to
 released engineering key version `0.1.0-key-release-007`. The release binds
 LTE-011 fix1 build/flash/runtime evidence, command `cmd-000033`, raw LTE
