@@ -121,7 +121,7 @@ re-run and on-device model acceptance re-run on EVT hardware.
 | 1 | PWR-001 power telemetry + 24h battery baseline | V1-M1 | active |
 | 1 | PWR-002 low-power location state-machine decision | V1-M1 | done (2026-07-03) |
 | 1 | FIELD-003 outdoor GNSS acceptance | V1-M1 | active |
-| 1 | PRIVACY-001 product demo privacy/data boundary gate | V1-M3 | active |
+| 1 | PRIVACY-001 product demo privacy/data boundary gate | V1-M3 | done (2026-07-03) |
 | 1 | PROD-001 mass-production requirements (incl. AI compute criteria) | V1-M4 | active pending founder TBDs |
 | 2 | STAB-002 LTE long-run/reconnect gate (R3.0) | V1-M1 | planned |
 | 2 | FT-1 assembly: SOS key mapping + mounting + release gate | V1-M1 | planned |

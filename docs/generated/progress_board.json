@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-03 13:11 UTC",
+  "generated_at": "2026-07-03 13:33 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "4263033 demo: bind product demo web review evidence"
+    "head": "bbe25ee privacy: add product demo data boundary gate"
   },
   "current_focus": "V1 Wave 1: 可靠性收尾（功耗/GNSS/VPS加固）；PROD-001 量产需求草稿已交付待创始人填值；目标 ~2 周内出 FT-1 可穿戴外场测试版",
   "milestones": [
@@ -158,15 +158,6 @@
       "path": "D:/pywork/egolink/docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md"
     },
     {
-      "id": "PRIVACY-001",
-      "title": "Product demo privacy and data boundary gate",
-      "state": "in_progress",
-      "packet_status": "active",
-      "priority": "high",
-      "date": "2026-07-03",
-      "path": "D:/pywork/egolink/docs/tasks/active/PRIVACY-001_PRODUCT_DEMO_DATA_BOUNDARY_GATE.md"
-    },
-    {
       "id": "PROD-001",
       "title": "Mass-production requirements definition and module/MCU selection gates",
       "state": "in_progress",
@@ -241,6 +232,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/OPS-001_VPS_PRODUCTION_HARDENING.md"
     },
     {
+      "id": "PRIVACY-001",
+      "title": "Product demo privacy and data boundary gate",
+      "state": "done",
+      "packet_status": "completed",
+      "priority": "high",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/done/PRIVACY-001_PRODUCT_DEMO_DATA_BOUNDARY_GATE.md"
+    },
+    {
       "id": "PWR-002",
       "title": "Low-power location state-machine decision record",
       "state": "done",
@@ -248,15 +248,6 @@
       "priority": "high",
       "date": "2026-07-03",
       "path": "D:/pywork/egolink/docs/tasks/done/PWR-002_LOW_POWER_LOCATION_STATE_MACHINE_DECISION.md"
-    },
-    {
-      "id": "DEMO-008",
-      "title": "Product Demo Closed Loop Report Baseline",
-      "state": "done",
-      "packet_status": "completed",
-      "priority": "high",
-      "date": "2026-07-02",
-      "path": "D:/pywork/egolink/docs/tasks/done/DEMO-008_PRODUCT_DEMO_REPORT_BASELINE.md"
     }
   ],
   "operator_asks": [
@@ -316,7 +307,7 @@
     }
   ],
   "counts": {
-    "active": 4,
-    "done_total": 74
+    "active": 3,
+    "done_total": 75
   }
 }

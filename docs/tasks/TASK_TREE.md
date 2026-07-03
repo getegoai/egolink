@@ -492,10 +492,23 @@ mass-production definition and sourcing.
   `docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md`
 - `FIELD-003` Outdoor GNSS acceptance protocol + first run -
   `docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md`
-- `PRIVACY-001` Product demo privacy and data boundary gate -
-  `docs/tasks/active/PRIVACY-001_PRODUCT_DEMO_DATA_BOUNDARY_GATE.md`
 - `PROD-001` Mass-production requirements + module/MCU selection gates -
   `docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md`
+
+- `PRIVACY-001 Product Demo Privacy And Data Boundary Gate`
+  - Path: `docs/tasks/done/PRIVACY-001_PRODUCT_DEMO_DATA_BOUNDARY_GATE.md`
+  - Status: completed as an engineering privacy boundary on 2026-07-03.
+  - Evidence: `docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md`,
+    `scripts/build_product_demo_report.py`, and
+    `quality_tests/test_product_demo_report.py`.
+  - Current visible result: KR-008 product-demo reports now include a
+    `privacy_boundary_review` gate. Product-demo training remains disallowed
+    by default, raw audio/image retention is blocked by default, raw Wi-Fi
+    identifiers are disallowed, and private coordinates stay out of current
+    docs/generated summaries unless explicitly authorized.
+  - Boundary: not a legal compliance certification; founder/legal decisions
+    remain open for consent wording, retention limits, hashed Wi-Fi policy,
+    deletion flow, guardian/contact data, and any future audio use.
 
 - `PWR-002 Low-Power Location State-Machine Decision`
   - Path: `docs/tasks/done/PWR-002_LOW_POWER_LOCATION_STATE_MACHINE_DECISION.md`

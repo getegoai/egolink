@@ -1,7 +1,7 @@
 ---
 id: PRIVACY-001
 title: Product demo privacy and data boundary gate
-status: active
+status: completed
 priority: high
 requires_hardware: false
 created: 2026-07-03
@@ -53,25 +53,25 @@ input to DATA-002 consent/data-flywheel planning.
 
 # Acceptance Criteria
 
-- [ ] A current document under `docs/product/` or `docs/development/` defines
+- [x] A current document under `docs/product/` or `docs/development/` defines
       data classes for GNSS coordinates, cell signatures, Wi-Fi identifiers,
       IMU windows, user confirmations, audio, image, guardian/contact data,
       VPS logs, and training/export artifacts.
-- [ ] The document states default retention/export/training rules for each
+- [x] The document states default retention/export/training rules for each
       class, including `training_allowed=false` until consent and privacy
       review explicitly allow training use.
-- [ ] Raw audio and raw image retention remain disabled by default; any future
+- [x] Raw audio and raw image retention remain disabled by default; any future
       enablement requires explicit consent, retention limits, and a separate
       task.
-- [ ] Wi-Fi raw BSSID retention is disallowed by default; hashed fingerprints
+- [x] Wi-Fi raw BSSID retention is disallowed by default; hashed fingerprints
       require salt/rotation and retention rules before product-demo use.
-- [ ] Private coordinates are bounded evidence/export data, not copied into
+- [x] Private coordinates are bounded evidence/export data, not copied into
       current docs or generated summaries unless redacted or explicitly
       authorized.
-- [ ] KR-008/product-demo report readiness includes a privacy gate result or
+- [x] KR-008/product-demo report readiness includes a privacy gate result or
       blocker, without changing the existing release non-claim boundaries.
-- [ ] Tests or lint checks cover the machine-readable parts that are changed.
-- [ ] `python scripts/context_lint.py` passes; run full verify if code or
+- [x] Tests or lint checks cover the machine-readable parts that are changed.
+- [x] `python scripts/context_lint.py` passes; run full verify if code or
       contracts change.
 
 # Validation Commands
@@ -99,10 +99,31 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 # Completion Evidence
 
+- review1 (2026-07-03, codex): created the product-demo privacy boundary and
+  wired KR-008 report generation through a machine-checkable
+  `privacy_boundary_review` gate.
 - Changed files:
+  - `docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md`
+  - `docs/product/PRODUCT_CHARTER.md`
+  - `docs/development/LOCATION_DATASET.md`
+  - `docs/roadmap/V1_PRODUCT_PLAN.md`
+  - `scripts/build_product_demo_report.py`
+  - `quality_tests/test_product_demo_report.py`
+- Commit: `bbe25ee privacy: add product demo data boundary gate`
 - Test result:
+  - `python -m unittest quality_tests.test_product_demo_report -v`: PASS
+    (5 tests)
+  - `python scripts/context_lint.py`: PASS
+  - `git diff --check`: PASS
+  - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`: PASS
+    (347 tests)
 - Hardware result: not applicable
 - Remaining risks:
+  - This is an engineering privacy boundary, not a legal compliance
+    certification.
+  - Founder/legal decisions remain open for consent wording, exact-location
+    retention, hashed Wi-Fi retention/salt rotation, deletion workflow,
+    guardian/contact data model, and any future raw/derived audio use.
 
 # Builder Prompt
 

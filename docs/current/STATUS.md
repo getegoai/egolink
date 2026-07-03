@@ -6,14 +6,28 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-03: PRIVACY-001 is completed as an engineering privacy boundary for
+KR-008/V1 demos. `docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md` defines data
+classes and default retention/export/training rules for GNSS coordinates,
+cell/LTE signatures, Wi-Fi identifiers, IMU windows, user confirmations,
+audio, image, guardian/contact data, VPS logs, and training/export artifacts.
+`scripts/build_product_demo_report.py` now includes a
+`privacy_boundary_review` gate. Raw audio/image retention remains disabled by
+default, raw Wi-Fi identifiers are blocked, private coordinates remain
+bounded evidence/export data, and product-demo training remains
+`training_allowed=false` unless a future consent/privacy review explicitly
+allows it. This is not a legal compliance certification. Validation passed:
+focused product-demo report tests, `python scripts/context_lint.py`,
+`git diff --check`, and full `scripts\verify.ps1` (347 tests). Current active
+V1 Wave 1 packets are `PWR-001`, `FIELD-003`, and `PROD-001`.
+
 2026-07-03: PWR-002 is completed as a design decision. ADR-0003 adopts
 L0-L4 as an internal location power scheduler while keeping EALE-P0 public
 location beliefs (`Fine`, `Coarse`, `Predicted`, `Unknown`) unchanged. The
 decision adds required scheduler telemetry and safety boundaries, but makes
 no firmware, protocol, battery-life, power-saving, or location-accuracy claim.
-The task packet moved to `docs/tasks/done/`; current active V1 Wave 1 packets
-are `PWR-001`, `FIELD-003`, `PRIVACY-001`, and `PROD-001`. Root-level review
-and research inputs were archived under `docs/archive/reviews/` and
+The task packet moved to `docs/tasks/done/`. Root-level review and research
+inputs were archived under `docs/archive/reviews/` and
 `docs/archive/research/` as historical input, not authority.
 
 2026-07-03: OPS-001 VPS production hardening is completed directly on the

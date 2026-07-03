@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-03 13:11 UTC
-- 分支: `autodev/egolink-p0` @ 4263033 demo: bind product demo web review evidence
+- 生成时间: 2026-07-03 13:33 UTC
+- 分支: `autodev/egolink-p0` @ bbe25ee privacy: add product demo data boundary gate
 - 当前焦点: V1 Wave 1: 可靠性收尾（功耗/GNSS/VPS加固）；PROD-001 量产需求草稿已交付待创始人填值；目标 ~2 周内出 FT-1 可穿戴外场测试版
-- 已完成任务总数: 74，进行中: 4
+- 已完成任务总数: 75，进行中: 3
 
 ## 里程碑
 
@@ -22,7 +22,6 @@
 | 任务 | 标题 | 状态 | 优先级 | 执行者 |
 |---|---|---|---|---|
 | FIELD-003 | Outdoor GNSS acceptance protocol and first measured run | active | high | claude+创始人（户外执行） |
-| PRIVACY-001 | Product demo privacy and data boundary gate | active | high | - |
 | PROD-001 | Mass-production requirements definition and module/MCU selection gates | active | high | codex |
 | PWR-001 | Real power telemetry and first 24h battery baseline run | active | high | claude+创始人（刷机/挂电池） |
 
@@ -36,8 +35,8 @@
 | ENG-008 | Founder-facing project progress board generator | 2026-07-03 |
 | LTE-003 | LTE HTTP Command Poll And ACK | 2026-07-03 |
 | OPS-001 | VPS Message Hub production hardening baseline | 2026-07-03 |
+| PRIVACY-001 | Product demo privacy and data boundary gate | 2026-07-03 |
 | PWR-002 | Low-power location state-machine decision record | 2026-07-03 |
-| DEMO-008 | Product Demo Closed Loop Report Baseline | 2026-07-02 |
 
 ## 等待创始人处理
 
