@@ -1,7 +1,7 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-03 13:33 UTC
-- 分支: `autodev/egolink-p0` @ bbe25ee privacy: add product demo data boundary gate
+- 生成时间: 2026-07-03 13:39 UTC
+- 分支: `autodev/egolink-p0` @ 5bc585b docs: close privacy boundary task
 - 当前焦点: V1 Wave 1: 可靠性收尾（功耗/GNSS/VPS加固）；PROD-001 量产需求草稿已交付待创始人填值；目标 ~2 周内出 FT-1 可穿戴外场测试版
 - 已完成任务总数: 75，进行中: 3
 
@@ -40,7 +40,7 @@
 
 ## 等待创始人处理
 
-- [ ] 审阅 docs/product/MASS_PRODUCTION_REQUIREMENTS.md 并填写 TBD(founder) 值（PROD-001 草稿已交付）
+- [ ] 填写 docs/product/MASS_PRODUCTION_FOUNDER_DECISION_SHEET.md，并据此审阅 docs/product/MASS_PRODUCTION_REQUIREMENTS.md 的 TBD(founder) 值
 - [ ] 采购：PH2.0 锂电池（建议 ≥1500mAh）+ 临时挂绳外壳
 - [ ] 安全：修改 VPS root 密码（已在聊天中出现过）并考虑关闭 SSH 密码登录（运维手册第1节有步骤）
 - [ ] 刷机操作（每次固件更新约 10 分钟）

@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-03 13:33 UTC",
+  "generated_at": "2026-07-03 13:39 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "bbe25ee privacy: add product demo data boundary gate"
+    "head": "5bc585b docs: close privacy boundary task"
   },
   "current_focus": "V1 Wave 1: 可靠性收尾（功耗/GNSS/VPS加固）；PROD-001 量产需求草稿已交付待创始人填值；目标 ~2 周内出 FT-1 可穿戴外场测试版",
   "milestones": [
@@ -251,7 +251,7 @@
     }
   ],
   "operator_asks": [
-    "审阅 docs/product/MASS_PRODUCTION_REQUIREMENTS.md 并填写 TBD(founder) 值（PROD-001 草稿已交付）",
+    "填写 docs/product/MASS_PRODUCTION_FOUNDER_DECISION_SHEET.md，并据此审阅 docs/product/MASS_PRODUCTION_REQUIREMENTS.md 的 TBD(founder) 值",
     "采购：PH2.0 锂电池（建议 ≥1500mAh）+ 临时挂绳外壳",
     "安全：修改 VPS root 密码（已在聊天中出现过）并考虑关闭 SSH 密码登录（运维手册第1节有步骤）",
     "刷机操作（每次固件更新约 10 分钟）",

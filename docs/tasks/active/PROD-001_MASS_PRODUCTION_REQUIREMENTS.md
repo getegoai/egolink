@@ -97,7 +97,14 @@ python scripts/context_lint.py
   pre-selection evidence list. `context_lint` PASS (builder run + director
   re-run). Packet stays active until the founder fills `TBD(founder)` values
   and approves; then it moves to done.
-- Changed files: docs/product/MASS_PRODUCTION_REQUIREMENTS.md
+- review2 (2026-07-03, codex): added
+  `docs/product/MASS_PRODUCTION_FOUNDER_DECISION_SHEET.md` as a
+  founder-facing fill-in worksheet for the unresolved business/product values
+  without recording confidential supplier pricing. Linked it from
+  `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`.
+- Changed files:
+  - `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`
+  - `docs/product/MASS_PRODUCTION_FOUNDER_DECISION_SHEET.md`
 - Test result: python scripts/context_lint.py PASS
 - Remaining risks: all business values pending founder; China Mobile module
   datasheet and MCU quotes outstanding (tracked in section 7 Open Items).

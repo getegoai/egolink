@@ -29,6 +29,9 @@ Use TBD(founder) for values owned by founder/product approval: BOM ceiling,
 acceptable MOQ and lead-time risk, target price bands, product form factor,
 size and weight envelope, usage-profile cadence, launch battery claims, voice
 calling scope, privacy-retention policy, and final market/channel assumptions.
+Use `MASS_PRODUCTION_FOUNDER_DECISION_SHEET.md` as the founder-facing fill-in
+surface for those values before replacing placeholders in this requirements
+document.
 
 Use other explicit markers for evidence that must come from engineering,
 vendors, or later task output:
