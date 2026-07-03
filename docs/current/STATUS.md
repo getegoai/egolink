@@ -6,6 +6,31 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-03: DEMO-011 Product Demo Report Web Review Binding is implemented
+after DEMO-010. `scripts/build_product_demo_report.py` now accepts
+`--web-review-report`, binds a passing DEMO-010 Web/API review report into the
+`web_console_replay_review` flow gate, records the evidence under
+`source.web_review` and `evidence_summary.web_review`, and keeps
+`ready_for_kr008_release=false` when release blockers remain. New tests in
+`quality_tests/test_product_demo_report.py` verify both the old pending Web
+behavior and the bound Web Review `pass` behavior. A DEMO-011 report was
+generated under
+`reports/product_demo/kr008-demo011-web-reviewed-20260703-001/` from the
+existing LTE-011 fix1 export, the existing full demo safety summary, and
+`reports/product_demo_web_review/demo010-vps-20260703-001/product_demo_web_review_report.json`.
+The report has `flow_status_counts.pass=8`, Web Review `pass`, status `warn`,
+and release readiness `false` because evidence is still composite, DATA-001
+training readiness is false, location belief remains `Unknown`, and no KR-008
+manifest has been created/promoted. The report directory was copied to the VPS
+Message Hub report store only; no Message Hub code was deployed, no hardware
+was contacted, no firmware was flashed, no device command was sent, and GitLab
+was not modified. Follow-up read-only Web review gate
+`demo011-vps-20260703-001` passed against `203.0.113.10:8790`, confirming the
+Dashboard/API now show the DEMO-011 report path and Web Review `pass`.
+Validation passed: focused product-demo/report/Web review tests,
+`python scripts/context_lint.py`, `git diff --check`, and
+`powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` (334 tests).
+
 2026-07-03: DEMO-010 Product Demo Web Review Gate is implemented as the
 repeatable no-hardware gate after DEMO-009. New script
 `scripts/validate_product_demo_web_review.py` checks `/health`,

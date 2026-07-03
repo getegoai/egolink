@@ -343,6 +343,12 @@ Current implementation baseline:
   release-readiness boundary. The first read-only VPS gate passed as
   `demo010-vps-20260703-001`, but KR-008 still remains unreleased because the
   report is WARN/composite and not a same-run product scenario.
+- `DEMO-011` binds DEMO-010 evidence back into the product-demo report
+  generator through `--web-review-report`. The first bound report has all eight
+  flow gates passing and is copied to the VPS Dashboard report store, but it
+  still remains `WARN` because the evidence is composite, location belief is
+  `Unknown`, dataset/model-training readiness is false, and no KR-008 manifest
+  exists.
 
 Outputs:
 

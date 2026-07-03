@@ -599,6 +599,17 @@ the current report is Web/API reviewable while preserving
 still says `not_run` until a later same-run or regenerated product-demo report
 binds this gate evidence.
 
+`DEMO-011` adds that regenerated report binding path:
+`scripts/build_product_demo_report.py --web-review-report ...` can bind a
+passing DEMO-010 report into `flow.web_console_replay_review=pass` while
+preserving KR-008 release blockers. The first bound report is
+`reports/product_demo/kr008-demo011-web-reviewed-20260703-001/`; it has all
+eight product-demo flow gates passing and is visible on the VPS Dashboard, but
+the overall result remains `warn` and `ready_for_kr008_release=false` because
+the evidence is still composite rather than same-run, location belief remains
+`Unknown`, DATA-001/model-training readiness is false, and no KR-008 manifest
+has been created or promoted.
+
 ## Release Gate Policy
 
 Every key release should have:

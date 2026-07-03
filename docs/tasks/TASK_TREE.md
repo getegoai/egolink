@@ -271,6 +271,22 @@ motion candidate
     commands, contact hardware, flash firmware, deploy to the VPS, modify
     GitLab, regenerate same-run evidence, create/promote KR-008, or claim
     product readiness.
+- `DEMO-011 Product Demo Report Web Review Binding`
+  - Path:
+    `docs/tasks/done/DEMO-011_PRODUCT_DEMO_REPORT_WEB_REVIEW_BINDING.md`
+  - Status: completed as the product-demo report binding step after DEMO-010.
+  - Evidence: `scripts/build_product_demo_report.py`,
+    `quality_tests/test_product_demo_report.py`, local bound report under
+    `reports/product_demo/kr008-demo011-web-reviewed-20260703-001/`, and
+    follow-up read-only VPS gate report under
+    `reports/product_demo_web_review/demo011-vps-20260703-001/`.
+  - Current visible result: the latest VPS Dashboard Product Demo report shows
+    Web Review `pass`, flow gates `pass=8`, result `warn`, and release-ready
+    `false`.
+  - Boundary: this binds Web review evidence into the report chain only. It
+    does not create same-run field evidence, send device commands, contact
+    hardware, flash firmware, deploy Message Hub code, modify GitLab,
+    create/promote KR-008, or claim product readiness.
 - `REL-006 KR-005 Reliability Explainability Release Gate`
   - Path:
     `docs/tasks/done/REL-006_KR005_RELIABILITY_EXPLAINABILITY_RELEASE_GATE.md`
@@ -1157,6 +1173,17 @@ motion candidate
     `demo010-vps-20260703-001` passed.
   - Boundary: proves Web/API reviewability only; KR-008 remains pending until a
     same-run or regenerated product-demo report and manifest bind the evidence.
+- `DEMO-011 Product Demo Report Web Review Binding`
+  - Path: `docs/tasks/done/DEMO-011_PRODUCT_DEMO_REPORT_WEB_REVIEW_BINDING.md`
+  - Status: completed as the regenerated report binding step for DEMO-010
+    evidence.
+  - Result: `build_product_demo_report.py --web-review-report` generates a
+    product-demo report with Web Review `pass`; the bound report is visible on
+    the VPS Dashboard as
+    `reports/product_demo/kr008-demo011-web-reviewed-20260703-001/product_demo_report.json`.
+  - Boundary: flow gates all pass, but result remains `WARN` and KR-008 remains
+    unreleased because same-run evidence, Fine location belief, DATA-001/model
+    readiness, and KR-008 manifest are still missing.
 
 ## Hardware Evidence Line
 
@@ -1310,9 +1337,11 @@ motion candidate
     user confirmation or safety rule -> report export -> Web replay/review.
 16. Treat `DEMO-009` as the completed Dashboard review baseline for the
     DEMO-008 report, with VPS deployment evidence recorded.
-17. Treat `DEMO-010` as the completed repeatable Web/API review gate. Next
-    KR-008 work should create a same-run product-demo scenario or regenerate
-    the product-demo report with DEMO-010 evidence before any KR-008 manifest.
-18. Use `STAB-001B` only as a short KR-005/KR-006/KR-007 USB-Free baseline
+17. Treat `DEMO-010` as the completed repeatable Web/API review gate.
+18. Treat `DEMO-011` as the completed report binding step: the latest Web
+    Dashboard report has Web Review `pass`, but KR-008 remains blocked by
+    composite evidence, `Unknown` location belief, dataset/model readiness, and
+    no release manifest.
+19. Use `STAB-001B` only as a short KR-005/KR-006/KR-007 USB-Free baseline
     after the data and observability gates can explain failures. Do not
     promote it into long stability testing.

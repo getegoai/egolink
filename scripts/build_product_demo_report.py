@@ -30,7 +30,7 @@ DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "product_demo"
 REPORT_JSON = "product_demo_report.json"
 REPORT_MARKDOWN = "product_demo_report.md"
 GENERATOR_NAME = "build_product_demo_report"
-GENERATOR_VERSION = "0.1.0-demo008"
+GENERATOR_VERSION = "0.1.0-demo011"
 REPORT_VERSION = "0.1.0"
 
 FLOW_ORDER = [
@@ -124,6 +124,68 @@ def flow_gate(
         "warnings": warnings or [],
         "next_step": next_step,
     }
+
+
+def web_review_gate_from_report(web_review_report: dict[str, Any] | None) -> dict[str, Any]:
+    if not web_review_report:
+        return flow_gate(
+            "not_run",
+            "Web console replay/review wiring is still pending for KR-008.",
+            warnings=["web_console_product_demo_review_pending"],
+            next_step="Run scripts/validate_product_demo_web_review.py and bind the report evidence.",
+        )
+
+    product_demo = as_dict(web_review_report.get("product_demo"))
+    scope = as_dict(web_review_report.get("scope"))
+    candidate = str(web_review_report.get("candidate") or product_demo.get("candidate") or "")
+    result = str(web_review_report.get("result") or "").upper()
+    errors: list[str] = []
+    warnings: list[str] = []
+    if web_review_report.get("tool") != "validate_product_demo_web_review":
+        errors.append("web_review_tool_unrecognized")
+    if result != "PASS":
+        errors.append("web_review_gate_not_pass")
+    if candidate != "KR-008 / DEMO-008 Product Demo Closed Loop":
+        errors.append("web_review_candidate_mismatch")
+    if scope.get("commands_sent") or scope.get("hardware_contacted") or scope.get("firmware_changed"):
+        errors.append("web_review_scope_boundary_violated")
+    if scope.get("gitlab_modified") or scope.get("kr008_promoted"):
+        errors.append("web_review_release_boundary_violated")
+    if product_demo.get("available") is not True:
+        errors.append("web_review_product_demo_unavailable")
+
+    warnings.extend(
+        str(item)
+        for item in as_list(web_review_report.get("warnings"))
+        if item != "underlying_product_demo_web_flow_still_pending"
+    )
+    evidence = {
+        "review_id": web_review_report.get("review_id"),
+        "gate_version": web_review_report.get("gate_version"),
+        "hub_url": web_review_report.get("hub_url"),
+        "result": web_review_report.get("result"),
+        "product_demo_status": product_demo.get("status"),
+        "product_demo_ready_for_kr008_release": product_demo.get("ready_for_kr008_release"),
+        "product_demo_evidence_mode": product_demo.get("evidence_mode"),
+        "product_demo_test_run_id": product_demo.get("test_run_id"),
+        "report_path": web_review_report.get("report_path"),
+        "markdown_report_path": web_review_report.get("markdown_report_path"),
+        "scope": scope,
+    }
+    if errors:
+        return flow_gate(
+            "fail",
+            "Provided Web review gate evidence is not acceptable.",
+            evidence=evidence,
+            warnings=warnings,
+            next_step="Rerun DEMO-010 and bind a passing Web review report.",
+        )
+    return flow_gate(
+        "pass",
+        "DEMO-010 Web/API review gate passed and is bound to this report.",
+        evidence=evidence,
+        warnings=warnings,
+    )
 
 
 def test_run_id_from_export(export: dict[str, Any]) -> str:
@@ -245,6 +307,7 @@ def build_flow(
     manifest: dict[str, Any],
     eale_report: dict[str, Any],
     safety_summary: dict[str, Any] | None,
+    web_review_report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     source = as_dict(manifest.get("source"))
     commands = int(source.get("command_count") or 0)
@@ -303,12 +366,7 @@ def build_flow(
         "This offline product-demo report was exported.",
         evidence={"report_json": REPORT_JSON, "report_markdown": REPORT_MARKDOWN},
     )
-    web_gate = flow_gate(
-        "not_run",
-        "Web console replay/review wiring is still pending for KR-008.",
-        warnings=["web_console_product_demo_review_pending"],
-        next_step="Expose product_demo_report.json through the Message Hub Dashboard.",
-    )
+    web_gate = web_review_gate_from_report(web_review_report)
 
     return {
         "user_trigger_or_safety_event": trigger_gate,
@@ -326,6 +384,7 @@ def build_product_demo_report(
     test_run_export: dict[str, Any],
     *,
     safety_summary: dict[str, Any] | None = None,
+    web_review_report: dict[str, Any] | None = None,
     created_at: str | None = None,
     dataset_dir: Path | None = None,
     samples_path: Path | None = None,
@@ -346,9 +405,15 @@ def build_product_demo_report(
         dataset_dir=dataset_dir,
         created_at=created_at,
     )
-    flow = build_flow(samples=samples, manifest=manifest, eale_report=eale_report, safety_summary=safety_summary)
+    flow = build_flow(
+        samples=samples,
+        manifest=manifest,
+        eale_report=eale_report,
+        safety_summary=safety_summary,
+        web_review_report=web_review_report,
+    )
     statuses = [as_dict(flow.get(step)).get("status", "fail") for step in FLOW_ORDER]
-    status = overall_status([str(item) for item in statuses])
+    flow_status = overall_status([str(item) for item in statuses])
     warnings: list[str] = []
     errors: list[str] = []
     for gate in flow.values():
@@ -369,6 +434,21 @@ def build_product_demo_report(
 
     sample = first_sample(samples)
     location = sample_location_summary(sample)
+    web_review_source = as_dict(web_review_report) if web_review_report else {}
+    web_review_bound = as_dict(flow.get("web_console_replay_review")).get("status") == "pass"
+    if evidence_mode == "composite_existing_evidence":
+        warnings.append("composite_evidence_not_same_run")
+    if not as_dict(eale_report.get("training_readiness")).get("model_training_ready"):
+        warnings.append("dataset_not_ready_for_model_training")
+    if location.get("state") != "Fine":
+        warnings.append("location_belief_not_fine")
+    status = "fail" if errors else ("warn" if flow_status == "warn" or warnings else flow_status)
+    release_blockers = release_blockers_for_report(
+        errors=errors,
+        warnings=warnings,
+        location=location,
+        web_review_bound=web_review_bound,
+    )
     report = {
         "report_version": REPORT_VERSION,
         "generator": {"name": GENERATOR_NAME, "version": GENERATOR_VERSION, "created_at": created_at},
@@ -385,18 +465,22 @@ def build_product_demo_report(
             "evidence_mode": evidence_mode,
             "dataset_samples": len(samples),
             "dataset_manifest": as_dict(manifest.get("source")),
+            "web_review": {
+                "review_id": web_review_source.get("review_id"),
+                "result": web_review_source.get("result"),
+                "gate_version": web_review_source.get("gate_version"),
+                "report_path": web_review_source.get("report_path"),
+                "markdown_report_path": web_review_source.get("markdown_report_path"),
+            }
+            if web_review_source
+            else None,
         },
         "result": {
             "status": status,
             "errors": sorted(set(errors)),
             "warnings": sorted(set(warnings)),
             "ready_for_kr008_release": False,
-            "why_not_release_ready": [
-                "web_console_product_demo_review_pending",
-                "KR-008 still needs an operator-visible Web review path before release.",
-            ]
-            if status != "fail"
-            else ["one_or_more_required_flow_gates_failed"],
+            "why_not_release_ready": release_blockers,
         },
         "flow_order": FLOW_ORDER,
         "flow": flow,
@@ -410,15 +494,44 @@ def build_product_demo_report(
             "dataset_counts": as_dict(eale_report.get("counts")),
             "training_readiness": as_dict(eale_report.get("training_readiness")),
             "release_gate_usage": as_dict(eale_report.get("release_gate_usage")),
+            "web_review": {
+                "bound": web_review_bound,
+                "review_id": web_review_source.get("review_id") if web_review_source else None,
+                "result": web_review_source.get("result") if web_review_source else None,
+                "gate_version": web_review_source.get("gate_version") if web_review_source else None,
+            },
         },
         "non_claims": NON_CLAIMS,
         "next_gates": [
-            "Expose this report through the Message Hub Dashboard.",
-            "Bind a KR-008 manifest only after the Web review path is visible.",
+            "Create a same-run product demo scenario or explicitly accept composite evidence.",
+            "Bind a KR-008 manifest only after remaining release blockers are cleared.",
             "Keep real reconnect, durable store-forward, GNSS acceptance, battery/power, and enclosure gates separate.",
         ],
     }
     return report, samples, manifest, eale_report
+
+
+def release_blockers_for_report(
+    *,
+    errors: list[str],
+    warnings: list[str],
+    location: dict[str, Any],
+    web_review_bound: bool,
+) -> list[str]:
+    if errors:
+        return ["one_or_more_required_flow_gates_failed"]
+    blockers: list[str] = []
+    warning_set = set(warnings)
+    if "web_console_product_demo_review_pending" in warning_set or not web_review_bound:
+        blockers.append("web_console_product_demo_review_pending")
+    if "composite_evidence_not_same_run" in warning_set:
+        blockers.append("same_run_product_demo_evidence_missing")
+    if "dataset_not_ready_for_model_training" in warning_set:
+        blockers.append("dataset_not_ready_for_model_training")
+    if "location_belief_not_fine" in warning_set:
+        blockers.append(f"location_belief_not_fine:{location.get('state', 'Unknown')}")
+    blockers.append("kr008_manifest_not_created_or_promoted")
+    return sorted(set(blockers))
 
 
 def write_markdown(path: Path, report: dict[str, Any]) -> None:
@@ -433,6 +546,7 @@ def write_markdown(path: Path, report: dict[str, Any]) -> None:
         f"- Candidate: {as_dict(report.get('demo')).get('candidate', 'unknown')}",
         f"- Test run: {source.get('test_run_id', 'unknown')}",
         f"- Safety session: {source.get('safety_session_id') or 'not provided'}",
+        f"- Web review: {as_dict(as_dict(report.get('evidence_summary')).get('web_review')).get('result') or 'not bound'}",
         f"- Product ready: {as_dict(report.get('demo')).get('product_ready', False)}",
         "",
         "## Flow Gates",
@@ -474,6 +588,12 @@ def write_markdown(path: Path, report: dict[str, Any]) -> None:
     if errors:
         lines.extend(["", "## Errors", ""])
         lines.extend(f"- {error}" for error in errors)
+    blockers = as_list(result.get("why_not_release_ready"))
+    lines.extend(["", "## Release Blockers", ""])
+    if blockers:
+        lines.extend(f"- {blocker}" for blocker in blockers)
+    else:
+        lines.append("- none")
     lines.extend(["", "## Non-Claims", ""])
     lines.extend(f"- {item}" for item in as_list(report.get("non_claims")))
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -523,6 +643,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--test-run-export", "--input", dest="test_run_export", type=Path, required=True)
     parser.add_argument("--safety-demo-summary", type=Path)
+    parser.add_argument("--web-review-report", type=Path)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--created-at")
     parser.add_argument("--json", action="store_true")
@@ -534,6 +655,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         export = load_json(args.test_run_export)
         safety_summary = load_json(args.safety_demo_summary) if args.safety_demo_summary else None
+        web_review_report = load_json(args.web_review_report) if args.web_review_report else None
         test_run_id = test_run_id_from_export(export)
         output_dir = args.output_dir or DEFAULT_OUTPUT_ROOT / test_run_id
         dataset_dir = output_dir / "location_dataset"
@@ -542,6 +664,7 @@ def main(argv: list[str] | None = None) -> int:
         report, samples, manifest, eale_report = build_product_demo_report(
             export,
             safety_summary=safety_summary,
+            web_review_report=web_review_report,
             created_at=args.created_at,
             dataset_dir=dataset_dir,
             samples_path=samples_path,
