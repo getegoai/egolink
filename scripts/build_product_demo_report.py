@@ -32,6 +32,8 @@ REPORT_MARKDOWN = "product_demo_report.md"
 GENERATOR_NAME = "build_product_demo_report"
 GENERATOR_VERSION = "0.1.0-demo011"
 REPORT_VERSION = "0.1.0"
+PRIVACY_BOUNDARY_DOC = "docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md"
+RAW_WIFI_IDENTIFIER_KEYS = {"bssid", "ssid", "mac", "ap_mac", "raw_bssid", "raw_ssid"}
 
 FLOW_ORDER = [
     "user_trigger_or_safety_event",
@@ -40,6 +42,7 @@ FLOW_ORDER = [
     "multi_source_evidence_aggregation",
     "eale_p0_location_belief",
     "user_confirmation_or_safety_rule",
+    "privacy_boundary_review",
     "report_export",
     "web_console_replay_review",
 ]
@@ -51,6 +54,7 @@ NON_CLAIMS = [
     "No learned model or positioning accuracy claim.",
     "No long LTE stability, real reconnect recovery, or durable store-forward claim.",
     "No GNSS acceptance, battery/power, enclosure, camera, audio, or storage acceptance claim.",
+    "No consent, privacy compliance, or training-data permission claim.",
 ]
 
 
@@ -185,6 +189,88 @@ def web_review_gate_from_report(web_review_report: dict[str, Any] | None) -> dic
         "DEMO-010 Web/API review gate passed and is bound to this report.",
         evidence=evidence,
         warnings=warnings,
+    )
+
+
+def privacy_boundary_gate(
+    *,
+    samples: list[dict[str, Any]],
+    safety_summary: dict[str, Any] | None,
+) -> dict[str, Any]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    privacy_counts: Counter[str] = Counter()
+    dataset_training_allowed = 0
+    private_coordinate_exports = 0
+    wifi_hash_fingerprints = 0
+    raw_wifi_keys: set[str] = set()
+
+    for sample in samples:
+        privacy = as_dict(sample.get("privacy"))
+        privacy_counts[str(privacy.get("privacy_class") or "unknown")] += 1
+        if privacy.get("raw_audio_allowed") is True:
+            errors.append("raw_audio_retention_enabled")
+        if privacy.get("raw_image_allowed") is True:
+            errors.append("raw_image_retention_enabled")
+        if privacy.get("training_allowed") is True:
+            dataset_training_allowed += 1
+
+        features = sample_features(sample)
+        gnss = as_dict(features.get("gnss"))
+        if "latitude_deg" in gnss or "longitude_deg" in gnss:
+            private_coordinate_exports += 1
+            errors.append("private_coordinates_exported_to_product_demo_summary")
+
+        wifi = as_dict(features.get("wifi"))
+        raw_wifi_keys.update(sorted(set(wifi).intersection(RAW_WIFI_IDENTIFIER_KEYS)))
+        aps = [as_dict(ap) for ap in as_list(wifi.get("aps"))]
+        sample_wifi_hashes = 0
+        for ap in aps:
+            raw_wifi_keys.update(sorted(set(ap).intersection(RAW_WIFI_IDENTIFIER_KEYS)))
+            if ap.get("bssid_hash"):
+                sample_wifi_hashes += 1
+                wifi_hash_fingerprints += 1
+        if sample_wifi_hashes and not as_dict(wifi.get("hash_policy")):
+            errors.append("wifi_hash_policy_missing")
+
+    safety_privacy = as_dict(as_dict(safety_summary).get("privacy")) if safety_summary else {}
+    if safety_privacy.get("raw_audio_captured") is True:
+        errors.append("raw_audio_retention_enabled")
+    if safety_privacy.get("raw_image_captured") is True:
+        errors.append("raw_image_retention_enabled")
+    if dataset_training_allowed:
+        warnings.append("dataset_training_flags_are_not_product_demo_consent")
+    if raw_wifi_keys:
+        errors.append("raw_wifi_identifier_retained")
+
+    evidence = {
+        "policy_doc": PRIVACY_BOUNDARY_DOC,
+        "samples_checked": len(samples),
+        "privacy_classes": dict(sorted(privacy_counts.items())),
+        "product_demo_training_allowed": False,
+        "dataset_training_allowed_count": dataset_training_allowed,
+        "raw_audio_retention_allowed": False,
+        "raw_image_retention_allowed": False,
+        "private_coordinate_exports": private_coordinate_exports,
+        "wifi_hash_fingerprints": wifi_hash_fingerprints,
+        "raw_wifi_identifier_keys": sorted(raw_wifi_keys),
+        "guardian_contact_data": "not_collected",
+        "runtime_payload_bytes_exported": False,
+        "safety_summary_privacy": safety_privacy,
+    }
+    if errors:
+        return flow_gate(
+            "fail",
+            "Product-demo privacy boundary has blocking violations.",
+            evidence=evidence,
+            warnings=sorted(set(warnings + errors)),
+            next_step="Clear privacy blockers or attach explicit founder/legal privacy review before KR-008.",
+        )
+    return flow_gate(
+        "pass",
+        "Product-demo privacy boundary is satisfied for this report.",
+        evidence=evidence,
+        warnings=sorted(set(warnings)),
     )
 
 
@@ -361,6 +447,7 @@ def build_flow(
         },
         warnings=as_list(as_dict(eale_report.get("result")).get("warnings")),
     )
+    privacy_gate = privacy_boundary_gate(samples=samples, safety_summary=safety_summary)
     report_gate = flow_gate(
         "pass",
         "This offline product-demo report was exported.",
@@ -375,6 +462,7 @@ def build_flow(
         "multi_source_evidence_aggregation": aggregation_gate,
         "eale_p0_location_belief": eale_gate,
         "user_confirmation_or_safety_rule": decision_gate,
+        "privacy_boundary_review": privacy_gate,
         "report_export": report_gate,
         "web_console_replay_review": web_gate,
     }
@@ -436,6 +524,10 @@ def build_product_demo_report(
     location = sample_location_summary(sample)
     web_review_source = as_dict(web_review_report) if web_review_report else {}
     web_review_bound = as_dict(flow.get("web_console_replay_review")).get("status") == "pass"
+    privacy_gate = as_dict(flow.get("privacy_boundary_review"))
+    privacy_report = dict(as_dict(privacy_gate.get("evidence")))
+    privacy_report["gate_status"] = privacy_gate.get("status")
+    privacy_report["gate_summary"] = privacy_gate.get("summary")
     if evidence_mode == "composite_existing_evidence":
         warnings.append("composite_evidence_not_same_run")
     if not as_dict(eale_report.get("training_readiness")).get("model_training_ready"):
@@ -448,6 +540,7 @@ def build_product_demo_report(
         warnings=warnings,
         location=location,
         web_review_bound=web_review_bound,
+        privacy_gate_status=str(privacy_gate.get("status") or "fail"),
     )
     report = {
         "report_version": REPORT_VERSION,
@@ -485,6 +578,7 @@ def build_product_demo_report(
         "flow_order": FLOW_ORDER,
         "flow": flow,
         "location": location,
+        "privacy": privacy_report,
         "evidence_summary": {
             "flow_status_counts": stable_counts([str(status) for status in statuses]),
             "feature_groups": feature_groups_present(sample),
@@ -500,6 +594,7 @@ def build_product_demo_report(
                 "result": web_review_source.get("result") if web_review_source else None,
                 "gate_version": web_review_source.get("gate_version") if web_review_source else None,
             },
+            "privacy": privacy_report,
         },
         "non_claims": NON_CLAIMS,
         "next_gates": [
@@ -517,10 +612,13 @@ def release_blockers_for_report(
     warnings: list[str],
     location: dict[str, Any],
     web_review_bound: bool,
+    privacy_gate_status: str,
 ) -> list[str]:
-    if errors:
-        return ["one_or_more_required_flow_gates_failed"]
     blockers: list[str] = []
+    if errors:
+        blockers.append("one_or_more_required_flow_gates_failed")
+    if privacy_gate_status != "pass":
+        blockers.append("privacy_boundary_not_passed")
     warning_set = set(warnings)
     if "web_console_product_demo_review_pending" in warning_set or not web_review_bound:
         blockers.append("web_console_product_demo_review_pending")
@@ -539,6 +637,7 @@ def write_markdown(path: Path, report: dict[str, Any]) -> None:
     source = as_dict(report.get("source"))
     location = as_dict(report.get("location"))
     evidence = as_dict(report.get("evidence_summary"))
+    privacy = as_dict(report.get("privacy"))
     lines = [
         "# Product Demo Closed Loop Report",
         "",
@@ -547,6 +646,7 @@ def write_markdown(path: Path, report: dict[str, Any]) -> None:
         f"- Test run: {source.get('test_run_id', 'unknown')}",
         f"- Safety session: {source.get('safety_session_id') or 'not provided'}",
         f"- Web review: {as_dict(as_dict(report.get('evidence_summary')).get('web_review')).get('result') or 'not bound'}",
+        f"- Privacy gate: {privacy.get('gate_status', 'unknown')}",
         f"- Product ready: {as_dict(report.get('demo')).get('product_ready', False)}",
         "",
         "## Flow Gates",
@@ -574,6 +674,16 @@ def write_markdown(path: Path, report: dict[str, Any]) -> None:
             f"- Raw frame refs: {evidence.get('raw_frame_refs', 0)}",
             f"- Derived event refs: {evidence.get('derived_event_refs', 0)}",
             f"- Training readiness: {json.dumps(evidence.get('training_readiness', {}), sort_keys=True)}",
+            "",
+            "## Privacy Boundary",
+            "",
+            f"- Gate: {privacy.get('gate_status', 'unknown')}",
+            f"- Policy: {privacy.get('policy_doc', PRIVACY_BOUNDARY_DOC)}",
+            f"- Product-demo training allowed: {privacy.get('product_demo_training_allowed', False)}",
+            f"- Raw audio retention allowed: {privacy.get('raw_audio_retention_allowed', False)}",
+            f"- Raw image retention allowed: {privacy.get('raw_image_retention_allowed', False)}",
+            f"- Private coordinate exports: {privacy.get('private_coordinate_exports', 0)}",
+            f"- Raw Wi-Fi identifier keys: {json.dumps(privacy.get('raw_wifi_identifier_keys', []), sort_keys=True)}",
             "",
             "## Warnings",
             "",

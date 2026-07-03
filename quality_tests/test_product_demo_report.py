@@ -82,7 +82,13 @@ class ProductDemoReportTests(unittest.TestCase):
         self.assertEqual(report["flow"]["user_trigger_or_safety_event"]["status"], "pass")
         self.assertEqual(report["flow"]["lte_raw_frame_uplink"]["status"], "pass")
         self.assertEqual(report["flow"]["eale_p0_location_belief"]["status"], "pass")
+        self.assertEqual(report["flow"]["privacy_boundary_review"]["status"], "pass")
         self.assertEqual(report["flow"]["web_console_replay_review"]["status"], "not_run")
+        self.assertFalse(report["privacy"]["product_demo_training_allowed"])
+        self.assertFalse(report["privacy"]["raw_audio_retention_allowed"])
+        self.assertFalse(report["privacy"]["raw_image_retention_allowed"])
+        self.assertEqual(report["privacy"]["private_coordinate_exports"], 0)
+        self.assertIn("dataset_training_flags_are_not_product_demo_consent", report["result"]["warnings"])
         self.assertIn("composite_evidence_not_same_run", report["result"]["warnings"])
         self.assertIn("web_console_product_demo_review_pending", report["result"]["warnings"])
         self.assertEqual(report["location"]["state"], "Unknown")
@@ -103,7 +109,8 @@ class ProductDemoReportTests(unittest.TestCase):
         self.assertEqual(report["result"]["status"], "warn")
         self.assertFalse(report["result"]["ready_for_kr008_release"])
         self.assertEqual(report["flow"]["web_console_replay_review"]["status"], "pass")
-        self.assertEqual(report["evidence_summary"]["flow_status_counts"]["pass"], 8)
+        self.assertEqual(report["flow"]["privacy_boundary_review"]["status"], "pass")
+        self.assertEqual(report["evidence_summary"]["flow_status_counts"]["pass"], 9)
         self.assertNotIn("web_console_product_demo_review_pending", report["result"]["warnings"])
         self.assertNotIn("web_console_product_demo_review_pending", report["result"]["why_not_release_ready"])
         self.assertIn("same_run_product_demo_evidence_missing", report["result"]["why_not_release_ready"])
@@ -111,9 +118,27 @@ class ProductDemoReportTests(unittest.TestCase):
         self.assertIn("location_belief_not_fine:Unknown", report["result"]["why_not_release_ready"])
         self.assertEqual(report["source"]["web_review"]["review_id"], "demo010-unit")
         self.assertTrue(report["evidence_summary"]["web_review"]["bound"])
+        self.assertEqual(report["evidence_summary"]["privacy"]["gate_status"], "pass")
         self.assertEqual(len(samples), 1)
         self.assertEqual(manifest["source"]["test_run_id"], "loc-fusion-unit")
         self.assertNotEqual(eale_report["result"]["status"], "fail")
+
+    def test_privacy_gate_blocks_raw_media_retention(self) -> None:
+        summary = safety_summary()
+        summary["privacy"] = {"raw_audio_captured": True, "raw_image_captured": False}
+
+        report, _samples, _manifest, _eale_report = product_demo.build_product_demo_report(
+            kr003_like_export(),
+            safety_summary=summary,
+            web_review_report=web_review_report(),
+            created_at=FIXED_CREATED_AT,
+        )
+
+        self.assertEqual(report["result"]["status"], "fail")
+        self.assertEqual(report["flow"]["privacy_boundary_review"]["status"], "fail")
+        self.assertIn("raw_audio_retention_enabled", report["flow"]["privacy_boundary_review"]["warnings"])
+        self.assertIn("privacy_boundary_not_passed", report["result"]["why_not_release_ready"])
+        self.assertFalse(report["privacy"]["product_demo_training_allowed"])
 
     def test_cli_writes_report_dataset_and_eale_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -157,6 +182,8 @@ class ProductDemoReportTests(unittest.TestCase):
             saved = json.loads(report_json.read_text(encoding="utf-8"))
             self.assertIn("paths", saved)
             self.assertIn("No product readiness claim.", saved["non_claims"])
+            self.assertFalse(saved["privacy"]["product_demo_training_allowed"])
+            self.assertIn("Privacy gate: pass", report_md.read_text(encoding="utf-8"))
 
     def test_cli_accepts_web_review_report_and_writes_bound_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

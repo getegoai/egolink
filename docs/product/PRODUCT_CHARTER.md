@@ -29,6 +29,12 @@ P0 should prove that the system can:
 - refresh location or communication evidence;
 - create a complete replayable safety event record.
 
+Product-demo and field-test evidence must obey
+`docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md`: no raw audio/image retention
+by default, no unredacted private coordinates in current docs or generated
+summaries, no raw Wi-Fi BSSID retention, and no training use without explicit
+consent and privacy review.
+
 ## Non-Claims
 
 P0 does not claim:

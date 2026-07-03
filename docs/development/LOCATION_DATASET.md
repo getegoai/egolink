@@ -112,7 +112,8 @@ or time-blocked splits.
 ## Privacy And Retention
 
 Default retention should favor structured evidence and hashes over raw private
-payloads.
+payloads. Product-demo and V1 field-test exports must also obey
+`../product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md`.
 
 - Exact coordinates, Wi-Fi fingerprints, audio, images, and private place
   labels need an explicit privacy class.
@@ -120,6 +121,9 @@ payloads.
   default.
 - Wi-Fi AP identifiers should be hashed or otherwise privacy-reviewed before
   long retention.
+- Product-demo evidence is not training data by default; use
+  `training_allowed=false` until explicit consent and privacy review select a
+  run for DATA-002 or model work.
 - Dataset exports under `model_artifacts/` or runtime directories are not
   committed unless explicitly converted into small synthetic fixtures.
 
