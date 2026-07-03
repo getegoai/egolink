@@ -26,6 +26,10 @@ param(
     [switch]$EnableSim7670LocationObservation,
     [switch]$EnableRawPostFailOnceTest,
     [switch]$EnableReconnectStoreForwardTest,
+    [switch]$EnableMax17048Power,
+    [int]$Max17048I2CPort = 0,
+    [int]$Max17048SdaGpio = 15,
+    [int]$Max17048SclGpio = 16,
     [switch]$PrepareBuild,
     [switch]$Flash,
     [switch]$IUnderstandFlashWritesFirmware,
@@ -101,6 +105,10 @@ $result = [ordered]@{
     sim7670_location_observation_enabled = [bool]$effectiveEnableSim7670LocationObservation
     raw_post_fail_once_test_enabled = [bool]$EnableRawPostFailOnceTest
     reconnect_store_forward_test_enabled = [bool]$EnableReconnectStoreForwardTest
+    max17048_power_enabled = [bool]$EnableMax17048Power
+    max17048_i2c_port = $Max17048I2CPort
+    max17048_sda_gpio = $Max17048SdaGpio
+    max17048_scl_gpio = $Max17048SclGpio
     firmware_dir = $firmwarePath
     build_dir = $buildPath
     binary_path = $binaryPath
@@ -165,6 +173,14 @@ if ($PrepareBuild) {
     Add-If $prepareArgs $EnableSim7670LocationObservation "-EnableSim7670LocationObservation"
     Add-If $prepareArgs $EnableRawPostFailOnceTest "-EnableRawPostFailOnceTest"
     Add-If $prepareArgs $EnableReconnectStoreForwardTest "-EnableReconnectStoreForwardTest"
+    Add-If $prepareArgs $EnableMax17048Power "-EnableMax17048Power"
+    if ($EnableMax17048Power) {
+        @(
+            "-Max17048I2CPort", [string]$Max17048I2CPort,
+            "-Max17048SdaGpio", [string]$Max17048SdaGpio,
+            "-Max17048SclGpio", [string]$Max17048SclGpio
+        ) | ForEach-Object { $prepareArgs.Add([string]$_) }
+    }
     $prepareOutput = & powershell @prepareArgs
     if ($LASTEXITCODE -ne 0) {
         throw "prepare_fw001_hw_config.ps1 failed with exit code $LASTEXITCODE"

@@ -30,6 +30,25 @@ low-power observation
 - Personal location memory is built from observed field evidence, not from
   unlabelled assumptions.
 
+## Power Scheduler Boundary
+
+ADR-0003 adopts an `L0`..`L4` low-power location scheduler for planning sensor
+and reporting budgets. These scheduler states are separate from the public
+EALE-P0 location states below:
+
+- `L0` Deep Sleep / Safe Still;
+- `L1` Low Power Watch;
+- `L2` Moving Normal;
+- `L3` Uncertain Locate;
+- `L4` Emergency Track.
+
+The scheduler decides when GNSS, Wi-Fi, LTE, IMU, display, and report cadence
+should be active. It does not output user-facing location belief and must not
+replace `Fine`, `Coarse`, `Predicted`, or `Unknown`. Any implementation must
+emit additive telemetry for state entry/exit, transition reason, GNSS attempt
+budget, power source/status, and emergency override reason before it can be
+accepted.
+
 ## P0 Location States
 
 | State | Meaning |

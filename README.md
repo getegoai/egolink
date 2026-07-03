@@ -26,7 +26,7 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 powershell -ExecutionPolicy Bypass -File scripts/start_local_supervised_session.ps1
 ```
 
-打开 AutoDev + 设备/Safety 统一监控：
+打开设备/Safety 统一监控（legacy 监视脚本，AutoDev 循环已废弃）：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/watch_autodev.ps1
@@ -99,10 +99,11 @@ http://127.0.0.1:8787
 
 - 当前任务：`docs/tasks/active/`
 - 项目状态：`docs/current/STATUS.md`
+- V1 产品计划：`docs/roadmap/V1_PRODUCT_PLAN.md`（ADR-0002）
 - P0 Walking Skeleton 路线：`docs/current/ROADMAP_EGOLINK_P0.md`
 - 产品定位：`docs/product/PRODUCT_CHARTER.md`
 - 板级验证：`docs/hardware/validation/P0_BOARD_VALIDATION.md`
-- AutoDev 监控：`docs/development/AUTODEV_MONITORING.md`
+- 开发工作流（Director/Builder）：`docs/development/DIRECTOR_WORKFLOW.md`
 
 ## 版本化迭代
 

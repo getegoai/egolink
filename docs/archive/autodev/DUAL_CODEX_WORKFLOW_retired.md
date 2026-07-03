@@ -1,8 +1,11 @@
 ---
-document_status: authoritative
-last_verified: 2026-06-27
-verified_by: codex
+document_status: archived
+last_verified: 2026-07-03
+verified_by: claude
 ---
+
+> Archived 2026-07-03 by ENG-007 per ADR-0002: this workflow did not work in
+> practice. Use `docs/development/DIRECTOR_WORKFLOW.md`. Historical evidence only.
 
 # Dual Codex Workflow
 

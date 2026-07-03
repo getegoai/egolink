@@ -40,6 +40,8 @@ typedef struct {
 
 typedef struct {
     int battery_percent;
+    int battery_millivolt;
+    bool battery_voltage_valid;
     bool charging;
     bool battery_is_mock;
     bool charging_is_mock;

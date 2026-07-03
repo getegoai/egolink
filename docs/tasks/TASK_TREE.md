@@ -482,10 +482,39 @@ motion candidate
 
 ## Active Queue
 
+Current active packets (2026-07-03, per ADR-0002 and
+`docs/roadmap/V1_PRODUCT_PLAN.md`; executed via
+`docs/development/DIRECTOR_WORKFLOW.md`). New prefixes: `PWR-*` power and
+battery engineering, `PRIVACY-*` privacy/data boundary gates, and `PROD-*`
+mass-production definition and sourcing.
+
+- `PWR-001` Real power telemetry + 24h battery baseline -
+  `docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md`
+- `FIELD-003` Outdoor GNSS acceptance protocol + first run -
+  `docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md`
+- `PRIVACY-001` Product demo privacy and data boundary gate -
+  `docs/tasks/active/PRIVACY-001_PRODUCT_DEMO_DATA_BOUNDARY_GATE.md`
+- `PROD-001` Mass-production requirements + module/MCU selection gates -
+  `docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md`
+
+- `PWR-002 Low-Power Location State-Machine Decision`
+  - Path: `docs/tasks/done/PWR-002_LOW_POWER_LOCATION_STATE_MACHINE_DECISION.md`
+  - Status: completed as a design decision on 2026-07-03.
+  - Evidence:
+    `docs/architecture/adr/ADR-0003-low-power-location-state-machine.md`,
+    `docs/development/LOCATION_ENGINE.md`, and
+    `docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md`.
+  - Current visible result: L0-L4 are adopted as an internal location power
+    scheduler, separate from EALE-P0 public location beliefs (`Fine`,
+    `Coarse`, `Predicted`, `Unknown`).
+  - Boundary: no firmware scheduler implementation, no protocol change, no
+    power-saving claim, no battery-life claim, and no location-accuracy claim.
+
 - `LTE-003 LTE HTTP Command Poll And ACK`
-  - Path: `docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md`
-  - Status: raw-frame acceptance passed through FW-003; legacy JSON
-    command-poll path remains paused.
+  - Path: `docs/tasks/done/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md`
+  - Status: closed as superseded on 2026-07-03 (ENG-007); the FW-003
+    raw-frame path delivered the goal, and the legacy JSON command-poll
+    implementation is abandoned.
   - Goal: prove the existing Message Hub command queue can be polled over
     SIM7670G LTE HTTP-carried raw frames and that one harmless
     `set_report_interval` command can be ACKed back over LTE with USB

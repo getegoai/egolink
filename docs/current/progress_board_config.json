@@ -1,0 +1,75 @@
+{
+  "current_focus": "V1 Wave 1: 可靠性收尾（功耗/GNSS/VPS加固）；PROD-001 量产需求草稿已交付待创始人填值；目标 ~2 周内出 FT-1 可穿戴外场测试版",
+  "recent_done_limit": 8,
+  "milestones": [
+    {
+      "id": "V1-M1",
+      "title": "可靠性收尾",
+      "tasks": [
+        "PWR-001",
+        "FIELD-003",
+        "OPS-001",
+        {"id": "STAB-002", "label": "STAB-002 LTE长运行/重连门"},
+        {"id": "FT-1", "label": "FT-1 可穿戴测试版组装"}
+      ]
+    },
+    {
+      "id": "V1-M2",
+      "title": "家人端 MVP",
+      "tasks": [
+        {"id": "WEB-003", "label": "WEB-003 家人看板"},
+        {"id": "SRV-GEOFENCE", "label": "围栏引擎+通知通道"}
+      ]
+    },
+    {
+      "id": "V1-M3",
+      "title": "设备端 AI 轨道（核心）",
+      "tasks": [
+        {"id": "M1-002", "label": "M1-002 端侧会话记录器"},
+        {"id": "MODEL-001", "label": "MODEL-001 模型footprint评估"},
+        {"id": "DATA-002", "label": "DATA-002 数据飞轮管线"},
+        {"id": "M1-005", "label": "M1-005 标注闭环"},
+        {"id": "M1-006", "label": "M1-006 场景采集协议执行"},
+        {"id": "MOTIONNET-01", "label": "MotionNet v0.1 训练+端侧PoC"},
+        {"id": "FW-004", "label": "FW-004 固件能力真值源"}
+      ]
+    },
+    {
+      "id": "V1-M4",
+      "title": "量产定义与选型",
+      "tasks": [
+        "PROD-001",
+        {"id": "MODULE-EVAL-CM", "label": "中国移动模组评估（等资料）"},
+        {"id": "MCU-QUOTES", "label": "MCU渠道报价与选型ADR（等报价）"},
+        {"id": "MIC-DECISION", "label": "麦克风方案决策"}
+      ]
+    },
+    {
+      "id": "GOV",
+      "title": "治理",
+      "tasks": [
+        "ENG-007",
+        "ENG-008"
+      ]
+    }
+  ],
+  "assignees": {
+    "PROD-001": "codex",
+    "OPS-001": "claude（已完成）",
+    "FIELD-003-tooling": "codex（执行中）",
+    "PWR-001": "claude+创始人（刷机/挂电池）",
+    "FIELD-003": "claude+创始人（户外执行）"
+  },
+  "operator_asks": [
+    "审阅 docs/product/MASS_PRODUCTION_REQUIREMENTS.md 并填写 TBD(founder) 值（PROD-001 草稿已交付）",
+    "采购：PH2.0 锂电池（建议 ≥1500mAh）+ 临时挂绳外壳",
+    "安全：修改 VPS root 密码（已在聊天中出现过）并考虑关闭 SSH 密码登录（运维手册第1节有步骤）",
+    "刷机操作（每次固件更新约 10 分钟）",
+    "24h 电池独立运行（摆放+起止记录）",
+    "一次 2-3 小时户外佩戴走动测试（FIELD-003）",
+    "商务：中国移动 4G 模组详细资料",
+    "商务：ESP32-S3 / STM32U5A5 / Apollo4 渠道报价",
+    "决策：麦克风/交互硬件方案（V1 端侧 AI 陪伴需要）",
+    "审阅并提交当前工作区变更（或授权我按任务粒度提交）"
+  ]
+}

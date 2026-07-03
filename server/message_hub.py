@@ -1475,6 +1475,7 @@ def raw_power_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
             "source": kv_payload.get("power-source"),
             "source_status": kv_payload.get("power-source-status"),
             "evidence_status": kv_payload.get("power-evidence-status"),
+            "battery_mv": parse_raw_scalar(kv_payload.get("power-battery-mv")),
             "soc_pct": parse_raw_scalar(kv_payload.get("power-soc-pct")),
             "charging": parse_bool_or_text(kv_payload.get("power-charging")),
             "battery_source": kv_payload.get("power-battery-source"),

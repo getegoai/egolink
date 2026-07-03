@@ -371,25 +371,28 @@ python ..\..\scripts\validate_fw002_location_loop.py `
 The first sensor event is a `sensor_sample` / `device_health` payload. It
 reports ESP32 runtime observations that are available without extra drivers:
 uptime, Wi-Fi RSSI, free heap, minimum free heap, reset diagnostics
-(`reset_reason`, `boot_count`, and `boot_uptime_ms`), mock battery/charging
-from the `platform_power` log backend, mock IMU metadata from the
-`platform_imu` ring buffer skeleton, mock modem state, and mock GNSS state.
-Later firmware tasks can add real GNSS, power, IMU, or button values to the
-same event channel.
+(`reset_reason`, `boot_count`, and `boot_uptime_ms`), battery/charging fields
+from the `platform_power` backend, mock IMU metadata from the `platform_imu`
+ring buffer skeleton, mock modem state, and mock GNSS state. Later firmware
+tasks can add real GNSS, IMU, or button values to the same event channel.
 
-`platform_power` is currently a HARCH-002A / HPWR-001 log backend. It emits
-serial log markers such as `PLATFORM_POWER_ENTER`, `PLATFORM_POWER_MARK`, and
+`platform_power` is currently a HARCH-002A / HPWR-001 backend. It emits serial
+log markers such as `PLATFORM_POWER_ENTER`, `PLATFORM_POWER_MARK`, and
 structured `PLATFORM_POWER_EVENT` lines with `state_total_ms`,
-`serial_marker_id`, and `gpio_marker_id=disabled`. MQTT status and
-`sensor_sample` payloads include `battery_source=mock`, `charging_source=mock`,
-`power_state`, `power_state_elapsed_ms`, `power_state_cumulative_ms`,
-`power_marker_seq`, and marker IDs so a later PPK2 capture can be aligned with
-firmware activity.
+`serial_marker_id`, and `gpio_marker_id=disabled`. The default backend remains
+mock: MQTT status and `sensor_sample` payloads include `battery_source=mock`,
+`charging_source=mock`, `battery_mv=null`, `power_state`,
+`power_state_elapsed_ms`, `power_state_cumulative_ms`, `power_marker_seq`, and
+marker IDs so a later PPK2 capture can be aligned with firmware activity.
 
-It does not read a real battery, charger, fuel gauge, sleep state, SIM7670G
-power rail, or GPIO measurement marker yet. The GPIO marker remains disabled;
-no runtime, current, or battery-life claim is valid until an external power
-instrument is connected and its raw capture is saved.
+PWR-001 adds an explicit opt-in MAX17048 fuel-gauge backend
+(`CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048`). When enabled and the
+board's battery I2C pins are correct, status, sensor, and raw LTE
+`location_observation` payloads can carry `battery_mv` /
+`power_battery_mv` and measured SoC from the fuel gauge. Charging state remains
+mock because the fuel gauge does not prove charger state. The GPIO marker
+remains disabled; no runtime, current, 48h target, or battery-life claim is
+valid until a PWR-001 USB-Free run and power report are recorded.
 
 `platform_imu` is currently a TIMU-008 backend live-capture path with a
 default-mock product profile. The default

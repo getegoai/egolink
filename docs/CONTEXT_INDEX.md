@@ -6,7 +6,7 @@ verified_by: codex
 
 # Context Index
 
-Use this file as the first stop for Codex, Codex CLI, VS Code Codex, and AutoDev context loading.
+Use this file as the first stop for Claude Code, Codex, Codex CLI, VS Code Codex, and any builder-agent context loading.
 
 ## Default Minimal Context
 
@@ -38,7 +38,8 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 | PC simulator or bridge | `pc_simulator/AGENTS.md`, `docs/architecture/SYSTEM_OVERVIEW.md`, `shared/contracts/` | Named runtime fixture |
 | Model or Safety Companion | `model_lab/AGENTS.md`, `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`, `docs/safety/SAFETY_CONTRACT.md`, `shared/contracts/` | `docs/modeling/MODEL_ARCHITECTURE.md` |
 | Quality tests | `quality_tests/AGENTS.md`, task-specific source docs | Existing related tests |
-| AutoDev | `autodev/AGENTS.md`, `docs/development/AUTODEV.md`, `docs/development/AUTODEV_MONITORING.md` | Active task packet |
+| Builder task execution | `docs/development/DIRECTOR_WORKFLOW.md`, the active task packet | `docs/tasks/TEMPLATE.md` |
+| V1 product planning | `docs/roadmap/V1_PRODUCT_PLAN.md`, `docs/architecture/adr/ADR-0002-v1-ondevice-ai-companion-core.md` | `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md` |
 | Documentation-only | `docs/AGENTS.md`, this index, affected target docs | Archive sources named by the task |
 
 ## Authority Rules
@@ -50,6 +51,12 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 - P0 development flow is authoritative in `docs/development/DEV_FLOW.md`; near-term R0-R4 sequencing is authoritative in `docs/current/ROADMAP_EGOLINK_P0.md`.
 - Location-engine planning is authoritative in `docs/development/LOCATION_ENGINE.md`; location-fusion dataset planning is authoritative in `docs/development/LOCATION_DATASET.md`; SIM7670G LTE transport planning is authoritative in `docs/development/LTE_TRANSPORT.md`.
 - Architecture changes require an ADR under `docs/architecture/adr/`.
+- V1 product sequencing is authoritative in `docs/roadmap/V1_PRODUCT_PLAN.md`;
+  where it conflicts with `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`, ADR-0002
+  governs.
+- The active execution workflow is authoritative in
+  `docs/development/DIRECTOR_WORKFLOW.md`; AutoDev and Dual Codex documents
+  are deprecated (retirement tracked in ENG-007).
 - Machine-readable model schemas are authoritative in `shared/contracts/`; the P0 message-hub protocol baseline is documented in `docs/development/PROTOCOL.md` until matching schemas are added.
 - Archive files are historical evidence and must not be cited as current authority.
 

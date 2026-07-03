@@ -266,6 +266,7 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "power_source_status=%s",
             "power_evidence_status=%s",
             "power_soc_pct=%d",
+            "power_battery_mv=%s",
             "location_belief_state=Unknown",
             "location_belief_source=cell,lte,wifi,imu,power",
             "location_belief_reason=cell_observation_without_position_fix",
@@ -326,6 +327,8 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         observation_payload = self.app_main.split("static bool build_lte_location_observation_kv_payload", 1)[1].split(
             "static bool lte_http_publish_raw_location_observation", 1
         )[0]
+        self.assertIn('power.battery_is_mock ? "mock" : "measured"', observation_payload)
+        self.assertNotIn("power.battery_is_mock || power.charging_is_mock", observation_payload)
         for token in [
             "cell_operator=%s",
             "cell_mcc=%s",

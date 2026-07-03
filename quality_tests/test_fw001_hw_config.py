@@ -73,6 +73,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertFalse(payload["sim7670_lte_http_command_loop_enabled"])
         self.assertFalse(payload["sim7670_location_observation_enabled"])
         self.assertFalse(payload["reconnect_store_forward_test_enabled"])
+        self.assertFalse(payload["max17048_power_enabled"])
         self.assertNotIn("unit-secret-token", result.stdout)
         self.assertIn('CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED=y', config)
         self.assertIn('CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL="http://example.invalid:8790"', config)
@@ -86,6 +87,8 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED is not set", config)
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED is not set", config)
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST is not set", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MOCK=y", config)
+        self.assertIn("# CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048 is not set", config)
         self.assertIn("SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.vps.local", payload["build_command"])
         self.assertNotIn("flash", payload["build_command"].lower())
         self.assertFalse(config_bytes.startswith(b"\xef\xbb\xbf"))
@@ -137,6 +140,56 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_RX_GPIO=17", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_TX_GPIO=18", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_BAUD=115200", config)
+
+    def test_script_can_enable_max17048_power_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            firmware_dir = tmp_path / "firmware"
+            firmware_dir.mkdir()
+            token_file = tmp_path / "token.txt"
+            token_file.write_text("unit-secret-token\n", encoding="utf-8")
+            config_path = firmware_dir / "sdkconfig.vps.local"
+
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(self.script),
+                    "-HostName",
+                    "example.invalid",
+                    "-TokenFile",
+                    str(token_file),
+                    "-FirmwareDir",
+                    str(firmware_dir),
+                    "-ConfigPath",
+                    str(config_path),
+                    "-EnableMax17048Power",
+                    "-Max17048SdaGpio",
+                    "3",
+                    "-Max17048SclGpio",
+                    "2",
+                    "-Json",
+                ],
+                cwd=self.repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(result.stdout)
+            config = config_path.read_text(encoding="utf-8-sig")
+
+        self.assertTrue(payload["max17048_power_enabled"])
+        self.assertEqual(payload["max17048_i2c_port"], 0)
+        self.assertEqual(payload["max17048_sda_gpio"], 3)
+        self.assertEqual(payload["max17048_scl_gpio"], 2)
+        self.assertIn("# CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MOCK is not set", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048=y", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_I2C_PORT=0", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_SDA_GPIO=3", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_SCL_GPIO=2", config)
 
     def test_script_can_enable_lte_status_config_without_gnss(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -397,6 +450,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("[switch]$EnableSim7670LocationObservation", script_text)
         self.assertIn("[switch]$EnableRawPostFailOnceTest", script_text)
         self.assertIn("[switch]$EnableReconnectStoreForwardTest", script_text)
+        self.assertIn("[switch]$EnableMax17048Power", script_text)
 
     def test_gitignore_keeps_local_vps_config_and_build_output_untracked(self) -> None:
         gitignore = (self.repo_root / ".gitignore").read_text(encoding="utf-8")

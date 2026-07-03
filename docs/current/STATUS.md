@@ -6,6 +6,54 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-03: PWR-002 is completed as a design decision. ADR-0003 adopts
+L0-L4 as an internal location power scheduler while keeping EALE-P0 public
+location beliefs (`Fine`, `Coarse`, `Predicted`, `Unknown`) unchanged. The
+decision adds required scheduler telemetry and safety boundaries, but makes
+no firmware, protocol, battery-life, power-saving, or location-accuracy claim.
+The task packet moved to `docs/tasks/done/`; current active V1 Wave 1 packets
+are `PWR-001`, `FIELD-003`, `PRIVACY-001`, and `PROD-001`. Root-level review
+and research inputs were archived under `docs/archive/reviews/` and
+`docs/archive/research/` as historical input, not authority.
+
+2026-07-03: OPS-001 VPS production hardening is completed directly on the
+production host (root@203.0.113.10, SSH key auth, founder-authorized).
+Installed: daily sqlite-consistent backup with 14-day retention
+(`/usr/local/bin/egolink-backup.sh`, first archive
+`egolink-20260703-194401.tar.gz`), 5-minute liveness check
+(`/usr/local/bin/egolink-healthcheck.sh`; success freshness file + FAIL log
+both verified, failure simulated against a dead port without touching the
+service), journald capped at 500M (vacuumed 641M -> 496M). Restore drill
+passed: `PRAGMA integrity_check=ok`, all 8 tables present. Runbook added at
+`docs/operations/VPS_RUNBOOK.md`; scripts committed under `scripts/ops/`;
+evidence under `reports/ops/OPS-001-20260703-001/`. The Message Hub service
+itself was not modified, restarted, or redeployed. Remaining gaps recorded:
+off-host backup copy, outbound alerting, TLS, root password rotation
+(operator action). Same day, ENG-008 added the founder progress board
+(`scripts/build_progress_board.py` -> `docs/generated/PROGRESS_BOARD.md`),
+and PROD-001's requirements draft was delivered by the codex builder and
+accepted by director review
+(`docs/product/MASS_PRODUCTION_REQUIREMENTS.md`, awaiting founder
+`TBD(founder)` values).
+
+2026-07-03: ENG-007 governance re-baseline is applied. ADR-0002
+(`ADR-0002-v1-ondevice-ai-companion-core.md`) records the founder decision
+that on-device AI companion capability — real-time interaction and proactive
+AI service — is a V1 core differentiator, with an edge-cloud hybrid
+intelligence split and the on-device model track (M1 data foundation, formal
+IMU acceptance, MotionNet v0.1, model footprint assessment) on the V1
+critical path. A same-day earlier draft that deferred on-device ML to V2 was
+explicitly retracted by the founder before commit and is recorded only in the
+ADR's correction history. `docs/roadmap/V1_PRODUCT_PLAN.md` is now the
+authoritative product sequencing document, and
+`docs/development/DIRECTOR_WORKFLOW.md` replaces the retired
+AutoDev/Dual-Codex workflows (documents archived under
+`docs/archive/autodev/`). LTE-003 is closed as superseded by the FW-003
+raw-frame path. V1 Wave 1 packets are active: OPS-001, PWR-001, FIELD-003,
+PROD-001 (ENG-007 done). No firmware, protocol, server, or hardware behavior
+changed; validation passed with `python scripts/context_lint.py` and
+`powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`.
+
 2026-07-03: DEMO-011 Product Demo Report Web Review Binding is implemented
 after DEMO-010. `scripts/build_product_demo_report.py` now accepts
 `--web-review-report`, binds a passing DEMO-010 Web/API review report into the

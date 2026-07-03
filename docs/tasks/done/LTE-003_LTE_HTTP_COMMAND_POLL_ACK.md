@@ -1,8 +1,8 @@
 ---
 title: LTE HTTP Command Poll And ACK
 task_id: LTE-003
-status: paused
-last_verified: 2026-06-29
+status: superseded
+last_verified: 2026-07-03
 context:
   - docs/current/ACTIVE_BUILD.md
   - docs/current/STATUS.md
@@ -20,7 +20,7 @@ allowed_paths:
   - docs/development/LTE_TRANSPORT.md
   - docs/development/PROTOCOL.md
   - docs/tasks/TASK_TREE.md
-  - docs/tasks/active/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md
+  - docs/tasks/done/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md
   - docs/tasks/done/PROTO-002_RAW_FRAME_TRANSPORT_CONTRACT.md
   - shared/contracts/message_hub_raw_frame_record.schema.json
   - firmware/mqtt_heartbeat/README.md
@@ -38,6 +38,15 @@ allowed_paths:
 ---
 
 # LTE-003 LTE HTTP Command Poll And ACK
+
+## Closure (2026-07-03, ENG-007)
+
+Closed as superseded. The task goal — LTE command poll and ACK with USB
+disconnected — was achieved by the FW-003 raw-frame path
+(`0.1.0-fw003-raw-command-loop`, evidence under
+`reports/field_validation/fw003-raw-command-loop-20260629-175608/`). The
+legacy device-side JSON command-poll implementation (fix1-fix8) is abandoned;
+fix8 was never flashed. No further work is planned on this packet.
 
 ## Goal
 

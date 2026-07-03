@@ -6,9 +6,100 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 
+#if CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048
+#include "freertos/FreeRTOS.h"
+#include "driver/i2c.h"
+#endif
+
 #define PLATFORM_POWER_MOCK_BATTERY_PERCENT 87
 
 static const char *TAG = "egolink_platform_power";
+
+#if CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048
+
+#define MAX17048_I2C_ADDR 0x36
+#define MAX17048_REG_VCELL 0x02
+#define MAX17048_REG_SOC 0x04
+#define MAX17048_REG_VERSION 0x08
+#define MAX17048_I2C_PORT ((i2c_port_t)CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_I2C_PORT)
+
+static bool s_max17048_ready;
+
+static esp_err_t max17048_read_u16(uint8_t reg, uint16_t *value)
+{
+    uint8_t raw[2] = {0, 0};
+    esp_err_t err = i2c_master_write_read_device(
+        MAX17048_I2C_PORT,
+        MAX17048_I2C_ADDR,
+        &reg,
+        1,
+        raw,
+        sizeof(raw),
+        pdMS_TO_TICKS(CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_I2C_TIMEOUT_MS));
+    if (err == ESP_OK) {
+        *value = ((uint16_t)raw[0] << 8) | raw[1];
+    }
+    return err;
+}
+
+static void max17048_init(void)
+{
+    i2c_config_t config = {
+        .mode = I2C_MODE_MASTER,
+        .sda_io_num = CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_SDA_GPIO,
+        .scl_io_num = CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_SCL_GPIO,
+        .sda_pullup_en = GPIO_PULLUP_ENABLE,
+        .scl_pullup_en = GPIO_PULLUP_ENABLE,
+        .master.clk_speed = CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_I2C_FREQ_HZ,
+    };
+    esp_err_t err = i2c_param_config(MAX17048_I2C_PORT, &config);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "MAX17048_I2C_CONFIG_FAIL err=%d", (int)err);
+        return;
+    }
+    err = i2c_driver_install(MAX17048_I2C_PORT, I2C_MODE_MASTER, 0, 0, 0);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        /* ESP_ERR_INVALID_STATE means another backend already owns the bus. */
+        ESP_LOGW(TAG, "MAX17048_I2C_INSTALL_FAIL err=%d", (int)err);
+        return;
+    }
+    uint16_t version = 0;
+    err = max17048_read_u16(MAX17048_REG_VERSION, &version);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "MAX17048_PROBE_FAIL err=%d (check SDA/SCL Kconfig pins)", (int)err);
+        return;
+    }
+    s_max17048_ready = true;
+    ESP_LOGI(TAG, "MAX17048_PROBE_OK version=0x%04x", (unsigned)version);
+}
+
+static bool max17048_sample(int *battery_percent, int *battery_millivolt)
+{
+    if (!s_max17048_ready) {
+        return false;
+    }
+    uint16_t soc_raw = 0;
+    uint16_t vcell_raw = 0;
+    if (max17048_read_u16(MAX17048_REG_SOC, &soc_raw) != ESP_OK) {
+        return false;
+    }
+    if (max17048_read_u16(MAX17048_REG_VCELL, &vcell_raw) != ESP_OK) {
+        return false;
+    }
+    int percent = (int)(soc_raw / 256U);
+    if (percent < 0) {
+        percent = 0;
+    }
+    if (percent > 100) {
+        percent = 100;
+    }
+    *battery_percent = percent;
+    /* VCELL LSB = 78.125 uV -> mv = raw * 5 / 64 */
+    *battery_millivolt = (int)(((uint32_t)vcell_raw * 5U) / 64U);
+    return true;
+}
+
+#endif /* CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048 */
 
 static bool s_initialized;
 static platform_power_state_t s_state = PLATFORM_POWER_STATE_BOOT;
@@ -105,11 +196,20 @@ bool platform_power_init(void)
         s_gpio_marker_enabled = false;
         refresh_serial_marker_id();
         s_initialized = true;
+#if CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048
+        max17048_init();
+        ESP_LOGI(
+            TAG,
+            "PLATFORM_POWER_INIT backend=max17048 ready=%s charging_detection=mock state=%s",
+            s_max17048_ready ? "true" : "false",
+            platform_power_state_name(s_state));
+#else
         ESP_LOGI(
             TAG,
             "PLATFORM_POWER_INIT mock=true battery_percent=%d charging=false state=%s",
             PLATFORM_POWER_MOCK_BATTERY_PERCENT,
             platform_power_state_name(s_state));
+#endif
         log_structured_event(
             PLATFORM_POWER_EVENT_INIT,
             s_state,
@@ -217,12 +317,30 @@ void platform_power_get_snapshot(platform_power_snapshot_t *snapshot)
         platform_power_init();
     }
     int64_t now_ms = uptime_ms();
+    int battery_percent = PLATFORM_POWER_MOCK_BATTERY_PERCENT;
+    int battery_millivolt = 0;
+    bool battery_voltage_valid = false;
+    bool battery_is_mock = true;
+    const char *battery_source = "mock";
+#if CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048
+    if (max17048_sample(&battery_percent, &battery_millivolt)) {
+        battery_voltage_valid = true;
+        battery_is_mock = false;
+        battery_source = "max17048_i2c";
+    } else {
+        /* Explainable fallback: keep mock values and say why. */
+        battery_percent = PLATFORM_POWER_MOCK_BATTERY_PERCENT;
+        battery_source = "max17048_read_failed";
+    }
+#endif
     *snapshot = (platform_power_snapshot_t){
-        .battery_percent = PLATFORM_POWER_MOCK_BATTERY_PERCENT,
+        .battery_percent = battery_percent,
+        .battery_millivolt = battery_millivolt,
+        .battery_voltage_valid = battery_voltage_valid,
         .charging = false,
-        .battery_is_mock = true,
+        .battery_is_mock = battery_is_mock,
         .charging_is_mock = true,
-        .battery_source = "mock",
+        .battery_source = battery_source,
         .charging_source = "mock",
         .state = s_state,
         .marker_seq = s_marker_seq,

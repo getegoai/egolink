@@ -22,10 +22,14 @@ param(
     [switch]$EnableSim7670LocationObservation,
     [switch]$EnableRawPostFailOnceTest,
     [switch]$EnableReconnectStoreForwardTest,
+    [switch]$EnableMax17048Power,
     [int]$Sim7670UartNum = 1,
     [int]$Sim7670UartRxGpio = 17,
     [int]$Sim7670UartTxGpio = 18,
     [int]$Sim7670UartBaud = 115200,
+    [int]$Max17048I2CPort = 0,
+    [int]$Max17048SdaGpio = 15,
+    [int]$Max17048SclGpio = 16,
     [switch]$Build,
     [switch]$Json
 )
@@ -165,6 +169,20 @@ if ($EnableReconnectStoreForwardTest) {
 } else {
     $lines += "# CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST is not set"
 }
+if ($EnableMax17048Power) {
+    $lines += @(
+        "# CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MOCK is not set",
+        "CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048=y",
+        "CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_I2C_PORT=$Max17048I2CPort",
+        "CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_SDA_GPIO=$Max17048SdaGpio",
+        "CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_SCL_GPIO=$Max17048SclGpio"
+    )
+} else {
+    $lines += @(
+        "CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MOCK=y",
+        "# CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048 is not set"
+    )
+}
 if ($EnableSim7670Gnss -or $effectiveEnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop -or $effectiveEnableSim7670LocationObservation) {
     $lines += @(
         "CONFIG_EGOLINK_SIM7670_UART_NUM=$Sim7670UartNum",
@@ -229,6 +247,10 @@ $result = [pscustomobject]@{
     sim7670_location_observation_enabled = [bool]$effectiveEnableSim7670LocationObservation
     raw_post_fail_once_test_enabled = [bool]$EnableRawPostFailOnceTest
     reconnect_store_forward_test_enabled = [bool]$EnableReconnectStoreForwardTest
+    max17048_power_enabled = [bool]$EnableMax17048Power
+    max17048_i2c_port = $Max17048I2CPort
+    max17048_sda_gpio = $Max17048SdaGpio
+    max17048_scl_gpio = $Max17048SclGpio
     build_command = $buildCommand
     flash_intentionally_not_run = $true
 }

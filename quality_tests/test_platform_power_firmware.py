@@ -11,6 +11,7 @@ class PlatformPowerFirmwareTests(unittest.TestCase):
         self.header = (self.component_dir / "include" / "platform_power.h").read_text(encoding="utf-8")
         self.source = (self.component_dir / "platform_power.c").read_text(encoding="utf-8")
         self.component_cmake = (self.component_dir / "CMakeLists.txt").read_text(encoding="utf-8")
+        self.kconfig = (self.component_dir / "Kconfig.projbuild").read_text(encoding="utf-8")
         self.main_cmake = (
             self.repo_root / "firmware" / "mqtt_heartbeat" / "main" / "CMakeLists.txt"
         ).read_text(encoding="utf-8")
@@ -56,10 +57,21 @@ class PlatformPowerFirmwareTests(unittest.TestCase):
 
     def test_mock_battery_boundary_is_explicit(self) -> None:
         self.assertIn("PLATFORM_POWER_MOCK_BATTERY_PERCENT 87", self.source)
-        self.assertIn(".battery_is_mock = true", self.source)
+        self.assertIn("bool battery_is_mock = true", self.source)
         self.assertIn(".charging_is_mock = true", self.source)
-        self.assertIn('.battery_source = "mock"', self.source)
+        self.assertIn('const char *battery_source = "mock"', self.source)
         self.assertIn('.charging_source = "mock"', self.source)
+
+    def test_max17048_backend_is_explicit_opt_in_with_documented_pins(self) -> None:
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048", self.source)
+        self.assertIn("MAX17048_I2C_ADDR 0x36", self.source)
+        self.assertIn("i2c_master_write_read_device", self.source)
+        self.assertIn("config EGOLINK_PLATFORM_POWER_BACKEND_MAX17048", self.kconfig)
+        self.assertIn("default EGOLINK_PLATFORM_POWER_BACKEND_MOCK", self.kconfig)
+        self.assertIn("default 15", self.kconfig)
+        self.assertIn("default 16", self.kconfig)
+        self.assertIn("SDA GPIO15 / SCL GPIO16", self.kconfig)
+        self.assertIn("SDA GPIO3 / SCL GPIO2", self.kconfig)
 
     def test_hpwr_marker_metadata_is_log_only(self) -> None:
         for token in [
@@ -102,6 +114,7 @@ class PlatformPowerFirmwareTests(unittest.TestCase):
         self.assertIn("platform_power_get_snapshot", self.app_main)
         self.assertIn("platform_power_mark", self.app_main)
         self.assertIn('\\"battery_source\\":\\"%s\\"', self.app_main)
+        self.assertIn('\\"battery_mv\\":%s', self.app_main)
         self.assertIn('\\"charging_source\\":\\"%s\\"', self.app_main)
         self.assertIn('\\"power_state\\":\\"%s\\"', self.app_main)
         self.assertIn('\\"power_state_elapsed_ms\\":%" PRId64', self.app_main)
@@ -116,9 +129,12 @@ class PlatformPowerFirmwareTests(unittest.TestCase):
     def test_readme_keeps_real_power_unverified(self) -> None:
         self.assertIn("platform_power", self.readme)
         self.assertIn("battery_source=mock", self.readme)
-        self.assertIn("does not read a real battery", self.readme)
+        self.assertIn("MAX17048", self.readme)
+        self.assertIn("default backend remains", self.readme)
+        self.assertIn("mock: MQTT status", self.readme)
         self.assertIn("PLATFORM_POWER_EVENT", self.readme)
-        self.assertIn("GPIO marker remains disabled", self.readme)
+        self.assertIn("The GPIO marker", self.readme)
+        self.assertIn("remains disabled", self.readme)
 
 
 if __name__ == "__main__":

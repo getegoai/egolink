@@ -1,8 +1,11 @@
 ---
-document_status: authoritative
-last_verified: 2026-06-26
-verified_by: codex
+document_status: archived
+last_verified: 2026-07-03
+verified_by: claude
 ---
+
+> Archived 2026-07-03 by ENG-007 per ADR-0002: the AutoDev loop is retired.
+> Use `docs/development/DIRECTOR_WORKFLOW.md`. Historical evidence only.
 
 # AutoDev Context
 

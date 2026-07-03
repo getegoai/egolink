@@ -615,6 +615,7 @@ class MessageHubStoreTests(unittest.TestCase):
                 "power_source=platform_power\n"
                 "power_source_status=mock\n"
                 "power_evidence_status=mock\n"
+                "power_battery_mv=3920\n"
                 "power_soc_pct=87\n"
                 "power_charging=false\n"
                 "power_battery_source=mock_battery_percent\n"
@@ -675,6 +676,7 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(history[0]["imu"]["motion"], "unknown")
         self.assertTrue(history[0]["imu"]["data_is_mock"])
         self.assertEqual(history[0]["power"]["evidence_status"], "mock")
+        self.assertEqual(history[0]["power"]["battery_mv"], 3920)
         self.assertEqual(history[0]["power"]["soc_pct"], 87)
         self.assertEqual(history[0]["power"]["marker_seq"], 12)
         self.assertEqual(history[0]["reliability"]["network"]["raw_post_attempt_count"], 5)
@@ -697,6 +699,7 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(device["observability"]["wifi"]["evidence_status"], "missing")
         self.assertEqual(device["observability"]["imu"]["evidence_status"], "mock")
         self.assertEqual(device["observability"]["power"]["evidence_status"], "mock")
+        self.assertEqual(device["observability"]["power"]["battery_mv"], 3920)
         self.assertEqual(device["observability"]["reliability"]["network"]["last_error"], "LTE_RECONNECT_TIMEOUT")
         self.assertEqual(device["observability"]["reliability"]["network"]["raw_post_success_count"], 4)
         self.assertEqual(device["observability"]["reliability"]["cache"]["queued_message_count"], 3)

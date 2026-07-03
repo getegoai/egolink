@@ -1,0 +1,322 @@
+{
+  "generated_at": "2026-07-03 13:11 UTC",
+  "git": {
+    "branch": "autodev/egolink-p0",
+    "head": "4263033 demo: bind product demo web review evidence"
+  },
+  "current_focus": "V1 Wave 1: 可靠性收尾（功耗/GNSS/VPS加固）；PROD-001 量产需求草稿已交付待创始人填值；目标 ~2 周内出 FT-1 可穿戴外场测试版",
+  "milestones": [
+    {
+      "id": "V1-M1",
+      "title": "可靠性收尾",
+      "done": 1,
+      "total": 5,
+      "tasks": [
+        {
+          "id": "PWR-001",
+          "label": "PWR-001",
+          "state": "in_progress"
+        },
+        {
+          "id": "FIELD-003",
+          "label": "FIELD-003",
+          "state": "in_progress"
+        },
+        {
+          "id": "OPS-001",
+          "label": "OPS-001",
+          "state": "done"
+        },
+        {
+          "id": "STAB-002",
+          "label": "STAB-002 LTE长运行/重连门",
+          "state": "planned"
+        },
+        {
+          "id": "FT-1",
+          "label": "FT-1 可穿戴测试版组装",
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "V1-M2",
+      "title": "家人端 MVP",
+      "done": 0,
+      "total": 2,
+      "tasks": [
+        {
+          "id": "WEB-003",
+          "label": "WEB-003 家人看板",
+          "state": "planned"
+        },
+        {
+          "id": "SRV-GEOFENCE",
+          "label": "围栏引擎+通知通道",
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "V1-M3",
+      "title": "设备端 AI 轨道（核心）",
+      "done": 0,
+      "total": 7,
+      "tasks": [
+        {
+          "id": "M1-002",
+          "label": "M1-002 端侧会话记录器",
+          "state": "planned"
+        },
+        {
+          "id": "MODEL-001",
+          "label": "MODEL-001 模型footprint评估",
+          "state": "planned"
+        },
+        {
+          "id": "DATA-002",
+          "label": "DATA-002 数据飞轮管线",
+          "state": "planned"
+        },
+        {
+          "id": "M1-005",
+          "label": "M1-005 标注闭环",
+          "state": "planned"
+        },
+        {
+          "id": "M1-006",
+          "label": "M1-006 场景采集协议执行",
+          "state": "planned"
+        },
+        {
+          "id": "MOTIONNET-01",
+          "label": "MotionNet v0.1 训练+端侧PoC",
+          "state": "planned"
+        },
+        {
+          "id": "FW-004",
+          "label": "FW-004 固件能力真值源",
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "V1-M4",
+      "title": "量产定义与选型",
+      "done": 0,
+      "total": 4,
+      "tasks": [
+        {
+          "id": "PROD-001",
+          "label": "PROD-001",
+          "state": "in_progress"
+        },
+        {
+          "id": "MODULE-EVAL-CM",
+          "label": "中国移动模组评估（等资料）",
+          "state": "planned"
+        },
+        {
+          "id": "MCU-QUOTES",
+          "label": "MCU渠道报价与选型ADR（等报价）",
+          "state": "planned"
+        },
+        {
+          "id": "MIC-DECISION",
+          "label": "麦克风方案决策",
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "GOV",
+      "title": "治理",
+      "done": 2,
+      "total": 2,
+      "tasks": [
+        {
+          "id": "ENG-007",
+          "label": "ENG-007",
+          "state": "done"
+        },
+        {
+          "id": "ENG-008",
+          "label": "ENG-008",
+          "state": "done"
+        }
+      ]
+    }
+  ],
+  "active_tasks": [
+    {
+      "id": "FIELD-003",
+      "title": "Outdoor GNSS acceptance protocol and first measured run",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md"
+    },
+    {
+      "id": "PRIVACY-001",
+      "title": "Product demo privacy and data boundary gate",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/active/PRIVACY-001_PRODUCT_DEMO_DATA_BOUNDARY_GATE.md"
+    },
+    {
+      "id": "PROD-001",
+      "title": "Mass-production requirements definition and module/MCU selection gates",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md"
+    },
+    {
+      "id": "PWR-001",
+      "title": "Real power telemetry and first 24h battery baseline run",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md"
+    }
+  ],
+  "recent_done": [
+    {
+      "id": "DEMO-010",
+      "title": "Product Demo Web Review Gate",
+      "state": "done",
+      "packet_status": "completed",
+      "priority": "high",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/done/DEMO-010_PRODUCT_DEMO_WEB_REVIEW_GATE.md"
+    },
+    {
+      "id": "DEMO-011",
+      "title": "Product Demo Report Web Review Binding",
+      "state": "done",
+      "packet_status": "completed",
+      "priority": "high",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/done/DEMO-011_PRODUCT_DEMO_REPORT_WEB_REVIEW_BINDING.md"
+    },
+    {
+      "id": "ENG-007",
+      "title": "Retire AutoDev/Dual-Codex docs and adopt Director Workflow references",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/done/ENG-007_AUTODEV_DEPRECATION_DIRECTOR_WORKFLOW.md"
+    },
+    {
+      "id": "ENG-008",
+      "title": "Founder-facing project progress board generator",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/done/ENG-008_PROJECT_PROGRESS_BOARD.md"
+    },
+    {
+      "id": "LTE-003",
+      "title": "LTE HTTP Command Poll And ACK",
+      "state": "done",
+      "packet_status": "superseded",
+      "priority": "",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/done/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md"
+    },
+    {
+      "id": "OPS-001",
+      "title": "VPS Message Hub production hardening baseline",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/done/OPS-001_VPS_PRODUCTION_HARDENING.md"
+    },
+    {
+      "id": "PWR-002",
+      "title": "Low-power location state-machine decision record",
+      "state": "done",
+      "packet_status": "completed",
+      "priority": "high",
+      "date": "2026-07-03",
+      "path": "D:/pywork/egolink/docs/tasks/done/PWR-002_LOW_POWER_LOCATION_STATE_MACHINE_DECISION.md"
+    },
+    {
+      "id": "DEMO-008",
+      "title": "Product Demo Closed Loop Report Baseline",
+      "state": "done",
+      "packet_status": "completed",
+      "priority": "high",
+      "date": "2026-07-02",
+      "path": "D:/pywork/egolink/docs/tasks/done/DEMO-008_PRODUCT_DEMO_REPORT_BASELINE.md"
+    }
+  ],
+  "operator_asks": [
+    "审阅 docs/product/MASS_PRODUCTION_REQUIREMENTS.md 并填写 TBD(founder) 值（PROD-001 草稿已交付）",
+    "采购：PH2.0 锂电池（建议 ≥1500mAh）+ 临时挂绳外壳",
+    "安全：修改 VPS root 密码（已在聊天中出现过）并考虑关闭 SSH 密码登录（运维手册第1节有步骤）",
+    "刷机操作（每次固件更新约 10 分钟）",
+    "24h 电池独立运行（摆放+起止记录）",
+    "一次 2-3 小时户外佩戴走动测试（FIELD-003）",
+    "商务：中国移动 4G 模组详细资料",
+    "商务：ESP32-S3 / STM32U5A5 / Apollo4 渠道报价",
+    "决策：麦克风/交互硬件方案（V1 端侧 AI 陪伴需要）",
+    "审阅并提交当前工作区变更（或授权我按任务粒度提交）"
+  ],
+  "assignees": {
+    "PROD-001": "codex",
+    "OPS-001": "claude（已完成）",
+    "FIELD-003-tooling": "codex（执行中）",
+    "PWR-001": "claude+创始人（刷机/挂电池）",
+    "FIELD-003": "claude+创始人（户外执行）"
+  },
+  "key_releases": [
+    {
+      "id": "KR-001",
+      "status": "released",
+      "title": ""
+    },
+    {
+      "id": "KR-002",
+      "status": "release_candidate",
+      "title": ""
+    },
+    {
+      "id": "KR-003",
+      "status": "released",
+      "title": ""
+    },
+    {
+      "id": "KR-004",
+      "status": "released",
+      "title": ""
+    },
+    {
+      "id": "KR-005",
+      "status": "released",
+      "title": ""
+    },
+    {
+      "id": "KR-006",
+      "status": "released",
+      "title": ""
+    },
+    {
+      "id": "KR-007",
+      "status": "released",
+      "title": ""
+    }
+  ],
+  "counts": {
+    "active": 4,
+    "done_total": 74
+  }
+}

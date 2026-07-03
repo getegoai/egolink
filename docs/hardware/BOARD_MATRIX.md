@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-01
+last_verified: 2026-07-03
 verified_by: codex
 ---
 
@@ -20,3 +20,20 @@ All unknown fields must remain explicit. Do not infer hardware capability from p
 - `observed` means hardware evidence exists, but may still be engineering-only.
 - `verified` must be backed by a named evidence file and acceptance gate.
 - PC-side probe evidence must not be described as firmware-side product behavior.
+
+## PWR-001 Battery Sensing Audit
+
+- connectivity-node-001 vendor reference:
+  https://docs.waveshare.com/ESP32-S3-SIM7670G-4G documents the onboard
+  battery management path as MAX17048G fuel gauge plus ETA6098 charger and
+  CN3791 solar charger.
+- The same vendor page documents battery I2C pins by board revision:
+  V2 uses SDA GPIO15 / SCL GPIO16; V1 uses SDA GPIO3 / SCL GPIO2.
+- The active physical board revision is not yet recorded in repo evidence.
+  PWR-001 firmware therefore keeps the MAX17048 backend as explicit opt-in and
+  defaults the opt-in pin map to the documented V2 pins. Operators must confirm
+  the board revision or override pins before flash/runtime evidence can be
+  trusted.
+- Current repository state remains: battery accuracy, charging state, 24h
+  runtime, 48h target, and product power behavior are unverified until a named
+  PWR-001 USB-Free run and report are recorded.

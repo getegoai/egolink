@@ -1652,9 +1652,8 @@ static bool build_lte_location_observation_kv_payload(
     const char *imu_source_status =
         (imu.hardware_present && imu.driver_enabled && !imu.data_is_mock) ? "observed" : "unverified";
     const char *imu_evidence_status = imu.data_is_mock ? "mock" : (imu.hardware_present ? "observed" : "missing");
-    bool power_mock = power.battery_is_mock || power.charging_is_mock;
-    const char *power_source_status = power_mock ? "mock" : "observed";
-    const char *power_evidence_status = power_mock ? "mock" : "observed";
+    const char *power_source_status = power.battery_is_mock ? "mock" : "measured";
+    const char *power_evidence_status = power.battery_is_mock ? "mock" : "measured";
 
     char rssi[16];
     char rsrp[16];
@@ -1668,6 +1667,7 @@ static bool build_lte_location_observation_kv_payload(
     char reason_code[SIM7670_LTE_STATUS_MAX * 2];
     char imu_backend_status[64];
     char power_state[32];
+    char battery_mv[16];
 
     json_int_or_null(rssi, sizeof(rssi), lte->rssi_valid, lte->rssi);
     json_int_or_null(rsrp, sizeof(rsrp), lte->rsrp_valid, lte->rsrp);
@@ -1681,6 +1681,7 @@ static bool build_lte_location_observation_kv_payload(
     json_escape_summary(reason_code, sizeof(reason_code), lte->reason_code);
     json_escape_summary(imu_backend_status, sizeof(imu_backend_status), imu.backend_status);
     json_escape_summary(power_state, sizeof(power_state), platform_power_state_name(power.state));
+    json_int_or_null(battery_mv, sizeof(battery_mv), power.battery_voltage_valid, power.battery_millivolt);
     const char *network_state = "query_failed";
     const char *network_last_error = reason_code;
     if (lte_query_ok && lte->registered && lte->pdp_active) {
@@ -1735,6 +1736,7 @@ static bool build_lte_location_observation_kv_payload(
         "power_soc_pct=%d\n"
         "power_charging=%s\n"
         "power_state=%s\n"
+        "power_battery_mv=%s\n"
         "location_belief_state=Unknown\n"
         "location_belief_source=cell,lte,wifi,imu,power\n"
         "location_belief_reason=cell_observation_without_position_fix\n"
@@ -1791,6 +1793,7 @@ static bool build_lte_location_observation_kv_payload(
         power.battery_percent,
         json_bool(power.charging),
         power_state,
+        battery_mv,
         rssi,
         reliability.network_state,
         reliability.network_last_error,
@@ -2486,6 +2489,8 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
     int rssi = refresh_wifi_rssi();
     platform_power_snapshot_t power;
     platform_power_get_snapshot(&power);
+    char battery_mv[16];
+    json_int_or_null(battery_mv, sizeof(battery_mv), power.battery_voltage_valid, power.battery_millivolt);
     build_lte_observation_fragment(s_status_lte_fragment, sizeof(s_status_lte_fragment));
     snprintf(
         buffer,
@@ -2498,6 +2503,7 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
         "\"fw_version\":\"%s\","
         "\"hw_target\":\"waveshare_esp32s3_sim7670g_4g\","
         "\"battery\":%d,"
+        "\"battery_mv\":%s,"
         "\"charging\":%s,"
         "\"battery_source\":\"%s\","
         "\"charging_source\":\"%s\","
@@ -2523,6 +2529,7 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
         seq,
         CONFIG_EGOLINK_FW_VERSION,
         power.battery_percent,
+        battery_mv,
         json_bool(power.charging),
         power.battery_source,
         power.charging_source,
@@ -2549,6 +2556,8 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
     uint32_t min_free_heap = esp_get_minimum_free_heap_size();
     platform_power_snapshot_t power;
     platform_power_get_snapshot(&power);
+    char battery_mv[16];
+    json_int_or_null(battery_mv, sizeof(battery_mv), power.battery_voltage_valid, power.battery_millivolt);
     platform_imu_snapshot_t imu;
     platform_imu_sample();
     platform_imu_get_snapshot(&imu);
@@ -2570,6 +2579,7 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
         "\"free_heap_bytes\":%" PRIu32 ","
         "\"min_free_heap_bytes\":%" PRIu32 ","
         "\"battery\":%d,"
+        "\"battery_mv\":%s,"
         "\"charging\":%s,"
         "\"battery_source\":\"%s\","
         "\"charging_source\":\"%s\","
@@ -2609,6 +2619,7 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
         free_heap,
         min_free_heap,
         power.battery_percent,
+        battery_mv,
         json_bool(power.charging),
         power.battery_source,
         power.charging_source,

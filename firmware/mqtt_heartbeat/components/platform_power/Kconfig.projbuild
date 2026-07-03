@@ -1,0 +1,62 @@
+menu "Ego Link platform power"
+
+    choice EGOLINK_PLATFORM_POWER_BACKEND
+        prompt "Platform power backend"
+        default EGOLINK_PLATFORM_POWER_BACKEND_MOCK
+        help
+            Select the source used by platform_power_get_snapshot() battery
+            fields. Keep the mock backend by default; the MAX17048 backend is
+            an explicit opt-in for the PWR-001 battery baseline and does not
+            by itself prove product battery life, charging detection, or
+            power acceptance.
+
+        config EGOLINK_PLATFORM_POWER_BACKEND_MOCK
+            bool "Mock battery"
+
+        config EGOLINK_PLATFORM_POWER_BACKEND_MAX17048
+            bool "MAX17048 fuel gauge I2C backend"
+            help
+                Reads state-of-charge and cell voltage from the on-board
+                MAX17048 fuel gauge. Charging state remains mock: MAX17048
+                does not report charger state. Waveshare documents V2 battery
+                I2C as SDA GPIO15 / SCL GPIO16 and V1 as SDA GPIO3 / SCL GPIO2;
+                confirm the active board revision before trusting readings.
+    endchoice
+
+    config EGOLINK_PLATFORM_POWER_MAX17048_I2C_PORT
+        int "MAX17048 I2C port"
+        default 0
+        range 0 1
+        depends on EGOLINK_PLATFORM_POWER_BACKEND_MAX17048
+
+    config EGOLINK_PLATFORM_POWER_MAX17048_SDA_GPIO
+        int "MAX17048 I2C SDA GPIO"
+        default 15
+        range 0 48
+        depends on EGOLINK_PLATFORM_POWER_BACKEND_MAX17048
+        help
+            Default follows Waveshare V2 battery I2C documentation. Override
+            to GPIO3 for V1 boards after board-revision confirmation.
+
+    config EGOLINK_PLATFORM_POWER_MAX17048_SCL_GPIO
+        int "MAX17048 I2C SCL GPIO"
+        default 16
+        range 0 48
+        depends on EGOLINK_PLATFORM_POWER_BACKEND_MAX17048
+        help
+            Default follows Waveshare V2 battery I2C documentation. Override
+            to GPIO2 for V1 boards after board-revision confirmation.
+
+    config EGOLINK_PLATFORM_POWER_MAX17048_I2C_FREQ_HZ
+        int "MAX17048 I2C frequency"
+        default 100000
+        range 10000 400000
+        depends on EGOLINK_PLATFORM_POWER_BACKEND_MAX17048
+
+    config EGOLINK_PLATFORM_POWER_MAX17048_I2C_TIMEOUT_MS
+        int "MAX17048 I2C timeout"
+        default 1000
+        range 10 5000
+        depends on EGOLINK_PLATFORM_POWER_BACKEND_MAX17048
+
+endmenu
