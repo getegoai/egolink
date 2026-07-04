@@ -896,11 +896,42 @@ class MessageHubHttpTests(unittest.TestCase):
             try:
                 post_json(
                     base_url,
+                    "/api/v1/devices/ego-link-001/heartbeat",
+                    {
+                        "device_id": "ego-link-001",
+                        "seq": 0,
+                        "battery": 90,
+                        "battery_mv": 3990,
+                        "link_type": "lte",
+                        "guard_mode": "child_safety",
+                        "queue_size": 0,
+                    },
+                )
+                post_json(
+                    base_url,
+                    "/api/v1/devices/ego-link-001/telemetry",
+                    protocol.event_message(
+                        "ego-link-001",
+                        "2026-07-04T00:00:00Z",
+                        1,
+                        "location_report",
+                        "normal",
+                        source="no_hardware_d1_fixture",
+                        source_status="mock",
+                        fix=False,
+                        gnss_state="no_fix",
+                        power={"battery_mv": 3980, "soc_pct": 87, "evidence_status": "mock"},
+                        transport={"type": "lte"},
+                        reliability={"network": {"raw_post_attempt_count": 1, "raw_post_success_count": 1, "raw_post_failure_count": 0}},
+                    ),
+                )
+                post_json(
+                    base_url,
                     "/api/v1/devices/ego-link-001/telemetry",
                     protocol.event_message(
                         "ego-link-001",
                         "2026-07-04T00:00:01Z",
-                        1,
+                        2,
                         "location_observation",
                         "normal",
                         source="no_hardware_d1_fixture",
@@ -911,6 +942,7 @@ class MessageHubHttpTests(unittest.TestCase):
                         imu={"motion": "stationary", "confidence": 0.9, "evidence_status": "mock"},
                         power={"battery_mv": 3960, "soc_pct": 82, "evidence_status": "mock"},
                         transport={"type": "lte"},
+                        reliability={"network": {"raw_post_attempt_count": 2, "raw_post_success_count": 2, "raw_post_failure_count": 0}},
                         location_belief={
                             "state": "Coarse",
                             "radius_m": 250,
@@ -936,6 +968,17 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertTrue(d1["map_surface"]["visible"])
         self.assertEqual(d1["upload_freshness"]["last_location_event_type"], "location_observation")
         self.assertIsInstance(d1["upload_freshness"]["freshness_s"], int)
+        self.assertEqual(d1["uplink_metrics"]["basis"], "device_raw_post_counters")
+        self.assertEqual(d1["uplink_metrics"]["location_event_count"], 2)
+        self.assertEqual(d1["uplink_metrics"]["raw_post_attempt_count"], 2)
+        self.assertEqual(d1["uplink_metrics"]["raw_post_success_count"], 2)
+        self.assertEqual(d1["uplink_metrics"]["raw_post_failure_count"], 0)
+        self.assertEqual(d1["uplink_metrics"]["raw_post_success_rate"], 1.0)
+        self.assertEqual(d1["power_curve"]["sample_count"], 3)
+        self.assertEqual(d1["power_curve"]["delta_battery_mv"], -30)
+        self.assertEqual(d1["power_curve"]["delta_soc_pct"], -8.0)
+        self.assertEqual(d1["power_curve"]["latest"]["battery_mv"], 3960)
+        self.assertEqual(d1["power_curve"]["battery_life_claim"], "none")
         self.assertTrue(d1["evidence"]["components"]["gnss"]["seen"])
         self.assertTrue(d1["evidence"]["components"]["cell_lte"]["seen"])
         self.assertTrue(d1["evidence"]["components"]["imu"]["seen"])

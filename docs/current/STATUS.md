@@ -6,6 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: D1 Dashboard metrics are extended. Per-device `d1_link` now
+derives `uplink_metrics` and `power_curve` from recent Message Hub data:
+server-received location uploads, raw POST success/failure counters when
+present, power sample count, and voltage/SoC deltas. Dashboard shows Upload
+Success, Location Uploads, Power Curve, and Power Delta without claiming
+battery life. Validation passed: focused message-hub tests, `context_lint`,
+progress-board generation, `git diff --check`, and full `scripts\verify.ps1`
+(356 tests).
+
 2026-07-04: D1 Web/API baseline is implemented. `/api/state` now returns
 per-device `d1_link` from latest location evidence, and Dashboard shows
 `D1 Link Through` with map surface, upload freshness, and GNSS/cell-LTE/IMU/

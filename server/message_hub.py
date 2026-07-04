@@ -430,7 +430,7 @@ class MessageHubStore:
         device["location_memory"] = self._location_memory(db, device["device_id"])
         device["last_command"] = self._latest_command(db, device["device_id"])
         device["observability"] = build_observability(device, device["last_command"])
-        device["d1_link"] = build_d1_link_summary(device)
+        device["d1_link"] = build_d1_link_summary(device, self._recent_device_messages(db, device["device_id"]))
         return device
 
     def _location_memory(self, db: sqlite3.Connection, device_id: str) -> dict[str, Any] | None:
@@ -465,6 +465,18 @@ class MessageHubStore:
             (device_id,),
         ).fetchone()
         return json.loads(row["payload_json"]) if row else None
+
+    def _recent_device_messages(self, db: sqlite3.Connection, device_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        rows = db.execute(
+            """
+            SELECT payload_json FROM messages
+            WHERE device_id = ?
+              AND message_type IN ('status', 'event', 'ack', 'error')
+            ORDER BY id DESC LIMIT ?
+            """,
+            (device_id, limit),
+        ).fetchall()
+        return [json.loads(row["payload_json"]) for row in rows]
 
     def _latest_command(self, db: sqlite3.Connection, device_id: str) -> dict[str, Any] | None:
         row = db.execute(
@@ -2242,6 +2254,14 @@ def elapsed_seconds_since(value: Any) -> int | None:
     return int(max(0.0, (now - timestamp).total_seconds()))
 
 
+def elapsed_seconds_between(start: Any, end: Any) -> int | None:
+    start_dt = parse_iso_timestamp(start)
+    end_dt = parse_iso_timestamp(end)
+    if start_dt is None or end_dt is None:
+        return None
+    return int(max(0.0, (end_dt - start_dt).total_seconds()))
+
+
 def d1_observed_value(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() not in {"", "unknown"}
@@ -2252,7 +2272,101 @@ def d1_component_seen(payload: dict[str, Any], keys: list[str]) -> bool:
     return any(d1_observed_value(payload.get(key)) for key in keys)
 
 
-def build_d1_link_summary(device: dict[str, Any]) -> dict[str, Any]:
+def d1_event_time(message: dict[str, Any]) -> Any:
+    return first_known(message.get("server_received_at"), message.get("ts"))
+
+
+def d1_history_chronological(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return list(reversed(messages))
+
+
+def d1_raw_post_counters(message: dict[str, Any]) -> dict[str, int | None]:
+    network = as_dict(as_dict(message.get("reliability")).get("network"))
+    return {
+        "attempt_count": parse_optional_int(first_known(network.get("raw_post_attempt_count"), message.get("network_raw_post_attempt_count"))),
+        "success_count": parse_optional_int(first_known(network.get("raw_post_success_count"), message.get("network_raw_post_success_count"))),
+        "failure_count": parse_optional_int(first_known(network.get("raw_post_failure_count"), message.get("network_raw_post_failure_count"))),
+    }
+
+
+def build_d1_uplink_metrics(messages: list[dict[str, Any]]) -> dict[str, Any]:
+    ordered = d1_history_chronological(messages)
+    location_events = [
+        message
+        for message in ordered
+        if message.get("message_type") == "event" and message.get("event_type") in {"location_report", "location_observation"}
+    ]
+    latest_counters: dict[str, int | None] = {"attempt_count": None, "success_count": None, "failure_count": None}
+    for message in ordered:
+        counters = d1_raw_post_counters(message)
+        if any(value is not None for value in counters.values()):
+            latest_counters = counters
+    attempts = latest_counters["attempt_count"]
+    successes = latest_counters["success_count"]
+    failures = latest_counters["failure_count"]
+    success_rate = round(float(successes) / float(attempts), 3) if attempts and successes is not None else None
+    first_upload_at = d1_event_time(location_events[0]) if location_events else None
+    last_upload_at = d1_event_time(location_events[-1]) if location_events else None
+    return {
+        "basis": "device_raw_post_counters" if attempts is not None else "server_received_location_events",
+        "location_event_count": len(location_events),
+        "first_location_upload_at": first_upload_at,
+        "last_location_upload_at": last_upload_at,
+        "window_s": elapsed_seconds_between(first_upload_at, last_upload_at),
+        "raw_post_attempt_count": attempts,
+        "raw_post_success_count": successes,
+        "raw_post_failure_count": failures,
+        "raw_post_success_rate": success_rate,
+        "server_received_success_count": len(location_events),
+        "last_location_event_type": location_events[-1].get("event_type") if location_events else None,
+    }
+
+
+def d1_power_sample(message: dict[str, Any]) -> dict[str, Any] | None:
+    power = as_dict(message.get("power"))
+    battery_mv = first_known(power.get("battery_mv"), message.get("battery_mv"))
+    soc_pct = first_known(power.get("soc_pct"), message.get("soc_pct"), message.get("battery_percent"), message.get("battery"))
+    charging = first_known(power.get("charging"), message.get("charging"))
+    if battery_mv is None and soc_pct is None and charging is None:
+        return None
+    return compact_dict(
+        {
+            "server_received_at": d1_event_time(message),
+            "seq": message.get("seq"),
+            "event_type": message.get("event_type"),
+            "battery_mv": battery_mv,
+            "soc_pct": soc_pct,
+            "charging": charging,
+            "source_status": power.get("source_status"),
+            "evidence_status": power.get("evidence_status"),
+            "state": power.get("state"),
+        }
+    )
+
+
+def build_d1_power_curve(messages: list[dict[str, Any]]) -> dict[str, Any]:
+    samples = [sample for message in d1_history_chronological(messages) if (sample := d1_power_sample(message))]
+    first_sample = samples[0] if samples else {}
+    latest_sample = samples[-1] if samples else {}
+    first_mv = as_number(first_sample.get("battery_mv"))
+    latest_mv = as_number(latest_sample.get("battery_mv"))
+    first_soc = as_number(first_sample.get("soc_pct"))
+    latest_soc = as_number(latest_sample.get("soc_pct"))
+    return {
+        "sample_count": len(samples),
+        "first_sample_at": first_sample.get("server_received_at"),
+        "latest_sample_at": latest_sample.get("server_received_at"),
+        "window_s": elapsed_seconds_between(first_sample.get("server_received_at"), latest_sample.get("server_received_at")),
+        "latest": latest_sample or None,
+        "delta_battery_mv": int(latest_mv - first_mv) if latest_mv is not None and first_mv is not None else None,
+        "delta_soc_pct": round(latest_soc - first_soc, 3) if latest_soc is not None and first_soc is not None else None,
+        "samples": samples[-8:],
+        "battery_life_claim": "none",
+    }
+
+
+def build_d1_link_summary(device: dict[str, Any], messages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    messages = messages or []
     latest_location = as_dict(device.get("latest_location"))
     location_memory = as_dict(device.get("location_memory"))
     observability = as_dict(device.get("observability"))
@@ -2328,6 +2442,8 @@ def build_d1_link_summary(device: dict[str, Any]) -> dict[str, Any]:
             "last_location_event_type": latest_location.get("event_type"),
             "last_seq": first_known(latest_location.get("seq"), device.get("last_seq")),
         },
+        "uplink_metrics": build_d1_uplink_metrics(messages),
+        "power_curve": build_d1_power_curve(messages),
         "evidence": {
             "transport_type": first_known(transport.get("type"), "unknown"),
             "components": {
@@ -3878,6 +3994,8 @@ def render_dashboard() -> str:
       const estimate = d1.location_estimate || {};
       const map = d1.map_surface || {};
       const freshness = d1.upload_freshness || {};
+      const uplink = d1.uplink_metrics || {};
+      const powerCurve = d1.power_curve || {};
       const evidence = d1.evidence || {};
       const components = evidence.components || {};
       const gnss = components.gnss || {};
@@ -3894,6 +4012,11 @@ def render_dashboard() -> str:
         <div class="metric"><span>Accuracy Claim</span><span>${escapeHtml(estimate.accuracy_claim || 'none')}</span></div>
         <div class="metric"><span>Location Upload</span><span>${escapeHtml(freshness.last_location_upload_at || 'none')}</span></div>
         <div class="metric"><span>Upload Freshness</span><span>${escapeHtml(freshness.freshness_s ?? 'unknown')} s / seq ${escapeHtml(freshness.last_seq ?? 'unknown')}</span></div>
+        <div class="metric"><span>Upload Success</span><span>${escapeHtml(uplink.raw_post_success_count ?? 'unknown')} ok / ${escapeHtml(uplink.raw_post_failure_count ?? 'unknown')} fail / ${escapeHtml(uplink.raw_post_attempt_count ?? 'unknown')} attempts / rate ${escapeHtml(uplink.raw_post_success_rate ?? 'unknown')}</span></div>
+        <div class="metric"><span>Location Uploads</span><span>${escapeHtml(uplink.location_event_count ?? 0)} events / ${escapeHtml(uplink.basis || 'unknown')}</span></div>
+        <div class="metric"><span>Power Curve</span><span>${escapeHtml(powerCurve.sample_count ?? 0)} samples / ${escapeHtml(powerCurve.window_s ?? 'unknown')} s</span></div>
+        <div class="metric"><span>Power Delta</span><span>${escapeHtml(powerCurve.delta_battery_mv ?? 'unknown')} mV / ${escapeHtml(powerCurve.delta_soc_pct ?? 'unknown')}%</span></div>
+        <div class="metric"><span>Battery Claim</span><span>${escapeHtml(powerCurve.battery_life_claim || 'none')}</span></div>
         <div class="metric"><span>Transport</span><span>${escapeHtml(evidence.transport_type || 'unknown')}</span></div>
         <div class="metric"><span>GNSS Evidence</span><span>${escapeHtml(gnss.seen ?? false)} / fix ${escapeHtml(gnss.fix ?? 'unknown')} / ${escapeHtml(gnss.state || 'unknown')}</span></div>
         <div class="metric"><span>Cell/LTE Evidence</span><span>${escapeHtml(cellLte.seen ?? false)} / ${escapeHtml(cellLte.rat || 'unknown')} / ${escapeHtml(cellLte.registration_state || 'unknown')}</span></div>

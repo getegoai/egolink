@@ -57,7 +57,8 @@ battery power.
    `location_observation` uploads with GNSS/cell/IMU/power fields.
 4. Open the Dashboard and check the `D1 Link Through` panel: D1 status,
    map surface, upload freshness, GNSS evidence, Cell/LTE evidence, IMU
-   evidence, and Power evidence must be visible.
+   evidence, Power evidence, Upload Success, Location Uploads, Power Curve,
+   and Power Delta must be visible.
 5. Record the evidence path, board identity, firmware version or image, power
    source, start/end timestamp, and whether the map surface is coordinate,
    memory-coordinate, estimate-without-coordinate, or waiting for upload.
@@ -72,6 +73,14 @@ battery power.
   `d1_link`, Dashboard renders `D1 Link Through` with a map surface and upload
   freshness, and a synthetic no-hardware location-observation fixture covers
   the path.
+- D1 metrics baseline (2026-07-04, codex): `d1_link` now derives
+  `uplink_metrics` and `power_curve` from recent device messages, including
+  raw POST success/failure counters when present, server-received location
+  event count, power sample count, and voltage/SoC deltas. Dashboard exposes
+  these without claiming battery life.
+- Validation (2026-07-04, codex): focused message-hub tests PASS;
+  `python scripts/context_lint.py` PASS; `python scripts/build_progress_board.py`
+  PASS; `git diff --check` PASS; full `scripts\verify.ps1` PASS (356 tests).
 - Validation (2026-07-04, codex): `python scripts/context_lint.py` PASS;
   `python -m unittest quality_tests.test_message_hub_server
   quality_tests.test_message_hub_dashboard -v` PASS; `python
