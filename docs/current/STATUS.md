@@ -6,6 +6,34 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: UI-001 field-friendly Web/AMOLED UI is implemented, VPS-deployed,
+flashed, and smoke-tested. The Web Dashboard now puts `D1 Link Through` first
+with a `Field live view`, `d1FieldOverview`, `d1StatusStrip`,
+`d1FreshnessBadge`, and grouped location/uplink/power/evidence cards while
+keeping the existing D1 markers and `/api/state` contract. The updated Message
+Hub was deployed to `203.0.113.10:8790` with
+`scripts/deploy_message_hub_vps.ps1`, restarted `egolink-message-hub.service`
+on `0.0.0.0:8790`, and did not modify GitLab. Public checks passed:
+`/health` returned `ok=true`, unauthenticated `/api/state` returned `401`,
+Dashboard HTML contained the new UI markers, and read-only D1 Web/API gate
+`ui001-web-vps-20260704` passed. Evidence:
+`reports/d1_web_api/ui001-web-vps-20260704/d1_web_api_report.md`.
+The AMOLED `display_status` page now renders `D1 FIELD` with `LINK`, `LOC`,
+`PWR`, and `POST` rows; the sidecar payload is shortened for the small screen
+and remains read-only against the Message Hub. ESP-IDF v5.4.2 build passed
+(`egolink_amoled_safety_demo.bin` size `0xa0eb0`), flashing to `COM9` passed
+for ESP32-S3 MAC `02:00:00:00:00:01`, and smoke
+`ui001-amoled-friendly-smoke-20260704` passed with
+`command_ack_count=1` and `status_rendered_count=1`. Evidence:
+`reports/amoled_visible_status/ui001-amoled-friendly-smoke-20260704/ui001-amoled-friendly-smoke-20260704.summary.json`.
+Validation passed: focused UI/AMOLED tests (17 tests), `python
+scripts/context_lint.py`, `python -m py_compile server/message_hub.py`,
+`powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` (387 tests), and
+the AMOLED ESP-IDF build. The Codex in-app browser was unavailable in this
+session, so no screenshot evidence was captured. This does not claim GNSS
+accuracy, battery life, USB-Free display acceptance, calling/SMS, or product
+readiness.
+
 2026-07-04: D1-002 outdoor field kit is updated for visible AMOLED companion
 runs. `scripts/prepare_d1_field_kit.py` now generates a v2 offline kit with
 read-only Web/API preflight, AMOLED `display_status` preflight, the preferred

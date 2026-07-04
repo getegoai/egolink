@@ -3732,31 +3732,72 @@ def render_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ego Link Message Hub</title>
   <style>
-    body { margin: 0; font-family: Segoe UI, Arial, sans-serif; background: #f6f7f9; color: #17202a; }
-    header { padding: 14px 20px; background: #fff; border-bottom: 1px solid #d8dde6; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    h1 { margin: 0; font-size: 22px; letter-spacing: 0; }
-    .auth { display: flex; align-items: center; gap: 8px; }
+    :root {
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --line: #d9dee8;
+      --muted: #667085;
+      --text: #17202a;
+      --blue: #1f6feb;
+      --green: #0f766e;
+      --amber: #b45309;
+      --red: #c2410c;
+      --ink-soft: #344054;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Segoe UI, Arial, sans-serif; background: var(--bg); color: var(--text); }
+    header { padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: 21px; letter-spacing: 0; }
+    .auth { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     input { width: min(360px, 56vw); padding: 8px 10px; border: 1px solid #c8d0dc; border-radius: 6px; font: inherit; }
-    button { padding: 8px 12px; border: 1px solid #1f6feb; border-radius: 6px; background: #1f6feb; color: #fff; font: inherit; cursor: pointer; }
-    #authStatus { min-width: 92px; color: #667085; font-size: 13px; }
-    main { padding: 16px; display: grid; grid-template-columns: 380px 1fr; gap: 16px; }
+    button { padding: 8px 12px; border: 1px solid var(--blue); border-radius: 6px; background: var(--blue); color: #fff; font: inherit; cursor: pointer; }
+    #authStatus { min-width: 92px; color: var(--muted); font-size: 13px; }
+    .dashboard-shell { max-width: 1440px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+    .dashboard-grid { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px; align-items: start; }
     .stack { display: grid; gap: 16px; }
-    section { background: #fff; border: 1px solid #d8dde6; border-radius: 8px; padding: 14px; }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+    .focus-panel { padding: 0; overflow: hidden; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #edf0f5; }
+    .section-head h2 { margin: 0; }
+    .section-kicker, .refresh-note { color: var(--muted); font-size: 12px; }
     h2 { margin: 0 0 10px; font-size: 16px; letter-spacing: 0; }
-    .metric { display: grid; grid-template-columns: 132px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid #edf0f5; font-size: 14px; }
-    .metric span:first-child { color: #667085; }
-    .ok { color: #0f766e; font-weight: 600; }
-    .warn { color: #b45309; font-weight: 600; }
-    .bad { color: #c2410c; font-weight: 600; }
+    h3 { margin: 0; font-size: 14px; letter-spacing: 0; }
+    .metric { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 8px; padding: 7px 0; border-bottom: 1px solid #edf0f5; font-size: 14px; }
+    .metric span:first-child { color: var(--muted); }
+    .metric span:last-child, .metric b { min-width: 0; overflow-wrap: anywhere; }
+    .ok { color: var(--green); font-weight: 600; }
+    .warn { color: var(--amber); font-weight: 600; }
+    .bad { color: var(--red); font-weight: 600; }
+    .empty { color: var(--muted); }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { text-align: left; padding: 8px; border-bottom: 1px solid #edf0f5; vertical-align: top; }
-    th { color: #667085; }
-    .empty { color: #667085; }
-    .map-surface { min-height: 150px; border: 1px solid #c8d0dc; border-radius: 8px; background: #eef2f6; position: relative; display: grid; place-items: center; margin-bottom: 10px; overflow: hidden; }
+    th { color: var(--muted); }
+    .empty-panel { padding: 20px; color: var(--muted); }
+    .d1-overview { padding: 16px; display: grid; grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.1fr); gap: 16px; align-items: stretch; }
+    .d1-map-pane, .d1-summary-pane { min-width: 0; }
+    .d1-summary-pane { display: grid; gap: 12px; }
+    .d1-status-strip { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .status-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 5px 10px; border-radius: 999px; border: 1px solid #d8dde6; background: #f8fafc; color: var(--ink-soft); font-size: 13px; font-weight: 600; }
+    .status-chip.ok { background: #e8f5f2; border-color: #b8ddd6; color: var(--green); }
+    .status-chip.warn { background: #fff7e8; border-color: #f0d39a; color: var(--amber); }
+    .status-chip.bad { background: #fff1eb; border-color: #f0b8a3; color: var(--red); }
+    .d1-primary { border: 1px solid #d8dde6; border-radius: 8px; padding: 12px; display: grid; gap: 6px; background: #fbfcfe; }
+    .d1-primary strong { font-size: 22px; line-height: 1.2; overflow-wrap: anywhere; }
+    .d1-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .d1-card { border: 1px solid #d8dde6; border-radius: 8px; padding: 12px; background: #fff; display: grid; gap: 6px; min-width: 0; }
+    .card-label { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; }
+    .card-value { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+    .card-note { color: var(--ink-soft); font-size: 13px; overflow-wrap: anywhere; }
+    .evidence-list { display: grid; gap: 6px; }
+    .evidence-pill { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 13px; }
+    .evidence-pill span:last-child { overflow-wrap: anywhere; }
+    .map-surface { min-height: 260px; border: 1px solid #c8d0dc; border-radius: 8px; background: #eef2f6; position: relative; display: grid; place-items: center; overflow: hidden; }
     .map-grid { position: absolute; inset: 0; background-image: linear-gradient(#d9e0ea 1px, transparent 1px), linear-gradient(90deg, #d9e0ea 1px, transparent 1px); background-size: 28px 28px; }
-    .map-dot { width: 14px; height: 14px; border-radius: 50%; background: #1f6feb; border: 3px solid #fff; box-shadow: 0 0 0 2px #1f6feb; z-index: 1; }
-    .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: #344054; font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.82); border: 1px solid #d8dde6; border-radius: 6px; padding: 4px 6px; }
-    @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+    .map-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--blue); border: 3px solid #fff; box-shadow: 0 0 0 2px var(--blue); z-index: 1; }
+    .map-waiting { z-index: 1; color: var(--muted); font-size: 13px; font-weight: 600; border: 1px solid #c8d0dc; border-radius: 999px; padding: 6px 10px; background: rgba(255,255,255,0.82); }
+    .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: var(--ink-soft); font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 5px 6px; }
+    @media (max-width: 980px) { .dashboard-grid, .d1-overview { grid-template-columns: 1fr; } }
+    @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } }
   </style>
 </head>
 <body>
@@ -3768,42 +3809,50 @@ def render_dashboard() -> str:
       <span id="authStatus"></span>
     </div>
   </header>
-  <main>
-    <div class="stack">
-      <section>
-        <h2>Devices</h2>
-        <div id="devices"></div>
-      </section>
-      <section>
-        <h2>Run Context</h2>
-        <div id="runContext"></div>
-      </section>
-      <section>
-        <h2>Commands</h2>
-        <div id="commands"></div>
-      </section>
-      <section>
-        <h2>Raw Frames</h2>
-        <div id="rawFrames"></div>
-      </section>
-    </div>
-    <div class="stack">
-      <section>
-        <h2>Product Demo</h2>
-        <div id="productDemo"></div>
-      </section>
-      <section>
-        <h2>D1 Link Through</h2>
-        <div id="d1Link"></div>
-      </section>
-      <section>
-        <h2>Latest Field State</h2>
-        <div id="fieldState"></div>
-      </section>
-      <section>
-        <h2>Recent Messages</h2>
-        <table><thead><tr><th>Device</th><th>Type</th><th>Seq</th><th>Detail</th><th>Received</th></tr></thead><tbody id="messages"></tbody></table>
-      </section>
+  <main class="dashboard-shell">
+    <section class="focus-panel">
+      <div class="section-head">
+        <div>
+          <h2>D1 Link Through</h2>
+          <span class="section-kicker">Field live view</span>
+        </div>
+        <span class="refresh-note">auto refresh 3s</span>
+      </div>
+      <div id="d1Link"></div>
+    </section>
+    <div class="dashboard-grid">
+      <div class="stack">
+        <section>
+          <h2>Devices</h2>
+          <div id="devices"></div>
+        </section>
+        <section>
+          <h2>Run Context</h2>
+          <div id="runContext"></div>
+        </section>
+        <section>
+          <h2>Commands</h2>
+          <div id="commands"></div>
+        </section>
+        <section>
+          <h2>Raw Frames</h2>
+          <div id="rawFrames"></div>
+        </section>
+      </div>
+      <div class="stack">
+        <section>
+          <h2>Product Demo</h2>
+          <div id="productDemo"></div>
+        </section>
+        <section>
+          <h2>Latest Field State</h2>
+          <div id="fieldState"></div>
+        </section>
+        <section>
+          <h2>Recent Messages</h2>
+          <table><thead><tr><th>Device</th><th>Type</th><th>Seq</th><th>Detail</th><th>Received</th></tr></thead><tbody id="messages"></tbody></table>
+        </section>
+      </div>
     </div>
   </main>
   <script>
@@ -3966,6 +4015,31 @@ def render_dashboard() -> str:
       if (status === 'waiting_for_location_upload') return 'warn';
       return 'empty';
     }
+    function valueOrUnknown(value, fallback = 'unknown') {
+      if (value === undefined || value === null || value === '') return fallback;
+      return value;
+    }
+    function boolSeen(value) {
+      if (value === true) return 'seen';
+      if (value === false) return 'not seen';
+      return 'unknown';
+    }
+    function freshnessLabel(freshness) {
+      const seconds = Number(freshness.freshness_s);
+      if (!Number.isFinite(seconds)) return 'freshness unknown';
+      if (seconds < 60) return `${Math.max(0, Math.round(seconds))}s old`;
+      return `${Math.round(seconds / 60)}m old`;
+    }
+    function freshnessClass(freshness) {
+      const seconds = Number(freshness.freshness_s);
+      if (!Number.isFinite(seconds)) return 'warn';
+      if (seconds <= 120) return 'ok';
+      if (seconds <= 600) return 'warn';
+      return 'bad';
+    }
+    function arrayLabel(values) {
+      return Array.isArray(values) && values.length ? values.join(', ') : 'none';
+    }
     function coordinateLabel(lat, lon) {
       const parsedLat = Number(lat);
       const parsedLon = Number(lon);
@@ -3979,16 +4053,19 @@ def render_dashboard() -> str:
       const caption = map.visible
         ? `${mode} / ${estimate.state || 'unknown'} / ${coordinateLabel(map.lat, map.lon)}`
         : 'waiting for location upload';
+      const marker = map.visible
+        ? `<div class="map-dot" title="${escapeHtml(caption)}"></div>`
+        : '<div class="map-waiting">waiting for location</div>';
       return `
         <div class="map-surface" data-d1-map-mode="${escapeHtml(mode)}">
           <div class="map-grid"></div>
-          <div class="map-dot" title="${escapeHtml(caption)}"></div>
+          ${marker}
           <div class="map-caption">${escapeHtml(caption)}</div>
         </div>
       `;
     }
     function d1LinkPanel(devices) {
-      if (!devices.length) return '<span class="empty">No device data yet</span>';
+      if (!devices.length) return '<div class="empty-panel">No device data yet</div>';
       const d = devices[0];
       const d1 = d.d1_link || {};
       const estimate = d1.location_estimate || {};
@@ -4002,26 +4079,62 @@ def render_dashboard() -> str:
       const cellLte = components.cell_lte || {};
       const imu = components.imu || {};
       const power = components.power || {};
+      const status = d1.status || 'unknown';
+      const mapMode = map.mode || 'waiting_for_location_upload';
+      const locationText = `${valueOrUnknown(estimate.state)} / ${valueOrUnknown(estimate.confidence)} / ${valueOrUnknown(estimate.radius_m)} m`;
+      const uploadText = `${valueOrUnknown(uplink.raw_post_success_count)} ok / ${valueOrUnknown(uplink.raw_post_failure_count)} fail / ${valueOrUnknown(uplink.raw_post_attempt_count)} attempts / rate ${valueOrUnknown(uplink.raw_post_success_rate)}`;
+      const powerText = `${valueOrUnknown(powerCurve.sample_count, 0)} samples / ${valueOrUnknown(powerCurve.window_s)} s`;
+      const powerDeltaText = `${valueOrUnknown(powerCurve.delta_battery_mv)} mV / ${valueOrUnknown(powerCurve.delta_soc_pct)}%`;
       return `
-        ${d1MapSurface(map, estimate)}
-        <div class="metric"><span>Map Surface</span><span>${escapeHtml(map.mode || 'waiting_for_location_upload')}</span></div>
-        <div class="metric"><span>D1 Status</span><span class="${d1StatusClass(d1.status)}">${escapeHtml(d1.status || 'unknown')}</span></div>
-        <div class="metric"><span>Location Estimate</span><span>${escapeHtml(estimate.state || 'unknown')} / ${escapeHtml(estimate.confidence ?? 'unknown')} / ${escapeHtml(estimate.radius_m ?? 'unknown')} m</span></div>
-        <div class="metric"><span>Estimate Reason</span><span>${escapeHtml(estimate.reason || 'unknown')}</span></div>
-        <div class="metric"><span>Estimate Source</span><span>${escapeHtml((estimate.source || []).join(', ') || 'none')}</span></div>
-        <div class="metric"><span>Accuracy Claim</span><span>${escapeHtml(estimate.accuracy_claim || 'none')}</span></div>
-        <div class="metric"><span>Location Upload</span><span>${escapeHtml(freshness.last_location_upload_at || 'none')}</span></div>
-        <div class="metric"><span>Upload Freshness</span><span>${escapeHtml(freshness.freshness_s ?? 'unknown')} s / seq ${escapeHtml(freshness.last_seq ?? 'unknown')}</span></div>
-        <div class="metric"><span>Upload Success</span><span>${escapeHtml(uplink.raw_post_success_count ?? 'unknown')} ok / ${escapeHtml(uplink.raw_post_failure_count ?? 'unknown')} fail / ${escapeHtml(uplink.raw_post_attempt_count ?? 'unknown')} attempts / rate ${escapeHtml(uplink.raw_post_success_rate ?? 'unknown')}</span></div>
-        <div class="metric"><span>Location Uploads</span><span>${escapeHtml(uplink.location_event_count ?? 0)} events / ${escapeHtml(uplink.basis || 'unknown')}</span></div>
-        <div class="metric"><span>Power Curve</span><span>${escapeHtml(powerCurve.sample_count ?? 0)} samples / ${escapeHtml(powerCurve.window_s ?? 'unknown')} s</span></div>
-        <div class="metric"><span>Power Delta</span><span>${escapeHtml(powerCurve.delta_battery_mv ?? 'unknown')} mV / ${escapeHtml(powerCurve.delta_soc_pct ?? 'unknown')}%</span></div>
-        <div class="metric"><span>Battery Claim</span><span>${escapeHtml(powerCurve.battery_life_claim || 'none')}</span></div>
-        <div class="metric"><span>Transport</span><span>${escapeHtml(evidence.transport_type || 'unknown')}</span></div>
-        <div class="metric"><span>GNSS Evidence</span><span>${escapeHtml(gnss.seen ?? false)} / fix ${escapeHtml(gnss.fix ?? 'unknown')} / ${escapeHtml(gnss.state || 'unknown')}</span></div>
-        <div class="metric"><span>Cell/LTE Evidence</span><span>${escapeHtml(cellLte.seen ?? false)} / ${escapeHtml(cellLte.rat || 'unknown')} / ${escapeHtml(cellLte.registration_state || 'unknown')}</span></div>
-        <div class="metric"><span>IMU Evidence</span><span>${escapeHtml(imu.seen ?? false)} / ${escapeHtml(imu.motion || 'unknown')} / ${escapeHtml(imu.evidence_status || 'unknown')}</span></div>
-        <div class="metric"><span>Power Evidence</span><span>${escapeHtml(power.seen ?? false)} / ${escapeHtml(power.battery_mv ?? 'unknown')} mV / ${escapeHtml(power.soc_pct ?? 'unknown')}%</span></div>
+        <div id="d1FieldOverview" class="d1-overview">
+          <div class="d1-map-pane">
+            ${d1MapSurface(map, estimate)}
+          </div>
+          <div class="d1-summary-pane">
+            <div id="d1StatusStrip" class="d1-status-strip">
+              <span class="status-chip ${d1StatusClass(status)}">D1 Status ${escapeHtml(status)}</span>
+              <span id="d1FreshnessBadge" class="status-chip ${freshnessClass(freshness)}">Upload Freshness ${escapeHtml(freshnessLabel(freshness))}</span>
+              <span class="status-chip">Transport ${escapeHtml(valueOrUnknown(evidence.transport_type))}</span>
+              <span class="status-chip">Map Surface ${escapeHtml(mapMode)}</span>
+            </div>
+            <div class="d1-primary">
+              <span class="card-label">Location Estimate</span>
+              <strong>${escapeHtml(locationText)}</strong>
+              <span class="card-note">Estimate Reason: ${escapeHtml(valueOrUnknown(estimate.reason))}</span>
+              <span class="card-note">Estimate Source: ${escapeHtml(arrayLabel(estimate.source))}</span>
+              <span class="card-note">Accuracy Claim: ${escapeHtml(estimate.accuracy_claim || 'none')}</span>
+            </div>
+            <div class="d1-grid">
+              <div class="d1-card">
+                <span class="card-label">Uplink</span>
+                <span class="card-value">Upload Success: ${escapeHtml(uploadText)}</span>
+                <span class="card-note">Location Uploads: ${escapeHtml(uplink.location_event_count ?? 0)} events / ${escapeHtml(uplink.basis || 'unknown')}</span>
+                <span class="card-note">Location Upload: ${escapeHtml(freshness.last_location_upload_at || 'none')} / seq ${escapeHtml(freshness.last_seq ?? 'unknown')}</span>
+              </div>
+              <div class="d1-card">
+                <span class="card-label">Power</span>
+                <span class="card-value">Power Curve: ${escapeHtml(powerText)}</span>
+                <span class="card-note">Power Delta: ${escapeHtml(powerDeltaText)}</span>
+                <span class="card-note">Battery Claim: ${escapeHtml(powerCurve.battery_life_claim || 'none')}</span>
+              </div>
+              <div class="d1-card">
+                <span class="card-label">Evidence</span>
+                <div class="evidence-list">
+                  <div class="evidence-pill"><span>GNSS Evidence</span><span>${escapeHtml(boolSeen(gnss.seen))} / fix ${escapeHtml(valueOrUnknown(gnss.fix))} / ${escapeHtml(valueOrUnknown(gnss.state))}</span></div>
+                  <div class="evidence-pill"><span>Cell/LTE Evidence</span><span>${escapeHtml(boolSeen(cellLte.seen))} / ${escapeHtml(valueOrUnknown(cellLte.rat))} / ${escapeHtml(valueOrUnknown(cellLte.registration_state))}</span></div>
+                  <div class="evidence-pill"><span>IMU Evidence</span><span>${escapeHtml(boolSeen(imu.seen))} / ${escapeHtml(valueOrUnknown(imu.motion))} / ${escapeHtml(valueOrUnknown(imu.evidence_status))}</span></div>
+                  <div class="evidence-pill"><span>Power Evidence</span><span>${escapeHtml(boolSeen(power.seen))} / ${escapeHtml(valueOrUnknown(power.battery_mv))} mV / ${escapeHtml(valueOrUnknown(power.soc_pct))}%</span></div>
+                </div>
+              </div>
+              <div class="d1-card">
+                <span class="card-label">Field Notes</span>
+                <span class="card-value">${escapeHtml(coordinateLabel(map.lat, map.lon))}</span>
+                <span class="card-note">Map mode: ${escapeHtml(mapMode)}</span>
+                <span class="card-note">No accuracy or battery-life claim is made from this panel.</span>
+              </div>
+            </div>
+          </div>
+        </div>
       `;
     }
     function latestFieldState(devices, rawFrames) {

@@ -81,6 +81,8 @@ typedef struct {
 #define DISPLAY_TEXT_MAX 160
 #define STATUS_TEXT_MAX 96
 #define SCREEN_TEXT_WIDTH 372
+#define STATUS_ROW_WIDTH 372
+#define STATUS_ROW_HEIGHT 54
 
 typedef struct {
     char cmd_id[COMMAND_ID_MAX];
@@ -484,6 +486,34 @@ static lv_obj_t *make_button(lv_obj_t *parent, const char *label, lv_color_t col
     return button;
 }
 
+static lv_obj_t *add_status_row(lv_obj_t *parent, const char *label_text, const char *value_text, int32_t y, lv_color_t accent)
+{
+    lv_obj_t *row = lv_obj_create(parent);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, STATUS_ROW_WIDTH, STATUS_ROW_HEIGHT);
+    lv_obj_set_style_radius(row, 10, 0);
+    lv_obj_set_style_bg_color(row, lv_color_hex(0x171D24), 0);
+    lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(row, lv_color_hex(0x2B3440), 0);
+    lv_obj_set_style_border_width(row, 1, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(row, LV_ALIGN_TOP_MID, 0, y);
+
+    lv_obj_t *label = lv_label_create(row);
+    lv_label_set_text(label, label_text);
+    lv_obj_set_style_text_color(label, accent, 0);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
+    lv_obj_align(label, LV_ALIGN_LEFT_MID, 14, 0);
+
+    lv_obj_t *value = lv_label_create(row);
+    lv_label_set_text(value, value_text == NULL || value_text[0] == '\0' ? "unknown" : value_text);
+    lv_obj_set_style_text_color(value, lv_color_hex(0xF2F4F7), 0);
+    lv_obj_set_style_text_font(value, &lv_font_montserrat_16, 0);
+    style_wrapped_label(value, STATUS_ROW_WIDTH - 96, LV_TEXT_ALIGN_LEFT);
+    lv_obj_align(value, LV_ALIGN_LEFT_MID, 82, 0);
+    return value;
+}
+
 static void build_safety_prompt_ui(const char *title_text, const char *prompt_text, const char *severity)
 {
     lv_obj_t *screen = lv_screen_active();
@@ -527,38 +557,31 @@ static void build_status_ui(const display_status_t *status)
 {
     lv_obj_t *screen = lv_screen_active();
     lv_obj_clean(screen);
-    lv_obj_set_style_bg_color(screen, lv_color_hex(0x101418), 0);
+    lv_obj_set_style_bg_color(screen, lv_color_hex(0x0E1116), 0);
+
+    lv_obj_t *accent = lv_obj_create(screen);
+    lv_obj_remove_style_all(accent);
+    lv_obj_set_size(accent, 412, 8);
+    lv_obj_set_style_bg_color(accent, lv_color_hex(0x1F6FEB), 0);
+    lv_obj_set_style_bg_opa(accent, LV_OPA_COVER, 0);
+    lv_obj_align(accent, LV_ALIGN_TOP_MID, 0, 0);
 
     lv_obj_t *title = lv_label_create(screen);
-    lv_label_set_text(title, "Ego Link");
+    lv_label_set_text(title, "D1 FIELD");
     lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_28, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 40);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 26);
 
-    lv_obj_t *line1 = lv_label_create(screen);
-    lv_label_set_text(line1, status->line1);
-    lv_obj_set_style_text_color(line1, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_set_style_text_font(line1, &lv_font_montserrat_22, 0);
-    style_wrapped_label(line1, SCREEN_TEXT_WIDTH, LV_TEXT_ALIGN_CENTER);
-    lv_obj_align(line1, LV_ALIGN_TOP_MID, 0, 104);
+    lv_obj_t *subtitle = lv_label_create(screen);
+    lv_label_set_text(subtitle, "live status companion");
+    lv_obj_set_style_text_color(subtitle, lv_color_hex(0x9AA7B5), 0);
+    lv_obj_set_style_text_font(subtitle, &lv_font_montserrat_16, 0);
+    lv_obj_align(subtitle, LV_ALIGN_TOP_MID, 0, 61);
 
-    lv_obj_t *line2 = lv_label_create(screen);
-    lv_label_set_text(line2, status->line2);
-    lv_obj_set_style_text_color(line2, lv_color_hex(0xB8C2CC), 0);
-    style_wrapped_label(line2, SCREEN_TEXT_WIDTH, LV_TEXT_ALIGN_CENTER);
-    lv_obj_align(line2, LV_ALIGN_TOP_MID, 0, 150);
-
-    lv_obj_t *line3 = lv_label_create(screen);
-    lv_label_set_text(line3, status->line3);
-    lv_obj_set_style_text_color(line3, lv_color_hex(0xB8C2CC), 0);
-    style_wrapped_label(line3, SCREEN_TEXT_WIDTH, LV_TEXT_ALIGN_CENTER);
-    lv_obj_align(line3, LV_ALIGN_TOP_MID, 0, 188);
-
-    s_status_label = lv_label_create(screen);
-    lv_label_set_text(s_status_label, status->footer);
-    lv_obj_set_style_text_color(s_status_label, lv_color_hex(0x7A8794), 0);
-    style_wrapped_label(s_status_label, SCREEN_TEXT_WIDTH, LV_TEXT_ALIGN_CENTER);
-    lv_obj_align(s_status_label, LV_ALIGN_BOTTOM_MID, 0, -42);
+    (void)add_status_row(screen, "LINK", status->line1, 94, lv_color_hex(0x41C28A));
+    (void)add_status_row(screen, "LOC", status->line2, 158, lv_color_hex(0x69A7FF));
+    (void)add_status_row(screen, "PWR", status->line3, 222, lv_color_hex(0xF0B84A));
+    s_status_label = add_status_row(screen, "POST", status->footer, 286, lv_color_hex(0xA6B3C2));
 }
 
 static void build_idle_ui(void)

@@ -205,9 +205,9 @@ function New-D1StatusPayload {
     $device = Select-D1Device -State $State -PreferredDeviceId $PreferredDeviceId
     if ($null -eq $device) {
         return [ordered]@{
-            summary = "D1 waiting / no device"
+            summary = "WAIT no device"
             lte = "unknown"
-            location = "Loc waiting"
+            location = "waiting"
             battery = "Battery unknown"
             footer = "No d1_link in /api/state"
         }
@@ -228,19 +228,24 @@ function New-D1StatusPayload {
     $rat = First-Text @((Get-Field $cell "rat")) "LTE"
     $registration = First-Text @((Get-Field $cell "registration_state")) "unknown"
     $pdp = First-Text @((Get-Field $cell "pdp_state")) "unknown"
-    $lteText = Limit-Text "$rat $registration/$pdp"
-    $summary = Limit-Text "D1 $status fresh $freshText / $lteText"
+    $statusLabel = switch ($status) {
+        "estimate_visible" { "LIVE"; break }
+        "waiting_for_location_upload" { "WAIT"; break }
+        default { Limit-Text $status 12 }
+    }
+    $lteText = Limit-Text "$rat $registration/$pdp" 42
+    $summary = Limit-Text "$statusLabel fresh $freshText / $lteText" 44
 
     $lat = Get-Field $surface "lat"
     $lon = Get-Field $surface "lon"
     $latText = Format-Number -Value $lat -Format "0.00000"
     $lonText = Format-Number -Value $lon -Format "0.00000"
     if ($latText -and $lonText) {
-        $location = "Coord $latText,$lonText"
+        $location = Limit-Text "Coord $latText,$lonText" 44
     } else {
         $mapMode = First-Text @((Get-Field $surface "mode")) "waiting"
         $gnssState = First-Text @((Get-Field $gnss "state"), (Get-Field $gnss "reason_code")) "gnss_unknown"
-        $location = Limit-Text "Loc $mapMode / $gnssState"
+        $location = Limit-Text "$mapMode / $gnssState" 44
     }
 
     $socText = Format-Number -Value (Get-Field $power "soc_pct") -Format "0"
@@ -252,7 +257,7 @@ function New-D1StatusPayload {
         $mvText = Format-Number -Value (Get-Field (Get-Field $powerCurve "latest") "battery_mv") -Format "0"
     }
     if ($socText -or $mvText) {
-        $battery = Limit-Text "Battery $(First-Text @($socText) "?")% / $(First-Text @($mvText) "?")mV"
+        $battery = Limit-Text "$(First-Text @($socText) "?")% / $(First-Text @($mvText) "?")mV" 44
     } else {
         $battery = "Battery unknown"
     }
@@ -260,7 +265,7 @@ function New-D1StatusPayload {
     $ok = First-Text @((Get-Field $uplink "raw_post_success_count")) "?"
     $fail = First-Text @((Get-Field $uplink "raw_post_failure_count")) "?"
     $locCount = First-Text @((Get-Field $uplink "location_event_count")) "?"
-    $footer = Limit-Text "POST $ok ok / $fail fail / loc $locCount"
+    $footer = Limit-Text "$ok ok / $fail fail / loc $locCount" 44
 
     return [ordered]@{
         summary = $summary
