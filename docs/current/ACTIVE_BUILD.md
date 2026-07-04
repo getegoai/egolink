@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-02
+last_verified: 2026-07-04
 verified_by: codex
 ---
 
@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | LTE-011 fix1 observation payload margin is currently flashed on `COM4` after explicit operator confirmation and passed USB-Free runtime validation with `cmd-000033`; the LTE-010 offline reconnect/store-forward evidence gate passed over that export. The prior LTE-011 runtime validation with `cmd-000032` failed explainably at firmware-side `location_observation_payload_truncated`. LTE-009 raw POST retry fault-injection firmware previously passed USB-Free runtime with `cmd-000031`. LTE-008 fix1 bounded raw POST retry observability firmware previously passed USB-Free runtime with `cmd-000030`. The earlier LTE-008 image's first USB-Free runtime validation failed with `location_observation_payload_truncated`. LTE-007 volatile cache/drop observability firmware previously passed USB-Free runtime with `cmd-000028`; LTE-006 fix1 reliability non-claim firmware previously passed USB-Free runtime with `cmd-000026`; LOC-005A source-state runtime previously passed with `cmd-000024`; LOC-004A reboot-aware USB-Free validator smoke previously passed with `cmd-000023`; LTE-004 request-location thin slice previously passed |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | D1 periodic location firmware `0.1.0-d1-periodic-location` is currently flashed on `COM4` after explicit operator confirmation. Flash passed for ESP32-S3 MAC `02:00:00:00:00:03` with bootloader/app/partition-table hashes verified and hard reset completed; post-flash read-only VPS D1 Web/API check still showed old 2026-07-02 location evidence and no latitude/longitude, so live LTE upload and outdoor GNSS fix remain unverified. LTE-011 fix1 observation payload margin previously passed USB-Free runtime validation with `cmd-000033`, and the LTE-010 offline reconnect/store-forward evidence gate passed over that export. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 

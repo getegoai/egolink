@@ -115,6 +115,14 @@ battery power.
   Dashboard. Local ESP-IDF build PASS produced
   `firmware/mqtt_heartbeat/build_d1_periodic_verify/egolink_mqtt_heartbeat.bin`;
   flashing was intentionally not run.
+- D1 periodic flash (2026-07-04, codex): after explicit operator approval,
+  flashed `0.1.0-d1-periodic-location` on connectivity-node `COM4`. esptool
+  detected ESP32-S3 MAC `02:00:00:00:00:03`, wrote bootloader, app
+  (`316800` bytes), and partition table, verified hashes, and hard-reset the
+  board. Read-only VPS D1 Web/API check
+  `d1-live-after-flash-check-20260704` still showed the old 2026-07-02
+  location evidence and no latitude/longitude, so live LTE upload and outdoor
+  GNSS fix remain unverified.
 - Validation (2026-07-04, codex): D1 periodic firmware/tool focused tests
   PASS (34 tests); ESP-IDF build PASS for
   `build_d1_periodic_verify/egolink_mqtt_heartbeat.bin`; `python
