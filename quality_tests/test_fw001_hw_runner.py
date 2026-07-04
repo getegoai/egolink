@@ -42,6 +42,8 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertFalse(payload["sim7670_lte_http_probe_enabled"])
         self.assertFalse(payload["sim7670_lte_http_command_loop_enabled"])
         self.assertFalse(payload["sim7670_location_observation_enabled"])
+        self.assertFalse(payload["d1_periodic_location_enabled"])
+        self.assertEqual(payload["d1_periodic_location_interval_sec"], 60)
         self.assertFalse(payload["raw_post_fail_once_test_enabled"])
         self.assertFalse(payload["reconnect_store_forward_test_enabled"])
         self.assertEqual(payload["existing_command_id"], "")
@@ -106,6 +108,8 @@ class FW001HardwareRunnerTests(unittest.TestCase):
         self.assertIn("[switch]$EnableSim7670LteHttpProbe", self.script_text)
         self.assertIn("[switch]$EnableSim7670LteHttpCommandLoop", self.script_text)
         self.assertIn("[switch]$EnableSim7670LocationObservation", self.script_text)
+        self.assertIn("[switch]$EnableD1PeriodicLocation", self.script_text)
+        self.assertIn("[int]$D1PeriodicLocationIntervalSec = 60", self.script_text)
         self.assertIn("[switch]$EnableRawPostFailOnceTest", self.script_text)
         self.assertIn("[switch]$EnableReconnectStoreForwardTest", self.script_text)
         self.assertIn("[string]$ExistingCommandId", self.script_text)
@@ -129,6 +133,8 @@ class FW001HardwareRunnerTests(unittest.TestCase):
             'Add-If $prepareArgs $EnableSim7670LocationObservation "-EnableSim7670LocationObservation"',
             self.script_text,
         )
+        self.assertIn('Add-If $prepareArgs $EnableD1PeriodicLocation "-EnableD1PeriodicLocation"', self.script_text)
+        self.assertIn('"-D1PeriodicLocationIntervalSec", [string]$D1PeriodicLocationIntervalSec', self.script_text)
         self.assertIn('Add-If $prepareArgs $EnableRawPostFailOnceTest "-EnableRawPostFailOnceTest"', self.script_text)
         self.assertIn(
             'Add-If $prepareArgs $EnableReconnectStoreForwardTest "-EnableReconnectStoreForwardTest"',

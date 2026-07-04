@@ -24,6 +24,8 @@ param(
     [switch]$EnableSim7670LteHttpProbe,
     [switch]$EnableSim7670LteHttpCommandLoop,
     [switch]$EnableSim7670LocationObservation,
+    [switch]$EnableD1PeriodicLocation,
+    [int]$D1PeriodicLocationIntervalSec = 60,
     [switch]$EnableRawPostFailOnceTest,
     [switch]$EnableReconnectStoreForwardTest,
     [switch]$EnableMax17048Power,
@@ -86,8 +88,8 @@ $lteCommandValidationScript = Resolve-RepoPath "scripts/validate_lte_command_loo
 $tokenPath = Resolve-RepoPath $TokenFile
 $buildPath = Join-Path $firmwarePath $BuildDir
 $binaryPath = Join-Path $buildPath "egolink_mqtt_heartbeat.bin"
-$effectiveEnableSim7670LocationObservation = [bool]($EnableSim7670LocationObservation -or $EnableReconnectStoreForwardTest)
-$effectiveEnableSim7670LteHttpCommandLoop = [bool]($EnableSim7670LteHttpCommandLoop -or $effectiveEnableSim7670LocationObservation)
+$effectiveEnableSim7670LocationObservation = [bool]($EnableSim7670LocationObservation -or $EnableReconnectStoreForwardTest -or $EnableD1PeriodicLocation)
+$effectiveEnableSim7670LteHttpCommandLoop = [bool]($EnableSim7670LteHttpCommandLoop -or $effectiveEnableSim7670LocationObservation -or $EnableD1PeriodicLocation)
 $effectiveEnableSim7670LteStatus = [bool]($EnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop)
 
 $result = [ordered]@{
@@ -103,6 +105,8 @@ $result = [ordered]@{
     sim7670_lte_http_probe_enabled = [bool]$EnableSim7670LteHttpProbe
     sim7670_lte_http_command_loop_enabled = [bool]$effectiveEnableSim7670LteHttpCommandLoop
     sim7670_location_observation_enabled = [bool]$effectiveEnableSim7670LocationObservation
+    d1_periodic_location_enabled = [bool]$EnableD1PeriodicLocation
+    d1_periodic_location_interval_sec = $D1PeriodicLocationIntervalSec
     raw_post_fail_once_test_enabled = [bool]$EnableRawPostFailOnceTest
     reconnect_store_forward_test_enabled = [bool]$EnableReconnectStoreForwardTest
     max17048_power_enabled = [bool]$EnableMax17048Power
@@ -171,6 +175,12 @@ if ($PrepareBuild) {
     Add-If $prepareArgs $EnableSim7670LteHttpProbe "-EnableSim7670LteHttpProbe"
     Add-If $prepareArgs $EnableSim7670LteHttpCommandLoop "-EnableSim7670LteHttpCommandLoop"
     Add-If $prepareArgs $EnableSim7670LocationObservation "-EnableSim7670LocationObservation"
+    Add-If $prepareArgs $EnableD1PeriodicLocation "-EnableD1PeriodicLocation"
+    if ($EnableD1PeriodicLocation) {
+        @(
+            "-D1PeriodicLocationIntervalSec", [string]$D1PeriodicLocationIntervalSec
+        ) | ForEach-Object { $prepareArgs.Add([string]$_) }
+    }
     Add-If $prepareArgs $EnableRawPostFailOnceTest "-EnableRawPostFailOnceTest"
     Add-If $prepareArgs $EnableReconnectStoreForwardTest "-EnableReconnectStoreForwardTest"
     Add-If $prepareArgs $EnableMax17048Power "-EnableMax17048Power"

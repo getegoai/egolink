@@ -1,10 +1,22 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-03
+last_verified: 2026-07-04
 verified_by: codex
 ---
 
 ## Latest Deployment Note
+
+2026-07-04: D1 periodic location firmware is prepared but not flashed. The
+opt-in `0.1.0-d1-periodic-location` mode keeps the LTE command-loop task alive
+and periodically uploads a raw `location_report` plus `location_observation`
+pair so the deployed Dashboard can refresh field data without manual
+`request_location` commands. The local ESP-IDF build passed and produced
+`firmware/mqtt_heartbeat/build_d1_periodic_verify/egolink_mqtt_heartbeat.bin`
+with `flash_intentionally_not_run=true`; no hardware was contacted, no firmware
+was flashed, no device command was sent, and no GNSS accuracy, battery-life, or
+long LTE stability claim is made. Validation passed: focused D1 firmware/tool
+tests, `context_lint`, progress-board generation, `git diff --check`, and full
+`scripts\verify.ps1` (371 tests).
 
 2026-07-04: D1 Dashboard/Web is deployed to the public VPS Message Hub at
 `203.0.113.10:8790` without modifying GitLab. The read-only D1 Web/API gate

@@ -1865,6 +1865,28 @@ static bool lte_http_publish_raw_location_observation(const char *cmd_id)
     return ok;
 }
 #endif
+
+#if CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED
+static bool lte_http_publish_d1_periodic_location_once(void)
+{
+    static uint32_t periodic_id = 0;
+    char cmd_id[64];
+    snprintf(cmd_id, sizeof(cmd_id), "d1-periodic-%" PRIu32, ++periodic_id);
+    ESP_LOGI(TAG, "LTE_HTTP_D1_PERIODIC_LOCATION_START id=%s", cmd_id);
+    bool location_ok = lte_http_publish_raw_location_report(cmd_id);
+    bool observation_ok = false;
+#if CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+    observation_ok = location_ok ? lte_http_publish_raw_location_observation(cmd_id) : false;
+#endif
+    ESP_LOGI(
+        TAG,
+        "LTE_HTTP_D1_PERIODIC_LOCATION_DONE id=%s location_ok=%s observation_ok=%s",
+        cmd_id,
+        location_ok ? "true" : "false",
+        observation_ok ? "true" : "false");
+    return location_ok && observation_ok;
+}
+#endif
 #endif
 
 static void build_lte_command_ack_payload(
@@ -2461,6 +2483,31 @@ static void lte_http_command_task(void *arg)
         max_attempts = 1;
     }
     bool acked = false;
+#if CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED
+    int64_t next_periodic_location_ms = 0;
+    for (int attempt = 1;; ++attempt) {
+        sim7670_lte_http_probe_result_t poll_result;
+        ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_ROUND_START attempt=%d max_attempts=%d periodic_location=true", attempt, max_attempts);
+        bool round_acked = lte_http_poll_commands_once(&poll_result);
+        acked = acked || round_acked;
+        (void)lte_http_post_command_diag(round_acked ? "command_ack_observed" : "poll_no_ack", &poll_result, true, round_acked);
+        ESP_LOGI(
+            TAG,
+            "LTE_HTTP_COMMAND_POLL_ROUND_DONE attempt=%d acked=%s cumulative_acked=%s",
+            attempt,
+            round_acked ? "true" : "false",
+            acked ? "true" : "false");
+
+        int64_t now_ms = uptime_ms();
+        if (now_ms >= next_periodic_location_ms) {
+            bool location_ok = lte_http_publish_d1_periodic_location_once();
+            ESP_LOGI(TAG, "LTE_HTTP_D1_PERIODIC_LOCATION_SCHEDULED ok=%s", location_ok ? "true" : "false");
+            next_periodic_location_ms = uptime_ms() + (int64_t)CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_INTERVAL_SEC * 1000;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_INTERVAL_SEC * 1000));
+    }
+#else
     for (int attempt = 1; attempt <= max_attempts; ++attempt) {
         sim7670_lte_http_probe_result_t poll_result;
         ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_ROUND_START attempt=%d max_attempts=%d", attempt, max_attempts);
@@ -2480,6 +2527,7 @@ static void lte_http_command_task(void *arg)
         acked ? "lte_http_command_ack_ok" : "lte_http_command_ack_missing");
     platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_http_command_done");
     vTaskDelete(NULL);
+#endif
 }
 #endif
 #endif

@@ -18,6 +18,7 @@ context:
   - docs/development/PROTOCOL.md
 
 allowed_paths:
+  - firmware/
   - server/
   - pc_simulator/
   - scripts/
@@ -45,6 +46,9 @@ and the Dashboard shows it.
 - [x] A run-specific D1 outdoor field kit can generate operator runbook,
       checklist, notes template, and post-run evidence commands without
       touching hardware or secrets.
+- [x] Opt-in D1 field firmware can periodically upload location reports and
+      observations so the live Dashboard refreshes without manual command
+      enqueueing.
 - [x] `python scripts/context_lint.py` and `powershell -ExecutionPolicy Bypass
       -File scripts\verify.ps1` pass.
 
@@ -104,6 +108,18 @@ battery power.
   `D1 Link Through` panel and `/api/state` exposes `d1_link`; current device
   data is stale from 2026-07-02 and has no latitude/longitude yet, so this is
   Web readiness rather than a new hardware positioning pass.
+- D1 periodic location firmware (2026-07-04, codex): added an opt-in
+  `0.1.0-d1-periodic-location` firmware mode and field-kit default so the LTE
+  command-loop task can keep polling commands while periodically uploading a
+  raw `location_report` plus `location_observation` pair for the live
+  Dashboard. Local ESP-IDF build PASS produced
+  `firmware/mqtt_heartbeat/build_d1_periodic_verify/egolink_mqtt_heartbeat.bin`;
+  flashing was intentionally not run.
+- Validation (2026-07-04, codex): D1 periodic firmware/tool focused tests
+  PASS (34 tests); ESP-IDF build PASS for
+  `build_d1_periodic_verify/egolink_mqtt_heartbeat.bin`; `python
+  scripts/context_lint.py` PASS; `python scripts/build_progress_board.py`
+  PASS; `git diff --check` PASS; full `scripts\verify.ps1` PASS (371 tests).
 - Validation (2026-07-04, codex): D1 field-kit/report-chain focused tests
   PASS; `python scripts/context_lint.py` PASS; `python
   scripts/build_progress_board.py` PASS; `git diff --check` PASS; full

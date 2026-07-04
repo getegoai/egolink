@@ -20,6 +20,8 @@ param(
     [switch]$EnableSim7670LteHttpProbe,
     [switch]$EnableSim7670LteHttpCommandLoop,
     [switch]$EnableSim7670LocationObservation,
+    [switch]$EnableD1PeriodicLocation,
+    [int]$D1PeriodicLocationIntervalSec = 60,
     [switch]$EnableRawPostFailOnceTest,
     [switch]$EnableReconnectStoreForwardTest,
     [switch]$EnableMax17048Power,
@@ -106,9 +108,13 @@ if (-not $Token) {
 if (-not $Token) {
     throw "Message Hub token is required. Pass -Token, set EGOLINK_MESSAGE_HUB_TOKEN, or provide the ignored token file."
 }
+if ($EnableD1PeriodicLocation -and ($D1PeriodicLocationIntervalSec -lt 15 -or $D1PeriodicLocationIntervalSec -gt 3600)) {
+    throw "D1PeriodicLocationIntervalSec must be between 15 and 3600 seconds."
+}
 
 $effectiveEnableSim7670LocationObservation = [bool]($EnableSim7670LocationObservation -or $EnableReconnectStoreForwardTest)
-$effectiveEnableSim7670LteHttpCommandLoop = [bool]($EnableSim7670LteHttpCommandLoop -or $effectiveEnableSim7670LocationObservation)
+$effectiveEnableSim7670LocationObservation = [bool]($effectiveEnableSim7670LocationObservation -or $EnableD1PeriodicLocation)
+$effectiveEnableSim7670LteHttpCommandLoop = [bool]($EnableSim7670LteHttpCommandLoop -or $effectiveEnableSim7670LocationObservation -or $EnableD1PeriodicLocation)
 $effectiveEnableSim7670LteStatus = [bool]($EnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop)
 
 $wifiSource = "parameters"
@@ -158,6 +164,14 @@ if ($effectiveEnableSim7670LocationObservation) {
     $lines += "CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED=y"
 } else {
     $lines += "# CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED is not set"
+}
+if ($EnableD1PeriodicLocation) {
+    $lines += @(
+        "CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED=y",
+        "CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_INTERVAL_SEC=$D1PeriodicLocationIntervalSec"
+    )
+} else {
+    $lines += "# CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED is not set"
 }
 if ($EnableRawPostFailOnceTest) {
     $lines += "CONFIG_EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST=y"
@@ -245,6 +259,8 @@ $result = [pscustomobject]@{
     sim7670_lte_http_probe_enabled = [bool]$EnableSim7670LteHttpProbe
     sim7670_lte_http_command_loop_enabled = [bool]$effectiveEnableSim7670LteHttpCommandLoop
     sim7670_location_observation_enabled = [bool]$effectiveEnableSim7670LocationObservation
+    d1_periodic_location_enabled = [bool]$EnableD1PeriodicLocation
+    d1_periodic_location_interval_sec = $D1PeriodicLocationIntervalSec
     raw_post_fail_once_test_enabled = [bool]$EnableRawPostFailOnceTest
     reconnect_store_forward_test_enabled = [bool]$EnableReconnectStoreForwardTest
     max17048_power_enabled = [bool]$EnableMax17048Power

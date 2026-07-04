@@ -358,6 +358,38 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
                 self.assertNotIn(token, observation_payload)
         self.assertIn("config EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST", self.sim7670_kconfig)
         self.assertIn("default n", self.sim7670_kconfig)
+
+    def test_d1_periodic_location_mode_is_opt_in_and_keeps_lte_loop_running(self) -> None:
+        for token in [
+            "config EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED",
+            "default n",
+            "depends on EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED",
+            "config EGOLINK_SIM7670_D1_PERIODIC_LOCATION_INTERVAL_SEC",
+            "range 15 3600",
+            "CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED",
+            "lte_http_publish_d1_periodic_location_once",
+            "d1-periodic-%",
+            "LTE_HTTP_D1_PERIODIC_LOCATION_START",
+            "LTE_HTTP_D1_PERIODIC_LOCATION_DONE",
+            "LTE_HTTP_D1_PERIODIC_LOCATION_SCHEDULED",
+            "CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_INTERVAL_SEC",
+            "periodic_location=true",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.app_main + self.sim7670_kconfig)
+        command_branch = self.app_main.split("static void lte_http_command_task", 1)[1].split(
+            "static void build_status_payload",
+            1,
+        )[0]
+        periodic_branch = command_branch.split("#if CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED", 1)[1].split(
+            "#else",
+            1,
+        )[0]
+        self.assertIn("for (int attempt = 1;; ++attempt)", periodic_branch)
+        self.assertIn("lte_http_poll_commands_once", periodic_branch)
+        self.assertIn("lte_http_publish_d1_periodic_location_once", periodic_branch)
+        self.assertIn("vTaskDelay", periodic_branch)
+        self.assertNotIn("vTaskDelete(NULL)", periodic_branch)
         self.assertIn("Test-only LTE-009 switch", self.sim7670_kconfig)
         self.assertIn("config EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST", self.sim7670_kconfig)
         self.assertIn("Test-only LTE-011 switch", self.sim7670_kconfig)

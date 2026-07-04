@@ -405,6 +405,59 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST=y", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_NUM=1", config)
 
+    def test_script_can_enable_d1_periodic_location_and_implies_observation_loop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            firmware_dir = tmp_path / "firmware"
+            firmware_dir.mkdir()
+            token_file = tmp_path / "token.txt"
+            token_file.write_text("unit-secret-token\n", encoding="utf-8")
+            config_path = firmware_dir / "sdkconfig.vps.local"
+
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(self.script),
+                    "-HostName",
+                    "example.invalid",
+                    "-TokenFile",
+                    str(token_file),
+                    "-FirmwareDir",
+                    str(firmware_dir),
+                    "-ConfigPath",
+                    str(config_path),
+                    "-EnableSim7670Gnss",
+                    "-EnableD1PeriodicLocation",
+                    "-D1PeriodicLocationIntervalSec",
+                    "45",
+                    "-Json",
+                ],
+                cwd=self.repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(result.stdout)
+            config = config_path.read_text(encoding="utf-8-sig")
+
+        self.assertTrue(payload["sim7670_gnss_enabled"])
+        self.assertTrue(payload["sim7670_lte_status_enabled"])
+        self.assertTrue(payload["sim7670_lte_http_command_loop_enabled"])
+        self.assertTrue(payload["sim7670_location_observation_enabled"])
+        self.assertTrue(payload["d1_periodic_location_enabled"])
+        self.assertEqual(payload["d1_periodic_location_interval_sec"], 45)
+        self.assertNotIn("unit-secret-token", result.stdout)
+        self.assertIn("CONFIG_EGOLINK_SIM7670_GNSS_ENABLED=y", config)
+        self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED=y", config)
+        self.assertIn("CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=y", config)
+        self.assertIn("CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED=y", config)
+        self.assertIn("CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED=y", config)
+        self.assertIn("CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_INTERVAL_SEC=45", config)
+
     def test_script_rejects_tracked_config_path_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -448,6 +501,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("[switch]$EnableSim7670LteHttpProbe", script_text)
         self.assertIn("[switch]$EnableSim7670LteHttpCommandLoop", script_text)
         self.assertIn("[switch]$EnableSim7670LocationObservation", script_text)
+        self.assertIn("[switch]$EnableD1PeriodicLocation", script_text)
         self.assertIn("[switch]$EnableRawPostFailOnceTest", script_text)
         self.assertIn("[switch]$EnableReconnectStoreForwardTest", script_text)
         self.assertIn("[switch]$EnableMax17048Power", script_text)

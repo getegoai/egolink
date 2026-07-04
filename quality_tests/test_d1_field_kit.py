@@ -54,6 +54,11 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertFalse(manifest["secrets"]["token_value_read"])
             self.assertIn("-PrepareBuild", manifest["commands"]["prepare_build"]["argv"])
             self.assertNotIn("-Flash", manifest["commands"]["prepare_build"]["argv"])
+            self.assertIn("-EnableD1PeriodicLocation", manifest["commands"]["prepare_build"]["argv"])
+            self.assertIn("-D1PeriodicLocationIntervalSec", manifest["commands"]["prepare_build"]["argv"])
+            self.assertIn("60", manifest["commands"]["prepare_build"]["argv"])
+            self.assertIn("-LteCommandName", manifest["commands"]["short_usb_free_link_check"]["argv"])
+            self.assertIn("request_location", manifest["commands"]["short_usb_free_link_check"]["argv"])
             self.assertTrue(manifest["commands"]["flash_explicit_operator_action"]["hardware_action"])
             self.assertTrue(manifest["commands"]["short_usb_free_link_check"]["sends_message_hub_command"])
 
@@ -77,6 +82,7 @@ class D1FieldKitTests(unittest.TestCase):
                 fw_version="0.1.0-fw001-hw-r1",
                 token_file="server/runtime/vps_message_hub_token.txt",
                 duration_hours=3.5,
+                location_interval_sec=45,
                 board_revision="V1",
                 max17048_sda_gpio=None,
                 max17048_scl_gpio=None,
@@ -93,6 +99,11 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("3.5", power_argv)
             self.assertIn("--battery-capacity-mah", power_argv)
             self.assertIn("1200", power_argv)
+            self.assertEqual(manifest["field_run"]["location_interval_sec"], 45)
+            prepare_argv = manifest["commands"]["prepare_build"]["argv"]
+            self.assertIn("-EnableD1PeriodicLocation", prepare_argv)
+            self.assertIn("-D1PeriodicLocationIntervalSec", prepare_argv)
+            self.assertIn("45", prepare_argv)
 
     def test_partial_pin_override_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -109,6 +120,7 @@ class D1FieldKitTests(unittest.TestCase):
                     fw_version="0.1.0-fw001-hw-r1",
                     token_file="server/runtime/vps_message_hub_token.txt",
                     duration_hours=4,
+                    location_interval_sec=60,
                     board_revision="V2",
                     max17048_sda_gpio=15,
                     max17048_scl_gpio=None,

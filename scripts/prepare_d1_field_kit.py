@@ -22,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_field"
 DEFAULT_TOKEN_FILE = "server/runtime/vps_message_hub_token.txt"
 DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
-DEFAULT_FW_VERSION = "0.1.0-fw001-hw-r1"
+DEFAULT_FW_VERSION = "0.1.0-d1-periodic-location"
 DEFAULT_BOARD_ID = "connectivity-node-001"
 DEFAULT_DURATION_HOURS = 4.0
 KIT_VERSION = "D1.field_kit.v1"
@@ -135,6 +135,7 @@ def build_commands(
     sda_gpio: int,
     scl_gpio: int,
     duration_hours: float,
+    location_interval_sec: int,
     battery_capacity_mah: float | None,
 ) -> dict[str, dict[str, Any]]:
     fw_base = [
@@ -161,6 +162,9 @@ def build_commands(
         "-EnableSim7670LteStatus",
         "-EnableSim7670LteHttpCommandLoop",
         "-EnableSim7670LocationObservation",
+        "-EnableD1PeriodicLocation",
+        "-D1PeriodicLocationIntervalSec",
+        str(location_interval_sec),
         "-EnableMax17048Power",
         "-Max17048SdaGpio",
         str(sda_gpio),
@@ -190,13 +194,15 @@ def build_commands(
         "short_usb_free_link_check": command_record(
             description=(
                 "Optional 3-5 minute link check after the operator confirms independent power "
-                "and USB disconnected. This may enqueue a harmless set_report_interval command."
+                "and USB disconnected. This may enqueue one request_location command."
             ),
             argv=fw_base
             + [
                 "-Validate",
                 "-OperatorConfirmedIndependentPower",
                 "-OperatorConfirmedUsbDisconnected",
+                "-LteCommandName",
+                "request_location",
                 "-RequireLteLocationObservation",
                 "-ValidationTimeoutSec",
                 "300",
@@ -327,6 +333,7 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
         f"- Board ID: `{manifest['device']['board_id']}`",
         f"- Firmware version: `{manifest['device']['fw_version']}`",
         f"- Target duration: `{manifest['field_run']['duration_hours']} h`",
+        f"- Location upload interval: `{manifest['field_run']['location_interval_sec']} s`",
         f"- Board revision: `{manifest['power']['board_revision']}`",
         f"- MAX17048 pins: SDA GPIO{manifest['power']['max17048_sda_gpio']} / SCL GPIO{manifest['power']['max17048_scl_gpio']}",
         f"- Token file reference: `{manifest['secrets']['token_file']}`",
@@ -470,6 +477,7 @@ def build_manifest(
     fw_version: str,
     token_file: str,
     duration_hours: float,
+    location_interval_sec: int,
     board_revision: str,
     sda_gpio: int,
     scl_gpio: int,
@@ -485,6 +493,7 @@ def build_manifest(
         sda_gpio=sda_gpio,
         scl_gpio=scl_gpio,
         duration_hours=duration_hours,
+        location_interval_sec=location_interval_sec,
         battery_capacity_mah=battery_capacity_mah,
     )
     manifest_path = output_dir / MANIFEST_JSON
@@ -507,6 +516,7 @@ def build_manifest(
         },
         "field_run": {
             "duration_hours": duration_hours,
+            "location_interval_sec": location_interval_sec,
             "connection_path": "independent_power_usb_disconnected",
             "runtime_evidence_path": "device -> LTE/network -> VPS Message Hub -> Web Dashboard",
         },
@@ -570,6 +580,7 @@ def prepare_field_kit(
     fw_version: str,
     token_file: str,
     duration_hours: float,
+    location_interval_sec: int,
     board_revision: str,
     max17048_sda_gpio: int | None,
     max17048_scl_gpio: int | None,
@@ -580,6 +591,8 @@ def prepare_field_kit(
         raise D1FieldKitError("--duration-hours must be positive")
     if battery_capacity_mah is not None and battery_capacity_mah <= 0:
         raise D1FieldKitError("--battery-capacity-mah must be positive when provided")
+    if location_interval_sec < 15 or location_interval_sec > 3600:
+        raise D1FieldKitError("--location-interval-sec must be between 15 and 3600")
     hub = resolve_hub(hub_url=hub_url, host_name=host_name, port=port, scheme=scheme)
     sda_gpio, scl_gpio, warnings = resolve_max17048_pins(
         board_revision=board_revision,
@@ -597,6 +610,7 @@ def prepare_field_kit(
         fw_version=fw_version,
         token_file=token_file,
         duration_hours=duration_hours,
+        location_interval_sec=location_interval_sec,
         board_revision=board_revision,
         sda_gpio=sda_gpio,
         scl_gpio=scl_gpio,
@@ -623,6 +637,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--fw-version", default=DEFAULT_FW_VERSION)
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE)
     parser.add_argument("--duration-hours", type=float, default=DEFAULT_DURATION_HOURS)
+    parser.add_argument("--location-interval-sec", type=int, default=60)
     parser.add_argument("--board-revision", choices=("V2", "V1", "unknown"), default="V2")
     parser.add_argument("--max17048-sda-gpio", type=int)
     parser.add_argument("--max17048-scl-gpio", type=int)
@@ -648,6 +663,7 @@ def main(argv: list[str] | None = None) -> int:
             fw_version=args.fw_version,
             token_file=args.token_file,
             duration_hours=args.duration_hours,
+            location_interval_sec=args.location_interval_sec,
             board_revision=args.board_revision,
             max17048_sda_gpio=args.max17048_sda_gpio,
             max17048_scl_gpio=args.max17048_scl_gpio,
