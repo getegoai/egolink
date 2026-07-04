@@ -32,7 +32,7 @@ Examples:
   powershell -ExecutionPolicy Bypass -File scripts\run_amoled_d1_status_sidecar.ps1 -HubUrl http://203.0.113.10:8790
   powershell -ExecutionPolicy Bypass -File scripts\run_amoled_d1_status_sidecar.ps1 -Port COM9 -SampleCount 12 -PollIntervalSec 30
 
-The script is finite. It reads /api/state, sends status_update JSON to the
+The script is finite. It reads /api/state, sends display_status JSON to the
 AMOLED USB Serial/JTAG port, records board JSONL, and exits. It does not send
 commands to the 4G board or the Message Hub command queue.
 "@
@@ -285,7 +285,7 @@ function New-D1StatusUpdateCommandJson {
     $message = [ordered]@{
         protocol_version = "0.2"
         source = "pc-bridge-d1-status-sidecar"
-        type = "status_update"
+        type = "display_status"
         cmd_id = $CommandId
         source_device_id = $sourceDeviceId
         payload = $payload
@@ -359,7 +359,7 @@ try {
             $lastPayload = (($commandJson | ConvertFrom-Json).payload)
             $serial.WriteLine($commandJson)
             $commandsSent += 1
-            Write-Host "SENT status_update $cmdId"
+            Write-Host "SENT display_status $cmdId"
         } catch {
             $fetchErrors += 1
             Write-Warning "D1 state fetch/send failed for ${cmdId}: $($_.Exception.Message)"

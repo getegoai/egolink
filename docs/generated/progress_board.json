@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-04 09:49 UTC",
+  "generated_at": "2026-07-04 10:04 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "62f9cab feat(amoled): mirror d1 status to screen sidecar [AMOLED-002]"
+    "head": "3702e2e feat(field): add d1 companion sidecar runner [AMOLED-003]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -241,6 +241,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/AMOLED-003_D1_FIELD_COMPANION_RUNNER.md"
     },
     {
+      "id": "AMOLED-004",
+      "title": "Visible D1 status display on AMOLED sidecar",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "medium",
+      "date": "2026-07-04",
+      "path": "D:/pywork/egolink/docs/tasks/done/AMOLED-004_VISIBLE_D1_STATUS_DISPLAY.md"
+    },
+    {
       "id": "DATA-002",
       "title": "Data flywheel pipeline spec",
       "state": "done",
@@ -275,15 +284,6 @@
       "priority": "high",
       "date": "2026-07-03",
       "path": "D:/pywork/egolink/docs/tasks/done/ENG-007_AUTODEV_DEPRECATION_DIRECTOR_WORKFLOW.md"
-    },
-    {
-      "id": "ENG-008",
-      "title": "Founder-facing project progress board generator",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-03",
-      "path": "D:/pywork/egolink/docs/tasks/done/ENG-008_PROJECT_PROGRESS_BOARD.md"
     }
   ],
   "operator_asks": [
@@ -349,6 +349,6 @@
     "active": 2,
     "paused": 3,
     "open_total": 5,
-    "done_total": 79
+    "done_total": 80
   }
 }

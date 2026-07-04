@@ -76,7 +76,7 @@ typedef struct {
 #define DEMO_PROTOCOL_VERSION "0.2"
 #define DEMO_FIRMWARE "egolink_amoled_safety_demo"
 #define DEMO_BOARD "ESP32-S3-Touch-AMOLED-2.06"
-#define COMMAND_LINE_MAX 512
+#define COMMAND_LINE_MAX 1024
 #define COMMAND_ID_MAX 96
 #define DISPLAY_TEXT_MAX 160
 #define STATUS_TEXT_MAX 96
@@ -643,6 +643,11 @@ static bool command_is_status_update(const cJSON *root)
     return strcmp(value, "status_update") == 0 || strcmp(value, "display_status") == 0;
 }
 
+static bool command_forces_status_page(const char *command_name)
+{
+    return command_name != NULL && strcmp(command_name, "display_status") == 0;
+}
+
 static void parse_ask_user_command(const cJSON *root, ask_user_command_t *command)
 {
     memset(command, 0, sizeof(*command));
@@ -715,17 +720,19 @@ static void render_ask_user_command(const ask_user_command_t *command)
     print_ui_event("ask_user_rendered", "pending", s_active_cmd_id);
 }
 
-static void render_status_update_command(const display_status_t *status)
+static void render_status_update_command(const display_status_t *status, const char *command_name)
 {
+    bool force_status_page = command_forces_status_page(command_name);
     bsp_display_lock(0);
-    if (s_prompt_active) {
+    if (s_prompt_active && !force_status_page) {
         set_status(status->line1);
     } else {
+        s_prompt_active = false;
         build_status_ui(status);
     }
     bsp_display_unlock();
 
-    print_command_ack("status_update", status->cmd_id, "ok");
+    print_command_ack(force_status_page ? "display_status" : "status_update", status->cmd_id, "ok");
     print_ui_event("status_rendered", "updated", status->cmd_id);
 }
 
@@ -743,8 +750,10 @@ static void handle_command_line(const char *line)
         render_ask_user_command(&command);
     } else if (command_is_status_update(root)) {
         display_status_t status = {0};
+        char command_name[32] = {0};
+        (void)json_command_name(root, command_name, sizeof(command_name));
         parse_status_update_command(root, &status);
-        render_status_update_command(&status);
+        render_status_update_command(&status, command_name);
     } else {
         char command_name[32] = {0};
         char cmd_id[COMMAND_ID_MAX] = {0};

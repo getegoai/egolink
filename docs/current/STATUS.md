@@ -6,6 +6,21 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: AMOLED-004 visible D1 status display fix is built, flashed, and
+smoke-tested on the ESP32-S3-Touch-AMOLED-2.06 board. The sidecar runner now
+sends `display_status` for field visibility, while the firmware keeps
+`status_update` as a non-disruptive prompt status update and treats
+`display_status` as a full-screen D1 status page switch. The serial command
+buffer was raised to 1024 bytes to avoid truncating long field run IDs. ESP-IDF
+v5.4.2 build passed (`egolink_amoled_safety_demo.bin` size `0x9cea0`), flashing
+to `COM9` passed for ESP32-S3 MAC `02:00:00:00:00:01`, and smoke
+`amoled004-companion-visible-vps-smoke-20260704` passed with AMOLED
+`cmd=display_status`, `command_ack_count=1`, and `status_rendered_count=1`.
+Evidence:
+`reports/d1_field_companion/amoled004-companion-visible-vps-smoke-20260704/d1_field_companion_summary.json`.
+This fixes the visible sidecar path only; it does not claim GNSS fix, location
+accuracy, battery life, USB-Free display acceptance, or product readiness.
+
 2026-07-04: AMOLED-003 D1 field companion runner is added and smoke-tested.
 `scripts/run_d1_field_companion.ps1` starts the read-only D1 field observer and
 the AMOLED D1 status sidecar with one shared run ID, sample count, and poll

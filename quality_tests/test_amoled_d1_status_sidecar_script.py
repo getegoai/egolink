@@ -55,7 +55,8 @@ class AmoledD1StatusSidecarScriptTests(unittest.TestCase):
             "location_event_count",
             "power_curve",
             "cell_lte",
-            "status_update",
+            "display_status",
+            'type = "display_status"',
             "pc-bridge-d1-status-sidecar",
         ]
         for term in required_terms:
