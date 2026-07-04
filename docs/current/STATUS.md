@@ -6,6 +6,35 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: DATA-005 candidate review queue is implemented. The local
+training-candidate store now has bounded review-queue listing plus audited
+review actions through `pc_simulator/training_candidate_store.py` and
+`scripts/review_training_candidates.py`. `approve_for_training` can promote an
+eligible candidate to `reviewed_training_candidate` and set
+`training_allowed=true` only after label review, consent/training request,
+privacy review, quality review, split assignment, and split-leakage confirmation
+all pass. `reject` and `needs_changes` never enable training. Data-flywheel
+status reports now include a bounded `review_queue` sample, and the Message Hub
+Dashboard/API can surface pending review samples/actions without exposing raw
+candidate records, DB files, private coordinates, runtime JSONL logs, or raw
+payload bytes. A bounded status report was generated as
+`reports/data_flywheel/data005-review-queue-status-20260704/` and synced to the
+VPS Dashboard; authenticated `/api/state` returned
+`run_id=data005-review-queue-status-20260704`,
+`status=needs_capture`, `pipeline_stage=candidate_store_missing`,
+`review_queue.pending_records=0`, and actions
+`approve_for_training,reject,needs_changes`. Deployment used
+`scripts/deploy_message_hub_vps.ps1 -Public -IncludeFieldReportSummaries
+-IncludeDataFlywheelSummaries`, restarted `egolink-message-hub.service`, and
+did not modify GitLab. Validation passed: focused candidate-store/dashboard
+tests (24 tests), `python scripts/context_lint.py`, `python -m py_compile
+pc_simulator\training_candidate_store.py scripts\review_training_candidates.py
+scripts\summarize_data_flywheel.py server\message_hub.py`, `git diff
+--check`, and full `scripts\verify.ps1` (406 tests). This does not train a
+model, export a dataset manifest, integrate a training server, change
+firmware/protocol ingest, deploy on-device inference, or claim model
+accuracy/power impact.
+
 2026-07-04: FIELD-006 always-on D1 field readiness is implemented and
 VPS-deployed. `/api/state` now includes `d1_link.field_readiness`, and the Web
 Dashboard shows a first-glance `Field Ready` badge/card with readiness reason,

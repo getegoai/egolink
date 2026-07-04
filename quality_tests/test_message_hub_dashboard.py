@@ -36,6 +36,10 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Candidate Records", html)
         self.assertIn("Training Gate", html)
         self.assertIn("Review Queues", html)
+        self.assertIn("Review Queue", html)
+        self.assertIn("review_queue", html)
+        self.assertIn("sample_records", html)
+        self.assertIn("available_actions", html)
         self.assertIn("Training Server", html)
         self.assertIn("fieldResultsPanel", html)
         self.assertIn("fieldResultsCards", html)
@@ -379,6 +383,21 @@ class MessageHubDashboardTests(unittest.TestCase):
                             "privacy_or_consent_blocked_records": 0,
                             "quality_blocked_records": 0,
                         },
+                        "review_queue": {
+                            "available": True,
+                            "pending_records": 3,
+                            "available_actions": ["approve_for_training", "reject", "needs_changes"],
+                            "sample_records": [
+                                {
+                                    "record_id": "cand-unit",
+                                    "session_id": "session-unit",
+                                    "state": "candidate",
+                                    "label": "needs_help",
+                                    "split_name": "unassigned",
+                                    "label_review_state": "pending",
+                                }
+                            ],
+                        },
                         "readiness": {
                             "model_training_ready": False,
                             "reason": "candidate_review_not_complete",
@@ -404,6 +423,9 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(summary["status"], "needs_review")
         self.assertEqual(summary["counts"]["records_total"], 3)
         self.assertEqual(summary["review"]["label_review_pending_records"], 3)
+        self.assertEqual(summary["review_queue"]["pending_records"], 3)
+        self.assertEqual(summary["review_queue"]["sample_records"][0]["record_id"], "cand-unit")
+        self.assertIn("approve_for_training", summary["review_queue"]["available_actions"])
         self.assertFalse(summary["readiness"]["model_training_ready"])
         payload = json.dumps(summary)
         self.assertNotIn("training_candidates.db", payload)

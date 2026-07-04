@@ -3254,6 +3254,7 @@ def load_latest_data_flywheel_status(root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS)
         return data_flywheel_unavailable("data_flywheel_status_unreadable")
     counts = as_dict(report.get("counts"))
     review = as_dict(report.get("review"))
+    review_queue = as_dict(report.get("review_queue"))
     readiness = as_dict(report.get("readiness"))
     candidate_store = as_dict(report.get("candidate_store"))
     paths = as_dict(report.get("paths"))
@@ -3291,6 +3292,12 @@ def load_latest_data_flywheel_status(root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS)
                 "split_leakage_unchecked_records": review.get("split_leakage_unchecked_records", 0),
                 "privacy_or_consent_blocked_records": review.get("privacy_or_consent_blocked_records", 0),
                 "quality_blocked_records": review.get("quality_blocked_records", 0),
+            },
+            "review_queue": {
+                "available": review_queue.get("available", False),
+                "pending_records": review_queue.get("pending_records", 0),
+                "sample_records": review_queue.get("sample_records", []),
+                "available_actions": review_queue.get("available_actions", []),
             },
             "readiness": {
                 "model_training_ready": readiness.get("model_training_ready", False),
@@ -4417,10 +4424,14 @@ def render_dashboard() -> str:
       }
       const counts = flywheel.counts || {};
       const review = flywheel.review || {};
+      const reviewQueue = flywheel.review_queue || {};
       const readiness = flywheel.readiness || {};
       const store = flywheel.candidate_store || {};
       const blockers = flywheel.blockers || [];
       const warnings = flywheel.warnings || [];
+      const reviewSamples = (reviewQueue.sample_records || []).slice(0, 5).map(record => `
+        <div class="metric"><span>${escapeHtml(record.record_id || 'candidate')}</span><span>${escapeHtml(record.state || 'unknown')} / ${escapeHtml(record.label || 'unknown')} / split ${escapeHtml(record.split_name || 'unknown')} / ${escapeHtml(record.label_review_state || 'unknown')}</span></div>
+      `).join('') || '<div class="metric"><span>Review Samples</span><span class="empty">none</span></div>';
       return `
         <div class="metric"><span>Status</span><span class="${statusClass(flywheel.status)}">${escapeHtml(flywheel.status || 'unknown')}</span></div>
         <div class="metric"><span>Stage</span><span>${escapeHtml(flywheel.pipeline_stage || 'unknown')}</span></div>
@@ -4430,11 +4441,13 @@ def render_dashboard() -> str:
         <div class="metric"><span>Training Gate</span><span>${escapeHtml(readiness.model_training_ready ?? false)} / ${escapeHtml(readiness.reason || 'unknown')}</span></div>
         <div class="metric"><span>Reviewed Candidates</span><span>${escapeHtml(counts.reviewed_training_candidate_records ?? 0)} reviewed / ${escapeHtml(counts.training_allowed_records ?? 0)} training_allowed</span></div>
         <div class="metric"><span>Review Queues</span><span>label ${escapeHtml(review.label_review_pending_records ?? 0)} / split ${escapeHtml(review.split_leakage_unchecked_records ?? 0)} / privacy ${escapeHtml(review.privacy_or_consent_blocked_records ?? 0)} / quality ${escapeHtml(review.quality_blocked_records ?? 0)}</span></div>
+        <div class="metric"><span>Review Queue</span><span>${escapeHtml(reviewQueue.pending_records ?? 0)} pending / actions ${escapeHtml((reviewQueue.available_actions || []).join(', ') || 'none')}</span></div>
         <div class="metric"><span>Training Server</span><span>${escapeHtml(readiness.training_server_ready ?? false)} / on-device ${escapeHtml(readiness.on_device_deployment_ready ?? false)}</span></div>
         <div class="metric"><span>Blockers</span><span>${escapeHtml(blockers.join(', ') || 'none')}</span></div>
         <div class="metric"><span>Warnings</span><span>${escapeHtml(warnings.join(', ') || 'none')}</span></div>
         <div class="metric"><span>Next Step</span><span>${escapeHtml(flywheel.next_step || 'Create the next data task')}</span></div>
         <div class="metric"><span>Report</span><span>${escapeHtml(flywheel.markdown_path || flywheel.report_path || 'unknown')}</span></div>
+        ${reviewSamples}
       `;
     }
     function fieldResultsPanel(results) {

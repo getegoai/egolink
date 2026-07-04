@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 from pc_simulator import session_annotations, session_recorder, training_candidate_store
-from scripts import build_training_candidate_store, summarize_data_flywheel
+from scripts import build_training_candidate_store, review_training_candidates, summarize_data_flywheel
 from quality_tests.test_session_recorder import sample_events
 
 
@@ -168,6 +168,8 @@ class TrainingCandidateStoreTests(unittest.TestCase):
         self.assertFalse(summary["readiness"]["model_training_ready"])
         self.assertIn("label_review_pending", summary["blockers"])
         self.assertIn("split_leakage_review_pending", summary["blockers"])
+        self.assertEqual(summary["review_queue"]["pending_records"], 1)
+        self.assertEqual(summary["review_queue"]["sample_records"][0]["label"], "needs_help")
         payload = json.dumps(written, ensure_ascii=False)
         self.assertNotIn("record_json", payload)
         self.assertNotIn("raw_payload", payload)
@@ -206,6 +208,163 @@ class TrainingCandidateStoreTests(unittest.TestCase):
         self.assertEqual(payload["counts"]["records_total"], 1)
         self.assertFalse(payload["readiness"]["model_training_ready"])
         self.assertTrue(report_exists)
+
+    def test_candidate_review_queue_is_bounded_without_raw_records_or_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+            training_candidate_store.store_recording(recording_dir, db_path)
+
+            queue = training_candidate_store.candidate_review_queue(db_path, limit=5)
+
+        self.assertTrue(queue["available"])
+        self.assertEqual(queue["pending_records"], 1)
+        self.assertEqual(queue["records"][0]["label"], "needs_help")
+        payload = json.dumps(queue, ensure_ascii=False)
+        self.assertNotIn("record_json", payload)
+        self.assertNotIn("raw_payload", payload)
+        self.assertNotIn("recording_path", payload)
+        self.assertNotIn(str(recording_dir), payload)
+
+    def test_review_approval_requires_all_training_gates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+            training_candidate_store.store_recording(recording_dir, db_path)
+            record_id = self.read_records(db_path)[0]["record_id"]
+
+            with self.assertRaises(training_candidate_store.CandidateStoreError) as raised:
+                training_candidate_store.review_candidate_record(
+                    db_path,
+                    record_id=record_id,
+                    decision="approve_for_training",
+                    reviewer="unit",
+                    split_name="train",
+                    privacy_reviewed=True,
+                    quality_reviewed=True,
+                )
+
+        self.assertIn("split_leakage_not_checked", str(raised.exception))
+
+    def test_review_approval_promotes_candidate_and_status_becomes_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+            training_candidate_store.store_recording(
+                recording_dir,
+                db_path,
+                generated_at="2026-07-04T12:02:00+00:00",
+            )
+            record_id = self.read_records(db_path)[0]["record_id"]
+
+            review = training_candidate_store.review_candidate_record(
+                db_path,
+                record_id=record_id,
+                decision="approve_for_training",
+                reviewer="unit",
+                split_name="train",
+                split_leakage_checked=True,
+                privacy_reviewed=True,
+                quality_reviewed=True,
+                reviewed_at="2026-07-04T12:05:00+00:00",
+                notes="unit approval",
+            )
+            records = self.read_records(db_path)
+            summary = training_candidate_store.summarize_candidate_store(
+                db_path,
+                generated_at="2026-07-04T12:06:00+00:00",
+            )
+
+        self.assertTrue(review["ok"])
+        self.assertEqual(review["record"]["state"], "reviewed_training_candidate")
+        self.assertTrue(review["record"]["training_allowed"])
+        self.assertEqual(records[0]["state"], "reviewed_training_candidate")
+        self.assertTrue(records[0]["training_allowed"])
+        self.assertFalse(records[0]["review_required"])
+        self.assertEqual(records[0]["split"]["split_name"], "train")
+        self.assertTrue(records[0]["split"]["split_leakage_checked"])
+        self.assertEqual(summary["status"], "ready_for_experiment")
+        self.assertTrue(summary["readiness"]["model_training_ready"])
+        self.assertEqual(summary["review_queue"]["pending_records"], 0)
+
+    def test_review_reject_does_not_enable_training(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+            training_candidate_store.store_recording(recording_dir, db_path)
+            record_id = self.read_records(db_path)[0]["record_id"]
+
+            review = training_candidate_store.review_candidate_record(
+                db_path,
+                record_id=record_id,
+                decision="reject",
+                reviewer="unit",
+                reviewed_at="2026-07-04T12:07:00+00:00",
+            )
+            records = self.read_records(db_path)
+            summary = training_candidate_store.summarize_candidate_store(db_path)
+
+        self.assertEqual(review["record"]["state"], "review_rejected")
+        self.assertFalse(review["record"]["training_allowed"])
+        self.assertFalse(records[0]["training_allowed"])
+        self.assertEqual(summary["review_queue"]["pending_records"], 0)
+        self.assertEqual(summary["review"]["split_leakage_unchecked_records"], 0)
+
+    def test_review_cli_lists_and_approves_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+            training_candidate_store.store_recording(recording_dir, db_path)
+            record_id = self.read_records(db_path)[0]["record_id"]
+
+            with redirect_stdout(StringIO()) as queue_output:
+                list_exit = review_training_candidates.main(
+                    ["--db", str(db_path), "--json"]
+                )
+            queue_payload = json.loads(queue_output.getvalue())
+            with redirect_stdout(StringIO()) as review_output:
+                review_exit = review_training_candidates.main(
+                    [
+                        "--db",
+                        str(db_path),
+                        "--record-id",
+                        record_id,
+                        "--decision",
+                        "approve_for_training",
+                        "--reviewer",
+                        "unit",
+                        "--split-name",
+                        "train",
+                        "--split-leakage-checked",
+                        "--privacy-reviewed",
+                        "--quality-reviewed",
+                        "--reviewed-at",
+                        "2026-07-04T12:08:00+00:00",
+                        "--json",
+                    ]
+                )
+            review_payload = json.loads(review_output.getvalue())
+
+        self.assertEqual(list_exit, 0)
+        self.assertEqual(queue_payload["pending_records"], 1)
+        self.assertEqual(review_exit, 0)
+        self.assertEqual(review_payload["record"]["state"], "reviewed_training_candidate")
+        self.assertTrue(review_payload["record"]["training_allowed"])
 
 
 if __name__ == "__main__":

@@ -22,7 +22,12 @@ STORE_SCHEMA_VERSION = "egolink.training_candidate_store.v0.1"
 RECORD_SCHEMA_VERSION = "egolink.training_candidate_record.v0.1"
 STORE_BUILDER_VERSION = "data-003.0"
 DATA_FLYWHEEL_STATUS_SCHEMA_VERSION = "egolink.data_flywheel_status.v0.1"
-DATA_FLYWHEEL_STATUS_BUILDER_VERSION = "data-004.0"
+DATA_FLYWHEEL_STATUS_BUILDER_VERSION = "data-005.0"
+REVIEW_QUEUE_SCHEMA_VERSION = "egolink.training_candidate_review_queue.v0.1"
+REVIEW_ACTION_SCHEMA_VERSION = "egolink.training_candidate_review_action.v0.1"
+REVIEW_BUILDER_VERSION = "data-005.0"
+REVIEW_ACTIONS = ("approve_for_training", "reject", "needs_changes")
+DEFAULT_REVIEW_QUEUE_LIMIT = 25
 
 
 class CandidateStoreError(ValueError):
@@ -339,6 +344,18 @@ def initialize(connection: sqlite3.Connection) -> None:
             ON training_candidate_records(session_id);
         CREATE INDEX IF NOT EXISTS idx_training_candidate_state
             ON training_candidate_records(state);
+
+        CREATE TABLE IF NOT EXISTS training_candidate_review_actions (
+            review_id TEXT PRIMARY KEY,
+            record_id TEXT NOT NULL,
+            decision TEXT NOT NULL,
+            reviewer TEXT NOT NULL,
+            reviewed_at TEXT NOT NULL,
+            action_json TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_training_candidate_review_record
+            ON training_candidate_review_actions(record_id);
         """
     )
 
@@ -396,6 +413,14 @@ def build_store_unavailable_status(db_path: Path, *, generated_at: str, reason: 
             "privacy_or_consent_blocked_records": 0,
             "quality_blocked_records": 0,
         },
+        "review_queue": {
+            "schema_version": REVIEW_QUEUE_SCHEMA_VERSION,
+            "available": False,
+            "reason": reason,
+            "pending_records": 0,
+            "sample_records": [],
+            "available_actions": list(REVIEW_ACTIONS),
+        },
         "readiness": {
             "model_training_ready": False,
             "reason": reason,
@@ -427,6 +452,387 @@ def load_candidate_record_jsons(connection: sqlite3.Connection) -> list[dict[str
         if isinstance(record, dict):
             records.append(record)
     return records
+
+
+def load_candidate_record_json(connection: sqlite3.Connection, record_id: str) -> dict[str, Any]:
+    row = connection.execute(
+        "SELECT record_json FROM training_candidate_records WHERE record_id = ?",
+        (record_id,),
+    ).fetchone()
+    if row is None:
+        raise CandidateStoreError(f"Candidate record not found: {record_id}")
+    try:
+        record = json.loads(row["record_json"])
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise CandidateStoreError(f"Candidate record is not valid JSON: {record_id}") from exc
+    if not isinstance(record, dict):
+        raise CandidateStoreError(f"Candidate record is not a JSON object: {record_id}")
+    return record
+
+
+def label_review_state(record: Mapping[str, Any]) -> str:
+    return str(as_dict(record.get("labels")).get("label_review_state") or "unknown")
+
+
+def record_needs_review(record: Mapping[str, Any]) -> bool:
+    state = str(record.get("state") or "unknown")
+    if state in {"reviewed_training_candidate", "experiment_input", "release_candidate", "review_rejected"}:
+        return False
+    if record.get("review_required") is True:
+        return True
+    if label_review_state(record) in {"pending", "needs_revision"}:
+        return True
+    if as_dict(record.get("split")).get("split_leakage_checked") is not True:
+        return True
+    return state in {"candidate", "quality_blocked", "consent_blocked", "privacy_blocked"}
+
+
+def bounded_review_queue_item(record: Mapping[str, Any]) -> dict[str, Any]:
+    source_refs = as_dict(record.get("source_refs"))
+    device_context = as_dict(record.get("device_context"))
+    consent = as_dict(record.get("consent"))
+    privacy = as_dict(record.get("privacy"))
+    labels = as_dict(record.get("labels"))
+    label_set = as_dict(labels.get("label_set"))
+    quality = as_dict(record.get("quality"))
+    split = as_dict(record.get("split"))
+    features = as_dict(record.get("features"))
+    return {
+        "record_id": record.get("record_id"),
+        "session_id": record.get("session_id"),
+        "window_id": record.get("window_id"),
+        "candidate_type": record.get("candidate_type"),
+        "state": record.get("state"),
+        "training_allowed": bool(record.get("training_allowed")),
+        "review_required": bool(record.get("review_required")),
+        "review_reason": record.get("review_reason"),
+        "label": label_set.get("label"),
+        "label_review_state": labels.get("label_review_state"),
+        "label_confidence": labels.get("label_confidence"),
+        "consent_status": consent.get("consent_status"),
+        "annotation_training_requested": bool(consent.get("annotation_training_requested")),
+        "consent_reviewed_by": consent.get("reviewed_by"),
+        "privacy_class": privacy.get("privacy_class"),
+        "quality_gate": quality.get("quality_gate"),
+        "quality_score": quality.get("quality_score"),
+        "quality_blockers": quality.get("blockers") or [],
+        "split_name": split.get("split_name"),
+        "split_leakage_checked": bool(split.get("split_leakage_checked")),
+        "feature_groups": features.get("feature_groups") or [],
+        "device_id": device_context.get("device_id"),
+        "firmware_version": device_context.get("firmware_version"),
+        "source_status": device_context.get("source_status"),
+        "source_event_type": source_refs.get("source_event_type"),
+        "annotation_id": source_refs.get("annotation_id"),
+        "available_actions": list(REVIEW_ACTIONS),
+    }
+
+
+def bounded_review_queue_items(
+    records: list[dict[str, Any]],
+    *,
+    limit: int | None = DEFAULT_REVIEW_QUEUE_LIMIT,
+) -> list[dict[str, Any]]:
+    items = [
+        bounded_review_queue_item(record)
+        for record in records
+        if record_needs_review(record)
+    ]
+    items.sort(key=lambda item: (str(item.get("session_id") or ""), str(item.get("record_id") or "")))
+    if limit is None:
+        return items
+    return items[: max(0, limit)]
+
+
+def candidate_review_queue(
+    db_path: Path,
+    *,
+    limit: int = DEFAULT_REVIEW_QUEUE_LIMIT,
+    generated_at: str | None = None,
+) -> dict[str, Any]:
+    generated = generated_at or utc_now()
+    db_path = db_path.resolve()
+    if not db_path.exists():
+        return {
+            "schema_version": REVIEW_QUEUE_SCHEMA_VERSION,
+            "generated_at": generated,
+            "available": False,
+            "reason": "candidate_store_missing",
+            "pending_records": 0,
+            "records": [],
+            "available_actions": list(REVIEW_ACTIONS),
+        }
+
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        required_tables = {"training_candidate_sessions", "training_candidate_records"}
+        if not all(table_exists(connection, table) for table in required_tables):
+            return {
+                "schema_version": REVIEW_QUEUE_SCHEMA_VERSION,
+                "generated_at": generated,
+                "available": False,
+                "reason": "candidate_store_uninitialized",
+                "pending_records": 0,
+                "records": [],
+                "available_actions": list(REVIEW_ACTIONS),
+            }
+        records = load_candidate_record_jsons(connection)
+    finally:
+        connection.close()
+
+    all_items = bounded_review_queue_items(records, limit=None)
+    return {
+        "schema_version": REVIEW_QUEUE_SCHEMA_VERSION,
+        "generated_at": generated,
+        "available": True,
+        "pending_records": len(all_items),
+        "records": all_items[: max(0, limit)],
+        "available_actions": list(REVIEW_ACTIONS),
+        "non_claims": [
+            "Review queue records are bounded summaries only.",
+            "No raw candidate record, raw payload, private coordinate, DB file, or runtime JSONL log is exported.",
+        ],
+    }
+
+
+def review_id_for(record_id: str, decision: str, reviewer: str, reviewed_at: str) -> str:
+    return "review-" + sha1_text(f"{record_id}|{decision}|{reviewer}|{reviewed_at}")[:16]
+
+
+def require_approval_eligibility(
+    record: Mapping[str, Any],
+    *,
+    split_name: str,
+    split_leakage_checked: bool,
+    privacy_reviewed: bool,
+    quality_reviewed: bool,
+) -> list[str]:
+    blockers: list[str] = []
+    consent = as_dict(record.get("consent"))
+    privacy = as_dict(record.get("privacy"))
+    quality = as_dict(record.get("quality"))
+    if record.get("state") != "candidate":
+        blockers.append("state_not_candidate")
+    if quality.get("quality_gate") != "pass":
+        blockers.append("quality_gate_not_pass")
+    if consent.get("annotation_training_requested") is not True:
+        blockers.append("training_not_requested_by_annotation")
+    if consent.get("consent_status") != "training_requested_pending_review":
+        blockers.append("consent_not_pending_training_review")
+    if privacy.get("raw_audio_allowed") is True or privacy.get("raw_image_allowed") is True:
+        blockers.append("raw_media_allowed")
+    if not privacy_reviewed:
+        blockers.append("privacy_review_not_confirmed")
+    if not quality_reviewed:
+        blockers.append("quality_review_not_confirmed")
+    if not split_leakage_checked:
+        blockers.append("split_leakage_not_checked")
+    if split_name in {"", "unassigned"}:
+        blockers.append("split_not_assigned")
+    return blockers
+
+
+def update_reviewed_record(
+    record: dict[str, Any],
+    *,
+    decision: str,
+    reviewer: str,
+    reviewed_at: str,
+    split_name: str,
+    split_leakage_checked: bool,
+    privacy_reviewed: bool,
+    quality_reviewed: bool,
+    notes: str | None,
+) -> dict[str, Any]:
+    updated = dict(record)
+    labels = dict(as_dict(updated.get("labels")))
+    consent = dict(as_dict(updated.get("consent")))
+    split = dict(as_dict(updated.get("split")))
+    review = {
+        "schema_version": REVIEW_ACTION_SCHEMA_VERSION,
+        "builder_version": REVIEW_BUILDER_VERSION,
+        "decision": decision,
+        "reviewer": reviewer,
+        "reviewed_at": reviewed_at,
+        "notes": notes or "",
+        "privacy_reviewed": privacy_reviewed,
+        "quality_reviewed": quality_reviewed,
+        "split_leakage_checked": split_leakage_checked,
+    }
+    updated["review"] = review
+    updated["updated_at"] = reviewed_at
+
+    if decision == "approve_for_training":
+        labels["label_review_state"] = "reviewed"
+        labels["label_confidence"] = "reviewed"
+        consent["reviewed_by"] = reviewer
+        consent["reviewed_at"] = reviewed_at
+        consent["training_allowed"] = True
+        split["split_name"] = split_name
+        split["split_leakage_checked"] = True
+        updated["state"] = "reviewed_training_candidate"
+        updated["training_allowed"] = True
+        updated["review_required"] = False
+        updated["review_reason"] = "DATA-005 approved after label, consent, privacy, quality, and split review."
+    elif decision == "reject":
+        labels["label_review_state"] = "rejected"
+        labels["label_confidence"] = "reviewed"
+        consent["reviewed_by"] = reviewer
+        consent["reviewed_at"] = reviewed_at
+        consent["training_allowed"] = False
+        updated["state"] = "review_rejected"
+        updated["training_allowed"] = False
+        updated["review_required"] = False
+        updated["review_reason"] = "DATA-005 rejected by review."
+    elif decision == "needs_changes":
+        labels["label_review_state"] = "needs_revision"
+        labels["label_confidence"] = "needs_review"
+        consent["training_allowed"] = False
+        updated["training_allowed"] = False
+        updated["review_required"] = True
+        updated["review_reason"] = "DATA-005 review requested changes before any training use."
+    else:
+        raise CandidateStoreError(f"Unsupported review decision: {decision}")
+
+    updated["labels"] = labels
+    updated["consent"] = consent
+    updated["split"] = split
+    return updated
+
+
+def save_candidate_record(connection: sqlite3.Connection, record: Mapping[str, Any], *, updated_at: str) -> None:
+    labels = as_dict(record.get("labels"))
+    quality = as_dict(record.get("quality"))
+    split = as_dict(record.get("split"))
+    privacy = as_dict(record.get("privacy"))
+    lineage = as_dict(record.get("lineage"))
+    connection.execute(
+        """
+        UPDATE training_candidate_records
+        SET state = ?,
+            training_allowed = ?,
+            privacy_class = ?,
+            label_set = ?,
+            quality_gate = ?,
+            quality_score = ?,
+            split_name = ?,
+            source_manifest_hash = ?,
+            record_json = ?,
+            updated_at = ?
+        WHERE record_id = ?
+        """,
+        (
+            record.get("state"),
+            int(bool(record.get("training_allowed"))),
+            as_dict(record.get("privacy")).get("privacy_class", "unknown"),
+            json.dumps(as_dict(labels.get("label_set")), ensure_ascii=False, sort_keys=True),
+            quality.get("quality_gate", "unknown"),
+            quality.get("quality_score"),
+            split.get("split_name", "unassigned"),
+            lineage.get("source_manifest_hash"),
+            json.dumps(record, ensure_ascii=False, sort_keys=True),
+            updated_at,
+            record.get("record_id"),
+        ),
+    )
+
+
+def review_candidate_record(
+    db_path: Path,
+    *,
+    record_id: str,
+    decision: str,
+    reviewer: str,
+    split_name: str = "unassigned",
+    split_leakage_checked: bool = False,
+    privacy_reviewed: bool = False,
+    quality_reviewed: bool = False,
+    reviewed_at: str | None = None,
+    notes: str | None = None,
+) -> dict[str, Any]:
+    if decision not in REVIEW_ACTIONS:
+        raise CandidateStoreError(f"Unsupported review decision: {decision}")
+    if not reviewer.strip():
+        raise CandidateStoreError("Reviewer is required.")
+    reviewed = reviewed_at or utc_now()
+    db = connect(db_path)
+    try:
+        initialize(db)
+        record = load_candidate_record_json(db, record_id)
+        if decision == "approve_for_training":
+            blockers = require_approval_eligibility(
+                record,
+                split_name=split_name,
+                split_leakage_checked=split_leakage_checked,
+                privacy_reviewed=privacy_reviewed,
+                quality_reviewed=quality_reviewed,
+            )
+            if blockers:
+                raise CandidateStoreError("Candidate cannot be approved for training: " + ", ".join(sorted(blockers)))
+        updated = update_reviewed_record(
+            record,
+            decision=decision,
+            reviewer=reviewer.strip(),
+            reviewed_at=reviewed,
+            split_name=split_name,
+            split_leakage_checked=split_leakage_checked,
+            privacy_reviewed=privacy_reviewed,
+            quality_reviewed=quality_reviewed,
+            notes=notes,
+        )
+        action = {
+            "schema_version": REVIEW_ACTION_SCHEMA_VERSION,
+            "builder_version": REVIEW_BUILDER_VERSION,
+            "review_id": review_id_for(record_id, decision, reviewer.strip(), reviewed),
+            "record_id": record_id,
+            "decision": decision,
+            "reviewer": reviewer.strip(),
+            "reviewed_at": reviewed,
+            "split_name": split_name,
+            "split_leakage_checked": split_leakage_checked,
+            "privacy_reviewed": privacy_reviewed,
+            "quality_reviewed": quality_reviewed,
+            "notes": notes or "",
+        }
+        save_candidate_record(db, updated, updated_at=reviewed)
+        db.execute(
+            """
+            INSERT INTO training_candidate_review_actions (
+                review_id, record_id, decision, reviewer, reviewed_at, action_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(review_id) DO UPDATE SET
+                record_id=excluded.record_id,
+                decision=excluded.decision,
+                reviewer=excluded.reviewer,
+                reviewed_at=excluded.reviewed_at,
+                action_json=excluded.action_json
+            """,
+            (
+                action["review_id"],
+                record_id,
+                decision,
+                reviewer.strip(),
+                reviewed,
+                json.dumps(action, ensure_ascii=False, sort_keys=True),
+            ),
+        )
+        db.commit()
+    finally:
+        db.close()
+    return {
+        "ok": True,
+        "schema_version": REVIEW_ACTION_SCHEMA_VERSION,
+        "decision": decision,
+        "review_id": action["review_id"],
+        "record": bounded_review_queue_item(updated),
+        "non_claims": [
+            "No model training has run.",
+            "No dataset manifest has been exported.",
+            "No on-device model behavior changed.",
+        ],
+    }
 
 
 def readiness_reason(*, records_total: int, reviewed_training_candidate_records: int) -> str:
@@ -495,10 +901,18 @@ def summarize_candidate_store(db_path: Path, *, generated_at: str | None = None)
         str(as_dict(record.get("labels")).get("label_review_state") or "unknown")
         for record in record_jsons
     )
+    review_queue_items = bounded_review_queue_items(record_jsons, limit=None)
+    review_scope_records = [
+        record
+        for record in record_jsons
+        if str(record.get("state") or "unknown") not in {"review_rejected"}
+    ]
     review_required_records = sum(1 for record in record_jsons if record.get("review_required") is True)
-    label_review_pending_records = int(label_review_state_counts.get("pending", 0))
+    label_review_pending_records = int(label_review_state_counts.get("pending", 0)) + int(
+        label_review_state_counts.get("needs_revision", 0)
+    )
     split_leakage_unchecked_records = sum(
-        1 for record in record_jsons if as_dict(record.get("split")).get("split_leakage_checked") is not True
+        1 for record in review_scope_records if as_dict(record.get("split")).get("split_leakage_checked") is not True
     )
     privacy_or_consent_blocked_records = sum(
         state_counts.get(state, 0) for state in ("consent_blocked", "privacy_blocked")
@@ -511,6 +925,7 @@ def summarize_candidate_store(db_path: Path, *, generated_at: str | None = None)
         review_required_records,
         label_review_pending_records,
         split_leakage_unchecked_records,
+        len(review_queue_items),
     )
 
     blockers: list[str] = []
@@ -581,6 +996,13 @@ def summarize_candidate_store(db_path: Path, *, generated_at: str | None = None)
             "privacy_or_consent_blocked_records": privacy_or_consent_blocked_records,
             "quality_blocked_records": quality_blocked_records,
         },
+        "review_queue": {
+            "schema_version": REVIEW_QUEUE_SCHEMA_VERSION,
+            "available": True,
+            "pending_records": len(review_queue_items),
+            "sample_records": review_queue_items[:5],
+            "available_actions": list(REVIEW_ACTIONS),
+        },
         "readiness": {
             "model_training_ready": model_training_ready,
             "reason": reason,
@@ -602,6 +1024,7 @@ def summarize_candidate_store(db_path: Path, *, generated_at: str | None = None)
 def render_data_flywheel_status_markdown(summary: Mapping[str, Any]) -> str:
     counts = as_dict(summary.get("counts"))
     review = as_dict(summary.get("review"))
+    review_queue = as_dict(summary.get("review_queue"))
     readiness = as_dict(summary.get("readiness"))
     candidate_store = as_dict(summary.get("candidate_store"))
     lines = [
@@ -624,6 +1047,7 @@ def render_data_flywheel_status_markdown(summary: Mapping[str, Any]) -> str:
         f"- Split leakage unchecked: {review.get('split_leakage_unchecked_records', 0)}",
         f"- Consent/privacy blocked: {review.get('privacy_or_consent_blocked_records', 0)}",
         f"- Quality blocked: {review.get('quality_blocked_records', 0)}",
+        f"- Bounded review queue: {review_queue.get('pending_records', 0)}",
         "",
         "## Counts",
         "",
@@ -634,6 +1058,19 @@ def render_data_flywheel_status_markdown(summary: Mapping[str, Any]) -> str:
         "## Next Step",
         "",
         str(summary.get("next_step") or "Create the next data flywheel task."),
+        "",
+        "## Review Queue Samples",
+        "",
+    ]
+    for item in review_queue.get("sample_records", []) or []:
+        lines.append(
+            f"- {item.get('record_id', 'unknown')}: {item.get('state', 'unknown')} / "
+            f"{item.get('label', 'unknown')} / split {item.get('split_name', 'unknown')} / "
+            f"label_review {item.get('label_review_state', 'unknown')}"
+        )
+    if not review_queue.get("sample_records"):
+        lines.append("- none")
+    lines += [
         "",
         "## Non-Claims",
         "",
