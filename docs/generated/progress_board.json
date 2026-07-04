@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-04 06:14 UTC",
+  "generated_at": "2026-07-04 06:25 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "536867e docs: open model footprint assessment"
+    "head": "64962a2 docs(flow): align queue to north star [D1]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [

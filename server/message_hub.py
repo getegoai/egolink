@@ -430,6 +430,7 @@ class MessageHubStore:
         device["location_memory"] = self._location_memory(db, device["device_id"])
         device["last_command"] = self._latest_command(db, device["device_id"])
         device["observability"] = build_observability(device, device["last_command"])
+        device["d1_link"] = build_d1_link_summary(device)
         return device
 
     def _location_memory(self, db: sqlite3.Connection, device_id: str) -> dict[str, Any] | None:
@@ -2233,6 +2234,134 @@ def build_gnss_reason(fix: Any, state: Any, error_code: Any, latest_location: di
     return "GNSS_" + "".join(ch if ch.isalnum() else "_" for ch in state_text.upper()).strip("_")
 
 
+def elapsed_seconds_since(value: Any) -> int | None:
+    timestamp = parse_iso_timestamp(value)
+    now = parse_iso_timestamp(utc_now())
+    if timestamp is None or now is None:
+        return None
+    return int(max(0.0, (now - timestamp).total_seconds()))
+
+
+def d1_observed_value(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() not in {"", "unknown"}
+    return value not in (None, [], {})
+
+
+def d1_component_seen(payload: dict[str, Any], keys: list[str]) -> bool:
+    return any(d1_observed_value(payload.get(key)) for key in keys)
+
+
+def build_d1_link_summary(device: dict[str, Any]) -> dict[str, Any]:
+    latest_location = as_dict(device.get("latest_location"))
+    location_memory = as_dict(device.get("location_memory"))
+    observability = as_dict(device.get("observability"))
+    belief = as_dict(observability.get("location_belief"))
+    gnss = as_dict(observability.get("gnss"))
+    cell = as_dict(observability.get("cell"))
+    lte = as_dict(observability.get("lte"))
+    imu = as_dict(observability.get("imu"))
+    power = as_dict(observability.get("power"))
+    transport = as_dict(observability.get("transport"))
+
+    location_lat = first_known(latest_location.get("lat"), dict_value(latest_location, "location", "lat"))
+    location_lon = first_known(latest_location.get("lon"), dict_value(latest_location, "location", "lon"))
+    memory_lat = dict_value(location_memory, "last_known_location", "lat")
+    memory_lon = dict_value(location_memory, "last_known_location", "lon")
+    map_lat = first_known(location_lat, memory_lat)
+    map_lon = first_known(location_lon, memory_lon)
+    has_coordinate = map_lat is not None and map_lon is not None
+
+    state = first_known(belief.get("state"), "unknown")
+    estimate_available = bool(latest_location) or str(state).strip().lower() not in {"", "unknown"}
+    if has_coordinate and location_lat is not None and location_lon is not None:
+        map_mode = "coordinate"
+    elif has_coordinate:
+        map_mode = "memory_coordinate"
+    elif estimate_available:
+        map_mode = "estimate_without_coordinate"
+    else:
+        map_mode = "waiting_for_location_upload"
+    if location_lat is not None and location_lon is not None:
+        coordinate_source = "latest_location"
+    elif has_coordinate:
+        coordinate_source = "location_memory"
+    else:
+        coordinate_source = None
+
+    last_location_upload_at = latest_location.get("server_received_at")
+    last_device_upload_at = device.get("last_seen_at")
+    freshness_anchor = first_known(last_location_upload_at, belief.get("updated_at"), last_device_upload_at)
+    status = "estimate_visible" if estimate_available else "waiting_for_location_upload"
+    cell_lte_seen = d1_component_seen(
+        cell,
+        ["rat", "operator", "mcc", "mnc", "tac", "cell_id", "rsrp", "rsrq", "rssi", "sinr", "registration_state", "pdp_state"],
+    ) or d1_component_seen(
+        lte,
+        ["registered", "attached", "pdp_active", "assigned_ip", "registration_state", "pdp_state", "reason_code"],
+    )
+
+    return {
+        "demo": "D1",
+        "status": status,
+        "location_estimate": {
+            "available": estimate_available,
+            "state": state,
+            "radius_m": belief.get("radius_m"),
+            "confidence": belief.get("confidence"),
+            "source": belief.get("source") if isinstance(belief.get("source"), list) else [],
+            "reason": first_known(belief.get("reason"), "no_location_estimate"),
+            "updated_at": first_known(belief.get("updated_at"), last_location_upload_at),
+            "accuracy_claim": "none",
+        },
+        "map_surface": {
+            "visible": estimate_available or has_coordinate,
+            "mode": map_mode,
+            "lat": map_lat,
+            "lon": map_lon,
+            "coordinate_source": coordinate_source,
+        },
+        "upload_freshness": {
+            "last_location_upload_at": last_location_upload_at,
+            "last_device_upload_at": last_device_upload_at,
+            "freshness_s": elapsed_seconds_since(freshness_anchor),
+            "last_location_event_type": latest_location.get("event_type"),
+            "last_seq": first_known(latest_location.get("seq"), device.get("last_seq")),
+        },
+        "evidence": {
+            "transport_type": first_known(transport.get("type"), "unknown"),
+            "components": {
+                "gnss": {
+                    "seen": bool(latest_location),
+                    "fix": first_known(latest_location.get("fix"), gnss.get("fix")),
+                    "state": first_known(latest_location.get("gnss_state"), gnss.get("state"), "unknown"),
+                    "reason_code": gnss.get("reason_code"),
+                },
+                "cell_lte": {
+                    "seen": cell_lte_seen,
+                    "cell_id": cell.get("cell_id"),
+                    "rat": cell.get("rat"),
+                    "registration_state": first_known(cell.get("registration_state"), lte.get("registration_state")),
+                    "pdp_state": first_known(cell.get("pdp_state"), lte.get("pdp_state")),
+                },
+                "imu": {
+                    "seen": d1_component_seen(imu, ["motion", "confidence", "hardware_present", "driver_enabled", "data_is_mock", "backend_status", "source_status", "evidence_status"]),
+                    "motion": imu.get("motion"),
+                    "confidence": imu.get("confidence"),
+                    "evidence_status": imu.get("evidence_status"),
+                },
+                "power": {
+                    "seen": d1_component_seen(power, ["battery_mv", "soc_pct", "charging", "state", "marker_seq", "source_status", "evidence_status"]),
+                    "battery_mv": power.get("battery_mv"),
+                    "soc_pct": power.get("soc_pct"),
+                    "evidence_status": power.get("evidence_status"),
+                },
+            },
+        },
+        "non_claims": ["location_accuracy_not_claimed", "battery_life_not_claimed"],
+    }
+
+
 def build_observability(device: dict[str, Any], latest_command: dict[str, Any] | None = None) -> dict[str, Any]:
     status = as_dict(device.get("last_status"))
     telemetry = as_dict(device.get("latest_telemetry"))
@@ -3507,6 +3636,10 @@ def render_dashboard() -> str:
     th, td { text-align: left; padding: 8px; border-bottom: 1px solid #edf0f5; vertical-align: top; }
     th { color: #667085; }
     .empty { color: #667085; }
+    .map-surface { min-height: 150px; border: 1px solid #c8d0dc; border-radius: 8px; background: #eef2f6; position: relative; display: grid; place-items: center; margin-bottom: 10px; overflow: hidden; }
+    .map-grid { position: absolute; inset: 0; background-image: linear-gradient(#d9e0ea 1px, transparent 1px), linear-gradient(90deg, #d9e0ea 1px, transparent 1px); background-size: 28px 28px; }
+    .map-dot { width: 14px; height: 14px; border-radius: 50%; background: #1f6feb; border: 3px solid #fff; box-shadow: 0 0 0 2px #1f6feb; z-index: 1; }
+    .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: #344054; font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.82); border: 1px solid #d8dde6; border-radius: 6px; padding: 4px 6px; }
     @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -3542,6 +3675,10 @@ def render_dashboard() -> str:
       <section>
         <h2>Product Demo</h2>
         <div id="productDemo"></div>
+      </section>
+      <section>
+        <h2>D1 Link Through</h2>
+        <div id="d1Link"></div>
       </section>
       <section>
         <h2>Latest Field State</h2>
@@ -3594,6 +3731,7 @@ def render_dashboard() -> str:
       commands.innerHTML = html;
       rawFrames.innerHTML = html;
       productDemo.innerHTML = html;
+      d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
     }
@@ -3707,6 +3845,62 @@ def render_dashboard() -> str:
         <div class="metric"><span>Warnings</span><span>${escapeHtml(warnings.join(', ') || 'none')}</span></div>
       `;
     }
+    function d1StatusClass(status) {
+      if (status === 'estimate_visible') return 'ok';
+      if (status === 'waiting_for_location_upload') return 'warn';
+      return 'empty';
+    }
+    function coordinateLabel(lat, lon) {
+      const parsedLat = Number(lat);
+      const parsedLon = Number(lon);
+      if (Number.isFinite(parsedLat) && Number.isFinite(parsedLon)) {
+        return `${parsedLat.toFixed(6)}, ${parsedLon.toFixed(6)}`;
+      }
+      return 'no coordinate';
+    }
+    function d1MapSurface(map, estimate) {
+      const mode = map.mode || 'waiting_for_location_upload';
+      const caption = map.visible
+        ? `${mode} / ${estimate.state || 'unknown'} / ${coordinateLabel(map.lat, map.lon)}`
+        : 'waiting for location upload';
+      return `
+        <div class="map-surface" data-d1-map-mode="${escapeHtml(mode)}">
+          <div class="map-grid"></div>
+          <div class="map-dot" title="${escapeHtml(caption)}"></div>
+          <div class="map-caption">${escapeHtml(caption)}</div>
+        </div>
+      `;
+    }
+    function d1LinkPanel(devices) {
+      if (!devices.length) return '<span class="empty">No device data yet</span>';
+      const d = devices[0];
+      const d1 = d.d1_link || {};
+      const estimate = d1.location_estimate || {};
+      const map = d1.map_surface || {};
+      const freshness = d1.upload_freshness || {};
+      const evidence = d1.evidence || {};
+      const components = evidence.components || {};
+      const gnss = components.gnss || {};
+      const cellLte = components.cell_lte || {};
+      const imu = components.imu || {};
+      const power = components.power || {};
+      return `
+        ${d1MapSurface(map, estimate)}
+        <div class="metric"><span>Map Surface</span><span>${escapeHtml(map.mode || 'waiting_for_location_upload')}</span></div>
+        <div class="metric"><span>D1 Status</span><span class="${d1StatusClass(d1.status)}">${escapeHtml(d1.status || 'unknown')}</span></div>
+        <div class="metric"><span>Location Estimate</span><span>${escapeHtml(estimate.state || 'unknown')} / ${escapeHtml(estimate.confidence ?? 'unknown')} / ${escapeHtml(estimate.radius_m ?? 'unknown')} m</span></div>
+        <div class="metric"><span>Estimate Reason</span><span>${escapeHtml(estimate.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Estimate Source</span><span>${escapeHtml((estimate.source || []).join(', ') || 'none')}</span></div>
+        <div class="metric"><span>Accuracy Claim</span><span>${escapeHtml(estimate.accuracy_claim || 'none')}</span></div>
+        <div class="metric"><span>Location Upload</span><span>${escapeHtml(freshness.last_location_upload_at || 'none')}</span></div>
+        <div class="metric"><span>Upload Freshness</span><span>${escapeHtml(freshness.freshness_s ?? 'unknown')} s / seq ${escapeHtml(freshness.last_seq ?? 'unknown')}</span></div>
+        <div class="metric"><span>Transport</span><span>${escapeHtml(evidence.transport_type || 'unknown')}</span></div>
+        <div class="metric"><span>GNSS Evidence</span><span>${escapeHtml(gnss.seen ?? false)} / fix ${escapeHtml(gnss.fix ?? 'unknown')} / ${escapeHtml(gnss.state || 'unknown')}</span></div>
+        <div class="metric"><span>Cell/LTE Evidence</span><span>${escapeHtml(cellLte.seen ?? false)} / ${escapeHtml(cellLte.rat || 'unknown')} / ${escapeHtml(cellLte.registration_state || 'unknown')}</span></div>
+        <div class="metric"><span>IMU Evidence</span><span>${escapeHtml(imu.seen ?? false)} / ${escapeHtml(imu.motion || 'unknown')} / ${escapeHtml(imu.evidence_status || 'unknown')}</span></div>
+        <div class="metric"><span>Power Evidence</span><span>${escapeHtml(power.seen ?? false)} / ${escapeHtml(power.battery_mv ?? 'unknown')} mV / ${escapeHtml(power.soc_pct ?? 'unknown')}%</span></div>
+      `;
+    }
     function latestFieldState(devices, rawFrames) {
       if (!devices.length) return '<span class="empty">No device data yet</span>';
       const d = devices[0];
@@ -3797,6 +3991,7 @@ def render_dashboard() -> str:
       const data = await response.json();
       runContext.innerHTML = runContextPanel(data.current_run || {});
       productDemo.innerHTML = productDemoPanel(data.product_demo || {});
+      d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>
         <div class="metric"><span>Status</span><span class="${ageClass(d.last_seen_at)}">${escapeHtml(onlineLabel(d.last_seen_at))}</span></div>

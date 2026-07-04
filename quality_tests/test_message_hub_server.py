@@ -886,6 +886,62 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(current_run["eale_p0"]["location_belief"]["failure_reason"], "GNSS_NO_FIX")
         self.assertEqual(current_run["evidence_counts"]["commands"], 0)
 
+    def test_state_api_exposes_d1_location_estimate_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                post_json(
+                    base_url,
+                    "/api/v1/devices/ego-link-001/telemetry",
+                    protocol.event_message(
+                        "ego-link-001",
+                        "2026-07-04T00:00:01Z",
+                        1,
+                        "location_observation",
+                        "normal",
+                        source="no_hardware_d1_fixture",
+                        source_status="mock",
+                        gnss={"enabled": True, "fix": False, "state": "no_fix", "attempt_ms": 30000},
+                        cell={"rat": "LTE", "cell_id": "mock-cell-d1", "registration_state": "registered", "rsrp": -74},
+                        lte={"registered": True, "pdp_active": True, "reason_code": "LTE_READY"},
+                        imu={"motion": "stationary", "confidence": 0.9, "evidence_status": "mock"},
+                        power={"battery_mv": 3960, "soc_pct": 82, "evidence_status": "mock"},
+                        transport={"type": "lte"},
+                        location_belief={
+                            "state": "Coarse",
+                            "radius_m": 250,
+                            "confidence": 0.62,
+                            "source": ["cell_lte", "wifi_memory"],
+                            "reason": "no_hardware_d1_fixture_estimate",
+                        },
+                    ),
+                )
+                state = get_json(base_url, "/api/state")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        d1 = state["devices"][0]["d1_link"]
+        self.assertEqual(d1["demo"], "D1")
+        self.assertEqual(d1["status"], "estimate_visible")
+        self.assertTrue(d1["location_estimate"]["available"])
+        self.assertEqual(d1["location_estimate"]["state"], "Coarse")
+        self.assertEqual(d1["location_estimate"]["accuracy_claim"], "none")
+        self.assertEqual(d1["map_surface"]["mode"], "estimate_without_coordinate")
+        self.assertTrue(d1["map_surface"]["visible"])
+        self.assertEqual(d1["upload_freshness"]["last_location_event_type"], "location_observation")
+        self.assertIsInstance(d1["upload_freshness"]["freshness_s"], int)
+        self.assertTrue(d1["evidence"]["components"]["gnss"]["seen"])
+        self.assertTrue(d1["evidence"]["components"]["cell_lte"]["seen"])
+        self.assertTrue(d1["evidence"]["components"]["imu"]["seen"])
+        self.assertTrue(d1["evidence"]["components"]["power"]["seen"])
+        self.assertIn("location_accuracy_not_claimed", d1["non_claims"])
+
     def test_state_api_and_product_demo_route_include_latest_demo_report(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

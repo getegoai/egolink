@@ -6,6 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: D1 Web/API baseline is implemented. `/api/state` now returns
+per-device `d1_link` from latest location evidence, and Dashboard shows
+`D1 Link Through` with map surface, upload freshness, and GNSS/cell-LTE/IMU/
+power evidence. Synthetic no-hardware fixture covers the API path; D1 operator
+runbook is in the active task. No hardware, firmware, protocol, or VPS
+behavior changed; no accuracy or battery-life pass is claimed. Validation
+passed: focused message-hub tests, `context_lint`, progress-board generation,
+`git diff --check`, and full `scripts\verify.ps1` (356 tests).
+
 2026-07-04: NORTH_STAR is now the top project direction and current execution
 is realigned to D1 link-through: 4G board + battery, periodic GNSS/cell/IMU/
 power collection, LTE upload, server location estimate, Dashboard map visible.
