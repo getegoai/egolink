@@ -42,6 +42,9 @@ and the Dashboard shows it.
 - [x] A no-hardware test fixture proves the Web/API path using synthetic or
       existing bounded evidence.
 - [x] Operator instructions exist for the battery-powered 4G-board D1 run.
+- [x] A run-specific D1 outdoor field kit can generate operator runbook,
+      checklist, notes template, and post-run evidence commands without
+      touching hardware or secrets.
 - [x] `python scripts/context_lint.py` and `powershell -ExecutionPolicy Bypass
       -File scripts\verify.ps1` pass.
 
@@ -88,6 +91,17 @@ battery power.
   report plus an optional PWR-001 measured power report into a one-page D1
   evidence report. It stays `WARN` until measured power evidence is supplied
   and does not contact hardware or claim location accuracy/battery life.
+- D1 outdoor field kit (2026-07-04, codex): added
+  `scripts/prepare_d1_field_kit.py` to generate a run-specific manifest,
+  runbook, checklist, and operator-notes template for a multi-hour D1 outdoor
+  shakedown. It reuses the guarded FW-001 hardware runner, marks flash and
+  command-sending steps as explicit operator actions, sets short-run power
+  analysis to the requested duration, and does not read secrets, contact
+  hardware, flash firmware, send commands, deploy code, or modify GitLab.
+- Validation (2026-07-04, codex): D1 field-kit/report-chain focused tests
+  PASS; `python scripts/context_lint.py` PASS; `python
+  scripts/build_progress_board.py` PASS; `git diff --check` PASS; full
+  `scripts\verify.ps1` PASS (369 tests).
 - Validation (2026-07-04, codex): D1 gate/message-hub focused tests PASS;
   `python scripts/context_lint.py` PASS; `python scripts/build_progress_board.py`
   PASS; `git diff --check` PASS; full `scripts\verify.ps1` PASS (359 tests).
