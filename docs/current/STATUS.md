@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: D1 Dashboard/Web is deployed to the public VPS Message Hub at
+`203.0.113.10:8790` without modifying GitLab. The read-only D1 Web/API gate
+`d1-live-after-deploy-20260704` passed: Dashboard contains the
+`D1 Link Through` panel markers and authenticated `/api/state` exposes
+per-device `d1_link`, upload metrics, power curve, and GNSS/Cell-LTE/IMU/Power
+component states. Current visible device data is still stale from
+`2026-07-02T10:49:07Z`, has `map_surface.mode=estimate_without_coordinate`,
+and has no latitude/longitude coordinate yet. This deploy did not contact
+hardware, flash firmware, send device commands, or claim location accuracy or
+battery life. Evidence:
+`reports/d1_web_api/d1-live-after-deploy-20260704/d1_web_api_report.md`.
+
 2026-07-04: D1 Web/API gate added. `scripts/validate_d1_web_api.py` performs
 a read-only check of `/health`, `/api/state`, and Dashboard D1 markers for
 location estimate, map surface, upload metrics, power curve, evidence

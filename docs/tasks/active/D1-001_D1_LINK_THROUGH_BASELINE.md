@@ -98,6 +98,12 @@ battery power.
   command-sending steps as explicit operator actions, sets short-run power
   analysis to the requested duration, and does not read secrets, contact
   hardware, flash firmware, send commands, deploy code, or modify GitLab.
+- D1 VPS Web deploy (2026-07-04, codex): deployed the current Message Hub/Web
+  to `203.0.113.10:8790` without touching GitLab. Read-only gate
+  `d1-live-after-deploy-20260704` PASS confirms the live Dashboard has the
+  `D1 Link Through` panel and `/api/state` exposes `d1_link`; current device
+  data is stale from 2026-07-02 and has no latitude/longitude yet, so this is
+  Web readiness rather than a new hardware positioning pass.
 - Validation (2026-07-04, codex): D1 field-kit/report-chain focused tests
   PASS; `python scripts/context_lint.py` PASS; `python
   scripts/build_progress_board.py` PASS; `git diff --check` PASS; full
