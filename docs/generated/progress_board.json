@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-03 13:39 UTC",
+  "generated_at": "2026-07-04 05:28 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "5bc585b docs: close privacy boundary task"
+    "head": "f7c5d32 docs: add production founder decision sheet"
   },
   "current_focus": "V1 Wave 1: 可靠性收尾（功耗/GNSS/VPS加固）；PROD-001 量产需求草稿已交付待创始人填值；目标 ~2 周内出 FT-1 可穿戴外场测试版",
   "milestones": [
@@ -60,7 +60,7 @@
     {
       "id": "V1-M3",
       "title": "设备端 AI 轨道（核心）",
-      "done": 0,
+      "done": 1,
       "total": 7,
       "tasks": [
         {
@@ -76,7 +76,7 @@
         {
           "id": "DATA-002",
           "label": "DATA-002 数据飞轮管线",
-          "state": "planned"
+          "state": "done"
         },
         {
           "id": "M1-005",
@@ -178,6 +178,15 @@
   ],
   "recent_done": [
     {
+      "id": "DATA-002",
+      "title": "Data flywheel pipeline spec",
+      "state": "done",
+      "packet_status": "completed",
+      "priority": "high",
+      "date": "2026-07-04",
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-002_DATA_FLYWHEEL_PIPELINE_SPEC.md"
+    },
+    {
       "id": "DEMO-010",
       "title": "Product Demo Web Review Gate",
       "state": "done",
@@ -239,15 +248,6 @@
       "priority": "high",
       "date": "2026-07-03",
       "path": "D:/pywork/egolink/docs/tasks/done/PRIVACY-001_PRODUCT_DEMO_DATA_BOUNDARY_GATE.md"
-    },
-    {
-      "id": "PWR-002",
-      "title": "Low-power location state-machine decision record",
-      "state": "done",
-      "packet_status": "completed",
-      "priority": "high",
-      "date": "2026-07-03",
-      "path": "D:/pywork/egolink/docs/tasks/done/PWR-002_LOW_POWER_LOCATION_STATE_MACHINE_DECISION.md"
     }
   ],
   "operator_asks": [
@@ -308,6 +308,6 @@
   ],
   "counts": {
     "active": 3,
-    "done_total": 75
+    "done_total": 76
   }
 }

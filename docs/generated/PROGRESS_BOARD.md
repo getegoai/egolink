@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-03 13:39 UTC
-- 分支: `autodev/egolink-p0` @ 5bc585b docs: close privacy boundary task
+- 生成时间: 2026-07-04 05:28 UTC
+- 分支: `autodev/egolink-p0` @ f7c5d32 docs: add production founder decision sheet
 - 当前焦点: V1 Wave 1: 可靠性收尾（功耗/GNSS/VPS加固）；PROD-001 量产需求草稿已交付待创始人填值；目标 ~2 周内出 FT-1 可穿戴外场测试版
-- 已完成任务总数: 75，进行中: 3
+- 已完成任务总数: 76，进行中: 3
 
 ## 里程碑
 
@@ -11,7 +11,7 @@
 |---|---|---|
 | V1-M1 可靠性收尾 | 1/5 | ⏳PWR-001 ⏳FIELD-003 ✅OPS-001 📋STAB-002 LTE长运行/重连门 📋FT-1 可穿戴测试版组装 |
 | V1-M2 家人端 MVP | 0/2 | 📋WEB-003 家人看板 📋围栏引擎+通知通道 |
-| V1-M3 设备端 AI 轨道（核心） | 0/7 | 📋M1-002 端侧会话记录器 📋MODEL-001 模型footprint评估 📋DATA-002 数据飞轮管线 📋M1-005 标注闭环 📋M1-006 场景采集协议执行 📋MotionNet v0.1 训练+端侧PoC 📋FW-004 固件能力真值源 |
+| V1-M3 设备端 AI 轨道（核心） | 1/7 | 📋M1-002 端侧会话记录器 📋MODEL-001 模型footprint评估 ✅DATA-002 数据飞轮管线 📋M1-005 标注闭环 📋M1-006 场景采集协议执行 📋MotionNet v0.1 训练+端侧PoC 📋FW-004 固件能力真值源 |
 | V1-M4 量产定义与选型 | 0/4 | ⏳PROD-001 📋中国移动模组评估（等资料） 📋MCU渠道报价与选型ADR（等报价） 📋麦克风方案决策 |
 | GOV 治理 | 2/2 | ✅ENG-007 ✅ENG-008 |
 
@@ -29,6 +29,7 @@
 
 | 任务 | 标题 | 日期 |
 |---|---|---|
+| DATA-002 | Data flywheel pipeline spec | 2026-07-04 |
 | DEMO-010 | Product Demo Web Review Gate | 2026-07-03 |
 | DEMO-011 | Product Demo Report Web Review Binding | 2026-07-03 |
 | ENG-007 | Retire AutoDev/Dual-Codex docs and adopt Director Workflow references | 2026-07-03 |
@@ -36,7 +37,6 @@
 | LTE-003 | LTE HTTP Command Poll And ACK | 2026-07-03 |
 | OPS-001 | VPS Message Hub production hardening baseline | 2026-07-03 |
 | PRIVACY-001 | Product demo privacy and data boundary gate | 2026-07-03 |
-| PWR-002 | Low-power location state-machine decision record | 2026-07-03 |
 
 ## 等待创始人处理
 

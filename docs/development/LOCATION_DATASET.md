@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-30
+last_verified: 2026-07-04
 verified_by: codex
 ---
 
@@ -187,3 +187,9 @@ The baseline leaves these deliberate next steps:
 
 DATA-001 is a data foundation task. It should not introduce a learned fusion
 model, change device wire fields, or claim product positioning accuracy.
+
+`DATA_FLYWHEEL_PIPELINE.md` defines the follow-on DATA-002 pipeline contract
+for promoting session/test-run evidence into consented, privacy-reviewed
+training-candidate records. DATA-002 remains a pipeline specification: it does
+not collect private data, train a learned model, implement a training-candidate
+store, or implement server/device OTA.

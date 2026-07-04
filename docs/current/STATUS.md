@@ -6,6 +6,21 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: DATA-002 is completed as a V1-M3 data-flywheel pipeline
+specification. `docs/development/DATA_FLYWHEEL_PIPELINE.md` now defines the
+path from session/test-run evidence to consented, privacy-reviewed
+training-candidate records with consent, privacy class, retention/deletion,
+lineage, labels, quality, and split-leakage fields. The default boundary stays
+`training_allowed=false`, `raw_audio_allowed=false`, and
+`raw_image_allowed=false`; Dashboard state is not a training source by itself.
+This is a planning/contract slice only: no private data collection, model
+training, training-candidate store, model registry, server rollout, device OTA,
+firmware behavior, protocol behavior, or legal compliance certification changed.
+Validation passed: focused DATA-002 doc tests, `python scripts/context_lint.py`,
+`python scripts/build_progress_board.py`, `git diff --check`, and full
+`scripts\verify.ps1` (351 tests). Current active V1 Wave 1 packets remain
+`PWR-001`, `FIELD-003`, and `PROD-001`.
+
 2026-07-03: PRIVACY-001 is completed as an engineering privacy boundary for
 KR-008/V1 demos. `docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md` defines data
 classes and default retention/export/training rules for GNSS coordinates,

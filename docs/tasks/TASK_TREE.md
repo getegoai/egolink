@@ -482,7 +482,7 @@ motion candidate
 
 ## Active Queue
 
-Current active packets (2026-07-03, per ADR-0002 and
+Current active packets (2026-07-04, per ADR-0002 and
 `docs/roadmap/V1_PRODUCT_PLAN.md`; executed via
 `docs/development/DIRECTOR_WORKFLOW.md`). New prefixes: `PWR-*` power and
 battery engineering, `PRIVACY-*` privacy/data boundary gates, and `PROD-*`
@@ -509,6 +509,19 @@ mass-production definition and sourcing.
   - Boundary: not a legal compliance certification; founder/legal decisions
     remain open for consent wording, retention limits, hashed Wi-Fi policy,
     deletion flow, guardian/contact data, and any future audio use.
+
+- `DATA-002 Data Flywheel Pipeline Spec`
+  - Path: `docs/tasks/done/DATA-002_DATA_FLYWHEEL_PIPELINE_SPEC.md`
+  - Status: completed as a DATA-002 pipeline specification on 2026-07-04.
+  - Evidence: `docs/development/DATA_FLYWHEEL_PIPELINE.md` and
+    `quality_tests/test_data_flywheel_pipeline_doc.py`.
+  - Current visible result: V1-M3 now has a current contract for turning
+    session/test-run evidence into consented, privacy-reviewed
+    training-candidate records with lineage, labels, quality, retention,
+    deletion, and split-leakage fields.
+  - Boundary: no private data collection, model training, training-candidate
+    store implementation, model registry, server update, device OTA, firmware
+    change, protocol change, or legal compliance certification.
 
 - `PWR-002 Low-Power Location State-Machine Decision`
   - Path: `docs/tasks/done/PWR-002_LOW_POWER_LOCATION_STATE_MACHINE_DECISION.md`
