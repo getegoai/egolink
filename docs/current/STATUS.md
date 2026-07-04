@@ -6,6 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: D1 live field observer is added for multi-hour outdoor shakedowns.
+`scripts/observe_d1_field_run.py` polls the VPS Message Hub read-only, writes
+JSONL samples plus JSON/Markdown summaries, and tracks freshness, raw POST
+progress, LTE/cell state, GNSS coordinate visibility, and MAX17048 power
+evidence without touching hardware or sending commands. Live smoke
+`d1-live-observer-interval-smoke2-20260704` observed two samples over 70s:
+freshness stayed below 180s, raw POST advanced `+2 ok / +0 fail`, and the only
+warning was `d1_coordinate_not_observed`.
+
 2026-07-04: D1 live LTE periodic upload is verified after SIM insertion and
 cold boot. Read-only VPS checks against `203.0.113.10:8790` showed fresh
 device data for `ego-link-r1-connectivity-001`: D1 gate

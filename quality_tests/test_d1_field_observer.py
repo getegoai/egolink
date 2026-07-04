@@ -1,0 +1,184 @@
+from __future__ import annotations
+
+from contextlib import redirect_stdout
+from http.server import ThreadingHTTPServer
+import io
+import json
+from pathlib import Path
+import tempfile
+import threading
+import unittest
+
+from pc_simulator import protocol
+from scripts import observe_d1_field_run as observer
+from server import message_hub
+
+
+def sample(
+    *,
+    freshness_s: float = 5,
+    seq: int = 10,
+    success_count: int = 4,
+    failure_count: int = 0,
+    location_count: int = 8,
+    power_count: int = 3,
+    coordinate: bool = False,
+) -> dict:
+    return {
+        "collected_at": "2026-07-04T08:00:00+00:00",
+        "ok": True,
+        "device_id": "ego-link-r1-connectivity-001",
+        "d1_status": "estimate_visible",
+        "last_device_upload_at": "2026-07-04T08:00:00+00:00",
+        "last_location_upload_at": "2026-07-04T08:00:00+00:00",
+        "freshness_s": freshness_s,
+        "last_seq": seq,
+        "map_mode": "coordinate" if coordinate else "estimate_without_coordinate",
+        "lat": 22.5 if coordinate else None,
+        "lon": 113.9 if coordinate else None,
+        "coordinate_seen": coordinate,
+        "raw_post_attempt_count": success_count + failure_count,
+        "raw_post_success_count": success_count,
+        "raw_post_failure_count": failure_count,
+        "location_event_count": location_count,
+        "power_sample_count": power_count,
+        "battery_mv": 4276,
+        "soc_pct": 92,
+        "power_evidence_status": "measured",
+        "gnss_seen": True,
+        "gnss_fix": None,
+        "gnss_state": "unknown",
+        "cell_lte_seen": True,
+        "cell_rat": "LTE",
+        "cell_id": "180571649",
+        "cell_registration_state": "registered_home",
+        "cell_pdp_state": "active",
+        "imu_seen": True,
+        "imu_evidence_status": "mock",
+    }
+
+
+class D1FieldObserverTests(unittest.TestCase):
+    def test_evaluate_observation_passes_fresh_periodic_upload_without_claims(self) -> None:
+        samples = [
+            sample(seq=20, success_count=7, location_count=12, power_count=5),
+            sample(seq=41, success_count=9, location_count=13, power_count=6),
+        ]
+
+        report = observer.evaluate_observation(
+            samples=samples,
+            run_id="D1-FIELD-unit",
+            hub_url="http://127.0.0.1:8790",
+            device_id="ego-link-r1-connectivity-001",
+            max_stale_sec=180,
+            poll_interval_sec=60,
+            duration_minutes=2,
+        )
+
+        self.assertEqual(report["result"], "WARN")
+        self.assertIn("d1_coordinate_not_observed", report["warnings"])
+        self.assertNotIn("d1_location_event_count_did_not_advance", report["warnings"])
+        self.assertEqual(report["summary"]["raw_post_success_delta"], 2)
+        self.assertEqual(report["summary"]["power_sample_count_delta"], 1)
+        self.assertFalse(report["scope"]["commands_sent"])
+        self.assertFalse(report["scope"]["hardware_contacted_directly"])
+        self.assertFalse(report["scope"]["location_accuracy_claimed"])
+
+    def test_evaluate_observation_fails_when_no_successful_samples(self) -> None:
+        report = observer.evaluate_observation(
+            samples=[{"ok": False, "error": "timeout"}],
+            run_id="D1-FIELD-fail",
+            hub_url="http://127.0.0.1:8790",
+            device_id="ego-link-r1-connectivity-001",
+            max_stale_sec=180,
+            poll_interval_sec=60,
+            duration_minutes=1,
+        )
+
+        self.assertEqual(report["result"], "FAIL")
+        self.assertIn("d1_no_successful_samples", report["errors"])
+        self.assertEqual(report["summary"]["fetch_error_count"], 1)
+
+    def test_cli_writes_reports_against_token_protected_local_server(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            token_file = tmp_path / "token.txt"
+            token_file.write_text("observer-secret-token\n", encoding="utf-8")
+            output_dir = tmp_path / "observation"
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            store.ingest(
+                "ego-link-r1-connectivity-001",
+                "telemetry",
+                protocol.event_message(
+                    "ego-link-r1-connectivity-001",
+                    "2026-07-04T08:00:01Z",
+                    1,
+                    "location_observation",
+                    "normal",
+                    source="d1_observer_fixture",
+                    source_status="mock",
+                    gnss={"fix": False, "state": "unknown"},
+                    cell={"rat": "LTE", "cell_id": "mock-cell-d1", "registration_state": "registered_home"},
+                    lte={"registered": True, "pdp_active": True, "reason_code": "LTE_READY"},
+                    imu={"motion": None, "confidence": None, "evidence_status": "mock"},
+                    power={"battery_mv": 4276, "soc_pct": 92, "evidence_status": "measured"},
+                    transport={"type": "lte"},
+                    reliability={
+                        "network": {
+                            "raw_post_attempt_count": 2,
+                            "raw_post_success_count": 2,
+                            "raw_post_failure_count": 0,
+                        }
+                    },
+                    location_belief={
+                        "state": "Unknown",
+                        "source": ["cell", "lte", "imu", "power"],
+                        "reason": "cell_observation_without_position_fix",
+                    },
+                ),
+            )
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store, token="observer-secret-token"))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    exit_code = observer.main(
+                        [
+                            "--hub-url",
+                            base_url,
+                            "--token-file",
+                            str(token_file),
+                            "--output-dir",
+                            str(output_dir),
+                            "--run-id",
+                            "D1-FIELD-observer-unit",
+                            "--device-id",
+                            "ego-link-r1-connectivity-001",
+                            "--sample-count",
+                            "1",
+                            "--poll-interval-sec",
+                            "0",
+                            "--duration-minutes",
+                            "1",
+                            "--json",
+                        ]
+                    )
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+            payload = json.loads(stdout.getvalue())
+            self.assertEqual(exit_code, 0)
+            self.assertIn(payload["result"], {"PASS", "WARN"})
+            self.assertNotIn("observer-secret-token", stdout.getvalue())
+            self.assertTrue((output_dir / observer.REPORT_JSON).is_file())
+            self.assertTrue((output_dir / observer.REPORT_MARKDOWN).is_file())
+            self.assertTrue((output_dir / observer.SAMPLES_JSONL).is_file())
+            self.assertEqual(payload["summary"]["successful_sample_count"], 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

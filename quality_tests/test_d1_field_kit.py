@@ -59,12 +59,20 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("60", manifest["commands"]["prepare_build"]["argv"])
             self.assertIn("-LteCommandName", manifest["commands"]["short_usb_free_link_check"]["argv"])
             self.assertIn("request_location", manifest["commands"]["short_usb_free_link_check"]["argv"])
+            self.assertIn("scripts\\observe_d1_field_run.py", manifest["commands"]["live_field_observer"]["argv"])
+            self.assertIn("--duration-minutes", manifest["commands"]["live_field_observer"]["argv"])
+            self.assertIn("--poll-interval-sec", manifest["commands"]["live_field_observer"]["argv"])
+            self.assertIn("--max-stale-sec", manifest["commands"]["live_field_observer"]["argv"])
             self.assertTrue(manifest["commands"]["flash_explicit_operator_action"]["hardware_action"])
             self.assertTrue(manifest["commands"]["short_usb_free_link_check"]["sends_message_hub_command"])
+            self.assertFalse(manifest["commands"]["live_field_observer"].get("hardware_action", False))
+            self.assertIn("field_observation_report", manifest["expected_outputs"])
 
             combined = json.dumps(manifest) + runbook + checklist + notes + stdout.getvalue()
             self.assertNotIn("unit-super-secret-token", combined)
             self.assertIn("D1 Outdoor Field Runbook", runbook)
+            self.assertIn("observe_d1_field_run.py", runbook)
+            self.assertIn("Live field observation report", notes)
             self.assertIn("Before Leaving", checklist)
             self.assertIn("D1 Field Operator Notes", notes)
 
@@ -104,6 +112,9 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("-EnableD1PeriodicLocation", prepare_argv)
             self.assertIn("-D1PeriodicLocationIntervalSec", prepare_argv)
             self.assertIn("45", prepare_argv)
+            observer_argv = manifest["commands"]["live_field_observer"]["argv"]
+            self.assertIn("--poll-interval-sec", observer_argv)
+            self.assertIn("45", observer_argv)
 
     def test_partial_pin_override_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

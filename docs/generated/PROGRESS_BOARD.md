@@ -1,7 +1,7 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-04 08:43 UTC
-- 分支: `autodev/egolink-p0` @ f10541f docs(hardware): record d1 periodic firmware flash [D1]
+- 生成时间: 2026-07-04 09:01 UTC
+- 分支: `autodev/egolink-p0` @ cb1dd42 docs(field): record d1 sim coldboot upload [D1]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
 - 已完成任务总数: 76，进行中: 2，暂停: 3
 

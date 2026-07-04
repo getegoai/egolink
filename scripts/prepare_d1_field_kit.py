@@ -172,6 +172,7 @@ def build_commands(
         str(scl_gpio),
     ]
     battery_capacity_arg = f"{battery_capacity_mah:g}" if battery_capacity_mah is not None else "<rated-capacity-mah>"
+    observer_max_stale_sec = max(location_interval_sec * 3, 180)
     return {
         "prepare_build": command_record(
             description="Create ignored local firmware config and build the D1 field image. No flash is run.",
@@ -210,6 +211,30 @@ def build_commands(
             ],
             sends_message_hub_command=True,
             requires_operator_intent=True,
+        ),
+        "live_field_observer": command_record(
+            description="Read-only VPS observer to run during the outdoor field shakedown.",
+            argv=[
+                "python",
+                "scripts\\observe_d1_field_run.py",
+                "--hub-url",
+                str(hub["hub_url"]),
+                "--token-file",
+                token_file,
+                "--run-id",
+                run_id,
+                "--output-dir",
+                report_path("d1_field_observation", run_id),
+                "--device-id",
+                device_id,
+                "--duration-minutes",
+                f"{duration_hours * 60:g}",
+                "--poll-interval-sec",
+                str(location_interval_sec),
+                "--max-stale-sec",
+                str(observer_max_stale_sec),
+                "--json",
+            ],
         ),
         "post_run_web_api_gate": command_record(
             description="Read-only D1 Web/API review after the field run.",
@@ -287,6 +312,7 @@ def build_checklists(*, duration_hours: float) -> dict[str, list[str]]:
         ],
         "during_run": [
             f"Keep the device running outdoors for about {duration_hours:g} hours.",
+            "Run the live field observer from this kit if a laptop or stable PC can stay online.",
             "Check the Dashboard periodically from phone; do not use serial as the runtime evidence path.",
             "Record gaps, reboots, lost service, charging changes, or operator touches with timestamps.",
             "If USB must be reconnected, record the runtime stop first and treat later data as a new segment.",
@@ -377,6 +403,12 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             "",
             "## During Run",
             "",
+            "Read-only live observer, if a laptop or stable PC can stay online during the field run:",
+            "",
+            "```powershell",
+            commands["live_field_observer"]["powershell"],
+            "```",
+            "",
         ]
     )
     lines.extend(f"- [ ] {item}" for item in checklist["during_run"])
@@ -459,6 +491,7 @@ def write_notes_template(path: Path, manifest: dict[str, Any]) -> None:
         "## Evidence",
         "",
         f"- Kit manifest: `{manifest['artifacts']['manifest']}`",
+        f"- Live field observation report: `{manifest['expected_outputs']['field_observation_report']}`",
         f"- Web/API report: `{manifest['expected_outputs']['web_api_report']}`",
         f"- Power report: `{manifest['expected_outputs']['power_report']}`",
         f"- D1 demo report: `{manifest['expected_outputs']['d1_demo_report']}`",
@@ -551,6 +584,8 @@ def build_manifest(
             "operator_notes": str(notes_path),
         },
         "expected_outputs": {
+            "field_observation_report": report_path("d1_field_observation", run_id, "d1_field_observation_report.json"),
+            "field_observation_samples": report_path("d1_field_observation", run_id, "d1_field_samples.jsonl"),
             "web_api_report": report_path("d1_web_api", run_id, "d1_web_api_report.json"),
             "power_report": report_path("power", run_id, "power_curve_report.json"),
             "d1_demo_report": report_path("d1_demo", run_id, "d1_demo_report.json"),

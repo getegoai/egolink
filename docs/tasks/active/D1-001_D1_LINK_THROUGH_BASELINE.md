@@ -130,6 +130,13 @@ battery power.
   `9 ok / 0 fail`, `location_event_count=13`, LTE registered/PDP active, and
   measured MAX17048 power. GNSS coordinates remain unavailable
   (`lat/lon=null`), and 4G-board IMU evidence remains mock/unverified.
+- D1 live field observer (2026-07-04, codex): added
+  `scripts/observe_d1_field_run.py` and connected it to the D1 field kit so a
+  laptop or stable PC can poll the VPS during a multi-hour outdoor run and
+  write JSONL samples plus JSON/Markdown summaries. Live smoke
+  `d1-live-observer-interval-smoke2-20260704` saw two successful samples over
+  70s, raw POST `+2 ok / +0 fail`, no stale samples, and only
+  `d1_coordinate_not_observed`.
 - Validation (2026-07-04, codex): D1 periodic firmware/tool focused tests
   PASS (34 tests); ESP-IDF build PASS for
   `build_d1_periodic_verify/egolink_mqtt_heartbeat.bin`; `python
