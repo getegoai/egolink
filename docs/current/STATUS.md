@@ -6,6 +6,17 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: D1-002 outdoor field kit is updated for visible AMOLED companion
+runs. `scripts/prepare_d1_field_kit.py` now generates a v2 offline kit with
+read-only Web/API preflight, AMOLED `display_status` preflight, the preferred
+`scripts/run_d1_field_companion.ps1` long-run command, and post-run Web/API,
+power-curve, and D1 evidence report commands. A current kit was generated at
+`reports/d1_field/d1-outdoor-kit-20260704/`; its manifest keeps the generator
+offline-only and records voice calling and SMS as `unverified_not_implemented`.
+The token value was not found in the generated kit. This does not contact
+hardware, send commands, flash firmware, or claim GNSS fix, location accuracy,
+battery life, calling, SMS, or product readiness.
+
 2026-07-04: AMOLED-004 visible D1 status display fix is built, flashed, and
 smoke-tested on the ESP32-S3-Touch-AMOLED-2.06 board. The sidecar runner now
 sends `display_status` for field visibility, while the firmware keeps

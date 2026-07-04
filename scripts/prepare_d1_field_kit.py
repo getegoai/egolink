@@ -25,7 +25,7 @@ DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
 DEFAULT_FW_VERSION = "0.1.0-d1-periodic-location"
 DEFAULT_BOARD_ID = "connectivity-node-001"
 DEFAULT_DURATION_HOURS = 4.0
-KIT_VERSION = "D1.field_kit.v1"
+KIT_VERSION = "D1.field_kit.v2"
 MANIFEST_JSON = "field_manifest.json"
 RUNBOOK_MD = "FIELD_RUNBOOK.md"
 CHECKLIST_MD = "FIELD_CHECKLIST.md"
@@ -73,6 +73,8 @@ def command_record(
     description: str,
     argv: list[str],
     hardware_action: bool = False,
+    opens_serial_port: bool = False,
+    writes_amoled_serial: bool = False,
     sends_message_hub_command: bool = False,
     requires_operator_intent: bool = False,
 ) -> dict[str, Any]:
@@ -81,9 +83,23 @@ def command_record(
         "argv": argv,
         "powershell": format_ps_command(argv),
         "hardware_action": hardware_action,
+        "opens_serial_port": opens_serial_port,
+        "writes_amoled_serial": writes_amoled_serial,
         "sends_message_hub_command": sends_message_hub_command,
         "requires_operator_intent": requires_operator_intent,
     }
+
+
+def with_optional_amoled_port(argv: list[str], amoled_port: str) -> list[str]:
+    if not amoled_port:
+        return argv
+    return argv + ["-AmoledPort", amoled_port]
+
+
+def with_optional_sidecar_port(argv: list[str], amoled_port: str) -> list[str]:
+    if not amoled_port:
+        return argv
+    return argv + ["-Port", amoled_port]
 
 
 def resolve_hub(*, hub_url: str, host_name: str, port: int, scheme: str) -> dict[str, Any]:
@@ -132,6 +148,7 @@ def build_commands(
     device_id: str,
     fw_version: str,
     token_file: str,
+    amoled_port: str,
     sda_gpio: int,
     scl_gpio: int,
     duration_hours: float,
@@ -173,7 +190,90 @@ def build_commands(
     ]
     battery_capacity_arg = f"{battery_capacity_mah:g}" if battery_capacity_mah is not None else "<rated-capacity-mah>"
     observer_max_stale_sec = max(location_interval_sec * 3, 180)
+    duration_minutes = f"{duration_hours * 60:g}"
+    preflight_amoled_argv = with_optional_sidecar_port(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            "scripts\\run_amoled_d1_status_sidecar.ps1",
+            "-HubUrl",
+            str(hub["hub_url"]),
+            "-TokenFile",
+            token_file,
+            "-SampleCount",
+            "1",
+            "-PollIntervalSec",
+            "0",
+            "-ReadWindowSeconds",
+            "10",
+            "-SessionId",
+            f"{run_id}-preflight-amoled",
+            "-OutputDir",
+            report_path("amoled_visible_status", run_id, "preflight"),
+            "-Reset",
+        ],
+        amoled_port,
+    )
+    companion_argv = with_optional_amoled_port(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            "scripts\\run_d1_field_companion.ps1",
+            "-HubUrl",
+            str(hub["hub_url"]),
+            "-TokenFile",
+            token_file,
+            "-RunId",
+            run_id,
+            "-DeviceId",
+            device_id,
+            "-DurationMinutes",
+            duration_minutes,
+            "-PollIntervalSec",
+            str(location_interval_sec),
+            "-AmoledReadWindowSeconds",
+            "10",
+            "-OutputRoot",
+            report_path("d1_field_companion"),
+        ],
+        amoled_port,
+    )
     return {
+        "preflight_web_api_gate": command_record(
+            description="Read-only preflight check of VPS D1 Web/API before leaving.",
+            argv=[
+                "python",
+                "scripts\\validate_d1_web_api.py",
+                "--hub-url",
+                str(hub["hub_url"]),
+                "--token-file",
+                token_file,
+                "--review-id",
+                f"{run_id}-preflight",
+                "--output-dir",
+                report_path("d1_web_api", f"{run_id}-preflight"),
+                "--device-id",
+                device_id,
+                "--json",
+            ],
+        ),
+        "preflight_amoled_visible_status": command_record(
+            description=(
+                "Send one visible display_status page to the AMOLED sidecar before leaving. "
+                "This writes only to the AMOLED USB Serial/JTAG sidecar."
+            ),
+            argv=preflight_amoled_argv,
+            hardware_action=True,
+            opens_serial_port=True,
+            writes_amoled_serial=True,
+            requires_operator_intent=True,
+        ),
         "prepare_build": command_record(
             description="Create ignored local firmware config and build the D1 field image. No flash is run.",
             argv=fw_base + ["-PrepareBuild", "-Json"],
@@ -235,6 +335,17 @@ def build_commands(
                 str(observer_max_stale_sec),
                 "--json",
             ],
+        ),
+        "live_field_companion": command_record(
+            description=(
+                "Preferred D1 outdoor run command: starts the read-only observer and the visible AMOLED sidecar "
+                "with the same run ID."
+            ),
+            argv=companion_argv,
+            hardware_action=True,
+            opens_serial_port=True,
+            writes_amoled_serial=True,
+            requires_operator_intent=True,
         ),
         "post_run_web_api_gate": command_record(
             description="Read-only D1 Web/API review after the field run.",
@@ -298,11 +409,14 @@ def build_checklists(*, duration_hours: float) -> dict[str, list[str]]:
         "before_leaving": [
             "Message Hub health endpoint and Dashboard are reachable from phone.",
             "Token is available via local token file or EGOLINK_MESSAGE_HUB_TOKEN, outside git.",
+            "Run the read-only preflight Web/API gate and confirm D1 state is fresh.",
+            "Run the AMOLED visible-status preflight and confirm the screen shows the D1 status page.",
             "Board revision and MAX17048 SDA/SCL pins are recorded.",
             "Firmware commit or binary path is recorded in OPERATOR_NOTES.md.",
             "D1 field image is built; flashing is complete only if explicitly intended by the operator.",
             "SIM/network path, GNSS antenna, battery, and cable strain relief are ready.",
             "Run ID, device ID, firmware version, and target evidence folders are copied to the phone or notes.",
+            "Calling and SMS are not part of this run and must not be claimed.",
         ],
         "start_run": [
             "Confirm independent battery or power-bank supply.",
@@ -312,7 +426,8 @@ def build_checklists(*, duration_hours: float) -> dict[str, list[str]]:
         ],
         "during_run": [
             f"Keep the device running outdoors for about {duration_hours:g} hours.",
-            "Run the live field observer from this kit if a laptop or stable PC can stay online.",
+            "Run the live field companion from this kit if a laptop or stable PC can stay online.",
+            "Keep the AMOLED sidecar visible when practical; record if it becomes blank, stale, or disconnected.",
             "Check the Dashboard periodically from phone; do not use serial as the runtime evidence path.",
             "Record gaps, reboots, lost service, charging changes, or operator touches with timestamps.",
             "If USB must be reconnected, record the runtime stop first and treat later data as a new segment.",
@@ -331,6 +446,8 @@ def non_claims() -> list[str]:
         "location_accuracy_not_claimed",
         "battery_life_not_claimed",
         "gnss_acceptance_not_claimed",
+        "calling_not_claimed",
+        "sms_not_claimed",
         "pwr001_24h_pass_not_claimed",
         "product_readiness_not_claimed",
     ]
@@ -360,6 +477,7 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
         f"- Firmware version: `{manifest['device']['fw_version']}`",
         f"- Target duration: `{manifest['field_run']['duration_hours']} h`",
         f"- Location upload interval: `{manifest['field_run']['location_interval_sec']} s`",
+        f"- AMOLED port: `{manifest['sidecar']['amoled_port'] or 'auto-detect'}`",
         f"- Board revision: `{manifest['power']['board_revision']}`",
         f"- MAX17048 pins: SDA GPIO{manifest['power']['max17048_sda_gpio']} / SCL GPIO{manifest['power']['max17048_scl_gpio']}",
         f"- Token file reference: `{manifest['secrets']['token_file']}`",
@@ -370,11 +488,28 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
     lines.extend(f"- [ ] {item}" for item in checklist["before_leaving"])
     lines.extend(
         [
-            "",
-            "### Build Or Refresh Firmware Image",
-            "",
-            "This command does not flash firmware.",
-            "",
+        "",
+        "### Preflight Web/API Gate",
+        "",
+        "Read-only check that the VPS D1 surface is reachable and current enough to review.",
+        "",
+        "```powershell",
+        commands["preflight_web_api_gate"]["powershell"],
+        "```",
+        "",
+        "### Preflight AMOLED Visible Status",
+        "",
+        "Confirm the sidecar screen visibly switches to the D1 status page before leaving.",
+        "The sidecar runner sends the `display_status` command to force the full-screen status view.",
+        "",
+        "```powershell",
+        commands["preflight_amoled_visible_status"]["powershell"],
+        "```",
+        "",
+        "### Build Or Refresh Firmware Image",
+        "",
+        "This command does not flash firmware.",
+        "",
             "```powershell",
             commands["prepare_build"]["powershell"],
             "```",
@@ -402,6 +537,12 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             "```",
             "",
             "## During Run",
+            "",
+            "Preferred one-command live run: starts the D1 observer and AMOLED display sidecar with the same run ID.",
+            "",
+            "```powershell",
+            commands["live_field_companion"]["powershell"],
+            "```",
             "",
             "Read-only live observer, if a laptop or stable PC can stay online during the field run:",
             "",
@@ -470,6 +611,7 @@ def write_notes_template(path: Path, manifest: dict[str, Any]) -> None:
         f"- Device ID: `{manifest['device']['device_id']}`",
         f"- Firmware version: `{manifest['device']['fw_version']}`",
         f"- Firmware commit or binary: `<record before leaving>`",
+        f"- AMOLED port: `{manifest['sidecar']['amoled_port'] or 'auto-detect'}`",
         f"- Board revision: `{manifest['power']['board_revision']}`",
         f"- MAX17048 pins: SDA GPIO{manifest['power']['max17048_sda_gpio']} / SCL GPIO{manifest['power']['max17048_scl_gpio']}",
         f"- Battery capacity mAh: `{manifest['power']['battery_capacity_mah'] or '<record rated capacity>'}`",
@@ -491,7 +633,9 @@ def write_notes_template(path: Path, manifest: dict[str, Any]) -> None:
         "## Evidence",
         "",
         f"- Kit manifest: `{manifest['artifacts']['manifest']}`",
+        f"- Companion summary: `{manifest['expected_outputs']['companion_summary']}`",
         f"- Live field observation report: `{manifest['expected_outputs']['field_observation_report']}`",
+        f"- AMOLED sidecar summary: `{manifest['expected_outputs']['amoled_sidecar_summary']}`",
         f"- Web/API report: `{manifest['expected_outputs']['web_api_report']}`",
         f"- Power report: `{manifest['expected_outputs']['power_report']}`",
         f"- D1 demo report: `{manifest['expected_outputs']['d1_demo_report']}`",
@@ -509,6 +653,7 @@ def build_manifest(
     board_id: str,
     fw_version: str,
     token_file: str,
+    amoled_port: str,
     duration_hours: float,
     location_interval_sec: int,
     board_revision: str,
@@ -523,6 +668,7 @@ def build_manifest(
         device_id=device_id,
         fw_version=fw_version,
         token_file=token_file,
+        amoled_port=amoled_port,
         sda_gpio=sda_gpio,
         scl_gpio=scl_gpio,
         duration_hours=duration_hours,
@@ -552,6 +698,18 @@ def build_manifest(
             "location_interval_sec": location_interval_sec,
             "connection_path": "independent_power_usb_disconnected",
             "runtime_evidence_path": "device -> LTE/network -> VPS Message Hub -> Web Dashboard",
+        },
+        "sidecar": {
+            "amoled_port": amoled_port,
+            "mode": "pc_connected_visible_display",
+            "status_command": "display_status",
+            "product_dependency": False,
+        },
+        "communications": {
+            "lte_data": "observed_for_d1_message_hub_uploads",
+            "voice_calling": "unverified_not_implemented",
+            "sms": "unverified_not_implemented",
+            "live_call_or_sms_probe_included": False,
         },
         "power": {
             "backend": "MAX17048",
@@ -584,6 +742,14 @@ def build_manifest(
             "operator_notes": str(notes_path),
         },
         "expected_outputs": {
+            "companion_summary": report_path("d1_field_companion", run_id, "d1_field_companion_summary.json"),
+            "amoled_sidecar_summary": report_path("d1_field_companion", run_id, "amoled", f"{run_id}.summary.json"),
+            "preflight_amoled_summary": report_path(
+                "amoled_visible_status", run_id, "preflight", f"{run_id}-preflight-amoled.summary.json"
+            ),
+            "preflight_web_api_report": report_path(
+                "d1_web_api", f"{run_id}-preflight", "d1_web_api_report.json"
+            ),
             "field_observation_report": report_path("d1_field_observation", run_id, "d1_field_observation_report.json"),
             "field_observation_samples": report_path("d1_field_observation", run_id, "d1_field_samples.jsonl"),
             "web_api_report": report_path("d1_web_api", run_id, "d1_web_api_report.json"),
@@ -596,6 +762,8 @@ def build_manifest(
             "It does not read or persist token values.",
             "It does not contact hardware, open serial ports, flash firmware, send Message Hub commands, deploy code, or modify GitLab.",
             "Operator commands that flash firmware or send commands are explicitly labeled and require operator intent.",
+            "AMOLED sidecar commands are PC-connected display aids and are not USB-Free product acceptance evidence.",
+            "Voice calling and SMS are unverified and not implemented in the current D1 run path.",
             "A multi-hour D1 shakedown is not a 24h PWR-001 pass or a product battery-life claim.",
         ],
         "non_claims": non_claims(),
@@ -614,6 +782,7 @@ def prepare_field_kit(
     board_id: str,
     fw_version: str,
     token_file: str,
+    amoled_port: str,
     duration_hours: float,
     location_interval_sec: int,
     board_revision: str,
@@ -644,6 +813,7 @@ def prepare_field_kit(
         board_id=board_id,
         fw_version=fw_version,
         token_file=token_file,
+        amoled_port=amoled_port,
         duration_hours=duration_hours,
         location_interval_sec=location_interval_sec,
         board_revision=board_revision,
@@ -671,6 +841,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--board-id", default=DEFAULT_BOARD_ID)
     parser.add_argument("--fw-version", default=DEFAULT_FW_VERSION)
     parser.add_argument("--token-file", default=DEFAULT_TOKEN_FILE)
+    parser.add_argument("--amoled-port", default="")
     parser.add_argument("--duration-hours", type=float, default=DEFAULT_DURATION_HOURS)
     parser.add_argument("--location-interval-sec", type=int, default=60)
     parser.add_argument("--board-revision", choices=("V2", "V1", "unknown"), default="V2")
@@ -697,6 +868,7 @@ def main(argv: list[str] | None = None) -> int:
             board_id=args.board_id,
             fw_version=args.fw_version,
             token_file=args.token_file,
+            amoled_port=args.amoled_port,
             duration_hours=args.duration_hours,
             location_interval_sec=args.location_interval_sec,
             board_revision=args.board_revision,

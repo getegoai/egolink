@@ -21,6 +21,17 @@ All unknown fields must remain explicit. Do not infer hardware capability from p
 - `verified` must be backed by a named evidence file and acceptance gate.
 - PC-side probe evidence must not be described as firmware-side product behavior.
 
+## Cellular Calling/SMS Boundary
+
+- `connectivity-node-001` has observed LTE data transport for Message Hub D1
+  uploads, command polling, raw POST retries, and location/power telemetry.
+- Voice calling and SMS are `unverified`: this repository has no implemented
+  call/SMS firmware path, no accepted ATD/ATA/CMGS evidence, and no product
+  emergency calling/SMS/dispatch claim.
+- Any future live dialing or SMS probe must be a separate operator-approved
+  hardware task with redacted destination data and explicit cost/privacy
+  handling.
+
 ## PWR-001 Battery Sensing Audit
 
 - connectivity-node-001 vendor reference:

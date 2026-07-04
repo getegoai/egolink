@@ -14,6 +14,22 @@ FIXED_CREATED_AT = "2026-07-04T12:00:00+00:00"
 
 
 class D1FieldKitTests(unittest.TestCase):
+    def test_board_matrix_keeps_calling_and_sms_unverified(self) -> None:
+        matrix = (Path(__file__).resolve().parents[1] / "docs" / "hardware" / "BOARD_MATRIX.md").read_text(
+            encoding="utf-8"
+        )
+        required_terms = [
+            "Cellular Calling/SMS Boundary",
+            "Voice calling and SMS are `unverified`",
+            "no implemented",
+            "no accepted ATD/ATA/CMGS evidence",
+            "operator-approved",
+            "hardware task",
+        ]
+        for term in required_terms:
+            with self.subTest(term=term):
+                self.assertIn(term, matrix)
+
     def test_default_cli_writes_offline_field_kit_without_secret_leak(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -31,6 +47,8 @@ class D1FieldKitTests(unittest.TestCase):
                         "http://example.test:8790",
                         "--token-file",
                         str(token_file),
+                        "--amoled-port",
+                        "COM9",
                         "--output-dir",
                         str(output_dir),
                         "--json",
@@ -52,6 +70,23 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertFalse(manifest["scope"]["message_hub_contacted"])
             self.assertFalse(manifest["scope"]["firmware_flashed"])
             self.assertFalse(manifest["secrets"]["token_value_read"])
+            self.assertEqual(manifest["sidecar"]["amoled_port"], "COM9")
+            self.assertEqual(manifest["sidecar"]["status_command"], "display_status")
+            self.assertFalse(manifest["sidecar"]["product_dependency"])
+            self.assertEqual(manifest["communications"]["voice_calling"], "unverified_not_implemented")
+            self.assertEqual(manifest["communications"]["sms"], "unverified_not_implemented")
+            self.assertFalse(manifest["communications"]["live_call_or_sms_probe_included"])
+            self.assertIn("preflight_web_api_gate", manifest["commands"])
+            self.assertIn("preflight_amoled_visible_status", manifest["commands"])
+            self.assertIn("live_field_companion", manifest["commands"])
+            self.assertIn(
+                "scripts\\run_amoled_d1_status_sidecar.ps1",
+                manifest["commands"]["preflight_amoled_visible_status"]["argv"],
+            )
+            self.assertIn("display_status", runbook)
+            self.assertIn("scripts\\run_d1_field_companion.ps1", manifest["commands"]["live_field_companion"]["argv"])
+            self.assertIn("-AmoledPort", manifest["commands"]["live_field_companion"]["argv"])
+            self.assertIn("COM9", manifest["commands"]["live_field_companion"]["argv"])
             self.assertIn("-PrepareBuild", manifest["commands"]["prepare_build"]["argv"])
             self.assertNotIn("-Flash", manifest["commands"]["prepare_build"]["argv"])
             self.assertIn("-EnableD1PeriodicLocation", manifest["commands"]["prepare_build"]["argv"])
@@ -65,16 +100,28 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("--max-stale-sec", manifest["commands"]["live_field_observer"]["argv"])
             self.assertTrue(manifest["commands"]["flash_explicit_operator_action"]["hardware_action"])
             self.assertTrue(manifest["commands"]["short_usb_free_link_check"]["sends_message_hub_command"])
+            self.assertTrue(manifest["commands"]["preflight_amoled_visible_status"]["writes_amoled_serial"])
+            self.assertFalse(manifest["commands"]["preflight_amoled_visible_status"]["sends_message_hub_command"])
+            self.assertTrue(manifest["commands"]["live_field_companion"]["writes_amoled_serial"])
+            self.assertFalse(manifest["commands"]["live_field_companion"]["sends_message_hub_command"])
             self.assertFalse(manifest["commands"]["live_field_observer"].get("hardware_action", False))
             self.assertIn("field_observation_report", manifest["expected_outputs"])
+            self.assertIn("companion_summary", manifest["expected_outputs"])
+            self.assertIn("amoled_sidecar_summary", manifest["expected_outputs"])
+            self.assertIn("calling_not_claimed", manifest["non_claims"])
+            self.assertIn("sms_not_claimed", manifest["non_claims"])
 
             combined = json.dumps(manifest) + runbook + checklist + notes + stdout.getvalue()
             self.assertNotIn("unit-super-secret-token", combined)
             self.assertIn("D1 Outdoor Field Runbook", runbook)
+            self.assertIn("Preflight AMOLED Visible Status", runbook)
+            self.assertIn("Preferred one-command live run", runbook)
             self.assertIn("observe_d1_field_run.py", runbook)
             self.assertIn("Live field observation report", notes)
+            self.assertIn("AMOLED sidecar summary", notes)
             self.assertIn("Before Leaving", checklist)
             self.assertIn("D1 Field Operator Notes", notes)
+            self.assertIn("Calling and SMS are not part of this run", checklist)
 
     def test_v1_board_uses_recorded_v1_max17048_pins(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -89,6 +136,7 @@ class D1FieldKitTests(unittest.TestCase):
                 board_id="connectivity-node-001",
                 fw_version="0.1.0-fw001-hw-r1",
                 token_file="server/runtime/vps_message_hub_token.txt",
+                amoled_port="",
                 duration_hours=3.5,
                 location_interval_sec=45,
                 board_revision="V1",
@@ -115,6 +163,10 @@ class D1FieldKitTests(unittest.TestCase):
             observer_argv = manifest["commands"]["live_field_observer"]["argv"]
             self.assertIn("--poll-interval-sec", observer_argv)
             self.assertIn("45", observer_argv)
+            companion_argv = manifest["commands"]["live_field_companion"]["argv"]
+            self.assertIn("scripts\\run_d1_field_companion.ps1", companion_argv)
+            self.assertNotIn("-AmoledPort", companion_argv)
+            self.assertEqual(manifest["sidecar"]["amoled_port"], "")
 
     def test_partial_pin_override_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -130,6 +182,7 @@ class D1FieldKitTests(unittest.TestCase):
                     board_id="connectivity-node-001",
                     fw_version="0.1.0-fw001-hw-r1",
                     token_file="server/runtime/vps_message_hub_token.txt",
+                    amoled_port="",
                     duration_hours=4,
                     location_interval_sec=60,
                     board_revision="V2",
