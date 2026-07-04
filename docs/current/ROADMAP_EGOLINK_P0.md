@@ -184,6 +184,28 @@ Later tasks:
   reference-point error measurement, and first accuracy metrics.
 - D3 follows D2 with 24h wearable-style power/reliability evidence.
 
+## 2026-07-04 On-Device AI And Data Flywheel Side Track
+
+The D1 link-through path is now good enough to start the V1 AI/data side track
+without blocking outdoor field and power runs. The order is:
+
+- keep FIELD-004 and PWR-001 as the source of reliable device, location, and
+  power evidence;
+- use M1 session recordings plus annotations as the bridge into the data
+  flywheel, not transient Dashboard state;
+- use DATA-003 to store bounded training-candidate records in a local SQLite
+  candidate store while keeping `training_allowed=false`;
+- add labeling and collection protocol work before any MotionNet training;
+- run MotionNet-class models in shadow mode first, then measure RAM, flash,
+  latency, and sleep-vs-inference power before any device-side release gate.
+
+Current AI/data boundary:
+
+- done: DATA-002 flywheel spec and DATA-003 candidate-store baseline;
+- active/planned: M1-002/M1-005/M1-006 data foundation and collection work;
+- blocked from claims: MotionNet accuracy, on-device deployment acceptance,
+  and model power/battery impact until measured evidence exists.
+
 ## R0: VPS + PC Simulator Simulated Loop
 
 Goal: prove the public message hub and dashboard without hardware.

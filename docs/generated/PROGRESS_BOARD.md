@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-04 10:32 UTC
-- 分支: `autodev/egolink-p0` @ 04be197 fix(amoled): force visible d1 status display [AMOLED-004]
+- 生成时间: 2026-07-04 12:07 UTC
+- 分支: `autodev/egolink-p0` @ 688816d feat(web): surface field test results [UI-002]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 81，进行中: 2，暂停: 3
+- 已完成任务总数: 84，进行中: 3，暂停: 3
 
 ## 里程碑
 
@@ -24,6 +24,7 @@
 |---|---|---|---|---|
 | D1-001 | D1 link-through baseline | active | high | codex |
 | FIELD-003 | Outdoor GNSS acceptance protocol and first measured run | paused | high | 暂停到D2：claude+创始人（户外执行） |
+| FIELD-004 | D1 outdoor multi-hour field run | active | high | - |
 | MODEL-001 | Model footprint assessment | paused | high | 暂停到D4/D5：codex |
 | PROD-001 | Mass-production requirements definition and module/MCU selection gates | paused | high | 暂停：等D1/创始人输入 |
 | PWR-001 | Real power telemetry and first 24h battery baseline run | active | high | claude+创始人（刷机/挂电池） |
@@ -38,8 +39,8 @@
 | AMOLED-004 | Visible D1 status display on AMOLED sidecar | 2026-07-04 |
 | D1-002 | Outdoor field kit with AMOLED companion | 2026-07-04 |
 | DATA-002 | Data flywheel pipeline spec | 2026-07-04 |
-| DEMO-010 | Product Demo Web Review Gate | 2026-07-03 |
-| DEMO-011 | Product Demo Report Web Review Binding | 2026-07-03 |
+| DATA-003 | Training candidate store baseline | 2026-07-04 |
+| UI-001 | Field-friendly Web dashboard and AMOLED status screen | 2026-07-04 |
 
 ## 等待创始人处理
 

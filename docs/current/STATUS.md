@@ -6,6 +6,22 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: DATA-003 training candidate store baseline is implemented. The
+project now has a local SQLite candidate-store path from existing session
+recordings plus annotations into bounded training-candidate records. The new
+store lives behind `pc_simulator/training_candidate_store.py` and
+`scripts/build_training_candidate_store.py`; it records source refs, labels,
+privacy, consent, quality, split, and lineage fields, while keeping
+`training_allowed=false` until a later review promotes records to
+`reviewed_training_candidate`. The on-device AI/data flywheel route is now
+documented in `docs/modeling/ON_DEVICE_AI_DATA_FLYWHEEL_ROADMAP.md` and linked
+from the P0/V1 roadmaps. This does not train a model, change firmware, change
+public contracts, retain raw private payload bytes, deploy on-device
+inference, or claim model accuracy or battery impact. Validation passed:
+focused candidate-store tests (4 tests), `python scripts/context_lint.py`,
+`python -m py_compile` for the candidate-store module and CLI, and
+`git diff --check`; full `scripts\verify.ps1` also passed (394 tests).
+
 2026-07-04: UI-002 field-test result visibility is implemented and deployed.
 The VPS Web Dashboard now has a `Field Test Results` panel after the D1 live
 view, sourced from bounded report summary files rather than raw JSONL logs.

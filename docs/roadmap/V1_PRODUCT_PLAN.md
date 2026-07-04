@@ -128,6 +128,7 @@ re-run and on-device model acceptance re-run on EVT hardware.
 | 2 | M1-002 on-device session recorder | V1-M3 | planned |
 | 2 | MODEL-001 model footprint assessment (ESP32-S3 first) | V1-M3 | paused for D1 (protocol baseline 2026-07-04; measurements pending) |
 | 2 | DATA-002 data flywheel pipeline spec | V1-M3 | done (2026-07-04) |
+| 2 | DATA-003 training candidate store baseline | V1-M3 | done (2026-07-04) |
 | 2 | WEB-003 guardian dashboard MVP (live location/track/SOS) | V1-M2 | planned |
 | 3 | M1-005 labeling loop, M1-006 collection protocol runs | V1-M3 | planned |
 | 3 | MotionNet v0.1 training + on-device PoC | V1-M3 | planned |

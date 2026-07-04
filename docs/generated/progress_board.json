@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-04 10:32 UTC",
+  "generated_at": "2026-07-04 12:07 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "04be197 fix(amoled): force visible d1 status display [AMOLED-004]"
+    "head": "688816d feat(web): surface field test results [UI-002]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -185,6 +185,15 @@
       "path": "D:/pywork/egolink/docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md"
     },
     {
+      "id": "FIELD-004",
+      "title": "D1 outdoor multi-hour field run",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-04",
+      "path": "D:/pywork/egolink/docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md"
+    },
+    {
       "id": "MODEL-001",
       "title": "Model footprint assessment",
       "state": "paused",
@@ -268,22 +277,22 @@
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-002_DATA_FLYWHEEL_PIPELINE_SPEC.md"
     },
     {
-      "id": "DEMO-010",
-      "title": "Product Demo Web Review Gate",
+      "id": "DATA-003",
+      "title": "Training candidate store baseline",
       "state": "done",
-      "packet_status": "completed",
+      "packet_status": "done",
       "priority": "high",
-      "date": "2026-07-03",
-      "path": "D:/pywork/egolink/docs/tasks/done/DEMO-010_PRODUCT_DEMO_WEB_REVIEW_GATE.md"
+      "date": "2026-07-04",
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-003_TRAINING_CANDIDATE_STORE_BASELINE.md"
     },
     {
-      "id": "DEMO-011",
-      "title": "Product Demo Report Web Review Binding",
+      "id": "UI-001",
+      "title": "Field-friendly Web dashboard and AMOLED status screen",
       "state": "done",
-      "packet_status": "completed",
+      "packet_status": "done",
       "priority": "high",
-      "date": "2026-07-03",
-      "path": "D:/pywork/egolink/docs/tasks/done/DEMO-011_PRODUCT_DEMO_REPORT_WEB_REVIEW_BINDING.md"
+      "date": "2026-07-04",
+      "path": "D:/pywork/egolink/docs/tasks/done/UI-001_FIELD_FRIENDLY_WEB_AMOLED_UI.md"
     }
   ],
   "operator_asks": [
@@ -346,9 +355,9 @@
     }
   ],
   "counts": {
-    "active": 2,
+    "active": 3,
     "paused": 3,
-    "open_total": 5,
-    "done_total": 81
+    "open_total": 6,
+    "done_total": 84
   }
 }
