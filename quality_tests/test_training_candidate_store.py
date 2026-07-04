@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 from pc_simulator import session_annotations, session_recorder, training_candidate_store
-from scripts import build_training_candidate_store
+from scripts import build_training_candidate_store, summarize_data_flywheel
 from quality_tests.test_session_recorder import sample_events
 
 
@@ -135,6 +135,77 @@ class TrainingCandidateStoreTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(payload["records_written"], 1)
         self.assertEqual(payload["training_allowed_records"], 0)
+
+    def test_data_flywheel_status_summarizes_candidate_store_without_records(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            report_dir = root / "status"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+            training_candidate_store.store_recording(
+                recording_dir,
+                db_path,
+                generated_at="2026-07-04T12:02:00+00:00",
+            )
+
+            summary = training_candidate_store.summarize_candidate_store(
+                db_path,
+                generated_at="2026-07-04T12:03:00+00:00",
+            )
+            written = training_candidate_store.write_data_flywheel_status_report(summary, report_dir)
+            json_exists = (report_dir / "data_flywheel_status.json").exists()
+            markdown_exists = (report_dir / "data_flywheel_status.md").exists()
+
+        self.assertEqual(summary["schema_version"], "egolink.data_flywheel_status.v0.1")
+        self.assertEqual(summary["status"], "needs_review")
+        self.assertEqual(summary["counts"]["sessions_total"], 1)
+        self.assertEqual(summary["counts"]["records_total"], 1)
+        self.assertEqual(summary["counts"]["training_allowed_records"], 0)
+        self.assertEqual(summary["review"]["label_review_pending_records"], 1)
+        self.assertEqual(summary["review"]["split_leakage_unchecked_records"], 1)
+        self.assertFalse(summary["readiness"]["model_training_ready"])
+        self.assertIn("label_review_pending", summary["blockers"])
+        self.assertIn("split_leakage_review_pending", summary["blockers"])
+        payload = json.dumps(written, ensure_ascii=False)
+        self.assertNotIn("record_json", payload)
+        self.assertNotIn("raw_payload", payload)
+        self.assertTrue(json_exists)
+        self.assertTrue(markdown_exists)
+
+    def test_data_flywheel_cli_writes_status_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            output_root = root / "reports"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+            training_candidate_store.store_recording(recording_dir, db_path)
+
+            with redirect_stdout(StringIO()) as output:
+                exit_code = summarize_data_flywheel.main(
+                    [
+                        "--db",
+                        str(db_path),
+                        "--output-root",
+                        str(output_root),
+                        "--run-id",
+                        "unit-data-flywheel",
+                        "--generated-at",
+                        "2026-07-04T12:04:00+00:00",
+                        "--json",
+                    ]
+                )
+            payload = json.loads(output.getvalue())
+            report_exists = (output_root / "unit-data-flywheel" / "data_flywheel_status.json").exists()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["run_id"], "unit-data-flywheel")
+        self.assertEqual(payload["counts"]["records_total"], 1)
+        self.assertFalse(payload["readiness"]["model_training_ready"])
+        self.assertTrue(report_exists)
 
 
 if __name__ == "__main__":

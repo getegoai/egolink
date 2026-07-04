@@ -27,7 +27,7 @@ Near-term engineering gates (R2.x/R3.x) remain in
 | 5 | **On-device AI companion (core differentiator)**: motion anomaly candidate detection on the wearable (MotionNet), real-time confirmation/interaction loop (display/touch/audio), proactive check-in behavior; degrades gracefully without LTE | M0 contracts + RuleRouter baseline, DEMO-001 AMOLED/IMU confirmation loop, IMU capture chain (TIMU-009 series) | M1 data foundation (M1-002/005/006), formal IMU acceptance, MotionNet v0.1, model footprint assessment, interaction loop hardening, mic decision |
 | 6 | Cloud AI services over LTE: heavier reasoning, language-level companion functions, fleet learning | VPS Message Hub in production, raw-frame ingest (SERVER-002) | Companion service design (V1-M3), model registry/update path |
 | 7 | Explainable location confidence shown to guardians ("why we believe TA is here") | EALE-P0 confidence buckets + evidence refs | Human-readable rendering (WEB-003) |
-| 8 | Data flywheel: consent + privacy classes, session ingest, confirmation-derived labels, retrain-and-ship loop (server update + device OTA) | M0 contracts, DATA-001 export, DATA-002 pipeline spec | M1 recorder/labeling/collection implementation, training-candidate store implementation, model registry, OTA model path |
+| 8 | Data flywheel: consent + privacy classes, session ingest, confirmation-derived labels, retrain-and-ship loop (server update + device OTA) | M0 contracts, DATA-001 export, DATA-002 pipeline spec, DATA-003 candidate store, DATA-004 control-plane visibility | M1 recorder/labeling/collection implementation, DATA-005 review queue, TRAIN-001 dataset/experiment handoff, model registry, OTA model path |
 
 ## 2. V1 Non-Goals
 
@@ -129,6 +129,7 @@ re-run and on-device model acceptance re-run on EVT hardware.
 | 2 | MODEL-001 model footprint assessment (ESP32-S3 first) | V1-M3 | paused for D1 (protocol baseline 2026-07-04; measurements pending) |
 | 2 | DATA-002 data flywheel pipeline spec | V1-M3 | done (2026-07-04) |
 | 2 | DATA-003 training candidate store baseline | V1-M3 | done (2026-07-04) |
+| 2 | DATA-004 data flywheel control-plane visibility | V1-M3 | done (2026-07-04) |
 | 2 | WEB-003 guardian dashboard MVP (live location/track/SOS) | V1-M2 | planned |
 | 3 | M1-005 labeling loop, M1-006 collection protocol runs | V1-M3 | planned |
 | 3 | MotionNet v0.1 training + on-device PoC | V1-M3 | planned |

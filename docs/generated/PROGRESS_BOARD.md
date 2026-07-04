@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-04 12:07 UTC
-- 分支: `autodev/egolink-p0` @ 688816d feat(web): surface field test results [UI-002]
+- 生成时间: 2026-07-04 12:48 UTC
+- 分支: `autodev/egolink-p0` @ b3287af feat(data): add training candidate store baseline [DATA-003]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 84，进行中: 3，暂停: 3
+- 已完成任务总数: 85，进行中: 3，暂停: 3
 
 ## 里程碑
 
@@ -40,7 +40,7 @@
 | D1-002 | Outdoor field kit with AMOLED companion | 2026-07-04 |
 | DATA-002 | Data flywheel pipeline spec | 2026-07-04 |
 | DATA-003 | Training candidate store baseline | 2026-07-04 |
-| UI-001 | Field-friendly Web dashboard and AMOLED status screen | 2026-07-04 |
+| DATA-004 | Data flywheel control plane | 2026-07-04 |
 
 ## 等待创始人处理
 

@@ -7,6 +7,7 @@ param(
     [int]$Port = 8790,
     [switch]$Public,
     [switch]$IncludeFieldReportSummaries,
+    [switch]$IncludeDataFlywheelSummaries,
     [switch]$NoStart
 )
 
@@ -83,6 +84,31 @@ function Copy-FieldReportSummaries {
     }
 }
 
+function Copy-DataFlywheelSummaries {
+    $dataFlywheelDir = Join-Path $repoRoot "reports\data_flywheel"
+    if (-not (Test-Path $dataFlywheelDir -PathType Container)) {
+        return
+    }
+    $allowedNames = @(
+        "data_flywheel_status.json",
+        "data_flywheel_status.md"
+    )
+    $reportFiles = Get-ChildItem -Path $dataFlywheelDir -Recurse -File |
+        Where-Object { $allowedNames -contains $_.Name }
+
+    $repoFull = (Resolve-Path $repoRoot).Path.TrimEnd("\", "/")
+    foreach ($file in $reportFiles) {
+        $fileFull = $file.FullName
+        if (-not $fileFull.StartsWith($repoFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to copy data flywheel summary outside repository: $fileFull"
+        }
+        $relative = $fileFull.Substring($repoFull.Length).TrimStart("\", "/")
+        $target = Join-Path $packageRoot $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -Force -LiteralPath $file.FullName -Destination $target
+    }
+}
+
 function SshArgs {
     $args = @()
     if ($SshKey) {
@@ -118,6 +144,9 @@ try {
     Copy-RelativePath "README.md"
     if ($IncludeFieldReportSummaries) {
         Copy-FieldReportSummaries
+    }
+    if ($IncludeDataFlywheelSummaries) {
+        Copy-DataFlywheelSummaries
     }
 
     Push-Location $packageRoot

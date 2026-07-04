@@ -18,6 +18,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Raw Frames", html)
         self.assertIn("Product Demo", html)
         self.assertIn("Field Test Results", html)
+        self.assertIn("Data Flywheel", html)
         self.assertIn("D1 Link Through", html)
         self.assertIn("dashboard-shell", html)
         self.assertIn("Field live view", html)
@@ -25,9 +26,16 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("rawFrames", html)
         self.assertIn("productDemo", html)
         self.assertIn("fieldResults", html)
+        self.assertIn("dataFlywheel", html)
         self.assertIn("d1Link", html)
         self.assertIn("d1_link", html)
         self.assertIn("field_results", html)
+        self.assertIn("data_flywheel", html)
+        self.assertIn("dataFlywheelPanel", html)
+        self.assertIn("Candidate Records", html)
+        self.assertIn("Training Gate", html)
+        self.assertIn("Review Queues", html)
+        self.assertIn("Training Server", html)
         self.assertIn("fieldResultsPanel", html)
         self.assertIn("fieldResultsCards", html)
         self.assertIn("d1FieldOverview", html)
@@ -236,16 +244,96 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(summary["status"], "not_available")
         self.assertEqual(summary["reason"], "no_field_result_reports")
 
+    def test_latest_data_flywheel_status_summary_is_bounded_for_dashboard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report_dir = root / "run-a"
+            report_dir.mkdir(parents=True)
+            (report_dir / "data_flywheel_status.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.data_flywheel_status.v0.1",
+                        "run_id": "unit-data-flywheel",
+                        "generated_at": "2026-07-04T12:04:00+00:00",
+                        "status": "needs_review",
+                        "pipeline_stage": "candidate_review_pending",
+                        "candidate_store": {
+                            "available": True,
+                            "db_path": "C:/private/path/training_candidates.db",
+                            "schema_version": "egolink.training_candidate_store.v0.1",
+                            "latest_updated_at": "2026-07-04T12:03:00+00:00",
+                        },
+                        "counts": {
+                            "sessions_total": 1,
+                            "records_total": 3,
+                            "needs_review_records": 3,
+                            "training_allowed_records": 0,
+                            "reviewed_training_candidate_records": 0,
+                            "experiment_input_records": 0,
+                        },
+                        "state_counts": {"candidate": 3},
+                        "candidate_type_counts": {"needs_help": 3},
+                        "quality_gate_counts": {"pass": 3},
+                        "label_review_state_counts": {"pending": 3},
+                        "review": {
+                            "label_review_pending_records": 3,
+                            "split_leakage_unchecked_records": 3,
+                            "privacy_or_consent_blocked_records": 0,
+                            "quality_blocked_records": 0,
+                        },
+                        "readiness": {
+                            "model_training_ready": False,
+                            "reason": "candidate_review_not_complete",
+                            "dataset_manifest_ready": False,
+                            "training_server_ready": False,
+                            "on_device_deployment_ready": False,
+                        },
+                        "blockers": ["label_review_pending", "split_leakage_review_pending"],
+                        "warnings": [],
+                        "next_step": "Create the labeling/review loop.",
+                        "paths": {
+                            "data_flywheel_status_markdown": "reports/data_flywheel/run-a/data_flywheel_status.md"
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summary = message_hub.load_latest_data_flywheel_status(root)
+
+        self.assertTrue(summary["available"])
+        self.assertEqual(summary["status"], "needs_review")
+        self.assertEqual(summary["counts"]["records_total"], 3)
+        self.assertEqual(summary["review"]["label_review_pending_records"], 3)
+        self.assertFalse(summary["readiness"]["model_training_ready"])
+        payload = json.dumps(summary)
+        self.assertNotIn("training_candidates.db", payload)
+        self.assertNotIn("record_json", payload)
+
+    def test_data_flywheel_missing_returns_explainable_not_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = message_hub.load_latest_data_flywheel_status(Path(tmp))
+
+        self.assertFalse(summary["available"])
+        self.assertEqual(summary["status"], "not_available")
+        self.assertEqual(summary["reason"], "no_data_flywheel_status_report")
+
     def test_deploy_script_can_include_curated_field_report_summaries(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         script = (repo_root / "scripts" / "deploy_message_hub_vps.ps1").read_text(encoding="utf-8")
 
         self.assertIn("IncludeFieldReportSummaries", script)
+        self.assertIn("IncludeDataFlywheelSummaries", script)
         self.assertIn("Copy-FieldReportSummaries", script)
+        self.assertIn("Copy-DataFlywheelSummaries", script)
         self.assertIn("d1_web_api_report.json", script)
         self.assertIn("d1_field_companion_summary.json", script)
+        self.assertIn("data_flywheel_status.json", script)
+        self.assertIn("data_flywheel_status.md", script)
         self.assertIn("*.summary.json", script)
         self.assertNotIn("*.jsonl", script)
+        self.assertNotIn("*.db", script)
 
     def test_latest_product_demo_report_summary_is_bounded_for_dashboard(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

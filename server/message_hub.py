@@ -34,6 +34,7 @@ DEFAULT_DB = REPO_ROOT / "server" / "runtime" / "message_hub.db"
 KEY_RELEASE_DIR = REPO_ROOT / "docs" / "current" / "key_releases"
 DEFAULT_PRODUCT_DEMO_REPORTS = REPO_ROOT / "reports" / "product_demo"
 DEFAULT_FIELD_RESULT_REPORTS = REPO_ROOT / "reports"
+DEFAULT_DATA_FLYWHEEL_REPORTS = REPO_ROOT / "reports" / "data_flywheel"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -852,6 +853,7 @@ def make_handler(
     token: str | None = None,
     product_demo_root: Path = DEFAULT_PRODUCT_DEMO_REPORTS,
     field_results_root: Path = DEFAULT_FIELD_RESULT_REPORTS,
+    data_flywheel_root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -894,6 +896,7 @@ def make_handler(
                 raw_frames = store.recent_raw_frames(20)
                 product_demo = load_latest_product_demo_report(product_demo_root)
                 field_results = load_latest_field_results(field_results_root)
+                data_flywheel = load_latest_data_flywheel_status(data_flywheel_root)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -902,6 +905,7 @@ def make_handler(
                         "raw_frames": raw_frames,
                         "product_demo": product_demo,
                         "field_results": field_results,
+                        "data_flywheel": data_flywheel,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -964,6 +968,9 @@ def make_handler(
                 return
             if segments == ["api", "v1", "field-results", "latest"]:
                 self.respond_json({"field_results": load_latest_field_results(field_results_root)})
+                return
+            if segments == ["api", "v1", "data-flywheel", "latest"]:
+                self.respond_json({"data_flywheel": load_latest_data_flywheel_status(data_flywheel_root)})
                 return
             raise MessageHubError("not_found", "route not found", status=404)
 
@@ -3146,6 +3153,88 @@ def load_latest_field_results(root: Path = DEFAULT_FIELD_RESULT_REPORTS) -> dict
     }
 
 
+def data_flywheel_unavailable(reason: str = "no_data_flywheel_status_report") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "counts": {},
+        "review": {},
+        "readiness": {"model_training_ready": False},
+        "blockers": [reason],
+        "warnings": [reason],
+        "next_step": "Run scripts/summarize_data_flywheel.py after building or updating the candidate store.",
+    }
+
+
+def latest_data_flywheel_status_path(root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS) -> Path | None:
+    return latest_report_path(root, ["**/data_flywheel_status.json"])
+
+
+def load_latest_data_flywheel_status(root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS) -> dict[str, Any]:
+    path = latest_data_flywheel_status_path(root)
+    if path is None:
+        return data_flywheel_unavailable()
+    report = load_json_report(path)
+    if report is None:
+        return data_flywheel_unavailable("data_flywheel_status_unreadable")
+    counts = as_dict(report.get("counts"))
+    review = as_dict(report.get("review"))
+    readiness = as_dict(report.get("readiness"))
+    candidate_store = as_dict(report.get("candidate_store"))
+    paths = as_dict(report.get("paths"))
+    markdown_path = paths.get("data_flywheel_status_markdown")
+    if not markdown_path:
+        markdown_candidate = path.with_suffix(".md")
+        markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    return compact_dict(
+        {
+            "available": True,
+            "status": report.get("status", "unknown"),
+            "pipeline_stage": report.get("pipeline_stage"),
+            "run_id": report.get("run_id"),
+            "generated_at": report.get("generated_at") or report_file_time(path),
+            "candidate_store": {
+                "available": candidate_store.get("available", False),
+                "reason": candidate_store.get("reason"),
+                "schema_version": candidate_store.get("schema_version"),
+                "latest_updated_at": candidate_store.get("latest_updated_at"),
+            },
+            "counts": {
+                "sessions_total": counts.get("sessions_total", 0),
+                "records_total": counts.get("records_total", 0),
+                "needs_review_records": counts.get("needs_review_records", 0),
+                "training_allowed_records": counts.get("training_allowed_records", 0),
+                "reviewed_training_candidate_records": counts.get("reviewed_training_candidate_records", 0),
+                "experiment_input_records": counts.get("experiment_input_records", 0),
+            },
+            "state_counts": report.get("state_counts"),
+            "candidate_type_counts": report.get("candidate_type_counts"),
+            "quality_gate_counts": report.get("quality_gate_counts"),
+            "label_review_state_counts": report.get("label_review_state_counts"),
+            "review": {
+                "label_review_pending_records": review.get("label_review_pending_records", 0),
+                "split_leakage_unchecked_records": review.get("split_leakage_unchecked_records", 0),
+                "privacy_or_consent_blocked_records": review.get("privacy_or_consent_blocked_records", 0),
+                "quality_blocked_records": review.get("quality_blocked_records", 0),
+            },
+            "readiness": {
+                "model_training_ready": readiness.get("model_training_ready", False),
+                "reason": readiness.get("reason"),
+                "dataset_manifest_ready": readiness.get("dataset_manifest_ready", False),
+                "training_server_ready": readiness.get("training_server_ready", False),
+                "on_device_deployment_ready": readiness.get("on_device_deployment_ready", False),
+            },
+            "warnings": report.get("warnings"),
+            "blockers": report.get("blockers"),
+            "next_step": report.get("next_step"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -4055,6 +4144,10 @@ def render_dashboard() -> str:
           <div id="fieldResults"></div>
         </section>
         <section>
+          <h2>Data Flywheel</h2>
+          <div id="dataFlywheel"></div>
+        </section>
+        <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
         </section>
@@ -4111,6 +4204,7 @@ def render_dashboard() -> str:
       rawFrames.innerHTML = html;
       productDemo.innerHTML = html;
       fieldResults.innerHTML = html;
+      dataFlywheel.innerHTML = html;
       d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
@@ -4192,7 +4286,7 @@ def render_dashboard() -> str:
     }
     function statusClass(status) {
       if (status === 'pass' || status === 'released') return 'ok';
-      if (status === 'warn' || status === 'not_run' || status === 'release_candidate') return 'warn';
+      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture') return 'warn';
       return status === 'not_available' ? 'empty' : 'bad';
     }
     function productDemoPanel(demo) {
@@ -4238,6 +4332,36 @@ def render_dashboard() -> str:
       if (warnings.length) parts.push(`warn ${warnings.join(', ')}`);
       if (errors.length) parts.push(`errors ${errors.join(', ')}`);
       return parts.join(' / ') || 'none';
+    }
+    function dataFlywheelPanel(flywheel) {
+      if (!flywheel || !flywheel.available) {
+        return `
+          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(flywheel && flywheel.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(flywheel && flywheel.reason || 'no_data_flywheel_status_report')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(flywheel && flywheel.next_step || 'Run the data flywheel status report')}</span></div>
+        `;
+      }
+      const counts = flywheel.counts || {};
+      const review = flywheel.review || {};
+      const readiness = flywheel.readiness || {};
+      const store = flywheel.candidate_store || {};
+      const blockers = flywheel.blockers || [];
+      const warnings = flywheel.warnings || [];
+      return `
+        <div class="metric"><span>Status</span><span class="${statusClass(flywheel.status)}">${escapeHtml(flywheel.status || 'unknown')}</span></div>
+        <div class="metric"><span>Stage</span><span>${escapeHtml(flywheel.pipeline_stage || 'unknown')}</span></div>
+        <div class="metric"><span>Candidate Store</span><span>${escapeHtml(store.available ?? false)} / ${escapeHtml(store.schema_version || store.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Sessions</span><span>${escapeHtml(counts.sessions_total ?? 0)}</span></div>
+        <div class="metric"><span>Candidate Records</span><span>${escapeHtml(counts.records_total ?? 0)} total / ${escapeHtml(counts.needs_review_records ?? 0)} needs review</span></div>
+        <div class="metric"><span>Training Gate</span><span>${escapeHtml(readiness.model_training_ready ?? false)} / ${escapeHtml(readiness.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Reviewed Candidates</span><span>${escapeHtml(counts.reviewed_training_candidate_records ?? 0)} reviewed / ${escapeHtml(counts.training_allowed_records ?? 0)} training_allowed</span></div>
+        <div class="metric"><span>Review Queues</span><span>label ${escapeHtml(review.label_review_pending_records ?? 0)} / split ${escapeHtml(review.split_leakage_unchecked_records ?? 0)} / privacy ${escapeHtml(review.privacy_or_consent_blocked_records ?? 0)} / quality ${escapeHtml(review.quality_blocked_records ?? 0)}</span></div>
+        <div class="metric"><span>Training Server</span><span>${escapeHtml(readiness.training_server_ready ?? false)} / on-device ${escapeHtml(readiness.on_device_deployment_ready ?? false)}</span></div>
+        <div class="metric"><span>Blockers</span><span>${escapeHtml(blockers.join(', ') || 'none')}</span></div>
+        <div class="metric"><span>Warnings</span><span>${escapeHtml(warnings.join(', ') || 'none')}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(flywheel.next_step || 'Create the next data task')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(flywheel.markdown_path || flywheel.report_path || 'unknown')}</span></div>
+      `;
     }
     function fieldResultsPanel(results) {
       if (!results || !results.available) {
@@ -4485,6 +4609,7 @@ def render_dashboard() -> str:
       runContext.innerHTML = runContextPanel(data.current_run || {});
       productDemo.innerHTML = productDemoPanel(data.product_demo || {});
       fieldResults.innerHTML = fieldResultsPanel(data.field_results || {});
+      dataFlywheel.innerHTML = dataFlywheelPanel(data.data_flywheel || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>

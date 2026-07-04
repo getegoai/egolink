@@ -23,10 +23,12 @@ must consume only reviewed evidence:
    local SQLite candidate store, with review still pending.
 4. M1-005/M1-006 add labeling and collection protocols for normal negative
    samples and controlled simulated positives.
-5. MotionNet v0.1 starts with a statistical baseline and small model
+5. DATA-004 keeps the flywheel visible through bounded status summaries and a
+   Dashboard/API panel without exposing raw records.
+6. MotionNet v0.1 starts with a statistical baseline and small model
    candidates only after candidate data passes quality, privacy, consent, and
    split-leakage checks.
-6. Device deployment begins in shadow mode: model output is recorded alongside
+7. Device deployment begins in shadow mode: model output is recorded alongside
    the deterministic Safety Kernel and RuleRouter; it does not replace safety
    behavior until later acceptance gates pass.
 
@@ -38,7 +40,8 @@ must consume only reviewed evidence:
 | Candidate store | Turn session recordings plus annotations into bounded records. | DATA-003. |
 | Labeling | Add human/user labels with consent and privacy state. | M1-005. |
 | Collection protocol | Collect normal negatives and safe controlled positives. | M1-006. |
-| Dataset readiness | Split by session/device/person/place/time and block leakage. | DATA-004 planned. |
+| Dataset readiness | Summarize review queues, split leakage blockers, and training readiness. | DATA-004. |
+| Dataset manifest | Export reviewed candidates to a training-server handoff manifest. | DATA-005 planned. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -55,6 +58,8 @@ must consume only reviewed evidence:
   `reviewed_training_candidate`.
 - Session splits are blocked by complete sessions first; random row splitting
   is not allowed.
+- DATA-004 status summaries and Dashboard panels are control-plane visibility
+  only; they are not dataset manifests and do not contain raw records.
 
 ## Model And Power Gates
 

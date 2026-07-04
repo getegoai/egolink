@@ -21,6 +21,8 @@ from pc_simulator import session_inspector
 STORE_SCHEMA_VERSION = "egolink.training_candidate_store.v0.1"
 RECORD_SCHEMA_VERSION = "egolink.training_candidate_record.v0.1"
 STORE_BUILDER_VERSION = "data-003.0"
+DATA_FLYWHEEL_STATUS_SCHEMA_VERSION = "egolink.data_flywheel_status.v0.1"
+DATA_FLYWHEEL_STATUS_BUILDER_VERSION = "data-004.0"
 
 
 class CandidateStoreError(ValueError):
@@ -58,6 +60,10 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
             raise CandidateStoreError(f"Expected JSON object in {path}:{line_number}")
         rows.append(payload)
     return rows
+
+
+def as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def sha1_text(value: str) -> str:
@@ -335,6 +341,325 @@ def initialize(connection: sqlite3.Connection) -> None:
             ON training_candidate_records(state);
         """
     )
+
+
+def table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
+    row = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def group_counts(connection: sqlite3.Connection, table_name: str, column_name: str) -> dict[str, int]:
+    rows = connection.execute(
+        f"SELECT {column_name} AS value, COUNT(*) AS count FROM {table_name} GROUP BY {column_name}"
+    ).fetchall()
+    return {
+        str(row["value"] if row["value"] is not None else "unknown"): int(row["count"])
+        for row in rows
+    }
+
+
+def build_store_unavailable_status(db_path: Path, *, generated_at: str, reason: str) -> dict[str, Any]:
+    return {
+        "schema_version": DATA_FLYWHEEL_STATUS_SCHEMA_VERSION,
+        "builder_version": DATA_FLYWHEEL_STATUS_BUILDER_VERSION,
+        "generated_at": generated_at,
+        "status": "needs_capture",
+        "pipeline_stage": reason,
+        "candidate_store": {
+            "available": False,
+            "reason": reason,
+            "db_path": str(db_path),
+            "schema_version": STORE_SCHEMA_VERSION,
+        },
+        "counts": {
+            "sessions_total": 0,
+            "records_total": 0,
+            "training_allowed_records": 0,
+            "review_required_records": 0,
+            "needs_review_records": 0,
+            "reviewed_training_candidate_records": 0,
+            "experiment_input_records": 0,
+            "release_candidate_records": 0,
+        },
+        "state_counts": {},
+        "candidate_type_counts": {},
+        "quality_gate_counts": {},
+        "privacy_class_counts": {},
+        "label_review_state_counts": {},
+        "split_counts": {},
+        "review": {
+            "label_review_pending_records": 0,
+            "split_leakage_unchecked_records": 0,
+            "privacy_or_consent_blocked_records": 0,
+            "quality_blocked_records": 0,
+        },
+        "readiness": {
+            "model_training_ready": False,
+            "reason": reason,
+            "dataset_manifest_ready": False,
+            "training_server_ready": False,
+            "on_device_deployment_ready": False,
+        },
+        "warnings": [reason],
+        "blockers": [reason],
+        "next_step": "Build the candidate store from reviewed session recordings before labeling or training.",
+        "non_claims": [
+            "No model training has run.",
+            "No candidate record is training-ready from this status alone.",
+            "No firmware or on-device inference behavior changes.",
+        ],
+    }
+
+
+def load_candidate_record_jsons(connection: sqlite3.Connection) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        "SELECT record_json FROM training_candidate_records ORDER BY record_id"
+    ).fetchall()
+    records: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            record = json.loads(row["record_json"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(record, dict):
+            records.append(record)
+    return records
+
+
+def readiness_reason(*, records_total: int, reviewed_training_candidate_records: int) -> str:
+    if records_total == 0:
+        return "no_candidate_records"
+    if reviewed_training_candidate_records == 0:
+        return "candidate_review_not_complete"
+    return "reviewed_candidates_available"
+
+
+def next_data_flywheel_step(status: str, blockers: list[str]) -> str:
+    if status == "needs_labels":
+        return "Add or review annotations, then rebuild the candidate store summary."
+    if "consent_or_privacy_review_pending" in blockers:
+        return "Run the consent/privacy review before any dataset export or training task."
+    if "quality_review_pending" in blockers:
+        return "Fix or exclude low-quality candidate records before dataset export."
+    if "split_leakage_review_pending" in blockers:
+        return "Run session/device/time-blocked split review before training."
+    if status == "ready_for_experiment":
+        return "Export a dataset manifest and hand it to the offline training runner."
+    return "Create the labeling/review loop so candidate records can be promoted deliberately."
+
+
+def summarize_candidate_store(db_path: Path, *, generated_at: str | None = None) -> dict[str, Any]:
+    generated = generated_at or utc_now()
+    db_path = db_path.resolve()
+    if not db_path.exists():
+        return build_store_unavailable_status(db_path, generated_at=generated, reason="candidate_store_missing")
+
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        required_tables = {"training_candidate_sessions", "training_candidate_records"}
+        if not all(table_exists(connection, table) for table in required_tables):
+            return build_store_unavailable_status(db_path, generated_at=generated, reason="candidate_store_uninitialized")
+
+        sessions_total = int(connection.execute("SELECT COUNT(*) FROM training_candidate_sessions").fetchone()[0])
+        records_total = int(connection.execute("SELECT COUNT(*) FROM training_candidate_records").fetchone()[0])
+        training_allowed_records = int(
+            connection.execute(
+                "SELECT COALESCE(SUM(training_allowed), 0) FROM training_candidate_records"
+            ).fetchone()[0]
+            or 0
+        )
+        latest_updated_row = connection.execute(
+            """
+            SELECT MAX(updated_at) AS latest_updated_at FROM (
+                SELECT updated_at FROM training_candidate_sessions
+                UNION ALL
+                SELECT updated_at FROM training_candidate_records
+            )
+            """
+        ).fetchone()
+        latest_updated_at = latest_updated_row["latest_updated_at"] if latest_updated_row else None
+        state_counts = group_counts(connection, "training_candidate_records", "state")
+        candidate_type_counts = group_counts(connection, "training_candidate_records", "candidate_type")
+        quality_gate_counts = group_counts(connection, "training_candidate_records", "quality_gate")
+        privacy_class_counts = group_counts(connection, "training_candidate_records", "privacy_class")
+        split_counts = group_counts(connection, "training_candidate_records", "split_name")
+        record_jsons = load_candidate_record_jsons(connection)
+    finally:
+        connection.close()
+
+    label_review_state_counts = Counter(
+        str(as_dict(record.get("labels")).get("label_review_state") or "unknown")
+        for record in record_jsons
+    )
+    review_required_records = sum(1 for record in record_jsons if record.get("review_required") is True)
+    label_review_pending_records = int(label_review_state_counts.get("pending", 0))
+    split_leakage_unchecked_records = sum(
+        1 for record in record_jsons if as_dict(record.get("split")).get("split_leakage_checked") is not True
+    )
+    privacy_or_consent_blocked_records = sum(
+        state_counts.get(state, 0) for state in ("consent_blocked", "privacy_blocked")
+    )
+    quality_blocked_records = int(state_counts.get("quality_blocked", 0))
+    reviewed_training_candidate_records = int(state_counts.get("reviewed_training_candidate", 0))
+    experiment_input_records = int(state_counts.get("experiment_input", 0))
+    release_candidate_records = int(state_counts.get("release_candidate", 0))
+    needs_review_records = max(
+        review_required_records,
+        label_review_pending_records,
+        split_leakage_unchecked_records,
+    )
+
+    blockers: list[str] = []
+    warnings: list[str] = []
+    if records_total == 0:
+        warnings.append("no_candidate_records")
+    if privacy_or_consent_blocked_records:
+        blockers.append("consent_or_privacy_review_pending")
+    if quality_blocked_records:
+        blockers.append("quality_review_pending")
+    if split_leakage_unchecked_records:
+        blockers.append("split_leakage_review_pending")
+    if label_review_pending_records:
+        blockers.append("label_review_pending")
+    if training_allowed_records and reviewed_training_candidate_records == 0:
+        blockers.append("training_allowed_without_reviewed_candidate")
+
+    model_training_ready = bool(training_allowed_records and reviewed_training_candidate_records)
+    if records_total == 0:
+        status = "needs_labels"
+        pipeline_stage = "candidate_store_empty"
+    elif blockers:
+        status = "needs_review"
+        pipeline_stage = "candidate_review_pending"
+    elif model_training_ready:
+        status = "ready_for_experiment"
+        pipeline_stage = "dataset_manifest_next"
+    else:
+        status = "needs_review"
+        pipeline_stage = "candidate_review_pending"
+        blockers.append("reviewed_training_candidate_missing")
+
+    reason = readiness_reason(
+        records_total=records_total,
+        reviewed_training_candidate_records=reviewed_training_candidate_records,
+    )
+    return {
+        "schema_version": DATA_FLYWHEEL_STATUS_SCHEMA_VERSION,
+        "builder_version": DATA_FLYWHEEL_STATUS_BUILDER_VERSION,
+        "generated_at": generated,
+        "status": status,
+        "pipeline_stage": pipeline_stage,
+        "candidate_store": {
+            "available": True,
+            "db_path": str(db_path),
+            "schema_version": STORE_SCHEMA_VERSION,
+            "latest_updated_at": latest_updated_at,
+        },
+        "counts": {
+            "sessions_total": sessions_total,
+            "records_total": records_total,
+            "training_allowed_records": training_allowed_records,
+            "review_required_records": review_required_records,
+            "needs_review_records": needs_review_records,
+            "reviewed_training_candidate_records": reviewed_training_candidate_records,
+            "experiment_input_records": experiment_input_records,
+            "release_candidate_records": release_candidate_records,
+        },
+        "state_counts": dict(sorted(state_counts.items())),
+        "candidate_type_counts": dict(sorted(candidate_type_counts.items())),
+        "quality_gate_counts": dict(sorted(quality_gate_counts.items())),
+        "privacy_class_counts": dict(sorted(privacy_class_counts.items())),
+        "label_review_state_counts": dict(sorted(label_review_state_counts.items())),
+        "split_counts": dict(sorted(split_counts.items())),
+        "review": {
+            "label_review_pending_records": label_review_pending_records,
+            "split_leakage_unchecked_records": split_leakage_unchecked_records,
+            "privacy_or_consent_blocked_records": privacy_or_consent_blocked_records,
+            "quality_blocked_records": quality_blocked_records,
+        },
+        "readiness": {
+            "model_training_ready": model_training_ready,
+            "reason": reason,
+            "dataset_manifest_ready": model_training_ready,
+            "training_server_ready": False,
+            "on_device_deployment_ready": False,
+        },
+        "warnings": sorted(set(warnings)),
+        "blockers": sorted(set(blockers)),
+        "next_step": next_data_flywheel_step(status, blockers),
+        "non_claims": [
+            "No model training has run.",
+            "No on-device model has been deployed.",
+            "No model accuracy, false-positive rate, or battery impact is claimed.",
+        ],
+    }
+
+
+def render_data_flywheel_status_markdown(summary: Mapping[str, Any]) -> str:
+    counts = as_dict(summary.get("counts"))
+    review = as_dict(summary.get("review"))
+    readiness = as_dict(summary.get("readiness"))
+    candidate_store = as_dict(summary.get("candidate_store"))
+    lines = [
+        "# Ego Link Data Flywheel Status",
+        "",
+        f"- Generated at: {summary.get('generated_at', 'unknown')}",
+        f"- Status: {summary.get('status', 'unknown')}",
+        f"- Pipeline stage: {summary.get('pipeline_stage', 'unknown')}",
+        f"- Candidate store available: {candidate_store.get('available', False)}",
+        f"- Sessions: {counts.get('sessions_total', 0)}",
+        f"- Candidate records: {counts.get('records_total', 0)}",
+        f"- Needs review: {counts.get('needs_review_records', 0)}",
+        f"- Training allowed records: {counts.get('training_allowed_records', 0)}",
+        f"- Reviewed training candidates: {counts.get('reviewed_training_candidate_records', 0)}",
+        f"- Model training ready: {readiness.get('model_training_ready', False)} ({readiness.get('reason', 'unknown')})",
+        "",
+        "## Review Queues",
+        "",
+        f"- Label review pending: {review.get('label_review_pending_records', 0)}",
+        f"- Split leakage unchecked: {review.get('split_leakage_unchecked_records', 0)}",
+        f"- Consent/privacy blocked: {review.get('privacy_or_consent_blocked_records', 0)}",
+        f"- Quality blocked: {review.get('quality_blocked_records', 0)}",
+        "",
+        "## Counts",
+        "",
+        f"- States: {json.dumps(summary.get('state_counts', {}), ensure_ascii=False, sort_keys=True)}",
+        f"- Candidate types: {json.dumps(summary.get('candidate_type_counts', {}), ensure_ascii=False, sort_keys=True)}",
+        f"- Quality gates: {json.dumps(summary.get('quality_gate_counts', {}), ensure_ascii=False, sort_keys=True)}",
+        "",
+        "## Next Step",
+        "",
+        str(summary.get("next_step") or "Create the next data flywheel task."),
+        "",
+        "## Non-Claims",
+        "",
+    ]
+    for item in summary.get("non_claims", []) or []:
+        lines.append(f"- {item}")
+    lines += [
+        "",
+        "This report contains only bounded counts and review status. It does not contain raw candidate records, raw payload bytes, private coordinates, candidate DB files, or runtime JSONL logs.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def write_data_flywheel_status_report(summary: Mapping[str, Any], output_dir: Path) -> dict[str, Any]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    payload = dict(summary)
+    json_path = output_dir / "data_flywheel_status.json"
+    markdown_path = output_dir / "data_flywheel_status.md"
+    payload["paths"] = {
+        "data_flywheel_status_json": str(json_path),
+        "data_flywheel_status_markdown": str(markdown_path),
+    }
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    markdown_path.write_text(render_data_flywheel_status_markdown(payload), encoding="utf-8")
+    return payload
 
 
 def store_recording(

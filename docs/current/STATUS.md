@@ -6,6 +6,34 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: DATA-004 data flywheel control-plane baseline is implemented and
+VPS-deployed.
+Candidate-store status can now be summarized into bounded JSON/Markdown reports
+with `scripts/summarize_data_flywheel.py`, and the Message Hub Dashboard/API can
+surface the latest curated `reports/data_flywheel/**/data_flywheel_status.json`
+summary through `/api/state` and `/api/v1/data-flywheel/latest`. The panel shows
+candidate sessions/records, review queues, split-leakage pending counts,
+training-readiness blockers, and the next data task without exposing raw
+candidate records, DB files, runtime JSONL logs, raw payload bytes, or private
+coordinates. `scripts/deploy_message_hub_vps.ps1 -IncludeDataFlywheelSummaries`
+can sync only `data_flywheel_status.json/.md` summaries. This does not train a
+model, mark records training-ready, change firmware/protocol ingest, integrate a
+training server, deploy on-device inference, or claim model accuracy/power
+impact. Deployment used `scripts/deploy_message_hub_vps.ps1 -Public
+-IncludeFieldReportSummaries -IncludeDataFlywheelSummaries`, restarted
+`egolink-message-hub.service` on `203.0.113.10:8790`, copied only curated field
+and data-flywheel summaries, and did not modify GitLab. Public checks passed:
+`/health` returned `ok=true`, unauthenticated `/api/state` returned `401`,
+Dashboard HTML contained `Data Flywheel`, `dataFlywheelPanel`, and `D1 Link
+Through`, authenticated `/api/state` included `data_flywheel`, and
+`/api/v1/data-flywheel/latest` returned `available=true`,
+`status=needs_capture`, `pipeline_stage=candidate_store_missing`,
+`records_total=0`. Validation passed: focused candidate-store/dashboard tests
+(16 tests), `python scripts/context_lint.py`, `python -m py_compile
+pc_simulator\training_candidate_store.py scripts\summarize_data_flywheel.py
+server\message_hub.py`, `git diff --check`, and full `scripts\verify.ps1`
+(398 tests).
+
 2026-07-04: DATA-003 training candidate store baseline is implemented. The
 project now has a local SQLite candidate-store path from existing session
 recordings plus annotations into bounded training-candidate records. The new

@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-04 12:07 UTC",
+  "generated_at": "2026-07-04 12:48 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "688816d feat(web): surface field test results [UI-002]"
+    "head": "b3287af feat(data): add training candidate store baseline [DATA-003]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -286,13 +286,13 @@
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-003_TRAINING_CANDIDATE_STORE_BASELINE.md"
     },
     {
-      "id": "UI-001",
-      "title": "Field-friendly Web dashboard and AMOLED status screen",
+      "id": "DATA-004",
+      "title": "Data flywheel control plane",
       "state": "done",
       "packet_status": "done",
       "priority": "high",
       "date": "2026-07-04",
-      "path": "D:/pywork/egolink/docs/tasks/done/UI-001_FIELD_FRIENDLY_WEB_AMOLED_UI.md"
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-004_DATA_FLYWHEEL_CONTROL_PLANE.md"
     }
   ],
   "operator_asks": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 84
+    "done_total": 85
   }
 }

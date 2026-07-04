@@ -201,10 +201,19 @@ without blocking outdoor field and power runs. The order is:
 
 Current AI/data boundary:
 
-- done: DATA-002 flywheel spec and DATA-003 candidate-store baseline;
-- active/planned: M1-002/M1-005/M1-006 data foundation and collection work;
+- done: DATA-002 flywheel spec, DATA-003 candidate-store baseline, and
+  DATA-004 data-flywheel control-plane visibility;
+- active/planned: M1-002/M1-005/M1-006 data foundation and collection work,
+  DATA-005 labeling/review queue, and TRAIN-001 dataset/experiment handoff;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
+
+DATA-004 answers the immediate visibility gap: the live Message Hub database
+remains the operational evidence store, while curated data-flywheel summaries
+show candidate counts, review queues, split-leakage blockers, and model-training
+readiness without exposing raw candidate records. Later DATA/TRAIN tasks should
+turn reviewed candidates into dataset manifests and training-server experiment
+records before any model is evaluated or shipped.
 
 ## R0: VPS + PC Simulator Simulated Loop
 
