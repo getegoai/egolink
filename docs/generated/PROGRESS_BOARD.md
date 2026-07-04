@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-04 09:38 UTC
-- 分支: `autodev/egolink-p0` @ 673772f feat(amoled): add screen sidecar status flow [AMOLED-001]
+- 生成时间: 2026-07-04 09:49 UTC
+- 分支: `autodev/egolink-p0` @ 62f9cab feat(amoled): mirror d1 status to screen sidecar [AMOLED-002]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 78，进行中: 2，暂停: 3
+- 已完成任务总数: 79，进行中: 2，暂停: 3
 
 ## 里程碑
 
@@ -34,12 +34,12 @@
 |---|---|---|
 | AMOLED-001 | AMOLED screen interaction sidecar | 2026-07-04 |
 | AMOLED-002 | AMOLED D1 status sidecar runner | 2026-07-04 |
+| AMOLED-003 | D1 field companion runner with AMOLED sidecar | 2026-07-04 |
 | DATA-002 | Data flywheel pipeline spec | 2026-07-04 |
 | DEMO-010 | Product Demo Web Review Gate | 2026-07-03 |
 | DEMO-011 | Product Demo Report Web Review Binding | 2026-07-03 |
 | ENG-007 | Retire AutoDev/Dual-Codex docs and adopt Director Workflow references | 2026-07-03 |
 | ENG-008 | Founder-facing project progress board generator | 2026-07-03 |
-| LTE-003 | LTE HTTP Command Poll And ACK | 2026-07-03 |
 
 ## 等待创始人处理
 

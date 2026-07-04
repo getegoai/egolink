@@ -6,6 +6,21 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: AMOLED-003 D1 field companion runner is added and smoke-tested.
+`scripts/run_d1_field_companion.ps1` starts the read-only D1 field observer and
+the AMOLED D1 status sidecar with one shared run ID, sample count, and poll
+interval, redirects child stdout/stderr to evidence files, waits for both
+children, and writes one JSON/Markdown companion summary. VPS smoke
+`amoled003-companion-vps-smoke5-20260704` passed on `COM9`: the observer child
+reported one successful sample from `ego-link-r1-connectivity-001`, LTE
+`registered_home/active`, raw POST `121 ok / 0 fail`, battery `100% / 4276mV`,
+and `d1_coordinate_not_observed`; the AMOLED child returned `command_ack` and
+`status_rendered` with the same D1 state. Evidence:
+`reports/d1_field_companion/amoled003-companion-vps-smoke5-20260704/d1_field_companion_summary.json`.
+This is a PC-connected field companion for live display while walking; it does
+not claim USB-Free display acceptance, GNSS fix, location accuracy, battery
+life, or product readiness.
+
 2026-07-04: AMOLED-002 D1 status sidecar runner is added and smoke-tested.
 `scripts/run_amoled_d1_status_sidecar.ps1` reads the Message Hub `/api/state`,
 extracts the selected device `d1_link`, and sends a compact sidecar-only

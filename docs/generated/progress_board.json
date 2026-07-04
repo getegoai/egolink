@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-04 09:38 UTC",
+  "generated_at": "2026-07-04 09:49 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "673772f feat(amoled): add screen sidecar status flow [AMOLED-001]"
+    "head": "62f9cab feat(amoled): mirror d1 status to screen sidecar [AMOLED-002]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -232,6 +232,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/AMOLED-002_D1_STATUS_SIDECAR_RUNNER.md"
     },
     {
+      "id": "AMOLED-003",
+      "title": "D1 field companion runner with AMOLED sidecar",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "medium",
+      "date": "2026-07-04",
+      "path": "D:/pywork/egolink/docs/tasks/done/AMOLED-003_D1_FIELD_COMPANION_RUNNER.md"
+    },
+    {
       "id": "DATA-002",
       "title": "Data flywheel pipeline spec",
       "state": "done",
@@ -275,15 +284,6 @@
       "priority": "high",
       "date": "2026-07-03",
       "path": "D:/pywork/egolink/docs/tasks/done/ENG-008_PROJECT_PROGRESS_BOARD.md"
-    },
-    {
-      "id": "LTE-003",
-      "title": "LTE HTTP Command Poll And ACK",
-      "state": "done",
-      "packet_status": "superseded",
-      "priority": "",
-      "date": "2026-07-03",
-      "path": "D:/pywork/egolink/docs/tasks/done/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md"
     }
   ],
   "operator_asks": [
@@ -349,6 +349,6 @@
     "active": 2,
     "paused": 3,
     "open_total": 5,
-    "done_total": 78
+    "done_total": 79
   }
 }

@@ -32,6 +32,10 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   the AMOLED screen over `COM9`; smoke `amoled002-d1-status-vps-smoke2-20260704`
   rendered `estimate_visible`, LTE registered/PDP active, no-fix map mode,
   battery, and raw POST counters without sending 4G-board commands.
+- AMOLED-003 field companion runner can start the D1 field observer and AMOLED
+  sidecar together with one run ID; smoke
+  `amoled003-companion-vps-smoke5-20260704` passed on `COM9` with one observer
+  sample and one AMOLED `status_rendered` event.
 - AMOLED `ask_user` command path rendered and returned `user_confirmation=safe` in Demo v0.2 evidence.
 - Demo v0.3 generated a complete safety record using Demo v0.2 real AMOLED confirmation evidence plus live SIM7670G GNSS AT probe.
 - SIM7670G GNSS AT probe was reachable indoors, selected `COM6`, and produced `fix=false`.
