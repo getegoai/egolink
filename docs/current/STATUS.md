@@ -6,6 +6,21 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: MODEL-001 is opened as an active V1-M3 model footprint assessment
+task, with the protocol baseline completed. `docs/modeling/MODEL_FOOTPRINT_ASSESSMENT.md`
+now defines evidence levels from `protocol_defined` through
+`candidate_compared`, minimum report fields for RAM, flash, latency, energy,
+artifact identity, source status, known gaps, and evidence paths, plus the
+rule that `TBD(MODEL-001)` production values must not be replaced until
+reviewed measured evidence exists. `docs/generated/PROGRESS_BOARD.md` was
+regenerated and now reports 4 active tasks and 76 completed tasks. This did
+not train a model, add a model artifact, benchmark ESP32-S3, measure power,
+select an MCU, change firmware/model behavior, change protocols/contracts, or
+replace any PROD-001 `TBD(MODEL-001)` value. Validation passed: focused
+MODEL-001 doc tests, `python scripts/context_lint.py`, `python
+scripts/build_progress_board.py`, `git diff --check`, and full
+`scripts\verify.ps1` (355 tests).
+
 2026-07-04: DATA-002 is completed as a V1-M3 data-flywheel pipeline
 specification. `docs/development/DATA_FLYWHEEL_PIPELINE.md` now defines the
 path from session/test-run evidence to consented, privacy-reviewed

@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-04 05:28 UTC
-- 分支: `autodev/egolink-p0` @ f7c5d32 docs: add production founder decision sheet
+- 生成时间: 2026-07-04 05:34 UTC
+- 分支: `autodev/egolink-p0` @ a837f4d docs: define data flywheel pipeline
 - 当前焦点: V1 Wave 1: 可靠性收尾（功耗/GNSS/VPS加固）；PROD-001 量产需求草稿已交付待创始人填值；目标 ~2 周内出 FT-1 可穿戴外场测试版
-- 已完成任务总数: 76，进行中: 3
+- 已完成任务总数: 76，进行中: 4
 
 ## 里程碑
 
@@ -11,7 +11,7 @@
 |---|---|---|
 | V1-M1 可靠性收尾 | 1/5 | ⏳PWR-001 ⏳FIELD-003 ✅OPS-001 📋STAB-002 LTE长运行/重连门 📋FT-1 可穿戴测试版组装 |
 | V1-M2 家人端 MVP | 0/2 | 📋WEB-003 家人看板 📋围栏引擎+通知通道 |
-| V1-M3 设备端 AI 轨道（核心） | 1/7 | 📋M1-002 端侧会话记录器 📋MODEL-001 模型footprint评估 ✅DATA-002 数据飞轮管线 📋M1-005 标注闭环 📋M1-006 场景采集协议执行 📋MotionNet v0.1 训练+端侧PoC 📋FW-004 固件能力真值源 |
+| V1-M3 设备端 AI 轨道（核心） | 1/7 | 📋M1-002 端侧会话记录器 ⏳MODEL-001 模型footprint评估 ✅DATA-002 数据飞轮管线 📋M1-005 标注闭环 📋M1-006 场景采集协议执行 📋MotionNet v0.1 训练+端侧PoC 📋FW-004 固件能力真值源 |
 | V1-M4 量产定义与选型 | 0/4 | ⏳PROD-001 📋中国移动模组评估（等资料） 📋MCU渠道报价与选型ADR（等报价） 📋麦克风方案决策 |
 | GOV 治理 | 2/2 | ✅ENG-007 ✅ENG-008 |
 
@@ -22,6 +22,7 @@
 | 任务 | 标题 | 状态 | 优先级 | 执行者 |
 |---|---|---|---|---|
 | FIELD-003 | Outdoor GNSS acceptance protocol and first measured run | active | high | claude+创始人（户外执行） |
+| MODEL-001 | Model footprint assessment | active | high | - |
 | PROD-001 | Mass-production requirements definition and module/MCU selection gates | active | high | codex |
 | PWR-001 | Real power telemetry and first 24h battery baseline run | active | high | claude+创始人（刷机/挂电池） |
 

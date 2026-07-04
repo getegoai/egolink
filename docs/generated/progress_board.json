@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-04 05:28 UTC",
+  "generated_at": "2026-07-04 05:34 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "f7c5d32 docs: add production founder decision sheet"
+    "head": "a837f4d docs: define data flywheel pipeline"
   },
   "current_focus": "V1 Wave 1: 可靠性收尾（功耗/GNSS/VPS加固）；PROD-001 量产需求草稿已交付待创始人填值；目标 ~2 周内出 FT-1 可穿戴外场测试版",
   "milestones": [
@@ -71,7 +71,7 @@
         {
           "id": "MODEL-001",
           "label": "MODEL-001 模型footprint评估",
-          "state": "planned"
+          "state": "in_progress"
         },
         {
           "id": "DATA-002",
@@ -156,6 +156,15 @@
       "priority": "high",
       "date": "2026-07-03",
       "path": "D:/pywork/egolink/docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md"
+    },
+    {
+      "id": "MODEL-001",
+      "title": "Model footprint assessment",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-04",
+      "path": "D:/pywork/egolink/docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md"
     },
     {
       "id": "PROD-001",
@@ -307,7 +316,7 @@
     }
   ],
   "counts": {
-    "active": 3,
+    "active": 4,
     "done_total": 76
   }
 }

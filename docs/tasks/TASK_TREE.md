@@ -485,8 +485,9 @@ motion candidate
 Current active packets (2026-07-04, per ADR-0002 and
 `docs/roadmap/V1_PRODUCT_PLAN.md`; executed via
 `docs/development/DIRECTOR_WORKFLOW.md`). New prefixes: `PWR-*` power and
-battery engineering, `PRIVACY-*` privacy/data boundary gates, and `PROD-*`
-mass-production definition and sourcing.
+battery engineering, `PRIVACY-*` privacy/data boundary gates, `MODEL-*` model
+footprint and on-device AI evidence gates, and `PROD-*` mass-production
+definition and sourcing.
 
 - `PWR-001` Real power telemetry + 24h battery baseline -
   `docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md`
@@ -494,6 +495,21 @@ mass-production definition and sourcing.
   `docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md`
 - `PROD-001` Mass-production requirements + module/MCU selection gates -
   `docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md`
+- `MODEL-001` Model footprint assessment -
+  `docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md`
+
+- `MODEL-001 Model Footprint Assessment`
+  - Path: `docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md`
+  - Status: active as of 2026-07-04; protocol baseline is complete and
+    RAM/flash/latency/power measurements remain pending.
+  - Evidence: `docs/modeling/MODEL_FOOTPRINT_ASSESSMENT.md` and
+    `quality_tests/test_model_footprint_assessment_doc.py`.
+  - Current visible result: V1-M3/PROD-001 now have a shared evidence protocol
+    for MotionNet-class model footprint assessment across ESP32-S3 and
+    candidate production MCUs.
+  - Boundary: no model training, model artifact, runtime benchmark, power
+    measurement, firmware/model behavior change, protocol change, MCU
+    selection, or replacement of `TBD(MODEL-001)` values yet.
 
 - `PRIVACY-001 Product Demo Privacy And Data Boundary Gate`
   - Path: `docs/tasks/done/PRIVACY-001_PRODUCT_DEMO_DATA_BOUNDARY_GATE.md`
