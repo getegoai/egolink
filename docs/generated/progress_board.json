@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-04 13:48 UTC",
+  "generated_at": "2026-07-04 13:58 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "e420e74 feat(field): surface always-on d1 readiness [FIELD-006]"
+    "head": "8c29cb6 feat(data): add candidate review queue [DATA-005]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 88
+    "done_total": 89
   }
 }

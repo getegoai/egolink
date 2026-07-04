@@ -46,7 +46,7 @@ must consume only reviewed evidence:
 | Collection protocol | Collect normal negatives and safe controlled positives. | M1-006. |
 | Dataset readiness | Summarize review queues, split leakage blockers, and training readiness. | DATA-004. |
 | Candidate review | Approve, reject, or return bounded candidates without exposing raw records. | DATA-005. |
-| Dataset manifest | Export reviewed candidates to a training-server handoff manifest. | TRAIN-001 planned. |
+| Dataset manifest | Export reviewed candidates to a training-server handoff manifest. | TRAIN-001. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -68,6 +68,8 @@ must consume only reviewed evidence:
 - DATA-005 review actions may promote a record only after label, consent,
   privacy, quality, and split-leakage review pass; rejected and needs-changes
   records never become training allowed.
+- TRAIN-001 manifests include only reviewed, training-allowed candidates and
+  bounded lineage/label/split summaries; they are not model training runs.
 
 ## Model And Power Gates
 

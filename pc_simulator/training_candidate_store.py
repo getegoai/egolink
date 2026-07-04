@@ -28,6 +28,8 @@ REVIEW_ACTION_SCHEMA_VERSION = "egolink.training_candidate_review_action.v0.1"
 REVIEW_BUILDER_VERSION = "data-005.0"
 REVIEW_ACTIONS = ("approve_for_training", "reject", "needs_changes")
 DEFAULT_REVIEW_QUEUE_LIMIT = 25
+DATASET_MANIFEST_SCHEMA_VERSION = "egolink.training_dataset_manifest.v0.1"
+DATASET_MANIFEST_BUILDER_VERSION = "train-001.0"
 
 
 class CandidateStoreError(ValueError):
@@ -833,6 +835,194 @@ def review_candidate_record(
             "No on-device model behavior changed.",
         ],
     }
+
+
+def dataset_manifest_record(record: Mapping[str, Any]) -> dict[str, Any]:
+    labels = as_dict(record.get("labels"))
+    label_set = as_dict(labels.get("label_set"))
+    quality = as_dict(record.get("quality"))
+    privacy = as_dict(record.get("privacy"))
+    split = as_dict(record.get("split"))
+    lineage = as_dict(record.get("lineage"))
+    features = as_dict(record.get("features"))
+    source_refs = as_dict(record.get("source_refs"))
+    device_context = as_dict(record.get("device_context"))
+    return {
+        "record_id": record.get("record_id"),
+        "session_id": record.get("session_id"),
+        "window_id": record.get("window_id"),
+        "candidate_type": record.get("candidate_type"),
+        "split_name": split.get("split_name"),
+        "split_group_key": split.get("split_group_key"),
+        "label": label_set.get("label"),
+        "model_labels": label_set.get("model_labels") if isinstance(label_set.get("model_labels"), dict) else {},
+        "label_review_state": labels.get("label_review_state"),
+        "privacy_class": privacy.get("privacy_class"),
+        "quality_gate": quality.get("quality_gate"),
+        "quality_score": quality.get("quality_score"),
+        "feature_groups": features.get("feature_groups") or [],
+        "feature_generator_version": features.get("feature_generator_version"),
+        "device_id": device_context.get("device_id"),
+        "firmware_version": device_context.get("firmware_version"),
+        "source_status": device_context.get("source_status"),
+        "source_event_type": source_refs.get("source_event_type"),
+        "annotation_id": source_refs.get("annotation_id"),
+        "source_manifest_hash": lineage.get("source_manifest_hash"),
+    }
+
+
+def reviewed_training_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        record
+        for record in records
+        if record.get("state") == "reviewed_training_candidate"
+        and record.get("training_allowed") is True
+        and as_dict(record.get("labels")).get("label_review_state") == "reviewed"
+        and as_dict(record.get("split")).get("split_leakage_checked") is True
+    ]
+
+
+def dataset_id_for(generated_at: str) -> str:
+    return "dataset-" + sha1_text(f"egolink|{generated_at}")[:12]
+
+
+def build_training_dataset_manifest(
+    db_path: Path,
+    *,
+    dataset_id: str | None = None,
+    generated_at: str | None = None,
+) -> dict[str, Any]:
+    generated = generated_at or utc_now()
+    dataset_id = dataset_id or dataset_id_for(generated)
+    db_path = db_path.resolve()
+    if not db_path.exists():
+        return {
+            "schema_version": DATASET_MANIFEST_SCHEMA_VERSION,
+            "builder_version": DATASET_MANIFEST_BUILDER_VERSION,
+            "dataset_id": dataset_id,
+            "generated_at": generated,
+            "status": "not_ready",
+            "reason": "candidate_store_missing",
+            "records": [],
+            "counts": {"records_total": 0, "eligible_records": 0},
+            "split_counts": {},
+            "training_server": {
+                "ready_for_handoff": False,
+                "runner_integration": "not_integrated",
+                "experiment_id": None,
+            },
+            "non_claims": [
+                "No model training has run.",
+                "No model metrics, accuracy, false-positive rate, latency, footprint, or power impact is claimed.",
+            ],
+        }
+
+    connection = sqlite3.connect(db_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        required_tables = {"training_candidate_sessions", "training_candidate_records"}
+        if not all(table_exists(connection, table) for table in required_tables):
+            records: list[dict[str, Any]] = []
+            latest_updated_at = None
+        else:
+            records = load_candidate_record_jsons(connection)
+            latest_row = connection.execute(
+                "SELECT MAX(updated_at) AS latest_updated_at FROM training_candidate_records"
+            ).fetchone()
+            latest_updated_at = latest_row["latest_updated_at"] if latest_row else None
+    finally:
+        connection.close()
+
+    eligible = reviewed_training_records(records)
+    manifest_records = [dataset_manifest_record(record) for record in eligible]
+    split_counts = Counter(str(record.get("split_name") or "unknown") for record in manifest_records)
+    status = "ready_for_training_handoff" if manifest_records else "not_ready"
+    reason = "reviewed_candidates_available" if manifest_records else "no_reviewed_training_candidates"
+    return {
+        "schema_version": DATASET_MANIFEST_SCHEMA_VERSION,
+        "builder_version": DATASET_MANIFEST_BUILDER_VERSION,
+        "dataset_id": dataset_id,
+        "generated_at": generated,
+        "status": status,
+        "reason": reason,
+        "source_candidate_store": {
+            "schema_version": STORE_SCHEMA_VERSION,
+            "latest_updated_at": latest_updated_at,
+        },
+        "counts": {
+            "records_total": len(records),
+            "eligible_records": len(manifest_records),
+            "reviewed_training_candidate_records": len(eligible),
+        },
+        "split_counts": dict(sorted(split_counts.items())),
+        "records": manifest_records,
+        "training_server": {
+            "ready_for_handoff": bool(manifest_records),
+            "runner_integration": "not_integrated",
+            "experiment_id": None,
+        },
+        "non_claims": [
+            "No model training has run.",
+            "No model has been evaluated or deployed.",
+            "No model metrics, accuracy, false-positive rate, latency, footprint, or power impact is claimed.",
+        ],
+    }
+
+
+def render_training_dataset_manifest_markdown(manifest: Mapping[str, Any]) -> str:
+    counts = as_dict(manifest.get("counts"))
+    lines = [
+        "# Ego Link Training Dataset Manifest",
+        "",
+        f"- Dataset: {manifest.get('dataset_id', 'unknown')}",
+        f"- Generated at: {manifest.get('generated_at', 'unknown')}",
+        f"- Status: {manifest.get('status', 'unknown')}",
+        f"- Reason: {manifest.get('reason', 'unknown')}",
+        f"- Eligible records: {counts.get('eligible_records', 0)}",
+        f"- Split counts: {json.dumps(manifest.get('split_counts', {}), ensure_ascii=False, sort_keys=True)}",
+        "",
+        "## Records",
+        "",
+    ]
+    for record in manifest.get("records", []) or []:
+        lines.append(
+            f"- {record.get('record_id', 'unknown')}: {record.get('candidate_type', 'unknown')} / "
+            f"{record.get('label', 'unknown')} / split {record.get('split_name', 'unknown')}"
+        )
+    if not manifest.get("records"):
+        lines.append("- none")
+    lines += [
+        "",
+        "## Training Server",
+        "",
+        f"- Ready for handoff: {as_dict(manifest.get('training_server')).get('ready_for_handoff', False)}",
+        f"- Runner integration: {as_dict(manifest.get('training_server')).get('runner_integration', 'unknown')}",
+        "",
+        "## Non-Claims",
+        "",
+    ]
+    for item in manifest.get("non_claims", []) or []:
+        lines.append(f"- {item}")
+    lines += [
+        "",
+        "This manifest contains only reviewed candidate summaries and lineage hashes. It does not contain raw candidate records, raw payload bytes, private coordinates, candidate DB files, or runtime JSONL logs.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def write_training_dataset_manifest(manifest: Mapping[str, Any], output_dir: Path) -> dict[str, Any]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    payload = dict(manifest)
+    json_path = output_dir / "training_dataset_manifest.json"
+    markdown_path = output_dir / "training_dataset_manifest.md"
+    payload["paths"] = {
+        "training_dataset_manifest_json": str(json_path),
+        "training_dataset_manifest_markdown": str(markdown_path),
+    }
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    markdown_path.write_text(render_training_dataset_manifest_markdown(payload), encoding="utf-8")
+    return payload
 
 
 def readiness_reason(*, records_total: int, reviewed_training_candidate_records: int) -> str:

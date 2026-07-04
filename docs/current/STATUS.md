@@ -6,6 +6,24 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: TRAIN-001 dataset/experiment handoff manifest is implemented. The
+candidate-store module can now export only `reviewed_training_candidate`
+records with `training_allowed=true` into a bounded
+`egolink.training_dataset_manifest.v0.1` manifest containing label, split,
+privacy, quality, feature-group, device, and lineage-hash summaries. The CLI
+`scripts/export_training_dataset_manifest.py` writes JSON/Markdown manifests
+under `reports/training_datasets/<dataset-id>/`, supports `--require-ready`,
+and reports `not_ready` rather than silently producing a training dataset when
+no reviewed candidates exist. Local evidence:
+`reports/training_datasets/train001-local-handoff-20260704/` currently shows
+`status=not_ready`, `reason=candidate_store_missing`, and `eligible_records=0`,
+which is expected until reviewed recordings are ingested. Focused
+candidate-store tests passed (14 tests), and `python -m py_compile` passed with
+a temporary pycache directory after Windows locked the default `__pycache__`.
+This does not train/evaluate a model, integrate a GPU/training server, deploy
+on-device inference, export raw candidate records, copy DB files, expose private
+coordinates/raw payloads, or claim model metrics, footprint, or power impact.
+
 2026-07-04: DATA-005 candidate review queue is implemented. The local
 training-candidate store now has bounded review-queue listing plus audited
 review actions through `pc_simulator/training_candidate_store.py` and

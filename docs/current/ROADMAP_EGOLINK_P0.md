@@ -204,10 +204,13 @@ Current AI/data boundary:
 - done: DATA-002 flywheel spec, DATA-003 candidate-store baseline, and
   DATA-004 data-flywheel control-plane visibility;
 - active/planned: M1-002/M1-005/M1-006 data foundation and collection work,
-  TRAIN-001 dataset/experiment handoff, and MotionNet-class baseline work;
+  and MotionNet-class baseline work;
 - done: DATA-005 candidate review queue can list bounded candidate summaries
   and conservatively approve, reject, or return records for changes without
   exposing raw records or enabling training before review gates pass;
+- done: TRAIN-001 dataset/experiment handoff can export reviewed,
+  training-allowed candidates into bounded manifests for a later training
+  runner without starting model training;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 

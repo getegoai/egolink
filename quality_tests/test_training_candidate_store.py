@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 from pc_simulator import session_annotations, session_recorder, training_candidate_store
-from scripts import build_training_candidate_store, review_training_candidates, summarize_data_flywheel
+from scripts import build_training_candidate_store, export_training_dataset_manifest, review_training_candidates, summarize_data_flywheel
 from quality_tests.test_session_recorder import sample_events
 
 
@@ -365,6 +365,123 @@ class TrainingCandidateStoreTests(unittest.TestCase):
         self.assertEqual(review_exit, 0)
         self.assertEqual(review_payload["record"]["state"], "reviewed_training_candidate")
         self.assertTrue(review_payload["record"]["training_allowed"])
+
+    def test_dataset_manifest_reports_not_ready_without_reviewed_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            output_dir = root / "dataset"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+            training_candidate_store.store_recording(recording_dir, db_path)
+
+            manifest = training_candidate_store.build_training_dataset_manifest(
+                db_path,
+                dataset_id="dataset-unit-empty",
+                generated_at="2026-07-04T12:09:00+00:00",
+            )
+            written = training_candidate_store.write_training_dataset_manifest(manifest, output_dir)
+            json_exists = (output_dir / "training_dataset_manifest.json").exists()
+            markdown_exists = (output_dir / "training_dataset_manifest.md").exists()
+
+        self.assertEqual(manifest["status"], "not_ready")
+        self.assertEqual(manifest["reason"], "no_reviewed_training_candidates")
+        self.assertEqual(manifest["counts"]["eligible_records"], 0)
+        self.assertEqual(manifest["records"], [])
+        payload = json.dumps(written, ensure_ascii=False)
+        self.assertNotIn("record_json", payload)
+        self.assertNotIn("raw_payload", payload)
+        self.assertNotIn(str(recording_dir), payload)
+        self.assertTrue(json_exists)
+        self.assertTrue(markdown_exists)
+
+    def test_dataset_manifest_exports_only_reviewed_training_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+            training_candidate_store.store_recording(recording_dir, db_path)
+            record_id = self.read_records(db_path)[0]["record_id"]
+            training_candidate_store.review_candidate_record(
+                db_path,
+                record_id=record_id,
+                decision="approve_for_training",
+                reviewer="unit",
+                split_name="train",
+                split_leakage_checked=True,
+                privacy_reviewed=True,
+                quality_reviewed=True,
+                reviewed_at="2026-07-04T12:10:00+00:00",
+            )
+
+            manifest = training_candidate_store.build_training_dataset_manifest(
+                db_path,
+                dataset_id="dataset-unit-ready",
+                generated_at="2026-07-04T12:11:00+00:00",
+            )
+
+        self.assertEqual(manifest["status"], "ready_for_training_handoff")
+        self.assertEqual(manifest["reason"], "reviewed_candidates_available")
+        self.assertEqual(manifest["counts"]["eligible_records"], 1)
+        self.assertEqual(manifest["split_counts"], {"train": 1})
+        record = manifest["records"][0]
+        self.assertEqual(record["record_id"], record_id)
+        self.assertEqual(record["label"], "needs_help")
+        self.assertEqual(record["split_name"], "train")
+        self.assertEqual(record["label_review_state"], "reviewed")
+        self.assertIn("source_manifest_hash", record)
+        payload = json.dumps(manifest, ensure_ascii=False)
+        self.assertNotIn("record_json", payload)
+        self.assertNotIn("raw_payload", payload)
+        self.assertNotIn("recording_path", payload)
+
+    def test_dataset_manifest_cli_writes_ready_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            output_root = root / "manifests"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+            training_candidate_store.store_recording(recording_dir, db_path)
+            record_id = self.read_records(db_path)[0]["record_id"]
+            training_candidate_store.review_candidate_record(
+                db_path,
+                record_id=record_id,
+                decision="approve_for_training",
+                reviewer="unit",
+                split_name="train",
+                split_leakage_checked=True,
+                privacy_reviewed=True,
+                quality_reviewed=True,
+                reviewed_at="2026-07-04T12:12:00+00:00",
+            )
+
+            with redirect_stdout(StringIO()) as output:
+                exit_code = export_training_dataset_manifest.main(
+                    [
+                        "--db",
+                        str(db_path),
+                        "--output-root",
+                        str(output_root),
+                        "--dataset-id",
+                        "dataset-cli-ready",
+                        "--generated-at",
+                        "2026-07-04T12:13:00+00:00",
+                        "--require-ready",
+                        "--json",
+                    ]
+                )
+            payload = json.loads(output.getvalue())
+            manifest_exists = (output_root / "dataset-cli-ready" / "training_dataset_manifest.json").exists()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["status"], "ready_for_training_handoff")
+        self.assertEqual(payload["counts"]["eligible_records"], 1)
+        self.assertTrue(manifest_exists)
 
 
 if __name__ == "__main__":
