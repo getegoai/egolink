@@ -77,14 +77,16 @@ Required power fields:
 
 ## VPS Export Analysis
 
-After exporting the Message Hub test run, generate the PWR-001 report:
+After the USB-Free run, generate the PWR-001 export and report:
 
 ```powershell
-python scripts\analyze_power_curve.py --input reports\power\PWR-001-YYYYMMDD\test_run_export.json --output-dir reports\power\PWR-001-YYYYMMDD --battery-capacity-mah <rated-capacity>
+python scripts\analyze_power_curve.py --hub http://<message-hub-host>:8790 --test-run-id PWR-001-YYYYMMDD-24h-001 --output-dir reports\power\PWR-001-YYYYMMDD-24h-001 --battery-capacity-mah <rated-capacity>
 ```
 
 The average-current estimate is only produced when the report has timestamped
 SoC samples, an observed SoC drop, and the rated battery capacity supplied.
+The 48h target gap is an engineering current-budget comparison only, not a
+runtime or product battery-life proof.
 
 ## Result Summary
 

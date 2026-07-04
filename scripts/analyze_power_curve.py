@@ -6,17 +6,22 @@ import argparse
 from collections import Counter
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any, Iterable
+from urllib import error, request
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "power"
+DEFAULT_TOKEN_FILE = REPO_ROOT / "server" / "runtime" / "vps_message_hub_token.txt"
 GENERATOR_NAME = "PWR-001.power_curve_analysis"
-GENERATOR_VERSION = "0.1.0"
+GENERATOR_VERSION = "0.2.0"
 REPORT_JSON = "power_curve_report.json"
 REPORT_MARKDOWN = "power_curve_report.md"
+DEFAULT_TARGET_HOURS = 48.0
+DEFAULT_USABLE_CAPACITY_FACTOR = 0.8
 
 
 class PowerCurveError(RuntimeError):
@@ -86,6 +91,41 @@ def load_json_object(path: Path) -> dict[str, Any]:
         raise PowerCurveError(f"invalid JSON: {path}: {exc}") from exc
     if not isinstance(payload, dict):
         raise PowerCurveError(f"JSON document must be an object: {path}")
+    return payload
+
+
+def read_token(token_file: Path | None) -> str | None:
+    env_token = os.environ.get("EGOLINK_MESSAGE_HUB_TOKEN")
+    if env_token:
+        return env_token
+    if token_file and token_file.exists():
+        token = token_file.read_text(encoding="utf-8").strip()
+        return token or None
+    return None
+
+
+def fetch_message_hub_export(
+    *,
+    hub_url: str,
+    test_run_id: str,
+    token: str | None,
+    timeout: float,
+) -> dict[str, Any]:
+    url = f"{hub_url.rstrip('/')}/api/v1/test-runs/{test_run_id}/export"
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    req = request.Request(url, headers=headers, method="GET")
+    try:
+        with request.urlopen(req, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise PowerCurveError(f"GET {url} returned HTTP {exc.code}: {detail}") from exc
+    except error.URLError as exc:
+        raise PowerCurveError(f"GET {url} failed: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise PowerCurveError(f"GET {url} returned invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise PowerCurveError(f"GET {url} must return a JSON object")
     return payload
 
 
@@ -199,6 +239,42 @@ def build_consumption_estimate(samples: list[dict[str, Any]], battery_capacity_m
     }
 
 
+def build_target_comparison(
+    consumption_estimate: dict[str, Any],
+    *,
+    battery_capacity_mah: float | None,
+    target_hours: float,
+    usable_capacity_factor: float,
+) -> dict[str, Any]:
+    if not battery_capacity_mah:
+        return {"status": "not_estimated", "reason": "battery_capacity_mah_not_provided"}
+    if target_hours <= 0:
+        return {"status": "not_estimated", "reason": "target_hours_must_be_positive"}
+    if usable_capacity_factor <= 0:
+        return {"status": "not_estimated", "reason": "usable_capacity_factor_must_be_positive"}
+    if consumption_estimate.get("status") != "estimated":
+        return {"status": "not_estimated", "reason": f"average_current_{consumption_estimate.get('reason', 'not_estimated')}"}
+    average_current_ma = numeric_or_none(consumption_estimate.get("average_current_ma"))
+    if average_current_ma is None:
+        return {"status": "not_estimated", "reason": "average_current_unavailable"}
+
+    target_average_current_ma = battery_capacity_mah * usable_capacity_factor / target_hours
+    gap_ma = average_current_ma - target_average_current_ma
+    gap_pct = (gap_ma / target_average_current_ma) * 100.0 if target_average_current_ma else None
+    return {
+        "status": "estimated",
+        "target_hours": target_hours,
+        "usable_capacity_factor": usable_capacity_factor,
+        "battery_capacity_mah": battery_capacity_mah,
+        "target_average_current_ma": target_average_current_ma,
+        "average_current_ma": average_current_ma,
+        "gap_vs_target_ma": gap_ma,
+        "gap_vs_target_pct": gap_pct,
+        "engineering_status": "over_48h_budget" if gap_ma > 0 else "within_48h_budget",
+        "claim_status": "engineering_gap_only_not_product_life_claim",
+    }
+
+
 def build_overlay(samples: list[dict[str, Any]]) -> dict[str, Any]:
     event_counts = Counter(str(sample.get("event_type") or sample.get("message_type") or "unknown") for sample in samples)
     transport_counts = Counter(str(sample.get("transport_type") or "unknown") for sample in samples)
@@ -217,6 +293,8 @@ def evaluate_power_curve(
     created_at: str | None = None,
     min_duration_hours: float = 24.0,
     battery_capacity_mah: float | None = None,
+    target_hours: float = DEFAULT_TARGET_HOURS,
+    usable_capacity_factor: float = DEFAULT_USABLE_CAPACITY_FACTOR,
 ) -> dict[str, Any]:
     samples = collect_power_samples(export)
     errors: list[str] = []
@@ -241,6 +319,14 @@ def evaluate_power_curve(
     estimate = build_consumption_estimate(samples, battery_capacity_mah, hours)
     if estimate.get("status") != "estimated":
         warnings.append(f"average current not estimated: {estimate.get('reason')}")
+    target_comparison = build_target_comparison(
+        estimate,
+        battery_capacity_mah=battery_capacity_mah,
+        target_hours=target_hours,
+        usable_capacity_factor=usable_capacity_factor,
+    )
+    if target_comparison.get("status") != "estimated":
+        warnings.append(f"48h target gap not estimated: {target_comparison.get('reason')}")
 
     status = "FAIL" if errors else ("WARN" if warnings else "PASS")
     test_run_id = first_known(as_dict(export.get("test_run")).get("test_run_id"), as_dict(export.get("test_run")).get("id"), "unknown-test-run")
@@ -248,17 +334,24 @@ def evaluate_power_curve(
         "generator": {"name": GENERATOR_NAME, "version": GENERATOR_VERSION, "created_at": created_at or utc_now()},
         "result": {"status": status, "errors": errors, "warnings": warnings},
         "source": {"test_run_id": test_run_id, "input_path": str(input_path) if input_path else None},
-        "requirements": {"min_duration_hours": min_duration_hours, "battery_capacity_mah": battery_capacity_mah},
+        "requirements": {
+            "min_duration_hours": min_duration_hours,
+            "battery_capacity_mah": battery_capacity_mah,
+            "target_hours": target_hours,
+            "usable_capacity_factor": usable_capacity_factor,
+        },
         "counts": {"samples": len(samples), "battery_mv_samples": len(battery_values), "soc_pct_samples": len(soc_values)},
         "duration_hours": hours,
         "battery_mv": numeric_stats(battery_values),
         "soc_pct": numeric_stats(soc_values),
         "transport_overlay": build_overlay(samples),
         "consumption_estimate": estimate,
+        "target_comparison": target_comparison,
         "samples": samples,
         "boundaries": [
             "Offline analysis over an existing Message Hub export.",
             "Average current is an engineering estimate only and requires battery capacity plus observed SoC drop.",
+            "48h target gap is an engineering current-budget comparison, not a runtime or battery-life proof.",
             "This report does not prove 48h or 7d product battery life.",
         ],
     }
@@ -278,6 +371,7 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
     result = as_dict(report.get("result"))
     source = as_dict(report.get("source"))
     estimate = as_dict(report.get("consumption_estimate"))
+    target = as_dict(report.get("target_comparison"))
     lines = [
         "# PWR-001 Power Curve Report",
         "",
@@ -288,6 +382,8 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- Battery mV first/last/min/max: {fmt_number(as_dict(report.get('battery_mv')).get('first'), 0)} / {fmt_number(as_dict(report.get('battery_mv')).get('last'), 0)} / {fmt_number(as_dict(report.get('battery_mv')).get('min'), 0)} / {fmt_number(as_dict(report.get('battery_mv')).get('max'), 0)}",
         f"- SoC first/last/delta pct: {fmt_number(as_dict(report.get('soc_pct')).get('first'))} / {fmt_number(as_dict(report.get('soc_pct')).get('last'))} / {fmt_number(as_dict(report.get('soc_pct')).get('delta'))}",
         f"- Average current estimate: {fmt_number(estimate.get('average_current_ma'))} mA ({estimate.get('status', 'not_estimated')})",
+        f"- 48h target current budget: {fmt_number(target.get('target_average_current_ma'))} mA ({fmt_number(target.get('usable_capacity_factor'))} usable capacity factor)",
+        f"- 48h target gap: {fmt_number(target.get('gap_vs_target_ma'))} mA / {fmt_number(target.get('gap_vs_target_pct'))}% ({target.get('engineering_status', target.get('status', 'not_estimated'))})",
         "",
         "## Transport Overlay",
         "",
@@ -313,6 +409,8 @@ def analyze_power_curve(
     output_dir: Path | None = None,
     min_duration_hours: float = 24.0,
     battery_capacity_mah: float | None = None,
+    target_hours: float = DEFAULT_TARGET_HOURS,
+    usable_capacity_factor: float = DEFAULT_USABLE_CAPACITY_FACTOR,
     created_at: str | None = None,
 ) -> dict[str, Any]:
     export = load_json_object(input_path)
@@ -322,6 +420,8 @@ def analyze_power_curve(
         created_at=created_at,
         min_duration_hours=min_duration_hours,
         battery_capacity_mah=battery_capacity_mah,
+        target_hours=target_hours,
+        usable_capacity_factor=usable_capacity_factor,
     )
     target_dir = output_dir or default_output_dir(report)
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -334,12 +434,39 @@ def analyze_power_curve(
     return report
 
 
+def resolve_cli_input(args: argparse.Namespace) -> tuple[Path, Path | None]:
+    if args.input_path and (args.hub_url or args.test_run_id):
+        raise PowerCurveError("--input cannot be combined with --hub/--test-run-id")
+    if args.input_path:
+        return args.input_path, args.output_dir
+    if not args.hub_url or not args.test_run_id:
+        raise PowerCurveError("provide --input or both --hub and --test-run-id")
+    output_dir = args.output_dir or (DEFAULT_OUTPUT_ROOT / args.test_run_id)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    token = read_token(args.token_file)
+    export = fetch_message_hub_export(
+        hub_url=args.hub_url,
+        test_run_id=args.test_run_id,
+        token=token,
+        timeout=args.timeout,
+    )
+    export_path = output_dir / "test_run_export.json"
+    write_json(export_path, export)
+    return export_path, output_dir
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", "--export", dest="input_path", required=True, type=Path)
+    parser.add_argument("--input", "--export", dest="input_path", type=Path)
+    parser.add_argument("--hub", "--hub-url", dest="hub_url")
+    parser.add_argument("--test-run-id")
+    parser.add_argument("--token-file", type=Path, default=DEFAULT_TOKEN_FILE)
+    parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--min-duration-hours", type=float, default=24.0)
     parser.add_argument("--battery-capacity-mah", type=float)
+    parser.add_argument("--target-hours", type=float, default=DEFAULT_TARGET_HOURS)
+    parser.add_argument("--usable-capacity-factor", type=float, default=DEFAULT_USABLE_CAPACITY_FACTOR)
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
@@ -347,11 +474,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
+        input_path, output_dir = resolve_cli_input(args)
         report = analyze_power_curve(
-            input_path=args.input_path,
-            output_dir=args.output_dir,
+            input_path=input_path,
+            output_dir=output_dir,
             min_duration_hours=args.min_duration_hours,
             battery_capacity_mah=args.battery_capacity_mah,
+            target_hours=args.target_hours,
+            usable_capacity_factor=args.usable_capacity_factor,
         )
     except PowerCurveError as exc:
         print(f"FAIL PWR-001 power curve analysis: {exc}", file=sys.stderr)
