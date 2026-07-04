@@ -53,6 +53,23 @@ class AmoledAskUserDemoScriptTests(unittest.TestCase):
             with self.subTest(term=term):
                 self.assertIn(term, self.script)
 
+    def test_script_can_send_sidecar_status_update(self) -> None:
+        required_terms = [
+            "SendStatusUpdate",
+            "New-StatusUpdateCommandJson",
+            'source = "pc-bridge-display"',
+            'type = "status_update"',
+            'cmd = "status_update"',
+            "StatusLte",
+            "StatusLocation",
+            "StatusBattery",
+            "status_rendered",
+            "status_update_sent",
+        ]
+        for term in required_terms:
+            with self.subTest(term=term):
+                self.assertIn(term, self.script)
+
     def test_script_writes_bounded_jsonl_evidence(self) -> None:
         required_terms = [
             "pc_simulator\\runtime\\demo_v0_2",

@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-04 09:01 UTC
-- 分支: `autodev/egolink-p0` @ cb1dd42 docs(field): record d1 sim coldboot upload [D1]
+- 生成时间: 2026-07-04 09:25 UTC
+- 分支: `autodev/egolink-p0` @ 3b76076 feat(field): add d1 live run observer [D1]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 76，进行中: 2，暂停: 3
+- 已完成任务总数: 77，进行中: 2，暂停: 3
 
 ## 里程碑
 
@@ -32,6 +32,7 @@
 
 | 任务 | 标题 | 日期 |
 |---|---|---|
+| AMOLED-001 | AMOLED screen interaction sidecar | 2026-07-04 |
 | DATA-002 | Data flywheel pipeline spec | 2026-07-04 |
 | DEMO-010 | Product Demo Web Review Gate | 2026-07-03 |
 | DEMO-011 | Product Demo Report Web Review Binding | 2026-07-03 |
@@ -39,7 +40,6 @@
 | ENG-008 | Founder-facing project progress board generator | 2026-07-03 |
 | LTE-003 | LTE HTTP Command Poll And ACK | 2026-07-03 |
 | OPS-001 | VPS Message Hub production hardening baseline | 2026-07-03 |
-| PRIVACY-001 | Product demo privacy and data boundary gate | 2026-07-03 |
 
 ## 等待创始人处理
 

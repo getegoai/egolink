@@ -1,21 +1,26 @@
 # Ego Link AMOLED Safety Demo
 
-This is `DEMO-002`: the first visible wearable-node safety prompt for
-ESP32-S3-Touch-AMOLED-2.06.
+This is `DEMO-002` plus the `AMOLED-001` sidecar increment: the first visible
+wearable-node safety prompt for ESP32-S3-Touch-AMOLED-2.06, with a bounded
+PC Bridge display-status path for D1 field testing.
 
 It is intentionally small and user-facing:
 
 1. Boot the AMOLED board.
 2. Initialize the Waveshare ESP-IDF BSP display/touch stack.
-3. Show an idle screen:
+3. Show an idle/status screen:
 
 ```text
 Ego Link
 Waiting for PC Bridge
+D1 status not linked
 ```
 
-4. Receive a PC Bridge `ask_user` JSON command over USB Serial/JTAG.
-5. Show an on-device prompt:
+4. Optionally receive a sidecar-only `status_update` JSON command over USB
+   Serial/JTAG and render LTE, location/map, and battery summary lines.
+5. Receive a PC Bridge `ask_user` JSON command over USB Serial/JTAG.
+6. Show an on-device prompt using the downlinked title/prompt/severity when
+   present:
 
 ```text
 Impact detected
@@ -23,7 +28,7 @@ Are you safe?
 [SAFE] [HELP]
 ```
 
-6. Touching either button prints a USB serial JSON event:
+7. Touching either button prints a USB serial JSON event:
 
 ```json
 {"type":"user_confirmation","device_id":"wearable-node-001","role":"wearable_node","protocol_version":"0.2","cmd_id":"demo-v0-2-001","response":"safe"}
@@ -31,7 +36,10 @@ Are you safe?
 
 This demo does not yet run MotionNet, real fall detection, GNSS, calling, or
 4G. It proves the product interaction can be seen and tapped on the wearable
-node from the PC Bridge `ask_user` command. The next step is to merge this UI with the QMI8658 IMU bridge.
+node from the PC Bridge `ask_user` command, and that the screen can act as a
+sidecar display for PC/server status while the 4G board remains the D1
+mainline. The included QMI8658 engineering sampler is still demo-only evidence,
+not formal IMU acceptance.
 
 The UI uses English labels for now because the minimal LVGL config does not
 ship a CJK font. The final product can replace the text with Chinese once a
@@ -71,12 +79,18 @@ Expected serial events:
 {"type":"display_ready",...,"response":"waiting"}
 ```
 
-## Run Demo v0.2
+## Run Demo v0.2 / Sidecar Smoke
 
 After flashing, send one bounded PC Bridge command:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_amoled_ask_user_demo.ps1
+```
+
+To first render a D1 sidecar status page and then render the prompt:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_amoled_ask_user_demo.ps1 -SendStatusUpdate
 ```
 
 For the full tap loop, keep the board connected and tap `SAFE` or `HELP`:
@@ -88,6 +102,7 @@ powershell -ExecutionPolicy Bypass -File scripts\run_amoled_ask_user_demo.ps1 -R
 Expected serial events:
 
 ```text
+{"type":"status_rendered",...,"response":"updated"}
 {"type":"command_ack",...,"cmd":"ask_user",...}
 {"type":"ask_user_rendered",...,"response":"pending"}
 {"type":"user_confirmation",...,"response":"safe"}

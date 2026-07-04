@@ -6,6 +6,25 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: AMOLED-001 screen interaction sidecar is flashed and smoke-tested
+on the ESP32-S3-Touch-AMOLED-2.06 board. `firmware/amoled_safety_demo` now uses
+the ESP-IDF `json`/cJSON component for serial downlink parsing, accepts
+payload-driven `ask_user` prompts, and adds a sidecar-only `status_update` /
+`display_status` screen for PC Bridge D1 status summaries without changing the
+public Message Hub or 4G-board firmware contracts. The runner
+`scripts/run_amoled_ask_user_demo.ps1 -SendStatusUpdate` can send a status page
+before the safety prompt and records `status_rendered` in its summary. ESP-IDF
+v5.4.2 build passed and produced
+`firmware/amoled_safety_demo/build/egolink_amoled_safety_demo.bin`, binary size
+`0x9ce30`; flashing to AMOLED `COM9` passed, esptool detected ESP32-S3
+USB-Serial/JTAG, PSRAM 8MB, MAC `02:00:00:00:00:01`, and verified hashes. The
+bounded smoke `amoled001-sidecar-smoke2-20260704` passed over `COM9`:
+`status_update -> command_ack/status_rendered` and
+`ask_user -> command_ack/ask_user_rendered`. Evidence:
+`pc_simulator/runtime/demo_v0_2/amoled001-sidecar-smoke2-20260704.summary.json`.
+This is a screen/downlink render pass; it does not claim new touch acceptance,
+formal IMU acceptance, D1 location accuracy, or battery-life acceptance.
+
 2026-07-04: D1 live field observer is added for multi-hour outdoor shakedowns.
 `scripts/observe_d1_field_run.py` polls the VPS Message Hub read-only, writes
 JSONL samples plus JSON/Markdown summaries, and tracks freshness, raw POST

@@ -12,6 +12,7 @@
 
 #include "driver/i2c_master.h"
 #include "esp_err.h"
+#include "cJSON.h"
 
 #define AMOLED_I2C_FREQ_HZ 100000
 #define AMOLED_I2C_TIMEOUT_MS 1000
@@ -77,11 +78,30 @@ typedef struct {
 #define DEMO_BOARD "ESP32-S3-Touch-AMOLED-2.06"
 #define COMMAND_LINE_MAX 512
 #define COMMAND_ID_MAX 96
+#define DISPLAY_TEXT_MAX 160
+#define STATUS_TEXT_MAX 96
+#define SCREEN_TEXT_WIDTH 372
+
+typedef struct {
+    char cmd_id[COMMAND_ID_MAX];
+    char title[DISPLAY_TEXT_MAX];
+    char prompt[DISPLAY_TEXT_MAX];
+    char severity[32];
+} ask_user_command_t;
+
+typedef struct {
+    char cmd_id[COMMAND_ID_MAX];
+    char line1[STATUS_TEXT_MAX];
+    char line2[STATUS_TEXT_MAX];
+    char line3[STATUS_TEXT_MAX];
+    char footer[STATUS_TEXT_MAX];
+} display_status_t;
 
 static uint32_t s_seq = 1;
 static lv_obj_t *s_status_label;
 static char s_active_cmd_id[COMMAND_ID_MAX];
 static bool s_response_sent;
+static bool s_prompt_active;
 
 static i2c_master_bus_handle_t s_i2c_bus;
 static i2c_master_dev_handle_t s_axp2101_dev;
@@ -287,6 +307,41 @@ static void json_flush(void)
     fflush(stdout);
 }
 
+static void copy_text(char *out, size_t out_size, const char *text, const char *fallback)
+{
+    if (out == NULL || out_size == 0) {
+        return;
+    }
+    const char *value = (text != NULL && text[0] != '\0') ? text : fallback;
+    if (value == NULL) {
+        value = "";
+    }
+    snprintf(out, out_size, "%s", value);
+}
+
+static void json_escape_into(const char *text, char *out, size_t out_size)
+{
+    if (out == NULL || out_size == 0) {
+        return;
+    }
+    if (text == NULL) {
+        out[0] = '\0';
+        return;
+    }
+
+    size_t index = 0;
+    for (const char *cursor = text; *cursor != '\0' && index + 1 < out_size; cursor++) {
+        unsigned char ch = (unsigned char)*cursor;
+        if ((ch == '"' || ch == '\\') && index + 2 < out_size) {
+            out[index++] = '\\';
+            out[index++] = (char)ch;
+        } else if (ch >= 0x20) {
+            out[index++] = (char)ch;
+        }
+    }
+    out[index] = '\0';
+}
+
 static void print_hello(void)
 {
     printf(
@@ -304,6 +359,9 @@ static void print_hello(void)
 
 static void print_ui_event(const char *event_type, const char *response, const char *cmd_id)
 {
+    char escaped_cmd_id[COMMAND_ID_MAX * 2];
+    json_escape_into(cmd_id == NULL ? "" : cmd_id, escaped_cmd_id, sizeof(escaped_cmd_id));
+
     printf(
         "{\"type\":\"%s\",\"device_id\":\"%s\",\"role\":\"%s\","
         "\"protocol_version\":\"%s\",\"seq\":%" PRIu32 ","
@@ -317,12 +375,19 @@ static void print_ui_event(const char *event_type, const char *response, const c
         next_seq(),
         monotonic_ms(),
         response,
-        cmd_id == NULL ? "" : cmd_id);
+        escaped_cmd_id);
     json_flush();
 }
 
 static void print_command_ack(const char *cmd, const char *cmd_id, const char *ack_status)
 {
+    char escaped_cmd[64];
+    char escaped_cmd_id[COMMAND_ID_MAX * 2];
+    char escaped_status[64];
+    json_escape_into(cmd == NULL ? "" : cmd, escaped_cmd, sizeof(escaped_cmd));
+    json_escape_into(cmd_id == NULL ? "" : cmd_id, escaped_cmd_id, sizeof(escaped_cmd_id));
+    json_escape_into(ack_status == NULL ? "" : ack_status, escaped_status, sizeof(escaped_status));
+
     printf(
         "{\"type\":\"command_ack\",\"device_id\":\"%s\",\"role\":\"%s\","
         "\"protocol_version\":\"%s\",\"seq\":%" PRIu32 ","
@@ -334,9 +399,28 @@ static void print_command_ack(const char *cmd, const char *cmd_id, const char *a
         DEMO_PROTOCOL_VERSION,
         next_seq(),
         monotonic_ms(),
-        cmd,
-        cmd_id == NULL ? "" : cmd_id,
-        ack_status);
+        escaped_cmd,
+        escaped_cmd_id,
+        escaped_status);
+    json_flush();
+}
+
+static void print_command_error(const char *reason)
+{
+    char escaped_reason[96];
+    json_escape_into(reason == NULL ? "unknown" : reason, escaped_reason, sizeof(escaped_reason));
+
+    printf(
+        "{\"type\":\"command_error\",\"device_id\":\"%s\",\"role\":\"%s\","
+        "\"protocol_version\":\"%s\",\"seq\":%" PRIu32 ","
+        "\"device_monotonic_ms\":%" PRId64 ","
+        "\"source\":\"amoled_touch_demo\",\"reason\":\"%s\"}\n",
+        DEMO_DEVICE_ID,
+        DEMO_ROLE,
+        DEMO_PROTOCOL_VERSION,
+        next_seq(),
+        monotonic_ms(),
+        escaped_reason);
     json_flush();
 }
 
@@ -346,6 +430,24 @@ static void set_status(const char *text)
         return;
     }
     lv_label_set_text(s_status_label, text);
+}
+
+static void style_wrapped_label(lv_obj_t *label, int32_t width, lv_text_align_t align)
+{
+    lv_obj_set_width(label, width);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(label, align, 0);
+}
+
+static lv_color_t severity_accent_color(const char *severity)
+{
+    if (severity != NULL && strcmp(severity, "emergency") == 0) {
+        return lv_color_hex(0xD64545);
+    }
+    if (severity != NULL && strcmp(severity, "info") == 0) {
+        return lv_color_hex(0x2D7DD2);
+    }
+    return lv_color_hex(0xE0A336);
 }
 
 static void response_button_cb(lv_event_t *event)
@@ -358,6 +460,7 @@ static void response_button_cb(lv_event_t *event)
         return;
     }
     s_response_sent = true;
+    s_prompt_active = false;
 
     if (strcmp(response, "safe") == 0) {
         set_status("Marked safe. Event logged.");
@@ -381,23 +484,31 @@ static lv_obj_t *make_button(lv_obj_t *parent, const char *label, lv_color_t col
     return button;
 }
 
-static void build_safety_prompt_ui(void)
+static void build_safety_prompt_ui(const char *title_text, const char *prompt_text, const char *severity)
 {
     lv_obj_t *screen = lv_screen_active();
     lv_obj_clean(screen);
     lv_obj_set_style_bg_color(screen, lv_color_hex(0x101418), 0);
 
+    lv_obj_t *accent = lv_obj_create(screen);
+    lv_obj_remove_style_all(accent);
+    lv_obj_set_size(accent, 412, 8);
+    lv_obj_set_style_bg_color(accent, severity_accent_color(severity), 0);
+    lv_obj_align(accent, LV_ALIGN_TOP_MID, 0, 0);
+
     lv_obj_t *title = lv_label_create(screen);
-    lv_label_set_text(title, "Impact detected");
+    lv_label_set_text(title, title_text == NULL || title_text[0] == '\0' ? "Impact detected" : title_text);
     lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_28, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 44);
+    style_wrapped_label(title, SCREEN_TEXT_WIDTH, LV_TEXT_ALIGN_CENTER);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 36);
 
     lv_obj_t *question = lv_label_create(screen);
-    lv_label_set_text(question, "Are you safe?");
+    lv_label_set_text(question, prompt_text == NULL || prompt_text[0] == '\0' ? "Are you safe?" : prompt_text);
     lv_obj_set_style_text_color(question, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(question, &lv_font_montserrat_22, 0);
-    lv_obj_align(question, LV_ALIGN_TOP_MID, 0, 96);
+    style_wrapped_label(question, SCREEN_TEXT_WIDTH, LV_TEXT_ALIGN_CENTER);
+    lv_obj_align(question, LV_ALIGN_TOP_MID, 0, 92);
 
     lv_obj_t *safe_button = make_button(screen, "SAFE", lv_color_hex(0x1D9A5B), "safe");
     lv_obj_align(safe_button, LV_ALIGN_CENTER, -96, 28);
@@ -408,10 +519,11 @@ static void build_safety_prompt_ui(void)
     s_status_label = lv_label_create(screen);
     lv_label_set_text(s_status_label, "Tap a button to reply");
     lv_obj_set_style_text_color(s_status_label, lv_color_hex(0xB8C2CC), 0);
+    style_wrapped_label(s_status_label, SCREEN_TEXT_WIDTH, LV_TEXT_ALIGN_CENTER);
     lv_obj_align(s_status_label, LV_ALIGN_BOTTOM_MID, 0, -42);
 }
 
-static void build_idle_ui(void)
+static void build_status_ui(const display_status_t *status)
 {
     lv_obj_t *screen = lv_screen_active();
     lv_obj_clean(screen);
@@ -421,90 +533,226 @@ static void build_idle_ui(void)
     lv_label_set_text(title, "Ego Link");
     lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_28, 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 68);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 40);
 
-    lv_obj_t *status = lv_label_create(screen);
-    lv_label_set_text(status, "Waiting for PC Bridge");
-    lv_obj_set_style_text_color(status, lv_color_hex(0xB8C2CC), 0);
-    lv_obj_set_style_text_font(status, &lv_font_montserrat_22, 0);
-    lv_obj_align(status, LV_ALIGN_CENTER, 0, -4);
+    lv_obj_t *line1 = lv_label_create(screen);
+    lv_label_set_text(line1, status->line1);
+    lv_obj_set_style_text_color(line1, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_font(line1, &lv_font_montserrat_22, 0);
+    style_wrapped_label(line1, SCREEN_TEXT_WIDTH, LV_TEXT_ALIGN_CENTER);
+    lv_obj_align(line1, LV_ALIGN_TOP_MID, 0, 104);
+
+    lv_obj_t *line2 = lv_label_create(screen);
+    lv_label_set_text(line2, status->line2);
+    lv_obj_set_style_text_color(line2, lv_color_hex(0xB8C2CC), 0);
+    style_wrapped_label(line2, SCREEN_TEXT_WIDTH, LV_TEXT_ALIGN_CENTER);
+    lv_obj_align(line2, LV_ALIGN_TOP_MID, 0, 150);
+
+    lv_obj_t *line3 = lv_label_create(screen);
+    lv_label_set_text(line3, status->line3);
+    lv_obj_set_style_text_color(line3, lv_color_hex(0xB8C2CC), 0);
+    style_wrapped_label(line3, SCREEN_TEXT_WIDTH, LV_TEXT_ALIGN_CENTER);
+    lv_obj_align(line3, LV_ALIGN_TOP_MID, 0, 188);
 
     s_status_label = lv_label_create(screen);
-    lv_label_set_text(s_status_label, "Send ask_user");
+    lv_label_set_text(s_status_label, status->footer);
     lv_obj_set_style_text_color(s_status_label, lv_color_hex(0x7A8794), 0);
+    style_wrapped_label(s_status_label, SCREEN_TEXT_WIDTH, LV_TEXT_ALIGN_CENTER);
     lv_obj_align(s_status_label, LV_ALIGN_BOTTOM_MID, 0, -42);
 }
 
-static bool extract_json_string(const char *line, const char *key, char *out, size_t out_size)
+static void build_idle_ui(void)
 {
-    if (line == NULL || key == NULL || out == NULL || out_size == 0) {
-        return false;
-    }
-
-    char pattern[32];
-    int written = snprintf(pattern, sizeof(pattern), "\"%s\"", key);
-    if (written <= 0 || written >= (int)sizeof(pattern)) {
-        return false;
-    }
-
-    const char *key_pos = strstr(line, pattern);
-    if (key_pos == NULL) {
-        return false;
-    }
-    const char *colon = strchr(key_pos + strlen(pattern), ':');
-    if (colon == NULL) {
-        return false;
-    }
-    const char *quote = strchr(colon, '"');
-    if (quote == NULL) {
-        return false;
-    }
-    quote++;
-
-    size_t index = 0;
-    while (quote[index] != '\0' && quote[index] != '"' && index + 1 < out_size) {
-        out[index] = quote[index];
-        index++;
-    }
-    out[index] = '\0';
-    return quote[index] == '"';
+    display_status_t status = {0};
+    copy_text(status.line1, sizeof(status.line1), "Waiting for PC Bridge", "");
+    copy_text(status.line2, sizeof(status.line2), "D1 status not linked", "");
+    copy_text(status.line3, sizeof(status.line3), "Battery: unknown", "");
+    copy_text(status.footer, sizeof(status.footer), "Send ask_user or status_update", "");
+    s_prompt_active = false;
+    build_status_ui(&status);
 }
 
-static bool command_is_ask_user(const char *line)
+static const cJSON *json_payload_object(const cJSON *root)
+{
+    const cJSON *payload = cJSON_GetObjectItemCaseSensitive(root, "payload");
+    return cJSON_IsObject(payload) ? payload : NULL;
+}
+
+static bool json_string_from_object(const cJSON *object, const char *key, char *out, size_t out_size)
+{
+    if (!cJSON_IsObject(object) || key == NULL || out == NULL || out_size == 0) {
+        return false;
+    }
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
+    if (!cJSON_IsString(item) || item->valuestring == NULL) {
+        return false;
+    }
+    copy_text(out, out_size, item->valuestring, "");
+    return true;
+}
+
+static bool json_string_from_root_or_payload(const cJSON *root, const char *key, char *out, size_t out_size)
+{
+    if (json_string_from_object(root, key, out, out_size)) {
+        return true;
+    }
+    return json_string_from_object(json_payload_object(root), key, out, out_size);
+}
+
+static bool json_number_from_object(const cJSON *object, const char *key, double *out)
+{
+    if (!cJSON_IsObject(object) || key == NULL || out == NULL) {
+        return false;
+    }
+    const cJSON *item = cJSON_GetObjectItemCaseSensitive(object, key);
+    if (!cJSON_IsNumber(item)) {
+        return false;
+    }
+    *out = item->valuedouble;
+    return true;
+}
+
+static bool json_number_from_root_or_payload(const cJSON *root, const char *key, double *out)
+{
+    if (json_number_from_object(root, key, out)) {
+        return true;
+    }
+    return json_number_from_object(json_payload_object(root), key, out);
+}
+
+static bool json_command_name(const cJSON *root, char *out, size_t out_size)
+{
+    if (json_string_from_object(root, "cmd", out, out_size)) {
+        return true;
+    }
+    return json_string_from_object(root, "type", out, out_size);
+}
+
+static bool command_is_ask_user(const cJSON *root)
 {
     char value[32] = {0};
-    if (extract_json_string(line, "type", value, sizeof(value)) && strcmp(value, "ask_user") == 0) {
-        return true;
-    }
-    if (extract_json_string(line, "cmd", value, sizeof(value)) && strcmp(value, "ask_user") == 0) {
-        return true;
-    }
-    return false;
+    return json_command_name(root, value, sizeof(value)) && strcmp(value, "ask_user") == 0;
 }
 
-static void render_ask_user_command(const char *cmd_id)
+static bool command_is_status_update(const cJSON *root)
 {
-    strncpy(s_active_cmd_id, cmd_id == NULL ? "" : cmd_id, sizeof(s_active_cmd_id) - 1);
-    s_active_cmd_id[sizeof(s_active_cmd_id) - 1] = '\0';
+    char value[32] = {0};
+    if (!json_command_name(root, value, sizeof(value))) {
+        return false;
+    }
+    return strcmp(value, "status_update") == 0 || strcmp(value, "display_status") == 0;
+}
+
+static void parse_ask_user_command(const cJSON *root, ask_user_command_t *command)
+{
+    memset(command, 0, sizeof(*command));
+    copy_text(command->title, sizeof(command->title), "Impact detected", "");
+    copy_text(command->prompt, sizeof(command->prompt), "Are you safe?", "");
+    copy_text(command->severity, sizeof(command->severity), "warning", "");
+
+    (void)json_string_from_root_or_payload(root, "cmd_id", command->cmd_id, sizeof(command->cmd_id));
+    (void)json_string_from_root_or_payload(root, "title", command->title, sizeof(command->title));
+    if (!json_string_from_root_or_payload(root, "prompt", command->prompt, sizeof(command->prompt))) {
+        (void)json_string_from_root_or_payload(root, "text", command->prompt, sizeof(command->prompt));
+    }
+    (void)json_string_from_root_or_payload(root, "severity", command->severity, sizeof(command->severity));
+}
+
+static void parse_status_update_command(const cJSON *root, display_status_t *status)
+{
+    memset(status, 0, sizeof(*status));
+    (void)json_string_from_root_or_payload(root, "cmd_id", status->cmd_id, sizeof(status->cmd_id));
+
+    char value[STATUS_TEXT_MAX] = {0};
+    if (json_string_from_root_or_payload(root, "summary", value, sizeof(value))) {
+        copy_text(status->line1, sizeof(status->line1), value, "D1 status update");
+    } else if (json_string_from_root_or_payload(root, "lte", value, sizeof(value))) {
+        snprintf(status->line1, sizeof(status->line1), "LTE: %s", value);
+    } else {
+        copy_text(status->line1, sizeof(status->line1), "LTE: waiting", "");
+    }
+
+    double lat = 0;
+    double lon = 0;
+    if (json_number_from_root_or_payload(root, "lat", &lat) && json_number_from_root_or_payload(root, "lon", &lon)) {
+        snprintf(status->line2, sizeof(status->line2), "Loc: %.5f, %.5f", lat, lon);
+    } else if (json_string_from_root_or_payload(root, "location", value, sizeof(value))) {
+        snprintf(status->line2, sizeof(status->line2), "Loc: %s", value);
+    } else if (json_string_from_root_or_payload(root, "map_mode", value, sizeof(value))) {
+        snprintf(status->line2, sizeof(status->line2), "Map: %s", value);
+    } else {
+        copy_text(status->line2, sizeof(status->line2), "Loc: waiting", "");
+    }
+
+    double battery = 0;
+    if (json_number_from_root_or_payload(root, "battery_percent", &battery)
+        || json_number_from_root_or_payload(root, "battery_pct", &battery)) {
+        snprintf(status->line3, sizeof(status->line3), "Battery: %.0f%%", battery);
+    } else if (json_string_from_root_or_payload(root, "battery", value, sizeof(value))) {
+        snprintf(status->line3, sizeof(status->line3), "Battery: %s", value);
+    } else {
+        copy_text(status->line3, sizeof(status->line3), "Battery: unknown", "");
+    }
+
+    if (json_string_from_root_or_payload(root, "footer", value, sizeof(value))) {
+        copy_text(status->footer, sizeof(status->footer), value, "Waiting for ask_user");
+    } else {
+        copy_text(status->footer, sizeof(status->footer), "Waiting for ask_user", "");
+    }
+}
+
+static void render_ask_user_command(const ask_user_command_t *command)
+{
+    copy_text(s_active_cmd_id, sizeof(s_active_cmd_id), command->cmd_id, "");
     s_response_sent = false;
+    s_prompt_active = true;
 
     bsp_display_lock(0);
-    build_safety_prompt_ui();
+    build_safety_prompt_ui(command->title, command->prompt, command->severity);
     bsp_display_unlock();
 
     print_command_ack("ask_user", s_active_cmd_id, "ok");
     print_ui_event("ask_user_rendered", "pending", s_active_cmd_id);
 }
 
+static void render_status_update_command(const display_status_t *status)
+{
+    bsp_display_lock(0);
+    if (s_prompt_active) {
+        set_status(status->line1);
+    } else {
+        build_status_ui(status);
+    }
+    bsp_display_unlock();
+
+    print_command_ack("status_update", status->cmd_id, "ok");
+    print_ui_event("status_rendered", "updated", status->cmd_id);
+}
+
 static void handle_command_line(const char *line)
 {
-    if (!command_is_ask_user(line)) {
+    cJSON *root = cJSON_Parse(line);
+    if (root == NULL) {
+        print_command_error("invalid_json");
         return;
     }
 
-    char cmd_id[COMMAND_ID_MAX] = {0};
-    extract_json_string(line, "cmd_id", cmd_id, sizeof(cmd_id));
-    render_ask_user_command(cmd_id);
+    if (command_is_ask_user(root)) {
+        ask_user_command_t command = {0};
+        parse_ask_user_command(root, &command);
+        render_ask_user_command(&command);
+    } else if (command_is_status_update(root)) {
+        display_status_t status = {0};
+        parse_status_update_command(root, &status);
+        render_status_update_command(&status);
+    } else {
+        char command_name[32] = {0};
+        char cmd_id[COMMAND_ID_MAX] = {0};
+        (void)json_command_name(root, command_name, sizeof(command_name));
+        (void)json_string_from_root_or_payload(root, "cmd_id", cmd_id, sizeof(cmd_id));
+        print_command_ack(command_name, cmd_id, "ignored_unsupported");
+    }
+    cJSON_Delete(root);
 }
 
 static void command_reader_task(void *arg)
@@ -708,7 +956,7 @@ void app_main(void)
     bsp_display_unlock();
 
     print_ui_event("display_ready", "waiting", "");
-    xTaskCreate(command_reader_task, "command_reader", 4096, NULL, 5, NULL);
+    xTaskCreate(command_reader_task, "command_reader", 8192, NULL, 5, NULL);
     xTaskCreate(imu_sampler_task, "imu_sampler", 4096, NULL, 4, NULL);
 
     while (true) {

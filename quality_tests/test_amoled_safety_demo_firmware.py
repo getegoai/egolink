@@ -9,6 +9,7 @@ class AmoledSafetyDemoFirmwareTests(unittest.TestCase):
         self.repo_root = Path(__file__).resolve().parents[1]
         self.app_dir = self.repo_root / "firmware" / "amoled_safety_demo"
         self.app = (self.app_dir / "main" / "app_main.c").read_text(encoding="utf-8")
+        self.cmake = (self.app_dir / "main" / "CMakeLists.txt").read_text(encoding="utf-8")
         self.manifest = (self.app_dir / "main" / "idf_component.yml").read_text(encoding="utf-8")
         self.lock = (self.app_dir / "dependencies.lock").read_text(encoding="utf-8")
         self.readme = (self.app_dir / "README.md").read_text(encoding="utf-8")
@@ -47,7 +48,15 @@ class AmoledSafetyDemoFirmwareTests(unittest.TestCase):
             "command_is_ask_user",
             "command_ack",
             "cmd_id",
+            "cJSON_Parse",
+            "payload",
+            "prompt",
+            "severity",
             "ask_user_rendered",
+            "status_update",
+            "display_status",
+            "status_rendered",
+            "command_error",
             "user_confirmation",
             "response_button_cb",
             '\\"response\\":\\"%s\\"',
@@ -65,8 +74,9 @@ class AmoledSafetyDemoFirmwareTests(unittest.TestCase):
             "GNSS",
             "4G",
             "PC Bridge `ask_user`",
+            "status_update",
             "run_amoled_ask_user_demo.ps1",
-            "merge this UI with the QMI8658 IMU bridge",
+            "QMI8658 engineering sampler",
             "CJK font",
             "official Waveshare ESP-IDF v5.4.2 LVGL demo set",
             "rendered corrupt frames",
@@ -129,6 +139,31 @@ class AmoledSafetyDemoFirmwareTests(unittest.TestCase):
             with self.subTest(term=term):
                 self.assertIn(term, self.app)
         self.assertNotIn('#include "driver/i2c.h"', self.app)
+
+    def test_serial_downlink_uses_structured_json_parser(self) -> None:
+        required_terms = [
+            '#include "cJSON.h"',
+            "REQUIRES json",
+            "cJSON_Parse(line)",
+            "cJSON_Delete(root)",
+            "cJSON_GetObjectItemCaseSensitive",
+            "json_payload_object",
+            "json_string_from_root_or_payload",
+            "json_number_from_root_or_payload",
+        ]
+        joined = self.app + "\n" + self.cmake
+        for term in required_terms:
+            with self.subTest(term=term):
+                self.assertIn(term, joined)
+
+        forbidden_terms = [
+            "extract_json_string",
+            "strstr(line",
+            "strchr(",
+        ]
+        for term in forbidden_terms:
+            with self.subTest(term=term):
+                self.assertNotIn(term, self.app)
 
     def test_no_broken_printf_concatenation(self) -> None:
         # Prevent broken format strings like %\" PRI...

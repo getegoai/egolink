@@ -8,6 +8,10 @@ param(
     [switch]$Reset,
     [switch]$RequireConfirmation,
     [switch]$WaitForMotionEvent,
+    [switch]$SendStatusUpdate,
+    [string]$StatusLte = "online",
+    [string]$StatusLocation = "estimate_without_coordinate",
+    [string]$StatusBattery = "unknown",
     [switch]$Help
 )
 
@@ -23,11 +27,13 @@ Send the Demo v0.2 PC Bridge ask_user command to ESP32-S3-Touch-AMOLED-2.06.
 
 Examples:
   powershell -ExecutionPolicy Bypass -File scripts\run_amoled_ask_user_demo.ps1
+  powershell -ExecutionPolicy Bypass -File scripts\run_amoled_ask_user_demo.ps1 -SendStatusUpdate
   powershell -ExecutionPolicy Bypass -File scripts\run_amoled_ask_user_demo.ps1 -Reset -RequireConfirmation
   powershell -ExecutionPolicy Bypass -File scripts\run_amoled_ask_user_demo.ps1 -Port COM9 -WaitSeconds 45
 
 The script is finite. It opens the AMOLED USB Serial/JTAG port, sends one
-versioned ask_user JSON command, records board JSONL, and exits.
+optional status_update JSON command, sends one versioned ask_user JSON
+command, records board JSONL, and exits.
 "@
 }
 
@@ -105,6 +111,35 @@ function New-AskUserCommandJson {
     return ($message | ConvertTo-Json -Compress -Depth 6)
 }
 
+function New-StatusUpdateCommandJson {
+    param(
+        [string]$CommandId,
+        [string]$Session,
+        [string]$Lte,
+        [string]$Location,
+        [string]$Battery
+    )
+    $message = [ordered]@{
+        protocol_version = "0.2"
+        source = "pc-bridge-display"
+        target = "wearable-node-001"
+        type = "status_update"
+        cmd = "status_update"
+        cmd_id = $CommandId
+        seq = 0
+        timestamp_ms = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        session_id = $Session
+        payload = [ordered]@{
+            summary = "D1 sidecar display"
+            lte = $Lte
+            location = $Location
+            battery = $Battery
+            footer = "Waiting for safety prompt"
+        }
+    }
+    return ($message | ConvertTo-Json -Compress -Depth 6)
+}
+
 if (-not $Port) {
     $Port = Find-AmoledPort
 }
@@ -116,13 +151,22 @@ Set-Location $RepoRoot
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
 $cmdId = "demo-v0-2-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
+$statusCmdId = "$cmdId-status"
 $commandJson = New-AskUserCommandJson -CommandId $cmdId -Session $SessionId
+$statusUpdateJson = New-StatusUpdateCommandJson -CommandId $statusCmdId -Session $SessionId -Lte $StatusLte -Location $StatusLocation -Battery $StatusBattery
 $jsonlPath = Join-Path $OutputDir "$SessionId.jsonl"
 $summaryPath = Join-Path $OutputDir "$SessionId.summary.json"
 $deadline = (Get-Date).AddSeconds($WaitSeconds)
-$sendAfter = (Get-Date).AddMilliseconds(800)
+$statusSendAfter = (Get-Date).AddMilliseconds(800)
+$askSendDelayMs = 800
+if ($SendStatusUpdate) {
+    $askSendDelayMs = 1600
+}
+$askSendAfter = (Get-Date).AddMilliseconds($askSendDelayMs)
 $sent = $false
+$statusSent = $false
 $rendered = $false
+$statusRendered = $false
 $confirmed = $false
 $confirmation = ""
 $captured = [System.Collections.Generic.List[string]]::new()
@@ -155,6 +199,12 @@ try {
     }
 
     while ((Get-Date) -lt $deadline) {
+        if ($SendStatusUpdate -and -not $statusSent -and (Get-Date) -ge $statusSendAfter) {
+            $serial.WriteLine($statusUpdateJson)
+            Write-Host "SENT $statusUpdateJson"
+            $statusSent = $true
+        }
+
         if (-not $sent) {
             $shouldSend = $false
             if ($WaitForMotionEvent) {
@@ -162,7 +212,7 @@ try {
                     $shouldSend = $true
                 }
             } else {
-                if ((Get-Date) -ge $sendAfter) {
+                if ((Get-Date) -ge $askSendAfter) {
                     $shouldSend = $true
                 }
             }
@@ -199,7 +249,7 @@ try {
         Write-Output $trimmed
 
         if ($message.type -eq "hello" -or $message.type -eq "display_ready") {
-            if (-not $sent -and -not $WaitForMotionEvent) {
+            if (-not $sent -and -not $WaitForMotionEvent -and -not $SendStatusUpdate) {
                 $serial.WriteLine($commandJson)
                 Write-Host "SENT $commandJson"
                 $sent = $true
@@ -208,6 +258,14 @@ try {
         if ($message.type -eq "motion_event" -or $message.event_type -eq "motion_event") {
             $motionSeen = $true
             if (-not $sent -and $WaitForMotionEvent) {
+                $serial.WriteLine($commandJson)
+                Write-Host "SENT $commandJson"
+                $sent = $true
+            }
+        }
+        if ($message.type -eq "status_rendered" -and $message.cmd_id -eq $statusCmdId) {
+            $statusRendered = $true
+            if (-not $sent -and -not $WaitForMotionEvent) {
                 $serial.WriteLine($commandJson)
                 Write-Host "SENT $commandJson"
                 $sent = $true
@@ -234,12 +292,15 @@ try {
 
 Write-Utf8NoBomLines -Path $jsonlPath -Lines $captured.ToArray()
 
-$ok = $rendered -and ((-not $RequireConfirmation) -or $confirmed)
+$ok = $rendered -and ((-not $RequireConfirmation) -or $confirmed) -and ((-not $SendStatusUpdate) -or $statusRendered)
 $summary = [ordered]@{
     ok = $ok
     session_id = $SessionId
     port = $Port
     baud_rate = $BaudRate
+    status_update_sent = $statusSent
+    status_command_id = $statusCmdId
+    status_rendered = $statusRendered
     command_sent = $sent
     command_id = $cmdId
     ask_user_rendered = $rendered

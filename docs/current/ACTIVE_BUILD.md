@@ -16,7 +16,7 @@ verified_by: codex
 
 | role | current board | observed ports | current use |
 |---|---|---|---|
-| `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED prompt/touch demo, QMI8658 capture path |
+| `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED-001 screen interaction sidecar is currently flashed: cJSON serial downlink parser, `status_update`/`display_status` status screen, payload-driven `ask_user` prompt, QMI8658 engineering sampler. Bounded smoke `amoled001-sidecar-smoke2-20260704` observed `status_rendered` and `ask_user_rendered`; no fresh tap was required in that smoke. |
 | `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | D1 periodic location firmware `0.1.0-d1-periodic-location` is currently flashed on `COM4` after explicit operator confirmation. Flash passed for ESP32-S3 MAC `02:00:00:00:00:03` with bootloader/app/partition-table hashes verified and hard reset completed. After SIM insertion and cold boot, read-only VPS checks verified live LTE periodic uploads with fresh 2026-07-04 timestamps, raw POST `9 ok / 0 fail`, LTE registered/PDP active, and measured MAX17048 power; GNSS coordinates remain unavailable indoors/at current placement (`lat/lon=null`). LTE-011 fix1 observation payload margin previously passed USB-Free runtime validation with `cmd-000033`, and the LTE-010 offline reconnect/store-forward evidence gate passed over that export. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
@@ -25,6 +25,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 
 - Full Demo v0.5 runner can produce one complete summary from real AMOLED IMU/touch evidence, SIM7670G GNSS AT evidence, mock-only structured audio evidence, session recording, quality gate, and replay.
 - Same-run AMOLED IMU/touch confirmation evidence has been captured: `motion_event`, `ask_user_rendered`, `user_confirmation=safe`, and final PC `safety_event`.
+- AMOLED-001 sidecar display smoke has been captured on `COM9`: `status_update`
+  rendered a D1 status page and a payload-driven `ask_user` rendered the safety
+  prompt; this did not re-test physical tap confirmation.
 - AMOLED `ask_user` command path rendered and returned `user_confirmation=safe` in Demo v0.2 evidence.
 - Demo v0.3 generated a complete safety record using Demo v0.2 real AMOLED confirmation evidence plus live SIM7670G GNSS AT probe.
 - SIM7670G GNSS AT probe was reachable indoors, selected `COM6`, and produced `fix=false`.
