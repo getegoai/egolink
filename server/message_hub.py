@@ -33,6 +33,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = REPO_ROOT / "server" / "runtime" / "message_hub.db"
 KEY_RELEASE_DIR = REPO_ROOT / "docs" / "current" / "key_releases"
 DEFAULT_PRODUCT_DEMO_REPORTS = REPO_ROOT / "reports" / "product_demo"
+DEFAULT_FIELD_RESULT_REPORTS = REPO_ROOT / "reports"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -850,6 +851,7 @@ def make_handler(
     *,
     token: str | None = None,
     product_demo_root: Path = DEFAULT_PRODUCT_DEMO_REPORTS,
+    field_results_root: Path = DEFAULT_FIELD_RESULT_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -891,6 +893,7 @@ def make_handler(
                 commands = store.recent_commands(20)
                 raw_frames = store.recent_raw_frames(20)
                 product_demo = load_latest_product_demo_report(product_demo_root)
+                field_results = load_latest_field_results(field_results_root)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -898,6 +901,7 @@ def make_handler(
                         "commands": commands,
                         "raw_frames": raw_frames,
                         "product_demo": product_demo,
+                        "field_results": field_results,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -957,6 +961,9 @@ def make_handler(
                 return
             if segments == ["api", "v1", "product-demo", "latest"]:
                 self.respond_json({"product_demo": load_latest_product_demo_report(product_demo_root)})
+                return
+            if segments == ["api", "v1", "field-results", "latest"]:
+                self.respond_json({"field_results": load_latest_field_results(field_results_root)})
                 return
             raise MessageHubError("not_found", "route not found", status=404)
 
@@ -2942,6 +2949,203 @@ def load_latest_product_demo_report(root: Path = DEFAULT_PRODUCT_DEMO_REPORTS) -
     )
 
 
+def field_results_unavailable(reason: str = "no_field_result_reports") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "reports": [],
+        "next_step": "Run or sync a D1 field/Web/API report so it can appear here.",
+    }
+
+
+def latest_report_path(root: Path, patterns: list[str]) -> Path | None:
+    if not root.exists():
+        return None
+    candidates: list[Path] = []
+    try:
+        for pattern in patterns:
+            candidates.extend(path for path in root.glob(pattern) if path.is_file())
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: (path.stat().st_mtime, str(path)))
+
+
+def load_json_report(path: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def normalized_report_status(value: Any) -> str:
+    status = str(value or "unknown").strip().lower()
+    if status in {"pass", "passed", "ok", "true"}:
+        return "pass"
+    if status in {"warn", "warning"}:
+        return "warn"
+    if status in {"fail", "failed", "false", "error"}:
+        return "fail"
+    return status or "unknown"
+
+
+def report_file_time(path: Path) -> str:
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat()
+    except OSError:
+        return utc_now()
+
+
+def path_if_exists(path: Path) -> str | None:
+    return relative_repo_path(path) if path.exists() else None
+
+
+def latest_d1_web_api_result(root: Path) -> dict[str, Any] | None:
+    path = latest_report_path(root / "d1_web_api", ["**/d1_web_api_report.json"])
+    if path is None:
+        return None
+    report = load_json_report(path)
+    if report is None:
+        return None
+    d1 = as_dict(report.get("d1"))
+    freshness = as_dict(d1.get("upload_freshness"))
+    uplink = as_dict(d1.get("uplink_metrics"))
+    power_curve = as_dict(d1.get("power_curve"))
+    status = normalized_report_status(report.get("result"))
+    markdown_candidate = path.with_suffix(".md")
+    return compact_dict(
+        {
+            "kind": "d1_web_api",
+            "title": "D1 Web/API Gate",
+            "status": status,
+            "run_id": report.get("review_id"),
+            "created_at": report.get("created_at") or report_file_time(path),
+            "device_id": report.get("device_id") or d1.get("device_id"),
+            "summary": f"D1 Web/API {status}: {d1.get('status', 'unknown')}",
+            "metrics": {
+                "upload_freshness_s": freshness.get("freshness_s"),
+                "raw_post": f"{uplink.get('raw_post_success_count', 'unknown')} ok / {uplink.get('raw_post_failure_count', 'unknown')} fail",
+                "location_uploads": uplink.get("location_event_count"),
+                "power_curve": f"{power_curve.get('sample_count', 0)} samples / {power_curve.get('window_s', 'unknown')} s",
+            },
+            "warnings": report.get("warnings"),
+            "errors": report.get("errors"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": path_if_exists(markdown_candidate),
+            "scope": report.get("scope"),
+        }
+    )
+
+
+def latest_amoled_status_result(root: Path) -> dict[str, Any] | None:
+    path = latest_report_path(root / "amoled_visible_status", ["**/*.summary.json"])
+    if path is None:
+        return None
+    report = load_json_report(path)
+    if report is None:
+        return None
+    status = normalized_report_status("pass" if report.get("ok") is True else "fail")
+    payload = as_dict(report.get("last_status_payload"))
+    return compact_dict(
+        {
+            "kind": "amoled_status",
+            "title": "AMOLED Status Screen",
+            "status": status,
+            "run_id": report.get("session_id"),
+            "created_at": report_file_time(path),
+            "device_id": report.get("device_id"),
+            "summary": f"AMOLED {status}: {report.get('command_ack_count', 0)} ack / {report.get('status_rendered_count', 0)} rendered",
+            "metrics": {
+                "commands_sent": report.get("commands_sent"),
+                "command_ack_count": report.get("command_ack_count"),
+                "status_rendered_count": report.get("status_rendered_count"),
+                "last_screen": payload.get("summary"),
+                "last_location": payload.get("location"),
+                "last_power": payload.get("battery"),
+            },
+            "report_path": relative_repo_path(path),
+            "scope": report.get("scope"),
+        }
+    )
+
+
+def child_summary(children: list[Any], name: str) -> dict[str, Any]:
+    for child in children:
+        item = as_dict(child)
+        if item.get("name") == name:
+            return as_dict(item.get("summary"))
+    return {}
+
+
+def latest_d1_companion_result(root: Path) -> dict[str, Any] | None:
+    path = latest_report_path(root / "d1_field_companion", ["**/d1_field_companion_summary.json"])
+    if path is None:
+        return None
+    report = load_json_report(path)
+    if report is None:
+        return None
+    children = report.get("children") if isinstance(report.get("children"), list) else []
+    observer = child_summary(children, "d1_observer")
+    observer_summary = as_dict(observer.get("summary"))
+    amoled = child_summary(children, "amoled_sidecar")
+    status = normalized_report_status(report.get("result"))
+    markdown_candidate = path.with_name("d1_field_companion_summary.md")
+    return compact_dict(
+        {
+            "kind": "d1_field_companion",
+            "title": "D1 Field Companion",
+            "status": status,
+            "run_id": report.get("run_id"),
+            "created_at": report.get("created_at") or report_file_time(path),
+            "device_id": report.get("device_id") or observer.get("device_id"),
+            "summary": f"D1 companion {status}: {observer_summary.get('successful_sample_count', 0)} samples / {amoled.get('status_rendered_count', 0)} rendered",
+            "metrics": {
+                "sample_count": observer_summary.get("sample_count"),
+                "successful_sample_count": observer_summary.get("successful_sample_count"),
+                "coordinate_sample_count": observer_summary.get("coordinate_sample_count"),
+                "max_freshness_s": observer_summary.get("max_freshness_s"),
+                "raw_post_delta": observer_summary.get("raw_post_success_delta"),
+                "battery_mv_first": observer_summary.get("battery_mv_first"),
+                "battery_mv_last": observer_summary.get("battery_mv_last"),
+                "status_rendered_count": amoled.get("status_rendered_count"),
+            },
+            "warnings": observer.get("warnings"),
+            "errors": observer.get("errors"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": path_if_exists(markdown_candidate),
+            "scope": report.get("scope") or observer.get("scope"),
+        }
+    )
+
+
+def load_latest_field_results(root: Path = DEFAULT_FIELD_RESULT_REPORTS) -> dict[str, Any]:
+    reports = [
+        result
+        for result in (
+            latest_d1_web_api_result(root),
+            latest_d1_companion_result(root),
+            latest_amoled_status_result(root),
+        )
+        if result is not None
+    ]
+    if not reports:
+        return field_results_unavailable()
+    status_rank = {"fail": 3, "warn": 2, "unknown": 1, "pass": 0}
+    worst = max((normalized_report_status(item.get("status")) for item in reports), key=lambda item: status_rank.get(item, 1))
+    latest_created = max((str(item.get("created_at", "")) for item in reports), default="")
+    return {
+        "available": True,
+        "status": worst,
+        "report_count": len(reports),
+        "latest_created_at": latest_created,
+        "reports": reports,
+        "next_step": "Run the D1 outdoor field companion and sync report summaries after the walk.",
+    }
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -3791,6 +3995,12 @@ def render_dashboard() -> str:
     .evidence-list { display: grid; gap: 6px; }
     .evidence-pill { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 13px; }
     .evidence-pill span:last-child { overflow-wrap: anywhere; }
+    .report-grid { display: grid; gap: 10px; }
+    .report-card { border: 1px solid #d8dde6; border-radius: 8px; padding: 12px; background: #fff; display: grid; gap: 6px; min-width: 0; }
+    .report-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .report-title { font-size: 15px; font-weight: 700; }
+    .report-meta, .report-path { color: var(--ink-soft); font-size: 13px; overflow-wrap: anywhere; }
+    .report-metrics { display: grid; gap: 4px; font-size: 13px; color: var(--ink-soft); }
     .map-surface { min-height: 260px; border: 1px solid #c8d0dc; border-radius: 8px; background: #eef2f6; position: relative; display: grid; place-items: center; overflow: hidden; }
     .map-grid { position: absolute; inset: 0; background-image: linear-gradient(#d9e0ea 1px, transparent 1px), linear-gradient(90deg, #d9e0ea 1px, transparent 1px); background-size: 28px 28px; }
     .map-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--blue); border: 3px solid #fff; box-shadow: 0 0 0 2px var(--blue); z-index: 1; }
@@ -3840,6 +4050,10 @@ def render_dashboard() -> str:
         </section>
       </div>
       <div class="stack">
+        <section>
+          <h2>Field Test Results</h2>
+          <div id="fieldResults"></div>
+        </section>
         <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
@@ -3896,6 +4110,7 @@ def render_dashboard() -> str:
       commands.innerHTML = html;
       rawFrames.innerHTML = html;
       productDemo.innerHTML = html;
+      fieldResults.innerHTML = html;
       d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
@@ -4008,6 +4223,48 @@ def render_dashboard() -> str:
         <div class="metric"><span>Dataset Training</span><span>${escapeHtml(training.model_training_ready ?? false)} / ${escapeHtml(training.reason || 'unknown')}</span></div>
         <div class="metric"><span>Report</span><span>${escapeHtml(demo.markdown_path || demo.report_path || 'unknown')}</span></div>
         <div class="metric"><span>Warnings</span><span>${escapeHtml(warnings.join(', ') || 'none')}</span></div>
+      `;
+    }
+    function metricRows(metrics) {
+      return Object.entries(metrics || {})
+        .filter(([, value]) => value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => `<div><span>${escapeHtml(key)}</span>: <b>${escapeHtml(value)}</b></div>`)
+        .join('') || '<div class="empty">No compact metrics</div>';
+    }
+    function reportWarnings(report) {
+      const warnings = report.warnings || [];
+      const errors = report.errors || [];
+      const parts = [];
+      if (warnings.length) parts.push(`warn ${warnings.join(', ')}`);
+      if (errors.length) parts.push(`errors ${errors.join(', ')}`);
+      return parts.join(' / ') || 'none';
+    }
+    function fieldResultsPanel(results) {
+      if (!results || !results.available) {
+        return `
+          <div class="metric"><span>Overall</span><span class="empty">${escapeHtml(results && results.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(results && results.reason || 'no_field_result_reports')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(results && results.next_step || 'Run a D1 field report')}</span></div>
+        `;
+      }
+      const cards = (results.reports || []).map(report => `
+        <div class="report-card">
+          <div class="report-head">
+            <span class="report-title">${escapeHtml(report.title || report.kind || 'Report')}</span>
+            <span class="${statusClass(report.status)}">${escapeHtml(report.status || 'unknown')}</span>
+          </div>
+          <div class="report-meta">${escapeHtml(report.run_id || 'no run id')} / ${escapeHtml(report.created_at || 'unknown')}</div>
+          <div class="card-note">${escapeHtml(report.summary || 'no summary')}</div>
+          <div class="report-metrics">${metricRows(report.metrics || {})}</div>
+          <div class="report-path">Report: ${escapeHtml(report.markdown_path || report.report_path || 'unknown')}</div>
+          <div class="report-meta">Warnings: ${escapeHtml(reportWarnings(report))}</div>
+        </div>
+      `).join('');
+      return `
+        <div class="metric"><span>Overall</span><span class="${statusClass(results.status)}">${escapeHtml(results.status || 'unknown')}</span></div>
+        <div class="metric"><span>Reports</span><span>${escapeHtml(results.report_count ?? 0)} summaries / latest ${escapeHtml(results.latest_created_at || 'unknown')}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(results.next_step || 'Run the next field report')}</span></div>
+        <div id="fieldResultsCards" class="report-grid">${cards}</div>
       `;
     }
     function d1StatusClass(status) {
@@ -4227,6 +4484,7 @@ def render_dashboard() -> str:
       const data = await response.json();
       runContext.innerHTML = runContextPanel(data.current_run || {});
       productDemo.innerHTML = productDemoPanel(data.product_demo || {});
+      fieldResults.innerHTML = fieldResultsPanel(data.field_results || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>

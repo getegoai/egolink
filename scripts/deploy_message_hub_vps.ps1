@@ -6,6 +6,7 @@ param(
     [string]$ListenHost = "127.0.0.1",
     [int]$Port = 8790,
     [switch]$Public,
+    [switch]$IncludeFieldReportSummaries,
     [switch]$NoStart
 )
 
@@ -47,6 +48,41 @@ function Copy-ServerSource {
     Copy-Item -Force -Path (Join-Path $repoRoot "server\.env.example") -Destination $target
 }
 
+function Copy-FieldReportSummaries {
+    $allowedNames = @(
+        "d1_web_api_report.json",
+        "d1_web_api_report.md",
+        "d1_field_companion_summary.json",
+        "d1_field_companion_summary.md"
+    )
+    $reportFiles = @()
+    foreach ($dir in @("reports\d1_web_api", "reports\d1_field_companion")) {
+        $sourceDir = Join-Path $repoRoot $dir
+        if (Test-Path $sourceDir -PathType Container) {
+            $reportFiles += Get-ChildItem -Path $sourceDir -Recurse -File |
+                Where-Object { $allowedNames -contains $_.Name }
+        }
+    }
+
+    $amoledDir = Join-Path $repoRoot "reports\amoled_visible_status"
+    if (Test-Path $amoledDir -PathType Container) {
+        $reportFiles += Get-ChildItem -Path $amoledDir -Recurse -File |
+            Where-Object { $_.Name -like "*.summary.json" }
+    }
+
+    $repoFull = (Resolve-Path $repoRoot).Path.TrimEnd("\", "/")
+    foreach ($file in $reportFiles) {
+        $fileFull = $file.FullName
+        if (-not $fileFull.StartsWith($repoFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to copy report outside repository: $fileFull"
+        }
+        $relative = $fileFull.Substring($repoFull.Length).TrimStart("\", "/")
+        $target = Join-Path $packageRoot $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -Force -LiteralPath $file.FullName -Destination $target
+    }
+}
+
 function SshArgs {
     $args = @()
     if ($SshKey) {
@@ -80,6 +116,9 @@ try {
     Copy-RelativePath "scripts\run_message_hub.py"
     Copy-RelativePath "shared\contracts"
     Copy-RelativePath "README.md"
+    if ($IncludeFieldReportSummaries) {
+        Copy-FieldReportSummaries
+    }
 
     Push-Location $packageRoot
     try {

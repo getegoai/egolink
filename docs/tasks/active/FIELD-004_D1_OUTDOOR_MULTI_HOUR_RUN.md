@@ -1,0 +1,88 @@
+---
+id: FIELD-004
+title: D1 outdoor multi-hour field run
+status: active
+priority: high
+requires_hardware: true
+serves_demo: D1
+created: 2026-07-04
+last_updated: 2026-07-04
+
+context:
+  - docs/product/NORTH_STAR.md
+  - docs/development/FIELD_TEST.md
+  - docs/current/ACTIVE_BUILD.md
+  - docs/hardware/BOARD_MATRIX.md
+  - reports/d1_field/d1-outdoor-kit-20260704/FIELD_RUNBOOK.md
+
+allowed_paths:
+  - reports/
+  - docs/current/STATUS.md
+  - docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md
+
+out_of_scope:
+  - changing firmware during the field run
+  - sending 4G-board serial commands
+  - claiming location accuracy or battery life
+  - raw private coordinate publication outside bounded evidence
+---
+
+# Goal
+
+Run the current D1 link outdoors for 2-3 hours so the founder can judge whether
+the LTE upload loop, visible estimate, and power curve are stable enough to keep
+building on.
+
+# Operator Setup
+
+- Primary device: `connectivity_node` Waveshare ESP32-S3-SIM7670G-4G.
+- Optional companion: AMOLED board on PC USB for live `D1 FIELD` display.
+- Runtime path: device -> LTE -> VPS Message Hub -> Web Dashboard.
+- Evidence path: `reports/d1_field_companion/FIELD-004-<date>/` plus post-run
+  Web/API and power reports.
+
+# Acceptance Criteria
+
+- [ ] Device runs on battery/independent power for 2-3 hours.
+- [ ] Dashboard stays usable and shows online/stale, upload freshness, LTE,
+      location estimate, and power evidence.
+- [ ] Field companion report records sample count, stale samples, raw POST
+      success/failure delta, coordinate sample count, and power sample count.
+- [ ] Post-run D1 Web/API report passes or fails explainably.
+- [ ] Post-run power report is generated; it may be WARN/FAIL, but must record
+      why.
+- [ ] Curated report summaries are synced to the VPS Dashboard `Field Test
+      Results` panel.
+- [ ] The result does not claim location accuracy or battery life unless a later
+      acceptance task defines those metrics.
+
+# Suggested Run
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\run_d1_field_companion.ps1 `
+  -HubUrl http://203.0.113.10:8790 `
+  -DurationMinutes 180 `
+  -PollIntervalSec 30 `
+  -ReadWindowSeconds 8 `
+  -SessionId FIELD-004-d1-outdoor-YYYYMMDD `
+  -OutputDir reports\d1_field_companion\FIELD-004-d1-outdoor-YYYYMMDD
+```
+
+# Post-Run Commands
+
+```powershell
+python scripts\validate_d1_web_api.py --hub-url http://203.0.113.10:8790 --review-id FIELD-004-d1-outdoor-YYYYMMDD --output-dir reports\d1_web_api\FIELD-004-d1-outdoor-YYYYMMDD --json
+
+python scripts\analyze_power_curve.py --hub http://203.0.113.10:8790 --test-run-id FIELD-004-d1-outdoor-YYYYMMDD --output-dir reports\power\FIELD-004-d1-outdoor-YYYYMMDD --min-duration-hours 2 --json
+
+powershell -ExecutionPolicy Bypass -File scripts\deploy_message_hub_vps.ps1 -HostName 203.0.113.10 -SshKey $HOME\.ssh\egolink_vps_ed25519 -Public -IncludeFieldReportSummaries
+```
+
+# Completion Evidence
+
+- Changed files:
+- Runtime:
+- Web/API report:
+- Power report:
+- VPS Dashboard result visibility:
+- Remaining risks:

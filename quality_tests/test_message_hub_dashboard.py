@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -16,14 +17,19 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Commands", html)
         self.assertIn("Raw Frames", html)
         self.assertIn("Product Demo", html)
+        self.assertIn("Field Test Results", html)
         self.assertIn("D1 Link Through", html)
         self.assertIn("dashboard-shell", html)
         self.assertIn("Field live view", html)
         self.assertIn("runContext", html)
         self.assertIn("rawFrames", html)
         self.assertIn("productDemo", html)
+        self.assertIn("fieldResults", html)
         self.assertIn("d1Link", html)
         self.assertIn("d1_link", html)
+        self.assertIn("field_results", html)
+        self.assertIn("fieldResultsPanel", html)
+        self.assertIn("fieldResultsCards", html)
         self.assertIn("d1FieldOverview", html)
         self.assertIn("d1StatusStrip", html)
         self.assertIn("d1FreshnessBadge", html)
@@ -128,6 +134,118 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Last Error", html)
         self.assertIn("tokenInput", html)
         self.assertIn("Authorization: `Bearer ${token}`", html)
+
+    def test_latest_field_results_summary_is_bounded_for_dashboard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            d1_dir = root / "d1_web_api" / "run-a"
+            d1_dir.mkdir(parents=True)
+            (d1_dir / "d1_web_api_report.json").write_text(
+                json.dumps(
+                    {
+                        "result": "PASS",
+                        "created_at": "2026-07-04T11:18:46+00:00",
+                        "review_id": "ui001-web-vps-20260704",
+                        "device_id": "ego-link-r1-connectivity-001",
+                        "d1": {
+                            "status": "estimate_visible",
+                            "upload_freshness": {"freshness_s": 30},
+                            "uplink_metrics": {
+                                "raw_post_success_count": 45,
+                                "raw_post_failure_count": 0,
+                                "location_event_count": 22,
+                            },
+                            "power_curve": {"sample_count": 11, "window_s": 680},
+                        },
+                        "scope": {"commands_sent": False},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (d1_dir / "d1_web_api_report.md").write_text("# D1\n", encoding="utf-8")
+
+            amoled_dir = root / "amoled_visible_status" / "run-b"
+            amoled_dir.mkdir(parents=True)
+            (amoled_dir / "run-b.summary.json").write_text(
+                json.dumps(
+                    {
+                        "ok": True,
+                        "session_id": "run-b",
+                        "command_ack_count": 1,
+                        "status_rendered_count": 1,
+                        "last_status_payload": {
+                            "summary": "LIVE fresh 58s",
+                            "location": "Coord 0.37919,1.23713",
+                            "battery": "88% / 4052mV",
+                        },
+                        "jsonl_path": "reports/amoled_visible_status/run-b/run-b.jsonl",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            companion_dir = root / "d1_field_companion" / "run-c"
+            companion_dir.mkdir(parents=True)
+            (companion_dir / "d1_field_companion_summary.json").write_text(
+                json.dumps(
+                    {
+                        "result": "PASS",
+                        "run_id": "run-c",
+                        "created_at": "2026-07-04T11:30:00+00:00",
+                        "children": [
+                            {
+                                "name": "d1_observer",
+                                "summary": {
+                                    "device_id": "ego-link-r1-connectivity-001",
+                                    "summary": {
+                                        "sample_count": 2,
+                                        "successful_sample_count": 2,
+                                        "coordinate_sample_count": 1,
+                                        "max_freshness_s": 40,
+                                    },
+                                    "warnings": [],
+                                    "errors": [],
+                                },
+                            },
+                            {"name": "amoled_sidecar", "summary": {"status_rendered_count": 2}},
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summary = message_hub.load_latest_field_results(root)
+
+        self.assertTrue(summary["available"])
+        self.assertEqual(summary["status"], "pass")
+        self.assertEqual(summary["report_count"], 3)
+        kinds = {item["kind"] for item in summary["reports"]}
+        self.assertEqual(kinds, {"d1_web_api", "amoled_status", "d1_field_companion"})
+        amoled = next(item for item in summary["reports"] if item["kind"] == "amoled_status")
+        self.assertNotIn("jsonl_path", json.dumps(amoled))
+        self.assertEqual(amoled["metrics"]["command_ack_count"], 1)
+
+    def test_field_results_missing_returns_explainable_not_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = message_hub.load_latest_field_results(Path(tmp))
+
+        self.assertFalse(summary["available"])
+        self.assertEqual(summary["status"], "not_available")
+        self.assertEqual(summary["reason"], "no_field_result_reports")
+
+    def test_deploy_script_can_include_curated_field_report_summaries(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        script = (repo_root / "scripts" / "deploy_message_hub_vps.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("IncludeFieldReportSummaries", script)
+        self.assertIn("Copy-FieldReportSummaries", script)
+        self.assertIn("d1_web_api_report.json", script)
+        self.assertIn("d1_field_companion_summary.json", script)
+        self.assertIn("*.summary.json", script)
+        self.assertNotIn("*.jsonl", script)
 
     def test_latest_product_demo_report_summary_is_bounded_for_dashboard(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

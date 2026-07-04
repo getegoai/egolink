@@ -145,6 +145,45 @@ power and battery accuracy. R3.2 validates GNSS performance under enclosure,
 mounting, and body/vehicle conditions. None of these may be inferred from
 build success, USB serial logs, or the current Wi-Fi transport gate.
 
+## 2026-07-04 D1 Field-Test Result Visibility And Next Runs
+
+D1 is now in a live shakedown posture: the connectivity node periodically
+uploads LTE D1 state to the VPS, the Dashboard shows the current estimate,
+upload success, and power curve entry point, and the AMOLED companion can mirror
+the state while connected as a PC sidecar.
+
+Current evidence lives in two places:
+
+- live state: VPS Message Hub database, visible through Dashboard and
+  authenticated `/api/state`;
+- run results: bounded report files under `reports/`, now surfaced by the
+  Dashboard `Field Test Results` panel when the curated summaries are present
+  on the VPS.
+
+Immediate next task:
+
+- `FIELD-004`: a 2-3 hour outdoor D1 walk/run using the 4G board as the primary
+  device, battery/independent power, and optional AMOLED sidecar. The run should
+  produce D1 field-companion evidence, a D1 Web/API report, and a power-curve
+  report. After the run, sync only report summaries to the VPS Dashboard.
+
+Near-term follow-up:
+
+- finish `PWR-001` with a longer battery/power baseline once the short outdoor
+  run proves the reporting loop is stable;
+- promote the D1 demo only after the field report shows stable uploads,
+  interpretable location state, and a started power curve without claiming
+  accuracy or battery life.
+
+Later tasks:
+
+- `MAP-001`: replace the placeholder grid with an optional map/track provider
+  after a provider/key/privacy decision. Until then the map block remains a
+  no-API coordinate/estimate placeholder.
+- D2 begins only after D1 has a usable field report: Wi-Fi/known-place inputs,
+  reference-point error measurement, and first accuracy metrics.
+- D3 follows D2 with 24h wearable-style power/reliability evidence.
+
 ## R0: VPS + PC Simulator Simulated Loop
 
 Goal: prove the public message hub and dashboard without hardware.

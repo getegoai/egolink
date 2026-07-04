@@ -16,7 +16,7 @@ verified_by: codex
 
 | role | current board | observed ports | current use |
 |---|---|---|---|
-| `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | AMOLED-004 visible D1 status sidecar is currently flashed: cJSON serial downlink parser, `display_status` full-screen D1 status page, non-disruptive `status_update`, payload-driven `ask_user` prompt, QMI8658 engineering sampler. Bounded smoke `amoled004-companion-visible-vps-smoke-20260704` observed `cmd=display_status` plus `status_rendered`. |
+| `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | UI-001 field-friendly D1 status sidecar is currently flashed: cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt, QMI8658 engineering sampler. Bounded smoke `ui001-amoled-friendly-smoke-20260704` observed `cmd=display_status` plus `status_rendered`. |
 | `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | D1 periodic location firmware `0.1.0-d1-periodic-location` is currently flashed on `COM4` after explicit operator confirmation. Flash passed for ESP32-S3 MAC `02:00:00:00:00:03` with bootloader/app/partition-table hashes verified and hard reset completed. After SIM insertion and cold boot, read-only VPS checks verified live LTE periodic uploads with fresh 2026-07-04 timestamps, raw POST `9 ok / 0 fail`, LTE registered/PDP active, and measured MAX17048 power; GNSS coordinates remain unavailable indoors/at current placement (`lat/lon=null`). LTE-011 fix1 observation payload margin previously passed USB-Free runtime validation with `cmd-000033`, and the LTE-010 offline reconnect/store-forward evidence gate passed over that export. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
@@ -39,6 +39,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 - AMOLED-004 visible sidecar fix is flashed on `COM9`: `display_status` now
   forces the full-screen D1 status page and passed companion smoke
   `amoled004-companion-visible-vps-smoke-20260704`.
+- UI-001 field-friendly AMOLED screen is flashed on `COM9`: `display_status`
+  renders `D1 FIELD` with `LINK`, `LOC`, `PWR`, and `POST` rows and passed
+  smoke `ui001-amoled-friendly-smoke-20260704`.
 - AMOLED `ask_user` command path rendered and returned `user_confirmation=safe` in Demo v0.2 evidence.
 - Demo v0.3 generated a complete safety record using Demo v0.2 real AMOLED confirmation evidence plus live SIM7670G GNSS AT probe.
 - SIM7670G GNSS AT probe was reachable indoors, selected `COM6`, and produced `fix=false`.

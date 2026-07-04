@@ -6,6 +6,30 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: UI-002 field-test result visibility is implemented and deployed.
+The VPS Web Dashboard now has a `Field Test Results` panel after the D1 live
+view, sourced from bounded report summary files rather than raw JSONL logs.
+Authenticated `/api/state` includes `field_results`, and
+`/api/v1/field-results/latest` exposes the latest curated report summaries for
+current evidence review. Deployment used
+`scripts/deploy_message_hub_vps.ps1 -Public -IncludeFieldReportSummaries`,
+restarted `egolink-message-hub.service` on `203.0.113.10:8790`, copied only
+curated D1 Web/API, D1 field companion, and AMOLED status summary/Markdown
+files, and did not modify GitLab. Public checks passed: `/health` returned
+`ok=true`, unauthenticated `/api/state` returned `401`, Dashboard HTML
+contained the `Field Test Results`, `fieldResults`, `fieldResultsPanel`, and
+`D1 Link Through` markers, and authenticated `/api/v1/field-results/latest`
+returned `available=true`, `status=pass`, `report_count=3` for
+`ui001-web-vps-20260704`,
+`amoled004-companion-visible-vps-smoke-20260704`, and
+`ui001-amoled-friendly-smoke-20260704`. Planning was updated with FIELD-004 as
+the next 2-3 hour outdoor D1 run, followed by longer power baseline work and a
+future optional map provider. This does not claim map-provider integration,
+location accuracy, battery life, calling/SMS, or product readiness. Validation
+passed: focused dashboard unit tests (8 tests), `python scripts/context_lint.py`,
+`python -m py_compile server\message_hub.py`, and full `scripts\verify.ps1`
+(390 tests).
+
 2026-07-04: UI-001 field-friendly Web/AMOLED UI is implemented, VPS-deployed,
 flashed, and smoke-tested. The Web Dashboard now puts `D1 Link Through` first
 with a `Field live view`, `d1FieldOverview`, `d1StatusStrip`,
