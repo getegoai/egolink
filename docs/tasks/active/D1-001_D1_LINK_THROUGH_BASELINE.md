@@ -83,6 +83,11 @@ battery power.
   `/api/state`, and Dashboard D1 markers. It checks location estimate/map
   surface, upload metrics, power curve, required evidence components, and
   non-claim boundaries without sending commands or touching hardware.
+- D1 demo report builder (2026-07-04, codex): added
+  `scripts/build_d1_demo_report.py` to compose an existing D1 Web/API gate
+  report plus an optional PWR-001 measured power report into a one-page D1
+  evidence report. It stays `WARN` until measured power evidence is supplied
+  and does not contact hardware or claim location accuracy/battery life.
 - Validation (2026-07-04, codex): D1 gate/message-hub focused tests PASS;
   `python scripts/context_lint.py` PASS; `python scripts/build_progress_board.py`
   PASS; `git diff --check` PASS; full `scripts\verify.ps1` PASS (359 tests).
