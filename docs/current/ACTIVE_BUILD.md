@@ -28,6 +28,10 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 - AMOLED-001 sidecar display smoke has been captured on `COM9`: `status_update`
   rendered a D1 status page and a payload-driven `ask_user` rendered the safety
   prompt; this did not re-test physical tap confirmation.
+- AMOLED-002 sidecar runner can mirror current VPS `/api/state` D1 status to
+  the AMOLED screen over `COM9`; smoke `amoled002-d1-status-vps-smoke2-20260704`
+  rendered `estimate_visible`, LTE registered/PDP active, no-fix map mode,
+  battery, and raw POST counters without sending 4G-board commands.
 - AMOLED `ask_user` command path rendered and returned `user_confirmation=safe` in Demo v0.2 evidence.
 - Demo v0.3 generated a complete safety record using Demo v0.2 real AMOLED confirmation evidence plus live SIM7670G GNSS AT probe.
 - SIM7670G GNSS AT probe was reachable indoors, selected `COM6`, and produced `fix=false`.

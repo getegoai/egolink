@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-04 09:25 UTC",
+  "generated_at": "2026-07-04 09:38 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "3b76076 feat(field): add d1 live run observer [D1]"
+    "head": "673772f feat(amoled): add screen sidecar status flow [AMOLED-001]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -223,6 +223,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/AMOLED-001_SCREEN_INTERACTION_SIDECAR.md"
     },
     {
+      "id": "AMOLED-002",
+      "title": "AMOLED D1 status sidecar runner",
+      "state": "done",
+      "packet_status": "completed",
+      "priority": "medium",
+      "date": "2026-07-04",
+      "path": "D:/pywork/egolink/docs/tasks/done/AMOLED-002_D1_STATUS_SIDECAR_RUNNER.md"
+    },
+    {
       "id": "DATA-002",
       "title": "Data flywheel pipeline spec",
       "state": "done",
@@ -275,15 +284,6 @@
       "priority": "",
       "date": "2026-07-03",
       "path": "D:/pywork/egolink/docs/tasks/done/LTE-003_LTE_HTTP_COMMAND_POLL_ACK.md"
-    },
-    {
-      "id": "OPS-001",
-      "title": "VPS Message Hub production hardening baseline",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-03",
-      "path": "D:/pywork/egolink/docs/tasks/done/OPS-001_VPS_PRODUCTION_HARDENING.md"
     }
   ],
   "operator_asks": [
@@ -349,6 +349,6 @@
     "active": 2,
     "paused": 3,
     "open_total": 5,
-    "done_total": 77
+    "done_total": 78
   }
 }

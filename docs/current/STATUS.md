@@ -6,6 +6,22 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: AMOLED-002 D1 status sidecar runner is added and smoke-tested.
+`scripts/run_amoled_d1_status_sidecar.ps1` reads the Message Hub `/api/state`,
+extracts the selected device `d1_link`, and sends a compact sidecar-only
+`status_update` to the AMOLED USB Serial/JTAG port. It auto-detects the
+Espressif VID/PID port, reads the token from `EGOLINK_MESSAGE_HUB_TOKEN` or the
+local runtime token file without printing it, writes bounded JSONL/summary
+evidence, and does not send Message Hub commands or contact the 4G board
+serial port. VPS smoke `amoled002-d1-status-vps-smoke2-20260704` passed on
+`COM9`: AMOLED returned `command_ack` and `status_rendered`; the rendered
+payload summarized current D1 state as `estimate_visible`, LTE
+`registered_home/active`, map `estimate_without_coordinate/no_fix`, battery
+`87% / 4275mV`, and raw POST `99 ok / 0 fail / loc 21`. Evidence:
+`pc_simulator/runtime/amoled_d1_status_sidecar/amoled002-d1-status-vps-smoke2-20260704.summary.json`.
+This remains a PC-connected display sidecar and does not claim USB-Free field
+acceptance, GNSS fix, location accuracy, or battery-life acceptance.
+
 2026-07-04: AMOLED-001 screen interaction sidecar is flashed and smoke-tested
 on the ESP32-S3-Touch-AMOLED-2.06 board. `firmware/amoled_safety_demo` now uses
 the ESP-IDF `json`/cJSON component for serial downlink parsing, accepts
