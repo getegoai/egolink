@@ -6,6 +6,29 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: FIELD-006 always-on D1 field readiness is implemented and
+VPS-deployed. `/api/state` now includes `d1_link.field_readiness`, and the Web
+Dashboard shows a first-glance `Field Ready` badge/card with readiness reason,
+operator action, and freshness thresholds. The intended normal preflight for
+the 2026-07-05 outdoor run is now: open `http://203.0.113.10:8790/`, confirm
+`Field Ready ready` plus fresh `Upload Freshness`, then go test; companion
+scripts remain optional for AMOLED sidecar recording/debug and post-run
+evidence. Deployment used `scripts/deploy_message_hub_vps.ps1 -Public
+-IncludeFieldReportSummaries -IncludeDataFlywheelSummaries`, restarted
+`egolink-message-hub.service`, left the service systemd `enabled`, and did not
+modify GitLab. Public checks passed: `/health` returned `ok=true`,
+unauthenticated `/api/state` returned `401`, Dashboard HTML contained `Field
+Ready`, `d1FieldReadyBadge`, and `field_readiness`, and authenticated
+`/api/state` showed `ego-link-r1-connectivity-001` as
+`field_readiness.state=ready`, `reason=fresh_periodic_upload`,
+`freshness_s=16`, `operator_action=go_test`, latest upload at
+`2026-07-04T13:18:41.428617+00:00`. Validation passed: focused dashboard tests
+(13 tests), `python scripts/context_lint.py`, `python -m py_compile
+server\message_hub.py`, `git diff --check`, and full `scripts\verify.ps1`
+(401 tests). This does not change firmware/protocol/model behavior or claim
+GNSS accuracy, battery life, calling/SMS, model readiness, or product
+readiness.
+
 2026-07-04: FIELD-005 D1 field-day post-run automation is implemented for the
 planned 2026-07-05 outdoor/long-run shakedown. `scripts/prepare_d1_field_kit.py`
 now emits `D1.field_kit.v3` kits with post-run Data Flywheel status generation

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import tempfile
@@ -41,6 +42,14 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("d1FieldOverview", html)
         self.assertIn("d1StatusStrip", html)
         self.assertIn("d1FreshnessBadge", html)
+        self.assertIn("d1FieldReadyBadge", html)
+        self.assertIn("field_readiness", html)
+        self.assertIn("Field Ready", html)
+        self.assertIn("Ready Reason", html)
+        self.assertIn("Operator Action", html)
+        self.assertIn("Freshness Gate", html)
+        self.assertIn("readinessClass", html)
+        self.assertIn("readinessHeadline", html)
         self.assertIn("status-chip", html)
         self.assertIn("d1-card", html)
         self.assertIn("D1 Status", html)
@@ -142,6 +151,95 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Last Error", html)
         self.assertIn("tokenInput", html)
         self.assertIn("Authorization: `Bearer ${token}`", html)
+
+    def test_d1_link_summary_marks_fresh_periodic_upload_ready(self) -> None:
+        now = message_hub.utc_now()
+        location = {
+            "message_type": "event",
+            "event_type": "location_report",
+            "seq": 42,
+            "server_received_at": now,
+            "fix": False,
+            "gnss_state": "no_fix",
+        }
+        device = {
+            "device_id": "ego-link-r1-connectivity-001",
+            "last_seen_at": now,
+            "last_seq": 42,
+            "latest_location": location,
+            "observability": {
+                "location_belief": {
+                    "state": "Predicted",
+                    "reason": "unit_fresh_periodic_upload",
+                    "updated_at": now,
+                },
+                "transport": {"type": "lte"},
+            },
+        }
+        messages = [
+            {
+                **location,
+                "reliability": {
+                    "network": {
+                        "raw_post_attempt_count": 4,
+                        "raw_post_success_count": 4,
+                        "raw_post_failure_count": 0,
+                    }
+                },
+            }
+        ]
+
+        summary = message_hub.build_d1_link_summary(device, messages)
+
+        readiness = summary["field_readiness"]
+        self.assertTrue(readiness["ready"])
+        self.assertEqual(readiness["state"], "ready")
+        self.assertEqual(readiness["reason"], "fresh_periodic_upload")
+        self.assertEqual(readiness["operator_action"], "go_test")
+        self.assertLessEqual(readiness["freshness_s"], message_hub.D1_FIELD_READY_FRESHNESS_S)
+        self.assertEqual(readiness["raw_post_health"], "ok")
+        self.assertIn("location_accuracy_not_claimed", readiness["non_claims"])
+
+    def test_d1_link_summary_waits_without_periodic_location_upload(self) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        device = {
+            "device_id": "ego-link-r1-connectivity-001",
+            "last_seen_at": now,
+            "last_seq": 7,
+            "observability": {"transport": {"type": "lte"}},
+        }
+
+        summary = message_hub.build_d1_link_summary(device, messages=[])
+
+        readiness = summary["field_readiness"]
+        self.assertFalse(readiness["ready"])
+        self.assertEqual(readiness["state"], "waiting_for_data")
+        self.assertEqual(readiness["reason"], "no_periodic_location_upload")
+        self.assertEqual(readiness["operator_action"], "wait_for_new_dashboard_data")
+
+    def test_d1_link_summary_marks_old_periodic_upload_not_ready(self) -> None:
+        old = (datetime.now(timezone.utc) - timedelta(seconds=message_hub.D1_FIELD_STALE_FRESHNESS_S + 60)).isoformat()
+        location = {
+            "message_type": "event",
+            "event_type": "location_observation",
+            "seq": 8,
+            "server_received_at": old,
+        }
+        device = {
+            "device_id": "ego-link-r1-connectivity-001",
+            "last_seen_at": old,
+            "last_seq": 8,
+            "latest_location": location,
+            "observability": {"location_belief": {"state": "Predicted", "updated_at": old}},
+        }
+
+        summary = message_hub.build_d1_link_summary(device, messages=[location])
+
+        readiness = summary["field_readiness"]
+        self.assertFalse(readiness["ready"])
+        self.assertEqual(readiness["state"], "not_ready")
+        self.assertEqual(readiness["reason"], "periodic_upload_too_old")
+        self.assertEqual(readiness["operator_action"], "check_power_sim_lte_or_reboot")
 
     def test_latest_field_results_summary_is_bounded_for_dashboard(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

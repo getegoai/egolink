@@ -39,6 +39,8 @@ MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
 EALE_P0_GENERATOR_VERSION = "0.1.0-alg001"
+D1_FIELD_READY_FRESHNESS_S = 180
+D1_FIELD_STALE_FRESHNESS_S = 600
 
 
 def utc_now() -> str:
@@ -2379,6 +2381,74 @@ def build_d1_power_curve(messages: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def build_d1_field_readiness(
+    status: str,
+    upload_freshness: dict[str, Any],
+    uplink_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    freshness_value = as_number(upload_freshness.get("freshness_s"))
+    freshness_s = int(freshness_value) if freshness_value is not None else None
+    latest_upload_at = upload_freshness.get("last_location_upload_at")
+    location_event_count = parse_optional_int(uplink_metrics.get("location_event_count")) or 0
+    raw_successes = parse_optional_int(uplink_metrics.get("raw_post_success_count"))
+    raw_failures = parse_optional_int(uplink_metrics.get("raw_post_failure_count"))
+    raw_attempts = parse_optional_int(uplink_metrics.get("raw_post_attempt_count"))
+
+    if raw_successes is None and raw_failures is None:
+        raw_post_health = "unknown"
+    elif raw_successes and not raw_failures:
+        raw_post_health = "ok"
+    elif raw_successes and raw_failures:
+        raw_post_health = "warn"
+    elif raw_attempts:
+        raw_post_health = "fail"
+    else:
+        raw_post_health = "unknown"
+
+    ready = False
+    if latest_upload_at is None and location_event_count == 0:
+        state = "waiting_for_data"
+        reason = "no_periodic_location_upload"
+        operator_action = "wait_for_new_dashboard_data"
+    elif freshness_s is None:
+        state = "waiting_for_data"
+        reason = "freshness_unknown"
+        operator_action = "wait_for_new_dashboard_data"
+    elif freshness_s <= D1_FIELD_READY_FRESHNESS_S and status == "estimate_visible":
+        state = "ready"
+        reason = "fresh_periodic_upload"
+        operator_action = "go_test"
+        ready = True
+    elif freshness_s <= D1_FIELD_READY_FRESHNESS_S:
+        state = "waiting_for_data"
+        reason = "fresh_upload_without_visible_estimate"
+        operator_action = "wait_for_next_location_estimate"
+    elif freshness_s <= D1_FIELD_STALE_FRESHNESS_S:
+        state = "stale"
+        reason = "periodic_upload_stale"
+        operator_action = "wait_for_next_upload"
+    else:
+        state = "not_ready"
+        reason = "periodic_upload_too_old"
+        operator_action = "check_power_sim_lte_or_reboot"
+
+    return {
+        "state": state,
+        "ready": ready,
+        "reason": reason,
+        "operator_action": operator_action,
+        "normal_mode": "web_dashboard_preflight",
+        "glance_check": "ready_when_web_shows_recent_d1_periodic_upload",
+        "freshness_s": freshness_s,
+        "freshness_threshold_s": D1_FIELD_READY_FRESHNESS_S,
+        "stale_threshold_s": D1_FIELD_STALE_FRESHNESS_S,
+        "latest_upload_at": latest_upload_at,
+        "location_event_count": location_event_count,
+        "raw_post_health": raw_post_health,
+        "non_claims": ["location_accuracy_not_claimed", "battery_life_not_claimed"],
+    }
+
+
 def build_d1_link_summary(device: dict[str, Any], messages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     messages = messages or []
     latest_location = as_dict(device.get("latest_location"))
@@ -2421,6 +2491,15 @@ def build_d1_link_summary(device: dict[str, Any], messages: list[dict[str, Any]]
     last_device_upload_at = device.get("last_seen_at")
     freshness_anchor = first_known(last_location_upload_at, belief.get("updated_at"), last_device_upload_at)
     status = "estimate_visible" if estimate_available else "waiting_for_location_upload"
+    upload_freshness = {
+        "last_location_upload_at": last_location_upload_at,
+        "last_device_upload_at": last_device_upload_at,
+        "freshness_s": elapsed_seconds_since(freshness_anchor),
+        "last_location_event_type": latest_location.get("event_type"),
+        "last_seq": first_known(latest_location.get("seq"), device.get("last_seq")),
+    }
+    uplink_metrics = build_d1_uplink_metrics(messages)
+    power_curve = build_d1_power_curve(messages)
     cell_lte_seen = d1_component_seen(
         cell,
         ["rat", "operator", "mcc", "mnc", "tac", "cell_id", "rsrp", "rsrq", "rssi", "sinr", "registration_state", "pdp_state"],
@@ -2432,6 +2511,7 @@ def build_d1_link_summary(device: dict[str, Any], messages: list[dict[str, Any]]
     return {
         "demo": "D1",
         "status": status,
+        "field_readiness": build_d1_field_readiness(status, upload_freshness, uplink_metrics),
         "location_estimate": {
             "available": estimate_available,
             "state": state,
@@ -2449,15 +2529,9 @@ def build_d1_link_summary(device: dict[str, Any], messages: list[dict[str, Any]]
             "lon": map_lon,
             "coordinate_source": coordinate_source,
         },
-        "upload_freshness": {
-            "last_location_upload_at": last_location_upload_at,
-            "last_device_upload_at": last_device_upload_at,
-            "freshness_s": elapsed_seconds_since(freshness_anchor),
-            "last_location_event_type": latest_location.get("event_type"),
-            "last_seq": first_known(latest_location.get("seq"), device.get("last_seq")),
-        },
-        "uplink_metrics": build_d1_uplink_metrics(messages),
-        "power_curve": build_d1_power_curve(messages),
+        "upload_freshness": upload_freshness,
+        "uplink_metrics": uplink_metrics,
+        "power_curve": power_curve,
         "evidence": {
             "transport_type": first_known(transport.get("type"), "unknown"),
             "components": {
@@ -4414,9 +4488,31 @@ def render_dashboard() -> str:
     function freshnessClass(freshness) {
       const seconds = Number(freshness.freshness_s);
       if (!Number.isFinite(seconds)) return 'warn';
-      if (seconds <= 120) return 'ok';
+      if (seconds <= 180) return 'ok';
       if (seconds <= 600) return 'warn';
       return 'bad';
+    }
+    function readinessClass(readiness) {
+      const state = readiness.state || 'waiting_for_data';
+      if (state === 'ready') return 'ok';
+      if (state === 'stale' || state === 'waiting_for_data') return 'warn';
+      return 'bad';
+    }
+    function readinessLabel(readiness) {
+      const state = readiness.state || 'waiting_for_data';
+      if (state === 'ready') return 'ready';
+      if (state === 'stale') return 'stale';
+      if (state === 'not_ready') return 'not ready';
+      return 'waiting';
+    }
+    function readinessHeadline(readiness) {
+      const state = readiness.state || 'waiting_for_data';
+      const freshness = Number(readiness.freshness_s);
+      const age = Number.isFinite(freshness) ? `${Math.max(0, Math.round(freshness))}s old` : 'freshness unknown';
+      if (state === 'ready') return `Ready / ${age}`;
+      if (state === 'stale') return `Stale / ${age}`;
+      if (state === 'not_ready') return `Not ready / ${age}`;
+      return `Waiting / ${age}`;
     }
     function arrayLabel(values) {
       return Array.isArray(values) && values.length ? values.join(', ') : 'none';
@@ -4449,6 +4545,7 @@ def render_dashboard() -> str:
       if (!devices.length) return '<div class="empty-panel">No device data yet</div>';
       const d = devices[0];
       const d1 = d.d1_link || {};
+      const readiness = d1.field_readiness || {};
       const estimate = d1.location_estimate || {};
       const map = d1.map_surface || {};
       const freshness = d1.upload_freshness || {};
@@ -4466,6 +4563,7 @@ def render_dashboard() -> str:
       const uploadText = `${valueOrUnknown(uplink.raw_post_success_count)} ok / ${valueOrUnknown(uplink.raw_post_failure_count)} fail / ${valueOrUnknown(uplink.raw_post_attempt_count)} attempts / rate ${valueOrUnknown(uplink.raw_post_success_rate)}`;
       const powerText = `${valueOrUnknown(powerCurve.sample_count, 0)} samples / ${valueOrUnknown(powerCurve.window_s)} s`;
       const powerDeltaText = `${valueOrUnknown(powerCurve.delta_battery_mv)} mV / ${valueOrUnknown(powerCurve.delta_soc_pct)}%`;
+      const readinessGateText = `ready <= ${valueOrUnknown(readiness.freshness_threshold_s, 180)}s / stale <= ${valueOrUnknown(readiness.stale_threshold_s, 600)}s`;
       return `
         <div id="d1FieldOverview" class="d1-overview">
           <div class="d1-map-pane">
@@ -4473,10 +4571,18 @@ def render_dashboard() -> str:
           </div>
           <div class="d1-summary-pane">
             <div id="d1StatusStrip" class="d1-status-strip">
+              <span id="d1FieldReadyBadge" class="status-chip ${readinessClass(readiness)}">Field Ready ${escapeHtml(readinessLabel(readiness))}</span>
               <span class="status-chip ${d1StatusClass(status)}">D1 Status ${escapeHtml(status)}</span>
               <span id="d1FreshnessBadge" class="status-chip ${freshnessClass(freshness)}">Upload Freshness ${escapeHtml(freshnessLabel(freshness))}</span>
               <span class="status-chip">Transport ${escapeHtml(valueOrUnknown(evidence.transport_type))}</span>
               <span class="status-chip">Map Surface ${escapeHtml(mapMode)}</span>
+            </div>
+            <div class="d1-primary">
+              <span class="card-label">Field Ready</span>
+              <strong>${escapeHtml(readinessHeadline(readiness))}</strong>
+              <span class="card-note">Ready Reason: ${escapeHtml(valueOrUnknown(readiness.reason))}</span>
+              <span class="card-note">Operator Action: ${escapeHtml(valueOrUnknown(readiness.operator_action))}</span>
+              <span class="card-note">Freshness Gate: ${escapeHtml(readinessGateText)}</span>
             </div>
             <div class="d1-primary">
               <span class="card-label">Location Estimate</span>

@@ -37,15 +37,28 @@ building on.
 
 - Primary device: `connectivity_node` Waveshare ESP32-S3-SIM7670G-4G.
 - Optional companion: AMOLED board on PC USB for live `D1 FIELD` display.
-- Runtime path: device -> LTE -> VPS Message Hub -> Web Dashboard.
+- Normal runtime path: device -> LTE -> VPS Message Hub -> Web Dashboard,
+  kept continuously available for ad hoc field checks.
 - Evidence path: `reports/d1_field_companion/FIELD-004-<date>/` plus post-run
   Web/API and power reports.
+
+# Normal Always-On Preflight
+
+Before leaving, open `http://203.0.113.10:8790/` and check the `D1 Link
+Through` panel:
+
+- `Field Ready ready` and fresh `Upload Freshness` mean the LTE periodic upload
+  loop is live enough to start walking.
+- `Field Ready stale`, `not ready`, or `waiting` means wait for the next upload
+  or check device power, SIM/LTE, and placement before treating the run as live.
+- This Web preflight does not claim GNSS accuracy or battery life; it only says
+  fresh D1 periodic data is reaching the server.
 
 # Acceptance Criteria
 
 - [ ] Device runs on battery/independent power for 2-3 hours.
-- [ ] Dashboard stays usable and shows online/stale, upload freshness, LTE,
-      location estimate, and power evidence.
+- [ ] Dashboard stays usable and shows `Field Ready`, online/stale, upload
+      freshness, LTE, location estimate, and power evidence.
 - [ ] Field companion report records sample count, stale samples, raw POST
       success/failure delta, coordinate sample count, and power sample count.
 - [ ] Post-run D1 Web/API report passes or fails explainably.
@@ -56,7 +69,11 @@ building on.
 - [ ] The result does not claim location accuracy or battery life unless a later
       acceptance task defines those metrics.
 
-# Suggested Run
+# Optional Companion Recording
+
+The always-on Web Dashboard is the normal preflight. Run the companion command
+when the field session should produce bounded long-run evidence and AMOLED
+sidecar visibility.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_d1_field_companion.ps1 `
