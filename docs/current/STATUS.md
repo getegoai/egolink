@@ -6,6 +6,14 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: D1 Web/API gate added. `scripts/validate_d1_web_api.py` performs
+a read-only check of `/health`, `/api/state`, and Dashboard D1 markers for
+location estimate, map surface, upload metrics, power curve, evidence
+components, and non-claim boundaries. It writes JSON/Markdown reports and does
+not contact hardware or send commands. Validation passed: focused D1
+gate/message-hub tests, `context_lint`, progress-board generation,
+`git diff --check`, and full `scripts\verify.ps1` (359 tests).
+
 2026-07-04: D1 Dashboard metrics are extended. Per-device `d1_link` now
 derives `uplink_metrics` and `power_curve` from recent Message Hub data:
 server-received location uploads, raw POST success/failure counters when

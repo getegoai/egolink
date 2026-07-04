@@ -78,6 +78,14 @@ battery power.
   raw POST success/failure counters when present, server-received location
   event count, power sample count, and voltage/SoC deltas. Dashboard exposes
   these without claiming battery life.
+- D1 Web/API gate (2026-07-04, codex): added
+  `scripts/validate_d1_web_api.py`, a read-only report gate for `/health`,
+  `/api/state`, and Dashboard D1 markers. It checks location estimate/map
+  surface, upload metrics, power curve, required evidence components, and
+  non-claim boundaries without sending commands or touching hardware.
+- Validation (2026-07-04, codex): D1 gate/message-hub focused tests PASS;
+  `python scripts/context_lint.py` PASS; `python scripts/build_progress_board.py`
+  PASS; `git diff --check` PASS; full `scripts\verify.ps1` PASS (359 tests).
 - Validation (2026-07-04, codex): focused message-hub tests PASS;
   `python scripts/context_lint.py` PASS; `python scripts/build_progress_board.py`
   PASS; `git diff --check` PASS; full `scripts\verify.ps1` PASS (356 tests).
