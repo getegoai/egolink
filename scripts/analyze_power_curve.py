@@ -22,6 +22,7 @@ REPORT_JSON = "power_curve_report.json"
 REPORT_MARKDOWN = "power_curve_report.md"
 DEFAULT_TARGET_HOURS = 48.0
 DEFAULT_USABLE_CAPACITY_FACTOR = 0.8
+MEASURED_POWER_LABELS = {"measured", "max17048_i2c"}
 
 
 class PowerCurveError(RuntimeError):
@@ -181,6 +182,7 @@ def extract_power_sample(source_path: str, message: dict[str, Any]) -> dict[str,
         "source": source,
         "source_status": source_status,
         "evidence_status": evidence_status,
+        "battery_source": first_known(power.get("battery_source"), message.get("battery_source")),
         "state": state,
     }
 
@@ -275,14 +277,29 @@ def build_target_comparison(
     }
 
 
+def is_measured_power_sample(sample: dict[str, Any]) -> bool:
+    labels = [
+        sample.get("source_status"),
+        sample.get("evidence_status"),
+        sample.get("source"),
+        sample.get("battery_source"),
+    ]
+    return any(str(label).strip().lower() in MEASURED_POWER_LABELS for label in labels if label not in (None, ""))
+
+
 def build_overlay(samples: list[dict[str, Any]]) -> dict[str, Any]:
     event_counts = Counter(str(sample.get("event_type") or sample.get("message_type") or "unknown") for sample in samples)
     transport_counts = Counter(str(sample.get("transport_type") or "unknown") for sample in samples)
     state_counts = Counter(str(sample.get("state") or "unknown") for sample in samples)
+    source_status_counts = Counter(
+        str(first_known(sample.get("source_status"), sample.get("evidence_status"), sample.get("source")) or "unknown")
+        for sample in samples
+    )
     return {
         "event_counts": dict(sorted(event_counts.items())),
         "transport_counts": dict(sorted(transport_counts.items())),
         "power_state_counts": dict(sorted(state_counts.items())),
+        "power_source_status_counts": dict(sorted(source_status_counts.items())),
     }
 
 
@@ -301,6 +318,9 @@ def evaluate_power_curve(
     warnings: list[str] = []
     if not samples:
         errors.append("export contains no power samples")
+    measured_samples = [sample for sample in samples if is_measured_power_sample(sample)]
+    if samples and not measured_samples:
+        errors.append("export contains no measured power samples")
     hours = duration_hours(samples)
     if hours is None:
         warnings.append("fewer than two timestamped power samples; duration is unavailable")
@@ -340,7 +360,12 @@ def evaluate_power_curve(
             "target_hours": target_hours,
             "usable_capacity_factor": usable_capacity_factor,
         },
-        "counts": {"samples": len(samples), "battery_mv_samples": len(battery_values), "soc_pct_samples": len(soc_values)},
+        "counts": {
+            "samples": len(samples),
+            "battery_mv_samples": len(battery_values),
+            "soc_pct_samples": len(soc_values),
+            "measured_power_samples": len(measured_samples),
+        },
         "duration_hours": hours,
         "battery_mv": numeric_stats(battery_values),
         "soc_pct": numeric_stats(soc_values),
@@ -381,6 +406,7 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- Duration h: {fmt_number(report.get('duration_hours'), 3)}",
         f"- Battery mV first/last/min/max: {fmt_number(as_dict(report.get('battery_mv')).get('first'), 0)} / {fmt_number(as_dict(report.get('battery_mv')).get('last'), 0)} / {fmt_number(as_dict(report.get('battery_mv')).get('min'), 0)} / {fmt_number(as_dict(report.get('battery_mv')).get('max'), 0)}",
         f"- SoC first/last/delta pct: {fmt_number(as_dict(report.get('soc_pct')).get('first'))} / {fmt_number(as_dict(report.get('soc_pct')).get('last'))} / {fmt_number(as_dict(report.get('soc_pct')).get('delta'))}",
+        f"- Measured power samples: {as_dict(report.get('counts')).get('measured_power_samples', 0)} / {as_dict(report.get('counts')).get('samples', 0)}",
         f"- Average current estimate: {fmt_number(estimate.get('average_current_ma'))} mA ({estimate.get('status', 'not_estimated')})",
         f"- 48h target current budget: {fmt_number(target.get('target_average_current_ma'))} mA ({fmt_number(target.get('usable_capacity_factor'))} usable capacity factor)",
         f"- 48h target gap: {fmt_number(target.get('gap_vs_target_ma'))} mA / {fmt_number(target.get('gap_vs_target_pct'))}% ({target.get('engineering_status', target.get('status', 'not_estimated'))})",

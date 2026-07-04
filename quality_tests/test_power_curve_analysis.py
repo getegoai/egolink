@@ -52,6 +52,7 @@ class PowerCurveAnalysisTests(unittest.TestCase):
 
         self.assertEqual(report["result"]["status"], "PASS")
         self.assertEqual(report["counts"]["samples"], 3)
+        self.assertEqual(report["counts"]["measured_power_samples"], 3)
         self.assertEqual(report["duration_hours"], 2.0)
         self.assertEqual(report["battery_mv"]["first"], 4080.0)
         self.assertEqual(report["battery_mv"]["last"], 4040.0)
@@ -64,6 +65,7 @@ class PowerCurveAnalysisTests(unittest.TestCase):
         self.assertEqual(report["target_comparison"]["engineering_status"], "within_48h_budget")
         self.assertEqual(report["target_comparison"]["claim_status"], "engineering_gap_only_not_product_life_claim")
         self.assertEqual(report["transport_overlay"]["transport_counts"]["lte"], 1)
+        self.assertEqual(report["transport_overlay"]["power_source_status_counts"]["measured"], 3)
 
     def test_missing_power_samples_fails(self) -> None:
         report = analyzer.evaluate_power_curve(
@@ -73,6 +75,26 @@ class PowerCurveAnalysisTests(unittest.TestCase):
 
         self.assertEqual(report["result"]["status"], "FAIL")
         self.assertIn("export contains no power samples", report["result"]["errors"])
+
+    def test_mock_only_power_samples_fail_pwr001_gate(self) -> None:
+        export = synthetic_export()
+        for message in export["messages"]:
+            power = message["power"]
+            power["source"] = "mock"
+            power["source_status"] = "mock"
+            power["evidence_status"] = "mock"
+
+        report = analyzer.evaluate_power_curve(
+            export,
+            created_at=FIXED_CREATED_AT,
+            min_duration_hours=1.0,
+            battery_capacity_mah=1000,
+        )
+
+        self.assertEqual(report["result"]["status"], "FAIL")
+        self.assertEqual(report["counts"]["measured_power_samples"], 0)
+        self.assertIn("export contains no measured power samples", report["result"]["errors"])
+        self.assertIn("3 samples are still marked mock", report["result"]["warnings"])
 
     def test_cli_writes_reports(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -103,6 +125,7 @@ class PowerCurveAnalysisTests(unittest.TestCase):
             self.assertEqual(report_json["result"]["status"], "PASS")
             self.assertIn("PWR-001 Power Curve Report", report_md)
             self.assertIn("Transport Overlay", report_md)
+            self.assertIn("Measured power samples: 3 / 3", report_md)
             self.assertIn("48h target current budget", report_md)
             self.assertIn("48h target gap", report_md)
             self.assertIn("This report does not prove 48h or 7d product battery life.", report_md)

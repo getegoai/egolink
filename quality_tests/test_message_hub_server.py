@@ -710,6 +710,75 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(exported["raw_frames"][0]["frame_id"], "obs-cmd-raw-observation")
         self.assertTrue(exported["raw_frames"][0]["raw_payload"]["data_redacted"])
 
+    def test_raw_location_observation_preserves_measured_power_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.create_test_run({"test_run_id": "pwr001-measured-power"})
+            payload = (
+                "event_type=location_observation\n"
+                "priority=normal\n"
+                "fw_version=0.1.0-pwr001-measured-power\n"
+                "test_run_id=pwr001-measured-power\n"
+                "seq=44\n"
+                "source=sim7670g_firmware_cell\n"
+                "source_status=observed\n"
+                "location_request_cmd_id=cmd-pwr001-measured\n"
+                "cell_rat=LTE\n"
+                "cell_id=180571649\n"
+                "lte_reason_code=LTE_READY\n"
+                "power_source=platform_power\n"
+                "power_source_status=measured\n"
+                "power_evidence_status=measured\n"
+                "power_battery_mv=4012\n"
+                "power_soc_pct=78\n"
+                "power_charging=false\n"
+                "power_battery_source=max17048_i2c\n"
+                "power_charging_source=mock\n"
+                "power_state=UPLOAD\n"
+                "power_marker_seq=22\n"
+                "power_reason=max17048_sample_ok\n"
+                "location_belief_state=Unknown\n"
+                "location_belief_source=cell,lte,power\n"
+                "location_belief_reason=cell_observation_without_position_fix\n"
+                "transport_type=lte\n"
+                "lte_http_phase=location_observation\n"
+                "lte_http_driver=sim7670g_uart_at_http\n"
+            ).encode("utf-8")
+            frame = message_hub.build_raw_frame(
+                "event",
+                "obs-pwr001-measured",
+                payload,
+                metadata={"test-run-id": "pwr001-measured-power"},
+            )
+            record = store.ingest_raw_frame("ego-link-001", frame)
+            history = store.telemetry_history("ego-link-001")
+            device = store.get_device("ego-link-001")
+            exported = store.export_test_run("pwr001-measured-power")
+
+        self.assertEqual(record["parse_result"]["status"], "ok")
+        self.assertEqual(record["parse_result"]["derived_message_type"], "event")
+        self.assertEqual(history[0]["power"]["source"], "platform_power")
+        self.assertEqual(history[0]["power"]["source_status"], "measured")
+        self.assertEqual(history[0]["power"]["evidence_status"], "measured")
+        self.assertEqual(history[0]["power"]["battery_mv"], 4012)
+        self.assertEqual(history[0]["power"]["soc_pct"], 78)
+        self.assertFalse(history[0]["power"]["charging"])
+        self.assertEqual(history[0]["power"]["battery_source"], "max17048_i2c")
+        self.assertEqual(history[0]["power"]["charging_source"], "mock")
+        self.assertEqual(history[0]["power"]["state"], "UPLOAD")
+        self.assertEqual(history[0]["power"]["marker_seq"], 22)
+        self.assertEqual(device["observability"]["power"]["source_status"], "measured")
+        self.assertEqual(device["observability"]["power"]["evidence_status"], "measured")
+        self.assertEqual(device["observability"]["power"]["battery_mv"], 4012)
+        self.assertEqual(device["observability"]["power"]["soc_pct"], 78)
+        d1_power_curve = device["d1_link"]["power_curve"]
+        self.assertEqual(d1_power_curve["sample_count"], 1)
+        self.assertEqual(d1_power_curve["latest"]["source_status"], "measured")
+        self.assertEqual(d1_power_curve["latest"]["evidence_status"], "measured")
+        self.assertEqual(d1_power_curve["latest"]["battery_mv"], 4012)
+        self.assertEqual(exported["messages"][0]["power"]["source_status"], "measured")
+        self.assertEqual(exported["messages"][0]["power"]["battery_source"], "max17048_i2c")
+
 
 class MessageHubDeployScriptTests(unittest.TestCase):
     def test_deploy_package_excludes_runtime_secret_files(self) -> None:
