@@ -79,6 +79,8 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("preflight_web_api_gate", manifest["commands"])
             self.assertIn("preflight_amoled_visible_status", manifest["commands"])
             self.assertIn("live_field_companion", manifest["commands"])
+            self.assertIn("post_run_data_flywheel_status", manifest["commands"])
+            self.assertIn("post_run_sync_dashboard_summaries", manifest["commands"])
             self.assertIn(
                 "scripts\\run_amoled_d1_status_sidecar.ps1",
                 manifest["commands"]["preflight_amoled_visible_status"]["argv"],
@@ -98,6 +100,13 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("--duration-minutes", manifest["commands"]["live_field_observer"]["argv"])
             self.assertIn("--poll-interval-sec", manifest["commands"]["live_field_observer"]["argv"])
             self.assertIn("--max-stale-sec", manifest["commands"]["live_field_observer"]["argv"])
+            self.assertIn("scripts\\summarize_data_flywheel.py", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
+            self.assertIn("--run-id", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
+            self.assertIn("D1-FIELD-unit-data-flywheel", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
+            sync_argv = manifest["commands"]["post_run_sync_dashboard_summaries"]["argv"]
+            self.assertIn("scripts\\deploy_message_hub_vps.ps1", sync_argv)
+            self.assertIn("-IncludeFieldReportSummaries", sync_argv)
+            self.assertIn("-IncludeDataFlywheelSummaries", sync_argv)
             self.assertTrue(manifest["commands"]["flash_explicit_operator_action"]["hardware_action"])
             self.assertTrue(manifest["commands"]["short_usb_free_link_check"]["sends_message_hub_command"])
             self.assertTrue(manifest["commands"]["preflight_amoled_visible_status"]["writes_amoled_serial"])
@@ -105,23 +114,30 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertTrue(manifest["commands"]["live_field_companion"]["writes_amoled_serial"])
             self.assertFalse(manifest["commands"]["live_field_companion"]["sends_message_hub_command"])
             self.assertFalse(manifest["commands"]["live_field_observer"].get("hardware_action", False))
+            self.assertFalse(manifest["commands"]["post_run_data_flywheel_status"].get("hardware_action", False))
             self.assertIn("field_observation_report", manifest["expected_outputs"])
             self.assertIn("companion_summary", manifest["expected_outputs"])
             self.assertIn("amoled_sidecar_summary", manifest["expected_outputs"])
+            self.assertIn("data_flywheel_status", manifest["expected_outputs"])
             self.assertIn("calling_not_claimed", manifest["non_claims"])
             self.assertIn("sms_not_claimed", manifest["non_claims"])
 
             combined = json.dumps(manifest) + runbook + checklist + notes + stdout.getvalue()
             self.assertNotIn("unit-super-secret-token", combined)
+            self.assertNotIn("*.db", combined)
+            self.assertNotIn("*.jsonl", manifest["commands"]["post_run_sync_dashboard_summaries"]["powershell"])
             self.assertIn("D1 Outdoor Field Runbook", runbook)
             self.assertIn("Preflight AMOLED Visible Status", runbook)
             self.assertIn("Preferred one-command live run", runbook)
+            self.assertIn("Data Flywheel Status", runbook)
+            self.assertIn("Sync Dashboard Summaries", runbook)
             self.assertIn("observe_d1_field_run.py", runbook)
             self.assertIn("Live field observation report", notes)
             self.assertIn("AMOLED sidecar summary", notes)
             self.assertIn("Before Leaving", checklist)
             self.assertIn("D1 Field Operator Notes", notes)
             self.assertIn("Calling and SMS are not part of this run", checklist)
+            self.assertIn("Run the data-flywheel status command", checklist)
 
     def test_v1_board_uses_recorded_v1_max17048_pins(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -163,6 +179,7 @@ class D1FieldKitTests(unittest.TestCase):
             observer_argv = manifest["commands"]["live_field_observer"]["argv"]
             self.assertIn("--poll-interval-sec", observer_argv)
             self.assertIn("45", observer_argv)
+            self.assertIn("post_run_sync_dashboard_summaries", manifest["commands"])
             companion_argv = manifest["commands"]["live_field_companion"]["argv"]
             self.assertIn("scripts\\run_d1_field_companion.ps1", companion_argv)
             self.assertNotIn("-AmoledPort", companion_argv)

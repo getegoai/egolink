@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: FIELD-005 D1 field-day post-run automation is implemented for the
+planned 2026-07-05 outdoor/long-run shakedown. `scripts/prepare_d1_field_kit.py`
+now emits `D1.field_kit.v3` kits with post-run Data Flywheel status generation
+and Dashboard summary sync using both `-IncludeFieldReportSummaries` and
+`-IncludeDataFlywheelSummaries`. FIELD-004 post-run commands now include D1 demo
+report composition, data-flywheel status generation, and curated summary sync.
+A concrete local kit was generated at
+`reports/d1_field/FIELD-004-d1-outdoor-20260705/` with runbook, checklist,
+notes template, and manifest. This does not contact hardware, flash firmware,
+send Message Hub commands, train a model, or claim GNSS accuracy, battery life,
+24h PWR-001 completion, calling/SMS, or product readiness.
+
 2026-07-04: DATA-004 data flywheel control-plane baseline is implemented and
 VPS-deployed.
 Candidate-store status can now be summarized into bounded JSON/Markdown reports

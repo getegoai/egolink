@@ -25,7 +25,7 @@ DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
 DEFAULT_FW_VERSION = "0.1.0-d1-periodic-location"
 DEFAULT_BOARD_ID = "connectivity-node-001"
 DEFAULT_DURATION_HOURS = 4.0
-KIT_VERSION = "D1.field_kit.v2"
+KIT_VERSION = "D1.field_kit.v3"
 MANIFEST_JSON = "field_manifest.json"
 RUNBOOK_MD = "FIELD_RUNBOOK.md"
 CHECKLIST_MD = "FIELD_CHECKLIST.md"
@@ -401,6 +401,39 @@ def build_commands(
                 "--json",
             ],
         ),
+        "post_run_data_flywheel_status": command_record(
+            description=(
+                "Summarize the local data-flywheel control plane after the field run. "
+                "This writes bounded counts/status only, not raw candidate records."
+            ),
+            argv=[
+                "python",
+                "scripts\\summarize_data_flywheel.py",
+                "--run-id",
+                f"{run_id}-data-flywheel",
+                "--json",
+            ],
+        ),
+        "post_run_sync_dashboard_summaries": command_record(
+            description=(
+                "Sync only curated Field Test Results and Data Flywheel status summaries to the VPS Dashboard."
+            ),
+            argv=[
+                "powershell",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "scripts\\deploy_message_hub_vps.ps1",
+                "-HostName",
+                str(hub["host_name"]),
+                "-SshKey",
+                "$HOME\\.ssh\\egolink_vps_ed25519",
+                "-Public",
+                "-IncludeFieldReportSummaries",
+                "-IncludeDataFlywheelSummaries",
+            ],
+            requires_operator_intent=True,
+        ),
     }
 
 
@@ -435,6 +468,8 @@ def build_checklists(*, duration_hours: float) -> dict[str, list[str]]:
         "after_run": [
             "Record local and UTC stop time plus visible Dashboard state.",
             "Run the Web/API gate, power-curve analysis, and D1 demo report commands from this kit.",
+            "Run the data-flywheel status command so the Dashboard shows the data pipeline state.",
+            "Sync curated Field Test Results and Data Flywheel summaries to the VPS Dashboard.",
             "Keep raw Message Hub export, generated reports, and OPERATOR_NOTES.md together.",
             "Do not claim location accuracy, battery life, GNSS acceptance, or 24h PWR-001 pass from a short D1 run.",
         ],
@@ -582,6 +617,22 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             "",
             "```powershell",
             commands["post_run_d1_demo_report"]["powershell"],
+            "```",
+            "",
+            "### Data Flywheel Status",
+            "",
+            "This summarizes candidate-store/readiness state only. It does not export raw candidate records.",
+            "",
+            "```powershell",
+            commands["post_run_data_flywheel_status"]["powershell"],
+            "```",
+            "",
+            "### Sync Dashboard Summaries",
+            "",
+            "This syncs curated report summaries to the Web Dashboard. It does not copy candidate DBs, raw JSONL logs, or private payloads.",
+            "",
+            "```powershell",
+            commands["post_run_sync_dashboard_summaries"]["powershell"],
             "```",
             "",
             "## Boundaries",
@@ -756,6 +807,9 @@ def build_manifest(
             "power_report": report_path("power", run_id, "power_curve_report.json"),
             "d1_demo_report": report_path("d1_demo", run_id, "d1_demo_report.json"),
             "message_hub_export": report_path("power", run_id, "test_run_export.json"),
+            "data_flywheel_status": report_path(
+                "data_flywheel", f"{run_id}-data-flywheel", "data_flywheel_status.json"
+            ),
         },
         "boundaries": [
             "This generator only writes local kit files.",
