@@ -13,6 +13,8 @@ Use this file as the first stop for Claude Code, Codex, Codex CLI, VS Code Codex
 Always load:
 
 - `AGENTS.md`
+- `docs/product/NORTH_STAR.md` (goal + guiding principles; check its date
+  every session to sense direction changes)
 - `docs/CONTEXT_INDEX.md`
 - `docs/product/PRODUCT_CHARTER.md`
 - `docs/product/P0_SCOPE.md`

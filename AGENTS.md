@@ -2,6 +2,8 @@
 
 ## Authoritative Sources
 
+- North star and development guiding principles (read first, every session;
+  check its date to sense goal changes): `docs/product/NORTH_STAR.md`
 - Context router: `docs/CONTEXT_INDEX.md`
 - Product definition: `docs/product/PRODUCT_CHARTER.md`
 - P0 scope and non-goals: `docs/product/P0_SCOPE.md`

@@ -482,20 +482,17 @@ motion candidate
 
 ## Active Queue
 
-Current active packets (2026-07-04, per ADR-0002 and
-`docs/roadmap/V1_PRODUCT_PLAN.md`; executed via
-`docs/development/DIRECTOR_WORKFLOW.md`). New prefixes: `PWR-*` power and
-battery engineering, `PRIVACY-*` privacy/data boundary gates, `MODEL-*` model
-footprint and on-device AI evidence gates, and `PROD-*` mass-production
-definition and sourcing.
+Current active packets (2026-07-04, per NORTH_STAR D1 link-through):
 
-- `PWR-001` Real power telemetry + 24h battery baseline -
+- `D1-001` D1 link-through baseline -
+  `docs/tasks/active/D1-001_D1_LINK_THROUGH_BASELINE.md`
+- `PWR-001` Real power telemetry + 24h battery baseline (serves D1) -
   `docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md`
-- `FIELD-003` Outdoor GNSS acceptance protocol + first run -
+- Paused until D2: `FIELD-003` Outdoor GNSS acceptance protocol + first run -
   `docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md`
-- `PROD-001` Mass-production requirements + module/MCU selection gates -
+- Paused until D1/founder input: `PROD-001` Mass-production requirements -
   `docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md`
-- `MODEL-001` Model footprint assessment -
+- Paused until D4-D5: `MODEL-001` Model footprint assessment -
   `docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md`
 
 - `MODEL-001 Model Footprint Assessment`

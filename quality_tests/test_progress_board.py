@@ -79,7 +79,10 @@ class ProgressBoardTests(unittest.TestCase):
     def test_markdown_render_contains_key_sections(self):
         board = board_mod.build_board(self.root)
         md = board_mod.render_markdown(board)
-        for expected in ("里程碑", "进行中的任务", "最近完成",
+        self.assertEqual(board["counts"]["active"], 1)
+        self.assertEqual(board["counts"]["paused"], 1)
+        self.assertEqual(board["counts"]["open_total"], 2)
+        for expected in ("里程碑", "进行中/暂停的任务", "最近完成",
                          "等待创始人处理", "KR-001", "do a thing",
                          "planned thing"):
             self.assertIn(expected, md)

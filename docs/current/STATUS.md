@@ -6,6 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: NORTH_STAR is now the top project direction and current execution
+is realigned to D1 link-through: 4G board + battery, periodic GNSS/cell/IMU/
+power collection, LTE upload, server location estimate, Dashboard map visible.
+Opened `D1-001`, kept `PWR-001` D1-critical, and paused `FIELD-003` until D2,
+`MODEL-001` until D4-D5, and `PROD-001` until D1/founder inputs. No hardware,
+firmware, protocol, or VPS behavior changed in this alignment slice.
+Validation passed: `context_lint`, focused progress-board/model-doc tests, and
+full `scripts\verify.ps1` (355 tests).
+
 2026-07-04: MODEL-001 is opened as an active V1-M3 model footprint assessment
 task, with the protocol baseline completed. `docs/modeling/MODEL_FOOTPRINT_ASSESSMENT.md`
 now defines evidence levels from `protocol_defined` through

@@ -151,6 +151,8 @@ def build_board(repo_root: Path) -> dict:
         (p for p in packets.values() if p["state"] in ("in_progress", "paused")),
         key=lambda p: p["id"],
     )
+    in_progress_count = sum(1 for p in active if p["state"] == "in_progress")
+    paused_count = sum(1 for p in active if p["state"] == "paused")
     recent_done = sorted(
         (p for p in packets.values() if p["state"] == "done"),
         key=lambda p: p["date"],
@@ -169,7 +171,9 @@ def build_board(repo_root: Path) -> dict:
             repo_root / "docs" / "current" / "key_releases"
         ),
         "counts": {
-            "active": len(active),
+            "active": in_progress_count,
+            "paused": paused_count,
+            "open_total": len(active),
             "done_total": sum(1 for p in packets.values() if p["state"] == "done"),
         },
     }
@@ -183,7 +187,8 @@ def render_markdown(board: dict) -> str:
         f"- 分支: `{board['git'].get('branch', '')}` @ {board['git'].get('head', '')}",
         f"- 当前焦点: {board['current_focus']}",
         f"- 已完成任务总数: {board['counts']['done_total']}"
-        f"，进行中: {board['counts']['active']}",
+        f"，进行中: {board['counts']['active']}"
+        f"，暂停: {board['counts'].get('paused', 0)}",
         "",
         "## 里程碑",
         "",
@@ -199,7 +204,7 @@ def render_markdown(board: dict) -> str:
         "",
         "图例: ✅完成 ⏳进行中 ⏸暂停 \U0001f4cb计划中",
         "",
-        "## 进行中的任务",
+        "## 进行中/暂停的任务",
         "",
         "| 任务 | 标题 | 状态 | 优先级 | 执行者 |",
         "|---|---|---|---|---|",
@@ -251,7 +256,8 @@ def main() -> int:
     print(
         "progress board written: "
         f"{(out_dir / 'PROGRESS_BOARD.md').as_posix()} "
-        f"(active={board['counts']['active']}, done={board['counts']['done_total']})"
+        f"(active={board['counts']['active']}, paused={board['counts']['paused']}, "
+        f"done={board['counts']['done_total']})"
     )
     return 0
 

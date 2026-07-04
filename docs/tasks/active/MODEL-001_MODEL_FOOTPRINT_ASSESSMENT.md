@@ -1,9 +1,10 @@
 ---
 id: MODEL-001
 title: Model footprint assessment
-status: active
+status: paused
 priority: high
 requires_hardware: false
+serves_demo: D4-D5
 created: 2026-07-04
 last_updated: 2026-07-04
 
@@ -90,11 +91,13 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 # Decisions
 
-- MODEL-001 starts as an active task, not completed, because real
+- MODEL-001 remains open but paused for D1; it is not completed because real
   RAM/flash/latency/power measurements are still pending.
 - Build size is not runtime RAM, latency, or energy evidence.
 - MCU selection remains blocked until measured evidence and founder/business
   constraints converge.
+- 2026-07-04: Paused by NORTH_STAR alignment. It is useful for D4-D5, but D1
+  link-through comes first.
 
 # Progress Evidence
 

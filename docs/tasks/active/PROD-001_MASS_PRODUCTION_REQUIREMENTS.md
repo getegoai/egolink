@@ -1,11 +1,12 @@
 ---
 id: PROD-001
 title: Mass-production requirements definition and module/MCU selection gates
-status: active
+status: paused
 priority: high
 requires_hardware: false
+serves_demo: post-D1
 created: 2026-07-03
-last_updated: 2026-07-03
+last_updated: 2026-07-04
 
 context:
   - docs/product/PRODUCT_CHARTER.md
@@ -86,6 +87,8 @@ python scripts/context_lint.py
 
 - Requirements are owned by the founder; the builder drafts, the founder
   fills business-sensitive numbers (cost ceiling, MOQ tolerance) and approves.
+- 2026-07-04: Paused by NORTH_STAR alignment until D1 link-through is back on
+  the main execution path or founder/business inputs arrive.
 
 # Completion Evidence
 

@@ -58,8 +58,9 @@ class ModelFootprintAssessmentDocTests(unittest.TestCase):
             self.assertIn(token, self.doc)
 
     def test_model_001_remains_active_until_measurements_exist(self):
-        self.assertIn("status: active", self.task)
-        self.assertIn("MODEL-001 starts as an active task, not completed", self.task)
+        self.assertIn("status: paused", self.task)
+        self.assertIn("MODEL-001 remains open but paused for D1", self.task)
+        self.assertIn("Paused by NORTH_STAR alignment", self.task)
         self.assertIn("measurements pending", self.plan)
         self.assertIn("A passing build is not runtime RAM, latency, or power evidence", self.doc_flat)
 
