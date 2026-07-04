@@ -9,7 +9,13 @@ import tempfile
 import unittest
 
 from pc_simulator import session_annotations, session_recorder, training_candidate_store
-from scripts import build_training_candidate_store, export_training_dataset_manifest, review_training_candidates, summarize_data_flywheel
+from scripts import (
+    build_training_candidate_store,
+    export_training_dataset_manifest,
+    review_training_candidates,
+    run_data_flywheel_pipeline,
+    summarize_data_flywheel,
+)
 from quality_tests.test_session_recorder import sample_events
 
 
@@ -482,6 +488,167 @@ class TrainingCandidateStoreTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ready_for_training_handoff")
         self.assertEqual(payload["counts"]["eligible_records"], 1)
         self.assertTrue(manifest_exists)
+
+    def test_data_flywheel_pipeline_empty_run_does_not_scan_runtime_or_expose_db_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db_path = root / "missing" / "candidates.db"
+            output_root = root / "pipeline"
+            data_flywheel_root = root / "flywheel"
+            dataset_root = root / "dataset"
+
+            with redirect_stdout(StringIO()) as output:
+                exit_code = run_data_flywheel_pipeline.main(
+                    [
+                        "--db",
+                        str(db_path),
+                        "--output-root",
+                        str(output_root),
+                        "--data-flywheel-output-root",
+                        str(data_flywheel_root),
+                        "--dataset-output-root",
+                        str(dataset_root),
+                        "--run-id",
+                        "unit-empty-pipeline",
+                        "--dataset-id",
+                        "unit-empty-dataset",
+                        "--generated-at",
+                        "2026-07-04T12:14:00+00:00",
+                        "--json",
+                    ]
+                )
+            payload = json.loads(output.getvalue())
+            pipeline_exists = (
+                output_root / "unit-empty-pipeline" / "data_flywheel_pipeline_run.json"
+            ).exists()
+            status_exists = (
+                data_flywheel_root
+                / "unit-empty-pipeline-data-flywheel"
+                / "data_flywheel_status.json"
+            ).exists()
+            manifest_exists = (
+                dataset_root / "unit-empty-dataset" / "training_dataset_manifest.json"
+            ).exists()
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["schema_version"], "egolink.data_flywheel_pipeline_run.v0.1")
+        self.assertEqual(payload["status"], "needs_recordings")
+        self.assertEqual(payload["recordings_requested"], 0)
+        self.assertEqual(payload["recordings_ingested"], [])
+        self.assertEqual(payload["data_flywheel"]["pipeline_stage"], "candidate_store_missing")
+        self.assertEqual(payload["dataset_manifest"]["status"], "not_ready")
+        self.assertEqual(payload["dataset_manifest"]["reason"], "candidate_store_missing")
+        payload_text = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("record_json", payload_text)
+        self.assertNotIn("raw_payload", payload_text)
+        self.assertNotIn(str(db_path), payload_text)
+        self.assertTrue(pipeline_exists)
+        self.assertTrue(status_exists)
+        self.assertTrue(manifest_exists)
+
+    def test_data_flywheel_pipeline_ingests_named_recording_and_reports_needs_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            output_root = root / "pipeline"
+            data_flywheel_root = root / "flywheel"
+            dataset_root = root / "dataset"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+
+            with redirect_stdout(StringIO()) as output:
+                exit_code = run_data_flywheel_pipeline.main(
+                    [
+                        "--recording-dir",
+                        str(recording_dir),
+                        "--db",
+                        str(db_path),
+                        "--output-root",
+                        str(output_root),
+                        "--data-flywheel-output-root",
+                        str(data_flywheel_root),
+                        "--dataset-output-root",
+                        str(dataset_root),
+                        "--run-id",
+                        "unit-ingest-pipeline",
+                        "--dataset-id",
+                        "unit-ingest-dataset",
+                        "--generated-at",
+                        "2026-07-04T12:15:00+00:00",
+                        "--json",
+                    ]
+                )
+            payload = json.loads(output.getvalue())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["status"], "needs_review")
+        self.assertEqual(payload["recordings_requested"], 1)
+        self.assertEqual(payload["recordings_ingested"][0]["recording_ref"], "recording")
+        self.assertEqual(payload["recordings_ingested"][0]["records_written"], 1)
+        self.assertEqual(payload["data_flywheel"]["counts"]["records_total"], 1)
+        self.assertEqual(payload["data_flywheel"]["review_queue"]["pending_records"], 1)
+        self.assertEqual(payload["dataset_manifest"]["status"], "not_ready")
+        self.assertEqual(payload["dataset_manifest"]["reason"], "no_reviewed_training_candidates")
+        payload_text = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn("record_json", payload_text)
+        self.assertNotIn("raw_payload", payload_text)
+        self.assertNotIn(str(recording_dir), payload_text)
+        self.assertNotIn(str(db_path), payload_text)
+
+    def test_data_flywheel_pipeline_exports_ready_manifest_after_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            recording_dir = root / "recording"
+            db_path = root / "candidates.db"
+            output_root = root / "pipeline"
+            data_flywheel_root = root / "flywheel"
+            dataset_root = root / "dataset"
+            self.write_recording(recording_dir)
+            self.add_annotation(recording_dir)
+            training_candidate_store.store_recording(recording_dir, db_path)
+            record_id = self.read_records(db_path)[0]["record_id"]
+            training_candidate_store.review_candidate_record(
+                db_path,
+                record_id=record_id,
+                decision="approve_for_training",
+                reviewer="unit",
+                split_name="train",
+                split_leakage_checked=True,
+                privacy_reviewed=True,
+                quality_reviewed=True,
+                reviewed_at="2026-07-04T12:16:00+00:00",
+            )
+
+            with redirect_stdout(StringIO()) as output:
+                exit_code = run_data_flywheel_pipeline.main(
+                    [
+                        "--db",
+                        str(db_path),
+                        "--output-root",
+                        str(output_root),
+                        "--data-flywheel-output-root",
+                        str(data_flywheel_root),
+                        "--dataset-output-root",
+                        str(dataset_root),
+                        "--run-id",
+                        "unit-ready-pipeline",
+                        "--dataset-id",
+                        "unit-ready-dataset",
+                        "--generated-at",
+                        "2026-07-04T12:17:00+00:00",
+                        "--require-ready",
+                        "--json",
+                    ]
+                )
+            payload = json.loads(output.getvalue())
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(payload["status"], "ready_for_training_handoff")
+        self.assertEqual(payload["data_flywheel"]["status"], "ready_for_experiment")
+        self.assertEqual(payload["dataset_manifest"]["status"], "ready_for_training_handoff")
+        self.assertEqual(payload["dataset_manifest"]["counts"]["eligible_records"], 1)
+        self.assertEqual(payload["dataset_manifest"]["record_sample"][0]["record_id"], record_id)
 
 
 if __name__ == "__main__":

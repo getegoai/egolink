@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-04 13:58 UTC
-- 分支: `autodev/egolink-p0` @ 8c29cb6 feat(data): add candidate review queue [DATA-005]
+- 生成时间: 2026-07-04 23:12 UTC
+- 分支: `autodev/egolink-p0` @ 35d29e2 feat(train): export reviewed candidate dataset manifest [TRAIN-001]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 89，进行中: 3，暂停: 3
+- 已完成任务总数: 90，进行中: 3，暂停: 3
 
 ## 里程碑
 
@@ -33,6 +33,7 @@
 
 | 任务 | 标题 | 日期 |
 |---|---|---|
+| DATA-006 | Data flywheel pipeline runner | 2026-07-05 |
 | AMOLED-001 | AMOLED screen interaction sidecar | 2026-07-04 |
 | AMOLED-002 | AMOLED D1 status sidecar runner | 2026-07-04 |
 | AMOLED-003 | D1 field companion runner with AMOLED sidecar | 2026-07-04 |
@@ -40,7 +41,6 @@
 | D1-002 | Outdoor field kit with AMOLED companion | 2026-07-04 |
 | DATA-002 | Data flywheel pipeline spec | 2026-07-04 |
 | DATA-003 | Training candidate store baseline | 2026-07-04 |
-| DATA-004 | Data flywheel control plane | 2026-07-04 |
 
 ## 等待创始人处理
 

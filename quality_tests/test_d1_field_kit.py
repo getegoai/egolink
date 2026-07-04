@@ -100,9 +100,11 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("--duration-minutes", manifest["commands"]["live_field_observer"]["argv"])
             self.assertIn("--poll-interval-sec", manifest["commands"]["live_field_observer"]["argv"])
             self.assertIn("--max-stale-sec", manifest["commands"]["live_field_observer"]["argv"])
-            self.assertIn("scripts\\summarize_data_flywheel.py", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
+            self.assertIn("scripts\\run_data_flywheel_pipeline.py", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
             self.assertIn("--run-id", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
-            self.assertIn("D1-FIELD-unit-data-flywheel", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
+            self.assertIn("D1-FIELD-unit-data-pipeline", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
+            self.assertIn("--dataset-id", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
+            self.assertIn("D1-FIELD-unit-dataset", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
             sync_argv = manifest["commands"]["post_run_sync_dashboard_summaries"]["argv"]
             self.assertIn("scripts\\deploy_message_hub_vps.ps1", sync_argv)
             self.assertIn("-IncludeFieldReportSummaries", sync_argv)
@@ -118,7 +120,9 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("field_observation_report", manifest["expected_outputs"])
             self.assertIn("companion_summary", manifest["expected_outputs"])
             self.assertIn("amoled_sidecar_summary", manifest["expected_outputs"])
+            self.assertIn("data_flywheel_pipeline", manifest["expected_outputs"])
             self.assertIn("data_flywheel_status", manifest["expected_outputs"])
+            self.assertIn("training_dataset_manifest", manifest["expected_outputs"])
             self.assertIn("calling_not_claimed", manifest["non_claims"])
             self.assertIn("sms_not_claimed", manifest["non_claims"])
 
@@ -129,7 +133,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("D1 Outdoor Field Runbook", runbook)
             self.assertIn("Preflight AMOLED Visible Status", runbook)
             self.assertIn("Preferred one-command live run", runbook)
-            self.assertIn("Data Flywheel Status", runbook)
+            self.assertIn("Data Flywheel Pipeline", runbook)
             self.assertIn("Sync Dashboard Summaries", runbook)
             self.assertIn("observe_d1_field_run.py", runbook)
             self.assertIn("Live field observation report", notes)
@@ -137,7 +141,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("Before Leaving", checklist)
             self.assertIn("D1 Field Operator Notes", notes)
             self.assertIn("Calling and SMS are not part of this run", checklist)
-            self.assertIn("Run the data-flywheel status command", checklist)
+            self.assertIn("Run the data-flywheel pipeline command", checklist)
 
     def test_v1_board_uses_recorded_v1_max17048_pins(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

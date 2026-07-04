@@ -25,7 +25,7 @@ DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
 DEFAULT_FW_VERSION = "0.1.0-d1-periodic-location"
 DEFAULT_BOARD_ID = "connectivity-node-001"
 DEFAULT_DURATION_HOURS = 4.0
-KIT_VERSION = "D1.field_kit.v3"
+KIT_VERSION = "D1.field_kit.v4"
 MANIFEST_JSON = "field_manifest.json"
 RUNBOOK_MD = "FIELD_RUNBOOK.md"
 CHECKLIST_MD = "FIELD_CHECKLIST.md"
@@ -403,14 +403,16 @@ def build_commands(
         ),
         "post_run_data_flywheel_status": command_record(
             description=(
-                "Summarize the local data-flywheel control plane after the field run. "
-                "This writes bounded counts/status only, not raw candidate records."
+                "Run the local data-flywheel pipeline after the field run. "
+                "This writes bounded pipeline/status/dataset manifests only, not raw candidate records."
             ),
             argv=[
                 "python",
-                "scripts\\summarize_data_flywheel.py",
+                "scripts\\run_data_flywheel_pipeline.py",
                 "--run-id",
-                f"{run_id}-data-flywheel",
+                f"{run_id}-data-pipeline",
+                "--dataset-id",
+                f"{run_id}-dataset",
                 "--json",
             ],
         ),
@@ -468,7 +470,7 @@ def build_checklists(*, duration_hours: float) -> dict[str, list[str]]:
         "after_run": [
             "Record local and UTC stop time plus visible Dashboard state.",
             "Run the Web/API gate, power-curve analysis, and D1 demo report commands from this kit.",
-            "Run the data-flywheel status command so the Dashboard shows the data pipeline state.",
+            "Run the data-flywheel pipeline command so post-run data state and dataset handoff readiness are recorded.",
             "Sync curated Field Test Results and Data Flywheel summaries to the VPS Dashboard.",
             "Keep raw Message Hub export, generated reports, and OPERATOR_NOTES.md together.",
             "Do not claim location accuracy, battery life, GNSS acceptance, or 24h PWR-001 pass from a short D1 run.",
@@ -619,9 +621,9 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             commands["post_run_d1_demo_report"]["powershell"],
             "```",
             "",
-            "### Data Flywheel Status",
+            "### Data Flywheel Pipeline",
             "",
-            "This summarizes candidate-store/readiness state only. It does not export raw candidate records.",
+            "This writes bounded pipeline, status, and dataset-manifest reports. It does not export raw candidate records.",
             "",
             "```powershell",
             commands["post_run_data_flywheel_status"]["powershell"],
@@ -807,8 +809,14 @@ def build_manifest(
             "power_report": report_path("power", run_id, "power_curve_report.json"),
             "d1_demo_report": report_path("d1_demo", run_id, "d1_demo_report.json"),
             "message_hub_export": report_path("power", run_id, "test_run_export.json"),
+            "data_flywheel_pipeline": report_path(
+                "data_flywheel_pipeline", f"{run_id}-data-pipeline", "data_flywheel_pipeline_run.json"
+            ),
             "data_flywheel_status": report_path(
-                "data_flywheel", f"{run_id}-data-flywheel", "data_flywheel_status.json"
+                "data_flywheel", f"{run_id}-data-pipeline-data-flywheel", "data_flywheel_status.json"
+            ),
+            "training_dataset_manifest": report_path(
+                "training_datasets", f"{run_id}-dataset", "training_dataset_manifest.json"
             ),
         },
         "boundaries": [

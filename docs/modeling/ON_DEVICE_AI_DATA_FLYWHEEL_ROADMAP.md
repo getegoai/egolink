@@ -29,10 +29,13 @@ must consume only reviewed evidence:
    gate before any record can become `reviewed_training_candidate`.
 7. TRAIN-001 exports reviewed candidates to a dataset/experiment handoff
    manifest for offline model work.
-8. MotionNet v0.1 starts with a statistical baseline and small model
+8. DATA-006 runs the post-capture pipeline as one bounded command: ingest
+   named recordings, refresh flywheel status, and export the dataset handoff
+   manifest.
+9. MotionNet v0.1 starts with a statistical baseline and small model
    candidates only after candidate data passes quality, privacy, consent, and
    split-leakage checks.
-9. Device deployment begins in shadow mode: model output is recorded alongside
+10. Device deployment begins in shadow mode: model output is recorded alongside
    the deterministic Safety Kernel and RuleRouter; it does not replace safety
    behavior until later acceptance gates pass.
 
@@ -47,6 +50,7 @@ must consume only reviewed evidence:
 | Dataset readiness | Summarize review queues, split leakage blockers, and training readiness. | DATA-004. |
 | Candidate review | Approve, reject, or return bounded candidates without exposing raw records. | DATA-005. |
 | Dataset manifest | Export reviewed candidates to a training-server handoff manifest. | TRAIN-001. |
+| Pipeline runner | Run capture-to-handoff status from one repeatable post-run command. | DATA-006. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -70,6 +74,9 @@ must consume only reviewed evidence:
   records never become training allowed.
 - TRAIN-001 manifests include only reviewed, training-allowed candidates and
   bounded lineage/label/split summaries; they are not model training runs.
+- DATA-006 pipeline runs only ingest recording directories explicitly named by
+  the operator; it does not scan runtime folders by default or copy DB files,
+  raw candidate records, raw payloads, private coordinates, or JSONL logs.
 
 ## Model And Power Gates
 

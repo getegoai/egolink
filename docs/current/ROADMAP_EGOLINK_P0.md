@@ -211,6 +211,9 @@ Current AI/data boundary:
 - done: TRAIN-001 dataset/experiment handoff can export reviewed,
   training-allowed candidates into bounded manifests for a later training
   runner without starting model training;
+- done: DATA-006 data-flywheel pipeline runner can ingest explicitly named
+  session recordings, refresh data-flywheel status, and export the training
+  dataset manifest from one post-run command;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 

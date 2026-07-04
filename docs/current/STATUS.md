@@ -6,6 +6,25 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-05: DATA-006 data-flywheel pipeline runner is implemented for
+unattended/post-field operation. The new
+`scripts/run_data_flywheel_pipeline.py` command composes the existing
+candidate-store ingest, data-flywheel status, and TRAIN-001 dataset-manifest
+export into one bounded run: it ingests only `--recording-dir` paths explicitly
+named by the operator, writes
+`reports/data_flywheel_pipeline/<run-id>/data_flywheel_pipeline_run.json/.md`,
+refreshes the corresponding bounded `reports/data_flywheel/<run-id>-data-flywheel/`
+status report, and writes a dataset handoff manifest under
+`reports/training_datasets/<dataset-id>/`. The D1 field kit is updated to
+v4 so the post-run data step records pipeline, status, and dataset handoff
+readiness from one command. Focused tests cover empty/no-runtime-scan,
+needs-review, and ready-for-training-handoff paths; full repository validation
+passed with 412 tests. This does not scan runtime folders by default, copy raw
+candidate records, copy candidate DBs, export private coordinates/raw
+payloads/JSONL logs, train or evaluate a model, integrate a training server,
+change firmware/protocol behavior, deploy on-device inference, or claim model
+accuracy, latency, footprint, or power impact.
+
 2026-07-04: TRAIN-001 dataset/experiment handoff manifest is implemented. The
 candidate-store module can now export only `reviewed_training_candidate`
 records with `training_allowed=true` into a bounded

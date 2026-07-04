@@ -94,7 +94,7 @@ python scripts\analyze_power_curve.py --hub http://203.0.113.10:8790 --test-run-
 
 python scripts\build_d1_demo_report.py --web-api-report reports\d1_web_api\FIELD-004-d1-outdoor-YYYYMMDD\d1_web_api_report.json --power-curve-report reports\power\FIELD-004-d1-outdoor-YYYYMMDD\power_curve_report.json --report-id FIELD-004-d1-outdoor-YYYYMMDD --output-dir reports\d1_demo\FIELD-004-d1-outdoor-YYYYMMDD --json
 
-python scripts\summarize_data_flywheel.py --run-id FIELD-004-d1-outdoor-YYYYMMDD-data-flywheel --json
+python scripts\run_data_flywheel_pipeline.py --run-id FIELD-004-d1-outdoor-YYYYMMDD-data-pipeline --dataset-id FIELD-004-d1-outdoor-YYYYMMDD-dataset --json
 
 powershell -ExecutionPolicy Bypass -File scripts\deploy_message_hub_vps.ps1 -HostName 203.0.113.10 -SshKey $HOME\.ssh\egolink_vps_ed25519 -Public -IncludeFieldReportSummaries -IncludeDataFlywheelSummaries
 ```
