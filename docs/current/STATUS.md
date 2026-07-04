@@ -6,6 +6,19 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-04: D1 live LTE periodic upload is verified after SIM insertion and
+cold boot. Read-only VPS checks against `203.0.113.10:8790` showed fresh
+device data for `ego-link-r1-connectivity-001`: D1 gate
+`d1-live-after-sim-coldboot-20260704` PASS, later poll at
+`2026-07-04T08:43:03Z` saw `last_location_upload_at=2026-07-04T08:43:02Z`,
+`freshness_s=1`, `raw_post_success_count=9`, `raw_post_failure_count=0`,
+`location_event_count=13`, and `power_sample_count=6`. LTE was registered with
+PDP active and MAX17048 power evidence was measured (`4276mV`, `92%` in the
+gate report). GNSS still had no coordinate (`lat/lon=null`,
+`map_surface.mode=estimate_without_coordinate`), and IMU evidence remains
+mock/unverified on the 4G board. Evidence:
+`reports/d1_web_api/d1-live-after-sim-coldboot-20260704/d1_web_api_report.md`.
+
 2026-07-04: D1 periodic location firmware is prepared and flashed. The opt-in
 `0.1.0-d1-periodic-location` mode keeps the LTE command-loop task alive and
 periodically uploads a raw `location_report` plus `location_observation` pair

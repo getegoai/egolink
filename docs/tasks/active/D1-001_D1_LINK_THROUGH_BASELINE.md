@@ -123,6 +123,13 @@ battery power.
   `d1-live-after-flash-check-20260704` still showed the old 2026-07-02
   location evidence and no latitude/longitude, so live LTE upload and outdoor
   GNSS fix remain unverified.
+- D1 SIM cold-boot upload (2026-07-04, codex): after the operator inserted a
+  SIM and cold-started the board, read-only VPS D1 gate
+  `d1-live-after-sim-coldboot-20260704` PASS and a later poll showed
+  `last_location_upload_at=2026-07-04T08:43:02Z`, `freshness_s=1`, raw POST
+  `9 ok / 0 fail`, `location_event_count=13`, LTE registered/PDP active, and
+  measured MAX17048 power. GNSS coordinates remain unavailable
+  (`lat/lon=null`), and 4G-board IMU evidence remains mock/unverified.
 - Validation (2026-07-04, codex): D1 periodic firmware/tool focused tests
   PASS (34 tests); ESP-IDF build PASS for
   `build_d1_periodic_verify/egolink_mqtt_heartbeat.bin`; `python
