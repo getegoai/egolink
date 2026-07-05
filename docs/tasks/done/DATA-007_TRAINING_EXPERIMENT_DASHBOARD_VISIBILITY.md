@@ -29,7 +29,6 @@ allowed_paths:
   - docs/tasks/done/DATA-007_TRAINING_EXPERIMENT_DASHBOARD_VISIBILITY.md
 
 out_of_scope:
-  - deploying to the VPS
   - training or evaluating a model
   - integrating a GPU runner, training server, or private endpoint
   - copying raw candidate records, candidate DB files, runtime JSONL logs, raw payloads, or private coordinates
@@ -83,8 +82,17 @@ git diff --check
   `scripts\deploy_message_hub_vps.ps1` passed; `python scripts\context_lint.py`
   passed; `git diff --check` passed with the existing CRLF warning for the
   touched PowerShell script; full `scripts\verify.ps1` passed (418 tests).
-- Deployment: not run in this task.
+- Deployment: `scripts\deploy_message_hub_vps.ps1 -HostName 203.0.113.10
+  -SshKey $HOME\.ssh\egolink_vps_ed25519 -Public
+  -IncludeFieldReportSummaries -IncludeDataFlywheelSummaries
+  -IncludeTrainingExperimentSummaries` completed, restarted
+  `egolink-message-hub.service`, and did not touch GitLab. Smoke after deploy:
+  `/health` returned `ok=true`, unauthenticated `/api/state` returned `401`,
+  authenticated `/api/state` included
+  `training_experiment.status=blocked_dataset_not_ready` with
+  `reason=candidate_store_missing`, and Dashboard HTML contained `Training
+  Experiments` plus `trainingExperimentPanel`.
 - Remaining risks: the public VPS Dashboard will not show this new panel until
-  the Message Hub is deployed and curated summaries are synced; DATA-007 does
-  not train/evaluate a model, integrate a runner, or claim measured model
-  metrics.
+  reviewed recording data is ingested, reviewed, and registered into a
+  runner-ready experiment plan; DATA-007 does not train/evaluate a model,
+  integrate a runner, or claim measured model metrics.

@@ -16,11 +16,18 @@ gates, next step, and report paths. `scripts/deploy_message_hub_vps.ps1` has a
 new explicit `-IncludeTrainingExperimentSummaries` switch that copies only
 `training_experiment_plan.json/.md`, and the D1 field kit post-run sync command
 now includes that switch. Focused Web/API/D1 field-kit tests passed (43 tests);
-Python compile and PowerShell parser checks passed. This has not been deployed
-to the VPS in this run; context lint and diff checks passed, and full
-repository validation passed (418 tests). This does not copy candidate DBs or
-runtime JSONL logs, and does not train/evaluate a model, integrate a runner, or
-claim model metrics.
+Python compile and PowerShell parser checks passed; context lint and diff
+checks passed; full repository validation passed (418 tests). The update was
+deployed to the public VPS Message Hub on `203.0.113.10:8790` with
+`-IncludeFieldReportSummaries -IncludeDataFlywheelSummaries
+-IncludeTrainingExperimentSummaries` and restarted
+`egolink-message-hub.service` without touching GitLab. Smoke after deploy:
+`/health` returned `ok=true`, unauthenticated `/api/state` returned `401`,
+authenticated `/api/state` included `training_experiment.status=
+blocked_dataset_not_ready`, `reason=candidate_store_missing`, and Dashboard
+HTML contained `Training Experiments` plus `trainingExperimentPanel`. This does
+not copy candidate DBs or runtime JSONL logs, and does not train/evaluate a
+model, integrate a runner, or claim model metrics.
 
 2026-07-05: TRAIN-002 training experiment registry is implemented as the next
 bounded step after DATA-006. The new `scripts/register_training_experiment.py`
