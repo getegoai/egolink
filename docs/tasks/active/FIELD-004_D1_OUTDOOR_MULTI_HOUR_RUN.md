@@ -6,7 +6,7 @@ priority: high
 requires_hardware: true
 serves_demo: D1
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-07-05
 
 context:
   - docs/product/NORTH_STAR.md
@@ -96,8 +96,41 @@ python scripts\build_d1_demo_report.py --web-api-report reports\d1_web_api\FIELD
 
 python scripts\run_data_flywheel_pipeline.py --run-id FIELD-004-d1-outdoor-YYYYMMDD-data-pipeline --dataset-id FIELD-004-d1-outdoor-YYYYMMDD-dataset --json
 
-powershell -ExecutionPolicy Bypass -File scripts\deploy_message_hub_vps.ps1 -HostName 203.0.113.10 -SshKey $HOME\.ssh\egolink_vps_ed25519 -Public -IncludeFieldReportSummaries -IncludeDataFlywheelSummaries
+powershell -ExecutionPolicy Bypass -File scripts\deploy_message_hub_vps.ps1 -HostName 203.0.113.10 -SshKey $HOME\.ssh\egolink_vps_ed25519 -Public -IncludeFieldReportSummaries -IncludeDataFlywheelSummaries -IncludeTrainingExperimentSummaries
 ```
+
+# Progress Evidence
+
+- 2026-07-05 unattended read-only D1 observation:
+  - Board/device: `connectivity-node-001` /
+    `ego-link-r1-connectivity-001`.
+  - Firmware reported by server: `0.1.0-d1-periodic-location`.
+  - Connection path: device -> LTE/network -> VPS Message Hub -> Web/API.
+  - Evidence:
+    `reports/d1_field_observation/FIELD-004-d1-outdoor-unattended-20260705-140133/d1_field_observation_report.json`
+    and `.md`, plus `d1_field_samples.jsonl`.
+  - Result: `WARN`; the observer read the VPS API successfully for 181/181
+    samples over roughly 3 hours, but the latest D1 upload did not advance.
+  - Key facts: coordinate samples 181; upload window stayed at
+    `2026-07-05T06:00:21.377132+00:00`; max freshness reached `10934.0 s`;
+    location event delta `0`; raw POST delta `0 ok / 0 fail`; power sample
+    delta `0`; battery stayed `4276 mV / 100%` in the stale server view.
+  - Warnings: `d1_upload_freshness_exceeded_threshold` and
+    `d1_location_event_count_did_not_advance`.
+- 2026-07-05 post-deploy Message Hub stability observation:
+  - Evidence:
+    `reports/message_hub_stability/DATA-007-post-deploy-stability-20260705-1430/stability_observation_report.json`
+    and `.md`, plus `device_snapshots.json`.
+  - Result: `FAIL`; the server stayed reachable, but this observation saw
+    `0` new telemetry-history messages for `ego-link-r1-connectivity-001`, and
+    final `last_seen_at` age was `10737.3 s`.
+  - The script is observation-only and did not enqueue commands.
+- Final read-only API check on 2026-07-05T17:06+08:00:
+  - `last_seen_at=2026-07-05T06:01:03.386419+00:00`, `last_seq=9275`,
+    `field_readiness.reason=periodic_upload_too_old`, upload freshness about
+    `11214 s`, and `training_experiment.status=blocked_dataset_not_ready`.
+  - Interpretation: the VPS and Dashboard are running, but the D1 device should
+    be treated as stale until a new Dashboard upload appears before departure.
 
 # Completion Evidence
 

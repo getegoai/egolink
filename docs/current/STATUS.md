@@ -6,6 +6,25 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-05: FIELD-004 unattended read-only D1 observation completed with a
+useful stale-link finding, not a field pass. Evidence is under
+`reports/d1_field_observation/FIELD-004-d1-outdoor-unattended-20260705-140133/`:
+`d1_field_observation_report.json/.md` plus `d1_field_samples.jsonl`. Result was
+`WARN`: 181/181 VPS API samples succeeded over roughly 3 hours and all 181 had
+coordinate samples, but the latest D1 upload stayed at
+`2026-07-05T06:00:21.377132+00:00`, upload freshness reached `10934.0 s`,
+location event delta was `0`, raw POST delta was `0 ok / 0 fail`, and power
+sample delta was `0`. A parallel post-deploy Message Hub stability observation
+under
+`reports/message_hub_stability/DATA-007-post-deploy-stability-20260705-1430/`
+returned `FAIL`: it saw `0` new telemetry-history messages for
+`ego-link-r1-connectivity-001`, and final last-seen age was `10737.3 s`. A final
+read-only API check at 2026-07-05T17:06+08:00 showed
+`last_seen_at=2026-07-05T06:01:03.386419+00:00`,
+`field_readiness.reason=periodic_upload_too_old`, and upload freshness about
+`11214 s`. The VPS/Dashboard is running, but the D1 device should be treated as
+stale until a new fresh upload appears before departure.
+
 2026-07-05: DATA-007 training experiment visibility is implemented locally.
 The Message Hub can now load the latest bounded
 `reports/training_experiments/**/training_experiment_plan.json`, expose it as
