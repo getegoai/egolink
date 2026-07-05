@@ -6,6 +6,23 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-05: TRAIN-005 local training runner dry-run is implemented locally as
+the next bounded bridge after TRAIN-004 and before any real local/GPU training
+runner integration. The new `scripts/run_training_runner_dry_run.py` command
+reads an explicitly named `training_feature_manifest.json` plus
+`training_feature_rows.jsonl`, checks manifest readiness, row count and feature
+set matching, required bounded row fields, target-label leakage, and
+synthetic-row policy, then writes
+`reports/training_runner_dry_runs/<run-id>/training_runner_dry_run.json/.md`.
+Local smoke evidence:
+`reports/training_runner_dry_runs/train005-local-smoke-20260705/` consumed the
+TRAIN-004 synthetic feature set with explicit `--allow-synthetic`, producing
+`status=synthetic_runner_dry_run_complete` for 4 rows. This validates runner
+input shape and bounded counts only. It does not train/evaluate a model,
+integrate a GPU runner or training server, produce model weights/artifacts,
+deploy on-device inference, change firmware/protocol behavior, or claim model
+accuracy, latency, footprint, or power impact.
+
 2026-07-05: DATA-011 training feature manifest visibility is implemented
 locally. The Message Hub can now load the latest bounded
 `reports/training_features/**/training_feature_manifest.json`, expose it as

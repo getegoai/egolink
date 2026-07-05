@@ -188,6 +188,13 @@ are allowed. JSONL row contents, raw records, candidate DBs, runtime logs,
 private training endpoints, raw tensors, model artifacts, and measured model
 claims are not.
 
+TRAIN-005 can run a local runner-input dry-run from an explicitly named
+TRAIN-004 feature manifest plus JSONL rows. It validates row count, feature-set
+matching, required bounded row fields, target-label leakage, and synthetic
+acknowledgement, then writes a dry-run report. It still does not train,
+evaluate, upload, or deploy a model, and `not_run` remains the only measured
+metric state.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -221,6 +228,8 @@ deployment, or OTA update behavior changes in DATA-002.
    dataset and preflight gates pass.
 10. Let DATA-011 surface the latest feature manifest status in Web/API without
    exposing JSONL row contents or private training details.
-11. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+11. Let TRAIN-005 validate runner input shape from the feature manifest and
+   rows before any real runner integration.
+12. Let MODEL-001 and MotionNet work consume only reviewed candidate records
    whose manifests still pass consent, privacy, retention, deletion, quality,
    and split-leakage checks.
