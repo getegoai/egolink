@@ -35,6 +35,7 @@ KEY_RELEASE_DIR = REPO_ROOT / "docs" / "current" / "key_releases"
 DEFAULT_PRODUCT_DEMO_REPORTS = REPO_ROOT / "reports" / "product_demo"
 DEFAULT_FIELD_RESULT_REPORTS = REPO_ROOT / "reports"
 DEFAULT_DATA_FLYWHEEL_REPORTS = REPO_ROOT / "reports" / "data_flywheel"
+DEFAULT_TRAINING_EXPERIMENT_REPORTS = REPO_ROOT / "reports" / "training_experiments"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -856,6 +857,7 @@ def make_handler(
     product_demo_root: Path = DEFAULT_PRODUCT_DEMO_REPORTS,
     field_results_root: Path = DEFAULT_FIELD_RESULT_REPORTS,
     data_flywheel_root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS,
+    training_experiment_root: Path = DEFAULT_TRAINING_EXPERIMENT_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -899,6 +901,7 @@ def make_handler(
                 product_demo = load_latest_product_demo_report(product_demo_root)
                 field_results = load_latest_field_results(field_results_root)
                 data_flywheel = load_latest_data_flywheel_status(data_flywheel_root)
+                training_experiment = load_latest_training_experiment_plan(training_experiment_root)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -908,6 +911,7 @@ def make_handler(
                         "product_demo": product_demo,
                         "field_results": field_results,
                         "data_flywheel": data_flywheel,
+                        "training_experiment": training_experiment,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -973,6 +977,11 @@ def make_handler(
                 return
             if segments == ["api", "v1", "data-flywheel", "latest"]:
                 self.respond_json({"data_flywheel": load_latest_data_flywheel_status(data_flywheel_root)})
+                return
+            if segments == ["api", "v1", "training-experiments", "latest"]:
+                self.respond_json(
+                    {"training_experiment": load_latest_training_experiment_plan(training_experiment_root)}
+                )
                 return
             raise MessageHubError("not_found", "route not found", status=404)
 
@@ -3316,6 +3325,101 @@ def load_latest_data_flywheel_status(root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS)
     )
 
 
+def training_experiment_unavailable(reason: str = "no_training_experiment_plan") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "dataset": {},
+        "model_track": {},
+        "runner": {"ready_for_handoff": False},
+        "metrics_plan": {},
+        "gates": {"dataset_ready": False},
+        "blockers": [reason],
+        "next_step": "Run scripts/register_training_experiment.py after exporting a dataset manifest.",
+    }
+
+
+def latest_training_experiment_plan_path(root: Path = DEFAULT_TRAINING_EXPERIMENT_REPORTS) -> Path | None:
+    return latest_report_path(root, ["**/training_experiment_plan.json"])
+
+
+def load_latest_training_experiment_plan(root: Path = DEFAULT_TRAINING_EXPERIMENT_REPORTS) -> dict[str, Any]:
+    path = latest_training_experiment_plan_path(root)
+    if path is None:
+        return training_experiment_unavailable()
+    report = load_json_report(path)
+    if report is None:
+        return training_experiment_unavailable("training_experiment_plan_unreadable")
+    dataset = as_dict(report.get("dataset"))
+    runner = as_dict(report.get("runner"))
+    metrics_plan = as_dict(report.get("metrics_plan"))
+    model_track = as_dict(report.get("model_track"))
+    gates = as_dict(report.get("gates"))
+    markdown_candidate = path.with_suffix(".md")
+    markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    raw_record_sample = dataset.get("record_sample") if isinstance(dataset.get("record_sample"), list) else []
+    record_sample = [
+        {
+            "record_id": record.get("record_id"),
+            "session_id": record.get("session_id"),
+            "candidate_type": record.get("candidate_type"),
+            "label": record.get("label"),
+            "split_name": record.get("split_name"),
+            "source_manifest_hash": record.get("source_manifest_hash"),
+        }
+        for record in raw_record_sample[:5]
+        if isinstance(record, dict)
+    ]
+    return compact_dict(
+        {
+            "available": True,
+            "status": report.get("status", "unknown"),
+            "reason": report.get("reason"),
+            "experiment_id": report.get("experiment_id"),
+            "created_at": report.get("created_at") or report_file_time(path),
+            "dataset": {
+                "dataset_id": dataset.get("dataset_id"),
+                "manifest_status": dataset.get("manifest_status"),
+                "manifest_reason": dataset.get("manifest_reason"),
+                "records_total": dataset.get("records_total", 0),
+                "eligible_records": dataset.get("eligible_records", 0),
+                "reviewed_training_candidate_records": dataset.get("reviewed_training_candidate_records", 0),
+                "split_counts": as_dict(dataset.get("split_counts")),
+                "record_sample": record_sample,
+            },
+            "model_track": {
+                "track": model_track.get("track"),
+                "candidate_model": model_track.get("candidate_model"),
+                "baseline_model": model_track.get("baseline_model"),
+            },
+            "runner": {
+                "integration": runner.get("integration"),
+                "ready_for_handoff": runner.get("ready_for_handoff", False),
+                "next_command": runner.get("next_command"),
+            },
+            "metrics_plan": {
+                "classification": as_dict(metrics_plan.get("classification")),
+                "operations": as_dict(metrics_plan.get("operations")),
+            },
+            "gates": {
+                "dataset_ready": gates.get("dataset_ready", False),
+                "privacy_review": gates.get("privacy_review"),
+                "consent_review": gates.get("consent_review"),
+                "split_leakage": gates.get("split_leakage"),
+                "baseline_comparison": gates.get("baseline_comparison"),
+                "footprint": gates.get("footprint"),
+                "power": gates.get("power"),
+                "rollback_plan": gates.get("rollback_plan"),
+            },
+            "next_step": runner.get("next_command"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -4229,6 +4333,10 @@ def render_dashboard() -> str:
           <div id="dataFlywheel"></div>
         </section>
         <section>
+          <h2>Training Experiments</h2>
+          <div id="trainingExperiment"></div>
+        </section>
+        <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
         </section>
@@ -4366,8 +4474,8 @@ def render_dashboard() -> str:
       `;
     }
     function statusClass(status) {
-      if (status === 'pass' || status === 'released') return 'ok';
-      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture') return 'warn';
+      if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner') return 'ok';
+      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records') return 'warn';
       return status === 'not_available' ? 'empty' : 'bad';
     }
     function productDemoPanel(demo) {
@@ -4448,6 +4556,41 @@ def render_dashboard() -> str:
         <div class="metric"><span>Next Step</span><span>${escapeHtml(flywheel.next_step || 'Create the next data task')}</span></div>
         <div class="metric"><span>Report</span><span>${escapeHtml(flywheel.markdown_path || flywheel.report_path || 'unknown')}</span></div>
         ${reviewSamples}
+      `;
+    }
+    function trainingExperimentPanel(experiment) {
+      if (!experiment || !experiment.available) {
+        return `
+          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(experiment && experiment.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(experiment && experiment.reason || 'no_training_experiment_plan')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(experiment && experiment.next_step || 'Register a training experiment plan')}</span></div>
+        `;
+      }
+      const dataset = experiment.dataset || {};
+      const model = experiment.model_track || {};
+      const runner = experiment.runner || {};
+      const metrics = experiment.metrics_plan || {};
+      const classification = metrics.classification || {};
+      const operations = metrics.operations || {};
+      const gates = experiment.gates || {};
+      const samples = (dataset.record_sample || []).slice(0, 5).map(record => `
+        <div class="metric"><span>${escapeHtml(record.record_id || 'record')}</span><span>${escapeHtml(record.label || 'unknown')} / split ${escapeHtml(record.split_name || 'unknown')} / ${escapeHtml(record.candidate_type || 'unknown')}</span></div>
+      `).join('') || '<div class="metric"><span>Record Sample</span><span class="empty">none</span></div>';
+      return `
+        <div class="metric"><span>Status</span><span class="${statusClass(experiment.status)}">${escapeHtml(experiment.status || 'unknown')}</span></div>
+        <div class="metric"><span>Experiment</span><b>${escapeHtml(experiment.experiment_id || 'unknown')}</b></div>
+        <div class="metric"><span>Reason</span><span>${escapeHtml(experiment.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Dataset</span><span>${escapeHtml(dataset.dataset_id || 'unknown')} / ${escapeHtml(dataset.manifest_status || 'unknown')}</span></div>
+        <div class="metric"><span>Eligible Records</span><span>${escapeHtml(dataset.eligible_records ?? 0)} eligible / ${escapeHtml(dataset.records_total ?? 0)} total</span></div>
+        <div class="metric"><span>Model Track</span><span>${escapeHtml(model.track || 'unknown')} / ${escapeHtml(model.candidate_model || 'unknown')}</span></div>
+        <div class="metric"><span>Baseline</span><span>${escapeHtml(model.baseline_model || 'unknown')}</span></div>
+        <div class="metric"><span>Runner Handoff</span><span>${escapeHtml(runner.ready_for_handoff ?? false)} / ${escapeHtml(runner.integration || 'unknown')}</span></div>
+        <div class="metric"><span>Classification Metrics</span><span>accuracy ${escapeHtml(classification.accuracy || 'planned_not_measured')} / FPR ${escapeHtml(classification.false_positive_rate || 'planned_not_measured')}</span></div>
+        <div class="metric"><span>Footprint Metrics</span><span>latency ${escapeHtml(operations.latency_ms || 'planned_not_measured')} / RAM ${escapeHtml(operations.ram_bytes || 'planned_not_measured')} / power ${escapeHtml(operations.energy_per_inference || 'planned_not_measured')}</span></div>
+        <div class="metric"><span>Gates</span><span>dataset ${escapeHtml(gates.dataset_ready ?? false)} / baseline ${escapeHtml(gates.baseline_comparison || 'unknown')} / footprint ${escapeHtml(gates.footprint || 'unknown')} / power ${escapeHtml(gates.power || 'unknown')}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(experiment.next_step || runner.next_command || 'Integrate a runner task')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(experiment.markdown_path || experiment.report_path || 'unknown')}</span></div>
+        ${samples}
       `;
     }
     function fieldResultsPanel(results) {
@@ -4729,6 +4872,7 @@ def render_dashboard() -> str:
       productDemo.innerHTML = productDemoPanel(data.product_demo || {});
       fieldResults.innerHTML = fieldResultsPanel(data.field_results || {});
       dataFlywheel.innerHTML = dataFlywheelPanel(data.data_flywheel || {});
+      trainingExperiment.innerHTML = trainingExperimentPanel(data.training_experiment || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>

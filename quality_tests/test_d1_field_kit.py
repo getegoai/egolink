@@ -109,6 +109,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("scripts\\deploy_message_hub_vps.ps1", sync_argv)
             self.assertIn("-IncludeFieldReportSummaries", sync_argv)
             self.assertIn("-IncludeDataFlywheelSummaries", sync_argv)
+            self.assertIn("-IncludeTrainingExperimentSummaries", sync_argv)
             self.assertTrue(manifest["commands"]["flash_explicit_operator_action"]["hardware_action"])
             self.assertTrue(manifest["commands"]["short_usb_free_link_check"]["sends_message_hub_command"])
             self.assertTrue(manifest["commands"]["preflight_amoled_visible_status"]["writes_amoled_serial"])

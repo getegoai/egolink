@@ -6,6 +6,22 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-05: DATA-007 training experiment visibility is implemented locally.
+The Message Hub can now load the latest bounded
+`reports/training_experiments/**/training_experiment_plan.json`, expose it as
+`training_experiment` in authenticated `/api/state`, serve
+`/api/v1/training-experiments/latest`, and render a Dashboard `Training
+Experiments` panel with dataset readiness, runner handoff, planned metrics,
+gates, next step, and report paths. `scripts/deploy_message_hub_vps.ps1` has a
+new explicit `-IncludeTrainingExperimentSummaries` switch that copies only
+`training_experiment_plan.json/.md`, and the D1 field kit post-run sync command
+now includes that switch. Focused Web/API/D1 field-kit tests passed (43 tests);
+Python compile and PowerShell parser checks passed. This has not been deployed
+to the VPS in this run; context lint and diff checks passed, and full
+repository validation passed (418 tests). This does not copy candidate DBs or
+runtime JSONL logs, and does not train/evaluate a model, integrate a runner, or
+claim model metrics.
+
 2026-07-05: TRAIN-002 training experiment registry is implemented as the next
 bounded step after DATA-006. The new `scripts/register_training_experiment.py`
 command consumes a TRAIN-001 `training_dataset_manifest.json` and writes

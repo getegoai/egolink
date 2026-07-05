@@ -1132,6 +1132,74 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(latest["product_demo"]["test_run_id"], "lte011-unit")
         self.assertEqual(latest["product_demo"]["evidence_mode"], "composite_existing_evidence")
 
+    def test_state_api_and_training_experiment_route_include_latest_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report_root = tmp_path / "training_experiments"
+            report_dir = report_root / "unit-experiment"
+            report_dir.mkdir(parents=True)
+            (report_dir / "training_experiment_plan.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.training_experiment_plan.v0.1",
+                        "experiment_id": "unit-experiment",
+                        "created_at": "2026-07-05T06:30:00+00:00",
+                        "status": "blocked_dataset_not_ready",
+                        "reason": "candidate_store_missing",
+                        "dataset": {
+                            "dataset_id": "unit-dataset",
+                            "manifest_status": "not_ready",
+                            "manifest_reason": "candidate_store_missing",
+                            "records_total": 0,
+                            "eligible_records": 0,
+                            "record_sample": [],
+                        },
+                        "model_track": {
+                            "track": "motionnet",
+                            "candidate_model": "motionnet-v0.1-planned",
+                            "baseline_model": "m0_rule_router",
+                        },
+                        "runner": {
+                            "integration": "not_integrated",
+                            "ready_for_handoff": False,
+                            "next_command": "Complete review gates.",
+                        },
+                        "metrics_plan": {
+                            "classification": {"accuracy": "planned_not_measured"},
+                            "operations": {"latency_ms": "planned_not_measured"},
+                        },
+                        "gates": {"dataset_ready": False, "baseline_comparison": "planned_not_run"},
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, training_experiment_root=report_root),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                latest = get_json(base_url, "/api/v1/training-experiments/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["training_experiment"]["status"], "blocked_dataset_not_ready")
+        self.assertEqual(state["training_experiment"]["reason"], "candidate_store_missing")
+        self.assertEqual(latest["training_experiment"]["experiment_id"], "unit-experiment")
+        self.assertEqual(latest["training_experiment"]["dataset"]["eligible_records"], 0)
+        self.assertEqual(
+            latest["training_experiment"]["metrics_plan"]["classification"]["accuracy"],
+            "planned_not_measured",
+        )
+
     def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -1307,6 +1375,8 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertTrue(health["ok"])
         self.assertEqual(context.exception.code, 401)
         self.assertEqual(state["devices"], [])
+        self.assertIn("training_experiment", state)
+        self.assertEqual(state["training_experiment"]["reason"], "no_training_experiment_plan")
 
     def test_http_raw_command_poll_and_ack_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

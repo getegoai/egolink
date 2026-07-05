@@ -217,6 +217,9 @@ Current AI/data boundary:
 - done: TRAIN-002 training experiment registry writes a bounded
   `training_experiment_plan` from the dataset manifest so a future runner has
   explicit readiness, gates, planned metrics, and non-claims;
+- done: DATA-007 Dashboard/API visibility can surface the latest bounded
+  training experiment plan and explicitly sync only curated experiment-plan
+  summaries;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -225,7 +228,8 @@ remains the operational evidence store, while curated data-flywheel summaries
 show candidate counts, review queues, split-leakage blockers, and model-training
 readiness without exposing raw candidate records. DATA-006/TRAIN-002 now turn
 reviewed candidates into dataset manifests and bounded training-experiment
-plans before any model is evaluated or shipped.
+plans, and DATA-007 makes the latest experiment plan visible in Web/API, before
+any model is evaluated or shipped.
 
 ## R0: VPS + PC Simulator Simulated Loop
 

@@ -35,10 +35,13 @@ must consume only reviewed evidence:
 9. TRAIN-002 registers a bounded training experiment plan from the dataset
    handoff manifest, recording runner readiness and planned metrics without
    starting a training job.
-10. MotionNet v0.1 starts with a statistical baseline and small model
+10. DATA-007 surfaces the latest bounded experiment plan in Web/API and
+   deployment summaries so runner readiness is visible without exposing raw
+   records.
+11. MotionNet v0.1 starts with a statistical baseline and small model
    candidates only after candidate data passes quality, privacy, consent, and
    split-leakage checks.
-11. Device deployment begins in shadow mode: model output is recorded alongside
+12. Device deployment begins in shadow mode: model output is recorded alongside
    the deterministic Safety Kernel and RuleRouter; it does not replace safety
    behavior until later acceptance gates pass.
 
@@ -55,6 +58,7 @@ must consume only reviewed evidence:
 | Dataset manifest | Export reviewed candidates to a training-server handoff manifest. | TRAIN-001. |
 | Pipeline runner | Run capture-to-handoff status from one repeatable post-run command. | DATA-006. |
 | Experiment registry | Register dataset readiness, runner handoff status, planned metrics, and non-claims for a future trainer. | TRAIN-002. |
+| Experiment visibility | Surface latest bounded experiment-plan readiness in Web/API and curated deploy summaries. | DATA-007. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -84,6 +88,9 @@ must consume only reviewed evidence:
 - TRAIN-002 experiment plans are runner handoff records only; metrics remain
   `planned_not_measured` until a later training/evaluation task writes measured
   evidence.
+- DATA-007 Dashboard/API summaries may show experiment status and planned
+  metrics only; they do not expose raw records, candidate DB paths, runtime
+  JSONL logs, or private training-server endpoints.
 
 ## Model And Power Gates
 

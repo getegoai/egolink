@@ -418,7 +418,7 @@ def build_commands(
         ),
         "post_run_sync_dashboard_summaries": command_record(
             description=(
-                "Sync only curated Field Test Results and Data Flywheel status summaries to the VPS Dashboard."
+                "Sync only curated Field Test Results, Data Flywheel, and Training Experiment summaries to the VPS Dashboard."
             ),
             argv=[
                 "powershell",
@@ -433,6 +433,7 @@ def build_commands(
                 "-Public",
                 "-IncludeFieldReportSummaries",
                 "-IncludeDataFlywheelSummaries",
+                "-IncludeTrainingExperimentSummaries",
             ],
             requires_operator_intent=True,
         ),

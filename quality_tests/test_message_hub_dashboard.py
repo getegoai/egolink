@@ -20,6 +20,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Product Demo", html)
         self.assertIn("Field Test Results", html)
         self.assertIn("Data Flywheel", html)
+        self.assertIn("Training Experiments", html)
         self.assertIn("D1 Link Through", html)
         self.assertIn("dashboard-shell", html)
         self.assertIn("Field live view", html)
@@ -28,11 +29,17 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("productDemo", html)
         self.assertIn("fieldResults", html)
         self.assertIn("dataFlywheel", html)
+        self.assertIn("trainingExperiment", html)
         self.assertIn("d1Link", html)
         self.assertIn("d1_link", html)
         self.assertIn("field_results", html)
         self.assertIn("data_flywheel", html)
         self.assertIn("dataFlywheelPanel", html)
+        self.assertIn("training_experiment", html)
+        self.assertIn("trainingExperimentPanel", html)
+        self.assertIn("Runner Handoff", html)
+        self.assertIn("Classification Metrics", html)
+        self.assertIn("Footprint Metrics", html)
         self.assertIn("Candidate Records", html)
         self.assertIn("Training Gate", html)
         self.assertIn("Review Queues", html)
@@ -439,18 +446,121 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(summary["status"], "not_available")
         self.assertEqual(summary["reason"], "no_data_flywheel_status_report")
 
+    def test_latest_training_experiment_summary_is_bounded_for_dashboard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report_dir = root / "unit-experiment"
+            report_dir.mkdir(parents=True)
+            (report_dir / "training_experiment_plan.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.training_experiment_plan.v0.1",
+                        "builder_version": "train-002.0",
+                        "experiment_id": "unit-experiment",
+                        "created_at": "2026-07-05T06:20:00+00:00",
+                        "status": "ready_for_runner",
+                        "reason": "reviewed_dataset_manifest_available",
+                        "dataset": {
+                            "dataset_id": "unit-dataset",
+                            "manifest_status": "ready_for_training_handoff",
+                            "manifest_reason": "reviewed_candidates_available",
+                            "records_total": 1,
+                            "eligible_records": 1,
+                            "reviewed_training_candidate_records": 1,
+                            "split_counts": {"train": 1},
+                            "record_sample": [
+                                {
+                                    "record_id": "cand-unit",
+                                    "session_id": "session-unit",
+                                    "candidate_type": "sos_confirmation",
+                                    "label": "needs_help",
+                                    "split_name": "train",
+                                    "source_manifest_hash": "abc123",
+                                    "recording_path": "C:/private/raw/session",
+                                }
+                            ],
+                        },
+                        "model_track": {
+                            "track": "motionnet",
+                            "candidate_model": "motionnet-v0.1-planned",
+                            "baseline_model": "m0_rule_router",
+                        },
+                        "runner": {
+                            "integration": "not_integrated",
+                            "ready_for_handoff": True,
+                            "training_server_endpoint": "https://private.example.invalid",
+                            "next_command": "Integrate a runner task.",
+                        },
+                        "metrics_plan": {
+                            "classification": {
+                                "accuracy": "planned_not_measured",
+                                "false_positive_rate": "planned_not_measured",
+                            },
+                            "operations": {
+                                "latency_ms": "planned_not_measured",
+                                "ram_bytes": "planned_not_measured",
+                                "energy_per_inference": "planned_not_measured",
+                            },
+                        },
+                        "gates": {
+                            "dataset_ready": True,
+                            "privacy_review": "inherited_from_dataset_manifest",
+                            "consent_review": "inherited_from_dataset_manifest",
+                            "split_leakage": "inherited_from_dataset_manifest",
+                            "baseline_comparison": "planned_not_run",
+                            "footprint": "planned_not_measured",
+                            "power": "planned_not_measured",
+                            "rollback_plan": "planned_not_written",
+                        },
+                        "non_claims": ["No model training has run."],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (report_dir / "training_experiment_plan.md").write_text("# Plan\n", encoding="utf-8")
+
+            summary = message_hub.load_latest_training_experiment_plan(root)
+
+        self.assertTrue(summary["available"])
+        self.assertEqual(summary["status"], "ready_for_runner")
+        self.assertEqual(summary["experiment_id"], "unit-experiment")
+        self.assertEqual(summary["dataset"]["eligible_records"], 1)
+        self.assertTrue(summary["runner"]["ready_for_handoff"])
+        self.assertEqual(summary["runner"]["integration"], "not_integrated")
+        self.assertEqual(summary["metrics_plan"]["operations"]["latency_ms"], "planned_not_measured")
+        self.assertEqual(summary["gates"]["baseline_comparison"], "planned_not_run")
+        self.assertEqual(summary["dataset"]["record_sample"][0]["record_id"], "cand-unit")
+        payload = json.dumps(summary)
+        self.assertNotIn("recording_path", payload)
+        self.assertNotIn("C:/private", payload)
+        self.assertNotIn("private.example.invalid", payload)
+        self.assertNotIn("record_json", payload)
+
+    def test_training_experiment_missing_returns_explainable_not_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = message_hub.load_latest_training_experiment_plan(Path(tmp))
+
+        self.assertFalse(summary["available"])
+        self.assertEqual(summary["status"], "not_available")
+        self.assertEqual(summary["reason"], "no_training_experiment_plan")
+
     def test_deploy_script_can_include_curated_field_report_summaries(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         script = (repo_root / "scripts" / "deploy_message_hub_vps.ps1").read_text(encoding="utf-8")
 
         self.assertIn("IncludeFieldReportSummaries", script)
         self.assertIn("IncludeDataFlywheelSummaries", script)
+        self.assertIn("IncludeTrainingExperimentSummaries", script)
         self.assertIn("Copy-FieldReportSummaries", script)
         self.assertIn("Copy-DataFlywheelSummaries", script)
+        self.assertIn("Copy-TrainingExperimentSummaries", script)
         self.assertIn("d1_web_api_report.json", script)
         self.assertIn("d1_field_companion_summary.json", script)
         self.assertIn("data_flywheel_status.json", script)
         self.assertIn("data_flywheel_status.md", script)
+        self.assertIn("training_experiment_plan.json", script)
+        self.assertIn("training_experiment_plan.md", script)
         self.assertIn("*.summary.json", script)
         self.assertNotIn("*.jsonl", script)
         self.assertNotIn("*.db", script)
