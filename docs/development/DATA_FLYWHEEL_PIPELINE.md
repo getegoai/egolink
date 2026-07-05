@@ -195,6 +195,13 @@ acknowledgement, then writes a dry-run report. It still does not train,
 evaluate, upload, or deploy a model, and `not_run` remains the only measured
 metric state.
 
+DATA-012 can expose the latest TRAIN-005 runner dry-run through Web/API and
+curated deployment summaries. It is visibility only: runner-input status,
+row-count matching, split/label/source summaries, target-leakage guard,
+synthetic policy, gates, and `not_run` measured metrics are allowed. JSONL row
+contents, raw records, candidate DBs, runtime logs, private training endpoints,
+raw tensors, model artifacts, and measured model claims are not.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -230,6 +237,8 @@ deployment, or OTA update behavior changes in DATA-002.
    exposing JSONL row contents or private training details.
 11. Let TRAIN-005 validate runner input shape from the feature manifest and
    rows before any real runner integration.
-12. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+12. Let DATA-012 surface the latest runner dry-run status in Web/API without
+   exposing JSONL row contents or private training details.
+13. Let MODEL-001 and MotionNet work consume only reviewed candidate records
    whose manifests still pass consent, privacy, retention, deletion, quality,
    and split-leakage checks.

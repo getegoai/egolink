@@ -11,6 +11,7 @@ param(
     [switch]$IncludeTrainingExperimentSummaries,
     [switch]$IncludeTrainingRunSummaries,
     [switch]$IncludeTrainingFeatureSummaries,
+    [switch]$IncludeTrainingRunnerDryRunSummaries,
     [switch]$NoStart
 )
 
@@ -187,6 +188,31 @@ function Copy-TrainingFeatureSummaries {
     }
 }
 
+function Copy-TrainingRunnerDryRunSummaries {
+    $trainingRunnerDryRunDir = Join-Path $repoRoot "reports\training_runner_dry_runs"
+    if (-not (Test-Path $trainingRunnerDryRunDir -PathType Container)) {
+        return
+    }
+    $allowedNames = @(
+        "training_runner_dry_run.json",
+        "training_runner_dry_run.md"
+    )
+    $reportFiles = Get-ChildItem -Path $trainingRunnerDryRunDir -Recurse -File |
+        Where-Object { $allowedNames -contains $_.Name }
+
+    $repoFull = (Resolve-Path $repoRoot).Path.TrimEnd("\", "/")
+    foreach ($file in $reportFiles) {
+        $fileFull = $file.FullName
+        if (-not $fileFull.StartsWith($repoFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to copy training runner dry-run summary outside repository: $fileFull"
+        }
+        $relative = $fileFull.Substring($repoFull.Length).TrimStart("\", "/")
+        $target = Join-Path $packageRoot $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -Force -LiteralPath $file.FullName -Destination $target
+    }
+}
+
 function SshArgs {
     $args = @()
     if ($SshKey) {
@@ -234,6 +260,9 @@ try {
     }
     if ($IncludeTrainingFeatureSummaries) {
         Copy-TrainingFeatureSummaries
+    }
+    if ($IncludeTrainingRunnerDryRunSummaries) {
+        Copy-TrainingRunnerDryRunSummaries
     }
 
     Push-Location $packageRoot

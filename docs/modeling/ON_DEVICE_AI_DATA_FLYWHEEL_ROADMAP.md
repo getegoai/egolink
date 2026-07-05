@@ -60,10 +60,13 @@ must consume only reviewed evidence:
 17. TRAIN-005 validates local runner-input shape from the TRAIN-004 manifest
     and JSONL rows, producing a dry-run report while keeping model training and
     measured metrics at `not_run`.
-18. MotionNet v0.1 starts with a statistical baseline and small model
+18. DATA-012 surfaces the latest TRAIN-005 runner dry-run in Web/API and
+    curated deployment summaries without exposing JSONL row contents or model
+    artifacts.
+19. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-19. Device deployment begins in shadow mode: model output is recorded alongside
+20. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -88,6 +91,7 @@ must consume only reviewed evidence:
 | Feature manifest | Export bounded feature rows for a future runner without raw tensors or training. | TRAIN-004. |
 | Feature visibility | Surface latest feature manifest readiness without row contents or model artifacts. | DATA-011. |
 | Runner dry-run | Validate runner input shape before real training/evaluation integration. | TRAIN-005. |
+| Runner visibility | Surface latest runner dry-run readiness without row contents or model artifacts. | DATA-012. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -149,6 +153,12 @@ must consume only reviewed evidence:
   required row fields, target-leakage guard, split/label/source counts, and
   synthetic acknowledgement. They do not train, evaluate, upload, or deploy a
   model, and they do not produce model artifacts or measured model metrics.
+- DATA-012 Web/API summaries may show TRAIN-005 status, runner-input gate,
+  row-count matching, split/label/source counts, target-leakage guard,
+  synthetic policy, gates, and `not_run` measured-metric placeholders only;
+  they do not expose JSONL row contents, raw records, candidate DB paths,
+  runtime JSONL logs, private training-server endpoints, raw tensors, model
+  artifacts, or measured model metrics.
 
 ## Model And Power Gates
 

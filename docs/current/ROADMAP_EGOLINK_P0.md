@@ -240,6 +240,9 @@ Current AI/data boundary:
 - done: TRAIN-005 local runner dry-run can validate TRAIN-004 manifest/row
   matching, required row fields, target-leakage guard, split/label/source
   counts, and synthetic acknowledgement before any real training runner starts;
+- done: DATA-012 Dashboard/API visibility can surface the latest TRAIN-005
+  runner dry-run status and curated deploy summaries without exposing JSONL row
+  contents, raw tensors, private training endpoints, or model artifacts;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -253,7 +256,8 @@ TRAIN-003 can preflight the runner handoff, DATA-010 makes that preflight
 visible, and TRAIN-004 exports the bounded feature rows a future runner should
 consume. DATA-011 then makes the feature-manifest readiness visible before any
 model is evaluated or shipped. TRAIN-005 validates the runner input contract
-from those rows while keeping model training and measured metrics at `not_run`.
+from those rows while keeping model training and measured metrics at `not_run`;
+DATA-012 makes that dry-run readiness visible in the same Web/API loop.
 
 ## R0: VPS + PC Simulator Simulated Loop
 

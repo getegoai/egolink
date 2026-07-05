@@ -6,6 +6,22 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-05: DATA-012 training runner dry-run visibility is implemented
+locally. The Message Hub can now load the latest bounded
+`reports/training_runner_dry_runs/**/training_runner_dry_run.json`, expose it
+as `training_runner_dry_run` in authenticated `/api/state`, serve
+`/api/v1/training-runner-dry-runs/latest`, and render a Dashboard `Training
+Runner Dry-Run` panel with runner-input status, feature-set status, row count,
+split/label summaries, synthetic policy, target-leakage guard, required-row
+checks, `not_run` measured metrics, gates, next step, and report paths.
+`scripts/deploy_message_hub_vps.ps1` has a new explicit
+`-IncludeTrainingRunnerDryRunSummaries` switch that copies only
+`training_runner_dry_run.json/.md`. Focused Web/API tests passed locally. This
+was not deployed to the VPS in this run, does not expose JSONL row contents,
+candidate DBs, raw records, runtime logs, private endpoints, raw tensors, model
+artifacts, or measured model metrics, and does not train/evaluate/deploy a
+model.
+
 2026-07-05: TRAIN-005 local training runner dry-run is implemented locally as
 the next bounded bridge after TRAIN-004 and before any real local/GPU training
 runner integration. The new `scripts/run_training_runner_dry_run.py` command

@@ -1384,6 +1384,118 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(latest["training_feature_manifest"]["checks"]["synthetic_record_policy"], "acknowledged")
         self.assertEqual(latest["training_feature_manifest"]["gates"]["model_artifact"], "not_produced")
 
+    def test_state_api_and_training_runner_dry_run_route_include_latest_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report_root = tmp_path / "training_runner_dry_runs"
+            report_dir = report_root / "unit-runner"
+            report_dir.mkdir(parents=True)
+            (report_dir / "training_runner_dry_run.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.training_runner_dry_run.v0.1",
+                        "run_id": "unit-runner",
+                        "created_at": "2026-07-05T12:45:00+00:00",
+                        "status": "synthetic_runner_dry_run_complete",
+                        "reason": "runner_input_contract_validated_with_synthetic_dry_run_rows",
+                        "feature_manifest": {
+                            "feature_set_id": "unit-features",
+                            "status": "ready_for_synthetic_feature_dry_run",
+                            "feature_scope": "manifest_summary_features",
+                            "target_separated_from_features": True,
+                        },
+                        "dataset": {
+                            "dataset_id": "unit-dataset",
+                            "status": "ready_for_training_handoff",
+                            "eligible_records": 1,
+                            "synthetic_records": 1,
+                        },
+                        "preflight": {
+                            "run_id": "unit-preflight",
+                            "status": "ready_for_training_runner",
+                            "runner_ready": True,
+                            "metrics_measured": {
+                                "classification": "not_run",
+                                "operations": "not_run",
+                                "power": "not_run",
+                            },
+                        },
+                        "feature_rows": {
+                            "expected_row_count": 1,
+                            "actual_row_count": 1,
+                            "row_count_matches": True,
+                            "feature_set_mismatch_count": 0,
+                            "split_counts": {"train": 1},
+                            "label_counts": {"safe": 1},
+                            "source_status_counts": {"synthetic_generated": 1},
+                            "feature_group_counts": {"imu_motion": 1},
+                            "synthetic_rows": 1,
+                            "synthetic_allowed_for_dry_run": True,
+                        },
+                        "checks": {
+                            "feature_manifest_ready": True,
+                            "feature_rows_readable": True,
+                            "row_count_matches": True,
+                            "required_row_fields": "pass",
+                            "missing_row_fields": {},
+                            "target_leakage_guard": "pass",
+                            "target_leakage_violations": {},
+                            "synthetic_row_policy": "acknowledged",
+                            "manifest_feature_export_gate": "pass",
+                        },
+                        "runner": {
+                            "integration": "local_runner_dry_run",
+                            "ready_for_real_runner": False,
+                            "dry_run_only": True,
+                            "next_step": "Dry-run only.",
+                        },
+                        "metrics_plan": {
+                            "measured": {
+                                "classification": "not_run",
+                                "operations": "not_run",
+                                "power": "not_run",
+                            },
+                            "dry_run_summary": {
+                                "labels": {"safe": 1},
+                                "splits": {"train": 1},
+                                "feature_groups": {"imu_motion": 1},
+                            },
+                        },
+                        "gates": {
+                            "runner_input": "pass",
+                            "model_training": "not_run",
+                            "model_artifact": "not_produced",
+                            "training_server": "not_integrated",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, training_runner_dry_run_root=report_root),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                latest = get_json(base_url, "/api/v1/training-runner-dry-runs/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["training_runner_dry_run"]["status"], "synthetic_runner_dry_run_complete")
+        self.assertEqual(state["training_runner_dry_run"]["feature_rows"]["actual_row_count"], 1)
+        self.assertEqual(latest["training_runner_dry_run"]["run_id"], "unit-runner")
+        self.assertTrue(latest["training_runner_dry_run"]["runner"]["dry_run_only"])
+        self.assertEqual(latest["training_runner_dry_run"]["checks"]["synthetic_row_policy"], "acknowledged")
+        self.assertEqual(latest["training_runner_dry_run"]["gates"]["model_artifact"], "not_produced")
+
     def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -1550,6 +1662,7 @@ class MessageHubHttpTests(unittest.TestCase):
                     training_experiment_root=Path(tmp) / "empty_training_experiments",
                     training_run_root=Path(tmp) / "empty_training_runs",
                     training_feature_root=Path(tmp) / "empty_training_features",
+                    training_runner_dry_run_root=Path(tmp) / "empty_training_runner_dry_runs",
                 ),
             )
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -1574,6 +1687,8 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(state["training_run_preflight"]["reason"], "no_training_run_preflight")
         self.assertIn("training_feature_manifest", state)
         self.assertEqual(state["training_feature_manifest"]["reason"], "no_training_feature_manifest")
+        self.assertIn("training_runner_dry_run", state)
+        self.assertEqual(state["training_runner_dry_run"]["reason"], "no_training_runner_dry_run")
 
     def test_http_raw_command_poll_and_ack_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

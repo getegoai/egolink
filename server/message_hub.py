@@ -38,6 +38,7 @@ DEFAULT_DATA_FLYWHEEL_REPORTS = REPO_ROOT / "reports" / "data_flywheel"
 DEFAULT_TRAINING_EXPERIMENT_REPORTS = REPO_ROOT / "reports" / "training_experiments"
 DEFAULT_TRAINING_RUN_REPORTS = REPO_ROOT / "reports" / "training_runs"
 DEFAULT_TRAINING_FEATURE_REPORTS = REPO_ROOT / "reports" / "training_features"
+DEFAULT_TRAINING_RUNNER_DRY_RUN_REPORTS = REPO_ROOT / "reports" / "training_runner_dry_runs"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -862,6 +863,7 @@ def make_handler(
     training_experiment_root: Path = DEFAULT_TRAINING_EXPERIMENT_REPORTS,
     training_run_root: Path = DEFAULT_TRAINING_RUN_REPORTS,
     training_feature_root: Path = DEFAULT_TRAINING_FEATURE_REPORTS,
+    training_runner_dry_run_root: Path = DEFAULT_TRAINING_RUNNER_DRY_RUN_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -908,6 +910,7 @@ def make_handler(
                 training_experiment = load_latest_training_experiment_plan(training_experiment_root)
                 training_run_preflight = load_latest_training_run_preflight(training_run_root)
                 training_feature_manifest = load_latest_training_feature_manifest(training_feature_root)
+                training_runner_dry_run = load_latest_training_runner_dry_run(training_runner_dry_run_root)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -920,6 +923,7 @@ def make_handler(
                         "training_experiment": training_experiment,
                         "training_run_preflight": training_run_preflight,
                         "training_feature_manifest": training_feature_manifest,
+                        "training_runner_dry_run": training_runner_dry_run,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -997,6 +1001,11 @@ def make_handler(
             if segments == ["api", "v1", "training-features", "latest"]:
                 self.respond_json(
                     {"training_feature_manifest": load_latest_training_feature_manifest(training_feature_root)}
+                )
+                return
+            if segments == ["api", "v1", "training-runner-dry-runs", "latest"]:
+                self.respond_json(
+                    {"training_runner_dry_run": load_latest_training_runner_dry_run(training_runner_dry_run_root)}
                 )
                 return
             raise MessageHubError("not_found", "route not found", status=404)
@@ -3650,6 +3659,118 @@ def load_latest_training_feature_manifest(root: Path = DEFAULT_TRAINING_FEATURE_
     )
 
 
+def training_runner_dry_run_unavailable(reason: str = "no_training_runner_dry_run") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "feature_manifest": {},
+        "feature_rows": {"actual_row_count": 0},
+        "runner": {"dry_run_only": False, "ready_for_real_runner": False},
+        "checks": {},
+        "metrics_plan": {"measured": {}},
+        "gates": {"runner_input": "not_available"},
+        "blockers": [reason],
+        "next_step": "Run scripts/run_training_runner_dry_run.py after TRAIN-004 feature rows are ready.",
+    }
+
+
+def latest_training_runner_dry_run_path(root: Path = DEFAULT_TRAINING_RUNNER_DRY_RUN_REPORTS) -> Path | None:
+    return latest_report_path(root, ["**/training_runner_dry_run.json"])
+
+
+def load_latest_training_runner_dry_run(root: Path = DEFAULT_TRAINING_RUNNER_DRY_RUN_REPORTS) -> dict[str, Any]:
+    path = latest_training_runner_dry_run_path(root)
+    if path is None:
+        return training_runner_dry_run_unavailable()
+    report = load_json_report(path)
+    if report is None:
+        return training_runner_dry_run_unavailable("training_runner_dry_run_unreadable")
+    feature_manifest = as_dict(report.get("feature_manifest"))
+    dataset = as_dict(report.get("dataset"))
+    preflight = as_dict(report.get("preflight"))
+    feature_rows = as_dict(report.get("feature_rows"))
+    checks = as_dict(report.get("checks"))
+    runner = as_dict(report.get("runner"))
+    metrics_plan = as_dict(report.get("metrics_plan"))
+    gates = as_dict(report.get("gates"))
+    markdown_candidate = path.with_suffix(".md")
+    markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    return compact_dict(
+        {
+            "available": True,
+            "status": report.get("status", "unknown"),
+            "reason": report.get("reason"),
+            "run_id": report.get("run_id"),
+            "created_at": report.get("created_at") or report_file_time(path),
+            "feature_manifest": {
+                "feature_set_id": feature_manifest.get("feature_set_id"),
+                "status": feature_manifest.get("status"),
+                "reason": feature_manifest.get("reason"),
+                "feature_scope": feature_manifest.get("feature_scope"),
+                "target_separated_from_features": feature_manifest.get("target_separated_from_features", False),
+            },
+            "dataset": {
+                "dataset_id": dataset.get("dataset_id"),
+                "status": dataset.get("status"),
+                "eligible_records": dataset.get("eligible_records", 0),
+                "synthetic_records": dataset.get("synthetic_records", 0),
+            },
+            "preflight": {
+                "run_id": preflight.get("run_id"),
+                "status": preflight.get("status"),
+                "runner_ready": preflight.get("runner_ready", False),
+                "metrics_measured": as_dict(preflight.get("metrics_measured")),
+            },
+            "feature_rows": {
+                "expected_row_count": feature_rows.get("expected_row_count", 0),
+                "actual_row_count": feature_rows.get("actual_row_count", 0),
+                "row_count_matches": feature_rows.get("row_count_matches", False),
+                "feature_set_mismatch_count": feature_rows.get("feature_set_mismatch_count", 0),
+                "split_counts": as_dict(feature_rows.get("split_counts")),
+                "label_counts": as_dict(feature_rows.get("label_counts")),
+                "source_status_counts": as_dict(feature_rows.get("source_status_counts")),
+                "feature_group_counts": as_dict(feature_rows.get("feature_group_counts")),
+                "synthetic_rows": feature_rows.get("synthetic_rows", 0),
+                "synthetic_allowed_for_dry_run": feature_rows.get("synthetic_allowed_for_dry_run", False),
+            },
+            "checks": {
+                "feature_manifest_ready": checks.get("feature_manifest_ready", False),
+                "feature_rows_readable": checks.get("feature_rows_readable", False),
+                "row_count_matches": checks.get("row_count_matches", False),
+                "required_row_fields": checks.get("required_row_fields"),
+                "missing_row_fields": as_dict(checks.get("missing_row_fields")),
+                "target_leakage_guard": checks.get("target_leakage_guard"),
+                "target_leakage_violations": as_dict(checks.get("target_leakage_violations")),
+                "synthetic_row_policy": checks.get("synthetic_row_policy"),
+                "manifest_feature_export_gate": checks.get("manifest_feature_export_gate"),
+            },
+            "runner": {
+                "integration": runner.get("integration"),
+                "ready_for_real_runner": runner.get("ready_for_real_runner", False),
+                "dry_run_only": runner.get("dry_run_only", False),
+                "next_step": runner.get("next_step"),
+            },
+            "metrics_plan": {
+                "measured": as_dict(metrics_plan.get("measured")),
+                "dry_run_summary": as_dict(metrics_plan.get("dry_run_summary")),
+            },
+            "gates": {
+                "runner_input": gates.get("runner_input"),
+                "model_training": gates.get("model_training"),
+                "model_evaluation": gates.get("model_evaluation"),
+                "model_artifact": gates.get("model_artifact"),
+                "training_server": gates.get("training_server"),
+                "device_deployment": gates.get("device_deployment"),
+            },
+            "next_step": report.get("next_step") or runner.get("next_step"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -4575,6 +4696,10 @@ def render_dashboard() -> str:
           <div id="trainingFeatureManifest"></div>
         </section>
         <section>
+          <h2>Training Runner Dry-Run</h2>
+          <div id="trainingRunnerDryRun"></div>
+        </section>
+        <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
         </section>
@@ -4635,6 +4760,7 @@ def render_dashboard() -> str:
       trainingExperiment.innerHTML = html;
       trainingRunPreflight.innerHTML = html;
       trainingFeatureManifest.innerHTML = html;
+      trainingRunnerDryRun.innerHTML = html;
       d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
@@ -4899,6 +5025,38 @@ def render_dashboard() -> str:
         <div class="metric"><span>Gates</span><span>feature ${escapeHtml(gates.feature_export || 'unknown')} / training ${escapeHtml(gates.model_training || 'not_run')} / artifact ${escapeHtml(gates.model_artifact || 'not_produced')} / server ${escapeHtml(gates.training_server || 'not_integrated')}</span></div>
         <div class="metric"><span>Next Step</span><span>${escapeHtml(manifest.next_step || 'Connect a runner task')}</span></div>
         <div class="metric"><span>Report</span><span>${escapeHtml(manifest.markdown_path || manifest.report_path || 'unknown')}</span></div>
+      `;
+    }
+    function trainingRunnerDryRunPanel(dryRun) {
+      if (!dryRun || !dryRun.available) {
+        return `
+          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(dryRun && dryRun.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(dryRun && dryRun.reason || 'no_training_runner_dry_run')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(dryRun && dryRun.next_step || 'Run the training runner dry-run')}</span></div>
+        `;
+      }
+      const manifest = dryRun.feature_manifest || {};
+      const rows = dryRun.feature_rows || {};
+      const checks = dryRun.checks || {};
+      const runner = dryRun.runner || {};
+      const gates = dryRun.gates || {};
+      const measured = (dryRun.metrics_plan || {}).measured || {};
+      return `
+        <div class="metric"><span>Status</span><span class="${statusClass(dryRun.status)}">${escapeHtml(dryRun.status || 'unknown')}</span></div>
+        <div class="metric"><span>Dry-Run</span><b>${escapeHtml(dryRun.run_id || 'unknown')}</b></div>
+        <div class="metric"><span>Reason</span><span>${escapeHtml(dryRun.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Feature Set</span><span>${escapeHtml(manifest.feature_set_id || 'unknown')} / ${escapeHtml(manifest.status || 'unknown')}</span></div>
+        <div class="metric"><span>Rows</span><span>${escapeHtml(rows.actual_row_count ?? 0)} actual / ${escapeHtml(rows.expected_row_count ?? 0)} expected / match ${escapeHtml(rows.row_count_matches ?? false)}</span></div>
+        <div class="metric"><span>Splits</span><span>${escapeHtml(JSON.stringify(rows.split_counts || {}))}</span></div>
+        <div class="metric"><span>Labels</span><span>${escapeHtml(JSON.stringify(rows.label_counts || {}))}</span></div>
+        <div class="metric"><span>Synthetic Policy</span><span>${escapeHtml(checks.synthetic_row_policy || 'unknown')} / rows ${escapeHtml(rows.synthetic_rows ?? 0)} / allowed ${escapeHtml(rows.synthetic_allowed_for_dry_run ?? false)}</span></div>
+        <div class="metric"><span>Target Guard</span><span>${escapeHtml(checks.target_leakage_guard || 'unknown')} / violations ${escapeHtml(JSON.stringify(checks.target_leakage_violations || {}))}</span></div>
+        <div class="metric"><span>Required Rows</span><span>${escapeHtml(checks.required_row_fields || 'unknown')} / missing ${escapeHtml(JSON.stringify(checks.missing_row_fields || {}))}</span></div>
+        <div class="metric"><span>Runner Input</span><span>${escapeHtml(gates.runner_input || 'unknown')} / dry-run ${escapeHtml(runner.dry_run_only ?? false)} / real ${escapeHtml(runner.ready_for_real_runner ?? false)}</span></div>
+        <div class="metric"><span>Measured Metrics</span><span>classification ${escapeHtml(measured.classification || 'not_run')} / operations ${escapeHtml(measured.operations || 'not_run')} / power ${escapeHtml(measured.power || 'not_run')}</span></div>
+        <div class="metric"><span>Gates</span><span>training ${escapeHtml(gates.model_training || 'not_run')} / artifact ${escapeHtml(gates.model_artifact || 'not_produced')} / server ${escapeHtml(gates.training_server || 'not_integrated')}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(dryRun.next_step || runner.next_step || 'Connect a real runner')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(dryRun.markdown_path || dryRun.report_path || 'unknown')}</span></div>
       `;
     }
     function fieldResultsPanel(results) {
@@ -5183,6 +5341,7 @@ def render_dashboard() -> str:
       trainingExperiment.innerHTML = trainingExperimentPanel(data.training_experiment || {});
       trainingRunPreflight.innerHTML = trainingRunPreflightPanel(data.training_run_preflight || {});
       trainingFeatureManifest.innerHTML = trainingFeatureManifestPanel(data.training_feature_manifest || {});
+      trainingRunnerDryRun.innerHTML = trainingRunnerDryRunPanel(data.training_runner_dry_run || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>
