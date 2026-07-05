@@ -22,6 +22,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Data Flywheel", html)
         self.assertIn("Training Experiments", html)
         self.assertIn("Training Run Preflight", html)
+        self.assertIn("Training Feature Manifest", html)
         self.assertIn("D1 Link Through", html)
         self.assertIn("dashboard-shell", html)
         self.assertIn("Field live view", html)
@@ -32,6 +33,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("dataFlywheel", html)
         self.assertIn("trainingExperiment", html)
         self.assertIn("trainingRunPreflight", html)
+        self.assertIn("trainingFeatureManifest", html)
         self.assertIn("d1Link", html)
         self.assertIn("d1_link", html)
         self.assertIn("field_results", html)
@@ -41,8 +43,13 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("trainingExperimentPanel", html)
         self.assertIn("training_run_preflight", html)
         self.assertIn("trainingRunPreflightPanel", html)
+        self.assertIn("training_feature_manifest", html)
+        self.assertIn("trainingFeatureManifestPanel", html)
         self.assertIn("Runner Handoff", html)
         self.assertIn("Runner Ready", html)
+        self.assertIn("Feature Rows", html)
+        self.assertIn("Target Boundary", html)
+        self.assertIn("Source Match", html)
         self.assertIn("Synthetic Gate", html)
         self.assertIn("Measured Metrics", html)
         self.assertIn("Classification Metrics", html)
@@ -677,6 +684,121 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(summary["status"], "not_available")
         self.assertEqual(summary["reason"], "no_training_run_preflight")
 
+    def test_latest_training_feature_manifest_summary_is_bounded_for_dashboard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report_dir = root / "unit-features"
+            report_dir.mkdir(parents=True)
+            (report_dir / "training_feature_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.training_feature_manifest.v0.1",
+                        "builder_version": "train-004.0",
+                        "feature_set_id": "unit-features",
+                        "generated_at": "2026-07-05T12:00:00+00:00",
+                        "status": "ready_for_synthetic_feature_dry_run",
+                        "reason": "bounded_synthetic_feature_rows_ready_for_runner_dry_run",
+                        "source_refs": {
+                            "dataset_manifest_ref": "training_dataset_manifest.json",
+                            "private_dataset_manifest_path": "C:/private/training_dataset_manifest.json",
+                        },
+                        "dataset": {
+                            "dataset_id": "unit-dataset",
+                            "status": "ready_for_training_handoff",
+                            "reason": "reviewed_candidates_available",
+                            "records_total": 1,
+                            "eligible_records": 1,
+                            "reviewed_training_candidate_records": 1,
+                            "split_counts": {"train": 1},
+                            "label_counts": {"needs_help": 1},
+                            "source_status_counts": {"synthetic_generated": 1},
+                            "synthetic_records": 1,
+                            "synthetic_allowed_for_dry_run": True,
+                            "recording_path": "C:/private/raw/session",
+                        },
+                        "preflight": {
+                            "run_id": "unit-preflight",
+                            "status": "ready_for_training_runner",
+                            "reason": "bounded_dataset_and_experiment_handoff_ready",
+                            "dataset_id": "unit-dataset",
+                            "runner_ready": True,
+                            "metrics_measured": {
+                                "classification": "not_run",
+                                "operations": "not_run",
+                                "power": "not_run",
+                            },
+                            "training_server_endpoint": "https://private.example.invalid",
+                        },
+                        "feature_rows": {
+                            "row_schema_version": "egolink.training_feature_row.v0.1",
+                            "row_count": 1,
+                            "rows_ref": "training_feature_rows.jsonl",
+                            "feature_groups": ["imu_motion"],
+                            "feature_scope": "manifest_summary_features",
+                            "target_separated_from_features": True,
+                            "row_sample": [{"raw_payload": "secret"}],
+                        },
+                        "checks": {
+                            "dataset_ready": True,
+                            "preflight_ready": True,
+                            "source_match": True,
+                            "has_records": True,
+                            "required_record_fields": "pass",
+                            "missing_record_fields": {},
+                            "synthetic_record_policy": "acknowledged",
+                            "label_leakage_guard": "target_separated_from_features",
+                        },
+                        "gates": {
+                            "feature_export": "pass",
+                            "training_runner": "not_integrated",
+                            "model_training": "not_run",
+                            "model_evaluation": "not_run",
+                            "model_artifact": "not_produced",
+                            "training_server": "not_integrated",
+                            "device_deployment": "not_started",
+                        },
+                        "paths": {
+                            "training_feature_manifest_json": "training_feature_manifest.json",
+                            "training_feature_rows_jsonl": "C:/private/training_feature_rows.jsonl",
+                        },
+                        "next_step": "Dry-run only.",
+                        "non_claims": ["No model training has run."],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (report_dir / "training_feature_manifest.md").write_text("# Feature Manifest\n", encoding="utf-8")
+
+            summary = message_hub.load_latest_training_feature_manifest(root)
+
+        self.assertTrue(summary["available"])
+        self.assertEqual(summary["status"], "ready_for_synthetic_feature_dry_run")
+        self.assertEqual(summary["feature_set_id"], "unit-features")
+        self.assertEqual(summary["dataset"]["eligible_records"], 1)
+        self.assertEqual(summary["preflight"]["run_id"], "unit-preflight")
+        self.assertTrue(summary["preflight"]["runner_ready"])
+        self.assertEqual(summary["feature_rows"]["row_count"], 1)
+        self.assertEqual(summary["feature_rows"]["feature_scope"], "manifest_summary_features")
+        self.assertTrue(summary["feature_rows"]["target_separated_from_features"])
+        self.assertEqual(summary["checks"]["label_leakage_guard"], "target_separated_from_features")
+        self.assertEqual(summary["gates"]["model_artifact"], "not_produced")
+        payload = json.dumps(summary)
+        self.assertNotIn("recording_path", payload)
+        self.assertNotIn("private_dataset_manifest_path", payload)
+        self.assertNotIn("row_sample", payload)
+        self.assertNotIn("raw_payload", payload)
+        self.assertNotIn("C:/private", payload)
+        self.assertNotIn("private.example.invalid", payload)
+
+    def test_training_feature_manifest_missing_returns_explainable_not_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = message_hub.load_latest_training_feature_manifest(Path(tmp))
+
+        self.assertFalse(summary["available"])
+        self.assertEqual(summary["status"], "not_available")
+        self.assertEqual(summary["reason"], "no_training_feature_manifest")
+
     def test_deploy_script_can_include_curated_field_report_summaries(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         script = (repo_root / "scripts" / "deploy_message_hub_vps.ps1").read_text(encoding="utf-8")
@@ -685,10 +807,12 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("IncludeDataFlywheelSummaries", script)
         self.assertIn("IncludeTrainingExperimentSummaries", script)
         self.assertIn("IncludeTrainingRunSummaries", script)
+        self.assertIn("IncludeTrainingFeatureSummaries", script)
         self.assertIn("Copy-FieldReportSummaries", script)
         self.assertIn("Copy-DataFlywheelSummaries", script)
         self.assertIn("Copy-TrainingExperimentSummaries", script)
         self.assertIn("Copy-TrainingRunSummaries", script)
+        self.assertIn("Copy-TrainingFeatureSummaries", script)
         self.assertIn("d1_web_api_report.json", script)
         self.assertIn("d1_field_companion_summary.json", script)
         self.assertIn("data_flywheel_status.json", script)
@@ -697,6 +821,9 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("training_experiment_plan.md", script)
         self.assertIn("training_run_preflight.json", script)
         self.assertIn("training_run_preflight.md", script)
+        self.assertIn("training_feature_manifest.json", script)
+        self.assertIn("training_feature_manifest.md", script)
+        self.assertNotIn("training_feature_rows.jsonl", script)
         self.assertIn("*.summary.json", script)
         self.assertNotIn("*.jsonl", script)
         self.assertNotIn("*.db", script)

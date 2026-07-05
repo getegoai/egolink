@@ -10,6 +10,7 @@ param(
     [switch]$IncludeDataFlywheelSummaries,
     [switch]$IncludeTrainingExperimentSummaries,
     [switch]$IncludeTrainingRunSummaries,
+    [switch]$IncludeTrainingFeatureSummaries,
     [switch]$NoStart
 )
 
@@ -161,6 +162,31 @@ function Copy-TrainingRunSummaries {
     }
 }
 
+function Copy-TrainingFeatureSummaries {
+    $trainingFeatureDir = Join-Path $repoRoot "reports\training_features"
+    if (-not (Test-Path $trainingFeatureDir -PathType Container)) {
+        return
+    }
+    $allowedNames = @(
+        "training_feature_manifest.json",
+        "training_feature_manifest.md"
+    )
+    $reportFiles = Get-ChildItem -Path $trainingFeatureDir -Recurse -File |
+        Where-Object { $allowedNames -contains $_.Name }
+
+    $repoFull = (Resolve-Path $repoRoot).Path.TrimEnd("\", "/")
+    foreach ($file in $reportFiles) {
+        $fileFull = $file.FullName
+        if (-not $fileFull.StartsWith($repoFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to copy training feature summary outside repository: $fileFull"
+        }
+        $relative = $fileFull.Substring($repoFull.Length).TrimStart("\", "/")
+        $target = Join-Path $packageRoot $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -Force -LiteralPath $file.FullName -Destination $target
+    }
+}
+
 function SshArgs {
     $args = @()
     if ($SshKey) {
@@ -205,6 +231,9 @@ try {
     }
     if ($IncludeTrainingRunSummaries) {
         Copy-TrainingRunSummaries
+    }
+    if ($IncludeTrainingFeatureSummaries) {
+        Copy-TrainingFeatureSummaries
     }
 
     Push-Location $packageRoot

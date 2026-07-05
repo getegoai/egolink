@@ -1295,6 +1295,95 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertTrue(latest["training_run_preflight"]["runner"]["ready_for_training_runner"])
         self.assertEqual(latest["training_run_preflight"]["metrics_plan"]["measured"]["classification"], "not_run")
 
+    def test_state_api_and_training_feature_route_include_latest_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report_root = tmp_path / "training_features"
+            report_dir = report_root / "unit-features"
+            report_dir.mkdir(parents=True)
+            (report_dir / "training_feature_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.training_feature_manifest.v0.1",
+                        "feature_set_id": "unit-features",
+                        "generated_at": "2026-07-05T12:00:00+00:00",
+                        "status": "ready_for_synthetic_feature_dry_run",
+                        "reason": "bounded_synthetic_feature_rows_ready_for_runner_dry_run",
+                        "dataset": {
+                            "dataset_id": "unit-dataset",
+                            "status": "ready_for_training_handoff",
+                            "records_total": 1,
+                            "eligible_records": 1,
+                            "reviewed_training_candidate_records": 1,
+                            "split_counts": {"train": 1},
+                            "label_counts": {"safe": 1},
+                            "source_status_counts": {"synthetic_generated": 1},
+                            "synthetic_records": 1,
+                            "synthetic_allowed_for_dry_run": True,
+                        },
+                        "preflight": {
+                            "run_id": "unit-preflight",
+                            "status": "ready_for_training_runner",
+                            "dataset_id": "unit-dataset",
+                            "runner_ready": True,
+                            "metrics_measured": {
+                                "classification": "not_run",
+                                "operations": "not_run",
+                                "power": "not_run",
+                            },
+                        },
+                        "feature_rows": {
+                            "row_schema_version": "egolink.training_feature_row.v0.1",
+                            "row_count": 1,
+                            "rows_ref": "training_feature_rows.jsonl",
+                            "feature_groups": ["imu_motion"],
+                            "feature_scope": "manifest_summary_features",
+                            "target_separated_from_features": True,
+                        },
+                        "checks": {
+                            "dataset_ready": True,
+                            "preflight_ready": True,
+                            "source_match": True,
+                            "has_records": True,
+                            "required_record_fields": "pass",
+                            "synthetic_record_policy": "acknowledged",
+                            "label_leakage_guard": "target_separated_from_features",
+                        },
+                        "gates": {
+                            "feature_export": "pass",
+                            "model_training": "not_run",
+                            "model_artifact": "not_produced",
+                            "training_server": "not_integrated",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, training_feature_root=report_root),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                latest = get_json(base_url, "/api/v1/training-features/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["training_feature_manifest"]["status"], "ready_for_synthetic_feature_dry_run")
+        self.assertEqual(state["training_feature_manifest"]["feature_rows"]["row_count"], 1)
+        self.assertEqual(latest["training_feature_manifest"]["feature_set_id"], "unit-features")
+        self.assertTrue(latest["training_feature_manifest"]["preflight"]["runner_ready"])
+        self.assertEqual(latest["training_feature_manifest"]["checks"]["synthetic_record_policy"], "acknowledged")
+        self.assertEqual(latest["training_feature_manifest"]["gates"]["model_artifact"], "not_produced")
+
     def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -1460,6 +1549,7 @@ class MessageHubHttpTests(unittest.TestCase):
                     token="secret",
                     training_experiment_root=Path(tmp) / "empty_training_experiments",
                     training_run_root=Path(tmp) / "empty_training_runs",
+                    training_feature_root=Path(tmp) / "empty_training_features",
                 ),
             )
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -1482,6 +1572,8 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(state["training_experiment"]["reason"], "no_training_experiment_plan")
         self.assertIn("training_run_preflight", state)
         self.assertEqual(state["training_run_preflight"]["reason"], "no_training_run_preflight")
+        self.assertIn("training_feature_manifest", state)
+        self.assertEqual(state["training_feature_manifest"]["reason"], "no_training_feature_manifest")
 
     def test_http_raw_command_poll_and_ack_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

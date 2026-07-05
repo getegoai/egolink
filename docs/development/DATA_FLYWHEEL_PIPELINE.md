@@ -180,6 +180,14 @@ feature set only with explicit acknowledgement, keeps target labels separate
 from feature fields, and does not generate MotionNet tensors or raw IMU window
 features. It still does not train, evaluate, upload, or deploy a model.
 
+DATA-011 can expose the latest TRAIN-004 feature manifest through Web/API and
+curated deployment summaries. It is visibility only: feature-set status,
+dataset/preflight match, row count, feature scope, target-boundary guard,
+synthetic policy, required-field checks, gates, and `not_run` measured metrics
+are allowed. JSONL row contents, raw records, candidate DBs, runtime logs,
+private training endpoints, raw tensors, model artifacts, and measured model
+claims are not.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -211,6 +219,8 @@ deployment, or OTA update behavior changes in DATA-002.
    exposing raw records or private training details.
 9. Let TRAIN-004 export bounded training feature manifests only after the
    dataset and preflight gates pass.
-10. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+10. Let DATA-011 surface the latest feature manifest status in Web/API without
+   exposing JSONL row contents or private training details.
+11. Let MODEL-001 and MotionNet work consume only reviewed candidate records
    whose manifests still pass consent, privacy, retention, deletion, quality,
    and split-leakage checks.

@@ -6,6 +6,23 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-05: DATA-011 training feature manifest visibility is implemented
+locally. The Message Hub can now load the latest bounded
+`reports/training_features/**/training_feature_manifest.json`, expose it as
+`training_feature_manifest` in authenticated `/api/state`, serve
+`/api/v1/training-features/latest`, and render a Dashboard `Training Feature
+Manifest` panel with feature-set status, dataset/preflight source match,
+feature-row count/scope, target-boundary guard, synthetic policy, required
+field checks, `not_run` measured metrics, gates, next step, and report paths.
+`scripts/deploy_message_hub_vps.ps1` has a new explicit
+`-IncludeTrainingFeatureSummaries` switch that copies only
+`training_feature_manifest.json/.md`; it does not copy
+`training_feature_rows.jsonl`. Focused Web/API tests passed locally. This was
+not deployed to the VPS in this run, does not expose JSONL row contents,
+candidate DBs, raw records, runtime logs, private endpoints, raw tensors, model
+artifacts, or measured model metrics, and does not train/evaluate/deploy a
+model.
+
 2026-07-05: TRAIN-004 training feature manifest export is implemented
 locally as the next bounded bridge after TRAIN-003 and before any real training
 runner/server integration. The new
