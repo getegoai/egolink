@@ -167,6 +167,12 @@ dry-runs, verify required bounded record fields, and record split/label/source
 counts. It still does not train, evaluate, upload, or deploy a model, does not
 integrate a private training server, and does not write measured metrics.
 
+DATA-010 can expose the latest TRAIN-003 preflight through Web/API and curated
+deployment summaries. It is visibility only: status, checks, gates, split/label
+counts, synthetic acknowledgement, and `not_run` measured-metric placeholders
+are allowed; private training endpoints, raw records, candidate DBs, runtime
+logs, model artifacts, and measured model claims are not.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -194,6 +200,8 @@ deployment, or OTA update behavior changes in DATA-002.
    dataset manifests until a real training runner task exists.
 7. Let TRAIN-003 keep checking runner preflight readiness without producing
    model artifacts or measured metrics.
-8. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+8. Let DATA-010 surface the latest runner preflight status in Web/API without
+   exposing raw records or private training details.
+9. Let MODEL-001 and MotionNet work consume only reviewed candidate records
    whose manifests still pass consent, privacy, retention, deletion, quality,
    and split-leakage checks.

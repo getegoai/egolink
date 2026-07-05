@@ -48,10 +48,13 @@ must consume only reviewed evidence:
 13. TRAIN-003 runs a bounded training-run preflight from the TRAIN-002 plan and
     TRAIN-001 manifest, producing a runner handoff check without training,
     evaluating, uploading, or deploying a model.
-14. MotionNet v0.1 starts with a statistical baseline and small model
+14. DATA-010 surfaces the latest bounded TRAIN-003 preflight in Web/API and
+    curated deploy summaries, keeping runner status visible without exposing
+    private endpoints, raw records, or model artifacts.
+15. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-15. Device deployment begins in shadow mode: model output is recorded alongside
+16. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -72,6 +75,7 @@ must consume only reviewed evidence:
 | Post-run collection | Bind D1 Web/API, power, demo, data-flywheel, dataset, and experiment artifacts into one post-field summary. | DATA-008. |
 | Synthetic dry-run | Exercise the data flywheel without hardware while keeping synthetic records out of release claims. | DATA-009. |
 | Runner preflight | Check experiment/dataset handoff readiness before a real training runner exists. | TRAIN-003. |
+| Runner visibility | Surface latest runner preflight readiness in Web/API and curated deploy summaries. | DATA-010. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -114,6 +118,10 @@ must consume only reviewed evidence:
 - TRAIN-003 preflight reports may verify runner handoff readiness and synthetic
   dry-run acknowledgement, but measured metrics remain `not_run` until a real
   training/evaluation runner writes reviewed evidence.
+- DATA-010 Web/API summaries may show TRAIN-003 status, checks, gates, and
+  `not_run` measured-metric placeholders only; they do not expose raw records,
+  candidate DB paths, runtime JSONL logs, private training-server endpoints, or
+  model artifacts.
 
 ## Model And Power Gates
 

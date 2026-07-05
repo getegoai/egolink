@@ -27,7 +27,7 @@ Near-term engineering gates (R2.x/R3.x) remain in
 | 5 | **On-device AI companion (core differentiator)**: motion anomaly candidate detection on the wearable (MotionNet), real-time confirmation/interaction loop (display/touch/audio), proactive check-in behavior; degrades gracefully without LTE | M0 contracts + RuleRouter baseline, DEMO-001 AMOLED/IMU confirmation loop, IMU capture chain (TIMU-009 series) | M1 data foundation (M1-002/005/006), formal IMU acceptance, MotionNet v0.1, model footprint assessment, interaction loop hardening, mic decision |
 | 6 | Cloud AI services over LTE: heavier reasoning, language-level companion functions, fleet learning | VPS Message Hub in production, raw-frame ingest (SERVER-002) | Companion service design (V1-M3), model registry/update path |
 | 7 | Explainable location confidence shown to guardians ("why we believe TA is here") | EALE-P0 confidence buckets + evidence refs | Human-readable rendering (WEB-003) |
-| 8 | Data flywheel: consent + privacy classes, session ingest, confirmation-derived labels, retrain-and-ship loop (server update + device OTA) | M0 contracts, DATA-001 export, DATA-002 pipeline spec, DATA-003 candidate store, DATA-004 control-plane visibility, DATA-005 review queue, TRAIN-001 handoff manifest, DATA-006 post-run pipeline runner, TRAIN-002 experiment registry, DATA-007 experiment visibility, DATA-009 synthetic dry-run, TRAIN-003 runner preflight | M1 recorder/labeling/collection implementation, training runner integration, model registry, OTA model path |
+| 8 | Data flywheel: consent + privacy classes, session ingest, confirmation-derived labels, retrain-and-ship loop (server update + device OTA) | M0 contracts, DATA-001 export, DATA-002 pipeline spec, DATA-003 candidate store, DATA-004 control-plane visibility, DATA-005 review queue, TRAIN-001 handoff manifest, DATA-006 post-run pipeline runner, TRAIN-002 experiment registry, DATA-007 experiment visibility, DATA-009 synthetic dry-run, TRAIN-003 runner preflight, DATA-010 runner-preflight visibility | M1 recorder/labeling/collection implementation, training runner integration, model registry, OTA model path |
 
 ## 2. V1 Non-Goals
 
@@ -137,6 +137,7 @@ re-run and on-device model acceptance re-run on EVT hardware.
 | 2 | DATA-007 training experiment dashboard visibility | V1-M3 | done (2026-07-05) |
 | 2 | DATA-009 synthetic scenario generator | V1-M3 | done (2026-07-05) |
 | 2 | TRAIN-003 training-run preflight | V1-M3 | done (2026-07-05) |
+| 2 | DATA-010 training-run preflight visibility | V1-M3 | done (2026-07-05) |
 | 2 | WEB-003 guardian dashboard MVP (live location/track/SOS) | V1-M2 | planned |
 | 3 | M1-005 labeling loop, M1-006 collection protocol runs | V1-M3 | planned |
 | 3 | MotionNet v0.1 training + on-device PoC | V1-M3 | planned |

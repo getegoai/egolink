@@ -6,6 +6,21 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-05: DATA-010 training-run preflight visibility is implemented locally.
+The Message Hub can now load the latest bounded
+`reports/training_runs/**/training_run_preflight.json`, expose it as
+`training_run_preflight` in authenticated `/api/state`, serve
+`/api/v1/training-runs/latest`, and render a Dashboard `Training Run Preflight`
+panel with experiment/dataset readiness, synthetic gate, required-field
+checks, runner readiness, `not_run` measured metrics, gates, next step, and
+report paths. `scripts/deploy_message_hub_vps.ps1` has a new explicit
+`-IncludeTrainingRunSummaries` switch that copies only
+`training_run_preflight.json/.md`. Focused Web/API tests passed locally. This
+was not deployed to the VPS in this run, does not train/evaluate a model,
+integrate a GPU runner or training server, expose private endpoints/raw
+records/candidate DBs/runtime logs/model artifacts, deploy on-device inference,
+or claim model metrics, latency, footprint, or power impact.
+
 2026-07-05: TRAIN-003 training-run preflight is implemented locally as the
 bounded bridge after TRAIN-002 and before any real training runner/server
 integration. The new `scripts/run_training_experiment_preflight.py` command

@@ -36,6 +36,7 @@ DEFAULT_PRODUCT_DEMO_REPORTS = REPO_ROOT / "reports" / "product_demo"
 DEFAULT_FIELD_RESULT_REPORTS = REPO_ROOT / "reports"
 DEFAULT_DATA_FLYWHEEL_REPORTS = REPO_ROOT / "reports" / "data_flywheel"
 DEFAULT_TRAINING_EXPERIMENT_REPORTS = REPO_ROOT / "reports" / "training_experiments"
+DEFAULT_TRAINING_RUN_REPORTS = REPO_ROOT / "reports" / "training_runs"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -858,6 +859,7 @@ def make_handler(
     field_results_root: Path = DEFAULT_FIELD_RESULT_REPORTS,
     data_flywheel_root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS,
     training_experiment_root: Path = DEFAULT_TRAINING_EXPERIMENT_REPORTS,
+    training_run_root: Path = DEFAULT_TRAINING_RUN_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -902,6 +904,7 @@ def make_handler(
                 field_results = load_latest_field_results(field_results_root)
                 data_flywheel = load_latest_data_flywheel_status(data_flywheel_root)
                 training_experiment = load_latest_training_experiment_plan(training_experiment_root)
+                training_run_preflight = load_latest_training_run_preflight(training_run_root)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -912,6 +915,7 @@ def make_handler(
                         "field_results": field_results,
                         "data_flywheel": data_flywheel,
                         "training_experiment": training_experiment,
+                        "training_run_preflight": training_run_preflight,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -982,6 +986,9 @@ def make_handler(
                 self.respond_json(
                     {"training_experiment": load_latest_training_experiment_plan(training_experiment_root)}
                 )
+                return
+            if segments == ["api", "v1", "training-runs", "latest"]:
+                self.respond_json({"training_run_preflight": load_latest_training_run_preflight(training_run_root)})
                 return
             raise MessageHubError("not_found", "route not found", status=404)
 
@@ -3420,6 +3427,120 @@ def load_latest_training_experiment_plan(root: Path = DEFAULT_TRAINING_EXPERIMEN
     )
 
 
+def training_run_preflight_unavailable(reason: str = "no_training_run_preflight") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "experiment": {},
+        "dataset": {},
+        "runner": {"ready_for_training_runner": False},
+        "checks": {},
+        "metrics_plan": {"measured": {}},
+        "gates": {"preflight_ready": False},
+        "blockers": [reason],
+        "next_step": "Run scripts/run_training_experiment_preflight.py after TRAIN-002 is runner-ready.",
+    }
+
+
+def latest_training_run_preflight_path(root: Path = DEFAULT_TRAINING_RUN_REPORTS) -> Path | None:
+    return latest_report_path(root, ["**/training_run_preflight.json"])
+
+
+def load_latest_training_run_preflight(root: Path = DEFAULT_TRAINING_RUN_REPORTS) -> dict[str, Any]:
+    path = latest_training_run_preflight_path(root)
+    if path is None:
+        return training_run_preflight_unavailable()
+    report = load_json_report(path)
+    if report is None:
+        return training_run_preflight_unavailable("training_run_preflight_unreadable")
+    experiment = as_dict(report.get("experiment"))
+    dataset = as_dict(report.get("dataset"))
+    runner = as_dict(report.get("runner"))
+    checks = as_dict(report.get("checks"))
+    metrics_plan = as_dict(report.get("metrics_plan"))
+    gates = as_dict(report.get("gates"))
+    markdown_candidate = path.with_suffix(".md")
+    markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    raw_record_sample = dataset.get("record_sample") if isinstance(dataset.get("record_sample"), list) else []
+    record_sample = [
+        {
+            "record_id": record.get("record_id"),
+            "session_id": record.get("session_id"),
+            "candidate_type": record.get("candidate_type"),
+            "label": record.get("label"),
+            "split_name": record.get("split_name"),
+            "source_status": record.get("source_status"),
+            "source_manifest_hash": record.get("source_manifest_hash"),
+        }
+        for record in raw_record_sample[:5]
+        if isinstance(record, dict)
+    ]
+    return compact_dict(
+        {
+            "available": True,
+            "status": report.get("status", "unknown"),
+            "reason": report.get("reason"),
+            "run_id": report.get("run_id"),
+            "created_at": report.get("created_at") or report_file_time(path),
+            "experiment": {
+                "experiment_id": experiment.get("experiment_id"),
+                "status": experiment.get("status"),
+                "reason": experiment.get("reason"),
+                "model_track": as_dict(experiment.get("model_track")),
+            },
+            "dataset": {
+                "dataset_id": dataset.get("dataset_id"),
+                "status": dataset.get("status"),
+                "reason": dataset.get("reason"),
+                "records_total": dataset.get("records_total", 0),
+                "eligible_records": dataset.get("eligible_records", 0),
+                "reviewed_training_candidate_records": dataset.get("reviewed_training_candidate_records", 0),
+                "experiment_records_total": dataset.get("experiment_records_total", 0),
+                "split_counts": as_dict(dataset.get("split_counts")),
+                "label_counts": as_dict(dataset.get("label_counts")),
+                "source_status_counts": as_dict(dataset.get("source_status_counts")),
+                "synthetic_records": dataset.get("synthetic_records", 0),
+                "synthetic_allowed_for_dry_run": dataset.get("synthetic_allowed_for_dry_run", False),
+                "record_sample": record_sample,
+            },
+            "checks": {
+                "experiment_ready": checks.get("experiment_ready", False),
+                "dataset_ready": checks.get("dataset_ready", False),
+                "has_eligible_records": checks.get("has_eligible_records", False),
+                "required_record_fields": checks.get("required_record_fields"),
+                "missing_record_fields": as_dict(checks.get("missing_record_fields")),
+                "split_counts": as_dict(checks.get("split_counts")),
+                "synthetic_record_policy": checks.get("synthetic_record_policy"),
+            },
+            "runner": {
+                "integration": runner.get("integration"),
+                "ready_for_training_runner": runner.get("ready_for_training_runner", False),
+                "next_step": runner.get("next_step"),
+            },
+            "metrics_plan": {
+                "planned": as_dict(metrics_plan.get("planned")),
+                "measured": as_dict(metrics_plan.get("measured")),
+            },
+            "gates": {
+                "preflight_ready": gates.get("preflight_ready", False),
+                "dataset_gate": gates.get("dataset_gate"),
+                "experiment_gate": gates.get("experiment_gate"),
+                "synthetic_gate": gates.get("synthetic_gate"),
+                "model_training": gates.get("model_training"),
+                "model_evaluation": gates.get("model_evaluation"),
+                "model_artifact": gates.get("model_artifact"),
+                "training_server": gates.get("training_server"),
+                "device_deployment": gates.get("device_deployment"),
+            },
+            "next_step": report.get("next_step") or runner.get("next_step"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -4337,6 +4458,10 @@ def render_dashboard() -> str:
           <div id="trainingExperiment"></div>
         </section>
         <section>
+          <h2>Training Run Preflight</h2>
+          <div id="trainingRunPreflight"></div>
+        </section>
+        <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
         </section>
@@ -4394,6 +4519,7 @@ def render_dashboard() -> str:
       productDemo.innerHTML = html;
       fieldResults.innerHTML = html;
       dataFlywheel.innerHTML = html;
+      trainingRunPreflight.innerHTML = html;
       d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
@@ -4474,8 +4600,8 @@ def render_dashboard() -> str:
       `;
     }
     function statusClass(status) {
-      if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner') return 'ok';
-      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records') return 'warn';
+      if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner') return 'ok';
+      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records') return 'warn';
       return status === 'not_available' ? 'empty' : 'bad';
     }
     function productDemoPanel(demo) {
@@ -4590,6 +4716,42 @@ def render_dashboard() -> str:
         <div class="metric"><span>Gates</span><span>dataset ${escapeHtml(gates.dataset_ready ?? false)} / baseline ${escapeHtml(gates.baseline_comparison || 'unknown')} / footprint ${escapeHtml(gates.footprint || 'unknown')} / power ${escapeHtml(gates.power || 'unknown')}</span></div>
         <div class="metric"><span>Next Step</span><span>${escapeHtml(experiment.next_step || runner.next_command || 'Integrate a runner task')}</span></div>
         <div class="metric"><span>Report</span><span>${escapeHtml(experiment.markdown_path || experiment.report_path || 'unknown')}</span></div>
+        ${samples}
+      `;
+    }
+    function trainingRunPreflightPanel(preflight) {
+      if (!preflight || !preflight.available) {
+        return `
+          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(preflight && preflight.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(preflight && preflight.reason || 'no_training_run_preflight')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(preflight && preflight.next_step || 'Run the training-run preflight')}</span></div>
+        `;
+      }
+      const dataset = preflight.dataset || {};
+      const experiment = preflight.experiment || {};
+      const model = experiment.model_track || {};
+      const runner = preflight.runner || {};
+      const checks = preflight.checks || {};
+      const measured = (preflight.metrics_plan || {}).measured || {};
+      const gates = preflight.gates || {};
+      const samples = (dataset.record_sample || []).slice(0, 5).map(record => `
+        <div class="metric"><span>${escapeHtml(record.record_id || 'record')}</span><span>${escapeHtml(record.label || 'unknown')} / split ${escapeHtml(record.split_name || 'unknown')} / ${escapeHtml(record.source_status || 'unknown')}</span></div>
+      `).join('') || '<div class="metric"><span>Record Sample</span><span class="empty">none</span></div>';
+      return `
+        <div class="metric"><span>Status</span><span class="${statusClass(preflight.status)}">${escapeHtml(preflight.status || 'unknown')}</span></div>
+        <div class="metric"><span>Preflight</span><b>${escapeHtml(preflight.run_id || 'unknown')}</b></div>
+        <div class="metric"><span>Reason</span><span>${escapeHtml(preflight.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Experiment</span><span>${escapeHtml(experiment.experiment_id || 'unknown')} / ${escapeHtml(experiment.status || 'unknown')}</span></div>
+        <div class="metric"><span>Dataset</span><span>${escapeHtml(dataset.dataset_id || 'unknown')} / ${escapeHtml(dataset.status || 'unknown')}</span></div>
+        <div class="metric"><span>Eligible Records</span><span>${escapeHtml(dataset.eligible_records ?? 0)} eligible / ${escapeHtml(dataset.records_total ?? 0)} total / experiment ${escapeHtml(dataset.experiment_records_total ?? 0)}</span></div>
+        <div class="metric"><span>Model Track</span><span>${escapeHtml(model.track || 'unknown')} / ${escapeHtml(model.candidate_model || 'unknown')}</span></div>
+        <div class="metric"><span>Synthetic Gate</span><span>${escapeHtml(gates.synthetic_gate || checks.synthetic_record_policy || 'unknown')} / records ${escapeHtml(dataset.synthetic_records ?? 0)} / allowed ${escapeHtml(dataset.synthetic_allowed_for_dry_run ?? false)}</span></div>
+        <div class="metric"><span>Required Fields</span><span>${escapeHtml(checks.required_record_fields || 'unknown')} / missing ${escapeHtml(JSON.stringify(checks.missing_record_fields || {}))}</span></div>
+        <div class="metric"><span>Runner Ready</span><span>${escapeHtml(runner.ready_for_training_runner ?? false)} / ${escapeHtml(runner.integration || 'unknown')}</span></div>
+        <div class="metric"><span>Measured Metrics</span><span>classification ${escapeHtml(measured.classification || 'not_run')} / operations ${escapeHtml(measured.operations || 'not_run')} / power ${escapeHtml(measured.power || 'not_run')}</span></div>
+        <div class="metric"><span>Gates</span><span>preflight ${escapeHtml(gates.preflight_ready ?? false)} / training ${escapeHtml(gates.model_training || 'not_run')} / artifact ${escapeHtml(gates.model_artifact || 'not_produced')} / server ${escapeHtml(gates.training_server || 'not_integrated')}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(preflight.next_step || runner.next_step || 'Connect a runner task')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(preflight.markdown_path || preflight.report_path || 'unknown')}</span></div>
         ${samples}
       `;
     }
@@ -4873,6 +5035,7 @@ def render_dashboard() -> str:
       fieldResults.innerHTML = fieldResultsPanel(data.field_results || {});
       dataFlywheel.innerHTML = dataFlywheelPanel(data.data_flywheel || {});
       trainingExperiment.innerHTML = trainingExperimentPanel(data.training_experiment || {});
+      trainingRunPreflight.innerHTML = trainingRunPreflightPanel(data.training_run_preflight || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>

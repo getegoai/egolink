@@ -226,6 +226,9 @@ Current AI/data boundary:
 - done: TRAIN-003 training-run preflight can check a TRAIN-002 plan plus
   TRAIN-001 manifest before real runner integration while keeping measured
   metrics at `not_run`;
+- done: DATA-010 Dashboard/API visibility can surface the latest bounded
+  TRAIN-003 preflight and curated deploy summaries without exposing raw
+  records, private training endpoints, or model artifacts;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -234,9 +237,9 @@ remains the operational evidence store, while curated data-flywheel summaries
 show candidate counts, review queues, split-leakage blockers, and model-training
 readiness without exposing raw candidate records. DATA-006/TRAIN-002 now turn
 reviewed candidates into dataset manifests and bounded training-experiment
-plans, DATA-009 can dry-run the path with explicit synthetic-only records, and
-TRAIN-003 can preflight the runner handoff before any model is evaluated or
-shipped.
+plans, DATA-009 can dry-run the path with explicit synthetic-only records,
+TRAIN-003 can preflight the runner handoff, and DATA-010 makes that preflight
+visible before any model is evaluated or shipped.
 
 ## R0: VPS + PC Simulator Simulated Loop
 

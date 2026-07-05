@@ -1200,6 +1200,101 @@ class MessageHubHttpTests(unittest.TestCase):
             "planned_not_measured",
         )
 
+    def test_state_api_and_training_run_route_include_latest_preflight(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report_root = tmp_path / "training_runs"
+            report_dir = report_root / "unit-preflight"
+            report_dir.mkdir(parents=True)
+            (report_dir / "training_run_preflight.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.training_run_preflight.v0.1",
+                        "run_id": "unit-preflight",
+                        "created_at": "2026-07-05T11:30:00+00:00",
+                        "status": "ready_for_training_runner",
+                        "reason": "bounded_dataset_and_experiment_handoff_ready",
+                        "experiment": {
+                            "experiment_id": "unit-experiment",
+                            "status": "ready_for_runner",
+                            "model_track": {"track": "motionnet"},
+                        },
+                        "dataset": {
+                            "dataset_id": "unit-dataset",
+                            "status": "ready_for_training_handoff",
+                            "records_total": 1,
+                            "eligible_records": 1,
+                            "reviewed_training_candidate_records": 1,
+                            "experiment_records_total": 1,
+                            "split_counts": {"train": 1},
+                            "label_counts": {"safe": 1},
+                            "source_status_counts": {"synthetic_generated": 1},
+                            "synthetic_records": 1,
+                            "synthetic_allowed_for_dry_run": True,
+                            "record_sample": [
+                                {
+                                    "record_id": "cand-unit",
+                                    "session_id": "session-unit",
+                                    "label": "safe",
+                                    "split_name": "train",
+                                    "source_status": "synthetic_generated",
+                                    "source_manifest_hash": "abc123",
+                                }
+                            ],
+                        },
+                        "checks": {
+                            "experiment_ready": True,
+                            "dataset_ready": True,
+                            "has_eligible_records": True,
+                            "required_record_fields": "pass",
+                            "synthetic_record_policy": "acknowledged",
+                        },
+                        "runner": {
+                            "integration": "local_preflight_only",
+                            "ready_for_training_runner": True,
+                            "next_step": "Connect a runner.",
+                        },
+                        "metrics_plan": {
+                            "measured": {
+                                "classification": "not_run",
+                                "operations": "not_run",
+                                "power": "not_run",
+                            }
+                        },
+                        "gates": {
+                            "preflight_ready": True,
+                            "model_training": "not_run",
+                            "model_artifact": "not_produced",
+                            "training_server": "not_integrated",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, training_run_root=report_root),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                latest = get_json(base_url, "/api/v1/training-runs/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["training_run_preflight"]["status"], "ready_for_training_runner")
+        self.assertEqual(state["training_run_preflight"]["dataset"]["synthetic_records"], 1)
+        self.assertEqual(latest["training_run_preflight"]["run_id"], "unit-preflight")
+        self.assertTrue(latest["training_run_preflight"]["runner"]["ready_for_training_runner"])
+        self.assertEqual(latest["training_run_preflight"]["metrics_plan"]["measured"]["classification"], "not_run")
+
     def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -1364,6 +1459,7 @@ class MessageHubHttpTests(unittest.TestCase):
                     store,
                     token="secret",
                     training_experiment_root=Path(tmp) / "empty_training_experiments",
+                    training_run_root=Path(tmp) / "empty_training_runs",
                 ),
             )
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -1384,6 +1480,8 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(state["devices"], [])
         self.assertIn("training_experiment", state)
         self.assertEqual(state["training_experiment"]["reason"], "no_training_experiment_plan")
+        self.assertIn("training_run_preflight", state)
+        self.assertEqual(state["training_run_preflight"]["reason"], "no_training_run_preflight")
 
     def test_http_raw_command_poll_and_ack_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
