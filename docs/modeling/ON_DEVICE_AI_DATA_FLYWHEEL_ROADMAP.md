@@ -51,10 +51,13 @@ must consume only reviewed evidence:
 14. DATA-010 surfaces the latest bounded TRAIN-003 preflight in Web/API and
     curated deploy summaries, keeping runner status visible without exposing
     private endpoints, raw records, or model artifacts.
-15. MotionNet v0.1 starts with a statistical baseline and small model
+15. TRAIN-004 exports bounded training feature manifests and JSONL feature rows
+    from ready dataset/preflight inputs, keeping target labels separate from
+    manifest-summary features and still producing no model artifact.
+16. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-16. Device deployment begins in shadow mode: model output is recorded alongside
+17. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -76,6 +79,7 @@ must consume only reviewed evidence:
 | Synthetic dry-run | Exercise the data flywheel without hardware while keeping synthetic records out of release claims. | DATA-009. |
 | Runner preflight | Check experiment/dataset handoff readiness before a real training runner exists. | TRAIN-003. |
 | Runner visibility | Surface latest runner preflight readiness in Web/API and curated deploy summaries. | DATA-010. |
+| Feature manifest | Export bounded feature rows for a future runner without raw tensors or training. | TRAIN-004. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -122,6 +126,11 @@ must consume only reviewed evidence:
   `not_run` measured-metric placeholders only; they do not expose raw records,
   candidate DB paths, runtime JSONL logs, private training-server endpoints, or
   model artifacts.
+- TRAIN-004 feature manifests may export bounded manifest-summary feature rows
+  from a ready dataset/preflight pair. Target labels stay under `target`, not
+  under `features`; rows do not contain raw recordings, raw IMU windows,
+  MotionNet tensors, candidate DB paths, runtime JSONL logs, private training
+  endpoints, model artifacts, or measured model metrics.
 
 ## Model And Power Gates
 

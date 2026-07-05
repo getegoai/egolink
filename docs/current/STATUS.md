@@ -1,10 +1,28 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-04
+last_verified: 2026-07-05
 verified_by: codex
 ---
 
 ## Latest Deployment Note
+
+2026-07-05: TRAIN-004 training feature manifest export is implemented
+locally as the next bounded bridge after TRAIN-003 and before any real training
+runner/server integration. The new
+`scripts/export_training_feature_manifest.py` command reads an explicitly
+named `training_dataset_manifest.json` plus `training_run_preflight.json`,
+requires the preflight to be runner-ready, checks dataset/source matching,
+required bounded row fields, and synthetic-record policy, then writes
+`reports/training_features/<feature-set-id>/training_feature_manifest.json`,
+`training_feature_rows.jsonl`, and `training_feature_manifest.md`. Local smoke
+evidence: `reports/training_features/train004-local-smoke-20260705/` consumed
+the DATA-009 reviewed synthetic dataset and TRAIN-003 preflight with explicit
+`--allow-synthetic`, producing 4 manifest-summary feature rows with target
+labels separated from feature fields and `status=ready_for_synthetic_feature_dry_run`.
+This does not train/evaluate a model, integrate a GPU runner or training
+server, generate raw IMU tensors, produce model weights/artifacts, deploy
+on-device inference, change firmware/protocol behavior, or claim model
+accuracy, latency, footprint, or power impact.
 
 2026-07-05: DATA-010 training-run preflight visibility is implemented locally.
 The Message Hub can now load the latest bounded

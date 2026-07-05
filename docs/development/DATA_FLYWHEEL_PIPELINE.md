@@ -173,6 +173,13 @@ counts, synthetic acknowledgement, and `not_run` measured-metric placeholders
 are allowed; private training endpoints, raw records, candidate DBs, runtime
 logs, model artifacts, and measured model claims are not.
 
+TRAIN-004 is the current bridge after runner preflight: it exports bounded
+manifest-summary feature rows from an explicitly named TRAIN-001 dataset
+manifest plus TRAIN-003 preflight report. It can produce a synthetic dry-run
+feature set only with explicit acknowledgement, keeps target labels separate
+from feature fields, and does not generate MotionNet tensors or raw IMU window
+features. It still does not train, evaluate, upload, or deploy a model.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -202,6 +209,8 @@ deployment, or OTA update behavior changes in DATA-002.
    model artifacts or measured metrics.
 8. Let DATA-010 surface the latest runner preflight status in Web/API without
    exposing raw records or private training details.
-9. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+9. Let TRAIN-004 export bounded training feature manifests only after the
+   dataset and preflight gates pass.
+10. Let MODEL-001 and MotionNet work consume only reviewed candidate records
    whose manifests still pass consent, privacy, retention, deletion, quality,
    and split-leakage checks.

@@ -229,6 +229,10 @@ Current AI/data boundary:
 - done: DATA-010 Dashboard/API visibility can surface the latest bounded
   TRAIN-003 preflight and curated deploy summaries without exposing raw
   records, private training endpoints, or model artifacts;
+- done: TRAIN-004 training feature manifest export can turn a ready TRAIN-001
+  dataset plus TRAIN-003 preflight into bounded JSONL feature rows for a future
+  runner, while keeping labels separate from features and producing no raw
+  tensors, model artifacts, or measured metrics;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -238,8 +242,9 @@ show candidate counts, review queues, split-leakage blockers, and model-training
 readiness without exposing raw candidate records. DATA-006/TRAIN-002 now turn
 reviewed candidates into dataset manifests and bounded training-experiment
 plans, DATA-009 can dry-run the path with explicit synthetic-only records,
-TRAIN-003 can preflight the runner handoff, and DATA-010 makes that preflight
-visible before any model is evaluated or shipped.
+TRAIN-003 can preflight the runner handoff, DATA-010 makes that preflight
+visible, and TRAIN-004 exports the bounded feature rows a future runner should
+consume before any model is evaluated or shipped.
 
 ## R0: VPS + PC Simulator Simulated Loop
 
