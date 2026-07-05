@@ -18,6 +18,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pc_simulator import training_candidate_store
+from scripts import register_training_experiment
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -25,8 +26,9 @@ DEFAULT_DB = REPO_ROOT / "pc_simulator" / "runtime" / "training_candidates" / "t
 DEFAULT_PIPELINE_ROOT = REPO_ROOT / "reports" / "data_flywheel_pipeline"
 DEFAULT_DATA_FLYWHEEL_ROOT = REPO_ROOT / "reports" / "data_flywheel"
 DEFAULT_DATASET_ROOT = REPO_ROOT / "reports" / "training_datasets"
+DEFAULT_EXPERIMENT_ROOT = REPO_ROOT / "reports" / "training_experiments"
 PIPELINE_SCHEMA_VERSION = "egolink.data_flywheel_pipeline_run.v0.1"
-PIPELINE_BUILDER_VERSION = "data-006.0"
+PIPELINE_BUILDER_VERSION = "data-006.1"
 
 
 def utc_now() -> str:
@@ -156,6 +158,33 @@ def bounded_manifest_summary(manifest: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def bounded_training_experiment_summary(plan: Mapping[str, Any]) -> dict[str, Any]:
+    dataset = as_dict(plan.get("dataset"))
+    return {
+        "schema_version": plan.get("schema_version"),
+        "builder_version": plan.get("builder_version"),
+        "experiment_id": plan.get("experiment_id"),
+        "created_at": plan.get("created_at"),
+        "status": plan.get("status"),
+        "reason": plan.get("reason"),
+        "dataset": {
+            "dataset_id": dataset.get("dataset_id"),
+            "manifest_status": dataset.get("manifest_status"),
+            "manifest_reason": dataset.get("manifest_reason"),
+            "records_total": dataset.get("records_total"),
+            "eligible_records": dataset.get("eligible_records"),
+            "reviewed_training_candidate_records": dataset.get("reviewed_training_candidate_records"),
+            "split_counts": as_dict(dataset.get("split_counts")),
+            "record_sample": list(dataset.get("record_sample") or []),
+        },
+        "model_track": as_dict(plan.get("model_track")),
+        "runner": as_dict(plan.get("runner")),
+        "metrics_plan": as_dict(plan.get("metrics_plan")),
+        "gates": as_dict(plan.get("gates")),
+        "paths": as_dict(plan.get("paths")),
+    }
+
+
 def derive_pipeline_status(
     *,
     recordings_requested: int,
@@ -194,7 +223,7 @@ def next_pipeline_step(status: str) -> str:
     if status == "needs_review":
         return "Review pending candidates with scripts/review_training_candidates.py, then rerun this pipeline."
     if status == "ready_for_training_handoff":
-        return "Hand the training_dataset_manifest.json to the offline training runner or training-server bridge task."
+        return "Use the training_experiment_plan.json as the bounded handoff for the offline training runner task."
     if status == "ingest_failed":
         return "Fix the named recording ingest failure and rerun this pipeline."
     return "Continue the next DATA/TRAIN task from the generated status report."
@@ -203,6 +232,7 @@ def next_pipeline_step(status: str) -> str:
 def render_pipeline_markdown(payload: Mapping[str, Any]) -> str:
     data_flywheel = as_dict(payload.get("data_flywheel"))
     dataset = as_dict(payload.get("dataset_manifest"))
+    experiment = as_dict(payload.get("training_experiment"))
     counts = as_dict(data_flywheel.get("counts"))
     dataset_counts = as_dict(dataset.get("counts"))
     paths = as_dict(payload.get("paths"))
@@ -218,6 +248,7 @@ def render_pipeline_markdown(payload: Mapping[str, Any]) -> str:
         f"- Review queue: {as_dict(data_flywheel.get('review_queue')).get('pending_records', 0)}",
         f"- Dataset manifest: {dataset.get('status', 'unknown')} ({dataset.get('reason', 'unknown')})",
         f"- Eligible records: {dataset_counts.get('eligible_records', 0)}",
+        f"- Training experiment: {experiment.get('status', 'unknown')} ({experiment.get('reason', 'unknown')})",
         "",
         "## Next Step",
         "",
@@ -229,6 +260,7 @@ def render_pipeline_markdown(payload: Mapping[str, Any]) -> str:
         f"- Pipeline Markdown: {paths.get('data_flywheel_pipeline_markdown', 'unknown')}",
         f"- Data flywheel status JSON: {as_dict(data_flywheel.get('paths')).get('data_flywheel_status_json', 'unknown')}",
         f"- Dataset manifest JSON: {as_dict(dataset.get('paths')).get('training_dataset_manifest_json', 'unknown')}",
+        f"- Training experiment plan JSON: {as_dict(experiment.get('paths')).get('training_experiment_plan_json', 'unknown')}",
         "",
         "## Ingested Recordings",
         "",
@@ -301,9 +333,24 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         manifest,
         args.dataset_output_root / str(manifest["dataset_id"]),
     )
+    manifest_path = Path(str(manifest_written["paths"]["training_dataset_manifest_json"]))
+    training_experiment = register_training_experiment.build_training_experiment_plan(
+        manifest_written,
+        manifest_path=manifest_path,
+        experiment_id=args.experiment_id or f"{run_id}-experiment",
+        created_at=generated_at,
+        model_track=args.model_track,
+        candidate_model=args.candidate_model,
+        baseline_model=args.baseline_model,
+    )
+    training_experiment_written = register_training_experiment.write_training_experiment_plan(
+        training_experiment,
+        args.experiment_output_root / str(training_experiment["experiment_id"]),
+    )
 
     bounded_data_flywheel = bounded_data_flywheel_summary(data_flywheel_written)
     bounded_dataset = bounded_manifest_summary(manifest_written)
+    bounded_experiment = bounded_training_experiment_summary(training_experiment_written)
     status = derive_pipeline_status(
         recordings_requested=len(recording_dirs),
         ingest_failures=ingest_failures,
@@ -321,6 +368,7 @@ def run_pipeline(args: argparse.Namespace) -> dict[str, Any]:
         "recordings_failed": ingest_failures,
         "data_flywheel": bounded_data_flywheel,
         "dataset_manifest": bounded_dataset,
+        "training_experiment": bounded_experiment,
         "next_step": next_pipeline_step(status),
         "non_claims": [
             "No model training has run.",
@@ -347,6 +395,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-root", type=Path, default=DEFAULT_PIPELINE_ROOT)
     parser.add_argument("--data-flywheel-output-root", type=Path, default=DEFAULT_DATA_FLYWHEEL_ROOT)
     parser.add_argument("--dataset-output-root", type=Path, default=DEFAULT_DATASET_ROOT)
+    parser.add_argument("--experiment-output-root", type=Path, default=DEFAULT_EXPERIMENT_ROOT)
+    parser.add_argument("--experiment-id", help="Stable training-experiment plan ID.")
+    parser.add_argument(
+        "--model-track",
+        default=register_training_experiment.DEFAULT_MODEL_TRACK,
+        choices=("motionnet", "context_router", "audiogate", "visiongate"),
+    )
+    parser.add_argument("--candidate-model", default=register_training_experiment.DEFAULT_CANDIDATE_MODEL)
+    parser.add_argument("--baseline-model", default=register_training_experiment.DEFAULT_BASELINE_MODEL)
     parser.add_argument("--require-ready", action="store_true", help="Return non-zero until dataset handoff is ready.")
     parser.add_argument("--json", action="store_true", help="Print the bounded pipeline JSON.")
     return parser.parse_args(argv)

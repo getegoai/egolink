@@ -404,7 +404,7 @@ def build_commands(
         "post_run_data_flywheel_status": command_record(
             description=(
                 "Run the local data-flywheel pipeline after the field run. "
-                "This writes bounded pipeline/status/dataset manifests only, not raw candidate records."
+                "This writes bounded pipeline/status/dataset/experiment manifests only, not raw candidate records."
             ),
             argv=[
                 "python",
@@ -623,7 +623,7 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             "",
             "### Data Flywheel Pipeline",
             "",
-            "This writes bounded pipeline, status, and dataset-manifest reports. It does not export raw candidate records.",
+            "This writes bounded pipeline, status, dataset-manifest, and training-experiment reports. It does not export raw candidate records.",
             "",
             "```powershell",
             commands["post_run_data_flywheel_status"]["powershell"],
@@ -692,6 +692,7 @@ def write_notes_template(path: Path, manifest: dict[str, Any]) -> None:
         f"- Web/API report: `{manifest['expected_outputs']['web_api_report']}`",
         f"- Power report: `{manifest['expected_outputs']['power_report']}`",
         f"- D1 demo report: `{manifest['expected_outputs']['d1_demo_report']}`",
+        f"- Training experiment plan: `{manifest['expected_outputs']['training_experiment_plan']}`",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -817,6 +818,11 @@ def build_manifest(
             ),
             "training_dataset_manifest": report_path(
                 "training_datasets", f"{run_id}-dataset", "training_dataset_manifest.json"
+            ),
+            "training_experiment_plan": report_path(
+                "training_experiments",
+                f"{run_id}-data-pipeline-experiment",
+                "training_experiment_plan.json",
             ),
         },
         "boundaries": [

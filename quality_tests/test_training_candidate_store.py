@@ -496,6 +496,7 @@ class TrainingCandidateStoreTests(unittest.TestCase):
             output_root = root / "pipeline"
             data_flywheel_root = root / "flywheel"
             dataset_root = root / "dataset"
+            experiment_root = root / "experiment"
 
             with redirect_stdout(StringIO()) as output:
                 exit_code = run_data_flywheel_pipeline.main(
@@ -508,6 +509,8 @@ class TrainingCandidateStoreTests(unittest.TestCase):
                         str(data_flywheel_root),
                         "--dataset-output-root",
                         str(dataset_root),
+                        "--experiment-output-root",
+                        str(experiment_root),
                         "--run-id",
                         "unit-empty-pipeline",
                         "--dataset-id",
@@ -529,6 +532,9 @@ class TrainingCandidateStoreTests(unittest.TestCase):
             manifest_exists = (
                 dataset_root / "unit-empty-dataset" / "training_dataset_manifest.json"
             ).exists()
+            experiment_exists = (
+                experiment_root / "unit-empty-pipeline-experiment" / "training_experiment_plan.json"
+            ).exists()
 
         self.assertEqual(exit_code, 0)
         self.assertEqual(payload["schema_version"], "egolink.data_flywheel_pipeline_run.v0.1")
@@ -538,6 +544,8 @@ class TrainingCandidateStoreTests(unittest.TestCase):
         self.assertEqual(payload["data_flywheel"]["pipeline_stage"], "candidate_store_missing")
         self.assertEqual(payload["dataset_manifest"]["status"], "not_ready")
         self.assertEqual(payload["dataset_manifest"]["reason"], "candidate_store_missing")
+        self.assertEqual(payload["training_experiment"]["status"], "blocked_dataset_not_ready")
+        self.assertEqual(payload["training_experiment"]["reason"], "candidate_store_missing")
         payload_text = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("record_json", payload_text)
         self.assertNotIn("raw_payload", payload_text)
@@ -545,6 +553,7 @@ class TrainingCandidateStoreTests(unittest.TestCase):
         self.assertTrue(pipeline_exists)
         self.assertTrue(status_exists)
         self.assertTrue(manifest_exists)
+        self.assertTrue(experiment_exists)
 
     def test_data_flywheel_pipeline_ingests_named_recording_and_reports_needs_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -554,6 +563,7 @@ class TrainingCandidateStoreTests(unittest.TestCase):
             output_root = root / "pipeline"
             data_flywheel_root = root / "flywheel"
             dataset_root = root / "dataset"
+            experiment_root = root / "experiment"
             self.write_recording(recording_dir)
             self.add_annotation(recording_dir)
 
@@ -570,6 +580,8 @@ class TrainingCandidateStoreTests(unittest.TestCase):
                         str(data_flywheel_root),
                         "--dataset-output-root",
                         str(dataset_root),
+                        "--experiment-output-root",
+                        str(experiment_root),
                         "--run-id",
                         "unit-ingest-pipeline",
                         "--dataset-id",
@@ -590,6 +602,8 @@ class TrainingCandidateStoreTests(unittest.TestCase):
         self.assertEqual(payload["data_flywheel"]["review_queue"]["pending_records"], 1)
         self.assertEqual(payload["dataset_manifest"]["status"], "not_ready")
         self.assertEqual(payload["dataset_manifest"]["reason"], "no_reviewed_training_candidates")
+        self.assertEqual(payload["training_experiment"]["status"], "blocked_dataset_not_ready")
+        self.assertEqual(payload["training_experiment"]["reason"], "no_reviewed_training_candidates")
         payload_text = json.dumps(payload, ensure_ascii=False)
         self.assertNotIn("record_json", payload_text)
         self.assertNotIn("raw_payload", payload_text)
@@ -604,6 +618,7 @@ class TrainingCandidateStoreTests(unittest.TestCase):
             output_root = root / "pipeline"
             data_flywheel_root = root / "flywheel"
             dataset_root = root / "dataset"
+            experiment_root = root / "experiment"
             self.write_recording(recording_dir)
             self.add_annotation(recording_dir)
             training_candidate_store.store_recording(recording_dir, db_path)
@@ -631,6 +646,8 @@ class TrainingCandidateStoreTests(unittest.TestCase):
                         str(data_flywheel_root),
                         "--dataset-output-root",
                         str(dataset_root),
+                        "--experiment-output-root",
+                        str(experiment_root),
                         "--run-id",
                         "unit-ready-pipeline",
                         "--dataset-id",
@@ -649,6 +666,12 @@ class TrainingCandidateStoreTests(unittest.TestCase):
         self.assertEqual(payload["dataset_manifest"]["status"], "ready_for_training_handoff")
         self.assertEqual(payload["dataset_manifest"]["counts"]["eligible_records"], 1)
         self.assertEqual(payload["dataset_manifest"]["record_sample"][0]["record_id"], record_id)
+        self.assertEqual(payload["training_experiment"]["status"], "ready_for_runner")
+        self.assertTrue(payload["training_experiment"]["runner"]["ready_for_handoff"])
+        self.assertEqual(
+            payload["training_experiment"]["metrics_plan"]["operations"]["latency_ms"],
+            "planned_not_measured",
+        )
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 ---
 document_status: working_plan
-last_verified: 2026-07-04
+last_verified: 2026-07-05
 verified_by: codex
 ---
 
@@ -32,10 +32,13 @@ must consume only reviewed evidence:
 8. DATA-006 runs the post-capture pipeline as one bounded command: ingest
    named recordings, refresh flywheel status, and export the dataset handoff
    manifest.
-9. MotionNet v0.1 starts with a statistical baseline and small model
+9. TRAIN-002 registers a bounded training experiment plan from the dataset
+   handoff manifest, recording runner readiness and planned metrics without
+   starting a training job.
+10. MotionNet v0.1 starts with a statistical baseline and small model
    candidates only after candidate data passes quality, privacy, consent, and
    split-leakage checks.
-10. Device deployment begins in shadow mode: model output is recorded alongside
+11. Device deployment begins in shadow mode: model output is recorded alongside
    the deterministic Safety Kernel and RuleRouter; it does not replace safety
    behavior until later acceptance gates pass.
 
@@ -51,6 +54,7 @@ must consume only reviewed evidence:
 | Candidate review | Approve, reject, or return bounded candidates without exposing raw records. | DATA-005. |
 | Dataset manifest | Export reviewed candidates to a training-server handoff manifest. | TRAIN-001. |
 | Pipeline runner | Run capture-to-handoff status from one repeatable post-run command. | DATA-006. |
+| Experiment registry | Register dataset readiness, runner handoff status, planned metrics, and non-claims for a future trainer. | TRAIN-002. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -77,6 +81,9 @@ must consume only reviewed evidence:
 - DATA-006 pipeline runs only ingest recording directories explicitly named by
   the operator; it does not scan runtime folders by default or copy DB files,
   raw candidate records, raw payloads, private coordinates, or JSONL logs.
+- TRAIN-002 experiment plans are runner handoff records only; metrics remain
+  `planned_not_measured` until a later training/evaluation task writes measured
+  evidence.
 
 ## Model And Power Gates
 

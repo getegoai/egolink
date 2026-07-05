@@ -214,15 +214,18 @@ Current AI/data boundary:
 - done: DATA-006 data-flywheel pipeline runner can ingest explicitly named
   session recordings, refresh data-flywheel status, and export the training
   dataset manifest from one post-run command;
+- done: TRAIN-002 training experiment registry writes a bounded
+  `training_experiment_plan` from the dataset manifest so a future runner has
+  explicit readiness, gates, planned metrics, and non-claims;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
 DATA-004 answers the immediate visibility gap: the live Message Hub database
 remains the operational evidence store, while curated data-flywheel summaries
 show candidate counts, review queues, split-leakage blockers, and model-training
-readiness without exposing raw candidate records. Later DATA/TRAIN tasks should
-turn reviewed candidates into dataset manifests and training-server experiment
-records before any model is evaluated or shipped.
+readiness without exposing raw candidate records. DATA-006/TRAIN-002 now turn
+reviewed candidates into dataset manifests and bounded training-experiment
+plans before any model is evaluated or shipped.
 
 ## R0: VPS + PC Simulator Simulated Loop
 

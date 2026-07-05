@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-04
+last_verified: 2026-07-05
 verified_by: codex
 ---
 
@@ -154,6 +154,12 @@ model work must produce a dataset manifest, model card, metrics, false-positive
 review, safety non-claim statement, footprint measurement, rollback plan, and
 release gate.
 
+TRAIN-002 is the current bridge after dataset export: it registers a bounded
+training experiment plan with dataset readiness, runner handoff status, planned
+metrics, inherited gates, and non-claims. It still does not integrate a GPU
+runner, call a training server, produce model weights, measure metrics, or
+change device behavior.
+
 Server model updates and device OTA are part of the V1 direction, but are
 `planned_not_implemented` here. No firmware, device protocol, Message Hub
 deployment, or OTA update behavior changes in DATA-002.
@@ -167,6 +173,8 @@ deployment, or OTA update behavior changes in DATA-002.
    consent context.
 4. Let M1-006 execute collection protocol runs for real negative samples and
    controlled simulated positives.
-5. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+5. Let TRAIN-002 keep registering bounded experiment plans from reviewed
+   dataset manifests until a real training runner task exists.
+6. Let MODEL-001 and MotionNet work consume only reviewed candidate records
    whose manifests still pass consent, privacy, retention, deletion, quality,
    and split-leakage checks.

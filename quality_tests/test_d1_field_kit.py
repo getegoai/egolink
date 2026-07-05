@@ -123,6 +123,11 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("data_flywheel_pipeline", manifest["expected_outputs"])
             self.assertIn("data_flywheel_status", manifest["expected_outputs"])
             self.assertIn("training_dataset_manifest", manifest["expected_outputs"])
+            self.assertIn("training_experiment_plan", manifest["expected_outputs"])
+            self.assertIn(
+                "D1-FIELD-unit-data-pipeline-experiment",
+                manifest["expected_outputs"]["training_experiment_plan"],
+            )
             self.assertIn("calling_not_claimed", manifest["non_claims"])
             self.assertIn("sms_not_claimed", manifest["non_claims"])
 

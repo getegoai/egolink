@@ -6,6 +6,23 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-05: TRAIN-002 training experiment registry is implemented as the next
+bounded step after DATA-006. The new `scripts/register_training_experiment.py`
+command consumes a TRAIN-001 `training_dataset_manifest.json` and writes
+`reports/training_experiments/<experiment-id>/training_experiment_plan.json/.md`
+with explicit statuses (`blocked_dataset_not_ready`,
+`blocked_no_eligible_records`, or `ready_for_runner`), model-track metadata,
+runner handoff state, inherited gates, `planned_not_measured` metrics, and
+non-claims. `scripts/run_data_flywheel_pipeline.py` now writes and summarizes
+this experiment plan after every dataset manifest, and the D1 field kit records
+the expected post-run experiment-plan artifact. Focused tests cover blocked,
+ready, require-ready, no-runtime-scan, needs-review, and ready-handoff paths.
+Focused validation passed (24 tests), context lint and diff checks passed, and
+full repository validation passed (415 tests). This does not train/evaluate a
+model, integrate a GPU/training server, produce model weights, deploy on-device
+inference, change firmware/protocol behavior, or claim model accuracy,
+false-positive rate, latency, footprint, or power impact.
+
 2026-07-05: DATA-006 data-flywheel pipeline runner is implemented for
 unattended/post-field operation. The new
 `scripts/run_data_flywheel_pipeline.py` command composes the existing
