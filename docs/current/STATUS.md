@@ -6,6 +6,17 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-05: DATA-008 D1 post-run collector is implemented locally. The new
+`scripts/collect_d1_postrun.py` command reads the Message Hub, writes the D1
+Web/API gate, optional PWR-001 power curve, D1 demo evidence report,
+DATA-006/ TRAIN-002 data-flywheel outputs, and one bounded
+`reports/d1_postrun/<run-id>/d1_postrun_collection_summary.json/.md`. The D1
+field kit is updated to v5 so FIELD-004 after-run work defaults to this single
+collector plus the existing explicit curated-summary VPS sync. This does not
+contact hardware, flash firmware, send commands, deploy, train/evaluate a
+model, or claim location accuracy, battery life, product readiness, or model
+metrics.
+
 2026-07-05: FIELD-004 unattended read-only D1 observation completed with a
 useful stale-link finding, not a field pass. Evidence is under
 `reports/d1_field_observation/FIELD-004-d1-outdoor-unattended-20260705-140133/`:

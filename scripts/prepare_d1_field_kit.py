@@ -25,7 +25,7 @@ DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
 DEFAULT_FW_VERSION = "0.1.0-d1-periodic-location"
 DEFAULT_BOARD_ID = "connectivity-node-001"
 DEFAULT_DURATION_HOURS = 4.0
-KIT_VERSION = "D1.field_kit.v4"
+KIT_VERSION = "D1.field_kit.v5"
 MANIFEST_JSON = "field_manifest.json"
 RUNBOOK_MD = "FIELD_RUNBOOK.md"
 CHECKLIST_MD = "FIELD_CHECKLIST.md"
@@ -244,6 +244,37 @@ def build_commands(
         ],
         amoled_port,
     )
+    post_run_collect_argv = [
+        "python",
+        "scripts\\collect_d1_postrun.py",
+        "--run-id",
+        run_id,
+        "--hub-url",
+        str(hub["hub_url"]),
+        "--token-file",
+        token_file,
+        "--device-id",
+        device_id,
+        "--message-test-run-id",
+        run_id,
+        "--min-duration-hours",
+        f"{duration_hours:g}",
+        "--output-root",
+        report_path("d1_postrun"),
+        "--web-api-output-dir",
+        report_path("d1_web_api", run_id),
+        "--power-output-dir",
+        report_path("power", run_id),
+        "--d1-demo-output-dir",
+        report_path("d1_demo", run_id),
+        "--data-pipeline-run-id",
+        f"{run_id}-data-pipeline",
+        "--dataset-id",
+        f"{run_id}-dataset",
+        "--json",
+    ]
+    if battery_capacity_mah is not None:
+        post_run_collect_argv.extend(["--battery-capacity-mah", battery_capacity_arg])
     return {
         "preflight_web_api_gate": command_record(
             description="Read-only preflight check of VPS D1 Web/API before leaving.",
@@ -365,6 +396,13 @@ def build_commands(
                 "--json",
             ],
         ),
+        "post_run_collect_evidence": command_record(
+            description=(
+                "Recommended one-command post-run collector: Web/API gate, power curve, "
+                "D1 demo report, data-flywheel pipeline, and a bounded artifact summary."
+            ),
+            argv=post_run_collect_argv,
+        ),
         "post_run_power_curve": command_record(
             description="Fetch the Message Hub test-run export and analyze measured MAX17048 power samples.",
             argv=[
@@ -470,8 +508,8 @@ def build_checklists(*, duration_hours: float) -> dict[str, list[str]]:
         ],
         "after_run": [
             "Record local and UTC stop time plus visible Dashboard state.",
-            "Run the Web/API gate, power-curve analysis, and D1 demo report commands from this kit.",
-            "Run the data-flywheel pipeline command so post-run data state and dataset handoff readiness are recorded.",
+            "Run the one-command post-run collector from this kit.",
+            "Use the individual Web/API, power, D1 demo, and data-flywheel commands only when troubleshooting.",
             "Sync curated Field Test Results and Data Flywheel summaries to the VPS Dashboard.",
             "Keep raw Message Hub export, generated reports, and OPERATOR_NOTES.md together.",
             "Do not claim location accuracy, battery life, GNSS acceptance, or 24h PWR-001 pass from a short D1 run.",
@@ -602,7 +640,17 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
     lines.extend(
         [
             "",
-            "### Web/API Gate",
+            "### Recommended Post-Run Collector",
+            "",
+            "Runs the Web/API gate, power curve, D1 evidence report, and data-flywheel pipeline, then writes one bounded artifact summary.",
+            "",
+            "```powershell",
+            commands["post_run_collect_evidence"]["powershell"],
+            "```",
+            "",
+            "### Individual Web/API Gate",
+            "",
+            "Use these individual commands only when troubleshooting or rerunning one component.",
             "",
             "```powershell",
             commands["post_run_web_api_gate"]["powershell"],
@@ -690,6 +738,7 @@ def write_notes_template(path: Path, manifest: dict[str, Any]) -> None:
         f"- Companion summary: `{manifest['expected_outputs']['companion_summary']}`",
         f"- Live field observation report: `{manifest['expected_outputs']['field_observation_report']}`",
         f"- AMOLED sidecar summary: `{manifest['expected_outputs']['amoled_sidecar_summary']}`",
+        f"- Post-run summary: `{manifest['expected_outputs']['postrun_summary']}`",
         f"- Web/API report: `{manifest['expected_outputs']['web_api_report']}`",
         f"- Power report: `{manifest['expected_outputs']['power_report']}`",
         f"- D1 demo report: `{manifest['expected_outputs']['d1_demo_report']}`",
@@ -810,6 +859,7 @@ def build_manifest(
             "web_api_report": report_path("d1_web_api", run_id, "d1_web_api_report.json"),
             "power_report": report_path("power", run_id, "power_curve_report.json"),
             "d1_demo_report": report_path("d1_demo", run_id, "d1_demo_report.json"),
+            "postrun_summary": report_path("d1_postrun", run_id, "d1_postrun_collection_summary.json"),
             "message_hub_export": report_path("power", run_id, "test_run_export.json"),
             "data_flywheel_pipeline": report_path(
                 "data_flywheel_pipeline", f"{run_id}-data-pipeline", "data_flywheel_pipeline_run.json"

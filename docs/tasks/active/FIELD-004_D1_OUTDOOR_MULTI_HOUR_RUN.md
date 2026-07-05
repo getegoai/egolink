@@ -61,6 +61,8 @@ Through` panel:
       freshness, LTE, location estimate, and power evidence.
 - [ ] Field companion report records sample count, stale samples, raw POST
       success/failure delta, coordinate sample count, and power sample count.
+- [ ] Post-run collector summary records Web/API, power, D1 demo, and
+      data-flywheel artifact paths.
 - [ ] Post-run D1 Web/API report passes or fails explainably.
 - [ ] Post-run power report is generated; it may be WARN/FAIL, but must record
       why.
@@ -86,6 +88,15 @@ powershell -ExecutionPolicy Bypass -File scripts\run_d1_field_companion.ps1 `
 ```
 
 # Post-Run Commands
+
+Recommended one-command collection after returning:
+
+```powershell
+python scripts\collect_d1_postrun.py --run-id FIELD-004-d1-outdoor-YYYYMMDD --hub-url http://203.0.113.10:8790 --message-test-run-id FIELD-004-d1-outdoor-YYYYMMDD --output-root reports\d1_postrun --json
+```
+
+Use the component commands below only when rerunning or troubleshooting one
+step:
 
 ```powershell
 python scripts\validate_d1_web_api.py --hub-url http://203.0.113.10:8790 --review-id FIELD-004-d1-outdoor-YYYYMMDD --output-dir reports\d1_web_api\FIELD-004-d1-outdoor-YYYYMMDD --json
@@ -136,6 +147,7 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy_message_hub_vps.ps1 -Hos
 
 - Changed files:
 - Runtime:
+- Post-run collector:
 - Web/API report:
 - Power report:
 - VPS Dashboard result visibility:

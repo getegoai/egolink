@@ -1358,7 +1358,14 @@ class MessageHubHttpTests(unittest.TestCase):
     def test_get_api_requires_token_when_auth_is_enabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
-            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store, token="secret"))
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(
+                    store,
+                    token="secret",
+                    training_experiment_root=Path(tmp) / "empty_training_experiments",
+                ),
+            )
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             base_url = f"http://127.0.0.1:{server.server_port}"
