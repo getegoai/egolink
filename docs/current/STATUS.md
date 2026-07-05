@@ -6,6 +6,23 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-05: TRAIN-003 training-run preflight is implemented locally as the
+bounded bridge after TRAIN-002 and before any real training runner/server
+integration. The new `scripts/run_training_experiment_preflight.py` command
+reads an explicitly named `training_experiment_plan.json` plus
+`training_dataset_manifest.json`, verifies experiment readiness, dataset
+readiness, required bounded record fields, split/label/source counts, and
+synthetic-record policy, then writes
+`reports/training_runs/<run-id>/training_run_preflight.json/.md`. Local smoke
+evidence: `reports/training_runs/train003-local-smoke-20260705/` consumed the
+DATA-009 reviewed synthetic dataset/experiment, required explicit
+`--allow-synthetic`, and produced `status=ready_for_training_runner` with 4
+eligible synthetic dry-run records while all measured metrics remained
+`not_run`. This does not train/evaluate a model, integrate a GPU runner or
+training server, produce model weights/artifacts, deploy on-device inference,
+change firmware/protocol behavior, or claim model accuracy, latency, footprint,
+or power impact.
+
 2026-07-05: DATA-009 synthetic scenario generator is implemented locally for
 D5 data-flywheel dry-runs while field evidence is sparse. The new
 `scripts/generate_synthetic_scenarios.py` command writes deterministic

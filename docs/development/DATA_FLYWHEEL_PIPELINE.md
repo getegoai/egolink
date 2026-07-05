@@ -160,6 +160,13 @@ metrics, inherited gates, and non-claims. It still does not integrate a GPU
 runner, call a training server, produce model weights, measure metrics, or
 change device behavior.
 
+TRAIN-003 is the current bridge after experiment registration: it checks a
+TRAIN-002 plan plus a TRAIN-001 dataset manifest and writes a bounded
+training-run preflight report. The preflight can acknowledge synthetic-only
+dry-runs, verify required bounded record fields, and record split/label/source
+counts. It still does not train, evaluate, upload, or deploy a model, does not
+integrate a private training server, and does not write measured metrics.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -185,6 +192,8 @@ deployment, or OTA update behavior changes in DATA-002.
    is still sparse.
 6. Let TRAIN-002 keep registering bounded experiment plans from reviewed
    dataset manifests until a real training runner task exists.
-7. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+7. Let TRAIN-003 keep checking runner preflight readiness without producing
+   model artifacts or measured metrics.
+8. Let MODEL-001 and MotionNet work consume only reviewed candidate records
    whose manifests still pass consent, privacy, retention, deletion, quality,
    and split-leakage checks.

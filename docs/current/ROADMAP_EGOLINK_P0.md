@@ -220,6 +220,12 @@ Current AI/data boundary:
 - done: DATA-007 Dashboard/API visibility can surface the latest bounded
   training experiment plan and explicitly sync only curated experiment-plan
   summaries;
+- done: DATA-009 synthetic scenario generator can produce explicit
+  synthetic-only recordings for no-hardware data-flywheel dry-runs without
+  treating them as field evidence or release metrics;
+- done: TRAIN-003 training-run preflight can check a TRAIN-002 plan plus
+  TRAIN-001 manifest before real runner integration while keeping measured
+  metrics at `not_run`;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -228,8 +234,9 @@ remains the operational evidence store, while curated data-flywheel summaries
 show candidate counts, review queues, split-leakage blockers, and model-training
 readiness without exposing raw candidate records. DATA-006/TRAIN-002 now turn
 reviewed candidates into dataset manifests and bounded training-experiment
-plans, and DATA-007 makes the latest experiment plan visible in Web/API, before
-any model is evaluated or shipped.
+plans, DATA-009 can dry-run the path with explicit synthetic-only records, and
+TRAIN-003 can preflight the runner handoff before any model is evaluated or
+shipped.
 
 ## R0: VPS + PC Simulator Simulated Loop
 
