@@ -160,6 +160,14 @@ metrics, inherited gates, and non-claims. It still does not integrate a GPU
 runner, call a training server, produce model weights, measure metrics, or
 change device behavior.
 
+DATA-009 may generate synthetic-only session recordings to exercise this
+pipeline while hardware runs are pending. Synthetic records must be explicitly
+marked `synthetic_only=true`, kept separate from field evidence, and used only
+for dry-run integration. Even when `--review-synthetic` promotes them through
+the review gate, the result is not a release acceptance metric and cannot
+support real-world model performance, power, latency, footprint, or product
+readiness claims.
+
 Server model updates and device OTA are part of the V1 direction, but are
 `planned_not_implemented` here. No firmware, device protocol, Message Hub
 deployment, or OTA update behavior changes in DATA-002.
@@ -173,8 +181,10 @@ deployment, or OTA update behavior changes in DATA-002.
    consent context.
 4. Let M1-006 execute collection protocol runs for real negative samples and
    controlled simulated positives.
-5. Let TRAIN-002 keep registering bounded experiment plans from reviewed
+5. Let DATA-009 run synthetic-only pipeline dry-runs while real field evidence
+   is still sparse.
+6. Let TRAIN-002 keep registering bounded experiment plans from reviewed
    dataset manifests until a real training runner task exists.
-6. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+7. Let MODEL-001 and MotionNet work consume only reviewed candidate records
    whose manifests still pass consent, privacy, retention, deletion, quality,
    and split-leakage checks.

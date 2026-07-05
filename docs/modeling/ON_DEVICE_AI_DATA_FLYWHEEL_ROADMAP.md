@@ -41,10 +41,14 @@ must consume only reviewed evidence:
 11. DATA-008 binds each D1 post-run collection to the Web/API report, power
     curve, D1 demo report, data-flywheel pipeline, dataset manifest, and
     training-experiment plan from one local summary.
-12. MotionNet v0.1 starts with a statistical baseline and small model
+12. DATA-009 generates explicit synthetic-only scenario recordings for
+    no-hardware pipeline dry-runs. These may exercise annotation, review,
+    dataset handoff, and experiment readiness, but they are not field evidence
+    or release metrics.
+13. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-13. Device deployment begins in shadow mode: model output is recorded alongside
+14. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -63,6 +67,7 @@ must consume only reviewed evidence:
 | Experiment registry | Register dataset readiness, runner handoff status, planned metrics, and non-claims for a future trainer. | TRAIN-002. |
 | Experiment visibility | Surface latest bounded experiment-plan readiness in Web/API and curated deploy summaries. | DATA-007. |
 | Post-run collection | Bind D1 Web/API, power, demo, data-flywheel, dataset, and experiment artifacts into one post-field summary. | DATA-008. |
+| Synthetic dry-run | Exercise the data flywheel without hardware while keeping synthetic records out of release claims. | DATA-009. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -98,6 +103,10 @@ must consume only reviewed evidence:
 - DATA-008 post-run summaries contain artifact paths and bounded component
   statuses only; they do not copy raw exports, candidate DBs, private payloads,
   runtime JSONL logs, or model artifacts.
+- DATA-009 synthetic scenarios must carry `synthetic_only=true`, remain
+  separate from field evidence, and may only support pipeline dry-runs or
+  runner integration tests. Synthetic review approval is not product release
+  acceptance and cannot be used for real-world model metrics.
 
 ## Model And Power Gates
 

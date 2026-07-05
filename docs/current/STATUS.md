@@ -6,6 +6,23 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-05: DATA-009 synthetic scenario generator is implemented locally for
+D5 data-flywheel dry-runs while field evidence is sparse. The new
+`scripts/generate_synthetic_scenarios.py` command writes deterministic
+synthetic-only session recordings under
+`reports/synthetic_scenarios/<run-id>/`, annotates them with structured-only
+privacy and training requests, and can optionally run DATA-006. By default the
+pipeline reports `needs_review`; with explicit `--review-synthetic` it reviews
+only the generated synthetic candidates and reruns the handoff path to produce
+a dry-run `ready_for_training_handoff` dataset manifest and TRAIN-002
+`ready_for_runner` experiment plan. Local smoke evidence:
+`reports/synthetic_scenarios/data009-local-smoke-20260705/` generated 4
+synthetic scenarios, 4 reviewed synthetic records, and a reviewed pipeline
+status of `ready_for_training_handoff`. This does not contact hardware, deploy
+to the VPS, train/evaluate a model, produce model artifacts, change firmware or
+protocol behavior, or claim field evidence, product readiness, model metrics,
+latency, footprint, or power impact.
+
 2026-07-05: DATA-008 D1 post-run collector is implemented locally. The new
 `scripts/collect_d1_postrun.py` command reads the Message Hub, writes the D1
 Web/API gate, optional PWR-001 power curve, D1 demo evidence report,
