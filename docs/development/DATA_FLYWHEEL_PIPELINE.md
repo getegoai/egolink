@@ -224,6 +224,15 @@ skipped with an explainable reason. DATA-014 still does not train a model,
 deploy to devices, copy feature-row JSONL to the Dashboard, or produce model
 artifacts, model cards, measured footprint/power data, or release claims.
 
+TRAIN-007 can bind the explicit dataset manifest, TRAIN-003 preflight,
+TRAIN-004 feature manifest and rows, TRAIN-005 runner dry-run, and TRAIN-006
+baseline eval into one bounded handoff bundle for a future local/GPU training
+runner or training server. It stores refs, hashes, row counts, readiness gates,
+and non-claims only. It still does not copy feature-row JSONL contents, call a
+training endpoint, train or evaluate a real model, produce model artifacts or
+model cards, deploy on-device inference, measure footprint/power, or allow
+release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -267,6 +276,8 @@ deployment, or OTA update behavior changes in DATA-002.
     exposing row contents, private training details, or model artifacts.
 15. Let DATA-014 bind TRAIN-003..006 into the D1 post-run collector after a
     ready dataset handoff, keeping blocked/not-ready runs explainable.
-16. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+16. Let TRAIN-007 build a bounded training handoff bundle for a future runner
+    or training server without copying feature rows or starting training.
+17. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

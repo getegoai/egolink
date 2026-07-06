@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: TRAIN-007 training handoff bundle is implemented locally as the
+next D5 bridge after DATA-014. The new
+`scripts/build_training_handoff_bundle.py` command consumes explicitly named
+DATA/ TRAIN reports: dataset manifest, TRAIN-003 preflight, TRAIN-004 feature
+manifest and feature rows, TRAIN-005 runner dry-run, and TRAIN-006 baseline
+eval. It writes a bounded `training_handoff_bundle.json/.md` with refs, file
+hashes, row counts, readiness gates, training-server integration status, next
+step, and non-claims. It does not copy feature-row contents, call or configure
+a training endpoint, train or evaluate a real model, produce model weights,
+model cards, model artifacts, footprint/power measurements, device deployment,
+or release claims.
+
 2026-07-06: FIELD-005 D1 observer incremental samples is implemented locally.
 Future `scripts/observe_d1_field_run.py` runs now initialize
 `d1_field_samples.jsonl` at start and append each sample immediately after it

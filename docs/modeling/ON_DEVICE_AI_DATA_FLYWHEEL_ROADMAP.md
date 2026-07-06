@@ -71,10 +71,13 @@ must consume only reviewed evidence:
 21. DATA-014 lets the D1 post-run collector continue through TRAIN-003..006
     when the dataset handoff is ready, while skipped/not-ready cases remain
     explainable in the same post-run summary.
-22. MotionNet v0.1 starts with a statistical baseline and small model
+22. TRAIN-007 builds one bounded handoff bundle from the dataset, preflight,
+    feature, runner dry-run, and baseline-eval reports so a future training
+    server can consume explicit refs and hashes without row contents.
+23. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-23. Device deployment begins in shadow mode: model output is recorded alongside
+24. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -103,6 +106,7 @@ must consume only reviewed evidence:
 | Baseline evaluation | Exercise aggregate metrics plumbing without model artifacts or release claims. | TRAIN-006. |
 | Baseline visibility | Surface latest baseline-eval readiness without raw rows or model artifacts. | DATA-013. |
 | Post-run training chain | Run TRAIN-003..006 from the D1 post-run collector when a reviewed dataset handoff is ready. | DATA-014. |
+| Training handoff bundle | Bind dataset, preflight, feature, runner dry-run, and baseline-eval refs and hashes for a future training runner/server without copying rows. | TRAIN-007. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -184,6 +188,12 @@ must consume only reviewed evidence:
   row counts, metric scope, gates, next step, and report paths after a ready
   dataset handoff. They do not expose feature-row JSONL contents, raw records,
   candidate DB paths, private training endpoints, model artifacts, model cards,
+  footprint, latency, power measurements, device deployment results, or release
+  claims.
+- TRAIN-007 handoff bundles may show input refs, file hashes, row counts,
+  component readiness, training-server integration status, gates, and next
+  steps. They do not copy JSONL row contents, raw records, candidate DBs,
+  runtime JSONL logs, private training endpoints, model artifacts, model cards,
   footprint, latency, power measurements, device deployment results, or release
   claims.
 

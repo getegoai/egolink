@@ -251,6 +251,9 @@ Current AI/data boundary:
   contents, private case rows, private training endpoints, or model artifacts;
 - done: DATA-014 post-run collector can continue through TRAIN-003..006 after
   a ready dataset handoff, while skipped/not-ready runs remain explainable;
+- done: TRAIN-007 training handoff bundle can bind dataset, preflight,
+  feature, runner dry-run, and baseline-eval refs and hashes for a future
+  training runner/server without copying row contents or starting training;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -273,6 +276,9 @@ visible in the Web/API loop without exposing row contents or model artifacts.
 DATA-014 binds TRAIN-003..006 back into the D1 post-run collector once the
 dataset handoff is ready, so a post-field run can progress from evidence
 collection to bounded runner/baseline status from one local command.
+TRAIN-007 then packages those explicit inputs into a bounded handoff bundle
+for future training-runner/server integration while keeping row contents,
+private endpoints, model artifacts, and release claims out of scope.
 
 ## R0: VPS + PC Simulator Simulated Loop
 
