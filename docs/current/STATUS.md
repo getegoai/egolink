@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-029 D1 labeling review-packet Web/API visibility is
+implemented locally. The Message Hub can load the latest bounded
+`reports/d1_labeling_reviews/**/d1_labeling_review_packet.json`, expose it as
+`d1_labeling_review_packet` in `/api/state`, serve it at
+`/api/v1/d1-labeling-review-packet/latest`, and render a Dashboard panel for
+pending D1 review work. Field kit v13 includes the explicit
+`-IncludeD1LabelingReviewSummaries` sync switch. This does not read sample
+JSONL, expose exact coordinates/raw payloads/feature rows/targets/candidate
+DBs, mark items reviewed, write candidate records, train/evaluate a model,
+write model artifacts, deploy inference, measure model footprint/power, deploy
+to the VPS, or allow release claims.
+
 2026-07-06: DATA-028 D1 labeling review-packet and post-run binding is
 implemented locally. `scripts/build_d1_labeling_review_packet.py` turns a
 bounded `d1_labeling_queue` summary into a human-review work packet with

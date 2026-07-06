@@ -2418,6 +2418,154 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertNotIn('"target"', payload_text)
         self.assertNotIn("C:/private", payload_text)
 
+    def test_state_api_and_endpoint_include_latest_d1_labeling_review_packet(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report_root = tmp_path / "d1_labeling_reviews"
+            report_dir = report_root / "unit-review"
+            report_dir.mkdir(parents=True)
+            (report_dir / "d1_labeling_review_packet.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.d1_labeling_review_packet.v0.1",
+                        "run_id": "unit-labeling-review",
+                        "generated_at": "2026-07-06T12:10:00+00:00",
+                        "serves_demo": "D5",
+                        "status": "needs_human_review",
+                        "source_queue": {
+                            "available": True,
+                            "run_id": "unit-labeling-queue",
+                            "status": "pending_human_review",
+                            "report_path": "reports/d1_labeling_queue/unit/d1_labeling_queue.json",
+                            "pending_item_count": 1,
+                            "intake_report_count": 1,
+                        },
+                        "summary": {
+                            "queue_pending_items": 1,
+                            "review_packet_items": 1,
+                            "needs_operator_label": 1,
+                            "needs_privacy_review": 1,
+                            "needs_training_consent": 1,
+                            "needs_split_plan": 1,
+                            "candidate_record_written_count": 0,
+                            "training_allowed_count": 0,
+                        },
+                        "review_packet": {
+                            "status": "open",
+                            "items": [
+                                {
+                                    "packet_item_id": "d1-review-unit",
+                                    "intake_id": "d1-intake-unit",
+                                    "source_run_id": "field-private",
+                                    "readiness_run_id": "unit-readiness",
+                                    "device_id": "ego-link-r1-connectivity-001",
+                                    "queue_status": "pending_label_privacy_split",
+                                    "current_review_state": {
+                                        "operator_label": "missing",
+                                        "privacy_review": "required",
+                                        "training_consent": "not_reviewed",
+                                        "split_plan": "missing",
+                                        "quality_gaps": ["gnss_fix_not_seen"],
+                                    },
+                                    "evidence_summary": {
+                                        "samples": 5,
+                                        "latest_seq": 52,
+                                        "raw_post_success_delta": 2,
+                                        "raw_post_failure_delta": 0,
+                                        "coordinate_sample_count": 5,
+                                        "gnss_fix_seen": False,
+                                        "imu_evidence_statuses": ["mock"],
+                                        "power_evidence_statuses": ["measured"],
+                                        "private_coordinates": [31.123456, 121.654321],
+                                    },
+                                    "decision_slots": {
+                                        "operator_label": {
+                                            "required": True,
+                                            "current": "missing",
+                                            "selected": None,
+                                            "allowed_values": ["safe", "needs_help"],
+                                            "reviewed_by": "private-operator",
+                                        },
+                                        "candidate_decision": {
+                                            "required": True,
+                                            "current": "not_reviewed",
+                                            "selected": None,
+                                            "allowed_values": ["ready_for_candidate_store", "reject_for_training"],
+                                        },
+                                    },
+                                    "requested_actions": ["attach_operator_or_user_label"],
+                                    "available_decisions": ["needs_more_capture", "reject_for_training"],
+                                    "training_allowed": True,
+                                    "candidate_record_written": True,
+                                    "raw_payload": {"secret": "do-not-copy"},
+                                }
+                            ],
+                        },
+                        "scope": {
+                            "labeling_queue_summary_read": True,
+                            "sample_jsonl_read": False,
+                            "payload_bytes_copied": False,
+                            "exact_coordinates_copied": False,
+                            "feature_rows_copied": False,
+                            "target_labels_written": False,
+                            "candidate_db_written": False,
+                            "training_samples_written": False,
+                            "model_training_started": False,
+                            "model_artifact_written": False,
+                            "release_claim_allowed": False,
+                        },
+                        "next_step": "Fill review decisions.",
+                        "raw_payload": {"secret": "do-not-copy"},
+                        "features": {"private": True},
+                        "target": {"label": "secret"},
+                        "paths": {"private_candidate_db": "C:/private/training_candidates.db"},
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (report_dir / "d1_labeling_review_packet.md").write_text("# D1 review\n", encoding="utf-8")
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, d1_labeling_review_root=report_root),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                latest = get_json(base_url, "/api/v1/d1-labeling-review-packet/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["d1_labeling_review_packet"]["status"], "needs_human_review")
+        self.assertEqual(state["d1_labeling_review_packet"]["summary"]["review_packet_items"], 1)
+        packet = latest["d1_labeling_review_packet"]["review_packet"]
+        self.assertEqual(packet["items"][0]["packet_item_id"], "d1-review-unit")
+        self.assertFalse(packet["items"][0]["training_allowed"])
+        self.assertFalse(packet["items"][0]["candidate_record_written"])
+        self.assertEqual(packet["items"][0]["decision_slots"]["operator_label"]["current"], "missing")
+        self.assertFalse(latest["d1_labeling_review_packet"]["scope"]["sample_jsonl_read"])
+        self.assertFalse(latest["d1_labeling_review_packet"]["scope"]["payload_bytes_copied"])
+        self.assertFalse(latest["d1_labeling_review_packet"]["scope"]["candidate_db_written"])
+        self.assertEqual(latest["d1_labeling_review_packet"]["review_gates"]["candidate_store"], "not_written")
+        self.assertEqual(
+            latest["d1_labeling_review_packet"]["markdown_path"],
+            str(report_dir / "d1_labeling_review_packet.md"),
+        )
+        payload_text = json.dumps(latest, sort_keys=True)
+        self.assertNotIn("31.123456", payload_text)
+        self.assertNotIn("121.654321", payload_text)
+        self.assertNotIn("raw_payload", payload_text)
+        self.assertNotIn("private-operator", payload_text)
+        self.assertNotIn('"features"', payload_text)
+        self.assertNotIn('"target"', payload_text)
+        self.assertNotIn("C:/private", payload_text)
+
     def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")

@@ -350,6 +350,13 @@ packet only: it does not mark items reviewed, write candidate records, read raw
 sample rows, expose exact coordinates, copy feature rows or targets, train a
 model, produce model artifacts, or allow release claims.
 
+DATA-029 surfaces the latest D1 labeling review packet in the Message Hub API
+and Dashboard, plus an explicit VPS summary-sync switch. The exposed object is
+still a bounded worklist: it shows compact queue lineage, review counts,
+decision slot names/current values, and non-training gates, but not raw sample
+rows, exact coordinates, raw payloads, reviewer-private fields, feature rows,
+targets, candidate DBs, model artifacts, or release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -423,6 +430,9 @@ deployment, or OTA update behavior changes in DATA-002.
     deployment summaries without exposing raw sample rows or candidate DBs.
 30. Let DATA-028 turn the D1 labeling queue into a bounded human-review packet
     before any candidate-store promotion.
-31. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+31. Let DATA-029 surface the D1 labeling review packet in Web/API and curated
+    deployment summaries without exposing raw samples, private review fields,
+    or candidate DBs.
+32. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

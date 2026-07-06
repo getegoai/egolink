@@ -32,6 +32,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("D1 Training Readiness", html)
         self.assertIn("D1 Labeling Intake", html)
         self.assertIn("D1 Labeling Queue", html)
+        self.assertIn("D1 Labeling Review Packet", html)
         self.assertIn("D1 Link Through", html)
         self.assertIn("dashboard-shell", html)
         self.assertIn("Field live view", html)
@@ -51,6 +52,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("d1TrainingReadiness", html)
         self.assertIn("d1LabelingIntake", html)
         self.assertIn("d1LabelingQueue", html)
+        self.assertIn("d1LabelingReviewPacket", html)
         self.assertIn("d1Link", html)
         self.assertIn("d1_link", html)
         self.assertIn("field_results", html)
@@ -78,6 +80,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("d1LabelingIntakePanel", html)
         self.assertIn("d1_labeling_queue", html)
         self.assertIn("d1LabelingQueuePanel", html)
+        self.assertIn("d1_labeling_review_packet", html)
+        self.assertIn("d1LabelingReviewPacketPanel", html)
         self.assertIn("Runner Handoff", html)
         self.assertIn("Runner Ready", html)
         self.assertIn("Feature Rows", html)
@@ -97,7 +101,10 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("First Intake", html)
         self.assertIn("Pending Items", html)
         self.assertIn("First Queue Item", html)
+        self.assertIn("First Review Item", html)
         self.assertIn("Label Groups", html)
+        self.assertIn("Decision Slots", html)
+        self.assertIn("Needed Reviews", html)
         self.assertIn("Sensor Gaps", html)
         self.assertIn("Synthetic Gate", html)
         self.assertIn("Measured Metrics", html)
@@ -1340,8 +1347,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertNotIn("31.123456", payload)
         self.assertNotIn("121.654321", payload)
         self.assertNotIn("raw_payload", payload)
-        self.assertNotIn("features", payload)
-        self.assertNotIn("target", payload)
+        self.assertNotIn('"features"', payload)
+        self.assertNotIn('"target"', payload)
         self.assertNotIn("private_candidate_db", payload)
         self.assertNotIn("C:/private", payload)
 
@@ -1481,8 +1488,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertNotIn("31.123456", payload)
         self.assertNotIn("121.654321", payload)
         self.assertNotIn("raw_payload", payload)
-        self.assertNotIn("features", payload)
-        self.assertNotIn("target", payload)
+        self.assertNotIn('"features"', payload)
+        self.assertNotIn('"target"', payload)
         self.assertNotIn("private_candidate_db", payload)
         self.assertNotIn("d1_field_samples.jsonl", payload)
         self.assertNotIn("C:/private", payload)
@@ -1494,6 +1501,159 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertFalse(summary["available"])
         self.assertEqual(summary["status"], "not_available")
         self.assertEqual(summary["reason"], "no_d1_labeling_queue")
+
+    def test_latest_d1_labeling_review_packet_summary_is_bounded_for_dashboard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report_dir = root / "unit-review"
+            report_dir.mkdir()
+            (report_dir / "d1_labeling_review_packet.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.d1_labeling_review_packet.v0.1",
+                        "run_id": "unit-labeling-review",
+                        "generated_at": "2026-07-06T12:10:00+00:00",
+                        "serves_demo": "D5",
+                        "status": "needs_human_review",
+                        "source_queue": {
+                            "available": True,
+                            "run_id": "unit-labeling-queue",
+                            "status": "pending_human_review",
+                            "report_path": "reports/d1_labeling_queue/unit/d1_labeling_queue.json",
+                            "pending_item_count": 1,
+                            "intake_report_count": 1,
+                        },
+                        "summary": {
+                            "queue_pending_items": 1,
+                            "review_packet_items": 1,
+                            "needs_operator_label": 1,
+                            "needs_privacy_review": 1,
+                            "needs_training_consent": 1,
+                            "needs_split_plan": 1,
+                            "candidate_record_written_count": 0,
+                            "training_allowed_count": 0,
+                        },
+                        "review_packet": {
+                            "status": "open",
+                            "items": [
+                                {
+                                    "packet_item_id": "d1-review-unit",
+                                    "intake_id": "d1-intake-unit",
+                                    "source_run_id": "field-private",
+                                    "readiness_run_id": "unit-readiness",
+                                    "device_id": "ego-link-r1-connectivity-001",
+                                    "queue_status": "pending_label_privacy_split",
+                                    "current_review_state": {
+                                        "operator_label": "missing",
+                                        "privacy_review": "required",
+                                        "training_consent": "not_reviewed",
+                                        "split_plan": "missing",
+                                        "quality_gaps": ["gnss_fix_not_seen"],
+                                    },
+                                    "evidence_summary": {
+                                        "samples": 5,
+                                        "latest_seq": 52,
+                                        "raw_post_success_delta": 2,
+                                        "raw_post_failure_delta": 0,
+                                        "coordinate_sample_count": 5,
+                                        "gnss_fix_seen": False,
+                                        "imu_evidence_statuses": ["mock"],
+                                        "power_evidence_statuses": ["measured"],
+                                        "private_coordinates": [31.123456, 121.654321],
+                                    },
+                                    "decision_slots": {
+                                        "operator_label": {
+                                            "required": True,
+                                            "current": "missing",
+                                            "selected": None,
+                                            "allowed_values": ["safe", "needs_help"],
+                                            "reviewed_by": "private-operator",
+                                        },
+                                        "privacy_review": {
+                                            "required": True,
+                                            "current": "required",
+                                            "selected": None,
+                                            "allowed_values": ["approved_bounded_summary_only"],
+                                            "reviewed_at": "private-time",
+                                        },
+                                    },
+                                    "requested_actions": ["attach_operator_or_user_label"],
+                                    "available_decisions": ["needs_more_capture", "reject_for_training"],
+                                    "training_allowed": True,
+                                    "candidate_record_written": True,
+                                    "raw_payload": {"secret": True},
+                                }
+                            ],
+                            "decision_schema": {
+                                "operator_label": ["safe", "needs_help"],
+                                "candidate_decision": ["ready_for_candidate_store", "reject_for_training"],
+                            },
+                            "apply_policy": "review_packet_must_be_applied_by_a_future_explicit_candidate_store_task",
+                        },
+                        "scope": {
+                            "labeling_queue_summary_read": True,
+                            "sample_jsonl_read": False,
+                            "payload_bytes_copied": False,
+                            "exact_coordinates_copied": False,
+                            "feature_rows_copied": False,
+                            "target_labels_written": False,
+                            "candidate_db_written": False,
+                            "training_samples_written": False,
+                            "model_training_started": False,
+                            "model_artifact_written": False,
+                            "release_claim_allowed": False,
+                        },
+                        "paths": {
+                            "private_candidate_db": "C:/private/training_candidates.db",
+                            "sample_jsonl": "C:/private/d1_field_samples.jsonl",
+                        },
+                        "raw_payload": {"private": True},
+                        "features": {"private": "do-not-expose"},
+                        "target": {"private": "do-not-expose"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (report_dir / "d1_labeling_review_packet.md").write_text("# D1 Labeling Review\n", encoding="utf-8")
+
+            summary = message_hub.load_latest_d1_labeling_review_packet(root)
+
+        self.assertTrue(summary["available"])
+        self.assertEqual(summary["status"], "needs_human_review")
+        self.assertEqual(summary["run_id"], "unit-labeling-review")
+        self.assertEqual(summary["summary"]["review_packet_items"], 1)
+        self.assertEqual(summary["summary"]["needs_operator_label"], 1)
+        self.assertEqual(summary["source_queue"]["run_id"], "unit-labeling-queue")
+        item = summary["review_packet"]["items"][0]
+        self.assertEqual(item["packet_item_id"], "d1-review-unit")
+        self.assertEqual(item["decision_slots"]["operator_label"]["current"], "missing")
+        self.assertIn("safe", item["decision_slots"]["operator_label"]["allowed_values"])
+        self.assertFalse(item["training_allowed"])
+        self.assertFalse(item["candidate_record_written"])
+        self.assertFalse(summary["scope"]["sample_jsonl_read"])
+        self.assertFalse(summary["scope"]["payload_bytes_copied"])
+        self.assertFalse(summary["scope"]["candidate_db_written"])
+        self.assertEqual(summary["review_gates"]["candidate_store"], "not_written")
+        payload = json.dumps(summary)
+        self.assertNotIn("31.123456", payload)
+        self.assertNotIn("121.654321", payload)
+        self.assertNotIn("raw_payload", payload)
+        self.assertNotIn("private-operator", payload)
+        self.assertNotIn("private-time", payload)
+        self.assertNotIn('"features"', payload)
+        self.assertNotIn('"target"', payload)
+        self.assertNotIn("private_candidate_db", payload)
+        self.assertNotIn("d1_field_samples.jsonl", payload)
+        self.assertNotIn("C:/private", payload)
+
+    def test_d1_labeling_review_packet_missing_returns_explainable_not_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = message_hub.load_latest_d1_labeling_review_packet(Path(tmp))
+
+        self.assertFalse(summary["available"])
+        self.assertEqual(summary["status"], "not_available")
+        self.assertEqual(summary["reason"], "no_d1_labeling_review_packet")
 
     def test_deploy_script_can_include_curated_field_report_summaries(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
@@ -1512,6 +1672,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("IncludeD1TrainingReadinessSummaries", script)
         self.assertIn("IncludeD1LabelingIntakeSummaries", script)
         self.assertIn("IncludeD1LabelingQueueSummaries", script)
+        self.assertIn("IncludeD1LabelingReviewSummaries", script)
         self.assertIn("Copy-FieldReportSummaries", script)
         self.assertIn("Copy-DataFlywheelSummaries", script)
         self.assertIn("Copy-TrainingExperimentSummaries", script)
@@ -1525,6 +1686,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Copy-D1TrainingReadinessSummaries", script)
         self.assertIn("Copy-D1LabelingIntakeSummaries", script)
         self.assertIn("Copy-D1LabelingQueueSummaries", script)
+        self.assertIn("Copy-D1LabelingReviewSummaries", script)
         self.assertIn("d1_web_api_report.json", script)
         self.assertIn("d1_field_companion_summary.json", script)
         self.assertIn("d1_field_observation_report.json", script)
@@ -1555,6 +1717,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("d1_labeling_intake.md", script)
         self.assertIn("d1_labeling_queue.json", script)
         self.assertIn("d1_labeling_queue.md", script)
+        self.assertIn("d1_labeling_review_packet.json", script)
+        self.assertIn("d1_labeling_review_packet.md", script)
         self.assertIn("*.summary.json", script)
         self.assertNotIn("*.jsonl", script)
         self.assertNotIn("d1_field_samples.jsonl", script)
