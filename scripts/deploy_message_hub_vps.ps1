@@ -17,6 +17,7 @@ param(
     [switch]$IncludeTrainingJobSummaries,
     [switch]$IncludeSyntheticTrainingChainSummaries,
     [switch]$IncludeD1TrainingReadinessSummaries,
+    [switch]$IncludeD1LabelingIntakeSummaries,
     [switch]$NoStart
 )
 
@@ -346,6 +347,31 @@ function Copy-D1TrainingReadinessSummaries {
     }
 }
 
+function Copy-D1LabelingIntakeSummaries {
+    $d1LabelingIntakeDir = Join-Path $repoRoot "reports\d1_labeling_intake"
+    if (-not (Test-Path $d1LabelingIntakeDir -PathType Container)) {
+        return
+    }
+    $allowedNames = @(
+        "d1_labeling_intake.json",
+        "d1_labeling_intake.md"
+    )
+    $reportFiles = Get-ChildItem -Path $d1LabelingIntakeDir -Recurse -File |
+        Where-Object { $allowedNames -contains $_.Name }
+
+    $repoFull = (Resolve-Path $repoRoot).Path.TrimEnd("\", "/")
+    foreach ($file in $reportFiles) {
+        $fileFull = $file.FullName
+        if (-not $fileFull.StartsWith($repoFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to copy D1 labeling intake summary outside repository: $fileFull"
+        }
+        $relative = $fileFull.Substring($repoFull.Length).TrimStart("\", "/")
+        $target = Join-Path $packageRoot $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -Force -LiteralPath $file.FullName -Destination $target
+    }
+}
+
 function SshArgs {
     $args = @()
     if ($SshKey) {
@@ -411,6 +437,9 @@ try {
     }
     if ($IncludeD1TrainingReadinessSummaries) {
         Copy-D1TrainingReadinessSummaries
+    }
+    if ($IncludeD1LabelingIntakeSummaries) {
+        Copy-D1LabelingIntakeSummaries
     }
 
     Push-Location $packageRoot

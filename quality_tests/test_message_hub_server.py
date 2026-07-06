@@ -2130,6 +2130,169 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertNotIn('"features"', payload_text)
         self.assertNotIn('"target"', payload_text)
 
+    def test_state_api_and_d1_labeling_intake_route_include_latest_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report_root = tmp_path / "d1_labeling_intake"
+            report_dir = report_root / "unit-d1-intake"
+            report_dir.mkdir(parents=True)
+            (report_dir / "d1_labeling_intake.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.d1_labeling_intake.v0.1",
+                        "run_id": "unit-d1-intake",
+                        "generated_at": "2026-07-06T11:35:00+00:00",
+                        "serves_demo": "D5",
+                        "status": "pending_human_review",
+                        "reason": "d1_run_waiting_for_label_privacy_consent_and_split_review",
+                        "source_readiness": {
+                            "run_id": "unit-d1-readiness",
+                            "status": "ready_for_labeling_review",
+                            "reason": "field_observation_can_enter_human_review_but_not_training",
+                            "report_path": "reports/d1_training_readiness/unit/d1_training_readiness.json",
+                        },
+                        "source_observation": {
+                            "run_id": "field-private",
+                            "status": "completed",
+                            "result": "PASS",
+                            "device_id": "ego-link-r1-connectivity-001",
+                            "sample_count": 5,
+                            "successful_sample_count": 5,
+                            "latest_seq": 52,
+                            "max_freshness_s": 62.0,
+                            "last_location_upload_at": "2026-07-06T11:20:18+00:00",
+                            "samples_jsonl_read": False,
+                            "coordinate_values_copied": False,
+                            "lat": 31.123456,
+                            "lon": 121.654321,
+                        },
+                        "evidence_coverage": {
+                            "transport": {
+                                "raw_post_success_delta": 2,
+                                "raw_post_failure_delta": 0,
+                                "lte_registration_seen": True,
+                                "pdp_active_seen": True,
+                            },
+                            "location": {
+                                "coordinate_sample_count": 5,
+                                "location_event_count_delta": 0,
+                                "map_modes": ["memory_coordinate"],
+                                "gnss_states": ["unknown"],
+                                "gnss_fix_seen": False,
+                                "coordinate_values_copied": False,
+                                "accuracy_claimed": False,
+                                "coordinates": {"lat": 31.123456, "lon": 121.654321},
+                            },
+                            "sensors": {
+                                "imu_evidence_statuses": ["mock"],
+                                "power_evidence_statuses": ["measured"],
+                                "power_measured_seen": True,
+                                "real_imu_seen": False,
+                            },
+                        },
+                        "intake_queue": {
+                            "available": True,
+                            "pending_items": 1,
+                            "next_queue": "training_candidate_store_after_review",
+                            "items": [
+                                {
+                                    "intake_id": "d1-intake-unit",
+                                    "source_run_id": "field-private",
+                                    "readiness_run_id": "unit-d1-readiness",
+                                    "device_id": "ego-link-r1-connectivity-001",
+                                    "status": "pending_label_privacy_split",
+                                    "training_allowed": False,
+                                    "candidate_record_written": False,
+                                    "review_state": {
+                                        "operator_label": "missing",
+                                        "privacy_review": "required",
+                                        "training_consent": "not_reviewed",
+                                        "split_plan": "missing",
+                                        "quality_gaps": ["gnss_fix_not_seen"],
+                                    },
+                                    "evidence_summary": {
+                                        "samples": 5,
+                                        "latest_seq": 52,
+                                        "raw_post_success_delta": 2,
+                                        "raw_post_failure_delta": 0,
+                                        "coordinate_sample_count": 5,
+                                        "gnss_fix_seen": False,
+                                        "imu_evidence_statuses": ["mock"],
+                                        "power_evidence_statuses": ["measured"],
+                                        "private_coordinates": [31.123456, 121.654321],
+                                    },
+                                    "requested_actions": ["attach_operator_or_user_label"],
+                                    "available_decisions": ["needs_more_capture", "ready_for_candidate_store"],
+                                    "raw_payload": {"secret": "do-not-copy"},
+                                }
+                            ],
+                        },
+                        "labeling_request": {
+                            "taxonomy_version": "d1_location_review.v0.1",
+                            "requested_label_groups": ["collection_context", "location_quality"],
+                            "free_text_policy": "redacted_or_absent",
+                            "exact_coordinates_visible": False,
+                            "raw_payload_visible": False,
+                        },
+                        "review_gates": {
+                            "training_readiness": "pass",
+                            "operator_label": "blocked",
+                            "privacy_review": "blocked",
+                            "candidate_store": "not_written",
+                            "model_training": "not_run",
+                        },
+                        "blockers": ["operator_label_missing", "privacy_review_required"],
+                        "scope": {
+                            "training_readiness_report_read": True,
+                            "sample_jsonl_read": False,
+                            "hardware_contacted": False,
+                            "candidate_db_written": False,
+                            "model_training_started": False,
+                            "model_artifact_written": False,
+                            "exact_coordinates_copied": False,
+                            "release_claim_allowed": False,
+                        },
+                        "next_step": "Collect labels and reviews.",
+                        "raw_payload": {"secret": "do-not-copy"},
+                        "features": {"private": True},
+                        "target": {"label": "secret"},
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (report_dir / "d1_labeling_intake.md").write_text("# D1 intake\n", encoding="utf-8")
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, d1_labeling_intake_root=report_root),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                latest = get_json(base_url, "/api/v1/d1-labeling-intake/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["d1_labeling_intake"]["status"], "pending_human_review")
+        self.assertEqual(state["d1_labeling_intake"]["intake_queue"]["pending_items"], 1)
+        self.assertEqual(latest["d1_labeling_intake"]["intake_queue"]["items"][0]["intake_id"], "d1-intake-unit")
+        self.assertFalse(latest["d1_labeling_intake"]["scope"]["sample_jsonl_read"])
+        self.assertFalse(latest["d1_labeling_intake"]["scope"]["candidate_db_written"])
+        self.assertEqual(latest["d1_labeling_intake"]["review_gates"]["candidate_store"], "not_written")
+        self.assertEqual(latest["d1_labeling_intake"]["markdown_path"], str(report_dir / "d1_labeling_intake.md"))
+        payload_text = json.dumps(latest, sort_keys=True)
+        self.assertNotIn("31.123456", payload_text)
+        self.assertNotIn("121.654321", payload_text)
+        self.assertNotIn("raw_payload", payload_text)
+        self.assertNotIn('"features"', payload_text)
+        self.assertNotIn('"target"', payload_text)
+
     def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")

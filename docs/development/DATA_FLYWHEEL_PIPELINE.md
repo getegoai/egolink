@@ -313,6 +313,13 @@ summary, the collector writes a `training_readiness` component and
 data-flywheel, and TRAIN-003..008 summaries. It preserves the same no-JSONL,
 no-coordinate, no-training, no-artifact, and no-release-claim boundaries.
 
+DATA-024 turns a D1 readiness report into a bounded labeling/privacy intake
+queue summary for Web/API visibility. It records which real D1 run is waiting
+for operator labels, privacy review, training-consent decision, and split
+review before any candidate-store write. It does not read sample JSONL, expose
+exact coordinates or raw payloads, write candidate DBs, create training samples,
+train or evaluate a model, produce model artifacts, or allow release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -376,6 +383,8 @@ deployment, or OTA update behavior changes in DATA-002.
     privacy review before any training handoff.
 25. Let DATA-023 include DATA-022 readiness in the one-command D1 post-run
     collector.
-26. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+26. Let DATA-024 turn real D1 readiness into a labeling/privacy intake queue
+    before candidate-store writes.
+27. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

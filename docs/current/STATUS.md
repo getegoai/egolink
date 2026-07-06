@@ -6,6 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-024 D1 labeling/privacy intake is implemented locally.
+`scripts/build_d1_labeling_intake.py` turns a DATA-022
+`d1_training_readiness.json` into a bounded `d1_labeling_intake` report and the
+Message Hub Dashboard/API can surface the latest intake queue. The intake
+stops at human review: it does not read sample JSONL contents, write
+candidate DBs, create training samples, expose exact coordinates/raw payloads/
+feature rows/targets, contact hardware, change firmware, train/evaluate a
+model, deploy inference, or make release claims.
+
 2026-07-06: DATA-023 D1 post-run training-readiness binding is implemented
 locally. `scripts/collect_d1_postrun.py` is now schema
 `egolink.d1_postrun_collection.v0.6`; when a D1 field-observation report or

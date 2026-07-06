@@ -30,6 +30,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Training Job Plan", html)
         self.assertIn("Synthetic Training Chain", html)
         self.assertIn("D1 Training Readiness", html)
+        self.assertIn("D1 Labeling Intake", html)
         self.assertIn("D1 Link Through", html)
         self.assertIn("dashboard-shell", html)
         self.assertIn("Field live view", html)
@@ -47,6 +48,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("trainingJobPlan", html)
         self.assertIn("syntheticTrainingChain", html)
         self.assertIn("d1TrainingReadiness", html)
+        self.assertIn("d1LabelingIntake", html)
         self.assertIn("d1Link", html)
         self.assertIn("d1_link", html)
         self.assertIn("field_results", html)
@@ -70,6 +72,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("syntheticTrainingChainPanel", html)
         self.assertIn("d1_training_readiness", html)
         self.assertIn("d1TrainingReadinessPanel", html)
+        self.assertIn("d1_labeling_intake", html)
+        self.assertIn("d1LabelingIntakePanel", html)
         self.assertIn("Runner Handoff", html)
         self.assertIn("Runner Ready", html)
         self.assertIn("Feature Rows", html)
@@ -86,6 +90,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Synthetic Review", html)
         self.assertIn("Data Pipeline", html)
         self.assertIn("Review Ready", html)
+        self.assertIn("First Intake", html)
+        self.assertIn("Label Groups", html)
         self.assertIn("Sensor Gaps", html)
         self.assertIn("Synthetic Gate", html)
         self.assertIn("Measured Metrics", html)
@@ -1175,6 +1181,172 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(summary["status"], "not_available")
         self.assertEqual(summary["reason"], "no_training_baseline_eval")
 
+    def test_latest_d1_labeling_intake_summary_is_bounded_for_dashboard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report_dir = root / "unit-intake"
+            report_dir.mkdir()
+            (report_dir / "d1_labeling_intake.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.d1_labeling_intake.v0.1",
+                        "run_id": "unit-intake",
+                        "generated_at": "2026-07-06T11:35:00+00:00",
+                        "serves_demo": "D5",
+                        "status": "pending_human_review",
+                        "reason": "d1_run_waiting_for_label_privacy_consent_and_split_review",
+                        "source_readiness": {
+                            "run_id": "unit-readiness",
+                            "status": "ready_for_labeling_review",
+                            "reason": "field_observation_can_enter_human_review_but_not_training",
+                            "report_path": "reports/d1_training_readiness/unit/d1_training_readiness.json",
+                        },
+                        "source_observation": {
+                            "run_id": "field-private",
+                            "status": "completed",
+                            "result": "PASS",
+                            "device_id": "ego-link-r1-connectivity-001",
+                            "sample_count": 5,
+                            "successful_sample_count": 5,
+                            "latest_seq": 52,
+                            "max_freshness_s": 62,
+                            "last_location_upload_at": "2026-07-06T11:20:18+00:00",
+                            "samples_jsonl_read": False,
+                            "coordinate_values_copied": False,
+                            "lat": 31.123456,
+                            "lon": 121.654321,
+                        },
+                        "evidence_coverage": {
+                            "transport": {
+                                "raw_post_success_delta": 2,
+                                "raw_post_failure_delta": 0,
+                                "lte_registration_seen": True,
+                                "pdp_active_seen": True,
+                            },
+                            "location": {
+                                "coordinate_sample_count": 5,
+                                "location_event_count_delta": 3,
+                                "map_modes": ["memory_coordinate"],
+                                "gnss_states": ["unknown"],
+                                "gnss_fix_seen": False,
+                                "coordinate_values_copied": False,
+                                "accuracy_claimed": False,
+                                "raw_location": {"lat": 31.123456, "lon": 121.654321},
+                            },
+                            "sensors": {
+                                "imu_evidence_statuses": ["mock"],
+                                "power_evidence_statuses": ["measured"],
+                                "power_measured_seen": True,
+                                "real_imu_seen": False,
+                            },
+                        },
+                        "intake_queue": {
+                            "available": True,
+                            "pending_items": 1,
+                            "next_queue": "training_candidate_store_after_review",
+                            "items": [
+                                {
+                                    "intake_id": "d1-intake-unit",
+                                    "source_run_id": "field-private",
+                                    "readiness_run_id": "unit-readiness",
+                                    "device_id": "ego-link-r1-connectivity-001",
+                                    "status": "pending_label_privacy_split",
+                                    "training_allowed": False,
+                                    "candidate_record_written": False,
+                                    "review_state": {
+                                        "operator_label": "missing",
+                                        "privacy_review": "required",
+                                        "training_consent": "not_reviewed",
+                                        "split_plan": "missing",
+                                        "quality_gaps": ["gnss_fix_not_seen"],
+                                    },
+                                    "evidence_summary": {
+                                        "samples": 5,
+                                        "latest_seq": 52,
+                                        "raw_post_success_delta": 2,
+                                        "raw_post_failure_delta": 0,
+                                        "coordinate_sample_count": 5,
+                                        "gnss_fix_seen": False,
+                                        "imu_evidence_statuses": ["mock"],
+                                        "power_evidence_statuses": ["measured"],
+                                        "private_coordinates": [31.123456, 121.654321],
+                                    },
+                                    "requested_actions": ["attach_operator_or_user_label"],
+                                    "available_decisions": ["needs_more_capture", "ready_for_candidate_store"],
+                                    "raw_payload": {"secret": True},
+                                }
+                            ],
+                        },
+                        "labeling_request": {
+                            "taxonomy_version": "d1_location_review.v0.1",
+                            "requested_label_groups": ["collection_context", "location_quality"],
+                            "free_text_policy": "redacted_or_absent",
+                            "exact_coordinates_visible": False,
+                            "raw_payload_visible": False,
+                        },
+                        "review_gates": {
+                            "training_readiness": "pass",
+                            "operator_label": "blocked",
+                            "privacy_review": "blocked",
+                            "candidate_store": "not_written",
+                            "model_training": "not_run",
+                        },
+                        "blockers": ["operator_label_missing", "privacy_review_required"],
+                        "scope": {
+                            "training_readiness_report_read": True,
+                            "sample_jsonl_read": False,
+                            "hardware_contacted": False,
+                            "candidate_db_written": False,
+                            "model_training_started": False,
+                            "model_artifact_written": False,
+                            "exact_coordinates_copied": False,
+                            "release_claim_allowed": False,
+                        },
+                        "paths": {
+                            "d1_labeling_intake_json": "reports/d1_labeling_intake/unit/d1_labeling_intake.json",
+                            "private_candidate_db": "C:/private/training_candidates.db",
+                        },
+                        "raw_payload": {"private": True},
+                        "features": {"private": "do-not-expose"},
+                        "target": {"private": "do-not-expose"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (report_dir / "d1_labeling_intake.md").write_text("# D1 Intake\n", encoding="utf-8")
+
+            summary = message_hub.load_latest_d1_labeling_intake(root)
+
+        self.assertTrue(summary["available"])
+        self.assertEqual(summary["status"], "pending_human_review")
+        self.assertEqual(summary["run_id"], "unit-intake")
+        self.assertEqual(summary["intake_queue"]["pending_items"], 1)
+        self.assertEqual(summary["intake_queue"]["items"][0]["intake_id"], "d1-intake-unit")
+        self.assertFalse(summary["intake_queue"]["items"][0]["training_allowed"])
+        self.assertFalse(summary["intake_queue"]["items"][0]["candidate_record_written"])
+        self.assertEqual(summary["review_gates"]["candidate_store"], "not_written")
+        self.assertFalse(summary["scope"]["sample_jsonl_read"])
+        self.assertFalse(summary["scope"]["candidate_db_written"])
+        self.assertFalse(summary["scope"]["exact_coordinates_copied"])
+        self.assertEqual(summary["labeling_request"]["requested_label_groups"], ["collection_context", "location_quality"])
+        payload = json.dumps(summary)
+        self.assertNotIn("31.123456", payload)
+        self.assertNotIn("121.654321", payload)
+        self.assertNotIn("raw_payload", payload)
+        self.assertNotIn("features", payload)
+        self.assertNotIn("target", payload)
+        self.assertNotIn("private_candidate_db", payload)
+        self.assertNotIn("C:/private", payload)
+
+    def test_d1_labeling_intake_missing_returns_explainable_not_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = message_hub.load_latest_d1_labeling_intake(Path(tmp))
+
+        self.assertFalse(summary["available"])
+        self.assertEqual(summary["status"], "not_available")
+        self.assertEqual(summary["reason"], "no_d1_labeling_intake")
+
     def test_deploy_script_can_include_curated_field_report_summaries(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         script = (repo_root / "scripts" / "deploy_message_hub_vps.ps1").read_text(encoding="utf-8")
@@ -1190,6 +1362,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("IncludeTrainingJobSummaries", script)
         self.assertIn("IncludeSyntheticTrainingChainSummaries", script)
         self.assertIn("IncludeD1TrainingReadinessSummaries", script)
+        self.assertIn("IncludeD1LabelingIntakeSummaries", script)
         self.assertIn("Copy-FieldReportSummaries", script)
         self.assertIn("Copy-DataFlywheelSummaries", script)
         self.assertIn("Copy-TrainingExperimentSummaries", script)
@@ -1201,6 +1374,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Copy-TrainingJobSummaries", script)
         self.assertIn("Copy-SyntheticTrainingChainSummaries", script)
         self.assertIn("Copy-D1TrainingReadinessSummaries", script)
+        self.assertIn("Copy-D1LabelingIntakeSummaries", script)
         self.assertIn("d1_web_api_report.json", script)
         self.assertIn("d1_field_companion_summary.json", script)
         self.assertIn("d1_field_observation_report.json", script)
@@ -1227,6 +1401,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("synthetic_training_chain.md", script)
         self.assertIn("d1_training_readiness.json", script)
         self.assertIn("d1_training_readiness.md", script)
+        self.assertIn("d1_labeling_intake.json", script)
+        self.assertIn("d1_labeling_intake.md", script)
         self.assertIn("*.summary.json", script)
         self.assertNotIn("*.jsonl", script)
         self.assertNotIn("d1_field_samples.jsonl", script)
