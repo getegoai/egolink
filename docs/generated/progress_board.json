@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-06 01:55 UTC",
+  "generated_at": "2026-07-06 02:08 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "da37656 feat(field): add d1 observer live status [D1]"
+    "head": "9b08603 feat(field): bind observation into postrun summary [D1]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -277,6 +277,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-018_POSTRUN_JOB_PLAN_COLLECTOR.md"
     },
     {
+      "id": "DATA-019",
+      "title": "Post-run field-observation binding",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "medium",
+      "date": "2026-07-06",
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-019_POSTRUN_FIELD_OBSERVATION_BINDING.md"
+    },
+    {
       "id": "FIELD-005",
       "title": "D1 observer incremental samples",
       "state": "done",
@@ -284,15 +293,6 @@
       "priority": "medium",
       "date": "2026-07-06",
       "path": "D:/pywork/egolink/docs/tasks/done/FIELD-005_D1_OBSERVER_INCREMENTAL_SAMPLES.md"
-    },
-    {
-      "id": "FIELD-006",
-      "title": "D1 observer live status snapshot",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "medium",
-      "date": "2026-07-06",
-      "path": "D:/pywork/egolink/docs/tasks/done/FIELD-006_D1_OBSERVER_LIVE_STATUS.md"
     }
   ],
   "operator_asks": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 109
+    "done_total": 110
   }
 }
