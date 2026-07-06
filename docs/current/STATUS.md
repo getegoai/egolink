@@ -6,6 +6,19 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-030 D1 labeling decision-template and post-run binding is
+implemented locally. `scripts/build_d1_labeling_decision_template.py` turns a
+bounded `d1_labeling_review_packet` summary into a fillable decision template
+with operator label, privacy review, training consent, split plan, and
+candidate decision fields; `scripts/collect_d1_postrun.py` is now schema
+`egolink.d1_postrun_collection.v0.10` and includes this as
+`labeling_decision_template`; field kit v14 expects the
+`d1_labeling_decision_template` artifact. This does not read sample JSONL,
+expose exact coordinates/raw payloads/feature rows/targets/candidate DBs,
+mark items reviewed, apply decisions, write candidate records, train/evaluate
+a model, write model artifacts, deploy inference, measure model
+footprint/power, deploy to the VPS, or allow release claims.
+
 2026-07-06: DATA-029 D1 labeling review-packet Web/API visibility is
 implemented locally. The Message Hub can load the latest bounded
 `reports/d1_labeling_reviews/**/d1_labeling_review_packet.json`, expose it as

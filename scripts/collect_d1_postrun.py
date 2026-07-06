@@ -3,9 +3,10 @@
 This command is the normal "back from the field" entry point for D1. It reads
 the Message Hub, binds the local field-observation report/status when present,
 builds existing Web/API, power, D1 demo, D1 training-readiness, D1 labeling
-intake/queue/review-packet, and data-flywheel reports, and writes one summary that points at the artifacts. It
-does not contact hardware, send device commands, deploy to the VPS, train a
-model, or copy raw training data.
+intake/queue/review-packet/decision-template, and data-flywheel reports, and
+writes one summary that points at the artifacts. It does not contact hardware,
+send device commands, deploy to the VPS, train a model, or copy raw training
+data.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from scripts import assess_d1_training_readiness
 from scripts import build_d1_labeling_intake
 from scripts import build_training_handoff_bundle
 from scripts import build_d1_demo_report
+from scripts import build_d1_labeling_decision_template
 from scripts import build_d1_labeling_review_packet
 from scripts import create_training_job_plan
 from scripts import export_training_feature_manifest
@@ -41,8 +43,8 @@ from scripts import validate_d1_web_api
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_postrun"
 DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
-SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.9"
-BUILDER_VERSION = "data-028.0"
+SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.10"
+BUILDER_VERSION = "data-030.0"
 SUMMARY_JSON = "d1_postrun_collection_summary.json"
 SUMMARY_MARKDOWN = "d1_postrun_collection_summary.md"
 READY_DATA_PIPELINE_STATUS = "ready_for_training_handoff"
@@ -354,6 +356,46 @@ def labeling_review_packet_summary(
         "training_allowed_count": summary.get("training_allowed_count", 0),
         "report_path": paths.get("d1_labeling_review_packet_json"),
         "markdown_report_path": paths.get("d1_labeling_review_packet_markdown"),
+        "next_step": report.get("next_step"),
+    }
+
+
+def labeling_decision_template_summary(
+    report: Mapping[str, Any] | None,
+    error_summary: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if error_summary:
+        return dict(error_summary)
+    if not report:
+        return {"status": "skipped", "reason": "labeling_decision_template_not_run"}
+    summary = as_dict(report.get("summary"))
+    paths = as_dict(report.get("paths"))
+    template = as_dict(report.get("decision_template"))
+    items = template.get("items") if isinstance(template.get("items"), list) else []
+    first_item = as_dict(items[0]) if items else {}
+    fields = as_dict(first_item.get("decision_fields"))
+    operator_slot = as_dict(fields.get("operator_label"))
+    privacy_slot = as_dict(fields.get("privacy_review"))
+    candidate_slot = as_dict(fields.get("candidate_decision"))
+    return {
+        "status": report.get("status"),
+        "reason": report.get("reason"),
+        "run_id": report.get("run_id"),
+        "template_items": summary.get("template_items", 0),
+        "required_decision_fields": summary.get("required_decision_fields", 0),
+        "selected_decision_fields": summary.get("selected_decision_fields", 0),
+        "items_ready_for_validation": summary.get("items_ready_for_validation", 0),
+        "ready_for_candidate_promotion": summary.get("ready_for_candidate_promotion", False),
+        "first_packet_item_id": first_item.get("packet_item_id"),
+        "first_intake_id": first_item.get("intake_id"),
+        "first_source_run_id": first_item.get("source_run_id"),
+        "first_operator_label_selected": operator_slot.get("selected"),
+        "first_privacy_review_selected": privacy_slot.get("selected"),
+        "first_candidate_decision_selected": candidate_slot.get("selected"),
+        "candidate_record_written_count": summary.get("candidate_record_written_count", 0),
+        "training_allowed_count": summary.get("training_allowed_count", 0),
+        "report_path": paths.get("d1_labeling_decision_template_json"),
+        "markdown_report_path": paths.get("d1_labeling_decision_template_markdown"),
         "next_step": report.get("next_step"),
     }
 
@@ -785,6 +827,66 @@ def collect_labeling_review_packet(
     return report, None
 
 
+def collect_labeling_decision_template(
+    args: argparse.Namespace,
+    *,
+    labeling_review_packet_report: Mapping[str, Any] | None,
+    labeling_review_packet_error: Mapping[str, Any] | None,
+    run_id: str,
+    created_at: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if args.skip_labeling_decision_template:
+        return None, {"status": "skipped", "reason": "skip_labeling_decision_template_requested"}
+    if labeling_review_packet_error:
+        return None, {
+            "status": "skipped",
+            "reason": "labeling_review_packet_not_available_for_decision_template",
+            "labeling_review_packet_reason": labeling_review_packet_error.get("reason"),
+        }
+    if not labeling_review_packet_report:
+        return None, {"status": "skipped", "reason": "labeling_review_packet_report_missing"}
+
+    review_ref = args.labeling_decision_template_review_packet_report
+    if review_ref is None:
+        paths = as_dict(labeling_review_packet_report.get("paths"))
+        report_path_text = paths.get("d1_labeling_review_packet_json")
+        review_ref = Path(str(report_path_text)) if report_path_text else None
+    expected_review_dir = args.labeling_review_packet_output_dir or (
+        args.labeling_review_packet_output_root
+        / (args.labeling_review_packet_run_id or f"{run_id}-labeling-review")
+    )
+    if review_ref is None or (not review_ref.is_absolute() and not (REPO_ROOT / review_ref).is_file()):
+        expected_review_ref = expected_review_dir / "d1_labeling_review_packet.json"
+        if expected_review_ref.is_file():
+            review_ref = expected_review_ref
+    if review_ref is None:
+        return None, {"status": "skipped", "reason": "labeling_review_packet_report_missing"}
+    if not review_ref.is_absolute():
+        review_ref = REPO_ROOT / review_ref
+
+    decision_run_id = args.labeling_decision_template_run_id or f"{run_id}-labeling-decisions"
+    review_root = (
+        args.labeling_review_packet_output_dir.parent
+        if args.labeling_review_packet_output_dir
+        else args.labeling_review_packet_output_root
+    )
+    namespace = argparse.Namespace(
+        review_packet_report=review_ref,
+        review_packet_root=review_root,
+        run_id=decision_run_id,
+        generated_at=created_at,
+        output_root=args.labeling_decision_template_output_root,
+        output_dir=args.labeling_decision_template_output_dir,
+        limit=args.labeling_decision_template_limit,
+        json=False,
+    )
+    try:
+        report = build_d1_labeling_decision_template.build_from_args(namespace)
+    except Exception as exc:
+        return None, bounded_error("labeling_decision_template_failed", exc)
+    return report, None
+
+
 def collect_training_chain(
     args: argparse.Namespace,
     *,
@@ -1055,6 +1157,18 @@ def derive_result(components: Mapping[str, Mapping[str, Any]]) -> tuple[str, lis
     if labeling_review_status not in {"needs_human_review", "no_review_items", "no_labeling_queue", "skipped"}:
         warnings.append(f"labeling_review_packet:{labeling_review_packet.get('reason') or labeling_review_status}")
 
+    labeling_decision_template = as_dict(components.get("labeling_decision_template"))
+    labeling_decision_status = str(labeling_decision_template.get("status") or "unknown")
+    if labeling_decision_status not in {
+        "ready_for_human_input",
+        "no_decision_items",
+        "no_labeling_review_packet",
+        "skipped",
+    }:
+        warnings.append(
+            f"labeling_decision_template:{labeling_decision_template.get('reason') or labeling_decision_status}"
+        )
+
     training_chain = as_dict(components.get("training_chain"))
     training_status = str(training_chain.get("status") or "unknown")
     if training_status == "error":
@@ -1140,6 +1254,28 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
             str(labeling_review_packet.get("next_step") or "Rerun D1 labeling review packet after queue generation.")
         )
 
+    labeling_decision_template = as_dict(components.get("labeling_decision_template"))
+    labeling_decision_status = str(labeling_decision_template.get("status") or "")
+    if labeling_decision_status == "ready_for_human_input":
+        steps.append(
+            str(
+                labeling_decision_template.get("next_step")
+                or "Fill the D1 labeling decision template before candidate-store promotion."
+            )
+        )
+    elif labeling_decision_status and labeling_decision_status not in {
+        "skipped",
+        "no_decision_items",
+        "no_labeling_review_packet",
+        "ready_for_human_input",
+    }:
+        steps.append(
+            str(
+                labeling_decision_template.get("next_step")
+                or "Rerun D1 labeling decision template after review packet generation."
+            )
+        )
+
     training_chain = as_dict(components.get("training_chain"))
     training_status = str(training_chain.get("status") or "")
     if training_status == "skipped" and training_chain.get("reason") == "data_flywheel_pipeline_not_ready":
@@ -1160,6 +1296,7 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
     labeling_intake = as_dict(components.get("labeling_intake"))
     labeling_queue = as_dict(components.get("labeling_queue"))
     labeling_review_packet = as_dict(components.get("labeling_review_packet"))
+    labeling_decision_template = as_dict(components.get("labeling_decision_template"))
     data_pipeline = as_dict(components.get("data_flywheel_pipeline"))
     training_experiment = as_dict(data_pipeline.get("training_experiment"))
     training_chain = as_dict(components.get("training_chain"))
@@ -1179,6 +1316,7 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
         "d1_labeling_intake": labeling_intake.get("report_path"),
         "d1_labeling_queue": labeling_queue.get("report_path"),
         "d1_labeling_review_packet": labeling_review_packet.get("report_path"),
+        "d1_labeling_decision_template": labeling_decision_template.get("report_path"),
         "web_api_report": as_dict(components.get("web_api")).get("report_path"),
         "power_curve_report": as_dict(components.get("power_curve")).get("report_path"),
         "message_hub_export": as_dict(components.get("power_curve")).get("export_path"),
@@ -1217,6 +1355,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
         "labeling_intake",
         "labeling_queue",
         "labeling_review_packet",
+        "labeling_decision_template",
         "web_api",
         "power_curve",
         "d1_demo",
@@ -1288,6 +1427,13 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         run_id=run_id,
         created_at=created_at,
     )
+    labeling_decision_template_report, labeling_decision_template_error = collect_labeling_decision_template(
+        args,
+        labeling_review_packet_report=labeling_review_packet_report,
+        labeling_review_packet_error=labeling_review_packet_error,
+        run_id=run_id,
+        created_at=created_at,
+    )
     power_report, power_status, export_path = collect_power_curve(
         args,
         token=token,
@@ -1317,6 +1463,10 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         "labeling_review_packet": labeling_review_packet_summary(
             labeling_review_packet_report,
             labeling_review_packet_error,
+        ),
+        "labeling_decision_template": labeling_decision_template_summary(
+            labeling_decision_template_report,
+            labeling_decision_template_error,
         ),
         "web_api": web_api_summary(web_report, web_error),
         "power_curve": power_summary(
@@ -1360,9 +1510,11 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
             "sample_jsonl_read_for_labeling_intake": False,
             "sample_jsonl_read_for_labeling_queue": False,
             "sample_jsonl_read_for_labeling_review_packet": False,
+            "sample_jsonl_read_for_labeling_decision_template": False,
             "candidate_db_written_for_labeling_intake": False,
             "candidate_db_written_for_labeling_queue": False,
             "candidate_db_written_for_labeling_review_packet": False,
+            "candidate_db_written_for_labeling_decision_template": False,
             "secrets_persisted": False,
         },
         "boundaries": [
@@ -1373,6 +1525,7 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
             "The labeling-intake step reads only the D1 training-readiness summary and writes no candidate DB.",
             "The labeling-queue step reads only D1 labeling-intake summaries and writes no candidate DB.",
             "The labeling-review packet step reads only the D1 labeling-queue summary and writes no candidate DB.",
+            "The labeling-decision template step reads only the D1 labeling-review packet and writes no candidate DB.",
             "The data-flywheel step ingests only recording directories explicitly passed with --recording-dir.",
             "The training-chain step runs only bounded local preflight, feature export, runner dry-run, aggregate baseline-eval, handoff-bundle, and job-plan reports after a ready dataset handoff.",
             "Dashboard state and curated summaries are not raw training data.",
@@ -1430,6 +1583,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--labeling-review-packet-output-dir", type=Path)
     parser.add_argument("--labeling-review-packet-limit", type=int)
+    parser.add_argument("--skip-labeling-decision-template", action="store_true")
+    parser.add_argument("--labeling-decision-template-run-id")
+    parser.add_argument("--labeling-decision-template-review-packet-report", type=Path)
+    parser.add_argument(
+        "--labeling-decision-template-output-root",
+        type=Path,
+        default=build_d1_labeling_decision_template.DEFAULT_OUTPUT_ROOT,
+    )
+    parser.add_argument("--labeling-decision-template-output-dir", type=Path)
+    parser.add_argument("--labeling-decision-template-limit", type=int)
     parser.add_argument("--message-test-run-id", help="Message Hub test_run_id to export for PWR-001 analysis.")
     parser.add_argument("--power-export", type=Path, help="Existing Message Hub test_run_export.json to analyze.")
     parser.add_argument("--power-output-dir", type=Path)
