@@ -3270,7 +3270,16 @@ def latest_d1_field_observation_result(root: Path) -> dict[str, Any] | None:
     status_path = latest_report_path(root / "d1_field_observation", ["**/d1_field_observation_status.json"])
     if report_path is None and status_path is None:
         return None
-    if report_path is not None:
+    use_status = False
+    if status_path is not None:
+        if report_path is None:
+            use_status = True
+        else:
+            try:
+                use_status = status_path.stat().st_mtime > report_path.stat().st_mtime
+            except OSError:
+                use_status = False
+    if report_path is not None and not use_status:
         report = load_json_report(report_path)
         if report is None:
             return None

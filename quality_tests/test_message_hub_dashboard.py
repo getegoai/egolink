@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -422,11 +423,32 @@ class MessageHubDashboardTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (observation_dir / "d1_field_observation_report.md").write_text("# Observation\n", encoding="utf-8")
+            live_observation_dir = root / "d1_field_observation" / "run-e"
+            live_observation_dir.mkdir(parents=True)
+            live_status_path = live_observation_dir / "d1_field_observation_status.json"
+            live_status_path.write_text(
+                json.dumps(
+                    {
+                        "status": "running",
+                        "run_id": "run-e",
+                        "sample_count": 6,
+                        "successful_sample_count": 6,
+                        "fetch_error_count": 0,
+                        "latest_seq": 100,
+                        "latest_freshness_s": 12,
+                        "report_path": "C:/private/local/live_report.json",
+                        "samples_path": "C:/private/local/d1_field_samples.jsonl",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            os.utime(live_status_path, (2_000_000_000, 2_000_000_000))
 
             summary = message_hub.load_latest_field_results(root)
 
         self.assertTrue(summary["available"])
-        self.assertEqual(summary["status"], "warn")
+        self.assertEqual(summary["status"], "running")
         self.assertEqual(summary["report_count"], 4)
         kinds = {item["kind"] for item in summary["reports"]}
         self.assertEqual(kinds, {"d1_web_api", "amoled_status", "d1_field_companion", "d1_field_observation"})
@@ -434,8 +456,10 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertNotIn("jsonl_path", json.dumps(amoled))
         self.assertEqual(amoled["metrics"]["command_ack_count"], 1)
         observation = next(item for item in summary["reports"] if item["kind"] == "d1_field_observation")
-        self.assertEqual(observation["metrics"]["sample_count"], 4)
-        self.assertEqual(observation["metrics"]["last_seq"], 42)
+        self.assertEqual(observation["status"], "running")
+        self.assertEqual(observation["run_id"], "run-e")
+        self.assertEqual(observation["metrics"]["sample_count"], 6)
+        self.assertEqual(observation["metrics"]["latest_seq"], 100)
         observation_payload = json.dumps(observation)
         self.assertNotIn("d1_field_samples.jsonl", observation_payload)
         self.assertNotIn("C:/private", observation_payload)
