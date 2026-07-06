@@ -62,8 +62,8 @@ Through` panel:
 - [ ] Field companion report records sample count, stale samples, raw POST
       success/failure delta, coordinate sample count, and power sample count.
 - [ ] Post-run collector summary records Web/API, power, D1 demo,
-      data-flywheel, D1 training-readiness, and D1 labeling-intake artifact
-      paths.
+      data-flywheel, D1 training-readiness, D1 labeling-intake, and D1
+      labeling-queue artifact paths.
 - [ ] Post-run D1 Web/API report passes or fails explainably.
 - [ ] Post-run power report is generated; it may be WARN/FAIL, but must record
       why.

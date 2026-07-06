@@ -2,8 +2,8 @@
 
 This command is the normal "back from the field" entry point for D1. It reads
 the Message Hub, binds the local field-observation report/status when present,
-builds existing Web/API, power, D1 demo, D1 training-readiness, and
-data-flywheel reports, and writes one summary that points at the artifacts. It
+builds existing Web/API, power, D1 demo, D1 training-readiness, D1 labeling
+intake/queue, and data-flywheel reports, and writes one summary that points at the artifacts. It
 does not contact hardware, send device commands, deploy to the VPS, train a
 model, or copy raw training data.
 """
@@ -33,14 +33,15 @@ from scripts import run_data_flywheel_pipeline
 from scripts import run_training_baseline_eval
 from scripts import run_training_experiment_preflight
 from scripts import run_training_runner_dry_run
+from scripts import summarize_d1_labeling_queue
 from scripts import validate_d1_web_api
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_postrun"
 DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
-SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.7"
-BUILDER_VERSION = "data-025.0"
+SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.8"
+BUILDER_VERSION = "data-026.0"
 SUMMARY_JSON = "d1_postrun_collection_summary.json"
 SUMMARY_MARKDOWN = "d1_postrun_collection_summary.md"
 READY_DATA_PIPELINE_STATUS = "ready_for_training_handoff"
@@ -283,6 +284,38 @@ def labeling_intake_summary(
         "blockers": list(report.get("blockers") or []),
         "report_path": paths.get("d1_labeling_intake_json"),
         "markdown_report_path": paths.get("d1_labeling_intake_markdown"),
+        "next_step": report.get("next_step"),
+    }
+
+
+def labeling_queue_summary(
+    report: Mapping[str, Any] | None,
+    error_summary: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if error_summary:
+        return dict(error_summary)
+    if not report:
+        return {"status": "skipped", "reason": "labeling_queue_not_run"}
+    summary = as_dict(report.get("summary"))
+    paths = as_dict(report.get("paths"))
+    queue = as_dict(report.get("queue"))
+    items = queue.get("items") if isinstance(queue.get("items"), list) else []
+    first_item = as_dict(items[0]) if items else {}
+    first_review = as_dict(first_item.get("review_state"))
+    return {
+        "status": report.get("status"),
+        "run_id": report.get("run_id"),
+        "intake_report_count": summary.get("intake_report_count", 0),
+        "pending_item_count": summary.get("pending_item_count", 0),
+        "not_ready_report_count": summary.get("not_ready_report_count", 0),
+        "first_intake_id": first_item.get("intake_id"),
+        "first_source_run_id": first_item.get("source_run_id"),
+        "first_operator_label": first_review.get("operator_label"),
+        "first_privacy_review": first_review.get("privacy_review"),
+        "first_training_consent": first_review.get("training_consent"),
+        "first_split_plan": first_review.get("split_plan"),
+        "report_path": paths.get("d1_labeling_queue_json"),
+        "markdown_report_path": paths.get("d1_labeling_queue_markdown"),
         "next_step": report.get("next_step"),
     }
 
@@ -622,6 +655,43 @@ def collect_labeling_intake(
     return report, None
 
 
+def collect_labeling_queue(
+    args: argparse.Namespace,
+    *,
+    labeling_intake_report: Mapping[str, Any] | None,
+    labeling_intake_error: Mapping[str, Any] | None,
+    run_id: str,
+    created_at: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if args.skip_labeling_queue:
+        return None, {"status": "skipped", "reason": "skip_labeling_queue_requested"}
+    if labeling_intake_error:
+        return None, {
+            "status": "skipped",
+            "reason": "labeling_intake_not_available_for_queue",
+            "labeling_intake_reason": labeling_intake_error.get("reason"),
+        }
+    if not labeling_intake_report:
+        return None, {"status": "skipped", "reason": "labeling_intake_report_missing"}
+
+    queue_run_id = args.labeling_queue_run_id or f"{run_id}-labeling-queue"
+    intake_root = args.labeling_intake_output_dir.parent if args.labeling_intake_output_dir else args.labeling_intake_output_root
+    namespace = argparse.Namespace(
+        intake_root=intake_root,
+        run_id=queue_run_id,
+        generated_at=created_at,
+        output_root=args.labeling_queue_output_root,
+        output_dir=args.labeling_queue_output_dir,
+        limit=args.labeling_queue_limit,
+        json=False,
+    )
+    try:
+        report = summarize_d1_labeling_queue.build_from_args(namespace)
+    except Exception as exc:
+        return None, bounded_error("labeling_queue_failed", exc)
+    return report, None
+
+
 def collect_training_chain(
     args: argparse.Namespace,
     *,
@@ -882,6 +952,11 @@ def derive_result(components: Mapping[str, Mapping[str, Any]]) -> tuple[str, lis
     if labeling_status not in {"pending_human_review", "not_ready_for_labeling_intake", "skipped"}:
         warnings.append(f"labeling_intake:{labeling_intake.get('reason') or labeling_status}")
 
+    labeling_queue = as_dict(components.get("labeling_queue"))
+    labeling_queue_status = str(labeling_queue.get("status") or "unknown")
+    if labeling_queue_status not in {"pending_human_review", "empty_or_not_ready", "no_intake_reports", "skipped"}:
+        warnings.append(f"labeling_queue:{labeling_queue.get('reason') or labeling_queue_status}")
+
     training_chain = as_dict(components.get("training_chain"))
     training_status = str(training_chain.get("status") or "unknown")
     if training_status == "error":
@@ -936,6 +1011,18 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
     elif labeling_status and labeling_status not in {"skipped", "not_ready_for_labeling_intake", "pending_human_review"}:
         steps.append(str(labeling_intake.get("next_step") or "Rerun D1 labeling intake after readiness is available."))
 
+    labeling_queue = as_dict(components.get("labeling_queue"))
+    labeling_queue_status = str(labeling_queue.get("status") or "")
+    if labeling_queue_status == "pending_human_review":
+        steps.append(str(labeling_queue.get("next_step") or "Review the D1 labeling queue before candidate-store writes."))
+    elif labeling_queue_status and labeling_queue_status not in {
+        "skipped",
+        "empty_or_not_ready",
+        "no_intake_reports",
+        "pending_human_review",
+    }:
+        steps.append(str(labeling_queue.get("next_step") or "Rerun D1 labeling queue after intake is available."))
+
     training_chain = as_dict(components.get("training_chain"))
     training_status = str(training_chain.get("status") or "")
     if training_status == "skipped" and training_chain.get("reason") == "data_flywheel_pipeline_not_ready":
@@ -954,6 +1041,7 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
     field_observation = as_dict(components.get("field_observation"))
     training_readiness = as_dict(components.get("training_readiness"))
     labeling_intake = as_dict(components.get("labeling_intake"))
+    labeling_queue = as_dict(components.get("labeling_queue"))
     data_pipeline = as_dict(components.get("data_flywheel_pipeline"))
     training_experiment = as_dict(data_pipeline.get("training_experiment"))
     training_chain = as_dict(components.get("training_chain"))
@@ -971,6 +1059,7 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
         "field_observation_samples": field_observation.get("samples_path"),
         "d1_training_readiness": training_readiness.get("report_path"),
         "d1_labeling_intake": labeling_intake.get("report_path"),
+        "d1_labeling_queue": labeling_queue.get("report_path"),
         "web_api_report": as_dict(components.get("web_api")).get("report_path"),
         "power_curve_report": as_dict(components.get("power_curve")).get("report_path"),
         "message_hub_export": as_dict(components.get("power_curve")).get("export_path"),
@@ -1007,6 +1096,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
         "field_observation",
         "training_readiness",
         "labeling_intake",
+        "labeling_queue",
         "web_api",
         "power_curve",
         "d1_demo",
@@ -1064,6 +1154,13 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         run_id=run_id,
         created_at=created_at,
     )
+    labeling_queue_report, labeling_queue_error = collect_labeling_queue(
+        args,
+        labeling_intake_report=labeling_intake_report,
+        labeling_intake_error=labeling_intake_error,
+        run_id=run_id,
+        created_at=created_at,
+    )
     power_report, power_status, export_path = collect_power_curve(
         args,
         token=token,
@@ -1089,6 +1186,7 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         "field_observation": field_observation_summary(field_report, field_status, field_error),
         "training_readiness": training_readiness_summary(training_readiness_report, training_readiness_error),
         "labeling_intake": labeling_intake_summary(labeling_intake_report, labeling_intake_error),
+        "labeling_queue": labeling_queue_summary(labeling_queue_report, labeling_queue_error),
         "web_api": web_api_summary(web_report, web_error),
         "power_curve": power_summary(
             power_report,
@@ -1129,7 +1227,9 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
             "model_artifact_written": False,
             "sample_jsonl_read_for_training_readiness": False,
             "sample_jsonl_read_for_labeling_intake": False,
+            "sample_jsonl_read_for_labeling_queue": False,
             "candidate_db_written_for_labeling_intake": False,
+            "candidate_db_written_for_labeling_queue": False,
             "secrets_persisted": False,
         },
         "boundaries": [
@@ -1138,6 +1238,7 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
             "The field-observation step reads only an explicit or same-run local observer report/status file.",
             "The training-readiness step reads only D1 field-observation report/status summaries, not sample JSONL contents.",
             "The labeling-intake step reads only the D1 training-readiness summary and writes no candidate DB.",
+            "The labeling-queue step reads only D1 labeling-intake summaries and writes no candidate DB.",
             "The data-flywheel step ingests only recording directories explicitly passed with --recording-dir.",
             "The training-chain step runs only bounded local preflight, feature export, runner dry-run, aggregate baseline-eval, handoff-bundle, and job-plan reports after a ready dataset handoff.",
             "Dashboard state and curated summaries are not raw training data.",
@@ -1180,6 +1281,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--labeling-intake-training-readiness-report", type=Path)
     parser.add_argument("--labeling-intake-output-root", type=Path, default=build_d1_labeling_intake.DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--labeling-intake-output-dir", type=Path)
+    parser.add_argument("--skip-labeling-queue", action="store_true")
+    parser.add_argument("--labeling-queue-run-id")
+    parser.add_argument("--labeling-queue-output-root", type=Path, default=summarize_d1_labeling_queue.DEFAULT_OUTPUT_ROOT)
+    parser.add_argument("--labeling-queue-output-dir", type=Path)
+    parser.add_argument("--labeling-queue-limit", type=int)
     parser.add_argument("--message-test-run-id", help="Message Hub test_run_id to export for PWR-001 analysis.")
     parser.add_argument("--power-export", type=Path, help="Existing Message Hub test_run_export.json to analyze.")
     parser.add_argument("--power-output-dir", type=Path)

@@ -157,6 +157,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("training_job_plan", manifest["expected_outputs"])
             self.assertIn("d1_training_readiness", manifest["expected_outputs"])
             self.assertIn("d1_labeling_intake", manifest["expected_outputs"])
+            self.assertIn("d1_labeling_queue", manifest["expected_outputs"])
             self.assertIn(
                 "D1-FIELD-unit-data-pipeline-experiment",
                 manifest["expected_outputs"]["training_experiment_plan"],
@@ -166,6 +167,7 @@ class D1FieldKitTests(unittest.TestCase):
                 manifest["expected_outputs"]["d1_training_readiness"],
             )
             self.assertIn("D1-FIELD-unit-labeling-intake", manifest["expected_outputs"]["d1_labeling_intake"])
+            self.assertIn("D1-FIELD-unit-labeling-queue", manifest["expected_outputs"]["d1_labeling_queue"])
             self.assertIn("D1-FIELD-unit-training-preflight", manifest["expected_outputs"]["training_run_preflight"])
             self.assertIn("D1-FIELD-unit-features", manifest["expected_outputs"]["training_feature_manifest"])
             self.assertIn("D1-FIELD-unit-runner-dry-run", manifest["expected_outputs"]["training_runner_dry_run"])
@@ -189,6 +191,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("Data Flywheel Pipeline", runbook)
             self.assertIn("D1 training-readiness", runbook)
             self.assertIn("D1 labeling-intake", runbook)
+            self.assertIn("D1 labeling-queue", runbook)
             self.assertIn("TRAIN-003..008", runbook)
             self.assertIn("Sync Dashboard Summaries", runbook)
             self.assertIn("observe_d1_field_run.py", runbook)
@@ -197,6 +200,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("Post-run summary", notes)
             self.assertIn("D1 training readiness", notes)
             self.assertIn("D1 labeling intake", notes)
+            self.assertIn("D1 labeling queue", notes)
             self.assertIn("Training run preflight", notes)
             self.assertIn("Training baseline eval", notes)
             self.assertIn("Training job plan", notes)
@@ -205,6 +209,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("Calling and SMS are not part of this run", checklist)
             self.assertIn("Run the one-command post-run collector", checklist)
             self.assertIn("post-run training readiness", checklist)
+            self.assertIn("D1 labeling queue", checklist)
 
     def test_v1_board_uses_recorded_v1_max17048_pins(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

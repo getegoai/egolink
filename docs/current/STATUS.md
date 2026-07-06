@@ -6,6 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-026 D1 labeling-queue index and post-run binding is
+implemented locally. `scripts/summarize_d1_labeling_queue.py` scans bounded
+`d1_labeling_intake` summaries and writes a compact queue of D1 runs pending
+labels, privacy review, consent decision, and split planning; the D1 post-run
+collector now includes this as `labeling_queue` and field kit v10 expects the
+`d1_labeling_queue` artifact. This does not read sample JSONL, write candidate
+DBs, expose exact coordinates/raw payloads, contact hardware, deploy to the
+VPS, train/evaluate a model, write model artifacts, or make release claims.
+
 2026-07-06: FIELD-009 D1 3-4h field-kit v9 readiness/intake closure is
 implemented locally. `scripts/prepare_d1_field_kit.py` now emits D1
 training-readiness and labeling-intake expected outputs, adds them to
