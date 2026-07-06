@@ -1610,6 +1610,124 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(latest["training_baseline_eval"]["gates"]["model_artifact"], "not_produced")
         self.assertEqual(latest["training_baseline_eval"]["gates"]["release_claim"], "not_allowed")
 
+    def test_state_api_and_training_handoff_bundle_route_include_latest_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report_root = tmp_path / "training_handoffs"
+            report_dir = report_root / "unit-handoff"
+            report_dir.mkdir(parents=True)
+            (report_dir / "training_handoff_bundle.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.training_handoff_bundle.v0.1",
+                        "handoff_id": "unit-handoff",
+                        "created_at": "2026-07-06T01:30:00+00:00",
+                        "status": "synthetic_handoff_dry_run_only",
+                        "reason": "synthetic_inputs_bound_for_dry_run_only",
+                        "source_refs": {
+                            "training_feature_rows": {
+                                "ref": "reports/training_features/unit/training_feature_rows.jsonl",
+                                "sha256": "abc123",
+                                "bytes": 42,
+                                "content_copied": False,
+                                "private_row": {"target": "secret"},
+                            }
+                        },
+                        "dataset": {
+                            "dataset_id": "unit-dataset",
+                            "status": "ready_for_training_handoff",
+                            "eligible_records": 1,
+                            "split_counts": {"test": 1},
+                        },
+                        "training_run_preflight": {
+                            "run_id": "unit-preflight",
+                            "status": "ready_for_training_runner",
+                            "runner_ready": True,
+                        },
+                        "feature_manifest": {
+                            "feature_set_id": "unit-features",
+                            "status": "ready_for_synthetic_feature_dry_run",
+                            "row_count": 1,
+                            "feature_scope": "manifest_summary_features",
+                            "target_separated_from_features": True,
+                        },
+                        "feature_rows": {
+                            "row_count": 1,
+                            "content_copied": False,
+                            "raw_rows_exposed": False,
+                            "rows": [{"target": {"label": "secret"}, "features": {"candidate": "secret"}}],
+                        },
+                        "runner_dry_run": {
+                            "run_id": "unit-runner",
+                            "status": "synthetic_runner_dry_run_complete",
+                            "runner_input_gate": "pass",
+                        },
+                        "baseline_eval": {
+                            "eval_id": "unit-eval",
+                            "status": "synthetic_baseline_eval_complete",
+                            "metric_scope": "synthetic_integration_only",
+                            "product_performance_claim": False,
+                        },
+                        "checks": {
+                            "source_ids_match": True,
+                            "feature_row_count_matches": True,
+                            "synthetic_input_seen": True,
+                            "synthetic_policy": "acknowledged",
+                        },
+                        "training_server": {
+                            "integration": "not_configured",
+                            "endpoint": "https://private.example.invalid/train",
+                            "bundle_ready_for_future_runner": False,
+                            "dry_run_only": True,
+                        },
+                        "gates": {
+                            "training_handoff": "dry_run_only",
+                            "model_training": "not_run",
+                            "model_artifact": "not_produced",
+                            "model_card": "not_produced",
+                            "training_server": "not_integrated",
+                            "model_registry": "not_integrated",
+                            "device_deployment": "not_started",
+                            "release_claim": "not_allowed",
+                        },
+                        "next_step": "repeat_with_reviewed_real_rows",
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, training_handoff_root=report_root),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                latest = get_json(base_url, "/api/v1/training-handoffs/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["training_handoff_bundle"]["status"], "synthetic_handoff_dry_run_only")
+        self.assertEqual(state["training_handoff_bundle"]["feature_rows"]["row_count"], 1)
+        self.assertFalse(state["training_handoff_bundle"]["feature_rows"]["content_copied"])
+        self.assertFalse(state["training_handoff_bundle"]["feature_rows"]["raw_rows_exposed"])
+        self.assertEqual(latest["training_handoff_bundle"]["handoff_id"], "unit-handoff")
+        self.assertEqual(latest["training_handoff_bundle"]["training_server"]["integration"], "not_configured")
+        self.assertTrue(latest["training_handoff_bundle"]["training_server"]["dry_run_only"])
+        self.assertEqual(latest["training_handoff_bundle"]["gates"]["model_artifact"], "not_produced")
+        payload_text = json.dumps(latest, sort_keys=True)
+        self.assertIn("sha256", payload_text)
+        self.assertNotIn("private.example", payload_text)
+        self.assertNotIn("private_row", payload_text)
+        self.assertNotIn('"target"', payload_text)
+        self.assertNotIn('"features"', payload_text)
+
     def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -1778,6 +1896,7 @@ class MessageHubHttpTests(unittest.TestCase):
                     training_feature_root=Path(tmp) / "empty_training_features",
                     training_runner_dry_run_root=Path(tmp) / "empty_training_runner_dry_runs",
                     training_baseline_eval_root=Path(tmp) / "empty_training_baseline_evals",
+                    training_handoff_root=Path(tmp) / "empty_training_handoffs",
                 ),
             )
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -1806,6 +1925,8 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(state["training_runner_dry_run"]["reason"], "no_training_runner_dry_run")
         self.assertIn("training_baseline_eval", state)
         self.assertEqual(state["training_baseline_eval"]["reason"], "no_training_baseline_eval")
+        self.assertIn("training_handoff_bundle", state)
+        self.assertEqual(state["training_handoff_bundle"]["reason"], "no_training_handoff_bundle")
 
     def test_http_raw_command_poll_and_ack_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

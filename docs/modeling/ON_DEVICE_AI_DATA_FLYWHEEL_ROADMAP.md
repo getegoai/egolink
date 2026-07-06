@@ -74,10 +74,13 @@ must consume only reviewed evidence:
 22. TRAIN-007 builds one bounded handoff bundle from the dataset, preflight,
     feature, runner dry-run, and baseline-eval reports so a future training
     server can consume explicit refs and hashes without row contents.
-23. MotionNet v0.1 starts with a statistical baseline and small model
+23. DATA-015 surfaces the latest TRAIN-007 handoff bundle in Web/API and
+    curated deployment summaries without exposing row contents, private
+    endpoints, or model artifacts.
+24. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-24. Device deployment begins in shadow mode: model output is recorded alongside
+25. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -107,6 +110,7 @@ must consume only reviewed evidence:
 | Baseline visibility | Surface latest baseline-eval readiness without raw rows or model artifacts. | DATA-013. |
 | Post-run training chain | Run TRAIN-003..006 from the D1 post-run collector when a reviewed dataset handoff is ready. | DATA-014. |
 | Training handoff bundle | Bind dataset, preflight, feature, runner dry-run, and baseline-eval refs and hashes for a future training runner/server without copying rows. | TRAIN-007. |
+| Handoff visibility | Surface latest handoff-bundle readiness without row contents, private endpoints, or model artifacts. | DATA-015. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -196,6 +200,12 @@ must consume only reviewed evidence:
   runtime JSONL logs, private training endpoints, model artifacts, model cards,
   footprint, latency, power measurements, device deployment results, or release
   claims.
+- DATA-015 Web/API summaries may show TRAIN-007 status, bounded source refs,
+  file hashes, row counts, synthetic policy, training-server integration state,
+  gates, and report paths only; they do not expose JSONL row contents, raw
+  records, candidate DB paths, runtime JSONL logs, private endpoints, model
+  artifacts, model cards, footprint, latency, power measurements, device
+  deployment results, or release claims.
 
 ## Model And Power Gates
 

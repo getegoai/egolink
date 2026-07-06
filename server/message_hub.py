@@ -20,7 +20,7 @@ import re
 import sqlite3
 import sys
 import threading
-from typing import Any
+from typing import Any, Mapping
 from urllib.parse import unquote, urlparse
 
 if __package__ in (None, ""):
@@ -40,6 +40,7 @@ DEFAULT_TRAINING_RUN_REPORTS = REPO_ROOT / "reports" / "training_runs"
 DEFAULT_TRAINING_FEATURE_REPORTS = REPO_ROOT / "reports" / "training_features"
 DEFAULT_TRAINING_RUNNER_DRY_RUN_REPORTS = REPO_ROOT / "reports" / "training_runner_dry_runs"
 DEFAULT_TRAINING_BASELINE_EVAL_REPORTS = REPO_ROOT / "reports" / "training_baseline_evals"
+DEFAULT_TRAINING_HANDOFF_REPORTS = REPO_ROOT / "reports" / "training_handoffs"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -866,6 +867,7 @@ def make_handler(
     training_feature_root: Path = DEFAULT_TRAINING_FEATURE_REPORTS,
     training_runner_dry_run_root: Path = DEFAULT_TRAINING_RUNNER_DRY_RUN_REPORTS,
     training_baseline_eval_root: Path = DEFAULT_TRAINING_BASELINE_EVAL_REPORTS,
+    training_handoff_root: Path = DEFAULT_TRAINING_HANDOFF_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -914,6 +916,7 @@ def make_handler(
                 training_feature_manifest = load_latest_training_feature_manifest(training_feature_root)
                 training_runner_dry_run = load_latest_training_runner_dry_run(training_runner_dry_run_root)
                 training_baseline_eval = load_latest_training_baseline_eval(training_baseline_eval_root)
+                training_handoff_bundle = load_latest_training_handoff_bundle(training_handoff_root)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -928,6 +931,7 @@ def make_handler(
                         "training_feature_manifest": training_feature_manifest,
                         "training_runner_dry_run": training_runner_dry_run,
                         "training_baseline_eval": training_baseline_eval,
+                        "training_handoff_bundle": training_handoff_bundle,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -1015,6 +1019,11 @@ def make_handler(
             if segments == ["api", "v1", "training-baseline-evals", "latest"]:
                 self.respond_json(
                     {"training_baseline_eval": load_latest_training_baseline_eval(training_baseline_eval_root)}
+                )
+                return
+            if segments == ["api", "v1", "training-handoffs", "latest"]:
+                self.respond_json(
+                    {"training_handoff_bundle": load_latest_training_handoff_bundle(training_handoff_root)}
                 )
                 return
             raise MessageHubError("not_found", "route not found", status=404)
@@ -3919,6 +3928,135 @@ def load_latest_training_baseline_eval(root: Path = DEFAULT_TRAINING_BASELINE_EV
     )
 
 
+def compact_source_refs(items: Mapping[str, Any]) -> dict[str, Any]:
+    refs: dict[str, Any] = {}
+    for key, value in items.items():
+        ref = as_dict(value)
+        refs[key] = compact_dict(
+            {
+                "ref": ref.get("ref"),
+                "sha256": ref.get("sha256"),
+                "bytes": ref.get("bytes"),
+                "content_copied": ref.get("content_copied", False),
+            }
+        )
+    return refs
+
+
+def training_handoff_bundle_unavailable(reason: str = "no_training_handoff_bundle") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "dataset": {},
+        "training_run_preflight": {},
+        "feature_manifest": {},
+        "feature_rows": {"row_count": 0, "content_copied": False, "raw_rows_exposed": False},
+        "runner_dry_run": {},
+        "baseline_eval": {},
+        "checks": {},
+        "training_server": {"integration": "not_configured"},
+        "gates": {"training_handoff": "not_available"},
+        "blockers": [reason],
+        "next_step": "Run scripts/build_training_handoff_bundle.py after TRAIN-006 baseline eval is ready.",
+    }
+
+
+def latest_training_handoff_bundle_path(root: Path = DEFAULT_TRAINING_HANDOFF_REPORTS) -> Path | None:
+    return latest_report_path(root, ["**/training_handoff_bundle.json"])
+
+
+def load_latest_training_handoff_bundle(root: Path = DEFAULT_TRAINING_HANDOFF_REPORTS) -> dict[str, Any]:
+    path = latest_training_handoff_bundle_path(root)
+    if path is None:
+        return training_handoff_bundle_unavailable()
+    report = load_json_report(path)
+    if report is None:
+        return training_handoff_bundle_unavailable("training_handoff_bundle_unreadable")
+    dataset = as_dict(report.get("dataset"))
+    preflight = as_dict(report.get("training_run_preflight"))
+    feature_manifest = as_dict(report.get("feature_manifest"))
+    feature_rows = as_dict(report.get("feature_rows"))
+    runner = as_dict(report.get("runner_dry_run"))
+    baseline = as_dict(report.get("baseline_eval"))
+    checks = as_dict(report.get("checks"))
+    training_server = as_dict(report.get("training_server"))
+    gates = as_dict(report.get("gates"))
+    markdown_candidate = path.with_suffix(".md")
+    markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    return compact_dict(
+        {
+            "available": True,
+            "status": report.get("status", "unknown"),
+            "reason": report.get("reason"),
+            "handoff_id": report.get("handoff_id"),
+            "created_at": report.get("created_at") or report_file_time(path),
+            "source_refs": compact_source_refs(as_dict(report.get("source_refs"))),
+            "dataset": {
+                "dataset_id": dataset.get("dataset_id"),
+                "status": dataset.get("status"),
+                "eligible_records": dataset.get("eligible_records", 0),
+                "split_counts": as_dict(dataset.get("split_counts")),
+            },
+            "training_run_preflight": {
+                "run_id": preflight.get("run_id"),
+                "status": preflight.get("status"),
+                "runner_ready": preflight.get("runner_ready", False),
+            },
+            "feature_manifest": {
+                "feature_set_id": feature_manifest.get("feature_set_id"),
+                "status": feature_manifest.get("status"),
+                "row_count": feature_manifest.get("row_count", 0),
+                "feature_scope": feature_manifest.get("feature_scope"),
+                "target_separated_from_features": feature_manifest.get("target_separated_from_features", False),
+            },
+            "feature_rows": {
+                "row_count": feature_rows.get("row_count", 0),
+                "content_copied": feature_rows.get("content_copied", False),
+                "raw_rows_exposed": feature_rows.get("raw_rows_exposed", False),
+            },
+            "runner_dry_run": {
+                "run_id": runner.get("run_id"),
+                "status": runner.get("status"),
+                "runner_input_gate": runner.get("runner_input_gate"),
+            },
+            "baseline_eval": {
+                "eval_id": baseline.get("eval_id"),
+                "status": baseline.get("status"),
+                "metric_scope": baseline.get("metric_scope"),
+                "product_performance_claim": baseline.get("product_performance_claim", False),
+            },
+            "checks": {
+                "source_ids_match": checks.get("source_ids_match", False),
+                "feature_row_count_matches": checks.get("feature_row_count_matches", False),
+                "synthetic_input_seen": checks.get("synthetic_input_seen", False),
+                "synthetic_policy": checks.get("synthetic_policy"),
+            },
+            "training_server": {
+                "integration": training_server.get("integration", "not_configured"),
+                "endpoint": None,
+                "bundle_ready_for_future_runner": training_server.get("bundle_ready_for_future_runner", False),
+                "dry_run_only": training_server.get("dry_run_only", False),
+                "next_step": training_server.get("next_step"),
+            },
+            "gates": {
+                "training_handoff": gates.get("training_handoff"),
+                "model_training": gates.get("model_training"),
+                "model_artifact": gates.get("model_artifact"),
+                "model_card": gates.get("model_card"),
+                "training_server": gates.get("training_server"),
+                "model_registry": gates.get("model_registry"),
+                "device_deployment": gates.get("device_deployment"),
+                "release_claim": gates.get("release_claim"),
+            },
+            "next_step": report.get("next_step"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -4852,6 +4990,10 @@ def render_dashboard() -> str:
           <div id="trainingBaselineEval"></div>
         </section>
         <section>
+          <h2>Training Handoff Bundle</h2>
+          <div id="trainingHandoffBundle"></div>
+        </section>
+        <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
         </section>
@@ -4914,6 +5056,7 @@ def render_dashboard() -> str:
       trainingFeatureManifest.innerHTML = html;
       trainingRunnerDryRun.innerHTML = html;
       trainingBaselineEval.innerHTML = html;
+      trainingHandoffBundle.innerHTML = html;
       d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
@@ -4994,8 +5137,8 @@ def render_dashboard() -> str:
       `;
     }
     function statusClass(status) {
-      if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner' || status === 'synthetic_baseline_eval_complete' || status === 'baseline_eval_complete') return 'ok';
-      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready') return 'warn';
+      if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner' || status === 'ready_for_training_server_handoff' || status === 'synthetic_baseline_eval_complete' || status === 'baseline_eval_complete') return 'ok';
+      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'synthetic_handoff_dry_run_only' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready' || status === 'blocked_feature_rows_mismatch' || status === 'blocked_source_mismatch') return 'warn';
       return status === 'not_available' ? 'empty' : 'bad';
     }
     function productDemoPanel(demo) {
@@ -5250,6 +5393,45 @@ def render_dashboard() -> str:
         <div class="metric"><span>Gates</span><span>eval ${escapeHtml(gates.baseline_evaluation || 'unknown')} / training ${escapeHtml(gates.model_training || 'not_run')} / artifact ${escapeHtml(gates.model_artifact || 'not_produced')} / claim ${escapeHtml(gates.release_claim || 'not_allowed')}</span></div>
         <div class="metric"><span>Next Step</span><span>${escapeHtml(evalReport.next_step || 'Repeat with reviewed real rows')}</span></div>
         <div class="metric"><span>Report</span><span>${escapeHtml(evalReport.markdown_path || evalReport.report_path || 'unknown')}</span></div>
+      `;
+    }
+    function trainingHandoffBundlePanel(bundle) {
+      if (!bundle || !bundle.available) {
+        return `
+          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(bundle && bundle.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(bundle && bundle.reason || 'no_training_handoff_bundle')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(bundle && bundle.next_step || 'Build the training handoff bundle')}</span></div>
+        `;
+      }
+      const dataset = bundle.dataset || {};
+      const preflight = bundle.training_run_preflight || {};
+      const manifest = bundle.feature_manifest || {};
+      const rows = bundle.feature_rows || {};
+      const runner = bundle.runner_dry_run || {};
+      const baseline = bundle.baseline_eval || {};
+      const checks = bundle.checks || {};
+      const server = bundle.training_server || {};
+      const gates = bundle.gates || {};
+      const sourceRefs = bundle.source_refs || {};
+      const sourceText = Object.entries(sourceRefs).map(([name, ref]) => {
+        return `${name}: ${ref && ref.sha256 ? String(ref.sha256).slice(0, 10) : 'nohash'}`;
+      }).join(' / ') || 'none';
+      return `
+        <div class="metric"><span>Status</span><span class="${statusClass(bundle.status)}">${escapeHtml(bundle.status || 'unknown')}</span></div>
+        <div class="metric"><span>Handoff</span><b>${escapeHtml(bundle.handoff_id || 'unknown')}</b></div>
+        <div class="metric"><span>Reason</span><span>${escapeHtml(bundle.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Dataset</span><span>${escapeHtml(dataset.dataset_id || 'unknown')} / ${escapeHtml(dataset.status || 'unknown')} / ${escapeHtml(dataset.eligible_records ?? 0)} eligible</span></div>
+        <div class="metric"><span>Preflight</span><span>${escapeHtml(preflight.run_id || 'unknown')} / ${escapeHtml(preflight.status || 'unknown')} / runner ${escapeHtml(preflight.runner_ready ?? false)}</span></div>
+        <div class="metric"><span>Feature Set</span><span>${escapeHtml(manifest.feature_set_id || 'unknown')} / ${escapeHtml(manifest.status || 'unknown')} / ${escapeHtml(manifest.feature_scope || 'unknown')}</span></div>
+        <div class="metric"><span>Rows</span><span>${escapeHtml(rows.row_count ?? 0)} rows / copied ${escapeHtml(rows.content_copied ?? false)} / exposed ${escapeHtml(rows.raw_rows_exposed ?? false)}</span></div>
+        <div class="metric"><span>Runner</span><span>${escapeHtml(runner.run_id || 'unknown')} / ${escapeHtml(runner.status || 'unknown')} / input ${escapeHtml(runner.runner_input_gate || 'unknown')}</span></div>
+        <div class="metric"><span>Baseline Eval</span><span>${escapeHtml(baseline.eval_id || 'unknown')} / ${escapeHtml(baseline.status || 'unknown')} / ${escapeHtml(baseline.metric_scope || 'unknown')}</span></div>
+        <div class="metric"><span>Checks</span><span>source ${escapeHtml(checks.source_ids_match ?? false)} / rows ${escapeHtml(checks.feature_row_count_matches ?? false)} / synthetic ${escapeHtml(checks.synthetic_policy || 'unknown')}</span></div>
+        <div class="metric"><span>Training Server</span><span>${escapeHtml(server.integration || 'not_configured')} / ready ${escapeHtml(server.bundle_ready_for_future_runner ?? false)} / dry-run ${escapeHtml(server.dry_run_only ?? false)}</span></div>
+        <div class="metric"><span>Gates</span><span>handoff ${escapeHtml(gates.training_handoff || 'unknown')} / training ${escapeHtml(gates.model_training || 'not_run')} / artifact ${escapeHtml(gates.model_artifact || 'not_produced')} / claim ${escapeHtml(gates.release_claim || 'not_allowed')}</span></div>
+        <div class="metric"><span>Source Refs</span><span>${escapeHtml(sourceText)}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(bundle.next_step || server.next_step || 'Connect a training runner')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(bundle.markdown_path || bundle.report_path || 'unknown')}</span></div>
       `;
     }
     function fieldResultsPanel(results) {
@@ -5536,6 +5718,7 @@ def render_dashboard() -> str:
       trainingFeatureManifest.innerHTML = trainingFeatureManifestPanel(data.training_feature_manifest || {});
       trainingRunnerDryRun.innerHTML = trainingRunnerDryRunPanel(data.training_runner_dry_run || {});
       trainingBaselineEval.innerHTML = trainingBaselineEvalPanel(data.training_baseline_eval || {});
+      trainingHandoffBundle.innerHTML = trainingHandoffBundlePanel(data.training_handoff_bundle || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>

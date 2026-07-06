@@ -254,6 +254,9 @@ Current AI/data boundary:
 - done: TRAIN-007 training handoff bundle can bind dataset, preflight,
   feature, runner dry-run, and baseline-eval refs and hashes for a future
   training runner/server without copying row contents or starting training;
+- done: DATA-015 Dashboard/API visibility can surface the latest TRAIN-007
+  handoff bundle and curated deploy summaries without exposing row contents,
+  private endpoints, or model artifacts;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -279,6 +282,8 @@ collection to bounded runner/baseline status from one local command.
 TRAIN-007 then packages those explicit inputs into a bounded handoff bundle
 for future training-runner/server integration while keeping row contents,
 private endpoints, model artifacts, and release claims out of scope.
+DATA-015 makes that handoff-bundle status visible in the Web/API loop and VPS
+summary packaging without changing training, deployment, or model behavior.
 
 ## R0: VPS + PC Simulator Simulated Loop
 

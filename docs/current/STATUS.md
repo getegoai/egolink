@@ -6,6 +6,21 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-015 training handoff visibility is implemented locally. The
+Message Hub can now load the latest bounded
+`reports/training_handoffs/**/training_handoff_bundle.json`, expose it as
+`training_handoff_bundle` in authenticated `/api/state`, serve
+`/api/v1/training-handoffs/latest`, and render a Dashboard `Training Handoff
+Bundle` panel with handoff status, dataset/preflight/feature/runner/baseline
+links, row-count and source-ref summaries, synthetic policy, training-server
+integration state, gates, next step, and report paths.
+`scripts/deploy_message_hub_vps.ps1` has a new explicit
+`-IncludeTrainingHandoffSummaries` switch that copies only
+`training_handoff_bundle.json/.md`. This was not deployed to the VPS in this
+run and does not expose feature-row contents, private endpoints, raw records,
+candidate DBs, model artifacts, model cards, measured footprint/power data,
+device deployment results, or release claims.
+
 2026-07-06: TRAIN-007 training handoff bundle is implemented locally as the
 next D5 bridge after DATA-014. The new
 `scripts/build_training_handoff_bundle.py` command consumes explicitly named

@@ -233,6 +233,13 @@ training endpoint, train or evaluate a real model, produce model artifacts or
 model cards, deploy on-device inference, measure footprint/power, or allow
 release claims.
 
+DATA-015 can expose the latest TRAIN-007 handoff bundle through Web/API and
+curated deployment summaries. It is visibility only: handoff status, input
+refs, hashes, row counts, synthetic policy, training-server integration state,
+gates, and report paths are allowed. JSONL row contents, raw records, candidate
+DBs, private endpoints, model artifacts, model cards, measured footprint/power
+data, device deployment results, and release claims are not.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -278,6 +285,8 @@ deployment, or OTA update behavior changes in DATA-002.
     ready dataset handoff, keeping blocked/not-ready runs explainable.
 16. Let TRAIN-007 build a bounded training handoff bundle for a future runner
     or training server without copying feature rows or starting training.
-17. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+17. Let DATA-015 surface the latest handoff bundle in Web/API and curated
+    deployment summaries without exposing row contents or private endpoints.
+18. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

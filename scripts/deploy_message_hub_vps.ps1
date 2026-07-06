@@ -13,6 +13,7 @@ param(
     [switch]$IncludeTrainingFeatureSummaries,
     [switch]$IncludeTrainingRunnerDryRunSummaries,
     [switch]$IncludeTrainingBaselineEvalSummaries,
+    [switch]$IncludeTrainingHandoffSummaries,
     [switch]$NoStart
 )
 
@@ -239,6 +240,31 @@ function Copy-TrainingBaselineEvalSummaries {
     }
 }
 
+function Copy-TrainingHandoffSummaries {
+    $trainingHandoffDir = Join-Path $repoRoot "reports\training_handoffs"
+    if (-not (Test-Path $trainingHandoffDir -PathType Container)) {
+        return
+    }
+    $allowedNames = @(
+        "training_handoff_bundle.json",
+        "training_handoff_bundle.md"
+    )
+    $reportFiles = Get-ChildItem -Path $trainingHandoffDir -Recurse -File |
+        Where-Object { $allowedNames -contains $_.Name }
+
+    $repoFull = (Resolve-Path $repoRoot).Path.TrimEnd("\", "/")
+    foreach ($file in $reportFiles) {
+        $fileFull = $file.FullName
+        if (-not $fileFull.StartsWith($repoFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to copy training handoff summary outside repository: $fileFull"
+        }
+        $relative = $fileFull.Substring($repoFull.Length).TrimStart("\", "/")
+        $target = Join-Path $packageRoot $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -Force -LiteralPath $file.FullName -Destination $target
+    }
+}
+
 function SshArgs {
     $args = @()
     if ($SshKey) {
@@ -292,6 +318,9 @@ try {
     }
     if ($IncludeTrainingBaselineEvalSummaries) {
         Copy-TrainingBaselineEvalSummaries
+    }
+    if ($IncludeTrainingHandoffSummaries) {
+        Copy-TrainingHandoffSummaries
     }
 
     Push-Location $packageRoot
