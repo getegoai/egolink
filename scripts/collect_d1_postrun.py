@@ -2,9 +2,10 @@
 
 This command is the normal "back from the field" entry point for D1. It reads
 the Message Hub, binds the local field-observation report/status when present,
-builds existing Web/API, power, D1 demo, and data-flywheel reports, and writes
-one summary that points at the artifacts. It does not contact hardware, send
-device commands, deploy to the VPS, train a model, or copy raw training data.
+builds existing Web/API, power, D1 demo, D1 training-readiness, and
+data-flywheel reports, and writes one summary that points at the artifacts. It
+does not contact hardware, send device commands, deploy to the VPS, train a
+model, or copy raw training data.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts import analyze_power_curve
+from scripts import assess_d1_training_readiness
 from scripts import build_training_handoff_bundle
 from scripts import build_d1_demo_report
 from scripts import create_training_job_plan
@@ -36,8 +38,8 @@ from scripts import validate_d1_web_api
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_postrun"
 DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
-SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.5"
-BUILDER_VERSION = "data-019.0"
+SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.6"
+BUILDER_VERSION = "data-023.0"
 SUMMARY_JSON = "d1_postrun_collection_summary.json"
 SUMMARY_MARKDOWN = "d1_postrun_collection_summary.md"
 READY_DATA_PIPELINE_STATUS = "ready_for_training_handoff"
@@ -219,6 +221,31 @@ def data_pipeline_summary(report: Mapping[str, Any] | None, error_summary: Mappi
             "experiment_id": experiment.get("experiment_id"),
             "report_path": as_dict(experiment.get("paths")).get("training_experiment_plan_json"),
         },
+        "next_step": report.get("next_step"),
+    }
+
+
+def training_readiness_summary(
+    report: Mapping[str, Any] | None,
+    error_summary: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if error_summary:
+        return dict(error_summary)
+    if not report:
+        return {"status": "skipped", "reason": "training_readiness_not_run"}
+    readiness = as_dict(report.get("readiness"))
+    paths = as_dict(report.get("paths"))
+    return {
+        "status": report.get("status"),
+        "reason": report.get("reason"),
+        "run_id": report.get("run_id"),
+        "ready_for_labeling_review": readiness.get("ready_for_labeling_review", False),
+        "ready_for_training_handoff": readiness.get("ready_for_training_handoff", False),
+        "training_allowed": readiness.get("training_allowed", False),
+        "blockers": list(readiness.get("blockers") or []),
+        "quality_gaps": list(readiness.get("quality_gaps") or []),
+        "report_path": paths.get("d1_training_readiness_json"),
+        "markdown_report_path": paths.get("d1_training_readiness_markdown"),
         "next_step": report.get("next_step"),
     }
 
@@ -459,6 +486,52 @@ def collect_data_pipeline(
         report = run_data_flywheel_pipeline.run_pipeline(namespace)
     except Exception as exc:
         return None, bounded_error("data_flywheel_pipeline_failed", exc)
+    return report, None
+
+
+def collect_training_readiness(
+    args: argparse.Namespace,
+    *,
+    field_report: Mapping[str, Any] | None,
+    field_status: Mapping[str, Any] | None,
+    field_error: Mapping[str, Any] | None,
+    run_id: str,
+    created_at: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if args.skip_training_readiness:
+        return None, {"status": "skipped", "reason": "skip_training_readiness_requested"}
+    if field_error:
+        return None, {
+            "status": "skipped",
+            "reason": "field_observation_not_available_for_training_readiness",
+            "field_observation_reason": field_error.get("reason"),
+        }
+    report_ref = args.field_observation_report
+    if report_ref is None and field_report:
+        report_path_text = field_report.get("report_path")
+        report_ref = Path(str(report_path_text)) if report_path_text else None
+    status_ref = args.field_observation_status
+    if status_ref is None and field_status:
+        status_path_text = field_status.get("status_path")
+        status_ref = Path(str(status_path_text)) if status_path_text else None
+    if report_ref is None and status_ref is None:
+        return None, {"status": "skipped", "reason": "field_observation_report_missing"}
+
+    readiness_run_id = args.training_readiness_run_id or f"{run_id}-training-readiness"
+    namespace = argparse.Namespace(
+        field_observation_report=report_ref,
+        field_observation_status=status_ref,
+        field_observation_root=assess_d1_training_readiness.DEFAULT_FIELD_OBSERVATION_ROOT,
+        run_id=readiness_run_id,
+        generated_at=created_at,
+        output_root=args.training_readiness_output_root,
+        output_dir=args.training_readiness_output_dir,
+        json=False,
+    )
+    try:
+        report = assess_d1_training_readiness.build_from_args(namespace)
+    except Exception as exc:
+        return None, bounded_error("training_readiness_assessment_failed", exc)
     return report, None
 
 
@@ -712,6 +785,11 @@ def derive_result(components: Mapping[str, Mapping[str, Any]]) -> tuple[str, lis
     if data_status != "ready_for_training_handoff":
         warnings.append(f"data_flywheel_pipeline:{data_pipeline.get('reason') or data_status}")
 
+    training_readiness = as_dict(components.get("training_readiness"))
+    readiness_status = str(training_readiness.get("status") or "unknown")
+    if readiness_status not in {"ready_for_labeling_review", "skipped"}:
+        warnings.append(f"training_readiness:{training_readiness.get('reason') or readiness_status}")
+
     training_chain = as_dict(components.get("training_chain"))
     training_status = str(training_chain.get("status") or "unknown")
     if training_status == "error":
@@ -752,6 +830,13 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
     elif data_status and data_status != "ready_for_training_handoff":
         steps.append(str(data_pipeline.get("next_step") or "Continue the next DATA/TRAIN task."))
 
+    training_readiness = as_dict(components.get("training_readiness"))
+    readiness_status = str(training_readiness.get("status") or "")
+    if readiness_status == "ready_for_labeling_review":
+        steps.append("Attach labels, privacy review, training consent, and split plan before training handoff.")
+    elif readiness_status and readiness_status not in {"skipped", "ready_for_labeling_review"}:
+        steps.append(str(training_readiness.get("next_step") or "Rerun D1 training readiness after a fresher field observation."))
+
     training_chain = as_dict(components.get("training_chain"))
     training_status = str(training_chain.get("status") or "")
     if training_status == "skipped" and training_chain.get("reason") == "data_flywheel_pipeline_not_ready":
@@ -768,6 +853,7 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
 
 def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Path, summary_md: Path) -> dict[str, Any]:
     field_observation = as_dict(components.get("field_observation"))
+    training_readiness = as_dict(components.get("training_readiness"))
     data_pipeline = as_dict(components.get("data_flywheel_pipeline"))
     training_experiment = as_dict(data_pipeline.get("training_experiment"))
     training_chain = as_dict(components.get("training_chain"))
@@ -783,6 +869,7 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
         "field_observation_report": field_observation.get("report_path"),
         "field_observation_status": field_observation.get("status_path"),
         "field_observation_samples": field_observation.get("samples_path"),
+        "d1_training_readiness": training_readiness.get("report_path"),
         "web_api_report": as_dict(components.get("web_api")).get("report_path"),
         "power_curve_report": as_dict(components.get("power_curve")).get("report_path"),
         "message_hub_export": as_dict(components.get("power_curve")).get("export_path"),
@@ -815,7 +902,15 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
         "## Components",
         "",
     ]
-    for name in ("field_observation", "web_api", "power_curve", "d1_demo", "data_flywheel_pipeline", "training_chain"):
+    for name in (
+        "field_observation",
+        "training_readiness",
+        "web_api",
+        "power_curve",
+        "d1_demo",
+        "data_flywheel_pipeline",
+        "training_chain",
+    ):
         component = as_dict(components.get(name))
         status = component.get("result") or component.get("status") or "unknown"
         reason = component.get("reason")
@@ -852,6 +947,14 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         timeout=args.timeout,
     )
     field_report, field_status, field_error = collect_field_observation(args, run_id=run_id)
+    training_readiness_report, training_readiness_error = collect_training_readiness(
+        args,
+        field_report=field_report,
+        field_status=field_status,
+        field_error=field_error,
+        run_id=run_id,
+        created_at=created_at,
+    )
     power_report, power_status, export_path = collect_power_curve(
         args,
         token=token,
@@ -875,6 +978,7 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
 
     components = {
         "field_observation": field_observation_summary(field_report, field_status, field_error),
+        "training_readiness": training_readiness_summary(training_readiness_report, training_readiness_error),
         "web_api": web_api_summary(web_report, web_error),
         "power_curve": power_summary(
             power_report,
@@ -913,12 +1017,14 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
             "model_evaluation_started": False,
             "model_deployed": False,
             "model_artifact_written": False,
+            "sample_jsonl_read_for_training_readiness": False,
             "secrets_persisted": False,
         },
         "boundaries": [
             "Read-only Message Hub collection plus local report generation only.",
             "No hardware, serial port, firmware, Message Hub command, deployment, or GitLab mutation is performed.",
             "The field-observation step reads only an explicit or same-run local observer report/status file.",
+            "The training-readiness step reads only D1 field-observation report/status summaries, not sample JSONL contents.",
             "The data-flywheel step ingests only recording directories explicitly passed with --recording-dir.",
             "The training-chain step runs only bounded local preflight, feature export, runner dry-run, aggregate baseline-eval, handoff-bundle, and job-plan reports after a ready dataset handoff.",
             "Dashboard state and curated summaries are not raw training data.",
@@ -952,6 +1058,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--skip-field-observation", action="store_true")
     parser.add_argument("--field-observation-report", type=Path)
     parser.add_argument("--field-observation-status", type=Path)
+    parser.add_argument("--skip-training-readiness", action="store_true")
+    parser.add_argument("--training-readiness-run-id")
+    parser.add_argument("--training-readiness-output-root", type=Path, default=assess_d1_training_readiness.DEFAULT_OUTPUT_ROOT)
+    parser.add_argument("--training-readiness-output-dir", type=Path)
     parser.add_argument("--message-test-run-id", help="Message Hub test_run_id to export for PWR-001 analysis.")
     parser.add_argument("--power-export", type=Path, help="Existing Message Hub test_run_export.json to analyze.")
     parser.add_argument("--power-output-dir", type=Path)

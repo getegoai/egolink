@@ -6,6 +6,17 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-023 D1 post-run training-readiness binding is implemented
+locally. `scripts/collect_d1_postrun.py` is now schema
+`egolink.d1_postrun_collection.v0.6`; when a D1 field-observation report or
+status summary is present, it runs the DATA-022 readiness assessment and
+includes a bounded `training_readiness` component plus a
+`d1_training_readiness` artifact path in the post-run summary. This does not
+read sample JSONL contents, contact hardware, send commands, change firmware
+or protocol behavior, deploy to the VPS, train/evaluate a model, write model
+artifacts, expose exact coordinates/raw payloads/feature rows/targets, or
+allow release claims.
+
 2026-07-06: DATA-022 D1 real-data training-readiness assessment is
 implemented locally. `scripts/assess_d1_training_readiness.py` reads bounded
 D1 field-observation report/status summaries and writes

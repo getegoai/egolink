@@ -249,6 +249,11 @@ class D1PostrunCollectorTests(unittest.TestCase):
             self.assertEqual(payload["components"]["data_flywheel_pipeline"]["status"], "needs_recordings")
             self.assertEqual(payload["components"]["field_observation"]["status"], "skipped")
             self.assertEqual(payload["components"]["field_observation"]["reason"], "field_observation_report_missing")
+            self.assertEqual(payload["components"]["training_readiness"]["status"], "skipped")
+            self.assertEqual(
+                payload["components"]["training_readiness"]["reason"],
+                "field_observation_not_available_for_training_readiness",
+            )
             self.assertEqual(
                 payload["components"]["data_flywheel_pipeline"]["training_experiment"]["status"],
                 "blocked_dataset_not_ready",
@@ -378,6 +383,8 @@ class D1PostrunCollectorTests(unittest.TestCase):
                             str(field_report),
                             "--field-observation-status",
                             str(field_status),
+                            "--training-readiness-output-root",
+                            str(root / "d1_training_readiness"),
                             "--created-at",
                             "2026-07-05T04:30:00+00:00",
                             "--json",
@@ -395,6 +402,20 @@ class D1PostrunCollectorTests(unittest.TestCase):
             self.assertEqual(payload["components"]["field_observation"]["result"], "WARN")
             self.assertEqual(payload["components"]["field_observation"]["sample_count"], 2)
             self.assertEqual(payload["components"]["field_observation"]["last_seq"], 11)
+            training_readiness = payload["components"]["training_readiness"]
+            self.assertEqual(training_readiness["status"], "ready_for_labeling_review")
+            self.assertTrue(training_readiness["ready_for_labeling_review"])
+            self.assertFalse(training_readiness["ready_for_training_handoff"])
+            self.assertFalse(training_readiness["training_allowed"])
+            self.assertIn("privacy_review_required", training_readiness["blockers"])
+            self.assertTrue(
+                (
+                    root
+                    / "d1_training_readiness"
+                    / "D1-POSTRUN-ready-training-training-readiness"
+                    / "d1_training_readiness.json"
+                ).is_file()
+            )
             self.assertEqual(payload["components"]["data_flywheel_pipeline"]["status"], "ready_for_training_handoff")
             self.assertEqual(
                 payload["components"]["data_flywheel_pipeline"]["training_experiment"]["status"],
@@ -478,9 +499,11 @@ class D1PostrunCollectorTests(unittest.TestCase):
             )
             self.assertEqual(payload["artifacts"]["field_observation_report"], str(field_report))
             self.assertEqual(payload["artifacts"]["field_observation_status"], str(field_status))
+            self.assertEqual(payload["artifacts"]["d1_training_readiness"], "d1_training_readiness.json")
             self.assertFalse(payload["scope"]["model_training_started"])
             self.assertFalse(payload["scope"]["model_evaluation_started"])
             self.assertFalse(payload["scope"]["model_artifact_written"])
+            self.assertFalse(payload["scope"]["sample_jsonl_read_for_training_readiness"])
             self.assertNotIn(str(db_path), output_text)
             self.assertNotIn("record_json", output_text)
             self.assertNotIn("raw_payload", output_text)
@@ -530,6 +553,7 @@ class D1PostrunCollectorTests(unittest.TestCase):
         self.assertEqual(payload["components"]["power_curve"]["reason"], "skip_power_requested")
         self.assertEqual(payload["components"]["d1_demo"]["result"], "WARN")
         self.assertEqual(payload["components"]["data_flywheel_pipeline"]["status"], "skipped")
+        self.assertEqual(payload["components"]["training_readiness"]["status"], "skipped")
         self.assertEqual(payload["components"]["training_chain"]["status"], "skipped")
         self.assertEqual(payload["components"]["training_chain"]["reason"], "data_flywheel_pipeline_missing")
 

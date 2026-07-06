@@ -306,6 +306,13 @@ copy exact coordinates, expose raw payloads, create training samples, train or
 evaluate a model, produce model artifacts, measure footprint/power, deploy to
 devices, or allow release claims.
 
+DATA-023 binds DATA-022 into the D1 post-run collector. When a post-run
+collection has an explicit or same-run D1 field-observation report/status
+summary, the collector writes a `training_readiness` component and
+`d1_training_readiness` artifact path beside the Web/API, power, demo,
+data-flywheel, and TRAIN-003..008 summaries. It preserves the same no-JSONL,
+no-coordinate, no-training, no-artifact, and no-release-claim boundaries.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -367,6 +374,8 @@ deployment, or OTA update behavior changes in DATA-002.
     exposing raw synthetic internals or model artifacts.
 24. Let DATA-022 surface whether real D1 captures are ready for labeling and
     privacy review before any training handoff.
-25. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+25. Let DATA-023 include DATA-022 readiness in the one-command D1 post-run
+    collector.
+26. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.
