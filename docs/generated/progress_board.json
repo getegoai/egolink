@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-06 01:28 UTC",
+  "generated_at": "2026-07-06 01:34 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "daece90 feat(data): extend postrun handoff chain [D5]"
+    "head": "6247f50 feat(train): add training job plan dry-run [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -286,13 +286,13 @@
       "path": "D:/pywork/egolink/docs/tasks/done/TRAIN-007_TRAINING_HANDOFF_BUNDLE.md"
     },
     {
-      "id": "DATA-006",
-      "title": "Data flywheel pipeline runner",
+      "id": "TRAIN-008",
+      "title": "Training job plan dry-run",
       "state": "done",
       "packet_status": "done",
       "priority": "high",
-      "date": "2026-07-05",
-      "path": "D:/pywork/egolink/docs/tasks/done/DATA-006_DATA_FLYWHEEL_PIPELINE_RUNNER.md"
+      "date": "2026-07-06",
+      "path": "D:/pywork/egolink/docs/tasks/done/TRAIN-008_TRAINING_JOB_PLAN.md"
     }
   ],
   "operator_asks": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 106
+    "done_total": 107
   }
 }
