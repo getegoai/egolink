@@ -342,6 +342,14 @@ the explicit queue-summary switch. It does not expose raw sample rows, exact
 coordinates, raw payloads, feature rows, targets, candidate DBs, private
 training details, model artifacts, or release claims.
 
+DATA-028 turns the bounded D1 labeling queue into a human-review packet. The
+packet lists each queue item and decision slots for operator label, privacy
+review, training consent, split plan, and candidate decision, then binds this
+packet into the one-command D1 post-run collector and field kit. It is a work
+packet only: it does not mark items reviewed, write candidate records, read raw
+sample rows, expose exact coordinates, copy feature rows or targets, train a
+model, produce model artifacts, or allow release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -413,6 +421,8 @@ deployment, or OTA update behavior changes in DATA-002.
     index before candidate-store writes.
 29. Let DATA-027 surface the latest D1 labeling queue in Web/API and curated
     deployment summaries without exposing raw sample rows or candidate DBs.
-30. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+30. Let DATA-028 turn the D1 labeling queue into a bounded human-review packet
+    before any candidate-store promotion.
+31. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

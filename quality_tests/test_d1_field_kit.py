@@ -111,6 +111,8 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("reports\\d1_field_observation\\D1-FIELD-unit\\d1_field_observation_status.json", collector_argv)
             self.assertIn("--data-pipeline-run-id", collector_argv)
             self.assertIn("D1-FIELD-unit-data-pipeline", collector_argv)
+            self.assertIn("--labeling-review-packet-output-root", collector_argv)
+            self.assertIn("reports\\d1_labeling_reviews", collector_argv)
             self.assertIn("scripts\\run_data_flywheel_pipeline.py", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
             self.assertIn("--run-id", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
             self.assertIn("D1-FIELD-unit-data-pipeline", manifest["commands"]["post_run_data_flywheel_status"]["argv"])
@@ -159,6 +161,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("d1_training_readiness", manifest["expected_outputs"])
             self.assertIn("d1_labeling_intake", manifest["expected_outputs"])
             self.assertIn("d1_labeling_queue", manifest["expected_outputs"])
+            self.assertIn("d1_labeling_review_packet", manifest["expected_outputs"])
             self.assertIn(
                 "D1-FIELD-unit-data-pipeline-experiment",
                 manifest["expected_outputs"]["training_experiment_plan"],
@@ -169,6 +172,7 @@ class D1FieldKitTests(unittest.TestCase):
             )
             self.assertIn("D1-FIELD-unit-labeling-intake", manifest["expected_outputs"]["d1_labeling_intake"])
             self.assertIn("D1-FIELD-unit-labeling-queue", manifest["expected_outputs"]["d1_labeling_queue"])
+            self.assertIn("D1-FIELD-unit-labeling-review", manifest["expected_outputs"]["d1_labeling_review_packet"])
             self.assertIn("D1-FIELD-unit-training-preflight", manifest["expected_outputs"]["training_run_preflight"])
             self.assertIn("D1-FIELD-unit-features", manifest["expected_outputs"]["training_feature_manifest"])
             self.assertIn("D1-FIELD-unit-runner-dry-run", manifest["expected_outputs"]["training_runner_dry_run"])
@@ -193,6 +197,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("D1 training-readiness", runbook)
             self.assertIn("D1 labeling-intake", runbook)
             self.assertIn("D1 labeling-queue", runbook)
+            self.assertIn("D1 labeling-review packet", runbook)
             self.assertIn("TRAIN-003..008", runbook)
             self.assertIn("Sync Dashboard Summaries", runbook)
             self.assertIn("observe_d1_field_run.py", runbook)
@@ -202,6 +207,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("D1 training readiness", notes)
             self.assertIn("D1 labeling intake", notes)
             self.assertIn("D1 labeling queue", notes)
+            self.assertIn("D1 labeling review packet", notes)
             self.assertIn("Training run preflight", notes)
             self.assertIn("Training baseline eval", notes)
             self.assertIn("Training job plan", notes)
@@ -211,6 +217,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("Run the one-command post-run collector", checklist)
             self.assertIn("post-run training readiness", checklist)
             self.assertIn("D1 labeling queue", checklist)
+            self.assertIn("D1 review packet", checklist)
 
     def test_v1_board_uses_recorded_v1_max17048_pins(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

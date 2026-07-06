@@ -6,6 +6,19 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-028 D1 labeling review-packet and post-run binding is
+implemented locally. `scripts/build_d1_labeling_review_packet.py` turns a
+bounded `d1_labeling_queue` summary into a human-review work packet with
+decision slots for operator label, privacy review, training consent, split
+plan, and candidate decision; `scripts/collect_d1_postrun.py` is now schema
+`egolink.d1_postrun_collection.v0.9` and includes this as
+`labeling_review_packet`; field kit v12 expects the
+`d1_labeling_review_packet` artifact. This does not read sample JSONL, expose
+exact coordinates/raw payloads/feature rows/targets/candidate DBs, mark items
+reviewed, write candidate records, train/evaluate a model, write model
+artifacts, deploy inference, measure model footprint/power, deploy to the VPS,
+or allow release claims.
+
 2026-07-06: DATA-027 D1 labeling-queue Web/API visibility is implemented
 locally. The Message Hub can load the latest bounded
 `reports/d1_labeling_queue/**/d1_labeling_queue.json`, expose it as
