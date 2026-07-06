@@ -202,6 +202,13 @@ synthetic policy, gates, and `not_run` measured metrics are allowed. JSONL row
 contents, raw records, candidate DBs, runtime logs, private training endpoints,
 raw tensors, model artifacts, and measured model claims are not.
 
+TRAIN-006 can run aggregate baseline evaluation over an explicitly named
+TRAIN-004 feature manifest, TRAIN-004 feature rows, and TRAIN-005 runner
+dry-run report. Synthetic rows require explicit acknowledgement and produce
+synthetic integration metrics only. TRAIN-006 still does not train a model,
+write model artifacts or model cards, integrate a training server, measure
+footprint/power, deploy on-device inference, or allow release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -236,9 +243,11 @@ deployment, or OTA update behavior changes in DATA-002.
 10. Let DATA-011 surface the latest feature manifest status in Web/API without
    exposing JSONL row contents or private training details.
 11. Let TRAIN-005 validate runner input shape from the feature manifest and
-   rows before any real runner integration.
+    rows before any real runner integration.
 12. Let DATA-012 surface the latest runner dry-run status in Web/API without
-   exposing JSONL row contents or private training details.
-13. Let MODEL-001 and MotionNet work consume only reviewed candidate records
-   whose manifests still pass consent, privacy, retention, deletion, quality,
-   and split-leakage checks.
+    exposing JSONL row contents or private training details.
+13. Let TRAIN-006 run aggregate baseline evaluation only after the TRAIN-005
+    runner-input gate passes; synthetic metrics remain integration-only.
+14. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+    whose manifests still pass consent, privacy, retention, deletion, quality,
+    and split-leakage checks.

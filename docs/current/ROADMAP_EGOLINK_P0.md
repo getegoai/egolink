@@ -243,6 +243,9 @@ Current AI/data boundary:
 - done: DATA-012 Dashboard/API visibility can surface the latest TRAIN-005
   runner dry-run status and curated deploy summaries without exposing JSONL row
   contents, raw tensors, private training endpoints, or model artifacts;
+- done: TRAIN-006 synthetic baseline eval can produce aggregate baseline
+  metrics from TRAIN-004/005 inputs with explicit synthetic acknowledgement,
+  while still producing no model artifact or release claim;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -258,6 +261,9 @@ consume. DATA-011 then makes the feature-manifest readiness visible before any
 model is evaluated or shipped. TRAIN-005 validates the runner input contract
 from those rows while keeping model training and measured metrics at `not_run`;
 DATA-012 makes that dry-run readiness visible in the same Web/API loop.
+TRAIN-006 then exercises aggregate baseline-metric plumbing on explicit
+synthetic inputs only; it still does not train a model, produce artifacts, or
+support product performance claims.
 
 ## R0: VPS + PC Simulator Simulated Loop
 

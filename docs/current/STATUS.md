@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: TRAIN-006 synthetic baseline evaluation is implemented locally as
+the next bounded bridge after TRAIN-005. The new
+`scripts/run_training_baseline_eval.py` command reads an explicitly named
+TRAIN-004 `training_feature_manifest.json`, TRAIN-004
+`training_feature_rows.jsonl`, and TRAIN-005 `training_runner_dry_run.json`;
+with explicit `--allow-synthetic`, local smoke evidence under
+`reports/training_baseline_evals/train006-local-smoke-20260706/` produced
+`status=synthetic_baseline_eval_complete`. Metrics are synthetic integration
+checks only: no model training, model weights, model card, model artifact,
+training server, model registry, device deployment, footprint, latency, power,
+release metric, or product performance claim is produced.
+
 2026-07-05: DATA-012 training runner dry-run visibility is implemented
 locally. The Message Hub can now load the latest bounded
 `reports/training_runner_dry_runs/**/training_runner_dry_run.json`, expose it
