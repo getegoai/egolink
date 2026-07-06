@@ -314,6 +314,8 @@ class D1PostrunCollectorTests(unittest.TestCase):
                             str(root / "runner"),
                             "--training-baseline-eval-output-root",
                             str(root / "baselines"),
+                            "--training-handoff-output-root",
+                            str(root / "handoffs"),
                             "--output-root",
                             str(root / "postrun"),
                             "--web-api-output-dir",
@@ -340,13 +342,17 @@ class D1PostrunCollectorTests(unittest.TestCase):
                 "ready_for_runner",
             )
             training_chain = payload["components"]["training_chain"]
-            self.assertEqual(training_chain["status"], "baseline_eval_complete")
+            self.assertEqual(training_chain["status"], "ready_for_training_server_handoff")
             self.assertEqual(training_chain["preflight"]["status"], "ready_for_training_runner")
             self.assertEqual(training_chain["feature_manifest"]["status"], "ready_for_feature_runner")
             self.assertEqual(training_chain["feature_manifest"]["row_count"], 1)
             self.assertEqual(training_chain["runner_dry_run"]["status"], "ready_for_runner_execution")
             self.assertEqual(training_chain["baseline_eval"]["status"], "baseline_eval_complete")
             self.assertEqual(training_chain["baseline_eval"]["metric_scope"], "reviewed_engineering_dataset")
+            self.assertEqual(training_chain["handoff_bundle"]["status"], "ready_for_training_server_handoff")
+            self.assertEqual(training_chain["handoff_bundle"]["handoff_id"], "D1-POSTRUN-ready-training-training-handoff")
+            self.assertEqual(training_chain["handoff_bundle"]["training_server"], "not_configured")
+            self.assertFalse(training_chain["handoff_bundle"]["dry_run_only"])
             self.assertTrue(
                 (
                     root
@@ -385,6 +391,14 @@ class D1PostrunCollectorTests(unittest.TestCase):
                     / "baselines"
                     / "D1-POSTRUN-ready-training-baseline-eval"
                     / "training_baseline_eval.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    root
+                    / "handoffs"
+                    / "D1-POSTRUN-ready-training-training-handoff"
+                    / "training_handoff_bundle.json"
                 ).is_file()
             )
             self.assertFalse(payload["scope"]["model_training_started"])

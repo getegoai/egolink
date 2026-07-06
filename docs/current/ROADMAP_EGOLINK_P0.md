@@ -257,6 +257,8 @@ Current AI/data boundary:
 - done: DATA-015 Dashboard/API visibility can surface the latest TRAIN-007
   handoff bundle and curated deploy summaries without exposing row contents,
   private endpoints, or model artifacts;
+- done: DATA-016 post-run collector and D1 field kit can continue through
+  TRAIN-007 handoff-bundle generation after TRAIN-006 baseline eval;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -284,6 +286,9 @@ for future training-runner/server integration while keeping row contents,
 private endpoints, model artifacts, and release claims out of scope.
 DATA-015 makes that handoff-bundle status visible in the Web/API loop and VPS
 summary packaging without changing training, deployment, or model behavior.
+DATA-016 binds TRAIN-007 back into the D1 post-run collector and field kit, so
+a reviewed post-field dataset can reach handoff-bundle readiness from one
+bounded local collector run.
 
 ## R0: VPS + PC Simulator Simulated Loop
 

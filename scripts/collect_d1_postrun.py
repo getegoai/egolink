@@ -20,6 +20,7 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts import analyze_power_curve
+from scripts import build_training_handoff_bundle
 from scripts import build_d1_demo_report
 from scripts import export_training_feature_manifest
 from scripts import register_training_experiment
@@ -33,12 +34,14 @@ from scripts import validate_d1_web_api
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_postrun"
 DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
-SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.2"
-BUILDER_VERSION = "data-014.0"
+SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.3"
+BUILDER_VERSION = "data-016.0"
 SUMMARY_JSON = "d1_postrun_collection_summary.json"
 SUMMARY_MARKDOWN = "d1_postrun_collection_summary.md"
 READY_DATA_PIPELINE_STATUS = "ready_for_training_handoff"
 READY_BASELINE_STATUSES = {"baseline_eval_complete", "synthetic_baseline_eval_complete"}
+READY_HANDOFF_STATUS = "ready_for_training_server_handoff"
+SYNTHETIC_HANDOFF_STATUS = "synthetic_handoff_dry_run_only"
 
 
 def utc_now() -> str:
@@ -179,6 +182,7 @@ def training_chain_summary(report: Mapping[str, Any] | None, error_summary: Mapp
     feature = as_dict(report.get("training_feature_manifest"))
     runner = as_dict(report.get("training_runner_dry_run"))
     baseline = as_dict(report.get("training_baseline_eval"))
+    handoff = as_dict(report.get("training_handoff_bundle"))
     return {
         "status": report.get("status"),
         "reason": report.get("reason"),
@@ -208,6 +212,14 @@ def training_chain_summary(report: Mapping[str, Any] | None, error_summary: Mapp
             "eval_id": baseline.get("eval_id"),
             "metric_scope": as_dict(baseline.get("metrics")).get("scope"),
             "report_path": str(nested_path(baseline, "paths", "training_baseline_eval_json") or ""),
+        },
+        "handoff_bundle": {
+            "status": handoff.get("status"),
+            "reason": handoff.get("reason"),
+            "handoff_id": handoff.get("handoff_id"),
+            "training_server": as_dict(handoff.get("training_server")).get("integration"),
+            "dry_run_only": as_dict(handoff.get("training_server")).get("dry_run_only", False),
+            "report_path": str(nested_path(handoff, "paths", "training_handoff_bundle_json") or ""),
         },
         "next_step": report.get("next_step"),
     }
@@ -472,19 +484,67 @@ def collect_training_chain(
             baseline_payload,
             args.training_baseline_eval_output_root / baseline_eval_id,
         )
+        baseline_path = args.training_baseline_eval_output_root / baseline_eval_id / "training_baseline_eval.json"
+
+        handoff_id = args.training_handoff_id or f"{run_id}-training-handoff"
+        handoff_dataset = build_training_handoff_bundle.load_json(
+            dataset_manifest_path,
+            label="dataset manifest",
+        )
+        handoff_preflight = build_training_handoff_bundle.load_json(
+            preflight_path,
+            label="training run preflight",
+        )
+        handoff_feature = build_training_handoff_bundle.load_json(
+            feature_manifest_path,
+            label="feature manifest",
+        )
+        handoff_runner = build_training_handoff_bundle.load_json(
+            runner_path,
+            label="runner dry-run",
+        )
+        handoff_baseline = build_training_handoff_bundle.load_json(
+            baseline_path,
+            label="baseline eval",
+        )
+        feature_row_count = build_training_handoff_bundle.count_jsonl_rows(feature_rows_path)
+        handoff_payload = build_training_handoff_bundle.build_handoff_bundle(
+            dataset=handoff_dataset,
+            preflight=handoff_preflight,
+            feature_manifest=handoff_feature,
+            feature_row_count=feature_row_count,
+            runner_dry_run=handoff_runner,
+            baseline_eval=handoff_baseline,
+            source_refs={
+                "dataset_manifest": build_training_handoff_bundle.input_ref(dataset_manifest_path),
+                "training_run_preflight": build_training_handoff_bundle.input_ref(preflight_path),
+                "training_feature_manifest": build_training_handoff_bundle.input_ref(feature_manifest_path),
+                "training_feature_rows": build_training_handoff_bundle.input_ref(feature_rows_path),
+                "training_runner_dry_run": build_training_handoff_bundle.input_ref(runner_path),
+                "training_baseline_eval": build_training_handoff_bundle.input_ref(baseline_path),
+            },
+            handoff_id=handoff_id,
+            created_at=created_at,
+            allow_synthetic=args.allow_synthetic_training_chain,
+        )
+        handoff_written = build_training_handoff_bundle.write_handoff_bundle(
+            handoff_payload,
+            args.training_handoff_output_root / handoff_id,
+        )
     except Exception as exc:
         return None, bounded_error("training_chain_failed", exc)
 
     return (
         {
-            "status": baseline_written.get("status"),
-            "reason": baseline_written.get("reason"),
+            "status": handoff_written.get("status"),
+            "reason": handoff_written.get("reason"),
             "synthetic_allowed_for_dry_run": bool(args.allow_synthetic_training_chain),
             "training_run_preflight": preflight_written,
             "training_feature_manifest": feature_written,
             "training_runner_dry_run": runner_written,
             "training_baseline_eval": baseline_written,
-            "next_step": baseline_written.get("next_step"),
+            "training_handoff_bundle": handoff_written,
+            "next_step": handoff_written.get("next_step"),
         },
         None,
     )
@@ -522,7 +582,7 @@ def derive_result(components: Mapping[str, Mapping[str, Any]]) -> tuple[str, lis
     training_status = str(training_chain.get("status") or "unknown")
     if training_status == "error":
         warnings.append(f"training_chain:{training_chain.get('reason') or training_status}")
-    elif training_status not in READY_BASELINE_STATUSES and training_status != "skipped":
+    elif training_status not in {READY_HANDOFF_STATUS, SYNTHETIC_HANDOFF_STATUS, "skipped"}:
         warnings.append(f"training_chain:{training_chain.get('reason') or training_status}")
 
     result = "FAIL" if errors else ("WARN" if warnings else "PASS")
@@ -554,8 +614,10 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
     training_chain = as_dict(components.get("training_chain"))
     training_status = str(training_chain.get("status") or "")
     if training_status == "skipped" and training_chain.get("reason") == "data_flywheel_pipeline_not_ready":
-        steps.append("After candidate review makes the dataset ready, rerun the post-run collector to create TRAIN-003..006 reports.")
-    elif training_status and training_status not in READY_BASELINE_STATUSES and training_status != "skipped":
+        steps.append("After candidate review makes the dataset ready, rerun the post-run collector to create TRAIN-003..007 reports.")
+    elif training_status == SYNTHETIC_HANDOFF_STATUS:
+        steps.append("Repeat the post-run collector with reviewed real rows before using the handoff for model training.")
+    elif training_status and training_status not in {READY_HANDOFF_STATUS, "skipped"}:
         steps.append(str(training_chain.get("next_step") or "Inspect the generated training-chain report and fix the first blocker."))
 
     if result != "FAIL":
@@ -571,6 +633,7 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
     feature_manifest = as_dict(training_chain.get("feature_manifest"))
     runner_dry_run = as_dict(training_chain.get("runner_dry_run"))
     baseline_eval = as_dict(training_chain.get("baseline_eval"))
+    handoff_bundle = as_dict(training_chain.get("handoff_bundle"))
     return {
         "postrun_summary_json": str(summary_json),
         "postrun_summary_markdown": str(summary_md),
@@ -586,6 +649,7 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
         "training_feature_manifest": feature_manifest.get("report_path"),
         "training_runner_dry_run": runner_dry_run.get("report_path"),
         "training_baseline_eval": baseline_eval.get("report_path"),
+        "training_handoff_bundle": handoff_bundle.get("report_path"),
     }
 
 
@@ -706,7 +770,7 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
             "Read-only Message Hub collection plus local report generation only.",
             "No hardware, serial port, firmware, Message Hub command, deployment, or GitLab mutation is performed.",
             "The data-flywheel step ingests only recording directories explicitly passed with --recording-dir.",
-            "The training-chain step runs only bounded local preflight, feature export, runner dry-run, and aggregate baseline-eval reports after a ready dataset handoff.",
+            "The training-chain step runs only bounded local preflight, feature export, runner dry-run, aggregate baseline-eval, and handoff-bundle reports after a ready dataset handoff.",
             "Dashboard state and curated summaries are not raw training data.",
         ],
         "non_claims": [
@@ -776,6 +840,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=run_training_baseline_eval.DEFAULT_OUTPUT_ROOT,
     )
     parser.add_argument("--baseline-eval-id")
+    parser.add_argument(
+        "--training-handoff-output-root",
+        type=Path,
+        default=build_training_handoff_bundle.DEFAULT_OUTPUT_ROOT,
+    )
+    parser.add_argument("--training-handoff-id")
     parser.add_argument(
         "--model-track",
         default=register_training_experiment.DEFAULT_MODEL_TRACK,

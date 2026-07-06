@@ -121,6 +121,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("-IncludeTrainingFeatureSummaries", sync_argv)
             self.assertIn("-IncludeTrainingRunnerDryRunSummaries", sync_argv)
             self.assertIn("-IncludeTrainingBaselineEvalSummaries", sync_argv)
+            self.assertIn("-IncludeTrainingHandoffSummaries", sync_argv)
             self.assertTrue(manifest["commands"]["flash_explicit_operator_action"]["hardware_action"])
             self.assertTrue(manifest["commands"]["short_usb_free_link_check"]["sends_message_hub_command"])
             self.assertTrue(manifest["commands"]["preflight_amoled_visible_status"]["writes_amoled_serial"])
@@ -143,6 +144,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("training_feature_manifest", manifest["expected_outputs"])
             self.assertIn("training_runner_dry_run", manifest["expected_outputs"])
             self.assertIn("training_baseline_eval", manifest["expected_outputs"])
+            self.assertIn("training_handoff_bundle", manifest["expected_outputs"])
             self.assertIn(
                 "D1-FIELD-unit-data-pipeline-experiment",
                 manifest["expected_outputs"]["training_experiment_plan"],
@@ -151,6 +153,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("D1-FIELD-unit-features", manifest["expected_outputs"]["training_feature_manifest"])
             self.assertIn("D1-FIELD-unit-runner-dry-run", manifest["expected_outputs"]["training_runner_dry_run"])
             self.assertIn("D1-FIELD-unit-baseline-eval", manifest["expected_outputs"]["training_baseline_eval"])
+            self.assertIn("D1-FIELD-unit-training-handoff", manifest["expected_outputs"]["training_handoff_bundle"])
             self.assertIn("calling_not_claimed", manifest["non_claims"])
             self.assertIn("sms_not_claimed", manifest["non_claims"])
             self.assertIn("model_training_not_claimed", manifest["non_claims"])

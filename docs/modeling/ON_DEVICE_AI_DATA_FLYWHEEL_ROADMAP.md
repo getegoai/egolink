@@ -77,10 +77,12 @@ must consume only reviewed evidence:
 23. DATA-015 surfaces the latest TRAIN-007 handoff bundle in Web/API and
     curated deployment summaries without exposing row contents, private
     endpoints, or model artifacts.
-24. MotionNet v0.1 starts with a statistical baseline and small model
+24. DATA-016 lets the D1 post-run collector continue through TRAIN-007 and
+    records the handoff-bundle status in the post-run summary and field kit.
+25. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-25. Device deployment begins in shadow mode: model output is recorded alongside
+26. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -111,6 +113,7 @@ must consume only reviewed evidence:
 | Post-run training chain | Run TRAIN-003..006 from the D1 post-run collector when a reviewed dataset handoff is ready. | DATA-014. |
 | Training handoff bundle | Bind dataset, preflight, feature, runner dry-run, and baseline-eval refs and hashes for a future training runner/server without copying rows. | TRAIN-007. |
 | Handoff visibility | Surface latest handoff-bundle readiness without row contents, private endpoints, or model artifacts. | DATA-015. |
+| Post-run handoff bundle | Extend the D1 post-run collector and field kit through TRAIN-007. | DATA-016. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -204,6 +207,12 @@ must consume only reviewed evidence:
   file hashes, row counts, synthetic policy, training-server integration state,
   gates, and report paths only; they do not expose JSONL row contents, raw
   records, candidate DB paths, runtime JSONL logs, private endpoints, model
+  artifacts, model cards, footprint, latency, power measurements, device
+  deployment results, or release claims.
+- DATA-016 post-run summaries may show TRAIN-003..007 component statuses,
+  handoff-bundle status, row counts, source-ref hashes, gates, next step, and
+  report paths after a ready dataset handoff. They do not expose feature-row
+  JSONL contents, raw records, candidate DB paths, private endpoints, model
   artifacts, model cards, footprint, latency, power measurements, device
   deployment results, or release claims.
 

@@ -25,7 +25,7 @@ DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
 DEFAULT_FW_VERSION = "0.1.0-d1-periodic-location"
 DEFAULT_BOARD_ID = "connectivity-node-001"
 DEFAULT_DURATION_HOURS = 4.0
-KIT_VERSION = "D1.field_kit.v6"
+KIT_VERSION = "D1.field_kit.v7"
 MANIFEST_JSON = "field_manifest.json"
 RUNBOOK_MD = "FIELD_RUNBOOK.md"
 CHECKLIST_MD = "FIELD_CHECKLIST.md"
@@ -457,7 +457,7 @@ def build_commands(
         ),
         "post_run_sync_dashboard_summaries": command_record(
             description=(
-                "Sync only curated Field Test Results, Data Flywheel, Training Experiment, and TRAIN-003..006 summaries to the VPS Dashboard."
+                "Sync only curated Field Test Results, Data Flywheel, Training Experiment, and TRAIN-003..007 summaries to the VPS Dashboard."
             ),
             argv=[
                 "powershell",
@@ -477,6 +477,7 @@ def build_commands(
                 "-IncludeTrainingFeatureSummaries",
                 "-IncludeTrainingRunnerDryRunSummaries",
                 "-IncludeTrainingBaselineEvalSummaries",
+                "-IncludeTrainingHandoffSummaries",
             ],
             requires_operator_intent=True,
         ),
@@ -754,6 +755,7 @@ def write_notes_template(path: Path, manifest: dict[str, Any]) -> None:
         f"- Training feature manifest: `{manifest['expected_outputs']['training_feature_manifest']}`",
         f"- Training runner dry-run: `{manifest['expected_outputs']['training_runner_dry_run']}`",
         f"- Training baseline eval: `{manifest['expected_outputs']['training_baseline_eval']}`",
+        f"- Training handoff bundle: `{manifest['expected_outputs']['training_handoff_bundle']}`",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -898,6 +900,9 @@ def build_manifest(
             "training_baseline_eval": report_path(
                 "training_baseline_evals", f"{run_id}-baseline-eval", "training_baseline_eval.json"
             ),
+            "training_handoff_bundle": report_path(
+                "training_handoffs", f"{run_id}-training-handoff", "training_handoff_bundle.json"
+            ),
         },
         "boundaries": [
             "This generator only writes local kit files.",
@@ -907,7 +912,7 @@ def build_manifest(
             "AMOLED sidecar commands are PC-connected display aids and are not USB-Free product acceptance evidence.",
             "Voice calling and SMS are unverified and not implemented in the current D1 run path.",
             "A multi-hour D1 shakedown is not a 24h PWR-001 pass or a product battery-life claim.",
-            "Post-run TRAIN-003..006 reports are local bounded handoff checks and do not train or deploy a model.",
+            "Post-run TRAIN-003..007 reports are local bounded handoff checks and do not train or deploy a model.",
         ],
         "non_claims": non_claims(),
     }

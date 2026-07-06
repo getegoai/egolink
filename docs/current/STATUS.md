@@ -6,6 +6,19 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-016 post-run handoff collector is implemented locally. The
+D1 post-run collector schema is now `egolink.d1_postrun_collection.v0.3` and
+continues through TRAIN-007 when the DATA-006 pipeline returns
+`ready_for_training_handoff`: TRAIN-003 preflight, TRAIN-004 feature export,
+TRAIN-005 runner dry-run, TRAIN-006 baseline eval, and TRAIN-007 handoff
+bundle. The post-run `training_chain.status` now reports the handoff-bundle
+status. The D1 field kit is updated to v7 with expected
+`training_handoff_bundle.json` output and the curated
+`-IncludeTrainingHandoffSummaries` sync switch. This does not train a model,
+call or configure a training endpoint, copy feature-row JSONL to the Dashboard,
+deploy to devices, produce model artifacts/cards, measure footprint/power, or
+allow release claims.
+
 2026-07-06: DATA-015 training handoff visibility is implemented locally. The
 Message Hub can now load the latest bounded
 `reports/training_handoffs/**/training_handoff_bundle.json`, expose it as
