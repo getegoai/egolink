@@ -25,7 +25,7 @@ DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
 DEFAULT_FW_VERSION = "0.1.0-d1-periodic-location"
 DEFAULT_BOARD_ID = "connectivity-node-001"
 DEFAULT_DURATION_HOURS = 4.0
-KIT_VERSION = "D1.field_kit.v10"
+KIT_VERSION = "D1.field_kit.v11"
 MANIFEST_JSON = "field_manifest.json"
 RUNBOOK_MD = "FIELD_RUNBOOK.md"
 CHECKLIST_MD = "FIELD_CHECKLIST.md"
@@ -462,7 +462,7 @@ def build_commands(
         "post_run_sync_dashboard_summaries": command_record(
             description=(
                 "Sync only curated Field Test Results, Data Flywheel, Training Experiment, TRAIN-003..008, "
-                "D1 readiness, and D1 labeling-intake summaries to the VPS Dashboard."
+                "D1 readiness, D1 labeling-intake, and D1 labeling-queue summaries to the VPS Dashboard."
             ),
             argv=[
                 "powershell",
@@ -487,6 +487,7 @@ def build_commands(
                 "-IncludeSyntheticTrainingChainSummaries",
                 "-IncludeD1TrainingReadinessSummaries",
                 "-IncludeD1LabelingIntakeSummaries",
+                "-IncludeD1LabelingQueueSummaries",
             ],
             requires_operator_intent=True,
         ),

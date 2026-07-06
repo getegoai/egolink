@@ -335,6 +335,13 @@ write. It does not read sample JSONL, write candidate DBs, expose exact
 coordinates or raw payloads, train/evaluate a model, produce model artifacts,
 or allow release claims.
 
+DATA-027 surfaces the latest bounded D1 labeling-queue index through the
+Message Hub API and Dashboard. The VPS deploy helper can copy only
+`d1_labeling_queue.json/.md`, and the field kit post-run sync command includes
+the explicit queue-summary switch. It does not expose raw sample rows, exact
+coordinates, raw payloads, feature rows, targets, candidate DBs, private
+training details, model artifacts, or release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -404,6 +411,8 @@ deployment, or OTA update behavior changes in DATA-002.
     collector.
 28. Let DATA-026 summarize D1 labeling intake reports into a bounded queue
     index before candidate-store writes.
-29. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+29. Let DATA-027 surface the latest D1 labeling queue in Web/API and curated
+    deployment summaries without exposing raw sample rows or candidate DBs.
+30. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

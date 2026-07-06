@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-06 14:36 UTC
-- 分支: `autodev/egolink-p0` @ 135a42e feat(field): refresh d1 field kit intake outputs [D1]
+- 生成时间: 2026-07-06 14:54 UTC
+- 分支: `autodev/egolink-p0` @ 2b38c0e feat(data): surface d1 labeling queue [D5]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 120，进行中: 3，暂停: 3
+- 已完成任务总数: 121，进行中: 3，暂停: 3
 
 ## 里程碑
 

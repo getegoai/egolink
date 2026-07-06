@@ -45,6 +45,7 @@ DEFAULT_TRAINING_JOB_REPORTS = REPO_ROOT / "reports" / "training_jobs"
 DEFAULT_SYNTHETIC_TRAINING_CHAIN_REPORTS = REPO_ROOT / "reports" / "synthetic_training_chain"
 DEFAULT_D1_TRAINING_READINESS_REPORTS = REPO_ROOT / "reports" / "d1_training_readiness"
 DEFAULT_D1_LABELING_INTAKE_REPORTS = REPO_ROOT / "reports" / "d1_labeling_intake"
+DEFAULT_D1_LABELING_QUEUE_REPORTS = REPO_ROOT / "reports" / "d1_labeling_queue"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -876,6 +877,7 @@ def make_handler(
     synthetic_training_chain_root: Path = DEFAULT_SYNTHETIC_TRAINING_CHAIN_REPORTS,
     d1_training_readiness_root: Path = DEFAULT_D1_TRAINING_READINESS_REPORTS,
     d1_labeling_intake_root: Path = DEFAULT_D1_LABELING_INTAKE_REPORTS,
+    d1_labeling_queue_root: Path = DEFAULT_D1_LABELING_QUEUE_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -929,6 +931,7 @@ def make_handler(
                 synthetic_training_chain = load_latest_synthetic_training_chain(synthetic_training_chain_root)
                 d1_training_readiness = load_latest_d1_training_readiness(d1_training_readiness_root)
                 d1_labeling_intake = load_latest_d1_labeling_intake(d1_labeling_intake_root)
+                d1_labeling_queue = load_latest_d1_labeling_queue(d1_labeling_queue_root)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -948,6 +951,7 @@ def make_handler(
                         "synthetic_training_chain": synthetic_training_chain,
                         "d1_training_readiness": d1_training_readiness,
                         "d1_labeling_intake": d1_labeling_intake,
+                        "d1_labeling_queue": d1_labeling_queue,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -1057,6 +1061,9 @@ def make_handler(
                 return
             if segments == ["api", "v1", "d1-labeling-intake", "latest"]:
                 self.respond_json({"d1_labeling_intake": load_latest_d1_labeling_intake(d1_labeling_intake_root)})
+                return
+            if segments == ["api", "v1", "d1-labeling-queue", "latest"]:
+                self.respond_json({"d1_labeling_queue": load_latest_d1_labeling_queue(d1_labeling_queue_root)})
                 return
             raise MessageHubError("not_found", "route not found", status=404)
 
@@ -4760,6 +4767,187 @@ def load_latest_d1_labeling_intake(root: Path = DEFAULT_D1_LABELING_INTAKE_REPOR
     )
 
 
+def d1_labeling_queue_unavailable(reason: str = "no_d1_labeling_queue") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "serves_demo": "D5",
+        "queue": {"available": False, "pending_items": 0, "items": []},
+        "review_gates": {"labeling_queue": "not_available"},
+        "scope": {
+            "labeling_intake_reports_read": False,
+            "sample_jsonl_read": False,
+            "hardware_contacted": False,
+            "candidate_db_written": False,
+            "training_samples_written": False,
+            "model_training_started": False,
+            "model_artifact_written": False,
+            "exact_coordinates_copied": False,
+            "release_claim_allowed": False,
+        },
+        "next_step": "Run scripts/summarize_d1_labeling_queue.py after D1 labeling-intake summaries exist.",
+    }
+
+
+def latest_d1_labeling_queue_path(root: Path = DEFAULT_D1_LABELING_QUEUE_REPORTS) -> Path | None:
+    return latest_report_path(root, ["**/d1_labeling_queue.json"])
+
+
+def compact_d1_labeling_queue_items(items: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for item in list(items or [])[:8]:
+        if not isinstance(item, dict):
+            continue
+        review_state = as_dict(item.get("review_state"))
+        evidence = as_dict(item.get("evidence_summary"))
+        result.append(
+            compact_dict(
+                {
+                    "queue_id": item.get("queue_id"),
+                    "intake_id": item.get("intake_id"),
+                    "source_run_id": item.get("source_run_id"),
+                    "readiness_run_id": item.get("readiness_run_id"),
+                    "device_id": item.get("device_id"),
+                    "status": item.get("status"),
+                    "training_allowed": False,
+                    "candidate_record_written": False,
+                    "review_state": {
+                        "operator_label": review_state.get("operator_label"),
+                        "privacy_review": review_state.get("privacy_review"),
+                        "training_consent": review_state.get("training_consent"),
+                        "split_plan": review_state.get("split_plan"),
+                        "quality_gaps": list(review_state.get("quality_gaps") or []),
+                    },
+                    "evidence_summary": {
+                        "samples": evidence.get("samples", 0),
+                        "latest_seq": evidence.get("latest_seq"),
+                        "raw_post_success_delta": evidence.get("raw_post_success_delta", 0),
+                        "raw_post_failure_delta": evidence.get("raw_post_failure_delta", 0),
+                        "coordinate_sample_count": evidence.get("coordinate_sample_count", 0),
+                        "gnss_fix_seen": evidence.get("gnss_fix_seen", False),
+                        "imu_evidence_statuses": list(evidence.get("imu_evidence_statuses") or []),
+                        "power_evidence_statuses": list(evidence.get("power_evidence_statuses") or []),
+                    },
+                    "requested_actions": list(item.get("requested_actions") or []),
+                    "available_decisions": list(item.get("available_decisions") or []),
+                    "intake_report_path": item.get("intake_report_path") or item.get("source_report_path"),
+                }
+            )
+        )
+    return result
+
+
+def compact_d1_labeling_queue_reports(reports: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for report in list(reports or [])[:8]:
+        if not isinstance(report, dict):
+            continue
+        result.append(
+            compact_dict(
+                {
+                    "run_id": report.get("run_id"),
+                    "status": report.get("status"),
+                    "reason": report.get("reason"),
+                    "pending_items": report.get("pending_items", 0),
+                    "report_path": report.get("report_path"),
+                    "markdown_path": report.get("markdown_path") or report.get("markdown_report_path"),
+                    "training_allowed": False,
+                    "candidate_record_written": False,
+                    "blockers": list(report.get("blockers") or []),
+                }
+            )
+        )
+    return result
+
+
+def load_latest_d1_labeling_queue(root: Path = DEFAULT_D1_LABELING_QUEUE_REPORTS) -> dict[str, Any]:
+    path = latest_d1_labeling_queue_path(root)
+    if path is None:
+        return d1_labeling_queue_unavailable()
+    report = load_json_report(path)
+    if report is None:
+        return d1_labeling_queue_unavailable("d1_labeling_queue_unreadable")
+    summary = as_dict(report.get("summary"))
+    queue = as_dict(report.get("queue"))
+    scope = as_dict(report.get("scope"))
+    pending_items = summary.get("pending_items", summary.get("pending_item_count", 0))
+    compact_items = compact_d1_labeling_queue_items(queue.get("items"))
+    compact_reports = compact_d1_labeling_queue_reports(report.get("intake_reports"))
+    needs_operator_label = summary.get(
+        "needs_operator_label",
+        len([item for item in compact_items if as_dict(item.get("review_state")).get("operator_label") == "missing"]),
+    )
+    needs_privacy_review = summary.get(
+        "needs_privacy_review",
+        len([item for item in compact_items if as_dict(item.get("review_state")).get("privacy_review") == "required"]),
+    )
+    needs_training_consent = summary.get(
+        "needs_training_consent",
+        len(
+            [
+                item
+                for item in compact_items
+                if as_dict(item.get("review_state")).get("training_consent") == "not_reviewed"
+            ]
+        ),
+    )
+    needs_split_plan = summary.get(
+        "needs_split_plan",
+        len([item for item in compact_items if as_dict(item.get("review_state")).get("split_plan") == "missing"]),
+    )
+    markdown_candidate = path.with_suffix(".md")
+    markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    return compact_dict(
+        {
+            "available": True,
+            "status": report.get("status", "unknown"),
+            "reason": report.get("reason"),
+            "run_id": report.get("run_id"),
+            "generated_at": report.get("generated_at") or report_file_time(path),
+            "serves_demo": report.get("serves_demo", "D5"),
+            "summary": {
+                "intake_report_count": summary.get("intake_report_count", 0),
+                "pending_items": pending_items,
+                "needs_operator_label": needs_operator_label,
+                "needs_privacy_review": needs_privacy_review,
+                "needs_training_consent": needs_training_consent,
+                "needs_split_plan": needs_split_plan,
+                "not_ready_reports": summary.get("not_ready_reports", summary.get("not_ready_report_count", 0)),
+                "error_count": summary.get("error_count", 0),
+            },
+            "queue": {
+                "available": queue.get("available", False),
+                "pending_items": queue.get("pending_items", pending_items),
+                "next_queue": queue.get("next_queue"),
+                "items": compact_items,
+            },
+            "intake_reports": compact_reports,
+            "review_gates": as_dict(report.get("review_gates")),
+            "blockers": list(report.get("blockers") or []),
+            "scope": {
+                "labeling_intake_reports_read": scope.get(
+                    "labeling_intake_reports_read", scope.get("intake_summaries_read", False)
+                ),
+                "sample_jsonl_read": scope.get("sample_jsonl_read", False),
+                "hardware_contacted": scope.get("hardware_contacted", False),
+                "commands_sent": scope.get("commands_sent", False),
+                "firmware_changed": scope.get("firmware_changed", False),
+                "candidate_db_written": scope.get("candidate_db_written", False),
+                "training_samples_written": scope.get("training_samples_written", False),
+                "model_training_started": scope.get("model_training_started", False),
+                "model_artifact_written": scope.get("model_artifact_written", False),
+                "exact_coordinates_copied": scope.get("exact_coordinates_copied", False),
+                "release_claim_allowed": scope.get("release_claim_allowed", False),
+            },
+            "next_step": report.get("next_step"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -5713,6 +5901,10 @@ def render_dashboard() -> str:
           <div id="d1LabelingIntake"></div>
         </section>
         <section>
+          <h2>D1 Labeling Queue</h2>
+          <div id="d1LabelingQueue"></div>
+        </section>
+        <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
         </section>
@@ -5780,6 +5972,7 @@ def render_dashboard() -> str:
       syntheticTrainingChain.innerHTML = html;
       d1TrainingReadiness.innerHTML = html;
       d1LabelingIntake.innerHTML = html;
+      d1LabelingQueue.innerHTML = html;
       d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
@@ -5862,7 +6055,7 @@ def render_dashboard() -> str:
     function statusClass(status) {
       if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner' || status === 'ready_for_training_server_handoff' || status === 'ready_for_runner_queue' || status === 'synthetic_baseline_eval_complete' || status === 'baseline_eval_complete' || status === 'ready_for_synthetic_feature_dry_run' || status === 'synthetic_runner_dry_run_complete') return 'ok';
       if (status === 'ready_for_labeling_review') return 'warn';
-      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'synthetic_ready_for_runner' || status === 'synthetic_training_chain_complete' || status === 'synthetic_handoff_dry_run_only' || status === 'synthetic_runner_queue_dry_run_only' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready' || status === 'blocked_feature_rows_mismatch' || status === 'blocked_source_mismatch' || status === 'blocked_handoff_not_ready') return 'warn';
+      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'pending_human_review' || status === 'pending_label_privacy_split' || status === 'pending_labeling_queue_review' || status === 'synthetic_ready_for_runner' || status === 'synthetic_training_chain_complete' || status === 'synthetic_handoff_dry_run_only' || status === 'synthetic_runner_queue_dry_run_only' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready' || status === 'blocked_feature_rows_mismatch' || status === 'blocked_source_mismatch' || status === 'blocked_handoff_not_ready') return 'warn';
       return status === 'not_available' ? 'empty' : 'bad';
     }
     function productDemoPanel(demo) {
@@ -6310,6 +6503,42 @@ def render_dashboard() -> str:
         <div class="metric"><span>Report</span><span>${escapeHtml(report.markdown_path || report.report_path || 'unknown')}</span></div>
       `;
     }
+    function d1LabelingQueuePanel(report) {
+      if (!report || !report.available) {
+        return `
+          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(report && report.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(report && report.reason || 'no_d1_labeling_queue')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(report && report.next_step || 'Build a D1 labeling queue index')}</span></div>
+        `;
+      }
+      const summary = report.summary || {};
+      const queue = report.queue || {};
+      const items = queue.items || [];
+      const first = items[0] || {};
+      const review = first.review_state || {};
+      const evidence = first.evidence_summary || {};
+      const gates = report.review_gates || {};
+      const scope = report.scope || {};
+      const reports = report.intake_reports || [];
+      const firstReport = reports[0] || {};
+      return `
+        <div class="metric"><span>Status</span><span class="${statusClass(report.status)}">${escapeHtml(report.status || 'unknown')}</span></div>
+        <div class="metric"><span>Run</span><b>${escapeHtml(report.run_id || 'unknown')}</b></div>
+        <div class="metric"><span>Pending Items</span><span>${escapeHtml(queue.pending_items ?? summary.pending_items ?? 0)} pending / reports ${escapeHtml(summary.intake_report_count ?? reports.length ?? 0)}</span></div>
+        <div class="metric"><span>Review Queue</span><span>label ${escapeHtml(summary.needs_operator_label ?? 0)} / privacy ${escapeHtml(summary.needs_privacy_review ?? 0)} / consent ${escapeHtml(summary.needs_training_consent ?? 0)} / split ${escapeHtml(summary.needs_split_plan ?? 0)}</span></div>
+        <div class="metric"><span>First Queue Item</span><span>${escapeHtml(first.queue_id || first.intake_id || 'none')} / ${escapeHtml(first.status || 'none')} / ${escapeHtml(first.source_run_id || 'unknown')}</span></div>
+        <div class="metric"><span>Review State</span><span>label ${escapeHtml(review.operator_label || 'missing')} / privacy ${escapeHtml(review.privacy_review || 'required')} / consent ${escapeHtml(review.training_consent || 'not_reviewed')} / split ${escapeHtml(review.split_plan || 'missing')}</span></div>
+        <div class="metric"><span>Evidence</span><span>${escapeHtml(evidence.samples ?? 0)} samples / seq ${escapeHtml(evidence.latest_seq ?? 'unknown')} / POST ${escapeHtml(evidence.raw_post_success_delta ?? 0)} ok / ${escapeHtml(evidence.raw_post_failure_delta ?? 0)} fail</span></div>
+        <div class="metric"><span>Location Scope</span><span>${escapeHtml(evidence.coordinate_sample_count ?? 0)} coordinate samples / GNSS fix ${escapeHtml(evidence.gnss_fix_seen ?? false)} / exact copied ${escapeHtml(scope.exact_coordinates_copied ?? false)}</span></div>
+        <div class="metric"><span>Sensor Gaps</span><span>IMU ${escapeHtml((evidence.imu_evidence_statuses || []).join(', ') || 'unknown')} / Power ${escapeHtml((evidence.power_evidence_statuses || []).join(', ') || 'unknown')}</span></div>
+        <div class="metric"><span>Gates</span><span>intake ${escapeHtml(gates.labeling_intake || 'unknown')} / label ${escapeHtml(gates.operator_label || 'unknown')} / privacy ${escapeHtml(gates.privacy_review || 'unknown')} / candidate ${escapeHtml(gates.candidate_store || 'unknown')}</span></div>
+        <div class="metric"><span>Latest Intake</span><span>${escapeHtml(firstReport.run_id || 'none')} / ${escapeHtml(firstReport.status || 'unknown')} / ${escapeHtml(firstReport.pending_items ?? 0)} pending</span></div>
+        <div class="metric"><span>Blockers</span><span>${escapeHtml((report.blockers || []).join(', ') || 'none')}</span></div>
+        <div class="metric"><span>Scope</span><span>jsonl ${escapeHtml(scope.sample_jsonl_read ?? false)} / db ${escapeHtml(scope.candidate_db_written ?? false)} / training ${escapeHtml(scope.model_training_started ?? false)} / artifact ${escapeHtml(scope.model_artifact_written ?? false)} / claim ${escapeHtml(scope.release_claim_allowed ?? false)}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(report.next_step || 'Review queue items before candidate-store writes')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(report.markdown_path || report.report_path || 'unknown')}</span></div>
+      `;
+    }
     function fieldResultsPanel(results) {
       if (!results || !results.available) {
         return `
@@ -6599,6 +6828,7 @@ def render_dashboard() -> str:
       syntheticTrainingChain.innerHTML = syntheticTrainingChainPanel(data.synthetic_training_chain || {});
       d1TrainingReadiness.innerHTML = d1TrainingReadinessPanel(data.d1_training_readiness || {});
       d1LabelingIntake.innerHTML = d1LabelingIntakePanel(data.d1_labeling_intake || {});
+      d1LabelingQueue.innerHTML = d1LabelingQueuePanel(data.d1_labeling_queue || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>

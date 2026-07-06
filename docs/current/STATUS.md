@@ -6,6 +6,20 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-027 D1 labeling-queue Web/API visibility is implemented
+locally. The Message Hub can load the latest bounded
+`reports/d1_labeling_queue/**/d1_labeling_queue.json`, expose it as
+`d1_labeling_queue` in authenticated `/api/state`, serve
+`/api/v1/d1-labeling-queue/latest`, and render a Dashboard
+`D1 Labeling Queue` panel. `scripts/deploy_message_hub_vps.ps1` has a new
+explicit `-IncludeD1LabelingQueueSummaries` switch that copies only
+`d1_labeling_queue.json/.md`; field kit v11 includes that switch in the
+post-run sync command. This was not deployed to the VPS in this run and does
+not read sample JSONL, expose exact coordinates/raw payloads/feature rows/
+targets/candidate DBs, write training samples, train/evaluate a model, write
+model artifacts, deploy inference, measure model footprint/power, or allow
+release claims.
+
 2026-07-06: DATA-026 D1 labeling-queue index and post-run binding is
 implemented locally. `scripts/summarize_d1_labeling_queue.py` scans bounded
 `d1_labeling_intake` summaries and writes a compact queue of D1 runs pending
