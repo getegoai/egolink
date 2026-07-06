@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-04 23:12 UTC",
+  "generated_at": "2026-07-06 01:21 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "35d29e2 feat(train): export reviewed candidate dataset manifest [TRAIN-001]"
+    "head": "3484e96 feat(data): surface training handoff bundles [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -190,7 +190,7 @@
       "state": "in_progress",
       "packet_status": "active",
       "priority": "high",
-      "date": "2026-07-04",
+      "date": "2026-07-05",
       "path": "D:/pywork/egolink/docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md"
     },
     {
@@ -223,6 +223,60 @@
   ],
   "recent_done": [
     {
+      "id": "DATA-013",
+      "title": "Training baseline eval visibility",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-06",
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-013_TRAINING_BASELINE_EVAL_VISIBILITY.md"
+    },
+    {
+      "id": "DATA-014",
+      "title": "Post-run training-chain collector",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-06",
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-014_POSTRUN_TRAINING_CHAIN.md"
+    },
+    {
+      "id": "DATA-015",
+      "title": "Training handoff visibility",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-06",
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-015_TRAINING_HANDOFF_VISIBILITY.md"
+    },
+    {
+      "id": "FIELD-005",
+      "title": "D1 observer incremental samples",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "medium",
+      "date": "2026-07-06",
+      "path": "D:/pywork/egolink/docs/tasks/done/FIELD-005_D1_OBSERVER_INCREMENTAL_SAMPLES.md"
+    },
+    {
+      "id": "TRAIN-006",
+      "title": "Synthetic baseline evaluation",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-06",
+      "path": "D:/pywork/egolink/docs/tasks/done/TRAIN-006_SYNTHETIC_BASELINE_EVAL.md"
+    },
+    {
+      "id": "TRAIN-007",
+      "title": "Training handoff bundle",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-06",
+      "path": "D:/pywork/egolink/docs/tasks/done/TRAIN-007_TRAINING_HANDOFF_BUNDLE.md"
+    },
+    {
       "id": "DATA-006",
       "title": "Data flywheel pipeline runner",
       "state": "done",
@@ -232,67 +286,13 @@
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-006_DATA_FLYWHEEL_PIPELINE_RUNNER.md"
     },
     {
-      "id": "AMOLED-001",
-      "title": "AMOLED screen interaction sidecar",
-      "state": "done",
-      "packet_status": "completed",
-      "priority": "medium",
-      "date": "2026-07-04",
-      "path": "D:/pywork/egolink/docs/tasks/done/AMOLED-001_SCREEN_INTERACTION_SIDECAR.md"
-    },
-    {
-      "id": "AMOLED-002",
-      "title": "AMOLED D1 status sidecar runner",
-      "state": "done",
-      "packet_status": "completed",
-      "priority": "medium",
-      "date": "2026-07-04",
-      "path": "D:/pywork/egolink/docs/tasks/done/AMOLED-002_D1_STATUS_SIDECAR_RUNNER.md"
-    },
-    {
-      "id": "AMOLED-003",
-      "title": "D1 field companion runner with AMOLED sidecar",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "medium",
-      "date": "2026-07-04",
-      "path": "D:/pywork/egolink/docs/tasks/done/AMOLED-003_D1_FIELD_COMPANION_RUNNER.md"
-    },
-    {
-      "id": "AMOLED-004",
-      "title": "Visible D1 status display on AMOLED sidecar",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "medium",
-      "date": "2026-07-04",
-      "path": "D:/pywork/egolink/docs/tasks/done/AMOLED-004_VISIBLE_D1_STATUS_DISPLAY.md"
-    },
-    {
-      "id": "D1-002",
-      "title": "Outdoor field kit with AMOLED companion",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "medium",
-      "date": "2026-07-04",
-      "path": "D:/pywork/egolink/docs/tasks/done/D1-002_OUTDOOR_FIELD_KIT_WITH_AMOLED_COMPANION.md"
-    },
-    {
-      "id": "DATA-002",
-      "title": "Data flywheel pipeline spec",
-      "state": "done",
-      "packet_status": "completed",
-      "priority": "high",
-      "date": "2026-07-04",
-      "path": "D:/pywork/egolink/docs/tasks/done/DATA-002_DATA_FLYWHEEL_PIPELINE_SPEC.md"
-    },
-    {
-      "id": "DATA-003",
-      "title": "Training candidate store baseline",
+      "id": "DATA-007",
+      "title": "Training experiment dashboard visibility",
       "state": "done",
       "packet_status": "done",
       "priority": "high",
-      "date": "2026-07-04",
-      "path": "D:/pywork/egolink/docs/tasks/done/DATA-003_TRAINING_CANDIDATE_STORE_BASELINE.md"
+      "date": "2026-07-05",
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-007_TRAINING_EXPERIMENT_DASHBOARD_VISIBILITY.md"
     }
   ],
   "operator_asks": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 90
+    "done_total": 105
   }
 }
