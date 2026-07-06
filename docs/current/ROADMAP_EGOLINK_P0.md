@@ -261,6 +261,9 @@ Current AI/data boundary:
   TRAIN-007 handoff-bundle generation after TRAIN-006 baseline eval;
 - done: TRAIN-008 training job plan can turn an explicit TRAIN-007 handoff
   bundle into a bounded runner/server queue plan without starting training;
+- done: DATA-017 Dashboard/API visibility can surface the latest TRAIN-008
+  job plan and curated deploy summaries without exposing row contents, private
+  endpoints, or model artifacts;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -294,6 +297,8 @@ bounded local collector run.
 TRAIN-008 then turns an explicit handoff bundle into a local training job plan
 for future runner/server integration while keeping actual training, endpoints,
 artifacts, and deployment out of scope.
+DATA-017 makes that job-plan status visible in the Web/API loop and VPS
+summary packaging without changing training, deployment, or model behavior.
 
 ## R0: VPS + PC Simulator Simulated Loop
 

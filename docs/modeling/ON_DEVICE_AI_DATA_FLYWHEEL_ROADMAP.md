@@ -82,10 +82,13 @@ must consume only reviewed evidence:
 25. TRAIN-008 creates a bounded training job plan from a TRAIN-007 handoff
     bundle, recording runner queue intent and planned metrics without starting
     model training.
-26. MotionNet v0.1 starts with a statistical baseline and small model
+26. DATA-017 surfaces the latest TRAIN-008 job plan in Web/API and curated
+    deployment summaries without exposing row contents, private endpoints, or
+    model artifacts.
+27. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-27. Device deployment begins in shadow mode: model output is recorded alongside
+28. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -118,6 +121,7 @@ must consume only reviewed evidence:
 | Handoff visibility | Surface latest handoff-bundle readiness without row contents, private endpoints, or model artifacts. | DATA-015. |
 | Post-run handoff bundle | Extend the D1 post-run collector and field kit through TRAIN-007. | DATA-016. |
 | Training job plan | Create a bounded runner/server queue plan from a handoff bundle without starting training. | TRAIN-008. |
+| Training job visibility | Surface latest job-plan readiness without row contents, private endpoints, or model artifacts. | DATA-017. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -224,6 +228,12 @@ must consume only reviewed evidence:
   hash, and next step. They do not copy feature-row JSONL contents, call
   private endpoints, train/evaluate a model, produce model artifacts/cards,
   measure footprint/power, deploy to devices, or support release claims.
+- DATA-017 Web/API summaries may show TRAIN-008 status, source handoff hash,
+  dataset/feature summaries, model plan, runner queue state, planned metrics,
+  gates, and report paths only. They do not expose JSONL row contents, raw
+  records, candidate DB paths, runtime JSONL logs, private endpoints, model
+  artifacts, model cards, footprint, latency, power measurements, device
+  deployment results, or release claims.
 
 ## Model And Power Gates
 

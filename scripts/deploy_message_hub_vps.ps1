@@ -14,6 +14,7 @@ param(
     [switch]$IncludeTrainingRunnerDryRunSummaries,
     [switch]$IncludeTrainingBaselineEvalSummaries,
     [switch]$IncludeTrainingHandoffSummaries,
+    [switch]$IncludeTrainingJobSummaries,
     [switch]$NoStart
 )
 
@@ -265,6 +266,31 @@ function Copy-TrainingHandoffSummaries {
     }
 }
 
+function Copy-TrainingJobSummaries {
+    $trainingJobDir = Join-Path $repoRoot "reports\training_jobs"
+    if (-not (Test-Path $trainingJobDir -PathType Container)) {
+        return
+    }
+    $allowedNames = @(
+        "training_job_plan.json",
+        "training_job_plan.md"
+    )
+    $reportFiles = Get-ChildItem -Path $trainingJobDir -Recurse -File |
+        Where-Object { $allowedNames -contains $_.Name }
+
+    $repoFull = (Resolve-Path $repoRoot).Path.TrimEnd("\", "/")
+    foreach ($file in $reportFiles) {
+        $fileFull = $file.FullName
+        if (-not $fileFull.StartsWith($repoFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to copy training job summary outside repository: $fileFull"
+        }
+        $relative = $fileFull.Substring($repoFull.Length).TrimStart("\", "/")
+        $target = Join-Path $packageRoot $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -Force -LiteralPath $file.FullName -Destination $target
+    }
+}
+
 function SshArgs {
     $args = @()
     if ($SshKey) {
@@ -321,6 +347,9 @@ try {
     }
     if ($IncludeTrainingHandoffSummaries) {
         Copy-TrainingHandoffSummaries
+    }
+    if ($IncludeTrainingJobSummaries) {
+        Copy-TrainingJobSummaries
     }
 
     Push-Location $packageRoot

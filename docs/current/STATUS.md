@@ -6,6 +6,20 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-017 training job visibility is implemented locally. The
+Message Hub can now load the latest bounded
+`reports/training_jobs/**/training_job_plan.json`, expose it as
+`training_job_plan` in authenticated `/api/state`, serve
+`/api/v1/training-jobs/latest`, and render a Dashboard `Training Job Plan`
+panel with job status, source handoff hash, dataset/feature summaries, model
+plan, runner queue state, planned metrics, gates, next step, and report paths.
+`scripts/deploy_message_hub_vps.ps1` has a new explicit
+`-IncludeTrainingJobSummaries` switch that copies only
+`training_job_plan.json/.md`. This was not deployed to the VPS in this run and
+does not expose feature-row contents, private endpoints, raw records,
+candidate DBs, model artifacts, model cards, measured footprint/power data,
+device deployment results, or release claims.
+
 2026-07-06: TRAIN-008 training job plan dry-run is implemented locally. The
 new `scripts/create_training_job_plan.py` command consumes an explicitly named
 TRAIN-007 `training_handoff_bundle.json` and writes

@@ -255,6 +255,13 @@ endpoint, train or evaluate a model, copy feature-row JSONL contents, produce
 model artifacts/cards, deploy on-device inference, measure footprint/power, or
 allow release claims.
 
+DATA-017 can expose the latest TRAIN-008 job plan through Web/API and curated
+deployment summaries. It is visibility only: job status, source handoff hash,
+dataset/feature summaries, model plan, runner queue state, planned metrics,
+gates, and report paths are allowed. JSONL row contents, raw records, private
+endpoints, model artifacts, model cards, measured footprint/power data, device
+deployment results, and release claims are not.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -306,6 +313,8 @@ deployment, or OTA update behavior changes in DATA-002.
     after TRAIN-006 baseline eval completes.
 19. Let TRAIN-008 create a bounded training job plan from an explicit
     TRAIN-007 handoff bundle before any real runner/server integration.
-20. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+20. Let DATA-017 surface the latest job plan in Web/API and curated deployment
+    summaries without exposing row contents or private endpoints.
+21. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

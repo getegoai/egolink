@@ -41,6 +41,7 @@ DEFAULT_TRAINING_FEATURE_REPORTS = REPO_ROOT / "reports" / "training_features"
 DEFAULT_TRAINING_RUNNER_DRY_RUN_REPORTS = REPO_ROOT / "reports" / "training_runner_dry_runs"
 DEFAULT_TRAINING_BASELINE_EVAL_REPORTS = REPO_ROOT / "reports" / "training_baseline_evals"
 DEFAULT_TRAINING_HANDOFF_REPORTS = REPO_ROOT / "reports" / "training_handoffs"
+DEFAULT_TRAINING_JOB_REPORTS = REPO_ROOT / "reports" / "training_jobs"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -868,6 +869,7 @@ def make_handler(
     training_runner_dry_run_root: Path = DEFAULT_TRAINING_RUNNER_DRY_RUN_REPORTS,
     training_baseline_eval_root: Path = DEFAULT_TRAINING_BASELINE_EVAL_REPORTS,
     training_handoff_root: Path = DEFAULT_TRAINING_HANDOFF_REPORTS,
+    training_job_root: Path = DEFAULT_TRAINING_JOB_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -917,6 +919,7 @@ def make_handler(
                 training_runner_dry_run = load_latest_training_runner_dry_run(training_runner_dry_run_root)
                 training_baseline_eval = load_latest_training_baseline_eval(training_baseline_eval_root)
                 training_handoff_bundle = load_latest_training_handoff_bundle(training_handoff_root)
+                training_job_plan = load_latest_training_job_plan(training_job_root)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -932,6 +935,7 @@ def make_handler(
                         "training_runner_dry_run": training_runner_dry_run,
                         "training_baseline_eval": training_baseline_eval,
                         "training_handoff_bundle": training_handoff_bundle,
+                        "training_job_plan": training_job_plan,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -1025,6 +1029,9 @@ def make_handler(
                 self.respond_json(
                     {"training_handoff_bundle": load_latest_training_handoff_bundle(training_handoff_root)}
                 )
+                return
+            if segments == ["api", "v1", "training-jobs", "latest"]:
+                self.respond_json({"training_job_plan": load_latest_training_job_plan(training_job_root)})
                 return
             raise MessageHubError("not_found", "route not found", status=404)
 
@@ -4057,6 +4064,118 @@ def load_latest_training_handoff_bundle(root: Path = DEFAULT_TRAINING_HANDOFF_RE
     )
 
 
+def training_job_plan_unavailable(reason: str = "no_training_job_plan") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "source_handoff": {},
+        "dataset": {},
+        "feature_input": {"row_count": 0, "row_contents_copied": False, "raw_rows_exposed": False},
+        "model_plan": {},
+        "runner_plan": {"training_server_integration": "not_configured", "training_server_endpoint": None},
+        "metrics_plan": {},
+        "checks": {},
+        "gates": {"training_job": "not_available"},
+        "blockers": [reason],
+        "next_step": "Run scripts/create_training_job_plan.py after TRAIN-007 handoff bundle is ready.",
+    }
+
+
+def latest_training_job_plan_path(root: Path = DEFAULT_TRAINING_JOB_REPORTS) -> Path | None:
+    return latest_report_path(root, ["**/training_job_plan.json"])
+
+
+def load_latest_training_job_plan(root: Path = DEFAULT_TRAINING_JOB_REPORTS) -> dict[str, Any]:
+    path = latest_training_job_plan_path(root)
+    if path is None:
+        return training_job_plan_unavailable()
+    report = load_json_report(path)
+    if report is None:
+        return training_job_plan_unavailable("training_job_plan_unreadable")
+    source_handoff = as_dict(report.get("source_handoff"))
+    source_ref = as_dict(source_handoff.get("ref"))
+    feature_input = as_dict(report.get("feature_input"))
+    model_plan = as_dict(report.get("model_plan"))
+    runner_plan = as_dict(report.get("runner_plan"))
+    checks = as_dict(report.get("checks"))
+    gates = as_dict(report.get("gates"))
+    markdown_candidate = path.with_suffix(".md")
+    markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    return compact_dict(
+        {
+            "available": True,
+            "status": report.get("status", "unknown"),
+            "reason": report.get("reason"),
+            "job_id": report.get("job_id"),
+            "created_at": report.get("created_at") or report_file_time(path),
+            "source_handoff": {
+                "handoff_id": source_handoff.get("handoff_id"),
+                "status": source_handoff.get("status"),
+                "ref": compact_dict(
+                    {
+                        "ref": source_ref.get("ref"),
+                        "sha256": source_ref.get("sha256"),
+                        "bytes": source_ref.get("bytes"),
+                        "content_copied": source_ref.get("content_copied", False),
+                    }
+                ),
+            },
+            "dataset": as_dict(report.get("dataset")),
+            "feature_input": {
+                "feature_set_id": feature_input.get("feature_set_id"),
+                "feature_manifest_status": feature_input.get("feature_manifest_status"),
+                "feature_scope": feature_input.get("feature_scope"),
+                "row_count": feature_input.get("row_count", 0),
+                "row_contents_copied": feature_input.get("row_contents_copied", False),
+                "raw_rows_exposed": feature_input.get("raw_rows_exposed", False),
+                "target_separated_from_features": feature_input.get("target_separated_from_features", False),
+            },
+            "model_plan": {
+                "model_track": model_plan.get("model_track"),
+                "candidate_model": model_plan.get("candidate_model"),
+                "baseline_model": model_plan.get("baseline_model"),
+                "task_type": model_plan.get("task_type"),
+                "baseline_eval_id": model_plan.get("baseline_eval_id"),
+                "baseline_metric_scope": model_plan.get("baseline_metric_scope"),
+                "product_performance_claim": model_plan.get("product_performance_claim", False),
+            },
+            "runner_plan": {
+                "runner_profile": runner_plan.get("runner_profile"),
+                "queue_state": runner_plan.get("queue_state"),
+                "training_server_integration": runner_plan.get("training_server_integration", "not_configured"),
+                "training_server_endpoint": None,
+                "bundle_ready_for_future_runner": runner_plan.get("bundle_ready_for_future_runner", False),
+                "dry_run_only": runner_plan.get("dry_run_only", False),
+                "uses_feature_row_refs_only": runner_plan.get("uses_feature_row_refs_only", True),
+            },
+            "metrics_plan": as_dict(report.get("metrics_plan")),
+            "checks": {
+                "handoff_ready": checks.get("handoff_ready", False),
+                "handoff_gate": checks.get("handoff_gate"),
+                "synthetic_input_seen": checks.get("synthetic_input_seen", False),
+                "synthetic_policy": checks.get("synthetic_policy"),
+                "row_contents_copied": checks.get("row_contents_copied", False),
+                "private_endpoint_exposed": checks.get("private_endpoint_exposed", False),
+            },
+            "gates": {
+                "training_job": gates.get("training_job"),
+                "model_training": gates.get("model_training"),
+                "model_artifact": gates.get("model_artifact"),
+                "model_card": gates.get("model_card"),
+                "training_server": gates.get("training_server"),
+                "model_registry": gates.get("model_registry"),
+                "device_deployment": gates.get("device_deployment"),
+                "release_claim": gates.get("release_claim"),
+            },
+            "next_step": report.get("next_step"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -4994,6 +5113,10 @@ def render_dashboard() -> str:
           <div id="trainingHandoffBundle"></div>
         </section>
         <section>
+          <h2>Training Job Plan</h2>
+          <div id="trainingJobPlan"></div>
+        </section>
+        <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
         </section>
@@ -5057,6 +5180,7 @@ def render_dashboard() -> str:
       trainingRunnerDryRun.innerHTML = html;
       trainingBaselineEval.innerHTML = html;
       trainingHandoffBundle.innerHTML = html;
+      trainingJobPlan.innerHTML = html;
       d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
@@ -5137,8 +5261,8 @@ def render_dashboard() -> str:
       `;
     }
     function statusClass(status) {
-      if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner' || status === 'ready_for_training_server_handoff' || status === 'synthetic_baseline_eval_complete' || status === 'baseline_eval_complete') return 'ok';
-      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'synthetic_handoff_dry_run_only' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready' || status === 'blocked_feature_rows_mismatch' || status === 'blocked_source_mismatch') return 'warn';
+      if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner' || status === 'ready_for_training_server_handoff' || status === 'ready_for_runner_queue' || status === 'synthetic_baseline_eval_complete' || status === 'baseline_eval_complete') return 'ok';
+      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'synthetic_handoff_dry_run_only' || status === 'synthetic_runner_queue_dry_run_only' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready' || status === 'blocked_feature_rows_mismatch' || status === 'blocked_source_mismatch' || status === 'blocked_handoff_not_ready') return 'warn';
       return status === 'not_available' ? 'empty' : 'bad';
     }
     function productDemoPanel(demo) {
@@ -5434,6 +5558,43 @@ def render_dashboard() -> str:
         <div class="metric"><span>Report</span><span>${escapeHtml(bundle.markdown_path || bundle.report_path || 'unknown')}</span></div>
       `;
     }
+    function trainingJobPlanPanel(plan) {
+      if (!plan || !plan.available) {
+        return `
+          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(plan && plan.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(plan && plan.reason || 'no_training_job_plan')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(plan && plan.next_step || 'Create a training job plan')}</span></div>
+        `;
+      }
+      const source = plan.source_handoff || {};
+      const sourceRef = source.ref || {};
+      const dataset = plan.dataset || {};
+      const input = plan.feature_input || {};
+      const model = plan.model_plan || {};
+      const runner = plan.runner_plan || {};
+      const checks = plan.checks || {};
+      const gates = plan.gates || {};
+      const metrics = plan.metrics_plan || {};
+      const classification = metrics.classification || {};
+      const operations = metrics.operations || {};
+      const power = metrics.power || {};
+      return `
+        <div class="metric"><span>Status</span><span class="${statusClass(plan.status)}">${escapeHtml(plan.status || 'unknown')}</span></div>
+        <div class="metric"><span>Job</span><b>${escapeHtml(plan.job_id || 'unknown')}</b></div>
+        <div class="metric"><span>Reason</span><span>${escapeHtml(plan.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Source Handoff</span><span>${escapeHtml(source.handoff_id || 'unknown')} / ${escapeHtml(source.status || 'unknown')} / ${escapeHtml(sourceRef.sha256 ? String(sourceRef.sha256).slice(0, 10) : 'nohash')}</span></div>
+        <div class="metric"><span>Dataset</span><span>${escapeHtml(dataset.dataset_id || 'unknown')} / ${escapeHtml(dataset.status || 'unknown')} / ${escapeHtml(dataset.eligible_records ?? 0)} eligible</span></div>
+        <div class="metric"><span>Feature Input</span><span>${escapeHtml(input.feature_set_id || 'unknown')} / ${escapeHtml(input.row_count ?? 0)} rows / copied ${escapeHtml(input.row_contents_copied ?? false)}</span></div>
+        <div class="metric"><span>Model Plan</span><span>${escapeHtml(model.model_track || 'unknown')} / ${escapeHtml(model.candidate_model || 'unknown')} vs ${escapeHtml(model.baseline_model || 'unknown')}</span></div>
+        <div class="metric"><span>Runner Queue</span><span>${escapeHtml(runner.runner_profile || 'unknown')} / ${escapeHtml(runner.queue_state || 'unknown')} / ${escapeHtml(runner.training_server_integration || 'not_configured')}</span></div>
+        <div class="metric"><span>Runner Ready</span><span>${escapeHtml(runner.bundle_ready_for_future_runner ?? false)} / dry-run ${escapeHtml(runner.dry_run_only ?? false)} / refs-only ${escapeHtml(runner.uses_feature_row_refs_only ?? true)}</span></div>
+        <div class="metric"><span>Planned Metrics</span><span>accuracy ${escapeHtml(classification.accuracy || 'planned_not_measured')} / latency ${escapeHtml(operations.latency_ms || 'planned_not_measured')} / power ${escapeHtml(power.energy_per_inference || 'planned_not_measured')}</span></div>
+        <div class="metric"><span>Checks</span><span>handoff ${escapeHtml(checks.handoff_ready ?? false)} / synthetic ${escapeHtml(checks.synthetic_policy || 'unknown')} / endpoint ${escapeHtml(checks.private_endpoint_exposed ?? false)}</span></div>
+        <div class="metric"><span>Gates</span><span>job ${escapeHtml(gates.training_job || 'unknown')} / training ${escapeHtml(gates.model_training || 'not_run')} / artifact ${escapeHtml(gates.model_artifact || 'not_produced')} / claim ${escapeHtml(gates.release_claim || 'not_allowed')}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(plan.next_step || 'Connect a real runner')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(plan.markdown_path || plan.report_path || 'unknown')}</span></div>
+      `;
+    }
     function fieldResultsPanel(results) {
       if (!results || !results.available) {
         return `
@@ -5719,6 +5880,7 @@ def render_dashboard() -> str:
       trainingRunnerDryRun.innerHTML = trainingRunnerDryRunPanel(data.training_runner_dry_run || {});
       trainingBaselineEval.innerHTML = trainingBaselineEvalPanel(data.training_baseline_eval || {});
       trainingHandoffBundle.innerHTML = trainingHandoffBundlePanel(data.training_handoff_bundle || {});
+      trainingJobPlan.innerHTML = trainingJobPlanPanel(data.training_job_plan || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>
