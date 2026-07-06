@@ -216,6 +216,14 @@ allowed. JSONL row contents, raw records, private case rows, private endpoints,
 model artifacts, model cards, footprint/power measurements, and release claims
 are not.
 
+DATA-014 extends the D1 post-run collector so a ready DATA-006/TRAIN-002
+handoff can immediately continue through TRAIN-003 preflight, TRAIN-004
+feature export, TRAIN-005 runner dry-run, and TRAIN-006 baseline eval from one
+local command. If the dataset handoff is not ready, the training chain is
+skipped with an explainable reason. DATA-014 still does not train a model,
+deploy to devices, copy feature-row JSONL to the Dashboard, or produce model
+artifacts, model cards, measured footprint/power data, or release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -257,6 +265,8 @@ deployment, or OTA update behavior changes in DATA-002.
     runner-input gate passes; synthetic metrics remain integration-only.
 14. Let DATA-013 surface latest baseline-eval status in Web/API without
     exposing row contents, private training details, or model artifacts.
-15. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+15. Let DATA-014 bind TRAIN-003..006 into the D1 post-run collector after a
+    ready dataset handoff, keeping blocked/not-ready runs explainable.
+16. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

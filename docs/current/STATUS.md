@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-014 post-run training-chain collector is implemented locally.
+`scripts/collect_d1_postrun.py` now keeps the normal D1 after-run path as one
+command and, when the DATA-006 pipeline returns `ready_for_training_handoff`,
+continues through TRAIN-003 preflight, TRAIN-004 feature manifest/rows,
+TRAIN-005 runner dry-run, and TRAIN-006 baseline eval. When the dataset is not
+ready, the new `training_chain` component is skipped with an explainable
+reason. The D1 field kit is updated to v6 with expected TRAIN-003..006 outputs
+and explicit curated-summary sync switches. This was not deployed to the VPS
+and still does not train/evaluate a real model, copy feature-row JSONL to the
+Dashboard, produce model artifacts/cards, integrate a runner/server/registry/
+OTA path, measure footprint/latency/power, or allow release claims.
+
 2026-07-06: DATA-013 training baseline eval visibility is implemented locally.
 The Message Hub can now load the latest bounded
 `reports/training_baseline_evals/**/training_baseline_eval.json`, expose it as

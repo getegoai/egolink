@@ -5,13 +5,15 @@ from http.server import ThreadingHTTPServer
 import io
 import json
 from pathlib import Path
+import sqlite3
 import tempfile
 import threading
 import unittest
 
-from pc_simulator import protocol
+from pc_simulator import protocol, session_annotations, session_recorder, training_candidate_store
 from scripts import collect_d1_postrun as collector
 from server import message_hub
+from quality_tests.test_session_recorder import sample_events
 
 
 DEVICE_ID = "ego-link-r1-connectivity-001"
@@ -46,6 +48,7 @@ def add_d1_messages(store: message_hub.MessageHubStore) -> None:
             },
         ),
     )
+
     store.ingest(
         DEVICE_ID,
         "telemetry",
@@ -125,6 +128,54 @@ def add_d1_messages(store: message_hub.MessageHubStore) -> None:
     )
 
 
+def write_reviewed_candidate_store(root: Path) -> Path:
+    recording_dir = root / "recording"
+    db_path = root / "candidates.db"
+    recording = session_recorder.build_recording(
+        sample_events(),
+        event_log=Path("events.jsonl"),
+        session_id="postrun-training-session",
+        created_at="2026-07-05T04:00:00+00:00",
+    )
+    session_recorder.write_recording(recording, recording_dir)
+    target = next(
+        item
+        for item in session_annotations.annotation_targets(recording_dir)
+        if item.get("event_type") == "sos_pressed"
+    )
+    session_annotations.annotate_recording(
+        recording_dir,
+        source_event_key=target["source_event_key"],
+        label="needs_help",
+        annotator_type="human",
+        annotation_id="ann-postrun-training",
+        created_at="2026-07-05T04:01:00+00:00",
+        training_allowed=True,
+    )
+    training_candidate_store.store_recording(recording_dir, db_path, generated_at="2026-07-05T04:02:00+00:00")
+    connection = sqlite3.connect(db_path)
+    try:
+        record_id = str(
+            connection.execute(
+                "SELECT record_id FROM training_candidate_records ORDER BY record_id LIMIT 1"
+            ).fetchone()[0]
+        )
+    finally:
+        connection.close()
+    training_candidate_store.review_candidate_record(
+        db_path,
+        record_id=record_id,
+        decision="approve_for_training",
+        reviewer="unit",
+        split_name="train",
+        split_leakage_checked=True,
+        privacy_reviewed=True,
+        quality_reviewed=True,
+        reviewed_at="2026-07-05T04:03:00+00:00",
+    )
+    return db_path
+
+
 class D1PostrunCollectorTests(unittest.TestCase):
     def test_collector_composes_postrun_reports_without_secret_leak(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -200,9 +251,12 @@ class D1PostrunCollectorTests(unittest.TestCase):
                 payload["components"]["data_flywheel_pipeline"]["training_experiment"]["status"],
                 "blocked_dataset_not_ready",
             )
+            self.assertEqual(payload["components"]["training_chain"]["status"], "skipped")
+            self.assertEqual(payload["components"]["training_chain"]["reason"], "data_flywheel_pipeline_not_ready")
             self.assertFalse(payload["scope"]["hardware_contacted"])
             self.assertFalse(payload["scope"]["commands_sent"])
             self.assertFalse(payload["scope"]["model_training_started"])
+            self.assertFalse(payload["scope"]["model_artifact_written"])
             self.assertTrue(summary_path.is_file())
             self.assertTrue(summary_md.is_file())
             self.assertTrue((root / "web" / "d1_web_api_report.json").is_file())
@@ -219,6 +273,126 @@ class D1PostrunCollectorTests(unittest.TestCase):
             output_text = stdout.getvalue() + summary_path.read_text(encoding="utf-8") + summary_md.read_text(encoding="utf-8")
             self.assertNotIn(TOKEN, output_text)
             self.assertNotIn(str(root / "candidates.db"), output_text)
+
+    def test_collector_runs_training_chain_when_dataset_handoff_is_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            db_path = write_reviewed_candidate_store(root)
+            store = message_hub.MessageHubStore(root / "hub.db")
+            add_d1_messages(store)
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                stdout = io.StringIO()
+                with redirect_stdout(stdout):
+                    exit_code = collector.main(
+                        [
+                            "--run-id",
+                            "D1-POSTRUN-ready-training",
+                            "--hub-url",
+                            base_url,
+                            "--device-id",
+                            DEVICE_ID,
+                            "--skip-power",
+                            "--db",
+                            str(db_path),
+                            "--data-flywheel-pipeline-output-root",
+                            str(root / "pipeline"),
+                            "--data-flywheel-output-root",
+                            str(root / "flywheel"),
+                            "--dataset-output-root",
+                            str(root / "datasets"),
+                            "--experiment-output-root",
+                            str(root / "experiments"),
+                            "--training-run-output-root",
+                            str(root / "training_runs"),
+                            "--training-feature-output-root",
+                            str(root / "features"),
+                            "--training-runner-dry-run-output-root",
+                            str(root / "runner"),
+                            "--training-baseline-eval-output-root",
+                            str(root / "baselines"),
+                            "--output-root",
+                            str(root / "postrun"),
+                            "--web-api-output-dir",
+                            str(root / "web"),
+                            "--d1-demo-output-dir",
+                            str(root / "demo"),
+                            "--created-at",
+                            "2026-07-05T04:30:00+00:00",
+                            "--json",
+                        ]
+                    )
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+            payload = json.loads(stdout.getvalue())
+            output_text = stdout.getvalue() + json.dumps(payload, ensure_ascii=False)
+
+            self.assertEqual(exit_code, 0)
+            self.assertEqual(payload["components"]["data_flywheel_pipeline"]["status"], "ready_for_training_handoff")
+            self.assertEqual(
+                payload["components"]["data_flywheel_pipeline"]["training_experiment"]["status"],
+                "ready_for_runner",
+            )
+            training_chain = payload["components"]["training_chain"]
+            self.assertEqual(training_chain["status"], "baseline_eval_complete")
+            self.assertEqual(training_chain["preflight"]["status"], "ready_for_training_runner")
+            self.assertEqual(training_chain["feature_manifest"]["status"], "ready_for_feature_runner")
+            self.assertEqual(training_chain["feature_manifest"]["row_count"], 1)
+            self.assertEqual(training_chain["runner_dry_run"]["status"], "ready_for_runner_execution")
+            self.assertEqual(training_chain["baseline_eval"]["status"], "baseline_eval_complete")
+            self.assertEqual(training_chain["baseline_eval"]["metric_scope"], "reviewed_engineering_dataset")
+            self.assertTrue(
+                (
+                    root
+                    / "training_runs"
+                    / "D1-POSTRUN-ready-training-training-preflight"
+                    / "training_run_preflight.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    root
+                    / "features"
+                    / "D1-POSTRUN-ready-training-features"
+                    / "training_feature_manifest.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    root
+                    / "features"
+                    / "D1-POSTRUN-ready-training-features"
+                    / "training_feature_rows.jsonl"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    root
+                    / "runner"
+                    / "D1-POSTRUN-ready-training-runner-dry-run"
+                    / "training_runner_dry_run.json"
+                ).is_file()
+            )
+            self.assertTrue(
+                (
+                    root
+                    / "baselines"
+                    / "D1-POSTRUN-ready-training-baseline-eval"
+                    / "training_baseline_eval.json"
+                ).is_file()
+            )
+            self.assertFalse(payload["scope"]["model_training_started"])
+            self.assertFalse(payload["scope"]["model_evaluation_started"])
+            self.assertFalse(payload["scope"]["model_artifact_written"])
+            self.assertNotIn(str(db_path), output_text)
+            self.assertNotIn("record_json", output_text)
+            self.assertNotIn("raw_payload", output_text)
 
     def test_collector_skip_power_keeps_summary_writeable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -265,6 +439,8 @@ class D1PostrunCollectorTests(unittest.TestCase):
         self.assertEqual(payload["components"]["power_curve"]["reason"], "skip_power_requested")
         self.assertEqual(payload["components"]["d1_demo"]["result"], "WARN")
         self.assertEqual(payload["components"]["data_flywheel_pipeline"]["status"], "skipped")
+        self.assertEqual(payload["components"]["training_chain"]["status"], "skipped")
+        self.assertEqual(payload["components"]["training_chain"]["reason"], "data_flywheel_pipeline_missing")
 
 
 if __name__ == "__main__":

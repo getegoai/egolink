@@ -21,18 +21,24 @@ if __package__ in (None, ""):
 
 from scripts import analyze_power_curve
 from scripts import build_d1_demo_report
+from scripts import export_training_feature_manifest
 from scripts import register_training_experiment
 from scripts import run_data_flywheel_pipeline
+from scripts import run_training_baseline_eval
+from scripts import run_training_experiment_preflight
+from scripts import run_training_runner_dry_run
 from scripts import validate_d1_web_api
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_postrun"
 DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
-SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.1"
-BUILDER_VERSION = "data-008.0"
+SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.2"
+BUILDER_VERSION = "data-014.0"
 SUMMARY_JSON = "d1_postrun_collection_summary.json"
 SUMMARY_MARKDOWN = "d1_postrun_collection_summary.md"
+READY_DATA_PIPELINE_STATUS = "ready_for_training_handoff"
+READY_BASELINE_STATUSES = {"baseline_eval_complete", "synthetic_baseline_eval_complete"}
 
 
 def utc_now() -> str:
@@ -148,6 +154,60 @@ def data_pipeline_summary(report: Mapping[str, Any] | None, error_summary: Mappi
             "reason": experiment.get("reason"),
             "experiment_id": experiment.get("experiment_id"),
             "report_path": as_dict(experiment.get("paths")).get("training_experiment_plan_json"),
+        },
+        "next_step": report.get("next_step"),
+    }
+
+
+def nested_path(payload: Mapping[str, Any], *keys: str) -> Path | None:
+    current: Any = payload
+    for key in keys:
+        if not isinstance(current, Mapping):
+            return None
+        current = current.get(key)
+    if current in (None, ""):
+        return None
+    return Path(str(current))
+
+
+def training_chain_summary(report: Mapping[str, Any] | None, error_summary: Mapping[str, Any] | None) -> dict[str, Any]:
+    if error_summary:
+        return dict(error_summary)
+    if not report:
+        return {"status": "skipped", "reason": "training_chain_not_run"}
+    preflight = as_dict(report.get("training_run_preflight"))
+    feature = as_dict(report.get("training_feature_manifest"))
+    runner = as_dict(report.get("training_runner_dry_run"))
+    baseline = as_dict(report.get("training_baseline_eval"))
+    return {
+        "status": report.get("status"),
+        "reason": report.get("reason"),
+        "synthetic_allowed_for_dry_run": bool(report.get("synthetic_allowed_for_dry_run")),
+        "preflight": {
+            "status": preflight.get("status"),
+            "reason": preflight.get("reason"),
+            "run_id": preflight.get("run_id"),
+            "report_path": str(nested_path(preflight, "paths", "training_run_preflight_json") or ""),
+        },
+        "feature_manifest": {
+            "status": feature.get("status"),
+            "reason": feature.get("reason"),
+            "feature_set_id": feature.get("feature_set_id"),
+            "row_count": as_dict(feature.get("feature_rows")).get("row_count"),
+            "report_path": str(nested_path(feature, "paths", "training_feature_manifest_json") or ""),
+        },
+        "runner_dry_run": {
+            "status": runner.get("status"),
+            "reason": runner.get("reason"),
+            "run_id": runner.get("run_id"),
+            "report_path": str(nested_path(runner, "paths", "training_runner_dry_run_json") or ""),
+        },
+        "baseline_eval": {
+            "status": baseline.get("status"),
+            "reason": baseline.get("reason"),
+            "eval_id": baseline.get("eval_id"),
+            "metric_scope": as_dict(baseline.get("metrics")).get("scope"),
+            "report_path": str(nested_path(baseline, "paths", "training_baseline_eval_json") or ""),
         },
         "next_step": report.get("next_step"),
     }
@@ -284,6 +344,152 @@ def collect_data_pipeline(
     return report, None
 
 
+def collect_training_chain(
+    args: argparse.Namespace,
+    *,
+    data_report: Mapping[str, Any] | None,
+    run_id: str,
+    created_at: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if args.skip_training_chain:
+        return None, {"status": "skipped", "reason": "skip_training_chain_requested"}
+    if not data_report:
+        return None, {"status": "skipped", "reason": "data_flywheel_pipeline_missing"}
+    if data_report.get("status") != READY_DATA_PIPELINE_STATUS:
+        return None, {
+            "status": "skipped",
+            "reason": "data_flywheel_pipeline_not_ready",
+            "data_flywheel_pipeline_status": data_report.get("status"),
+            "next_step": data_report.get("next_step"),
+        }
+
+    dataset_manifest_path = nested_path(data_report, "dataset_manifest", "paths", "training_dataset_manifest_json")
+    experiment_plan_path = nested_path(data_report, "training_experiment", "paths", "training_experiment_plan_json")
+    if dataset_manifest_path is None or experiment_plan_path is None:
+        return None, {
+            "status": "error",
+            "reason": "training_chain_inputs_missing",
+            "dataset_manifest_path": str(dataset_manifest_path) if dataset_manifest_path else None,
+            "experiment_plan_path": str(experiment_plan_path) if experiment_plan_path else None,
+        }
+
+    try:
+        preflight_run_id = args.training_run_id or f"{run_id}-training-preflight"
+        experiment = run_training_experiment_preflight.load_json(
+            experiment_plan_path,
+            label="experiment plan",
+        )
+        dataset = run_training_experiment_preflight.load_json(
+            dataset_manifest_path,
+            label="dataset manifest",
+        )
+        preflight_payload = run_training_experiment_preflight.build_preflight_report(
+            experiment,
+            dataset,
+            experiment_plan_ref=experiment_plan_path.name,
+            dataset_manifest_ref=dataset_manifest_path.name,
+            run_id=preflight_run_id,
+            created_at=created_at,
+            allow_synthetic=args.allow_synthetic_training_chain,
+        )
+        preflight_written = run_training_experiment_preflight.write_preflight_report(
+            preflight_payload,
+            args.training_run_output_root / preflight_run_id,
+        )
+        preflight_path = args.training_run_output_root / preflight_run_id / "training_run_preflight.json"
+
+        feature_set_id = args.feature_set_id or f"{run_id}-features"
+        feature_dataset = export_training_feature_manifest.load_json(
+            dataset_manifest_path,
+            label="dataset manifest",
+        )
+        feature_preflight = export_training_feature_manifest.load_json(
+            preflight_path,
+            label="training run preflight",
+        )
+        feature_payload, feature_rows = export_training_feature_manifest.build_feature_manifest(
+            feature_dataset,
+            feature_preflight,
+            dataset_manifest_ref=dataset_manifest_path.name,
+            preflight_ref=preflight_path.name,
+            feature_set_id=feature_set_id,
+            generated_at=created_at,
+            allow_synthetic=args.allow_synthetic_training_chain,
+        )
+        feature_written = export_training_feature_manifest.write_feature_manifest(
+            feature_payload,
+            feature_rows,
+            args.training_feature_output_root / feature_set_id,
+        )
+        feature_manifest_path = args.training_feature_output_root / feature_set_id / "training_feature_manifest.json"
+        feature_rows_path = args.training_feature_output_root / feature_set_id / "training_feature_rows.jsonl"
+
+        runner_run_id = args.runner_dry_run_id or f"{run_id}-runner-dry-run"
+        runner_manifest = run_training_runner_dry_run.load_json(
+            feature_manifest_path,
+            label="feature manifest",
+        )
+        runner_rows, runner_row_error = run_training_runner_dry_run.load_jsonl_rows(feature_rows_path)
+        runner_payload = run_training_runner_dry_run.build_runner_dry_run_report(
+            runner_manifest,
+            runner_rows,
+            row_error=runner_row_error,
+            feature_manifest_ref=feature_manifest_path.name,
+            feature_rows_ref=feature_rows_path.name,
+            run_id=runner_run_id,
+            created_at=created_at,
+            allow_synthetic=args.allow_synthetic_training_chain,
+        )
+        runner_written = run_training_runner_dry_run.write_runner_dry_run_report(
+            runner_payload,
+            args.training_runner_dry_run_output_root / runner_run_id,
+        )
+        runner_path = args.training_runner_dry_run_output_root / runner_run_id / "training_runner_dry_run.json"
+
+        baseline_eval_id = args.baseline_eval_id or f"{run_id}-baseline-eval"
+        baseline_manifest = run_training_baseline_eval.load_json(
+            feature_manifest_path,
+            label="feature manifest",
+        )
+        baseline_runner = run_training_baseline_eval.load_json(
+            runner_path,
+            label="runner dry-run",
+        )
+        baseline_rows, baseline_row_error = run_training_baseline_eval.load_jsonl_rows(feature_rows_path)
+        baseline_payload = run_training_baseline_eval.build_baseline_eval_report(
+            baseline_manifest,
+            baseline_runner,
+            baseline_rows,
+            row_error=baseline_row_error,
+            feature_manifest_ref=feature_manifest_path.name,
+            feature_rows_ref=feature_rows_path.name,
+            runner_dry_run_ref=runner_path.name,
+            eval_id=baseline_eval_id,
+            created_at=created_at,
+            allow_synthetic=args.allow_synthetic_training_chain,
+        )
+        baseline_written = run_training_baseline_eval.write_baseline_eval_report(
+            baseline_payload,
+            args.training_baseline_eval_output_root / baseline_eval_id,
+        )
+    except Exception as exc:
+        return None, bounded_error("training_chain_failed", exc)
+
+    return (
+        {
+            "status": baseline_written.get("status"),
+            "reason": baseline_written.get("reason"),
+            "synthetic_allowed_for_dry_run": bool(args.allow_synthetic_training_chain),
+            "training_run_preflight": preflight_written,
+            "training_feature_manifest": feature_written,
+            "training_runner_dry_run": runner_written,
+            "training_baseline_eval": baseline_written,
+            "next_step": baseline_written.get("next_step"),
+        },
+        None,
+    )
+
+
 def derive_result(components: Mapping[str, Mapping[str, Any]]) -> tuple[str, list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -312,6 +518,13 @@ def derive_result(components: Mapping[str, Mapping[str, Any]]) -> tuple[str, lis
     if data_status != "ready_for_training_handoff":
         warnings.append(f"data_flywheel_pipeline:{data_pipeline.get('reason') or data_status}")
 
+    training_chain = as_dict(components.get("training_chain"))
+    training_status = str(training_chain.get("status") or "unknown")
+    if training_status == "error":
+        warnings.append(f"training_chain:{training_chain.get('reason') or training_status}")
+    elif training_status not in READY_BASELINE_STATUSES and training_status != "skipped":
+        warnings.append(f"training_chain:{training_chain.get('reason') or training_status}")
+
     result = "FAIL" if errors else ("WARN" if warnings else "PASS")
     return result, errors, warnings
 
@@ -338,6 +551,13 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
     elif data_status and data_status != "ready_for_training_handoff":
         steps.append(str(data_pipeline.get("next_step") or "Continue the next DATA/TRAIN task."))
 
+    training_chain = as_dict(components.get("training_chain"))
+    training_status = str(training_chain.get("status") or "")
+    if training_status == "skipped" and training_chain.get("reason") == "data_flywheel_pipeline_not_ready":
+        steps.append("After candidate review makes the dataset ready, rerun the post-run collector to create TRAIN-003..006 reports.")
+    elif training_status and training_status not in READY_BASELINE_STATUSES and training_status != "skipped":
+        steps.append(str(training_chain.get("next_step") or "Inspect the generated training-chain report and fix the first blocker."))
+
     if result != "FAIL":
         steps.append("Sync curated summaries to the VPS Dashboard when the run should be visible remotely.")
     return steps or ["No immediate follow-up is required for this collector result."]
@@ -346,6 +566,11 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
 def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Path, summary_md: Path) -> dict[str, Any]:
     data_pipeline = as_dict(components.get("data_flywheel_pipeline"))
     training_experiment = as_dict(data_pipeline.get("training_experiment"))
+    training_chain = as_dict(components.get("training_chain"))
+    preflight = as_dict(training_chain.get("preflight"))
+    feature_manifest = as_dict(training_chain.get("feature_manifest"))
+    runner_dry_run = as_dict(training_chain.get("runner_dry_run"))
+    baseline_eval = as_dict(training_chain.get("baseline_eval"))
     return {
         "postrun_summary_json": str(summary_json),
         "postrun_summary_markdown": str(summary_md),
@@ -357,6 +582,10 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
         "data_flywheel_status": data_pipeline.get("data_flywheel_status_path"),
         "training_dataset_manifest": data_pipeline.get("dataset_manifest_path"),
         "training_experiment_plan": training_experiment.get("report_path"),
+        "training_run_preflight": preflight.get("report_path"),
+        "training_feature_manifest": feature_manifest.get("report_path"),
+        "training_runner_dry_run": runner_dry_run.get("report_path"),
+        "training_baseline_eval": baseline_eval.get("report_path"),
     }
 
 
@@ -375,7 +604,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
         "## Components",
         "",
     ]
-    for name in ("web_api", "power_curve", "d1_demo", "data_flywheel_pipeline"):
+    for name in ("web_api", "power_curve", "d1_demo", "data_flywheel_pipeline", "training_chain"):
         component = as_dict(components.get(name))
         status = component.get("result") or component.get("status") or "unknown"
         reason = component.get("reason")
@@ -425,6 +654,12 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         created_at=created_at,
     )
     data_report, data_error = collect_data_pipeline(args, run_id=run_id, created_at=created_at)
+    training_report, training_error = collect_training_chain(
+        args,
+        data_report=data_report,
+        run_id=run_id,
+        created_at=created_at,
+    )
 
     components = {
         "web_api": web_api_summary(web_report, web_error),
@@ -436,6 +671,7 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "d1_demo": d1_demo_summary(demo_report, demo_error),
         "data_flywheel_pipeline": data_pipeline_summary(data_report, data_error),
+        "training_chain": training_chain_summary(training_report, training_error),
     }
     result, errors, warnings = derive_result(components)
 
@@ -461,20 +697,23 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
             "deploy_run": False,
             "gitlab_modified": False,
             "model_training_started": False,
+            "model_evaluation_started": False,
             "model_deployed": False,
+            "model_artifact_written": False,
             "secrets_persisted": False,
         },
         "boundaries": [
             "Read-only Message Hub collection plus local report generation only.",
             "No hardware, serial port, firmware, Message Hub command, deployment, or GitLab mutation is performed.",
             "The data-flywheel step ingests only recording directories explicitly passed with --recording-dir.",
+            "The training-chain step runs only bounded local preflight, feature export, runner dry-run, and aggregate baseline-eval reports after a ready dataset handoff.",
             "Dashboard state and curated summaries are not raw training data.",
         ],
         "non_claims": [
             "No location accuracy is claimed.",
             "No battery life or 24h PWR-001 pass is claimed.",
             "No GNSS acceptance, product readiness, calling, or SMS behavior is claimed.",
-            "No model training, evaluation, deployment, accuracy, latency, footprint, or power impact is claimed.",
+            "No model training, deployment, model artifact, model card, real-world accuracy, latency, footprint, or power impact is claimed.",
         ],
     }
     summary["next_steps"] = derive_next_steps(components, result)
@@ -515,6 +754,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--dataset-output-root", type=Path, default=run_data_flywheel_pipeline.DEFAULT_DATASET_ROOT)
     parser.add_argument("--experiment-output-root", type=Path, default=run_data_flywheel_pipeline.DEFAULT_EXPERIMENT_ROOT)
     parser.add_argument("--experiment-id")
+    parser.add_argument("--skip-training-chain", action="store_true")
+    parser.add_argument(
+        "--allow-synthetic-training-chain",
+        action="store_true",
+        help="Allow synthetic-only rows for TRAIN-003..006 dry-run integration reports.",
+    )
+    parser.add_argument("--training-run-output-root", type=Path, default=run_training_experiment_preflight.DEFAULT_OUTPUT_ROOT)
+    parser.add_argument("--training-run-id")
+    parser.add_argument("--training-feature-output-root", type=Path, default=export_training_feature_manifest.DEFAULT_OUTPUT_ROOT)
+    parser.add_argument("--feature-set-id")
+    parser.add_argument(
+        "--training-runner-dry-run-output-root",
+        type=Path,
+        default=run_training_runner_dry_run.DEFAULT_OUTPUT_ROOT,
+    )
+    parser.add_argument("--runner-dry-run-id")
+    parser.add_argument(
+        "--training-baseline-eval-output-root",
+        type=Path,
+        default=run_training_baseline_eval.DEFAULT_OUTPUT_ROOT,
+    )
+    parser.add_argument("--baseline-eval-id")
     parser.add_argument(
         "--model-track",
         default=register_training_experiment.DEFAULT_MODEL_TRACK,

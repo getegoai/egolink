@@ -25,7 +25,7 @@ DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
 DEFAULT_FW_VERSION = "0.1.0-d1-periodic-location"
 DEFAULT_BOARD_ID = "connectivity-node-001"
 DEFAULT_DURATION_HOURS = 4.0
-KIT_VERSION = "D1.field_kit.v5"
+KIT_VERSION = "D1.field_kit.v6"
 MANIFEST_JSON = "field_manifest.json"
 RUNBOOK_MD = "FIELD_RUNBOOK.md"
 CHECKLIST_MD = "FIELD_CHECKLIST.md"
@@ -399,7 +399,8 @@ def build_commands(
         "post_run_collect_evidence": command_record(
             description=(
                 "Recommended one-command post-run collector: Web/API gate, power curve, "
-                "D1 demo report, data-flywheel pipeline, and a bounded artifact summary."
+                "D1 demo report, data-flywheel pipeline, training-chain reports when the dataset is ready, "
+                "and a bounded artifact summary."
             ),
             argv=post_run_collect_argv,
         ),
@@ -456,7 +457,7 @@ def build_commands(
         ),
         "post_run_sync_dashboard_summaries": command_record(
             description=(
-                "Sync only curated Field Test Results, Data Flywheel, and Training Experiment summaries to the VPS Dashboard."
+                "Sync only curated Field Test Results, Data Flywheel, Training Experiment, and TRAIN-003..006 summaries to the VPS Dashboard."
             ),
             argv=[
                 "powershell",
@@ -472,6 +473,10 @@ def build_commands(
                 "-IncludeFieldReportSummaries",
                 "-IncludeDataFlywheelSummaries",
                 "-IncludeTrainingExperimentSummaries",
+                "-IncludeTrainingRunSummaries",
+                "-IncludeTrainingFeatureSummaries",
+                "-IncludeTrainingRunnerDryRunSummaries",
+                "-IncludeTrainingBaselineEvalSummaries",
             ],
             requires_operator_intent=True,
         ),
@@ -510,7 +515,7 @@ def build_checklists(*, duration_hours: float) -> dict[str, list[str]]:
             "Record local and UTC stop time plus visible Dashboard state.",
             "Run the one-command post-run collector from this kit.",
             "Use the individual Web/API, power, D1 demo, and data-flywheel commands only when troubleshooting.",
-            "Sync curated Field Test Results and Data Flywheel summaries to the VPS Dashboard.",
+            "Sync curated Field Test Results, Data Flywheel, and TRAIN-003..006 summaries to the VPS Dashboard.",
             "Keep raw Message Hub export, generated reports, and OPERATOR_NOTES.md together.",
             "Do not claim location accuracy, battery life, GNSS acceptance, or 24h PWR-001 pass from a short D1 run.",
         ],
@@ -524,6 +529,8 @@ def non_claims() -> list[str]:
         "gnss_acceptance_not_claimed",
         "calling_not_claimed",
         "sms_not_claimed",
+        "model_training_not_claimed",
+        "model_metrics_not_claimed",
         "pwr001_24h_pass_not_claimed",
         "product_readiness_not_claimed",
     ]
@@ -642,7 +649,7 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             "",
             "### Recommended Post-Run Collector",
             "",
-            "Runs the Web/API gate, power curve, D1 evidence report, and data-flywheel pipeline, then writes one bounded artifact summary.",
+            "Runs the Web/API gate, power curve, D1 evidence report, data-flywheel pipeline, and TRAIN-003..006 reports when the dataset handoff is ready, then writes one bounded artifact summary.",
             "",
             "```powershell",
             commands["post_run_collect_evidence"]["powershell"],
@@ -680,7 +687,7 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             "",
             "### Sync Dashboard Summaries",
             "",
-            "This syncs curated report summaries to the Web Dashboard. It does not copy candidate DBs, raw JSONL logs, or private payloads.",
+            "This syncs curated report summaries to the Web Dashboard. It does not copy candidate DBs, feature-row JSONL, raw JSONL logs, model artifacts, or private payloads.",
             "",
             "```powershell",
             commands["post_run_sync_dashboard_summaries"]["powershell"],
@@ -743,6 +750,10 @@ def write_notes_template(path: Path, manifest: dict[str, Any]) -> None:
         f"- Power report: `{manifest['expected_outputs']['power_report']}`",
         f"- D1 demo report: `{manifest['expected_outputs']['d1_demo_report']}`",
         f"- Training experiment plan: `{manifest['expected_outputs']['training_experiment_plan']}`",
+        f"- Training run preflight: `{manifest['expected_outputs']['training_run_preflight']}`",
+        f"- Training feature manifest: `{manifest['expected_outputs']['training_feature_manifest']}`",
+        f"- Training runner dry-run: `{manifest['expected_outputs']['training_runner_dry_run']}`",
+        f"- Training baseline eval: `{manifest['expected_outputs']['training_baseline_eval']}`",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -875,6 +886,18 @@ def build_manifest(
                 f"{run_id}-data-pipeline-experiment",
                 "training_experiment_plan.json",
             ),
+            "training_run_preflight": report_path(
+                "training_runs", f"{run_id}-training-preflight", "training_run_preflight.json"
+            ),
+            "training_feature_manifest": report_path(
+                "training_features", f"{run_id}-features", "training_feature_manifest.json"
+            ),
+            "training_runner_dry_run": report_path(
+                "training_runner_dry_runs", f"{run_id}-runner-dry-run", "training_runner_dry_run.json"
+            ),
+            "training_baseline_eval": report_path(
+                "training_baseline_evals", f"{run_id}-baseline-eval", "training_baseline_eval.json"
+            ),
         },
         "boundaries": [
             "This generator only writes local kit files.",
@@ -884,6 +907,7 @@ def build_manifest(
             "AMOLED sidecar commands are PC-connected display aids and are not USB-Free product acceptance evidence.",
             "Voice calling and SMS are unverified and not implemented in the current D1 run path.",
             "A multi-hour D1 shakedown is not a 24h PWR-001 pass or a product battery-life claim.",
+            "Post-run TRAIN-003..006 reports are local bounded handoff checks and do not train or deploy a model.",
         ],
         "non_claims": non_claims(),
     }

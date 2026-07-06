@@ -249,6 +249,8 @@ Current AI/data boundary:
 - done: DATA-013 Dashboard/API visibility can surface the latest TRAIN-006
   baseline-eval status and curated deploy summaries without exposing JSONL row
   contents, private case rows, private training endpoints, or model artifacts;
+- done: DATA-014 post-run collector can continue through TRAIN-003..006 after
+  a ready dataset handoff, while skipped/not-ready runs remain explainable;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -268,6 +270,9 @@ TRAIN-006 then exercises aggregate baseline-metric plumbing on explicit
 synthetic inputs only; it still does not train a model, produce artifacts, or
 support product performance claims. DATA-013 makes that baseline-eval status
 visible in the Web/API loop without exposing row contents or model artifacts.
+DATA-014 binds TRAIN-003..006 back into the D1 post-run collector once the
+dataset handoff is ready, so a post-field run can progress from evidence
+collection to bounded runner/baseline status from one local command.
 
 ## R0: VPS + PC Simulator Simulated Loop
 
