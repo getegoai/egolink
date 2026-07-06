@@ -264,6 +264,8 @@ Current AI/data boundary:
 - done: DATA-017 Dashboard/API visibility can surface the latest TRAIN-008
   job plan and curated deploy summaries without exposing row contents, private
   endpoints, or model artifacts;
+- done: DATA-018 post-run collector and D1 field kit can continue through
+  TRAIN-008 job-plan generation after the TRAIN-007 handoff bundle;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -299,6 +301,9 @@ for future runner/server integration while keeping actual training, endpoints,
 artifacts, and deployment out of scope.
 DATA-017 makes that job-plan status visible in the Web/API loop and VPS
 summary packaging without changing training, deployment, or model behavior.
+DATA-018 binds TRAIN-008 back into the D1 post-run collector and field kit, so
+a reviewed post-field dataset can reach job-plan readiness from one bounded
+local collector run.
 
 ## R0: VPS + PC Simulator Simulated Loop
 

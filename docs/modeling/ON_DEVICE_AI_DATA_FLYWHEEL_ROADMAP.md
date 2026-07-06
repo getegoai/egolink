@@ -85,10 +85,12 @@ must consume only reviewed evidence:
 26. DATA-017 surfaces the latest TRAIN-008 job plan in Web/API and curated
     deployment summaries without exposing row contents, private endpoints, or
     model artifacts.
-27. MotionNet v0.1 starts with a statistical baseline and small model
+27. DATA-018 lets the D1 post-run collector continue through TRAIN-008 and
+    records the job-plan status in the post-run summary and field kit.
+28. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-28. Device deployment begins in shadow mode: model output is recorded alongside
+29. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -122,6 +124,7 @@ must consume only reviewed evidence:
 | Post-run handoff bundle | Extend the D1 post-run collector and field kit through TRAIN-007. | DATA-016. |
 | Training job plan | Create a bounded runner/server queue plan from a handoff bundle without starting training. | TRAIN-008. |
 | Training job visibility | Surface latest job-plan readiness without row contents, private endpoints, or model artifacts. | DATA-017. |
+| Post-run job plan | Extend the D1 post-run collector and field kit through TRAIN-008. | DATA-018. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -234,6 +237,12 @@ must consume only reviewed evidence:
   records, candidate DB paths, runtime JSONL logs, private endpoints, model
   artifacts, model cards, footprint, latency, power measurements, device
   deployment results, or release claims.
+- DATA-018 post-run summaries may show TRAIN-003..008 component statuses,
+  job-plan status, handoff refs, row counts, planned metrics, gates, next
+  step, and report paths after a ready dataset handoff. They do not expose
+  feature-row JSONL contents, raw records, candidate DB paths, private
+  endpoints, model artifacts, model cards, footprint, latency, power
+  measurements, device deployment results, or release claims.
 
 ## Model And Power Gates
 

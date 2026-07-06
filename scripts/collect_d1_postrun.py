@@ -22,6 +22,7 @@ if __package__ in (None, ""):
 from scripts import analyze_power_curve
 from scripts import build_training_handoff_bundle
 from scripts import build_d1_demo_report
+from scripts import create_training_job_plan
 from scripts import export_training_feature_manifest
 from scripts import register_training_experiment
 from scripts import run_data_flywheel_pipeline
@@ -34,14 +35,16 @@ from scripts import validate_d1_web_api
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_postrun"
 DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
-SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.3"
-BUILDER_VERSION = "data-016.0"
+SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.4"
+BUILDER_VERSION = "data-018.0"
 SUMMARY_JSON = "d1_postrun_collection_summary.json"
 SUMMARY_MARKDOWN = "d1_postrun_collection_summary.md"
 READY_DATA_PIPELINE_STATUS = "ready_for_training_handoff"
 READY_BASELINE_STATUSES = {"baseline_eval_complete", "synthetic_baseline_eval_complete"}
 READY_HANDOFF_STATUS = "ready_for_training_server_handoff"
 SYNTHETIC_HANDOFF_STATUS = "synthetic_handoff_dry_run_only"
+READY_JOB_STATUS = create_training_job_plan.READY_JOB_STATUS
+SYNTHETIC_JOB_STATUS = create_training_job_plan.SYNTHETIC_JOB_STATUS
 
 
 def utc_now() -> str:
@@ -183,6 +186,7 @@ def training_chain_summary(report: Mapping[str, Any] | None, error_summary: Mapp
     runner = as_dict(report.get("training_runner_dry_run"))
     baseline = as_dict(report.get("training_baseline_eval"))
     handoff = as_dict(report.get("training_handoff_bundle"))
+    job_plan = as_dict(report.get("training_job_plan"))
     return {
         "status": report.get("status"),
         "reason": report.get("reason"),
@@ -220,6 +224,15 @@ def training_chain_summary(report: Mapping[str, Any] | None, error_summary: Mapp
             "training_server": as_dict(handoff.get("training_server")).get("integration"),
             "dry_run_only": as_dict(handoff.get("training_server")).get("dry_run_only", False),
             "report_path": str(nested_path(handoff, "paths", "training_handoff_bundle_json") or ""),
+        },
+        "job_plan": {
+            "status": job_plan.get("status"),
+            "reason": job_plan.get("reason"),
+            "job_id": job_plan.get("job_id"),
+            "runner_profile": as_dict(job_plan.get("runner_plan")).get("runner_profile"),
+            "queue_state": as_dict(job_plan.get("runner_plan")).get("queue_state"),
+            "dry_run_only": as_dict(job_plan.get("runner_plan")).get("dry_run_only", False),
+            "report_path": str(nested_path(job_plan, "paths", "training_job_plan_json") or ""),
         },
         "next_step": report.get("next_step"),
     }
@@ -531,20 +544,39 @@ def collect_training_chain(
             handoff_payload,
             args.training_handoff_output_root / handoff_id,
         )
+        handoff_path = args.training_handoff_output_root / handoff_id / "training_handoff_bundle.json"
+
+        job_id = args.training_job_id or f"{run_id}-training-job"
+        job_payload = create_training_job_plan.build_job_plan(
+            handoff_written,
+            handoff_ref=create_training_job_plan.input_ref(handoff_path),
+            job_id=job_id,
+            created_at=created_at,
+            allow_synthetic=args.allow_synthetic_training_chain,
+            model_track=args.model_track,
+            candidate_model=args.candidate_model,
+            baseline_model=args.baseline_model,
+            runner_profile=args.training_job_runner_profile,
+        )
+        job_written = create_training_job_plan.write_job_plan(
+            job_payload,
+            args.training_job_output_root / job_id,
+        )
     except Exception as exc:
         return None, bounded_error("training_chain_failed", exc)
 
     return (
         {
-            "status": handoff_written.get("status"),
-            "reason": handoff_written.get("reason"),
+            "status": job_written.get("status"),
+            "reason": job_written.get("reason"),
             "synthetic_allowed_for_dry_run": bool(args.allow_synthetic_training_chain),
             "training_run_preflight": preflight_written,
             "training_feature_manifest": feature_written,
             "training_runner_dry_run": runner_written,
             "training_baseline_eval": baseline_written,
             "training_handoff_bundle": handoff_written,
-            "next_step": handoff_written.get("next_step"),
+            "training_job_plan": job_written,
+            "next_step": job_written.get("next_step"),
         },
         None,
     )
@@ -582,7 +614,7 @@ def derive_result(components: Mapping[str, Mapping[str, Any]]) -> tuple[str, lis
     training_status = str(training_chain.get("status") or "unknown")
     if training_status == "error":
         warnings.append(f"training_chain:{training_chain.get('reason') or training_status}")
-    elif training_status not in {READY_HANDOFF_STATUS, SYNTHETIC_HANDOFF_STATUS, "skipped"}:
+    elif training_status not in {READY_JOB_STATUS, SYNTHETIC_JOB_STATUS, "skipped"}:
         warnings.append(f"training_chain:{training_chain.get('reason') or training_status}")
 
     result = "FAIL" if errors else ("WARN" if warnings else "PASS")
@@ -614,10 +646,10 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
     training_chain = as_dict(components.get("training_chain"))
     training_status = str(training_chain.get("status") or "")
     if training_status == "skipped" and training_chain.get("reason") == "data_flywheel_pipeline_not_ready":
-        steps.append("After candidate review makes the dataset ready, rerun the post-run collector to create TRAIN-003..007 reports.")
-    elif training_status == SYNTHETIC_HANDOFF_STATUS:
-        steps.append("Repeat the post-run collector with reviewed real rows before using the handoff for model training.")
-    elif training_status and training_status not in {READY_HANDOFF_STATUS, "skipped"}:
+        steps.append("After candidate review makes the dataset ready, rerun the post-run collector to create TRAIN-003..008 reports.")
+    elif training_status == SYNTHETIC_JOB_STATUS:
+        steps.append("Repeat the post-run collector with reviewed real rows before using the job plan for model training.")
+    elif training_status and training_status not in {READY_JOB_STATUS, "skipped"}:
         steps.append(str(training_chain.get("next_step") or "Inspect the generated training-chain report and fix the first blocker."))
 
     if result != "FAIL":
@@ -634,6 +666,7 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
     runner_dry_run = as_dict(training_chain.get("runner_dry_run"))
     baseline_eval = as_dict(training_chain.get("baseline_eval"))
     handoff_bundle = as_dict(training_chain.get("handoff_bundle"))
+    job_plan = as_dict(training_chain.get("job_plan"))
     return {
         "postrun_summary_json": str(summary_json),
         "postrun_summary_markdown": str(summary_md),
@@ -650,6 +683,7 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
         "training_runner_dry_run": runner_dry_run.get("report_path"),
         "training_baseline_eval": baseline_eval.get("report_path"),
         "training_handoff_bundle": handoff_bundle.get("report_path"),
+        "training_job_plan": job_plan.get("report_path"),
     }
 
 
@@ -770,7 +804,7 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
             "Read-only Message Hub collection plus local report generation only.",
             "No hardware, serial port, firmware, Message Hub command, deployment, or GitLab mutation is performed.",
             "The data-flywheel step ingests only recording directories explicitly passed with --recording-dir.",
-            "The training-chain step runs only bounded local preflight, feature export, runner dry-run, aggregate baseline-eval, and handoff-bundle reports after a ready dataset handoff.",
+            "The training-chain step runs only bounded local preflight, feature export, runner dry-run, aggregate baseline-eval, handoff-bundle, and job-plan reports after a ready dataset handoff.",
             "Dashboard state and curated summaries are not raw training data.",
         ],
         "non_claims": [
@@ -822,7 +856,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--allow-synthetic-training-chain",
         action="store_true",
-        help="Allow synthetic-only rows for TRAIN-003..006 dry-run integration reports.",
+        help="Allow synthetic-only rows for TRAIN-003..008 dry-run integration reports.",
     )
     parser.add_argument("--training-run-output-root", type=Path, default=run_training_experiment_preflight.DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--training-run-id")
@@ -846,6 +880,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=build_training_handoff_bundle.DEFAULT_OUTPUT_ROOT,
     )
     parser.add_argument("--training-handoff-id")
+    parser.add_argument(
+        "--training-job-output-root",
+        type=Path,
+        default=create_training_job_plan.DEFAULT_OUTPUT_ROOT,
+    )
+    parser.add_argument("--training-job-id")
+    parser.add_argument(
+        "--training-job-runner-profile",
+        default="local_runner_planned",
+        choices=("local_runner_planned", "gpu_server_planned", "ci_dry_run"),
+    )
     parser.add_argument(
         "--model-track",
         default=register_training_experiment.DEFAULT_MODEL_TRACK,

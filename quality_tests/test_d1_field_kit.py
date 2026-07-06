@@ -122,6 +122,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("-IncludeTrainingRunnerDryRunSummaries", sync_argv)
             self.assertIn("-IncludeTrainingBaselineEvalSummaries", sync_argv)
             self.assertIn("-IncludeTrainingHandoffSummaries", sync_argv)
+            self.assertIn("-IncludeTrainingJobSummaries", sync_argv)
             self.assertTrue(manifest["commands"]["flash_explicit_operator_action"]["hardware_action"])
             self.assertTrue(manifest["commands"]["short_usb_free_link_check"]["sends_message_hub_command"])
             self.assertTrue(manifest["commands"]["preflight_amoled_visible_status"]["writes_amoled_serial"])
@@ -145,6 +146,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("training_runner_dry_run", manifest["expected_outputs"])
             self.assertIn("training_baseline_eval", manifest["expected_outputs"])
             self.assertIn("training_handoff_bundle", manifest["expected_outputs"])
+            self.assertIn("training_job_plan", manifest["expected_outputs"])
             self.assertIn(
                 "D1-FIELD-unit-data-pipeline-experiment",
                 manifest["expected_outputs"]["training_experiment_plan"],
@@ -154,6 +156,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("D1-FIELD-unit-runner-dry-run", manifest["expected_outputs"]["training_runner_dry_run"])
             self.assertIn("D1-FIELD-unit-baseline-eval", manifest["expected_outputs"]["training_baseline_eval"])
             self.assertIn("D1-FIELD-unit-training-handoff", manifest["expected_outputs"]["training_handoff_bundle"])
+            self.assertIn("D1-FIELD-unit-training-job", manifest["expected_outputs"]["training_job_plan"])
             self.assertIn("calling_not_claimed", manifest["non_claims"])
             self.assertIn("sms_not_claimed", manifest["non_claims"])
             self.assertIn("model_training_not_claimed", manifest["non_claims"])
@@ -169,7 +172,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("Recommended Post-Run Collector", runbook)
             self.assertIn("scripts\\collect_d1_postrun.py", runbook)
             self.assertIn("Data Flywheel Pipeline", runbook)
-            self.assertIn("TRAIN-003..006", runbook)
+            self.assertIn("TRAIN-003..008", runbook)
             self.assertIn("Sync Dashboard Summaries", runbook)
             self.assertIn("observe_d1_field_run.py", runbook)
             self.assertIn("Live field observation report", notes)
@@ -177,6 +180,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("Post-run summary", notes)
             self.assertIn("Training run preflight", notes)
             self.assertIn("Training baseline eval", notes)
+            self.assertIn("Training job plan", notes)
             self.assertIn("Before Leaving", checklist)
             self.assertIn("D1 Field Operator Notes", notes)
             self.assertIn("Calling and SMS are not part of this run", checklist)

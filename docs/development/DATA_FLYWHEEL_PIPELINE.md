@@ -262,6 +262,14 @@ gates, and report paths are allowed. JSONL row contents, raw records, private
 endpoints, model artifacts, model cards, measured footprint/power data, device
 deployment results, and release claims are not.
 
+DATA-018 extends the D1 post-run collector and field kit so a ready
+DATA-006/TRAIN-002 handoff can continue through TRAIN-008 from one local
+post-field command. The new post-run chain status is the TRAIN-008 job-plan
+status, while the summary still keeps the TRAIN-007 handoff component visible.
+DATA-018 still does not train a model, call a training endpoint, copy
+feature-row JSONL to the Dashboard, deploy to devices, or produce model
+artifacts, model cards, measured footprint/power data, or release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -315,6 +323,8 @@ deployment, or OTA update behavior changes in DATA-002.
     TRAIN-007 handoff bundle before any real runner/server integration.
 20. Let DATA-017 surface the latest job plan in Web/API and curated deployment
     summaries without exposing row contents or private endpoints.
-21. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+21. Let DATA-018 bind TRAIN-008 into the D1 post-run collector and field kit
+    after the TRAIN-007 handoff bundle is written.
+22. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

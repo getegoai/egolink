@@ -25,7 +25,7 @@ DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
 DEFAULT_FW_VERSION = "0.1.0-d1-periodic-location"
 DEFAULT_BOARD_ID = "connectivity-node-001"
 DEFAULT_DURATION_HOURS = 4.0
-KIT_VERSION = "D1.field_kit.v7"
+KIT_VERSION = "D1.field_kit.v8"
 MANIFEST_JSON = "field_manifest.json"
 RUNBOOK_MD = "FIELD_RUNBOOK.md"
 CHECKLIST_MD = "FIELD_CHECKLIST.md"
@@ -457,7 +457,7 @@ def build_commands(
         ),
         "post_run_sync_dashboard_summaries": command_record(
             description=(
-                "Sync only curated Field Test Results, Data Flywheel, Training Experiment, and TRAIN-003..007 summaries to the VPS Dashboard."
+                "Sync only curated Field Test Results, Data Flywheel, Training Experiment, and TRAIN-003..008 summaries to the VPS Dashboard."
             ),
             argv=[
                 "powershell",
@@ -478,6 +478,7 @@ def build_commands(
                 "-IncludeTrainingRunnerDryRunSummaries",
                 "-IncludeTrainingBaselineEvalSummaries",
                 "-IncludeTrainingHandoffSummaries",
+                "-IncludeTrainingJobSummaries",
             ],
             requires_operator_intent=True,
         ),
@@ -516,7 +517,7 @@ def build_checklists(*, duration_hours: float) -> dict[str, list[str]]:
             "Record local and UTC stop time plus visible Dashboard state.",
             "Run the one-command post-run collector from this kit.",
             "Use the individual Web/API, power, D1 demo, and data-flywheel commands only when troubleshooting.",
-            "Sync curated Field Test Results, Data Flywheel, and TRAIN-003..006 summaries to the VPS Dashboard.",
+            "Sync curated Field Test Results, Data Flywheel, and TRAIN-003..008 summaries to the VPS Dashboard.",
             "Keep raw Message Hub export, generated reports, and OPERATOR_NOTES.md together.",
             "Do not claim location accuracy, battery life, GNSS acceptance, or 24h PWR-001 pass from a short D1 run.",
         ],
@@ -650,7 +651,7 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             "",
             "### Recommended Post-Run Collector",
             "",
-            "Runs the Web/API gate, power curve, D1 evidence report, data-flywheel pipeline, and TRAIN-003..006 reports when the dataset handoff is ready, then writes one bounded artifact summary.",
+            "Runs the Web/API gate, power curve, D1 evidence report, data-flywheel pipeline, and TRAIN-003..008 reports when the dataset handoff is ready, then writes one bounded artifact summary.",
             "",
             "```powershell",
             commands["post_run_collect_evidence"]["powershell"],
@@ -756,6 +757,7 @@ def write_notes_template(path: Path, manifest: dict[str, Any]) -> None:
         f"- Training runner dry-run: `{manifest['expected_outputs']['training_runner_dry_run']}`",
         f"- Training baseline eval: `{manifest['expected_outputs']['training_baseline_eval']}`",
         f"- Training handoff bundle: `{manifest['expected_outputs']['training_handoff_bundle']}`",
+        f"- Training job plan: `{manifest['expected_outputs']['training_job_plan']}`",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -903,6 +905,9 @@ def build_manifest(
             "training_handoff_bundle": report_path(
                 "training_handoffs", f"{run_id}-training-handoff", "training_handoff_bundle.json"
             ),
+            "training_job_plan": report_path(
+                "training_jobs", f"{run_id}-training-job", "training_job_plan.json"
+            ),
         },
         "boundaries": [
             "This generator only writes local kit files.",
@@ -912,7 +917,7 @@ def build_manifest(
             "AMOLED sidecar commands are PC-connected display aids and are not USB-Free product acceptance evidence.",
             "Voice calling and SMS are unverified and not implemented in the current D1 run path.",
             "A multi-hour D1 shakedown is not a 24h PWR-001 pass or a product battery-life claim.",
-            "Post-run TRAIN-003..007 reports are local bounded handoff checks and do not train or deploy a model.",
+            "Post-run TRAIN-003..008 reports are local bounded handoff/job-plan checks and do not train or deploy a model.",
         ],
         "non_claims": non_claims(),
     }

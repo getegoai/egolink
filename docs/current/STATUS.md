@@ -6,6 +6,20 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-018 post-run job-plan collector is implemented locally. The
+D1 post-run collector schema is now `egolink.d1_postrun_collection.v0.4` and
+continues through TRAIN-008 when the DATA-006 pipeline returns
+`ready_for_training_handoff`: TRAIN-003 preflight, TRAIN-004 feature export,
+TRAIN-005 runner dry-run, TRAIN-006 baseline eval, TRAIN-007 handoff bundle,
+and TRAIN-008 training job plan. The post-run `training_chain.status` now
+reports the job-plan status, with bounded `handoff_bundle` and `job_plan`
+components. The D1 field kit is updated to v8 with expected
+`training_job_plan.json` output and the curated
+`-IncludeTrainingJobSummaries` sync switch. This does not train a model, call
+or configure a training endpoint, copy feature-row JSONL to the Dashboard,
+deploy to devices, produce model artifacts/cards, measure footprint/power, or
+allow release claims.
+
 2026-07-06: DATA-017 training job visibility is implemented locally. The
 Message Hub can now load the latest bounded
 `reports/training_jobs/**/training_job_plan.json`, expose it as
