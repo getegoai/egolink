@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-06 01:41 UTC",
+  "generated_at": "2026-07-06 01:49 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "3c6e39d feat(data): surface training job plans [D5]"
+    "head": "812f895 feat(data): chain postrun job plans [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -268,6 +268,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-017_TRAINING_JOB_VISIBILITY.md"
     },
     {
+      "id": "DATA-018",
+      "title": "Post-run job-plan collector",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-06",
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-018_POSTRUN_JOB_PLAN_COLLECTOR.md"
+    },
+    {
       "id": "FIELD-005",
       "title": "D1 observer incremental samples",
       "state": "done",
@@ -284,15 +293,6 @@
       "priority": "high",
       "date": "2026-07-06",
       "path": "D:/pywork/egolink/docs/tasks/done/TRAIN-006_SYNTHETIC_BASELINE_EVAL.md"
-    },
-    {
-      "id": "TRAIN-007",
-      "title": "Training handoff bundle",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-06",
-      "path": "D:/pywork/egolink/docs/tasks/done/TRAIN-007_TRAINING_HANDOFF_BUNDLE.md"
     }
   ],
   "operator_asks": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 108
+    "done_total": 109
   }
 }
