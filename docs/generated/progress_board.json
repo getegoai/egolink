@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-06 01:21 UTC",
+  "generated_at": "2026-07-06 01:28 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "3484e96 feat(data): surface training handoff bundles [D5]"
+    "head": "daece90 feat(data): extend postrun handoff chain [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -250,6 +250,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-015_TRAINING_HANDOFF_VISIBILITY.md"
     },
     {
+      "id": "DATA-016",
+      "title": "Post-run handoff collector",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-06",
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-016_POSTRUN_HANDOFF_COLLECTOR.md"
+    },
+    {
       "id": "FIELD-005",
       "title": "D1 observer incremental samples",
       "state": "done",
@@ -284,15 +293,6 @@
       "priority": "high",
       "date": "2026-07-05",
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-006_DATA_FLYWHEEL_PIPELINE_RUNNER.md"
-    },
-    {
-      "id": "DATA-007",
-      "title": "Training experiment dashboard visibility",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-05",
-      "path": "D:/pywork/egolink/docs/tasks/done/DATA-007_TRAINING_EXPERIMENT_DASHBOARD_VISIBILITY.md"
     }
   ],
   "operator_asks": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 105
+    "done_total": 106
   }
 }
