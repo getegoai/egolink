@@ -6,6 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: FIELD-009 D1 3-4h field-kit v9 readiness/intake closure is
+implemented locally. `scripts/prepare_d1_field_kit.py` now emits D1
+training-readiness and labeling-intake expected outputs, adds them to
+operator notes/runbook/checklist, and includes the curated VPS sync switches
+for those bounded summaries. This prepares the next 3-4h D1 outdoor run but
+does not contact hardware, flash firmware, deploy to the VPS, read raw sample
+JSONL, expose private payloads, train/evaluate a model, or make accuracy,
+battery-life, GNSS, calling/SMS, or product-readiness claims.
+
 2026-07-06: DATA-025 D1 post-run labeling-intake binding is implemented
 locally. `scripts/collect_d1_postrun.py` is now schema
 `egolink.d1_postrun_collection.v0.7`; when a post-run collection generates or

@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-06 12:05 UTC",
+  "generated_at": "2026-07-06 13:36 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "d4df843 feat(data): add d1 labeling intake visibility [D5]"
+    "head": "729daf0 feat(data): bind d1 intake into postrun [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -190,7 +190,7 @@
       "state": "in_progress",
       "packet_status": "active",
       "priority": "high",
-      "date": "2026-07-05",
+      "date": "2026-07-06",
       "path": "D:/pywork/egolink/docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md"
     },
     {
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 118
+    "done_total": 119
   }
 }

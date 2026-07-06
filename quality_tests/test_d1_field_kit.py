@@ -127,6 +127,9 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("-IncludeTrainingBaselineEvalSummaries", sync_argv)
             self.assertIn("-IncludeTrainingHandoffSummaries", sync_argv)
             self.assertIn("-IncludeTrainingJobSummaries", sync_argv)
+            self.assertIn("-IncludeSyntheticTrainingChainSummaries", sync_argv)
+            self.assertIn("-IncludeD1TrainingReadinessSummaries", sync_argv)
+            self.assertIn("-IncludeD1LabelingIntakeSummaries", sync_argv)
             self.assertTrue(manifest["commands"]["flash_explicit_operator_action"]["hardware_action"])
             self.assertTrue(manifest["commands"]["short_usb_free_link_check"]["sends_message_hub_command"])
             self.assertTrue(manifest["commands"]["preflight_amoled_visible_status"]["writes_amoled_serial"])
@@ -152,10 +155,17 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("training_baseline_eval", manifest["expected_outputs"])
             self.assertIn("training_handoff_bundle", manifest["expected_outputs"])
             self.assertIn("training_job_plan", manifest["expected_outputs"])
+            self.assertIn("d1_training_readiness", manifest["expected_outputs"])
+            self.assertIn("d1_labeling_intake", manifest["expected_outputs"])
             self.assertIn(
                 "D1-FIELD-unit-data-pipeline-experiment",
                 manifest["expected_outputs"]["training_experiment_plan"],
             )
+            self.assertIn(
+                "D1-FIELD-unit-training-readiness",
+                manifest["expected_outputs"]["d1_training_readiness"],
+            )
+            self.assertIn("D1-FIELD-unit-labeling-intake", manifest["expected_outputs"]["d1_labeling_intake"])
             self.assertIn("D1-FIELD-unit-training-preflight", manifest["expected_outputs"]["training_run_preflight"])
             self.assertIn("D1-FIELD-unit-features", manifest["expected_outputs"]["training_feature_manifest"])
             self.assertIn("D1-FIELD-unit-runner-dry-run", manifest["expected_outputs"]["training_runner_dry_run"])
@@ -177,12 +187,16 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("Recommended Post-Run Collector", runbook)
             self.assertIn("scripts\\collect_d1_postrun.py", runbook)
             self.assertIn("Data Flywheel Pipeline", runbook)
+            self.assertIn("D1 training-readiness", runbook)
+            self.assertIn("D1 labeling-intake", runbook)
             self.assertIn("TRAIN-003..008", runbook)
             self.assertIn("Sync Dashboard Summaries", runbook)
             self.assertIn("observe_d1_field_run.py", runbook)
             self.assertIn("Live field observation report", notes)
             self.assertIn("AMOLED sidecar summary", notes)
             self.assertIn("Post-run summary", notes)
+            self.assertIn("D1 training readiness", notes)
+            self.assertIn("D1 labeling intake", notes)
             self.assertIn("Training run preflight", notes)
             self.assertIn("Training baseline eval", notes)
             self.assertIn("Training job plan", notes)
@@ -190,6 +204,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("D1 Field Operator Notes", notes)
             self.assertIn("Calling and SMS are not part of this run", checklist)
             self.assertIn("Run the one-command post-run collector", checklist)
+            self.assertIn("post-run training readiness", checklist)
 
     def test_v1_board_uses_recorded_v1_max17048_pins(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

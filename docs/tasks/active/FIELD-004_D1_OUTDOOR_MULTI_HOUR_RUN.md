@@ -6,14 +6,14 @@ priority: high
 requires_hardware: true
 serves_demo: D1
 created: 2026-07-04
-last_updated: 2026-07-05
+last_updated: 2026-07-06
 
 context:
   - docs/product/NORTH_STAR.md
   - docs/development/FIELD_TEST.md
   - docs/current/ACTIVE_BUILD.md
   - docs/hardware/BOARD_MATRIX.md
-  - reports/d1_field/d1-outdoor-kit-20260704/FIELD_RUNBOOK.md
+  - reports/d1_field/FIELD-004-d1-outdoor-20260707-3h5/FIELD_RUNBOOK.md
 
 allowed_paths:
   - reports/
@@ -29,7 +29,7 @@ out_of_scope:
 
 # Goal
 
-Run the current D1 link outdoors for 2-3 hours so the founder can judge whether
+Run the current D1 link outdoors for 3-4 hours so the founder can judge whether
 the LTE upload loop, visible estimate, and power curve are stable enough to keep
 building on.
 
@@ -56,13 +56,14 @@ Through` panel:
 
 # Acceptance Criteria
 
-- [ ] Device runs on battery/independent power for 2-3 hours.
+- [ ] Device runs on battery/independent power for 3-4 hours.
 - [ ] Dashboard stays usable and shows `Field Ready`, online/stale, upload
       freshness, LTE, location estimate, and power evidence.
 - [ ] Field companion report records sample count, stale samples, raw POST
       success/failure delta, coordinate sample count, and power sample count.
-- [ ] Post-run collector summary records Web/API, power, D1 demo, and
-      data-flywheel artifact paths.
+- [ ] Post-run collector summary records Web/API, power, D1 demo,
+      data-flywheel, D1 training-readiness, and D1 labeling-intake artifact
+      paths.
 - [ ] Post-run D1 Web/API report passes or fails explainably.
 - [ ] Post-run power report is generated; it may be WARN/FAIL, but must record
       why.
@@ -77,37 +78,44 @@ The always-on Web Dashboard is the normal preflight. Run the companion command
 when the field session should produce bounded long-run evidence and AMOLED
 sidecar visibility.
 
+For the next planned run, use the generated kit:
+
+- Run ID: `FIELD-004-d1-outdoor-20260707-3h5`
+- Runbook: `reports\d1_field\FIELD-004-d1-outdoor-20260707-3h5\FIELD_RUNBOOK.md`
+- Checklist: `reports\d1_field\FIELD-004-d1-outdoor-20260707-3h5\FIELD_CHECKLIST.md`
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_d1_field_companion.ps1 `
   -HubUrl http://203.0.113.10:8790 `
-  -DurationMinutes 180 `
+  -DurationMinutes 210 `
   -PollIntervalSec 30 `
   -ReadWindowSeconds 8 `
-  -SessionId FIELD-004-d1-outdoor-YYYYMMDD `
-  -OutputDir reports\d1_field_companion\FIELD-004-d1-outdoor-YYYYMMDD
+  -SessionId FIELD-004-d1-outdoor-20260707-3h5 `
+  -OutputDir reports\d1_field_companion\FIELD-004-d1-outdoor-20260707-3h5
 ```
 
 # Post-Run Commands
 
-Recommended one-command collection after returning:
+Recommended one-command collection after returning. The generated v9 runbook
+above is the source of exact field-observation report/status paths.
 
 ```powershell
-python scripts\collect_d1_postrun.py --run-id FIELD-004-d1-outdoor-YYYYMMDD --hub-url http://203.0.113.10:8790 --message-test-run-id FIELD-004-d1-outdoor-YYYYMMDD --output-root reports\d1_postrun --json
+python scripts\collect_d1_postrun.py --run-id FIELD-004-d1-outdoor-20260707-3h5 --hub-url http://203.0.113.10:8790 --message-test-run-id FIELD-004-d1-outdoor-20260707-3h5 --output-root reports\d1_postrun --json
 ```
 
 Use the component commands below only when rerunning or troubleshooting one
 step:
 
 ```powershell
-python scripts\validate_d1_web_api.py --hub-url http://203.0.113.10:8790 --review-id FIELD-004-d1-outdoor-YYYYMMDD --output-dir reports\d1_web_api\FIELD-004-d1-outdoor-YYYYMMDD --json
+python scripts\validate_d1_web_api.py --hub-url http://203.0.113.10:8790 --review-id FIELD-004-d1-outdoor-20260707-3h5 --output-dir reports\d1_web_api\FIELD-004-d1-outdoor-20260707-3h5 --json
 
-python scripts\analyze_power_curve.py --hub http://203.0.113.10:8790 --test-run-id FIELD-004-d1-outdoor-YYYYMMDD --output-dir reports\power\FIELD-004-d1-outdoor-YYYYMMDD --min-duration-hours 2 --json
+python scripts\analyze_power_curve.py --hub http://203.0.113.10:8790 --test-run-id FIELD-004-d1-outdoor-20260707-3h5 --output-dir reports\power\FIELD-004-d1-outdoor-20260707-3h5 --min-duration-hours 3.5 --json
 
-python scripts\build_d1_demo_report.py --web-api-report reports\d1_web_api\FIELD-004-d1-outdoor-YYYYMMDD\d1_web_api_report.json --power-curve-report reports\power\FIELD-004-d1-outdoor-YYYYMMDD\power_curve_report.json --report-id FIELD-004-d1-outdoor-YYYYMMDD --output-dir reports\d1_demo\FIELD-004-d1-outdoor-YYYYMMDD --json
+python scripts\build_d1_demo_report.py --web-api-report reports\d1_web_api\FIELD-004-d1-outdoor-20260707-3h5\d1_web_api_report.json --power-curve-report reports\power\FIELD-004-d1-outdoor-20260707-3h5\power_curve_report.json --report-id FIELD-004-d1-outdoor-20260707-3h5 --output-dir reports\d1_demo\FIELD-004-d1-outdoor-20260707-3h5 --json
 
-python scripts\run_data_flywheel_pipeline.py --run-id FIELD-004-d1-outdoor-YYYYMMDD-data-pipeline --dataset-id FIELD-004-d1-outdoor-YYYYMMDD-dataset --json
+python scripts\run_data_flywheel_pipeline.py --run-id FIELD-004-d1-outdoor-20260707-3h5-data-pipeline --dataset-id FIELD-004-d1-outdoor-20260707-3h5-dataset --json
 
-powershell -ExecutionPolicy Bypass -File scripts\deploy_message_hub_vps.ps1 -HostName 203.0.113.10 -SshKey $HOME\.ssh\egolink_vps_ed25519 -Public -IncludeFieldReportSummaries -IncludeDataFlywheelSummaries -IncludeTrainingExperimentSummaries
+powershell -ExecutionPolicy Bypass -File scripts\deploy_message_hub_vps.ps1 -HostName 203.0.113.10 -SshKey $HOME\.ssh\egolink_vps_ed25519 -Public -IncludeFieldReportSummaries -IncludeDataFlywheelSummaries -IncludeTrainingExperimentSummaries -IncludeTrainingRunSummaries -IncludeTrainingFeatureSummaries -IncludeTrainingRunnerDryRunSummaries -IncludeTrainingBaselineEvalSummaries -IncludeTrainingHandoffSummaries -IncludeTrainingJobSummaries -IncludeSyntheticTrainingChainSummaries -IncludeD1TrainingReadinessSummaries -IncludeD1LabelingIntakeSummaries
 ```
 
 # Progress Evidence
