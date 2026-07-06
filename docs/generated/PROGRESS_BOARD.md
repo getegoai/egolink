@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-06 02:35 UTC
-- 分支: `autodev/egolink-p0` @ fb870aa fix(field): prefer live observation status [D1]
+- 生成时间: 2026-07-06 06:22 UTC
+- 分支: `autodev/egolink-p0` @ 1497e00 docs(progress): refresh field observation index board [D1]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 112，进行中: 3，暂停: 3
+- 已完成任务总数: 113，进行中: 3，暂停: 3
 
 ## 里程碑
 
@@ -40,7 +40,7 @@
 | DATA-017 | Training job visibility | 2026-07-06 |
 | DATA-018 | Post-run job-plan collector | 2026-07-06 |
 | DATA-019 | Post-run field-observation binding | 2026-07-06 |
-| FIELD-005 | D1 observer incremental samples | 2026-07-06 |
+| DATA-020 | Synthetic training-chain smoke runner | 2026-07-06 |
 
 ## 等待创始人处理
 

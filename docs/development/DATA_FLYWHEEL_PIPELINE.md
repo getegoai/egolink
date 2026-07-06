@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-05
+last_verified: 2026-07-06
 verified_by: codex
 ---
 
@@ -278,6 +278,15 @@ contents, contact hardware, send commands, change firmware/protocol/API
 behavior, train a model, or add location, power, LTE, GNSS, battery-life,
 model, or product-readiness claims.
 
+DATA-020 provides a no-hardware synthetic training-chain smoke runner. It
+generates explicit synthetic-only session recordings, performs the existing
+synthetic review dry-run, runs the data-flywheel pipeline, and continues
+through TRAIN-003..008 to a bounded synthetic job plan from one command. It
+does not contact hardware or the Message Hub, expose candidate DB paths or
+feature-row contents, call a training endpoint, train/evaluate a real model,
+produce model artifacts/cards, measure footprint/power, deploy to devices, or
+allow release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -333,6 +342,8 @@ deployment, or OTA update behavior changes in DATA-002.
     summaries without exposing row contents or private endpoints.
 21. Let DATA-018 bind TRAIN-008 into the D1 post-run collector and field kit
     after the TRAIN-007 handoff bundle is written.
-22. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+22. Let DATA-020 keep the synthetic-only DATA/TRAIN chain executable as a
+    no-hardware smoke while real field evidence is sparse.
+23. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

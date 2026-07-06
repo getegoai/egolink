@@ -1,10 +1,19 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-05
+last_verified: 2026-07-06
 verified_by: codex
 ---
 
 ## Latest Deployment Note
+
+2026-07-06: DATA-020 synthetic training-chain smoke runner is implemented
+locally. `scripts/run_synthetic_training_chain.py` generates synthetic-only
+sessions, performs the explicit synthetic review dry-run, runs the
+data-flywheel pipeline, and continues through TRAIN-003..008 to a bounded
+synthetic job plan from one no-hardware command. This does not contact
+hardware or the Message Hub, expose candidate DB paths or feature-row
+contents, train/evaluate a real model, produce model artifacts/cards, measure
+footprint/power, deploy to devices, or allow release claims.
 
 2026-07-06: FIELD-008 local D1 field-observation index is implemented locally.
 `scripts/summarize_d1_field_observations.py` scans bounded

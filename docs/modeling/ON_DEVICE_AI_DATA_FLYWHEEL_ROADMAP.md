@@ -1,6 +1,6 @@
 ---
 document_status: working_plan
-last_verified: 2026-07-05
+last_verified: 2026-07-06
 verified_by: codex
 ---
 
@@ -87,10 +87,13 @@ must consume only reviewed evidence:
     model artifacts.
 27. DATA-018 lets the D1 post-run collector continue through TRAIN-008 and
     records the job-plan status in the post-run summary and field kit.
-28. MotionNet v0.1 starts with a statistical baseline and small model
+28. DATA-020 runs the synthetic-only DATA/TRAIN chain from generated sessions
+    through review, dataset handoff, TRAIN-003..008, and a dry-run job plan as
+    a no-hardware smoke while real field evidence is sparse.
+29. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-29. Device deployment begins in shadow mode: model output is recorded alongside
+30. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -125,6 +128,7 @@ must consume only reviewed evidence:
 | Training job plan | Create a bounded runner/server queue plan from a handoff bundle without starting training. | TRAIN-008. |
 | Training job visibility | Surface latest job-plan readiness without row contents, private endpoints, or model artifacts. | DATA-017. |
 | Post-run job plan | Extend the D1 post-run collector and field kit through TRAIN-008. | DATA-018. |
+| Synthetic chain smoke | Keep generated scenarios, review, dataset handoff, TRAIN-003..008, and job-plan plumbing executable without hardware. | DATA-020. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -243,6 +247,13 @@ must consume only reviewed evidence:
   feature-row JSONL contents, raw records, candidate DB paths, private
   endpoints, model artifacts, model cards, footprint, latency, power
   measurements, device deployment results, or release claims.
+- DATA-020 synthetic training-chain summaries may show generated scenario
+  counts, synthetic review counts, data-flywheel statuses, TRAIN-003..008
+  component statuses, row counts, dry-run gates, and bounded artifact refs
+  only. They do not expose candidate DB paths, raw recordings, raw candidate
+  records, private coordinates, feature-row contents, private endpoints, model
+  artifacts, measured footprint/power data, device deployment results, or
+  release claims.
 
 ## Model And Power Gates
 
