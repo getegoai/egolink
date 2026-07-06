@@ -365,6 +365,13 @@ apply decisions, write candidate records, read raw sample rows, expose exact
 coordinates, copy feature rows or targets, train a model, produce model
 artifacts, or allow release claims.
 
+DATA-031 surfaces the latest D1 labeling decision template in the Message Hub
+API and Dashboard, plus an explicit VPS summary-sync switch. The exposed object
+shows compact review lineage, decision progress, decision field names/current
+values/selected values, and non-training gates, but not raw sample rows, exact
+coordinates, raw payloads, private operator notes, feature rows, targets,
+candidate DBs, model artifacts, or release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -443,6 +450,9 @@ deployment, or OTA update behavior changes in DATA-002.
     or candidate DBs.
 32. Let DATA-030 generate a fillable D1 labeling decision template before any
     review-decision application or candidate-store promotion.
-33. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+33. Let DATA-031 surface the D1 labeling decision template in Web/API and
+    curated deployment summaries without exposing raw samples, private notes,
+    or candidate DBs.
+34. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

@@ -20,6 +20,7 @@ param(
     [switch]$IncludeD1LabelingIntakeSummaries,
     [switch]$IncludeD1LabelingQueueSummaries,
     [switch]$IncludeD1LabelingReviewSummaries,
+    [switch]$IncludeD1LabelingDecisionSummaries,
     [switch]$NoStart
 )
 
@@ -424,6 +425,31 @@ function Copy-D1LabelingReviewSummaries {
     }
 }
 
+function Copy-D1LabelingDecisionSummaries {
+    $d1LabelingDecisionDir = Join-Path $repoRoot "reports\d1_labeling_decisions"
+    if (-not (Test-Path $d1LabelingDecisionDir -PathType Container)) {
+        return
+    }
+    $allowedNames = @(
+        "d1_labeling_decision_template.json",
+        "d1_labeling_decision_template.md"
+    )
+    $reportFiles = Get-ChildItem -Path $d1LabelingDecisionDir -Recurse -File |
+        Where-Object { $allowedNames -contains $_.Name }
+
+    $repoFull = (Resolve-Path $repoRoot).Path.TrimEnd("\", "/")
+    foreach ($file in $reportFiles) {
+        $fileFull = $file.FullName
+        if (-not $fileFull.StartsWith($repoFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to copy D1 labeling decision summary outside repository: $fileFull"
+        }
+        $relative = $fileFull.Substring($repoFull.Length).TrimStart("\", "/")
+        $target = Join-Path $packageRoot $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -Force -LiteralPath $file.FullName -Destination $target
+    }
+}
+
 function SshArgs {
     $args = @()
     if ($SshKey) {
@@ -498,6 +524,9 @@ try {
     }
     if ($IncludeD1LabelingReviewSummaries) {
         Copy-D1LabelingReviewSummaries
+    }
+    if ($IncludeD1LabelingDecisionSummaries) {
+        Copy-D1LabelingDecisionSummaries
     }
 
     Push-Location $packageRoot

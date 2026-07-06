@@ -33,6 +33,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("D1 Labeling Intake", html)
         self.assertIn("D1 Labeling Queue", html)
         self.assertIn("D1 Labeling Review Packet", html)
+        self.assertIn("D1 Labeling Decision Template", html)
         self.assertIn("D1 Link Through", html)
         self.assertIn("dashboard-shell", html)
         self.assertIn("Field live view", html)
@@ -53,6 +54,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("d1LabelingIntake", html)
         self.assertIn("d1LabelingQueue", html)
         self.assertIn("d1LabelingReviewPacket", html)
+        self.assertIn("d1LabelingDecisionTemplate", html)
         self.assertIn("d1Link", html)
         self.assertIn("d1_link", html)
         self.assertIn("field_results", html)
@@ -82,6 +84,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("d1LabelingQueuePanel", html)
         self.assertIn("d1_labeling_review_packet", html)
         self.assertIn("d1LabelingReviewPacketPanel", html)
+        self.assertIn("d1_labeling_decision_template", html)
+        self.assertIn("d1LabelingDecisionTemplatePanel", html)
         self.assertIn("Runner Handoff", html)
         self.assertIn("Runner Ready", html)
         self.assertIn("Feature Rows", html)
@@ -105,6 +109,9 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Label Groups", html)
         self.assertIn("Decision Slots", html)
         self.assertIn("Needed Reviews", html)
+        self.assertIn("Decision Progress", html)
+        self.assertIn("First Template Item", html)
+        self.assertIn("Selected Values", html)
         self.assertIn("Sensor Gaps", html)
         self.assertIn("Synthetic Gate", html)
         self.assertIn("Measured Metrics", html)
@@ -1655,6 +1662,165 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(summary["status"], "not_available")
         self.assertEqual(summary["reason"], "no_d1_labeling_review_packet")
 
+    def test_latest_d1_labeling_decision_template_summary_is_bounded_for_dashboard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report_dir = root / "unit-decisions"
+            report_dir.mkdir()
+            (report_dir / "d1_labeling_decision_template.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.d1_labeling_decision_template.v0.1",
+                        "run_id": "unit-labeling-decisions",
+                        "generated_at": "2026-07-06T12:20:00+00:00",
+                        "serves_demo": "D5",
+                        "status": "ready_for_human_input",
+                        "source_review_packet": {
+                            "available": True,
+                            "run_id": "unit-labeling-review",
+                            "status": "needs_human_review",
+                            "report_path": "reports/d1_labeling_reviews/unit/d1_labeling_review_packet.json",
+                            "review_packet_items": 1,
+                        },
+                        "summary": {
+                            "template_items": 1,
+                            "review_packet_items": 1,
+                            "queue_pending_items": 1,
+                            "required_decision_fields": 5,
+                            "selected_decision_fields": 0,
+                            "items_ready_for_validation": 0,
+                            "candidate_record_written_count": 0,
+                            "training_allowed_count": 0,
+                            "ready_for_candidate_promotion": False,
+                        },
+                        "decision_template": {
+                            "status": "open",
+                            "items": [
+                                {
+                                    "packet_item_id": "d1-review-unit",
+                                    "intake_id": "d1-intake-unit",
+                                    "source_run_id": "field-private",
+                                    "readiness_run_id": "unit-readiness",
+                                    "device_id": "ego-link-r1-connectivity-001",
+                                    "queue_status": "pending_label_privacy_split",
+                                    "current_review_state": {
+                                        "operator_label": "missing",
+                                        "privacy_review": "required",
+                                        "training_consent": "not_reviewed",
+                                        "split_plan": "missing",
+                                        "quality_gaps": ["gnss_fix_not_seen"],
+                                    },
+                                    "evidence_summary": {
+                                        "samples": 5,
+                                        "latest_seq": 52,
+                                        "raw_post_success_delta": 2,
+                                        "raw_post_failure_delta": 0,
+                                        "coordinate_sample_count": 5,
+                                        "gnss_fix_seen": False,
+                                        "imu_evidence_statuses": ["mock"],
+                                        "power_evidence_statuses": ["measured"],
+                                        "private_coordinates": [31.123456, 121.654321],
+                                    },
+                                    "decision_fields": {
+                                        "operator_label": {
+                                            "required": True,
+                                            "current": "missing",
+                                            "selected": None,
+                                            "allowed_values": ["safe", "needs_help"],
+                                            "operator_note": "private-note",
+                                        },
+                                        "privacy_review": {
+                                            "required": True,
+                                            "current": "required",
+                                            "selected": None,
+                                            "allowed_values": ["approved_bounded_summary_only"],
+                                        },
+                                        "candidate_decision": {
+                                            "required": True,
+                                            "current": "not_reviewed",
+                                            "selected": None,
+                                            "allowed_values": ["ready_for_candidate_store", "reject_for_training"],
+                                        },
+                                    },
+                                    "requested_actions": ["attach_operator_or_user_label"],
+                                    "available_decisions": ["needs_more_capture", "reject_for_training"],
+                                    "validation_state": "not_submitted",
+                                    "training_allowed": True,
+                                    "candidate_record_written": True,
+                                    "raw_payload": {"secret": True},
+                                }
+                            ],
+                            "decision_schema": {
+                                "operator_label": ["safe", "needs_help"],
+                                "candidate_decision": ["ready_for_candidate_store", "reject_for_training"],
+                            },
+                            "apply_policy": "template_must_be_validated_by_a_future_explicit_review_application_task",
+                        },
+                        "scope": {
+                            "review_packet_summary_read": True,
+                            "sample_jsonl_read": False,
+                            "payload_bytes_copied": False,
+                            "exact_coordinates_copied": False,
+                            "feature_rows_copied": False,
+                            "target_labels_written": False,
+                            "candidate_db_written": False,
+                            "training_samples_written": False,
+                            "model_training_started": False,
+                            "model_artifact_written": False,
+                            "release_claim_allowed": False,
+                        },
+                        "paths": {
+                            "private_candidate_db": "C:/private/training_candidates.db",
+                            "sample_jsonl": "C:/private/d1_field_samples.jsonl",
+                        },
+                        "raw_payload": {"private": True},
+                        "features": {"private": "do-not-expose"},
+                        "target": {"private": "do-not-expose"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (report_dir / "d1_labeling_decision_template.md").write_text("# D1 Decisions\n", encoding="utf-8")
+
+            summary = message_hub.load_latest_d1_labeling_decision_template(root)
+
+        self.assertTrue(summary["available"])
+        self.assertEqual(summary["status"], "ready_for_human_input")
+        self.assertEqual(summary["run_id"], "unit-labeling-decisions")
+        self.assertEqual(summary["summary"]["template_items"], 1)
+        self.assertEqual(summary["summary"]["required_decision_fields"], 5)
+        self.assertEqual(summary["summary"]["selected_decision_fields"], 0)
+        self.assertFalse(summary["summary"]["ready_for_candidate_promotion"])
+        self.assertEqual(summary["source_review_packet"]["run_id"], "unit-labeling-review")
+        item = summary["decision_template"]["items"][0]
+        self.assertEqual(item["packet_item_id"], "d1-review-unit")
+        self.assertIn("safe", item["decision_fields"]["operator_label"]["allowed_values"])
+        self.assertIsNone(item["decision_fields"]["operator_label"].get("selected"))
+        self.assertFalse(item["training_allowed"])
+        self.assertFalse(item["candidate_record_written"])
+        self.assertFalse(summary["scope"]["sample_jsonl_read"])
+        self.assertFalse(summary["scope"]["payload_bytes_copied"])
+        self.assertFalse(summary["scope"]["candidate_db_written"])
+        self.assertEqual(summary["review_gates"]["candidate_store"], "not_written")
+        payload = json.dumps(summary)
+        self.assertNotIn("31.123456", payload)
+        self.assertNotIn("121.654321", payload)
+        self.assertNotIn("raw_payload", payload)
+        self.assertNotIn("private-note", payload)
+        self.assertNotIn("d1_field_samples.jsonl", payload)
+        self.assertNotIn('"features"', payload)
+        self.assertNotIn('"target"', payload)
+        self.assertNotIn("C:/private", payload)
+
+    def test_d1_labeling_decision_template_missing_returns_explainable_not_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = message_hub.load_latest_d1_labeling_decision_template(Path(tmp))
+
+        self.assertFalse(summary["available"])
+        self.assertEqual(summary["status"], "not_available")
+        self.assertEqual(summary["reason"], "no_d1_labeling_decision_template")
+
     def test_deploy_script_can_include_curated_field_report_summaries(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         script = (repo_root / "scripts" / "deploy_message_hub_vps.ps1").read_text(encoding="utf-8")
@@ -1673,6 +1839,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("IncludeD1LabelingIntakeSummaries", script)
         self.assertIn("IncludeD1LabelingQueueSummaries", script)
         self.assertIn("IncludeD1LabelingReviewSummaries", script)
+        self.assertIn("IncludeD1LabelingDecisionSummaries", script)
         self.assertIn("Copy-FieldReportSummaries", script)
         self.assertIn("Copy-DataFlywheelSummaries", script)
         self.assertIn("Copy-TrainingExperimentSummaries", script)
@@ -1687,6 +1854,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Copy-D1LabelingIntakeSummaries", script)
         self.assertIn("Copy-D1LabelingQueueSummaries", script)
         self.assertIn("Copy-D1LabelingReviewSummaries", script)
+        self.assertIn("Copy-D1LabelingDecisionSummaries", script)
         self.assertIn("d1_web_api_report.json", script)
         self.assertIn("d1_field_companion_summary.json", script)
         self.assertIn("d1_field_observation_report.json", script)
@@ -1719,6 +1887,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("d1_labeling_queue.md", script)
         self.assertIn("d1_labeling_review_packet.json", script)
         self.assertIn("d1_labeling_review_packet.md", script)
+        self.assertIn("d1_labeling_decision_template.json", script)
+        self.assertIn("d1_labeling_decision_template.md", script)
         self.assertIn("*.summary.json", script)
         self.assertNotIn("*.jsonl", script)
         self.assertNotIn("d1_field_samples.jsonl", script)

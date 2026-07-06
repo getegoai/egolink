@@ -136,6 +136,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertIn("-IncludeD1LabelingIntakeSummaries", sync_argv)
             self.assertIn("-IncludeD1LabelingQueueSummaries", sync_argv)
             self.assertIn("-IncludeD1LabelingReviewSummaries", sync_argv)
+            self.assertIn("-IncludeD1LabelingDecisionSummaries", sync_argv)
             self.assertTrue(manifest["commands"]["flash_explicit_operator_action"]["hardware_action"])
             self.assertTrue(manifest["commands"]["short_usb_free_link_check"]["sends_message_hub_command"])
             self.assertTrue(manifest["commands"]["preflight_amoled_visible_status"]["writes_amoled_serial"])

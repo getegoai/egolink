@@ -47,6 +47,7 @@ DEFAULT_D1_TRAINING_READINESS_REPORTS = REPO_ROOT / "reports" / "d1_training_rea
 DEFAULT_D1_LABELING_INTAKE_REPORTS = REPO_ROOT / "reports" / "d1_labeling_intake"
 DEFAULT_D1_LABELING_QUEUE_REPORTS = REPO_ROOT / "reports" / "d1_labeling_queue"
 DEFAULT_D1_LABELING_REVIEW_REPORTS = REPO_ROOT / "reports" / "d1_labeling_reviews"
+DEFAULT_D1_LABELING_DECISION_REPORTS = REPO_ROOT / "reports" / "d1_labeling_decisions"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -880,6 +881,7 @@ def make_handler(
     d1_labeling_intake_root: Path = DEFAULT_D1_LABELING_INTAKE_REPORTS,
     d1_labeling_queue_root: Path = DEFAULT_D1_LABELING_QUEUE_REPORTS,
     d1_labeling_review_root: Path = DEFAULT_D1_LABELING_REVIEW_REPORTS,
+    d1_labeling_decision_root: Path = DEFAULT_D1_LABELING_DECISION_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -935,6 +937,9 @@ def make_handler(
                 d1_labeling_intake = load_latest_d1_labeling_intake(d1_labeling_intake_root)
                 d1_labeling_queue = load_latest_d1_labeling_queue(d1_labeling_queue_root)
                 d1_labeling_review_packet = load_latest_d1_labeling_review_packet(d1_labeling_review_root)
+                d1_labeling_decision_template = load_latest_d1_labeling_decision_template(
+                    d1_labeling_decision_root
+                )
                 self.respond_json(
                     {
                         "devices": devices,
@@ -956,6 +961,7 @@ def make_handler(
                         "d1_labeling_intake": d1_labeling_intake,
                         "d1_labeling_queue": d1_labeling_queue,
                         "d1_labeling_review_packet": d1_labeling_review_packet,
+                        "d1_labeling_decision_template": d1_labeling_decision_template,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -1072,6 +1078,15 @@ def make_handler(
             if segments == ["api", "v1", "d1-labeling-review-packet", "latest"]:
                 self.respond_json(
                     {"d1_labeling_review_packet": load_latest_d1_labeling_review_packet(d1_labeling_review_root)}
+                )
+                return
+            if segments == ["api", "v1", "d1-labeling-decision-template", "latest"]:
+                self.respond_json(
+                    {
+                        "d1_labeling_decision_template": load_latest_d1_labeling_decision_template(
+                            d1_labeling_decision_root
+                        )
+                    }
                 )
                 return
             raise MessageHubError("not_found", "route not found", status=404)
@@ -5123,6 +5138,171 @@ def load_latest_d1_labeling_review_packet(root: Path = DEFAULT_D1_LABELING_REVIE
     )
 
 
+def d1_labeling_decision_template_unavailable(reason: str = "no_d1_labeling_decision_template") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "serves_demo": "D5",
+        "source_review_packet": {"available": False},
+        "decision_template": {"status": "not_available", "items": []},
+        "review_gates": {"candidate_store": "not_written", "model_training": "not_run"},
+        "scope": {
+            "review_packet_summary_read": False,
+            "sample_jsonl_read": False,
+            "payload_bytes_copied": False,
+            "exact_coordinates_copied": False,
+            "feature_rows_copied": False,
+            "target_labels_written": False,
+            "candidate_db_written": False,
+            "training_samples_written": False,
+            "model_training_started": False,
+            "model_artifact_written": False,
+            "release_claim_allowed": False,
+        },
+        "next_step": "Run scripts/build_d1_labeling_decision_template.py after a D1 labeling review packet exists.",
+    }
+
+
+def latest_d1_labeling_decision_template_path(root: Path = DEFAULT_D1_LABELING_DECISION_REPORTS) -> Path | None:
+    return latest_report_path(root, ["**/d1_labeling_decision_template.json"])
+
+
+def compact_d1_labeling_decision_fields(fields: Any) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    if not isinstance(fields, dict):
+        return result
+    for key, field in fields.items():
+        if not isinstance(field, dict):
+            continue
+        result[str(key)] = compact_dict(
+            {
+                "required": field.get("required", True),
+                "current": field.get("current"),
+                "selected": field.get("selected"),
+                "allowed_values": list(field.get("allowed_values") or []),
+            }
+        )
+    return result
+
+
+def compact_d1_labeling_decision_items(items: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for item in list(items or [])[:8]:
+        if not isinstance(item, dict):
+            continue
+        review_state = as_dict(item.get("current_review_state"))
+        evidence = as_dict(item.get("evidence_summary"))
+        result.append(
+            compact_dict(
+                {
+                    "packet_item_id": item.get("packet_item_id"),
+                    "intake_id": item.get("intake_id"),
+                    "source_run_id": item.get("source_run_id"),
+                    "readiness_run_id": item.get("readiness_run_id"),
+                    "device_id": item.get("device_id"),
+                    "queue_status": item.get("queue_status"),
+                    "current_review_state": {
+                        "operator_label": review_state.get("operator_label"),
+                        "privacy_review": review_state.get("privacy_review"),
+                        "training_consent": review_state.get("training_consent"),
+                        "split_plan": review_state.get("split_plan"),
+                        "quality_gaps": list(review_state.get("quality_gaps") or []),
+                    },
+                    "evidence_summary": {
+                        "samples": evidence.get("samples", 0),
+                        "latest_seq": evidence.get("latest_seq"),
+                        "raw_post_success_delta": evidence.get("raw_post_success_delta", 0),
+                        "raw_post_failure_delta": evidence.get("raw_post_failure_delta", 0),
+                        "coordinate_sample_count": evidence.get("coordinate_sample_count", 0),
+                        "gnss_fix_seen": evidence.get("gnss_fix_seen", False),
+                        "imu_evidence_statuses": list(evidence.get("imu_evidence_statuses") or []),
+                        "power_evidence_statuses": list(evidence.get("power_evidence_statuses") or []),
+                    },
+                    "decision_fields": compact_d1_labeling_decision_fields(item.get("decision_fields")),
+                    "requested_actions": list(item.get("requested_actions") or []),
+                    "available_decisions": list(item.get("available_decisions") or []),
+                    "validation_state": item.get("validation_state"),
+                    "candidate_record_written": False,
+                    "training_allowed": False,
+                }
+            )
+        )
+    return result
+
+
+def load_latest_d1_labeling_decision_template(root: Path = DEFAULT_D1_LABELING_DECISION_REPORTS) -> dict[str, Any]:
+    path = latest_d1_labeling_decision_template_path(root)
+    if path is None:
+        return d1_labeling_decision_template_unavailable()
+    report = load_json_report(path)
+    if report is None:
+        return d1_labeling_decision_template_unavailable("d1_labeling_decision_template_unreadable")
+    summary = as_dict(report.get("summary"))
+    template = as_dict(report.get("decision_template"))
+    scope = as_dict(report.get("scope"))
+    source_review_packet = as_dict(report.get("source_review_packet"))
+    compact_items = compact_d1_labeling_decision_items(template.get("items"))
+    markdown_candidate = path.with_suffix(".md")
+    markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    return compact_dict(
+        {
+            "available": True,
+            "status": report.get("status", "unknown"),
+            "reason": report.get("reason"),
+            "run_id": report.get("run_id"),
+            "generated_at": report.get("generated_at") or report_file_time(path),
+            "serves_demo": report.get("serves_demo", "D5"),
+            "source_review_packet": {
+                "available": source_review_packet.get("available", False),
+                "run_id": source_review_packet.get("run_id"),
+                "status": source_review_packet.get("status"),
+                "report_path": source_review_packet.get("report_path"),
+                "review_packet_items": source_review_packet.get("review_packet_items", 0),
+            },
+            "summary": {
+                "template_items": summary.get("template_items", len(compact_items)),
+                "review_packet_items": summary.get("review_packet_items", len(compact_items)),
+                "queue_pending_items": summary.get("queue_pending_items", 0),
+                "required_decision_fields": summary.get("required_decision_fields", 0),
+                "selected_decision_fields": summary.get("selected_decision_fields", 0),
+                "items_ready_for_validation": summary.get("items_ready_for_validation", 0),
+                "candidate_record_written_count": 0,
+                "training_allowed_count": 0,
+                "ready_for_candidate_promotion": False,
+            },
+            "decision_template": {
+                "status": template.get("status", "unknown"),
+                "items": compact_items,
+                "decision_schema": as_dict(template.get("decision_schema")),
+                "apply_policy": template.get("apply_policy"),
+            },
+            "review_gates": {
+                "candidate_store": "not_written",
+                "model_training": "not_run",
+                "release_claim": "not_allowed",
+            },
+            "scope": {
+                "review_packet_summary_read": scope.get("review_packet_summary_read", False),
+                "sample_jsonl_read": scope.get("sample_jsonl_read", False),
+                "payload_bytes_copied": scope.get("payload_bytes_copied", False),
+                "exact_coordinates_copied": scope.get("exact_coordinates_copied", False),
+                "feature_rows_copied": scope.get("feature_rows_copied", False),
+                "target_labels_written": scope.get("target_labels_written", False),
+                "candidate_db_written": scope.get("candidate_db_written", False),
+                "training_samples_written": scope.get("training_samples_written", False),
+                "model_training_started": scope.get("model_training_started", False),
+                "model_artifact_written": scope.get("model_artifact_written", False),
+                "release_claim_allowed": scope.get("release_claim_allowed", False),
+            },
+            "next_step": report.get("next_step"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -6084,6 +6264,10 @@ def render_dashboard() -> str:
           <div id="d1LabelingReviewPacket"></div>
         </section>
         <section>
+          <h2>D1 Labeling Decision Template</h2>
+          <div id="d1LabelingDecisionTemplate"></div>
+        </section>
+        <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
         </section>
@@ -6153,6 +6337,7 @@ def render_dashboard() -> str:
       d1LabelingIntake.innerHTML = html;
       d1LabelingQueue.innerHTML = html;
       d1LabelingReviewPacket.innerHTML = html;
+      d1LabelingDecisionTemplate.innerHTML = html;
       d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
@@ -6235,8 +6420,8 @@ def render_dashboard() -> str:
     function statusClass(status) {
       if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner' || status === 'ready_for_training_server_handoff' || status === 'ready_for_runner_queue' || status === 'synthetic_baseline_eval_complete' || status === 'baseline_eval_complete' || status === 'ready_for_synthetic_feature_dry_run' || status === 'synthetic_runner_dry_run_complete') return 'ok';
       if (status === 'ready_for_labeling_review') return 'warn';
-      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'needs_human_review' || status === 'pending_human_review' || status === 'pending_label_privacy_split' || status === 'pending_labeling_queue_review' || status === 'synthetic_ready_for_runner' || status === 'synthetic_training_chain_complete' || status === 'synthetic_handoff_dry_run_only' || status === 'synthetic_runner_queue_dry_run_only' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready' || status === 'blocked_feature_rows_mismatch' || status === 'blocked_source_mismatch' || status === 'blocked_handoff_not_ready') return 'warn';
-      return status === 'not_available' || status === 'no_review_items' || status === 'no_labeling_queue' ? 'empty' : 'bad';
+      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'needs_human_review' || status === 'ready_for_human_input' || status === 'pending_human_review' || status === 'pending_label_privacy_split' || status === 'pending_labeling_queue_review' || status === 'synthetic_ready_for_runner' || status === 'synthetic_training_chain_complete' || status === 'synthetic_handoff_dry_run_only' || status === 'synthetic_runner_queue_dry_run_only' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready' || status === 'blocked_feature_rows_mismatch' || status === 'blocked_source_mismatch' || status === 'blocked_handoff_not_ready') return 'warn';
+      return status === 'not_available' || status === 'no_review_items' || status === 'no_labeling_queue' || status === 'no_decision_items' || status === 'no_labeling_review_packet' ? 'empty' : 'bad';
     }
     function productDemoPanel(demo) {
       if (!demo || !demo.available) {
@@ -6756,6 +6941,45 @@ def render_dashboard() -> str:
         <div class="metric"><span>Report</span><span>${escapeHtml(report.markdown_path || report.report_path || 'unknown')}</span></div>
       `;
     }
+    function d1LabelingDecisionTemplatePanel(report) {
+      if (!report || !report.available) {
+        return `
+          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(report && report.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(report && report.reason || 'no_d1_labeling_decision_template')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(report && report.next_step || 'Build a D1 labeling decision template')}</span></div>
+        `;
+      }
+      const summary = report.summary || {};
+      const source = report.source_review_packet || {};
+      const template = report.decision_template || {};
+      const items = template.items || [];
+      const first = items[0] || {};
+      const fields = first.decision_fields || {};
+      const evidence = first.evidence_summary || {};
+      const gates = report.review_gates || {};
+      const scope = report.scope || {};
+      const fieldNames = Object.keys(fields);
+      const selected = fieldNames.filter(name => {
+        const field = fields[name] || {};
+        return field.selected !== undefined && field.selected !== null && field.selected !== '';
+      }).length;
+      return `
+        <div class="metric"><span>Status</span><span class="${statusClass(report.status)}">${escapeHtml(report.status || 'unknown')}</span></div>
+        <div class="metric"><span>Run</span><b>${escapeHtml(report.run_id || 'unknown')}</b></div>
+        <div class="metric"><span>Source Review</span><span>${escapeHtml(source.run_id || 'none')} / ${escapeHtml(source.status || 'unknown')} / ${escapeHtml(source.review_packet_items ?? summary.review_packet_items ?? 0)} items</span></div>
+        <div class="metric"><span>Template Items</span><span>${escapeHtml(summary.template_items ?? items.length ?? 0)} items / ${escapeHtml(template.status || 'unknown')}</span></div>
+        <div class="metric"><span>Decision Progress</span><span>${escapeHtml(summary.selected_decision_fields ?? selected)} selected / ${escapeHtml(summary.required_decision_fields ?? fieldNames.length)} required / ready ${escapeHtml(summary.items_ready_for_validation ?? 0)}</span></div>
+        <div class="metric"><span>First Template Item</span><span>${escapeHtml(first.packet_item_id || first.intake_id || 'none')} / ${escapeHtml(first.validation_state || 'not_submitted')} / ${escapeHtml(first.source_run_id || 'unknown')}</span></div>
+        <div class="metric"><span>Decision Fields</span><span>${escapeHtml(fieldNames.join(', ') || 'none')}</span></div>
+        <div class="metric"><span>Selected Values</span><span>label ${escapeHtml((fields.operator_label || {}).selected || 'TODO')} / privacy ${escapeHtml((fields.privacy_review || {}).selected || 'TODO')} / consent ${escapeHtml((fields.training_consent || {}).selected || 'TODO')} / split ${escapeHtml((fields.split_plan || {}).selected || 'TODO')} / candidate ${escapeHtml((fields.candidate_decision || {}).selected || 'TODO')}</span></div>
+        <div class="metric"><span>Evidence</span><span>${escapeHtml(evidence.samples ?? 0)} samples / seq ${escapeHtml(evidence.latest_seq ?? 'unknown')} / POST ${escapeHtml(evidence.raw_post_success_delta ?? 0)} ok / ${escapeHtml(evidence.raw_post_failure_delta ?? 0)} fail</span></div>
+        <div class="metric"><span>Location Scope</span><span>${escapeHtml(evidence.coordinate_sample_count ?? 0)} coordinate samples / GNSS fix ${escapeHtml(evidence.gnss_fix_seen ?? false)} / exact copied ${escapeHtml(scope.exact_coordinates_copied ?? false)}</span></div>
+        <div class="metric"><span>Gates</span><span>candidate ${escapeHtml(gates.candidate_store || 'unknown')} / training ${escapeHtml(gates.model_training || 'unknown')} / release ${escapeHtml(gates.release_claim || 'unknown')}</span></div>
+        <div class="metric"><span>Scope</span><span>jsonl ${escapeHtml(scope.sample_jsonl_read ?? false)} / payload ${escapeHtml(scope.payload_bytes_copied ?? false)} / db ${escapeHtml(scope.candidate_db_written ?? false)} / training ${escapeHtml(scope.model_training_started ?? false)} / artifact ${escapeHtml(scope.model_artifact_written ?? false)} / claim ${escapeHtml(scope.release_claim_allowed ?? false)}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(report.next_step || 'Fill selected values before validation')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(report.markdown_path || report.report_path || 'unknown')}</span></div>
+      `;
+    }
     function fieldResultsPanel(results) {
       if (!results || !results.available) {
         return `
@@ -7047,6 +7271,7 @@ def render_dashboard() -> str:
       d1LabelingIntake.innerHTML = d1LabelingIntakePanel(data.d1_labeling_intake || {});
       d1LabelingQueue.innerHTML = d1LabelingQueuePanel(data.d1_labeling_queue || {});
       d1LabelingReviewPacket.innerHTML = d1LabelingReviewPacketPanel(data.d1_labeling_review_packet || {});
+      d1LabelingDecisionTemplate.innerHTML = d1LabelingDecisionTemplatePanel(data.d1_labeling_decision_template || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>

@@ -6,6 +6,19 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-031 D1 labeling decision-template Web/API visibility is
+implemented locally. The Message Hub can load the latest bounded
+`reports/d1_labeling_decisions/**/d1_labeling_decision_template.json`, expose it
+as `d1_labeling_decision_template` in `/api/state`, serve it at
+`/api/v1/d1-labeling-decision-template/latest`, and render a Dashboard panel
+for pending decision-template work. Field kit v15 includes the explicit
+`-IncludeD1LabelingDecisionSummaries` sync switch. This does not read sample
+JSONL, expose exact coordinates/raw payloads/feature rows/targets/candidate
+DBs/private operator notes, mark items reviewed, apply decisions, write
+candidate records, train/evaluate a model, write model artifacts, deploy
+inference, measure model footprint/power, deploy to the VPS, or allow release
+claims.
+
 2026-07-06: DATA-030 D1 labeling decision-template and post-run binding is
 implemented locally. `scripts/build_d1_labeling_decision_template.py` turns a
 bounded `d1_labeling_review_packet` summary into a fillable decision template
