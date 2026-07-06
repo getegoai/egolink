@@ -6,6 +6,14 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: FIELD-008 local D1 field-observation index is implemented locally.
+`scripts/summarize_d1_field_observations.py` scans bounded
+`reports/d1_field_observation/**/d1_field_observation_status.json` and final
+reports, then writes a local JSON/Markdown index of running/completed observer
+runs without reading `d1_field_samples.jsonl`, calling the Message Hub,
+contacting hardware, sending commands, deploying code, or making accuracy,
+power, GNSS/LTE, model, or product-readiness claims.
+
 2026-07-06: FIELD-007 D1 field-observation visibility is implemented locally.
 The Message Hub Field Test Results loader can now include the latest
 `reports/d1_field_observation/**/d1_field_observation_report.json` or live

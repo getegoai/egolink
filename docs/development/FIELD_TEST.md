@@ -54,6 +54,24 @@ report/status paths only; it does not copy or expose `d1_field_samples.jsonl`.
 This is monitoring convenience only. It does not prove location accuracy,
 battery life, GNSS acceptance, LTE long-run acceptance, or product readiness.
 
+### Local D1 Observation Index
+
+When multiple long observers are running or have just completed, use the local
+index command to summarize their bounded status/report files without opening
+sample JSONL contents:
+
+```powershell
+python scripts\summarize_d1_field_observations.py --json
+```
+
+The command writes
+`reports/d1_field_observation/index/d1_field_observation_index.json` and `.md`
+with run IDs, running/completed state, latest sequence/freshness, sample
+counts, result, and report/status references. It does not call the Message Hub,
+contact hardware, send commands, deploy code, modify GitLab, read
+`d1_field_samples.jsonl`, or claim location accuracy, battery life, GNSS/LTE
+acceptance, model readiness, or product readiness.
+
 ## Reboot-Aware Command Validation
 
 Some firmware slices intentionally consume one command per independent-power
