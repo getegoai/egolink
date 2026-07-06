@@ -6,6 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-025 D1 post-run labeling-intake binding is implemented
+locally. `scripts/collect_d1_postrun.py` is now schema
+`egolink.d1_postrun_collection.v0.7`; when a post-run collection generates or
+receives D1 training readiness, it also writes a bounded `labeling_intake`
+component plus a `d1_labeling_intake` artifact path. This remains post-run
+summary plumbing only: no sample JSONL read, candidate DB write, raw payload or
+coordinate exposure, hardware contact, firmware change, model training,
+artifact write, device deployment, or release claim is performed.
+
 2026-07-06: DATA-024 D1 labeling/privacy intake is implemented locally.
 `scripts/build_d1_labeling_intake.py` turns a DATA-022
 `d1_training_readiness.json` into a bounded `d1_labeling_intake` report and the

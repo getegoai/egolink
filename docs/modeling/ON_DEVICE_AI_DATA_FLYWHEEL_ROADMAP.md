@@ -103,10 +103,13 @@ must consume only reviewed evidence:
 32. DATA-024 surfaces a bounded D1 labeling/privacy intake queue so real field
     runs can be reviewed for labels, consent, privacy, quality, and split before
     candidate-store writes.
-33. MotionNet v0.1 starts with a statistical baseline and small model
+33. DATA-025 binds DATA-024 into the D1 post-run collector so one post-field
+    command records the intake queue beside readiness, Web/API, power, demo,
+    data-flywheel, and TRAIN summaries.
+34. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-34. Device deployment begins in shadow mode: model output is recorded alongside
+35. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -146,6 +149,7 @@ must consume only reviewed evidence:
 | D1 real-data readiness | Surface whether real D1 field observations can enter labeling/privacy review before training handoff. | DATA-022. |
 | Post-run readiness binding | Include D1 real-data training-readiness in the one-command post-run collector. | DATA-023. |
 | D1 labeling intake | Surface D1 runs waiting for labels, privacy, consent, and split review before candidate-store writes. | DATA-024. |
+| Post-run intake binding | Include D1 labeling intake in the one-command post-run collector. | DATA-025. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |

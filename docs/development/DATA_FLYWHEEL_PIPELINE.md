@@ -320,6 +320,13 @@ review before any candidate-store write. It does not read sample JSONL, expose
 exact coordinates or raw payloads, write candidate DBs, create training samples,
 train or evaluate a model, produce model artifacts, or allow release claims.
 
+DATA-025 binds DATA-024 into the D1 post-run collector. After the collector
+creates or receives D1 training readiness, it writes a `labeling_intake`
+component and `d1_labeling_intake` artifact beside the Web/API, power,
+training-readiness, data-flywheel, and TRAIN summaries. The post-run path still
+does not read sample JSONL, write candidate DBs, expose exact coordinates or
+raw payloads, train/evaluate a model, or make release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -385,6 +392,8 @@ deployment, or OTA update behavior changes in DATA-002.
     collector.
 26. Let DATA-024 turn real D1 readiness into a labeling/privacy intake queue
     before candidate-store writes.
-27. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+27. Let DATA-025 include D1 labeling intake in the one-command D1 post-run
+    collector.
+28. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.
