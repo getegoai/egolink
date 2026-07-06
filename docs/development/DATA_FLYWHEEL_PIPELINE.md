@@ -287,6 +287,15 @@ feature-row contents, call a training endpoint, train/evaluate a real model,
 produce model artifacts/cards, measure footprint/power, deploy to devices, or
 allow release claims.
 
+DATA-021 can expose the latest DATA-020 synthetic training-chain summary
+through Web/API and curated deployment summaries. It is visibility only:
+synthetic scenario counts, review counts, data-flywheel states,
+TRAIN-003..008 component statuses, dry-run gates, scope flags, next step, and
+report paths are allowed. Raw recordings, candidate DB paths, raw candidate
+records, feature-row contents, private endpoints, runtime logs, model
+artifacts, measured footprint/power data, device deployment results, and
+release claims are not.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -344,6 +353,8 @@ deployment, or OTA update behavior changes in DATA-002.
     after the TRAIN-007 handoff bundle is written.
 22. Let DATA-020 keep the synthetic-only DATA/TRAIN chain executable as a
     no-hardware smoke while real field evidence is sparse.
-23. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+23. Let DATA-021 surface latest DATA-020 smoke status in Web/API without
+    exposing raw synthetic internals or model artifacts.
+24. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

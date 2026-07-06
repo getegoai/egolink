@@ -90,10 +90,13 @@ must consume only reviewed evidence:
 28. DATA-020 runs the synthetic-only DATA/TRAIN chain from generated sessions
     through review, dataset handoff, TRAIN-003..008, and a dry-run job plan as
     a no-hardware smoke while real field evidence is sparse.
-29. MotionNet v0.1 starts with a statistical baseline and small model
+29. DATA-021 surfaces the latest DATA-020 synthetic chain status in Web/API
+    and curated deployment summaries without exposing raw synthetic internals,
+    candidate DBs, feature-row contents, private endpoints, or model artifacts.
+30. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-30. Device deployment begins in shadow mode: model output is recorded alongside
+31. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -129,6 +132,7 @@ must consume only reviewed evidence:
 | Training job visibility | Surface latest job-plan readiness without row contents, private endpoints, or model artifacts. | DATA-017. |
 | Post-run job plan | Extend the D1 post-run collector and field kit through TRAIN-008. | DATA-018. |
 | Synthetic chain smoke | Keep generated scenarios, review, dataset handoff, TRAIN-003..008, and job-plan plumbing executable without hardware. | DATA-020. |
+| Synthetic chain visibility | Surface latest synthetic chain status in Web/API without raw internals or model artifacts. | DATA-021. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -254,6 +258,13 @@ must consume only reviewed evidence:
   records, private coordinates, feature-row contents, private endpoints, model
   artifacts, measured footprint/power data, device deployment results, or
   release claims.
+- DATA-021 Web/API summaries may show DATA-020 status, generated scenario
+  counts, synthetic review counts, data-flywheel states, TRAIN-003..008
+  component statuses, dry-run gates, scope flags, next step, and report paths
+  only. They do not expose raw recordings, candidate DB paths, raw candidate
+  records, private coordinates, feature-row contents, private endpoints,
+  runtime logs, model artifacts, measured footprint/power data, device
+  deployment results, or release claims.
 
 ## Model And Power Gates
 

@@ -1845,6 +1845,146 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertNotIn('"target"', payload_text)
         self.assertNotIn('"features"', payload_text)
 
+    def test_state_api_and_synthetic_training_chain_route_include_latest_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report_root = tmp_path / "synthetic_training_chain"
+            report_dir = report_root / "unit-chain"
+            report_dir.mkdir(parents=True)
+            (report_dir / "synthetic_training_chain.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.synthetic_training_chain.v0.1",
+                        "run_id": "unit-chain",
+                        "generated_at": "2026-07-06T06:30:00+00:00",
+                        "serves_demo": "D5",
+                        "status": "synthetic_training_chain_complete",
+                        "synthetic_only": True,
+                        "scenarios": ["normal_walk", "no_response"],
+                        "counts": {
+                            "recordings": 2,
+                            "reviewed_records": 2,
+                            "review_failures": 0,
+                            "feature_rows": 2,
+                        },
+                        "components": {
+                            "synthetic_scenarios": {
+                                "status": "synthetic_ready_for_runner",
+                                "recordings": 2,
+                                "reviewed_records": 2,
+                                "failed_reviews": 0,
+                                "seed": 42,
+                                "report": {"ref": "synthetic_scenario_run.json", "content_copied": False},
+                                "candidate_db": "candidate_store.sqlite3",
+                            },
+                            "data_flywheel": {
+                                "initial": {
+                                    "run_id": "unit-initial",
+                                    "status": "needs_review",
+                                    "candidate_records": 2,
+                                    "pending_review": 2,
+                                    "dataset_status": "not_ready",
+                                },
+                                "reviewed": {
+                                    "run_id": "unit-reviewed",
+                                    "status": "ready_for_training_handoff",
+                                    "eligible_records": 2,
+                                    "experiment_status": "ready_for_runner",
+                                    "runner_ready": True,
+                                },
+                            },
+                            "training_chain": {
+                                "status": "synthetic_runner_queue_dry_run_only",
+                                "reason": "synthetic_handoff_bound_for_runner_queue_dry_run_only",
+                                "components": {
+                                    "preflight": {
+                                        "status": "ready_for_training_runner",
+                                        "run_id": "unit-preflight",
+                                    },
+                                    "feature_manifest": {
+                                        "status": "ready_for_synthetic_feature_dry_run",
+                                        "feature_set_id": "unit-features",
+                                        "row_count": 2,
+                                        "rows": [{"features": {"x": "secret"}, "target": {"label": "secret"}}],
+                                    },
+                                    "runner_dry_run": {
+                                        "status": "synthetic_runner_dry_run_complete",
+                                        "row_count": 2,
+                                    },
+                                    "baseline_eval": {
+                                        "status": "synthetic_baseline_eval_complete",
+                                        "metric_scope": "synthetic_integration_only",
+                                        "product_performance_claim": False,
+                                    },
+                                    "handoff_bundle": {
+                                        "status": "synthetic_handoff_dry_run_only",
+                                        "training_server": "not_configured",
+                                        "dry_run_only": True,
+                                        "private_endpoint": "https://private.example.invalid/train",
+                                    },
+                                    "job_plan": {
+                                        "status": "synthetic_runner_queue_dry_run_only",
+                                        "job_id": "unit-job",
+                                        "queue_state": "plan_only",
+                                        "runner_profile": "ci_dry_run",
+                                        "dry_run_only": True,
+                                    },
+                                },
+                                "next_step": "Repeat with reviewed real records.",
+                            },
+                        },
+                        "scope": {
+                            "hardware_contacted": False,
+                            "message_hub_contacted": False,
+                            "model_training_started": False,
+                            "model_artifact_written": False,
+                            "release_claim_allowed": False,
+                        },
+                        "next_step": "Repeat with reviewed real records.",
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (report_dir / "synthetic_training_chain.md").write_text("# Synthetic chain\n", encoding="utf-8")
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, synthetic_training_chain_root=report_root),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                latest = get_json(base_url, "/api/v1/synthetic-training-chains/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["synthetic_training_chain"]["status"], "synthetic_training_chain_complete")
+        self.assertEqual(state["synthetic_training_chain"]["counts"]["feature_rows"], 2)
+        self.assertEqual(
+            state["synthetic_training_chain"]["components"]["data_flywheel"]["reviewed"]["status"],
+            "ready_for_training_handoff",
+        )
+        chain = latest["synthetic_training_chain"]
+        self.assertEqual(chain["run_id"], "unit-chain")
+        self.assertEqual(chain["components"]["training_chain"]["job_plan"]["status"], "synthetic_runner_queue_dry_run_only")
+        self.assertEqual(chain["components"]["training_chain"]["job_plan"]["runner_profile"], "ci_dry_run")
+        self.assertFalse(chain["scope"]["hardware_contacted"])
+        self.assertFalse(chain["scope"]["model_training_started"])
+        self.assertFalse(chain["scope"]["release_claim_allowed"])
+        self.assertEqual(chain["markdown_path"], str(report_dir / "synthetic_training_chain.md"))
+        payload_text = json.dumps(latest, sort_keys=True)
+        self.assertNotIn("candidate_store.sqlite3", payload_text)
+        self.assertNotIn("private.example", payload_text)
+        self.assertNotIn('"target"', payload_text)
+        self.assertNotIn('"features"', payload_text)
+        self.assertNotIn("raw_payload", payload_text)
+
     def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -2015,6 +2155,7 @@ class MessageHubHttpTests(unittest.TestCase):
                     training_baseline_eval_root=Path(tmp) / "empty_training_baseline_evals",
                     training_handoff_root=Path(tmp) / "empty_training_handoffs",
                     training_job_root=Path(tmp) / "empty_training_jobs",
+                    synthetic_training_chain_root=Path(tmp) / "empty_synthetic_training_chains",
                 ),
             )
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -2047,6 +2188,8 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(state["training_handoff_bundle"]["reason"], "no_training_handoff_bundle")
         self.assertIn("training_job_plan", state)
         self.assertEqual(state["training_job_plan"]["reason"], "no_training_job_plan")
+        self.assertIn("synthetic_training_chain", state)
+        self.assertEqual(state["synthetic_training_chain"]["reason"], "no_synthetic_training_chain")
 
     def test_http_raw_command_poll_and_ack_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

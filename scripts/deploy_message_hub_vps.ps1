@@ -15,6 +15,7 @@ param(
     [switch]$IncludeTrainingBaselineEvalSummaries,
     [switch]$IncludeTrainingHandoffSummaries,
     [switch]$IncludeTrainingJobSummaries,
+    [switch]$IncludeSyntheticTrainingChainSummaries,
     [switch]$NoStart
 )
 
@@ -294,6 +295,31 @@ function Copy-TrainingJobSummaries {
     }
 }
 
+function Copy-SyntheticTrainingChainSummaries {
+    $syntheticTrainingChainDir = Join-Path $repoRoot "reports\synthetic_training_chain"
+    if (-not (Test-Path $syntheticTrainingChainDir -PathType Container)) {
+        return
+    }
+    $allowedNames = @(
+        "synthetic_training_chain.json",
+        "synthetic_training_chain.md"
+    )
+    $reportFiles = Get-ChildItem -Path $syntheticTrainingChainDir -Recurse -File |
+        Where-Object { $allowedNames -contains $_.Name }
+
+    $repoFull = (Resolve-Path $repoRoot).Path.TrimEnd("\", "/")
+    foreach ($file in $reportFiles) {
+        $fileFull = $file.FullName
+        if (-not $fileFull.StartsWith($repoFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to copy synthetic training chain summary outside repository: $fileFull"
+        }
+        $relative = $fileFull.Substring($repoFull.Length).TrimStart("\", "/")
+        $target = Join-Path $packageRoot $relative
+        New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null
+        Copy-Item -Force -LiteralPath $file.FullName -Destination $target
+    }
+}
+
 function SshArgs {
     $args = @()
     if ($SshKey) {
@@ -353,6 +379,9 @@ try {
     }
     if ($IncludeTrainingJobSummaries) {
         Copy-TrainingJobSummaries
+    }
+    if ($IncludeSyntheticTrainingChainSummaries) {
+        Copy-SyntheticTrainingChainSummaries
     }
 
     Push-Location $packageRoot

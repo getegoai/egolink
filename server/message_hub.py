@@ -42,6 +42,7 @@ DEFAULT_TRAINING_RUNNER_DRY_RUN_REPORTS = REPO_ROOT / "reports" / "training_runn
 DEFAULT_TRAINING_BASELINE_EVAL_REPORTS = REPO_ROOT / "reports" / "training_baseline_evals"
 DEFAULT_TRAINING_HANDOFF_REPORTS = REPO_ROOT / "reports" / "training_handoffs"
 DEFAULT_TRAINING_JOB_REPORTS = REPO_ROOT / "reports" / "training_jobs"
+DEFAULT_SYNTHETIC_TRAINING_CHAIN_REPORTS = REPO_ROOT / "reports" / "synthetic_training_chain"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -870,6 +871,7 @@ def make_handler(
     training_baseline_eval_root: Path = DEFAULT_TRAINING_BASELINE_EVAL_REPORTS,
     training_handoff_root: Path = DEFAULT_TRAINING_HANDOFF_REPORTS,
     training_job_root: Path = DEFAULT_TRAINING_JOB_REPORTS,
+    synthetic_training_chain_root: Path = DEFAULT_SYNTHETIC_TRAINING_CHAIN_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -920,6 +922,7 @@ def make_handler(
                 training_baseline_eval = load_latest_training_baseline_eval(training_baseline_eval_root)
                 training_handoff_bundle = load_latest_training_handoff_bundle(training_handoff_root)
                 training_job_plan = load_latest_training_job_plan(training_job_root)
+                synthetic_training_chain = load_latest_synthetic_training_chain(synthetic_training_chain_root)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -936,6 +939,7 @@ def make_handler(
                         "training_baseline_eval": training_baseline_eval,
                         "training_handoff_bundle": training_handoff_bundle,
                         "training_job_plan": training_job_plan,
+                        "synthetic_training_chain": synthetic_training_chain,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -1032,6 +1036,11 @@ def make_handler(
                 return
             if segments == ["api", "v1", "training-jobs", "latest"]:
                 self.respond_json({"training_job_plan": load_latest_training_job_plan(training_job_root)})
+                return
+            if segments == ["api", "v1", "synthetic-training-chains", "latest"]:
+                self.respond_json(
+                    {"synthetic_training_chain": load_latest_synthetic_training_chain(synthetic_training_chain_root)}
+                )
                 return
             raise MessageHubError("not_found", "route not found", status=404)
 
@@ -4262,6 +4271,158 @@ def load_latest_training_job_plan(root: Path = DEFAULT_TRAINING_JOB_REPORTS) -> 
     )
 
 
+def synthetic_training_chain_unavailable(reason: str = "no_synthetic_training_chain") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "serves_demo": "D5",
+        "synthetic_only": True,
+        "counts": {"recordings": 0, "reviewed_records": 0, "review_failures": 0, "feature_rows": 0},
+        "components": {},
+        "scope": {
+            "hardware_contacted": False,
+            "message_hub_contacted": False,
+            "model_training_started": False,
+            "model_artifact_written": False,
+            "release_claim_allowed": False,
+        },
+        "blockers": [reason],
+        "next_step": "Run scripts/run_synthetic_training_chain.py for a no-hardware DATA/TRAIN smoke.",
+    }
+
+
+def latest_synthetic_training_chain_path(root: Path = DEFAULT_SYNTHETIC_TRAINING_CHAIN_REPORTS) -> Path | None:
+    return latest_report_path(root, ["**/synthetic_training_chain.json"])
+
+
+def bounded_component_ref(value: Any) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    ref = as_dict(value)
+    return compact_dict(
+        {
+            "ref": ref.get("ref"),
+            "content_copied": ref.get("content_copied", False),
+        }
+    )
+
+
+def compact_chain_step(step: Mapping[str, Any]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "status": step.get("status"),
+            "reason": step.get("reason"),
+            "run_id": step.get("run_id"),
+            "feature_set_id": step.get("feature_set_id"),
+            "eval_id": step.get("eval_id"),
+            "handoff_id": step.get("handoff_id"),
+            "job_id": step.get("job_id"),
+            "row_count": step.get("row_count"),
+            "feature_scope": step.get("feature_scope"),
+            "metric_scope": step.get("metric_scope"),
+            "product_performance_claim": step.get("product_performance_claim"),
+            "training_server": step.get("training_server"),
+            "runner_profile": step.get("runner_profile"),
+            "queue_state": step.get("queue_state"),
+            "dry_run_only": step.get("dry_run_only"),
+            "report": bounded_component_ref(step.get("report")),
+        }
+    )
+
+
+def compact_pipeline_step(step: Mapping[str, Any]) -> dict[str, Any]:
+    return compact_dict(
+        {
+            "run_id": step.get("run_id"),
+            "status": step.get("status"),
+            "recordings_requested": step.get("recordings_requested"),
+            "recordings_ingested": step.get("recordings_ingested"),
+            "candidate_records": step.get("candidate_records"),
+            "pending_review": step.get("pending_review"),
+            "dataset_status": step.get("dataset_status"),
+            "eligible_records": step.get("eligible_records"),
+            "experiment_status": step.get("experiment_status"),
+            "runner_ready": step.get("runner_ready"),
+            "report": bounded_component_ref(step.get("report")),
+        }
+    )
+
+
+def load_latest_synthetic_training_chain(root: Path = DEFAULT_SYNTHETIC_TRAINING_CHAIN_REPORTS) -> dict[str, Any]:
+    path = latest_synthetic_training_chain_path(root)
+    if path is None:
+        return synthetic_training_chain_unavailable()
+    report = load_json_report(path)
+    if report is None:
+        return synthetic_training_chain_unavailable("synthetic_training_chain_unreadable")
+    components = as_dict(report.get("components"))
+    synthetic = as_dict(components.get("synthetic_scenarios"))
+    data_flywheel = as_dict(components.get("data_flywheel"))
+    training = as_dict(components.get("training_chain"))
+    training_components = as_dict(training.get("components"))
+    markdown_candidate = path.with_suffix(".md")
+    markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    return compact_dict(
+        {
+            "available": True,
+            "status": report.get("status", "unknown"),
+            "reason": report.get("reason"),
+            "run_id": report.get("run_id"),
+            "generated_at": report.get("generated_at") or report_file_time(path),
+            "serves_demo": report.get("serves_demo", "D5"),
+            "synthetic_only": report.get("synthetic_only", True),
+            "scenarios": list(report.get("scenarios") or []),
+            "counts": {
+                "recordings": as_dict(report.get("counts")).get("recordings", 0),
+                "reviewed_records": as_dict(report.get("counts")).get("reviewed_records", 0),
+                "review_failures": as_dict(report.get("counts")).get("review_failures", 0),
+                "feature_rows": as_dict(report.get("counts")).get("feature_rows", 0),
+            },
+            "components": {
+                "synthetic_scenarios": {
+                    "status": synthetic.get("status"),
+                    "recordings": synthetic.get("recordings", 0),
+                    "reviewed_records": synthetic.get("reviewed_records", 0),
+                    "failed_reviews": synthetic.get("failed_reviews", 0),
+                    "seed": synthetic.get("seed"),
+                    "report": bounded_component_ref(synthetic.get("report")),
+                },
+                "data_flywheel": {
+                    "initial": compact_pipeline_step(as_dict(data_flywheel.get("initial"))),
+                    "reviewed": compact_pipeline_step(as_dict(data_flywheel.get("reviewed"))),
+                },
+                "training_chain": {
+                    "status": training.get("status"),
+                    "reason": training.get("reason"),
+                    "synthetic_allowed_for_dry_run": training.get("synthetic_allowed_for_dry_run", True),
+                    "preflight": compact_chain_step(as_dict(training_components.get("preflight"))),
+                    "feature_manifest": compact_chain_step(as_dict(training_components.get("feature_manifest"))),
+                    "runner_dry_run": compact_chain_step(as_dict(training_components.get("runner_dry_run"))),
+                    "baseline_eval": compact_chain_step(as_dict(training_components.get("baseline_eval"))),
+                    "handoff_bundle": compact_chain_step(as_dict(training_components.get("handoff_bundle"))),
+                    "job_plan": compact_chain_step(as_dict(training_components.get("job_plan"))),
+                    "next_step": training.get("next_step"),
+                },
+            },
+            "scope": {
+                "hardware_contacted": as_dict(report.get("scope")).get("hardware_contacted", False),
+                "message_hub_contacted": as_dict(report.get("scope")).get("message_hub_contacted", False),
+                "model_training_started": as_dict(report.get("scope")).get("model_training_started", False),
+                "model_evaluation_real_world": as_dict(report.get("scope")).get("model_evaluation_real_world", False),
+                "model_artifact_written": as_dict(report.get("scope")).get("model_artifact_written", False),
+                "device_deployment_started": as_dict(report.get("scope")).get("device_deployment_started", False),
+                "power_or_footprint_measured": as_dict(report.get("scope")).get("power_or_footprint_measured", False),
+                "release_claim_allowed": as_dict(report.get("scope")).get("release_claim_allowed", False),
+            },
+            "next_step": report.get("next_step") or training.get("next_step"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -5203,6 +5364,10 @@ def render_dashboard() -> str:
           <div id="trainingJobPlan"></div>
         </section>
         <section>
+          <h2>Synthetic Training Chain</h2>
+          <div id="syntheticTrainingChain"></div>
+        </section>
+        <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
         </section>
@@ -5267,6 +5432,7 @@ def render_dashboard() -> str:
       trainingBaselineEval.innerHTML = html;
       trainingHandoffBundle.innerHTML = html;
       trainingJobPlan.innerHTML = html;
+      syntheticTrainingChain.innerHTML = html;
       d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
@@ -5347,8 +5513,8 @@ def render_dashboard() -> str:
       `;
     }
     function statusClass(status) {
-      if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner' || status === 'ready_for_training_server_handoff' || status === 'ready_for_runner_queue' || status === 'synthetic_baseline_eval_complete' || status === 'baseline_eval_complete') return 'ok';
-      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'synthetic_handoff_dry_run_only' || status === 'synthetic_runner_queue_dry_run_only' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready' || status === 'blocked_feature_rows_mismatch' || status === 'blocked_source_mismatch' || status === 'blocked_handoff_not_ready') return 'warn';
+      if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner' || status === 'ready_for_training_server_handoff' || status === 'ready_for_runner_queue' || status === 'synthetic_baseline_eval_complete' || status === 'baseline_eval_complete' || status === 'ready_for_synthetic_feature_dry_run' || status === 'synthetic_runner_dry_run_complete') return 'ok';
+      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'synthetic_ready_for_runner' || status === 'synthetic_training_chain_complete' || status === 'synthetic_handoff_dry_run_only' || status === 'synthetic_runner_queue_dry_run_only' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready' || status === 'blocked_feature_rows_mismatch' || status === 'blocked_source_mismatch' || status === 'blocked_handoff_not_ready') return 'warn';
       return status === 'not_available' ? 'empty' : 'bad';
     }
     function productDemoPanel(demo) {
@@ -5681,6 +5847,47 @@ def render_dashboard() -> str:
         <div class="metric"><span>Report</span><span>${escapeHtml(plan.markdown_path || plan.report_path || 'unknown')}</span></div>
       `;
     }
+    function syntheticTrainingChainPanel(chain) {
+      if (!chain || !chain.available) {
+        return `
+          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(chain && chain.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(chain && chain.reason || 'no_synthetic_training_chain')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(chain && chain.next_step || 'Run the synthetic training chain smoke')}</span></div>
+        `;
+      }
+      const counts = chain.counts || {};
+      const components = chain.components || {};
+      const synthetic = components.synthetic_scenarios || {};
+      const data = components.data_flywheel || {};
+      const initial = data.initial || {};
+      const reviewed = data.reviewed || {};
+      const training = components.training_chain || {};
+      const preflight = training.preflight || {};
+      const feature = training.feature_manifest || {};
+      const runner = training.runner_dry_run || {};
+      const baseline = training.baseline_eval || {};
+      const handoff = training.handoff_bundle || {};
+      const job = training.job_plan || {};
+      const scope = chain.scope || {};
+      return `
+        <div class="metric"><span>Status</span><span class="${statusClass(chain.status)}">${escapeHtml(chain.status || 'unknown')}</span></div>
+        <div class="metric"><span>Run</span><b>${escapeHtml(chain.run_id || 'unknown')}</b></div>
+        <div class="metric"><span>Demo</span><span>${escapeHtml(chain.serves_demo || 'D5')} / synthetic ${escapeHtml(chain.synthetic_only ?? true)}</span></div>
+        <div class="metric"><span>Scenarios</span><span>${escapeHtml((chain.scenarios || []).join(', ') || 'none')}</span></div>
+        <div class="metric"><span>Counts</span><span>${escapeHtml(counts.recordings ?? 0)} recordings / ${escapeHtml(counts.reviewed_records ?? 0)} reviewed / ${escapeHtml(counts.feature_rows ?? 0)} rows</span></div>
+        <div class="metric"><span>Synthetic Review</span><span>${escapeHtml(synthetic.status || 'unknown')} / failed ${escapeHtml(synthetic.failed_reviews ?? 0)} / seed ${escapeHtml(synthetic.seed ?? 'unknown')}</span></div>
+        <div class="metric"><span>Data Pipeline</span><span>initial ${escapeHtml(initial.status || 'unknown')} / reviewed ${escapeHtml(reviewed.status || 'unknown')} / eligible ${escapeHtml(reviewed.eligible_records ?? 0)}</span></div>
+        <div class="metric"><span>Preflight</span><span>${escapeHtml(preflight.status || 'unknown')} / ${escapeHtml(preflight.run_id || 'unknown')}</span></div>
+        <div class="metric"><span>Feature Manifest</span><span>${escapeHtml(feature.status || 'unknown')} / ${escapeHtml(feature.feature_set_id || 'unknown')} / rows ${escapeHtml(feature.row_count ?? 0)}</span></div>
+        <div class="metric"><span>Runner Dry-Run</span><span>${escapeHtml(runner.status || 'unknown')} / rows ${escapeHtml(runner.row_count ?? 0)}</span></div>
+        <div class="metric"><span>Baseline Eval</span><span>${escapeHtml(baseline.status || 'unknown')} / ${escapeHtml(baseline.metric_scope || 'unknown')} / claim ${escapeHtml(baseline.product_performance_claim ?? false)}</span></div>
+        <div class="metric"><span>Handoff</span><span>${escapeHtml(handoff.status || 'unknown')} / ${escapeHtml(handoff.training_server || 'not_configured')} / dry-run ${escapeHtml(handoff.dry_run_only ?? false)}</span></div>
+        <div class="metric"><span>Job Plan</span><span>${escapeHtml(job.status || 'unknown')} / ${escapeHtml(job.queue_state || 'unknown')} / ${escapeHtml(job.runner_profile || 'unknown')}</span></div>
+        <div class="metric"><span>Scope</span><span>hardware ${escapeHtml(scope.hardware_contacted ?? false)} / hub ${escapeHtml(scope.message_hub_contacted ?? false)} / training ${escapeHtml(scope.model_training_started ?? false)} / artifact ${escapeHtml(scope.model_artifact_written ?? false)} / claim ${escapeHtml(scope.release_claim_allowed ?? false)}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(chain.next_step || training.next_step || 'Repeat with reviewed real records')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(chain.markdown_path || chain.report_path || 'unknown')}</span></div>
+      `;
+    }
     function fieldResultsPanel(results) {
       if (!results || !results.available) {
         return `
@@ -5967,6 +6174,7 @@ def render_dashboard() -> str:
       trainingBaselineEval.innerHTML = trainingBaselineEvalPanel(data.training_baseline_eval || {});
       trainingHandoffBundle.innerHTML = trainingHandoffBundlePanel(data.training_handoff_bundle || {});
       trainingJobPlan.innerHTML = trainingJobPlanPanel(data.training_job_plan || {});
+      syntheticTrainingChain.innerHTML = syntheticTrainingChainPanel(data.synthetic_training_chain || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>

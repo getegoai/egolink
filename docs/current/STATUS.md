@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-021 synthetic training-chain visibility is implemented
+locally. The Message Hub can now load the latest bounded
+`reports/synthetic_training_chain/**/synthetic_training_chain.json`, expose it
+as `synthetic_training_chain` in authenticated `/api/state`, serve
+`/api/v1/synthetic-training-chains/latest`, and render a Dashboard
+`Synthetic Training Chain` panel. `scripts/deploy_message_hub_vps.ps1` has a
+new explicit `-IncludeSyntheticTrainingChainSummaries` switch that copies only
+`synthetic_training_chain.json/.md`. This was not deployed to the VPS in this
+run and does not expose raw recordings, candidate DB paths, feature-row
+contents, private endpoints, model artifacts, measured footprint/power data,
+device deployment results, or release claims.
+
 2026-07-06: DATA-020 synthetic training-chain smoke runner is implemented
 locally. `scripts/run_synthetic_training_chain.py` generates synthetic-only
 sessions, performs the explicit synthetic review dry-run, runs the
