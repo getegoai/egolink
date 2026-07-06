@@ -372,16 +372,73 @@ class MessageHubDashboardTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
+            observation_dir = root / "d1_field_observation" / "run-d"
+            observation_dir.mkdir(parents=True)
+            (observation_dir / "d1_field_observation_status.json").write_text(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "result": "WARN",
+                        "run_id": "run-d",
+                        "sample_count": 4,
+                        "successful_sample_count": 4,
+                        "fetch_error_count": 0,
+                        "latest_seq": 42,
+                        "latest_freshness_s": 33,
+                        "report_path": "C:/private/local/d1_field_observation_report.json",
+                        "samples_path": "C:/private/local/d1_field_samples.jsonl",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (observation_dir / "d1_field_observation_report.json").write_text(
+                json.dumps(
+                    {
+                        "result": "WARN",
+                        "observer_version": "D1.field_observer.v2",
+                        "run_id": "run-d",
+                        "created_at": "2026-07-04T11:40:00+00:00",
+                        "device_id": "ego-link-r1-connectivity-001",
+                        "summary": {
+                            "sample_count": 4,
+                            "successful_sample_count": 4,
+                            "fetch_error_count": 0,
+                            "last_seq": 42,
+                            "last_location_upload_at": "2026-07-04T11:39:00+00:00",
+                            "max_freshness_s": 44,
+                            "raw_post_success_delta": 3,
+                            "location_event_count_delta": 2,
+                            "power_sample_count_delta": 1,
+                            "battery_mv_first": 4100,
+                            "battery_mv_last": 4090,
+                        },
+                        "warnings": ["d1_coordinate_not_observed"],
+                        "errors": [],
+                        "samples_path": "C:/private/local/d1_field_samples.jsonl",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (observation_dir / "d1_field_observation_report.md").write_text("# Observation\n", encoding="utf-8")
+
             summary = message_hub.load_latest_field_results(root)
 
         self.assertTrue(summary["available"])
-        self.assertEqual(summary["status"], "pass")
-        self.assertEqual(summary["report_count"], 3)
+        self.assertEqual(summary["status"], "warn")
+        self.assertEqual(summary["report_count"], 4)
         kinds = {item["kind"] for item in summary["reports"]}
-        self.assertEqual(kinds, {"d1_web_api", "amoled_status", "d1_field_companion"})
+        self.assertEqual(kinds, {"d1_web_api", "amoled_status", "d1_field_companion", "d1_field_observation"})
         amoled = next(item for item in summary["reports"] if item["kind"] == "amoled_status")
         self.assertNotIn("jsonl_path", json.dumps(amoled))
         self.assertEqual(amoled["metrics"]["command_ack_count"], 1)
+        observation = next(item for item in summary["reports"] if item["kind"] == "d1_field_observation")
+        self.assertEqual(observation["metrics"]["sample_count"], 4)
+        self.assertEqual(observation["metrics"]["last_seq"], 42)
+        observation_payload = json.dumps(observation)
+        self.assertNotIn("d1_field_samples.jsonl", observation_payload)
+        self.assertNotIn("C:/private", observation_payload)
 
     def test_field_results_missing_returns_explainable_not_available(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1106,6 +1163,9 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Copy-TrainingJobSummaries", script)
         self.assertIn("d1_web_api_report.json", script)
         self.assertIn("d1_field_companion_summary.json", script)
+        self.assertIn("d1_field_observation_report.json", script)
+        self.assertIn("d1_field_observation_report.md", script)
+        self.assertIn("d1_field_observation_status.json", script)
         self.assertIn("data_flywheel_status.json", script)
         self.assertIn("data_flywheel_status.md", script)
         self.assertIn("training_experiment_plan.json", script)
@@ -1125,6 +1185,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("training_job_plan.md", script)
         self.assertIn("*.summary.json", script)
         self.assertNotIn("*.jsonl", script)
+        self.assertNotIn("d1_field_samples.jsonl", script)
         self.assertNotIn("*.db", script)
 
     def test_latest_product_demo_report_summary_is_bounded_for_dashboard(self) -> None:

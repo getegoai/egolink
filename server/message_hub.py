@@ -3265,11 +3265,88 @@ def latest_d1_companion_result(root: Path) -> dict[str, Any] | None:
     )
 
 
+def latest_d1_field_observation_result(root: Path) -> dict[str, Any] | None:
+    report_path = latest_report_path(root / "d1_field_observation", ["**/d1_field_observation_report.json"])
+    status_path = latest_report_path(root / "d1_field_observation", ["**/d1_field_observation_status.json"])
+    if report_path is None and status_path is None:
+        return None
+    if report_path is not None:
+        report = load_json_report(report_path)
+        if report is None:
+            return None
+        summary = as_dict(report.get("summary"))
+        status = normalized_report_status(report.get("result"))
+        markdown_candidate = report_path.with_name("d1_field_observation_report.md")
+        status_candidate = report_path.with_name("d1_field_observation_status.json")
+        return compact_dict(
+            {
+                "kind": "d1_field_observation",
+                "title": "D1 Field Observation",
+                "status": status,
+                "run_id": report.get("run_id"),
+                "created_at": report.get("created_at") or report_file_time(report_path),
+                "device_id": report.get("device_id"),
+                "summary": f"D1 observation {status}: {summary.get('successful_sample_count', 0)} ok / {summary.get('sample_count', 0)} samples",
+                "metrics": {
+                    "sample_count": summary.get("sample_count"),
+                    "successful_sample_count": summary.get("successful_sample_count"),
+                    "fetch_error_count": summary.get("fetch_error_count"),
+                    "max_freshness_s": summary.get("max_freshness_s"),
+                    "last_seq": summary.get("last_seq"),
+                    "last_location_upload_at": summary.get("last_location_upload_at"),
+                    "raw_post_success_delta": summary.get("raw_post_success_delta"),
+                    "location_event_count_delta": summary.get("location_event_count_delta"),
+                    "power_sample_count_delta": summary.get("power_sample_count_delta"),
+                    "battery_mv_first": summary.get("battery_mv_first"),
+                    "battery_mv_last": summary.get("battery_mv_last"),
+                },
+                "warnings": report.get("warnings"),
+                "errors": report.get("errors"),
+                "report_path": relative_repo_path(report_path),
+                "markdown_path": path_if_exists(markdown_candidate),
+                "status_path": path_if_exists(status_candidate),
+                "scope": report.get("scope"),
+            }
+        )
+    status_report = load_json_report(status_path) if status_path is not None else None
+    if status_report is None or status_path is None:
+        return None
+    status = normalized_report_status(status_report.get("result") or status_report.get("status"))
+    report_candidate = status_path.with_name("d1_field_observation_report.json")
+    markdown_candidate = status_path.with_name("d1_field_observation_report.md")
+    return compact_dict(
+        {
+            "kind": "d1_field_observation",
+            "title": "D1 Field Observation",
+            "status": status,
+            "run_id": status_report.get("run_id"),
+            "created_at": status_report.get("updated_at") or report_file_time(status_path),
+            "device_id": status_report.get("device_id"),
+            "summary": f"D1 observation {status}: {status_report.get('successful_sample_count', 0)} ok / {status_report.get('sample_count', 0)} samples",
+            "metrics": {
+                "planned_sample_count": status_report.get("planned_sample_count"),
+                "sample_count": status_report.get("sample_count"),
+                "successful_sample_count": status_report.get("successful_sample_count"),
+                "fetch_error_count": status_report.get("fetch_error_count"),
+                "latest_seq": status_report.get("latest_seq"),
+                "latest_freshness_s": status_report.get("latest_freshness_s"),
+                "latest_location_upload_at": status_report.get("latest_location_upload_at"),
+                "latest_d1_status": status_report.get("latest_d1_status"),
+            },
+            "report_path": path_if_exists(report_candidate),
+            "markdown_path": path_if_exists(markdown_candidate),
+            "status_path": relative_repo_path(status_path),
+            "scope": status_report.get("scope"),
+        }
+    )
+
+
 def load_latest_field_results(root: Path = DEFAULT_FIELD_RESULT_REPORTS) -> dict[str, Any]:
     reports = [
         result
         for result in (
             latest_d1_web_api_result(root),
+            latest_d1_field_observation_result(root),
             latest_d1_companion_result(root),
             latest_amoled_status_result(root),
         )

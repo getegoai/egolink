@@ -6,6 +6,19 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: FIELD-007 D1 field-observation visibility is implemented locally.
+The Message Hub Field Test Results loader can now include the latest
+`reports/d1_field_observation/**/d1_field_observation_report.json` or live
+`d1_field_observation_status.json` as a bounded `D1 Field Observation` card in
+`/api/state`, `/api/v1/field-results/latest`, and the Dashboard. The curated
+VPS deploy switch `-IncludeFieldReportSummaries` can copy
+`d1_field_observation_report.json/.md` and
+`d1_field_observation_status.json`, but still does not copy
+`d1_field_samples.jsonl`. This was not deployed to the VPS in this run and
+does not expose local absolute paths, sample JSONL contents, raw payloads,
+private coordinates, hardware commands, firmware changes, or location/power/
+GNSS/LTE/product-readiness claims.
+
 2026-07-06: DATA-019 post-run field-observation binding is implemented
 locally. The D1 post-run collector schema is now
 `egolink.d1_postrun_collection.v0.5`; it can bind an explicit or same-run

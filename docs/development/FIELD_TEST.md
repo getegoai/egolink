@@ -45,6 +45,12 @@ to confirm samples are arriving without using serial logs or sending device
 commands. Observer reports with `sample_write_mode=incremental_jsonl` use this
 streaming sample path.
 
+When curated field summaries are synced, the Message Hub Field Test Results
+panel may also show a bounded `D1 Field Observation` card from
+`d1_field_observation_report.json` or the live status snapshot. The Web summary
+shows sample counts, latest sequence/freshness, delta metrics, warnings, and
+report/status paths only; it does not copy or expose `d1_field_samples.jsonl`.
+
 This is monitoring convenience only. It does not prove location accuracy,
 battery life, GNSS acceptance, LTE long-run acceptance, or product readiness.
 
