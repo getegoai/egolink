@@ -6,6 +6,16 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: FIELD-006 D1 observer live status snapshot is implemented
+locally. Future `scripts/observe_d1_field_run.py` runs now write
+`d1_field_observation_status.json` at startup, after each sample, and at
+completion, with running/completed state, sample counts, latest successful
+sample metadata, latest seq/freshness, and final report paths. The D1 field
+kit expected outputs now include this status file. This affects future
+observer runs only; it does not modify any already-running observer process,
+contact hardware, send commands, change firmware/protocol/API behavior, or add
+location, power, LTE, GNSS, battery-life, or product-readiness claims.
+
 2026-07-06: DATA-018 post-run job-plan collector is implemented locally. The
 D1 post-run collector schema is now `egolink.d1_postrun_collection.v0.4` and
 continues through TRAIN-008 when the DATA-006 pipeline returns

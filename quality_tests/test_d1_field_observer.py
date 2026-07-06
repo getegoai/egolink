@@ -230,12 +230,19 @@ class D1FieldObserverTests(unittest.TestCase):
             self.assertTrue((output_dir / observer.REPORT_JSON).is_file())
             self.assertTrue((output_dir / observer.REPORT_MARKDOWN).is_file())
             self.assertTrue((output_dir / observer.SAMPLES_JSONL).is_file())
+            self.assertTrue((output_dir / observer.STATUS_JSON).is_file())
             self.assertEqual(payload["summary"]["successful_sample_count"], 1)
+            status = json.loads((output_dir / observer.STATUS_JSON).read_text(encoding="utf-8"))
+            self.assertEqual(status["status"], "completed")
+            self.assertEqual(status["result"], payload["result"])
+            self.assertEqual(status["sample_count"], 1)
+            self.assertFalse(status["scope"]["commands_sent"])
 
     def test_observer_writes_samples_incrementally_during_poll_loop(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp) / "observation"
             samples_path = output_dir / observer.SAMPLES_JSONL
+            status_path = output_dir / observer.STATUS_JSON
             calls = 0
             original_fetch = observer.d1_web.fetch_json
 
@@ -246,6 +253,11 @@ class D1FieldObserverTests(unittest.TestCase):
                     lines = [line for line in samples_path.read_text(encoding="utf-8").splitlines() if line]
                     self.assertEqual(len(lines), 1)
                     self.assertIn('"last_seq": 1', lines[0])
+                    self.assertTrue(status_path.is_file())
+                    status = json.loads(status_path.read_text(encoding="utf-8"))
+                    self.assertEqual(status["status"], "running")
+                    self.assertEqual(status["sample_count"], 1)
+                    self.assertEqual(status["latest_seq"], 1)
                 calls += 1
                 return api_state(calls, success_count=10 + calls, location_count=20 + calls, power_count=30 + calls)
 
@@ -267,11 +279,17 @@ class D1FieldObserverTests(unittest.TestCase):
                 observer.d1_web.fetch_json = original_fetch
 
             lines = [json.loads(line) for line in samples_path.read_text(encoding="utf-8").splitlines() if line]
+            final_status = json.loads(status_path.read_text(encoding="utf-8"))
 
         self.assertEqual(calls, 2)
         self.assertEqual(report["sample_write_mode"], "incremental_jsonl")
+        self.assertEqual(report["status_path"], str(status_path))
         self.assertEqual(report["summary"]["successful_sample_count"], 2)
         self.assertEqual([line["last_seq"] for line in lines], [1, 2])
+        self.assertEqual(final_status["status"], "completed")
+        self.assertEqual(final_status["result"], report["result"])
+        self.assertEqual(final_status["sample_count"], 2)
+        self.assertEqual(final_status["latest_seq"], 2)
 
 
 if __name__ == "__main__":

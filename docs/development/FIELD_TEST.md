@@ -36,9 +36,12 @@ It is not allowed as the formal runtime path or the only acceptance evidence.
 
 `scripts/observe_d1_field_run.py` is read-only and writes future run samples
 incrementally to `d1_field_samples.jsonl` while the observer is still polling.
-The final `d1_field_observation_report.json/.md` is still written at observer
-exit. During a long unattended run, the operator can inspect the JSONL file to
-confirm samples are arriving without using serial logs or sending device
+It also refreshes `d1_field_observation_status.json` at startup, after each
+sample, and at completion with running/completed state, sample counts, latest
+sequence, latest freshness, and report paths. The final
+`d1_field_observation_report.json/.md` is still written at observer exit.
+During a long unattended run, the operator can inspect the JSONL or status file
+to confirm samples are arriving without using serial logs or sending device
 commands. Observer reports with `sample_write_mode=incremental_jsonl` use this
 streaming sample path.
 

@@ -26,6 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_field_observation"
 OBSERVER_VERSION = "D1.field_observer.v2"
 SAMPLES_JSONL = "d1_field_samples.jsonl"
+STATUS_JSON = "d1_field_observation_status.json"
 REPORT_JSON = "d1_field_observation_report.json"
 REPORT_MARKDOWN = "d1_field_observation_report.md"
 
@@ -281,6 +282,62 @@ def append_sample(path: Path, sample: dict[str, Any]) -> None:
         handle.write(json.dumps(sample, ensure_ascii=False) + "\n")
 
 
+def latest_successful_sample(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    for sample in reversed(samples):
+        if sample.get("ok"):
+            return sample
+    return {}
+
+
+def write_status(
+    path: Path,
+    *,
+    status: str,
+    run_id: str,
+    hub_url: str,
+    device_id: str | None,
+    planned_samples: int,
+    samples: list[dict[str, Any]],
+    samples_path: Path,
+    report_json: Path,
+    report_md: Path,
+    result: str | None = None,
+) -> None:
+    latest = latest_successful_sample(samples)
+    payload = {
+        "tool": "observe_d1_field_run",
+        "observer_version": OBSERVER_VERSION,
+        "status": status,
+        "result": result,
+        "updated_at": utc_now(),
+        "run_id": run_id,
+        "hub_url": hub_url.rstrip("/"),
+        "device_id": latest.get("device_id") or device_id,
+        "planned_sample_count": planned_samples,
+        "sample_count": len(samples),
+        "successful_sample_count": sum(1 for sample in samples if sample.get("ok")),
+        "fetch_error_count": sum(1 for sample in samples if not sample.get("ok")),
+        "latest_sample_collected_at": latest.get("collected_at"),
+        "latest_seq": latest.get("last_seq"),
+        "latest_location_upload_at": latest.get("last_location_upload_at"),
+        "latest_freshness_s": latest.get("freshness_s"),
+        "latest_d1_status": latest.get("d1_status"),
+        "samples_path": str(samples_path),
+        "report_path": str(report_json),
+        "markdown_report_path": str(report_md),
+        "sample_write_mode": "incremental_jsonl",
+        "scope": {
+            "hardware_contacted_directly": False,
+            "firmware_changed": False,
+            "commands_sent": False,
+            "gitlab_modified": False,
+            "location_accuracy_claimed": False,
+            "battery_life_claimed": False,
+        },
+    }
+    write_json(path, payload)
+
+
 def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
     summary = as_dict(report.get("summary"))
     lines = [
@@ -348,9 +405,24 @@ def observe_field_run(
         raise ValueError("sample_count must be positive")
 
     samples_path = output_dir / SAMPLES_JSONL
+    status_path = output_dir / STATUS_JSON
+    report_json = output_dir / REPORT_JSON
+    report_md = output_dir / REPORT_MARKDOWN
     samples_path.parent.mkdir(parents=True, exist_ok=True)
     samples_path.write_text("", encoding="utf-8")
     samples: list[dict[str, Any]] = []
+    write_status(
+        status_path,
+        status="running",
+        run_id=run_id,
+        hub_url=hub_url,
+        device_id=device_id,
+        planned_samples=planned_samples,
+        samples=samples,
+        samples_path=samples_path,
+        report_json=report_json,
+        report_md=report_md,
+    )
     for index in range(planned_samples):
         collected_at = utc_now()
         try:
@@ -360,6 +432,18 @@ def observe_field_run(
             sample = error_sample(device_id=device_id, collected_at=collected_at, error=str(exc))
         samples.append(sample)
         append_sample(samples_path, sample)
+        write_status(
+            status_path,
+            status="running",
+            run_id=run_id,
+            hub_url=hub_url,
+            device_id=device_id,
+            planned_samples=planned_samples,
+            samples=samples,
+            samples_path=samples_path,
+            report_json=report_json,
+            report_md=report_md,
+        )
         if index < planned_samples - 1 and poll_interval_sec > 0:
             time.sleep(poll_interval_sec)
 
@@ -372,14 +456,26 @@ def observe_field_run(
         poll_interval_sec=poll_interval_sec,
         duration_minutes=duration_minutes,
     )
-    report_json = output_dir / REPORT_JSON
-    report_md = output_dir / REPORT_MARKDOWN
     report["samples_path"] = str(samples_path)
+    report["status_path"] = str(status_path)
     report["report_path"] = str(report_json)
     report["markdown_report_path"] = str(report_md)
     report["sample_write_mode"] = "incremental_jsonl"
     write_json(report_json, report)
     write_markdown_report(report_md, report)
+    write_status(
+        status_path,
+        status="completed",
+        result=report.get("result"),
+        run_id=run_id,
+        hub_url=hub_url,
+        device_id=device_id,
+        planned_samples=planned_samples,
+        samples=samples,
+        samples_path=samples_path,
+        report_json=report_json,
+        report_md=report_md,
+    )
     return report
 
 

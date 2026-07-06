@@ -134,6 +134,7 @@ class D1FieldKitTests(unittest.TestCase):
             self.assertFalse(manifest["commands"]["post_run_collect_evidence"].get("sends_message_hub_command", False))
             self.assertFalse(manifest["commands"]["post_run_data_flywheel_status"].get("hardware_action", False))
             self.assertIn("field_observation_report", manifest["expected_outputs"])
+            self.assertIn("field_observation_status", manifest["expected_outputs"])
             self.assertIn("companion_summary", manifest["expected_outputs"])
             self.assertIn("amoled_sidecar_summary", manifest["expected_outputs"])
             self.assertIn("postrun_summary", manifest["expected_outputs"])

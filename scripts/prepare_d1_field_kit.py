@@ -870,6 +870,7 @@ def build_manifest(
                 "d1_web_api", f"{run_id}-preflight", "d1_web_api_report.json"
             ),
             "field_observation_report": report_path("d1_field_observation", run_id, "d1_field_observation_report.json"),
+            "field_observation_status": report_path("d1_field_observation", run_id, "d1_field_observation_status.json"),
             "field_observation_samples": report_path("d1_field_observation", run_id, "d1_field_samples.jsonl"),
             "web_api_report": report_path("d1_web_api", run_id, "d1_web_api_report.json"),
             "power_report": report_path("power", run_id, "power_curve_report.json"),
