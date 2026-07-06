@@ -247,6 +247,14 @@ bundle status. DATA-016 still does not train a model, call a training endpoint,
 copy feature-row JSONL to the Dashboard, deploy to devices, or produce model
 artifacts, model cards, measured footprint/power data, or release claims.
 
+TRAIN-008 can create a bounded training job plan from one explicit TRAIN-007
+handoff bundle. The plan records model track, candidate/baseline model names,
+row-count refs, runner profile, planned metrics, gates, and non-claims for a
+future local/GPU runner or training server queue. It still does not call an
+endpoint, train or evaluate a model, copy feature-row JSONL contents, produce
+model artifacts/cards, deploy on-device inference, measure footprint/power, or
+allow release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -296,6 +304,8 @@ deployment, or OTA update behavior changes in DATA-002.
     deployment summaries without exposing row contents or private endpoints.
 18. Let DATA-016 bind TRAIN-007 into the D1 post-run collector and field kit
     after TRAIN-006 baseline eval completes.
-19. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+19. Let TRAIN-008 create a bounded training job plan from an explicit
+    TRAIN-007 handoff bundle before any real runner/server integration.
+20. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

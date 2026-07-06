@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: TRAIN-008 training job plan dry-run is implemented locally. The
+new `scripts/create_training_job_plan.py` command consumes an explicitly named
+TRAIN-007 `training_handoff_bundle.json` and writes
+`reports/training_jobs/<job-id>/training_job_plan.json/.md` with source-handoff
+hash, dataset/feature row summaries, model track, candidate/baseline model
+names, runner profile, planned metrics, gates, next step, and non-claims.
+Ready reviewed handoffs become `ready_for_runner_queue`; synthetic handoffs
+require `--allow-synthetic` and remain dry-run only. This does not call or
+configure a training endpoint, train/evaluate a model, copy feature-row JSONL
+contents, produce model artifacts/cards, measure footprint/power, deploy to
+devices, or allow release claims.
+
 2026-07-06: DATA-016 post-run handoff collector is implemented locally. The
 D1 post-run collector schema is now `egolink.d1_postrun_collection.v0.3` and
 continues through TRAIN-007 when the DATA-006 pipeline returns

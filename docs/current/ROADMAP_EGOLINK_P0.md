@@ -259,6 +259,8 @@ Current AI/data boundary:
   private endpoints, or model artifacts;
 - done: DATA-016 post-run collector and D1 field kit can continue through
   TRAIN-007 handoff-bundle generation after TRAIN-006 baseline eval;
+- done: TRAIN-008 training job plan can turn an explicit TRAIN-007 handoff
+  bundle into a bounded runner/server queue plan without starting training;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -289,6 +291,9 @@ summary packaging without changing training, deployment, or model behavior.
 DATA-016 binds TRAIN-007 back into the D1 post-run collector and field kit, so
 a reviewed post-field dataset can reach handoff-bundle readiness from one
 bounded local collector run.
+TRAIN-008 then turns an explicit handoff bundle into a local training job plan
+for future runner/server integration while keeping actual training, endpoints,
+artifacts, and deployment out of scope.
 
 ## R0: VPS + PC Simulator Simulated Loop
 

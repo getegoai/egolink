@@ -79,10 +79,13 @@ must consume only reviewed evidence:
     endpoints, or model artifacts.
 24. DATA-016 lets the D1 post-run collector continue through TRAIN-007 and
     records the handoff-bundle status in the post-run summary and field kit.
-25. MotionNet v0.1 starts with a statistical baseline and small model
+25. TRAIN-008 creates a bounded training job plan from a TRAIN-007 handoff
+    bundle, recording runner queue intent and planned metrics without starting
+    model training.
+26. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-26. Device deployment begins in shadow mode: model output is recorded alongside
+27. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -114,6 +117,7 @@ must consume only reviewed evidence:
 | Training handoff bundle | Bind dataset, preflight, feature, runner dry-run, and baseline-eval refs and hashes for a future training runner/server without copying rows. | TRAIN-007. |
 | Handoff visibility | Surface latest handoff-bundle readiness without row contents, private endpoints, or model artifacts. | DATA-015. |
 | Post-run handoff bundle | Extend the D1 post-run collector and field kit through TRAIN-007. | DATA-016. |
+| Training job plan | Create a bounded runner/server queue plan from a handoff bundle without starting training. | TRAIN-008. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -215,6 +219,11 @@ must consume only reviewed evidence:
   JSONL contents, raw records, candidate DB paths, private endpoints, model
   artifacts, model cards, footprint, latency, power measurements, device
   deployment results, or release claims.
+- TRAIN-008 job plans may show model track, candidate/baseline model names,
+  feature row counts, runner profile, planned metrics, gates, source handoff
+  hash, and next step. They do not copy feature-row JSONL contents, call
+  private endpoints, train/evaluate a model, produce model artifacts/cards,
+  measure footprint/power, deploy to devices, or support release claims.
 
 ## Model And Power Gates
 
