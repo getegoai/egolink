@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-06 01:49 UTC",
+  "generated_at": "2026-07-06 01:55 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "812f895 feat(data): chain postrun job plans [D5]"
+    "head": "da37656 feat(field): add d1 observer live status [D1]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -286,13 +286,13 @@
       "path": "D:/pywork/egolink/docs/tasks/done/FIELD-005_D1_OBSERVER_INCREMENTAL_SAMPLES.md"
     },
     {
-      "id": "TRAIN-006",
-      "title": "Synthetic baseline evaluation",
+      "id": "FIELD-006",
+      "title": "D1 observer live status snapshot",
       "state": "done",
       "packet_status": "done",
-      "priority": "high",
+      "priority": "medium",
       "date": "2026-07-06",
-      "path": "D:/pywork/egolink/docs/tasks/done/TRAIN-006_SYNTHETIC_BASELINE_EVAL.md"
+      "path": "D:/pywork/egolink/docs/tasks/done/FIELD-006_D1_OBSERVER_LIVE_STATUS.md"
     }
   ],
   "operator_asks": [
