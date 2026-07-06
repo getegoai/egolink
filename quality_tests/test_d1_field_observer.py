@@ -58,6 +58,59 @@ def sample(
     }
 
 
+def api_state(seq: int, *, success_count: int, location_count: int, power_count: int) -> dict:
+    return {
+        "devices": [
+            {
+                "device_id": "ego-link-r1-connectivity-001",
+                "d1_link": {
+                    "status": "estimate_visible",
+                    "location_estimate": {
+                        "state": "Predicted",
+                        "reason": "unit",
+                        "updated_at": f"2026-07-04T08:00:{seq:02d}+00:00",
+                    },
+                    "map_surface": {"mode": "memory_coordinate", "lat": 22.5, "lon": 113.9},
+                    "upload_freshness": {
+                        "last_device_upload_at": f"2026-07-04T08:00:{seq:02d}+00:00",
+                        "last_location_upload_at": f"2026-07-04T08:00:{seq:02d}+00:00",
+                        "freshness_s": 5,
+                        "last_seq": seq,
+                    },
+                    "uplink_metrics": {
+                        "raw_post_attempt_count": success_count,
+                        "raw_post_success_count": success_count,
+                        "raw_post_failure_count": 0,
+                        "location_event_count": location_count,
+                    },
+                    "power_curve": {
+                        "sample_count": power_count,
+                        "latest_sample_at": f"2026-07-04T08:00:{seq:02d}+00:00",
+                    },
+                    "evidence": {
+                        "components": {
+                            "power": {
+                                "battery_mv": 4200 - seq,
+                                "soc_pct": 90,
+                                "evidence_status": "measured",
+                            },
+                            "gnss": {"seen": True, "fix": False, "state": "no_fix"},
+                            "cell_lte": {
+                                "seen": True,
+                                "rat": "LTE",
+                                "cell_id": "180571649",
+                                "registration_state": "registered_home",
+                                "pdp_state": "active",
+                            },
+                            "imu": {"seen": True, "evidence_status": "mock"},
+                        }
+                    },
+                },
+            }
+        ]
+    }
+
+
 class D1FieldObserverTests(unittest.TestCase):
     def test_evaluate_observation_passes_fresh_periodic_upload_without_claims(self) -> None:
         samples = [
@@ -178,6 +231,47 @@ class D1FieldObserverTests(unittest.TestCase):
             self.assertTrue((output_dir / observer.REPORT_MARKDOWN).is_file())
             self.assertTrue((output_dir / observer.SAMPLES_JSONL).is_file())
             self.assertEqual(payload["summary"]["successful_sample_count"], 1)
+
+    def test_observer_writes_samples_incrementally_during_poll_loop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "observation"
+            samples_path = output_dir / observer.SAMPLES_JSONL
+            calls = 0
+            original_fetch = observer.d1_web.fetch_json
+
+            def fake_fetch_json(*args, **kwargs) -> dict:
+                nonlocal calls
+                if calls == 1:
+                    self.assertTrue(samples_path.is_file())
+                    lines = [line for line in samples_path.read_text(encoding="utf-8").splitlines() if line]
+                    self.assertEqual(len(lines), 1)
+                    self.assertIn('"last_seq": 1', lines[0])
+                calls += 1
+                return api_state(calls, success_count=10 + calls, location_count=20 + calls, power_count=30 + calls)
+
+            observer.d1_web.fetch_json = fake_fetch_json
+            try:
+                report = observer.observe_field_run(
+                    hub_url="http://127.0.0.1:8790",
+                    token=None,
+                    output_dir=output_dir,
+                    run_id="D1-FIELD-incremental",
+                    device_id="ego-link-r1-connectivity-001",
+                    duration_minutes=1,
+                    poll_interval_sec=0,
+                    max_stale_sec=180,
+                    timeout=1,
+                    sample_count=2,
+                )
+            finally:
+                observer.d1_web.fetch_json = original_fetch
+
+            lines = [json.loads(line) for line in samples_path.read_text(encoding="utf-8").splitlines() if line]
+
+        self.assertEqual(calls, 2)
+        self.assertEqual(report["sample_write_mode"], "incremental_jsonl")
+        self.assertEqual(report["summary"]["successful_sample_count"], 2)
+        self.assertEqual([line["last_seq"] for line in lines], [1, 2])
 
 
 if __name__ == "__main__":

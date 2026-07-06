@@ -6,6 +6,16 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: FIELD-005 D1 observer incremental samples is implemented locally.
+Future `scripts/observe_d1_field_run.py` runs now initialize
+`d1_field_samples.jsonl` at start and append each sample immediately after it
+is collected, so an unattended field observation can be inspected while it is
+still running. Final reports still write `d1_field_observation_report.json/.md`
+and now record `sample_write_mode=incremental_jsonl`. This does not affect any
+observer process that was already running before the change, does not contact
+hardware, send commands, change firmware/protocol/API behavior, or add
+location, power, LTE, GNSS, battery-life, or product-readiness claims.
+
 2026-07-06: DATA-014 post-run training-chain collector is implemented locally.
 `scripts/collect_d1_postrun.py` now keeps the normal D1 after-run path as one
 command and, when the DATA-006 pipeline returns `ready_for_training_handoff`,

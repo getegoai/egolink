@@ -24,7 +24,7 @@ from scripts import validate_d1_web_api as d1_web  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_field_observation"
-OBSERVER_VERSION = "D1.field_observer.v1"
+OBSERVER_VERSION = "D1.field_observer.v2"
 SAMPLES_JSONL = "d1_field_samples.jsonl"
 REPORT_JSON = "d1_field_observation_report.json"
 REPORT_MARKDOWN = "d1_field_observation_report.md"
@@ -275,6 +275,12 @@ def write_samples(path: Path, samples: list[dict[str, Any]]) -> None:
     path.write_text("".join(json.dumps(sample, ensure_ascii=False) + "\n" for sample in samples), encoding="utf-8")
 
 
+def append_sample(path: Path, sample: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(sample, ensure_ascii=False) + "\n")
+
+
 def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
     summary = as_dict(report.get("summary"))
     lines = [
@@ -341,6 +347,9 @@ def observe_field_run(
     if planned_samples <= 0:
         raise ValueError("sample_count must be positive")
 
+    samples_path = output_dir / SAMPLES_JSONL
+    samples_path.parent.mkdir(parents=True, exist_ok=True)
+    samples_path.write_text("", encoding="utf-8")
     samples: list[dict[str, Any]] = []
     for index in range(planned_samples):
         collected_at = utc_now()
@@ -350,6 +359,7 @@ def observe_field_run(
         except Exception as exc:  # noqa: BLE001 - report read-only observer failures, keep observing.
             sample = error_sample(device_id=device_id, collected_at=collected_at, error=str(exc))
         samples.append(sample)
+        append_sample(samples_path, sample)
         if index < planned_samples - 1 and poll_interval_sec > 0:
             time.sleep(poll_interval_sec)
 
@@ -362,13 +372,12 @@ def observe_field_run(
         poll_interval_sec=poll_interval_sec,
         duration_minutes=duration_minutes,
     )
-    samples_path = output_dir / SAMPLES_JSONL
     report_json = output_dir / REPORT_JSON
     report_md = output_dir / REPORT_MARKDOWN
     report["samples_path"] = str(samples_path)
     report["report_path"] = str(report_json)
     report["markdown_report_path"] = str(report_md)
-    write_samples(samples_path, samples)
+    report["sample_write_mode"] = "incremental_jsonl"
     write_json(report_json, report)
     write_markdown_report(report_md, report)
     return report

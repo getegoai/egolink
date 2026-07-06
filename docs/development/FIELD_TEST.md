@@ -32,6 +32,19 @@ It is not allowed as the formal runtime path or the only acceptance evidence.
 [ ] test_run_id has been created.
 ```
 
+## D1 Long-Run Observer Monitoring
+
+`scripts/observe_d1_field_run.py` is read-only and writes future run samples
+incrementally to `d1_field_samples.jsonl` while the observer is still polling.
+The final `d1_field_observation_report.json/.md` is still written at observer
+exit. During a long unattended run, the operator can inspect the JSONL file to
+confirm samples are arriving without using serial logs or sending device
+commands. Observer reports with `sample_write_mode=incremental_jsonl` use this
+streaming sample path.
+
+This is monitoring convenience only. It does not prove location accuracy,
+battery life, GNSS acceptance, LTE long-run acceptance, or product readiness.
+
 ## Reboot-Aware Command Validation
 
 Some firmware slices intentionally consume one command per independent-power
