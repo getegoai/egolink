@@ -209,6 +209,13 @@ synthetic integration metrics only. TRAIN-006 still does not train a model,
 write model artifacts or model cards, integrate a training server, measure
 footprint/power, deploy on-device inference, or allow release claims.
 
+DATA-013 can expose the latest TRAIN-006 baseline-eval summary through Web/API
+and curated deployment summaries. It is visibility only: status, aggregate
+baseline metrics, synthetic policy, row counts, gates, and report paths are
+allowed. JSONL row contents, raw records, private case rows, private endpoints,
+model artifacts, model cards, footprint/power measurements, and release claims
+are not.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -248,6 +255,8 @@ deployment, or OTA update behavior changes in DATA-002.
     exposing JSONL row contents or private training details.
 13. Let TRAIN-006 run aggregate baseline evaluation only after the TRAIN-005
     runner-input gate passes; synthetic metrics remain integration-only.
-14. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+14. Let DATA-013 surface latest baseline-eval status in Web/API without
+    exposing row contents, private training details, or model artifacts.
+15. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

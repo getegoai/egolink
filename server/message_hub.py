@@ -39,6 +39,7 @@ DEFAULT_TRAINING_EXPERIMENT_REPORTS = REPO_ROOT / "reports" / "training_experime
 DEFAULT_TRAINING_RUN_REPORTS = REPO_ROOT / "reports" / "training_runs"
 DEFAULT_TRAINING_FEATURE_REPORTS = REPO_ROOT / "reports" / "training_features"
 DEFAULT_TRAINING_RUNNER_DRY_RUN_REPORTS = REPO_ROOT / "reports" / "training_runner_dry_runs"
+DEFAULT_TRAINING_BASELINE_EVAL_REPORTS = REPO_ROOT / "reports" / "training_baseline_evals"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -864,6 +865,7 @@ def make_handler(
     training_run_root: Path = DEFAULT_TRAINING_RUN_REPORTS,
     training_feature_root: Path = DEFAULT_TRAINING_FEATURE_REPORTS,
     training_runner_dry_run_root: Path = DEFAULT_TRAINING_RUNNER_DRY_RUN_REPORTS,
+    training_baseline_eval_root: Path = DEFAULT_TRAINING_BASELINE_EVAL_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -911,6 +913,7 @@ def make_handler(
                 training_run_preflight = load_latest_training_run_preflight(training_run_root)
                 training_feature_manifest = load_latest_training_feature_manifest(training_feature_root)
                 training_runner_dry_run = load_latest_training_runner_dry_run(training_runner_dry_run_root)
+                training_baseline_eval = load_latest_training_baseline_eval(training_baseline_eval_root)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -924,6 +927,7 @@ def make_handler(
                         "training_run_preflight": training_run_preflight,
                         "training_feature_manifest": training_feature_manifest,
                         "training_runner_dry_run": training_runner_dry_run,
+                        "training_baseline_eval": training_baseline_eval,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -1006,6 +1010,11 @@ def make_handler(
             if segments == ["api", "v1", "training-runner-dry-runs", "latest"]:
                 self.respond_json(
                     {"training_runner_dry_run": load_latest_training_runner_dry_run(training_runner_dry_run_root)}
+                )
+                return
+            if segments == ["api", "v1", "training-baseline-evals", "latest"]:
+                self.respond_json(
+                    {"training_baseline_eval": load_latest_training_baseline_eval(training_baseline_eval_root)}
                 )
                 return
             raise MessageHubError("not_found", "route not found", status=404)
@@ -3771,6 +3780,145 @@ def load_latest_training_runner_dry_run(root: Path = DEFAULT_TRAINING_RUNNER_DRY
     )
 
 
+def compact_training_baselines(items: list[Any]) -> list[dict[str, Any]]:
+    baselines: list[dict[str, Any]] = []
+    for item in items:
+        baseline = as_dict(item)
+        baselines.append(
+            compact_dict(
+                {
+                    "name": baseline.get("name"),
+                    "prediction_rule": baseline.get("prediction_rule"),
+                    "scope": baseline.get("scope"),
+                    "training_scope": baseline.get("training_scope"),
+                    "predicted_label": baseline.get("predicted_label"),
+                    "overall": as_dict(baseline.get("overall")),
+                    "by_split": as_dict(baseline.get("by_split")),
+                }
+            )
+        )
+    return baselines
+
+
+def training_baseline_eval_unavailable(reason: str = "no_training_baseline_eval") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "feature_manifest": {},
+        "runner_dry_run": {},
+        "feature_rows": {"actual_row_count": 0},
+        "checks": {},
+        "metrics": {"classification": {"baselines": []}},
+        "gates": {"baseline_evaluation": "not_available"},
+        "blockers": [reason],
+        "next_step": "Run scripts/run_training_baseline_eval.py after TRAIN-005 runner dry-run is ready.",
+    }
+
+
+def latest_training_baseline_eval_path(root: Path = DEFAULT_TRAINING_BASELINE_EVAL_REPORTS) -> Path | None:
+    return latest_report_path(root, ["**/training_baseline_eval.json"])
+
+
+def load_latest_training_baseline_eval(root: Path = DEFAULT_TRAINING_BASELINE_EVAL_REPORTS) -> dict[str, Any]:
+    path = latest_training_baseline_eval_path(root)
+    if path is None:
+        return training_baseline_eval_unavailable()
+    report = load_json_report(path)
+    if report is None:
+        return training_baseline_eval_unavailable("training_baseline_eval_unreadable")
+    feature_manifest = as_dict(report.get("feature_manifest"))
+    runner_dry_run = as_dict(report.get("runner_dry_run"))
+    dataset = as_dict(report.get("dataset"))
+    feature_rows = as_dict(report.get("feature_rows"))
+    checks = as_dict(report.get("checks"))
+    metrics = as_dict(report.get("metrics"))
+    classification = as_dict(metrics.get("classification"))
+    gates = as_dict(report.get("gates"))
+    markdown_candidate = path.with_suffix(".md")
+    markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    return compact_dict(
+        {
+            "available": True,
+            "status": report.get("status", "unknown"),
+            "reason": report.get("reason"),
+            "eval_id": report.get("eval_id"),
+            "created_at": report.get("created_at") or report_file_time(path),
+            "feature_manifest": {
+                "feature_set_id": feature_manifest.get("feature_set_id"),
+                "status": feature_manifest.get("status"),
+                "reason": feature_manifest.get("reason"),
+                "feature_scope": feature_manifest.get("feature_scope"),
+                "target_separated_from_features": feature_manifest.get("target_separated_from_features", False),
+            },
+            "runner_dry_run": {
+                "run_id": runner_dry_run.get("run_id"),
+                "status": runner_dry_run.get("status"),
+                "runner_input_gate": runner_dry_run.get("runner_input_gate"),
+                "dry_run_only": runner_dry_run.get("dry_run_only", False),
+            },
+            "dataset": {
+                "dataset_id": dataset.get("dataset_id"),
+                "status": dataset.get("status"),
+                "eligible_records": dataset.get("eligible_records", 0),
+                "synthetic_records": dataset.get("synthetic_records", 0),
+            },
+            "feature_rows": {
+                "expected_row_count": feature_rows.get("expected_row_count", 0),
+                "actual_row_count": feature_rows.get("actual_row_count", 0),
+                "row_count_matches": feature_rows.get("row_count_matches", False),
+                "runner_actual_row_count": feature_rows.get("runner_actual_row_count"),
+                "runner_row_count_matches": feature_rows.get("runner_row_count_matches"),
+                "feature_set_mismatch_count": feature_rows.get("feature_set_mismatch_count", 0),
+                "split_counts": as_dict(feature_rows.get("split_counts")),
+                "label_counts": as_dict(feature_rows.get("label_counts")),
+                "risk_type_counts": as_dict(feature_rows.get("risk_type_counts")),
+                "candidate_type_counts": as_dict(feature_rows.get("candidate_type_counts")),
+                "source_status_counts": as_dict(feature_rows.get("source_status_counts")),
+                "synthetic_rows": feature_rows.get("synthetic_rows", 0),
+                "synthetic_allowed_for_eval": feature_rows.get("synthetic_allowed_for_eval", False),
+            },
+            "checks": {
+                "feature_manifest_ready": checks.get("feature_manifest_ready", False),
+                "runner_dry_run_ready": checks.get("runner_dry_run_ready", False),
+                "feature_rows_readable": checks.get("feature_rows_readable", False),
+                "row_count_matches": checks.get("row_count_matches", False),
+                "required_row_fields": checks.get("required_row_fields"),
+                "missing_row_fields": as_dict(checks.get("missing_row_fields")),
+                "target_leakage_guard": checks.get("target_leakage_guard"),
+                "target_leakage_violations": as_dict(checks.get("target_leakage_violations")),
+                "synthetic_row_policy": checks.get("synthetic_row_policy"),
+            },
+            "metrics": {
+                "scope": metrics.get("scope"),
+                "measured_from_rows": metrics.get("measured_from_rows", False),
+                "classification": {
+                    "baselines": compact_training_baselines(as_list(classification.get("baselines"))),
+                    "product_performance_claim": classification.get("product_performance_claim", False),
+                    "release_metric": classification.get("release_metric", False),
+                },
+                "operations": metrics.get("operations"),
+                "footprint": metrics.get("footprint"),
+                "power": metrics.get("power"),
+            },
+            "gates": {
+                "baseline_evaluation": gates.get("baseline_evaluation"),
+                "model_training": gates.get("model_training"),
+                "model_artifact": gates.get("model_artifact"),
+                "model_card": gates.get("model_card"),
+                "training_server": gates.get("training_server"),
+                "model_registry": gates.get("model_registry"),
+                "device_deployment": gates.get("device_deployment"),
+                "release_claim": gates.get("release_claim"),
+            },
+            "next_step": report.get("next_step"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -4700,6 +4848,10 @@ def render_dashboard() -> str:
           <div id="trainingRunnerDryRun"></div>
         </section>
         <section>
+          <h2>Training Baseline Eval</h2>
+          <div id="trainingBaselineEval"></div>
+        </section>
+        <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
         </section>
@@ -4761,6 +4913,7 @@ def render_dashboard() -> str:
       trainingRunPreflight.innerHTML = html;
       trainingFeatureManifest.innerHTML = html;
       trainingRunnerDryRun.innerHTML = html;
+      trainingBaselineEval.innerHTML = html;
       d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
@@ -4841,8 +4994,8 @@ def render_dashboard() -> str:
       `;
     }
     function statusClass(status) {
-      if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner') return 'ok';
-      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records') return 'warn';
+      if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner' || status === 'synthetic_baseline_eval_complete' || status === 'baseline_eval_complete') return 'ok';
+      if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready') return 'warn';
       return status === 'not_available' ? 'empty' : 'bad';
     }
     function productDemoPanel(demo) {
@@ -5057,6 +5210,46 @@ def render_dashboard() -> str:
         <div class="metric"><span>Gates</span><span>training ${escapeHtml(gates.model_training || 'not_run')} / artifact ${escapeHtml(gates.model_artifact || 'not_produced')} / server ${escapeHtml(gates.training_server || 'not_integrated')}</span></div>
         <div class="metric"><span>Next Step</span><span>${escapeHtml(dryRun.next_step || runner.next_step || 'Connect a real runner')}</span></div>
         <div class="metric"><span>Report</span><span>${escapeHtml(dryRun.markdown_path || dryRun.report_path || 'unknown')}</span></div>
+      `;
+    }
+    function trainingBaselineEvalPanel(evalReport) {
+      if (!evalReport || !evalReport.available) {
+        return `
+          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(evalReport && evalReport.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(evalReport && evalReport.reason || 'no_training_baseline_eval')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(evalReport && evalReport.next_step || 'Run the training baseline eval')}</span></div>
+        `;
+      }
+      const manifest = evalReport.feature_manifest || {};
+      const runner = evalReport.runner_dry_run || {};
+      const rows = evalReport.feature_rows || {};
+      const checks = evalReport.checks || {};
+      const metrics = evalReport.metrics || {};
+      const classification = metrics.classification || {};
+      const gates = evalReport.gates || {};
+      const baselines = (classification.baselines || []).map(baseline => {
+        const overall = baseline.overall || {};
+        return `${baseline.name || 'baseline'} ${overall.correct ?? 0}/${overall.total ?? 0} acc ${overall.accuracy ?? 'unknown'}`;
+      }).join(' / ') || 'none';
+      return `
+        <div class="metric"><span>Status</span><span class="${statusClass(evalReport.status)}">${escapeHtml(evalReport.status || 'unknown')}</span></div>
+        <div class="metric"><span>Eval</span><b>${escapeHtml(evalReport.eval_id || 'unknown')}</b></div>
+        <div class="metric"><span>Reason</span><span>${escapeHtml(evalReport.reason || 'unknown')}</span></div>
+        <div class="metric"><span>Feature Set</span><span>${escapeHtml(manifest.feature_set_id || 'unknown')} / ${escapeHtml(manifest.status || 'unknown')}</span></div>
+        <div class="metric"><span>Runner Dry-Run</span><span>${escapeHtml(runner.run_id || 'unknown')} / ${escapeHtml(runner.status || 'unknown')} / input ${escapeHtml(runner.runner_input_gate || 'unknown')}</span></div>
+        <div class="metric"><span>Rows</span><span>${escapeHtml(rows.actual_row_count ?? 0)} actual / ${escapeHtml(rows.expected_row_count ?? 0)} expected / match ${escapeHtml(rows.row_count_matches ?? false)}</span></div>
+        <div class="metric"><span>Splits</span><span>${escapeHtml(JSON.stringify(rows.split_counts || {}))}</span></div>
+        <div class="metric"><span>Labels</span><span>${escapeHtml(JSON.stringify(rows.label_counts || {}))}</span></div>
+        <div class="metric"><span>Risk Types</span><span>${escapeHtml(JSON.stringify(rows.risk_type_counts || {}))}</span></div>
+        <div class="metric"><span>Candidates</span><span>${escapeHtml(JSON.stringify(rows.candidate_type_counts || {}))}</span></div>
+        <div class="metric"><span>Synthetic Policy</span><span>${escapeHtml(checks.synthetic_row_policy || 'unknown')} / rows ${escapeHtml(rows.synthetic_rows ?? 0)} / allowed ${escapeHtml(rows.synthetic_allowed_for_eval ?? false)}</span></div>
+        <div class="metric"><span>Metric Scope</span><span>${escapeHtml(metrics.scope || 'unknown')} / measured ${escapeHtml(metrics.measured_from_rows ?? false)}</span></div>
+        <div class="metric"><span>Baselines</span><span>${escapeHtml(baselines)}</span></div>
+        <div class="metric"><span>Target Guard</span><span>${escapeHtml(checks.target_leakage_guard || 'unknown')} / violations ${escapeHtml(JSON.stringify(checks.target_leakage_violations || {}))}</span></div>
+        <div class="metric"><span>Performance Claim</span><span>${escapeHtml(classification.product_performance_claim ?? false)} / release ${escapeHtml(classification.release_metric ?? false)}</span></div>
+        <div class="metric"><span>Gates</span><span>eval ${escapeHtml(gates.baseline_evaluation || 'unknown')} / training ${escapeHtml(gates.model_training || 'not_run')} / artifact ${escapeHtml(gates.model_artifact || 'not_produced')} / claim ${escapeHtml(gates.release_claim || 'not_allowed')}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(evalReport.next_step || 'Repeat with reviewed real rows')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(evalReport.markdown_path || evalReport.report_path || 'unknown')}</span></div>
       `;
     }
     function fieldResultsPanel(results) {
@@ -5342,6 +5535,7 @@ def render_dashboard() -> str:
       trainingRunPreflight.innerHTML = trainingRunPreflightPanel(data.training_run_preflight || {});
       trainingFeatureManifest.innerHTML = trainingFeatureManifestPanel(data.training_feature_manifest || {});
       trainingRunnerDryRun.innerHTML = trainingRunnerDryRunPanel(data.training_runner_dry_run || {});
+      trainingBaselineEval.innerHTML = trainingBaselineEvalPanel(data.training_baseline_eval || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>

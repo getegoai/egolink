@@ -66,10 +66,12 @@ must consume only reviewed evidence:
 19. TRAIN-006 runs aggregate baseline evaluation from TRAIN-004/005 inputs so
     metrics plumbing can be exercised. Synthetic metrics remain integration
     checks only and are not product performance evidence.
-20. MotionNet v0.1 starts with a statistical baseline and small model
+20. DATA-013 surfaces the latest TRAIN-006 baseline-eval status in Web/API and
+    curated deployment summaries without exposing raw rows or model artifacts.
+21. MotionNet v0.1 starts with a statistical baseline and small model
     candidates only after candidate data passes quality, privacy, consent, and
     split-leakage checks.
-21. Device deployment begins in shadow mode: model output is recorded alongside
+22. Device deployment begins in shadow mode: model output is recorded alongside
     the deterministic Safety Kernel and RuleRouter; it does not replace safety
     behavior until later acceptance gates pass.
 
@@ -96,6 +98,7 @@ must consume only reviewed evidence:
 | Runner dry-run | Validate runner input shape before real training/evaluation integration. | TRAIN-005. |
 | Runner visibility | Surface latest runner dry-run readiness without row contents or model artifacts. | DATA-012. |
 | Baseline evaluation | Exercise aggregate metrics plumbing without model artifacts or release claims. | TRAIN-006. |
+| Baseline visibility | Surface latest baseline-eval readiness without raw rows or model artifacts. | DATA-013. |
 | Model baseline | Compare thresholds, feature baselines, 1D-CNN, and TCN. | MotionNet v0.1 planned. |
 | Footprint | Measure RAM, flash, latency, and per-inference power. | MODEL-001 resumes after an artifact exists. |
 | Device shadow mode | Run model beside rules and record deltas. | MODEL-002 planned. |
@@ -168,6 +171,11 @@ must consume only reviewed evidence:
   and produce synthetic integration metrics only. Reports do not contain raw
   rows, model weights, model cards, training-server endpoints, footprint,
   latency, power measurements, device deployment results, or release claims.
+- DATA-013 Web/API summaries may show TRAIN-006 status, aggregate baseline
+  metrics, row counts, synthetic policy, gates, and report paths only; they do
+  not expose JSONL row contents, raw records, private case rows, private
+  endpoints, model artifacts, model cards, footprint, latency, power
+  measurements, device deployment results, or release claims.
 
 ## Model And Power Gates
 

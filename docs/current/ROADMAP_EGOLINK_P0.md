@@ -246,6 +246,9 @@ Current AI/data boundary:
 - done: TRAIN-006 synthetic baseline eval can produce aggregate baseline
   metrics from TRAIN-004/005 inputs with explicit synthetic acknowledgement,
   while still producing no model artifact or release claim;
+- done: DATA-013 Dashboard/API visibility can surface the latest TRAIN-006
+  baseline-eval status and curated deploy summaries without exposing JSONL row
+  contents, private case rows, private training endpoints, or model artifacts;
 - blocked from claims: MotionNet accuracy, on-device deployment acceptance,
   and model power/battery impact until measured evidence exists.
 
@@ -263,7 +266,8 @@ from those rows while keeping model training and measured metrics at `not_run`;
 DATA-012 makes that dry-run readiness visible in the same Web/API loop.
 TRAIN-006 then exercises aggregate baseline-metric plumbing on explicit
 synthetic inputs only; it still does not train a model, produce artifacts, or
-support product performance claims.
+support product performance claims. DATA-013 makes that baseline-eval status
+visible in the Web/API loop without exposing row contents or model artifacts.
 
 ## R0: VPS + PC Simulator Simulated Loop
 

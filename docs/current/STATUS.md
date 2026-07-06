@@ -6,6 +6,21 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-013 training baseline eval visibility is implemented locally.
+The Message Hub can now load the latest bounded
+`reports/training_baseline_evals/**/training_baseline_eval.json`, expose it as
+`training_baseline_eval` in authenticated `/api/state`, serve
+`/api/v1/training-baseline-evals/latest`, and render a Dashboard `Training
+Baseline Eval` panel with eval status, feature-set/runner dry-run linkage,
+row-count and label/risk/candidate summaries, synthetic policy, aggregate
+baseline metrics, non-claim gates, next step, and report paths.
+`scripts/deploy_message_hub_vps.ps1` has a new explicit
+`-IncludeTrainingBaselineEvalSummaries` switch that copies only
+`training_baseline_eval.json/.md`. This was not deployed to the VPS in this
+run and does not expose JSONL row contents, private case rows, private
+endpoints, raw records, model artifacts, model cards, measured footprint,
+measured latency, measured power, or release claims.
+
 2026-07-06: TRAIN-006 synthetic baseline evaluation is implemented locally as
 the next bounded bridge after TRAIN-005. The new
 `scripts/run_training_baseline_eval.py` command reads an explicitly named

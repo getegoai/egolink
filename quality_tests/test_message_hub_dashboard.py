@@ -24,6 +24,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Training Run Preflight", html)
         self.assertIn("Training Feature Manifest", html)
         self.assertIn("Training Runner Dry-Run", html)
+        self.assertIn("Training Baseline Eval", html)
         self.assertIn("D1 Link Through", html)
         self.assertIn("dashboard-shell", html)
         self.assertIn("Field live view", html)
@@ -36,6 +37,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("trainingRunPreflight", html)
         self.assertIn("trainingFeatureManifest", html)
         self.assertIn("trainingRunnerDryRun", html)
+        self.assertIn("trainingBaselineEval", html)
         self.assertIn("d1Link", html)
         self.assertIn("d1_link", html)
         self.assertIn("field_results", html)
@@ -49,6 +51,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("trainingFeatureManifestPanel", html)
         self.assertIn("training_runner_dry_run", html)
         self.assertIn("trainingRunnerDryRunPanel", html)
+        self.assertIn("training_baseline_eval", html)
+        self.assertIn("trainingBaselineEvalPanel", html)
         self.assertIn("Runner Handoff", html)
         self.assertIn("Runner Ready", html)
         self.assertIn("Feature Rows", html)
@@ -56,6 +60,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Source Match", html)
         self.assertIn("Runner Input", html)
         self.assertIn("Target Guard", html)
+        self.assertIn("Metric Scope", html)
+        self.assertIn("Performance Claim", html)
         self.assertIn("Synthetic Gate", html)
         self.assertIn("Measured Metrics", html)
         self.assertIn("Classification Metrics", html)
@@ -938,6 +944,132 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(summary["status"], "not_available")
         self.assertEqual(summary["reason"], "no_training_runner_dry_run")
 
+    def test_latest_training_baseline_eval_summary_is_bounded_for_dashboard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report_dir = root / "unit-eval"
+            report_dir.mkdir()
+            (report_dir / "training_baseline_eval.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.training_baseline_eval.v0.1",
+                        "eval_id": "unit-eval",
+                        "created_at": "2026-07-06T00:30:00+00:00",
+                        "status": "synthetic_baseline_eval_complete",
+                        "reason": "synthetic_rows_evaluated_for_runner_integration_only",
+                        "feature_manifest": {
+                            "feature_set_id": "unit-features",
+                            "status": "ready_for_synthetic_feature_dry_run",
+                            "feature_scope": "manifest_summary_features",
+                            "target_separated_from_features": True,
+                        },
+                        "runner_dry_run": {
+                            "run_id": "unit-runner",
+                            "status": "synthetic_runner_dry_run_complete",
+                            "runner_input_gate": "pass",
+                            "dry_run_only": True,
+                        },
+                        "dataset": {
+                            "dataset_id": "unit-dataset",
+                            "status": "ready_for_training_handoff",
+                            "eligible_records": 1,
+                            "synthetic_records": 1,
+                        },
+                        "feature_rows": {
+                            "expected_row_count": 1,
+                            "actual_row_count": 1,
+                            "row_count_matches": True,
+                            "runner_actual_row_count": 1,
+                            "runner_row_count_matches": True,
+                            "split_counts": {"test": 1},
+                            "label_counts": {"needs_help": 1},
+                            "risk_type_counts": {"uncertain": 1},
+                            "candidate_type_counts": {"uncertain": 1},
+                            "source_status_counts": {"synthetic_generated": 1},
+                            "synthetic_rows": 1,
+                            "synthetic_allowed_for_eval": True,
+                            "row_sample": [{"private": "do-not-expose"}],
+                        },
+                        "checks": {
+                            "feature_manifest_ready": True,
+                            "runner_dry_run_ready": True,
+                            "feature_rows_readable": True,
+                            "row_count_matches": True,
+                            "required_row_fields": "pass",
+                            "missing_row_fields": {},
+                            "target_leakage_guard": "pass",
+                            "target_leakage_violations": {},
+                            "synthetic_row_policy": "acknowledged",
+                        },
+                        "metrics": {
+                            "scope": "synthetic_integration_only",
+                            "measured_from_rows": True,
+                            "classification": {
+                                "baselines": [
+                                    {
+                                        "name": "candidate_type_risk_baseline",
+                                        "overall": {"total": 1, "correct": 1, "accuracy": 1.0},
+                                        "private_case_rows": [{"row_id": "secret"}],
+                                    }
+                                ],
+                                "product_performance_claim": False,
+                                "release_metric": False,
+                            },
+                            "operations": "not_run",
+                            "footprint": "not_run",
+                            "power": "not_run",
+                        },
+                        "gates": {
+                            "baseline_evaluation": "pass",
+                            "model_training": "not_run",
+                            "model_artifact": "not_produced",
+                            "model_card": "not_produced",
+                            "training_server": "not_integrated",
+                            "model_registry": "not_integrated",
+                            "device_deployment": "not_started",
+                            "release_claim": "not_allowed",
+                        },
+                        "source_refs": {
+                            "feature_rows_ref": "training_feature_rows.jsonl",
+                            "private_training_endpoint": "https://private.example.invalid",
+                        },
+                        "private_artifact_path": "C:/private/model.bin",
+                        "non_claims": ["Synthetic baseline metrics are integration metrics only."],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (report_dir / "training_baseline_eval.md").write_text("# Baseline Eval\n", encoding="utf-8")
+
+            summary = message_hub.load_latest_training_baseline_eval(root)
+
+        self.assertTrue(summary["available"])
+        self.assertEqual(summary["status"], "synthetic_baseline_eval_complete")
+        self.assertEqual(summary["eval_id"], "unit-eval")
+        self.assertEqual(summary["feature_rows"]["actual_row_count"], 1)
+        self.assertEqual(summary["feature_rows"]["risk_type_counts"], {"uncertain": 1})
+        self.assertEqual(summary["checks"]["synthetic_row_policy"], "acknowledged")
+        self.assertEqual(summary["metrics"]["scope"], "synthetic_integration_only")
+        self.assertEqual(summary["metrics"]["classification"]["baselines"][0]["overall"]["accuracy"], 1.0)
+        self.assertFalse(summary["metrics"]["classification"]["product_performance_claim"])
+        self.assertEqual(summary["gates"]["model_artifact"], "not_produced")
+        self.assertEqual(summary["gates"]["release_claim"], "not_allowed")
+        payload = json.dumps(summary)
+        self.assertNotIn("row_sample", payload)
+        self.assertNotIn("private_case_rows", payload)
+        self.assertNotIn("private_artifact_path", payload)
+        self.assertNotIn("C:/private", payload)
+        self.assertNotIn("private.example.invalid", payload)
+
+    def test_training_baseline_eval_missing_returns_explainable_not_available(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            summary = message_hub.load_latest_training_baseline_eval(Path(tmp))
+
+        self.assertFalse(summary["available"])
+        self.assertEqual(summary["status"], "not_available")
+        self.assertEqual(summary["reason"], "no_training_baseline_eval")
+
     def test_deploy_script_can_include_curated_field_report_summaries(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         script = (repo_root / "scripts" / "deploy_message_hub_vps.ps1").read_text(encoding="utf-8")
@@ -948,12 +1080,14 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("IncludeTrainingRunSummaries", script)
         self.assertIn("IncludeTrainingFeatureSummaries", script)
         self.assertIn("IncludeTrainingRunnerDryRunSummaries", script)
+        self.assertIn("IncludeTrainingBaselineEvalSummaries", script)
         self.assertIn("Copy-FieldReportSummaries", script)
         self.assertIn("Copy-DataFlywheelSummaries", script)
         self.assertIn("Copy-TrainingExperimentSummaries", script)
         self.assertIn("Copy-TrainingRunSummaries", script)
         self.assertIn("Copy-TrainingFeatureSummaries", script)
         self.assertIn("Copy-TrainingRunnerDryRunSummaries", script)
+        self.assertIn("Copy-TrainingBaselineEvalSummaries", script)
         self.assertIn("d1_web_api_report.json", script)
         self.assertIn("d1_field_companion_summary.json", script)
         self.assertIn("data_flywheel_status.json", script)
@@ -967,6 +1101,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertNotIn("training_feature_rows.jsonl", script)
         self.assertIn("training_runner_dry_run.json", script)
         self.assertIn("training_runner_dry_run.md", script)
+        self.assertIn("training_baseline_eval.json", script)
+        self.assertIn("training_baseline_eval.md", script)
         self.assertIn("*.summary.json", script)
         self.assertNotIn("*.jsonl", script)
         self.assertNotIn("*.db", script)

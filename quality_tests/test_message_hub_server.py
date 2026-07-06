@@ -1496,6 +1496,120 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(latest["training_runner_dry_run"]["checks"]["synthetic_row_policy"], "acknowledged")
         self.assertEqual(latest["training_runner_dry_run"]["gates"]["model_artifact"], "not_produced")
 
+    def test_state_api_and_training_baseline_eval_route_include_latest_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report_root = tmp_path / "training_baseline_evals"
+            report_dir = report_root / "unit-eval"
+            report_dir.mkdir(parents=True)
+            (report_dir / "training_baseline_eval.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.training_baseline_eval.v0.1",
+                        "eval_id": "unit-eval",
+                        "created_at": "2026-07-06T00:30:00+00:00",
+                        "status": "synthetic_baseline_eval_complete",
+                        "reason": "synthetic_rows_evaluated_for_runner_integration_only",
+                        "feature_manifest": {
+                            "feature_set_id": "unit-features",
+                            "status": "ready_for_synthetic_feature_dry_run",
+                            "feature_scope": "manifest_summary_features",
+                            "target_separated_from_features": True,
+                        },
+                        "runner_dry_run": {
+                            "run_id": "unit-runner",
+                            "status": "synthetic_runner_dry_run_complete",
+                            "runner_input_gate": "pass",
+                            "dry_run_only": True,
+                        },
+                        "dataset": {
+                            "dataset_id": "unit-dataset",
+                            "status": "ready_for_training_handoff",
+                            "eligible_records": 1,
+                            "synthetic_records": 1,
+                        },
+                        "feature_rows": {
+                            "expected_row_count": 1,
+                            "actual_row_count": 1,
+                            "row_count_matches": True,
+                            "split_counts": {"test": 1},
+                            "label_counts": {"needs_help": 1},
+                            "risk_type_counts": {"uncertain": 1},
+                            "candidate_type_counts": {"uncertain": 1},
+                            "source_status_counts": {"synthetic_generated": 1},
+                            "synthetic_rows": 1,
+                            "synthetic_allowed_for_eval": True,
+                        },
+                        "checks": {
+                            "feature_manifest_ready": True,
+                            "runner_dry_run_ready": True,
+                            "feature_rows_readable": True,
+                            "row_count_matches": True,
+                            "required_row_fields": "pass",
+                            "missing_row_fields": {},
+                            "target_leakage_guard": "pass",
+                            "target_leakage_violations": {},
+                            "synthetic_row_policy": "acknowledged",
+                        },
+                        "metrics": {
+                            "scope": "synthetic_integration_only",
+                            "measured_from_rows": True,
+                            "classification": {
+                                "baselines": [
+                                    {
+                                        "name": "candidate_type_risk_baseline",
+                                        "overall": {"total": 1, "correct": 1, "accuracy": 1.0},
+                                        "private_case_rows": [{"row_id": "secret"}],
+                                    }
+                                ],
+                                "product_performance_claim": False,
+                                "release_metric": False,
+                            },
+                            "operations": "not_run",
+                            "footprint": "not_run",
+                            "power": "not_run",
+                        },
+                        "gates": {
+                            "baseline_evaluation": "pass",
+                            "model_training": "not_run",
+                            "model_artifact": "not_produced",
+                            "model_card": "not_produced",
+                            "training_server": "not_integrated",
+                            "model_registry": "not_integrated",
+                            "device_deployment": "not_started",
+                            "release_claim": "not_allowed",
+                        },
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, training_baseline_eval_root=report_root),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                latest = get_json(base_url, "/api/v1/training-baseline-evals/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["training_baseline_eval"]["status"], "synthetic_baseline_eval_complete")
+        self.assertEqual(state["training_baseline_eval"]["feature_rows"]["actual_row_count"], 1)
+        self.assertEqual(latest["training_baseline_eval"]["eval_id"], "unit-eval")
+        self.assertEqual(latest["training_baseline_eval"]["metrics"]["scope"], "synthetic_integration_only")
+        self.assertEqual(latest["training_baseline_eval"]["metrics"]["classification"]["baselines"][0]["overall"]["accuracy"], 1.0)
+        self.assertNotIn("private_case_rows", json.dumps(latest))
+        self.assertEqual(latest["training_baseline_eval"]["gates"]["model_artifact"], "not_produced")
+        self.assertEqual(latest["training_baseline_eval"]["gates"]["release_claim"], "not_allowed")
+
     def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -1663,6 +1777,7 @@ class MessageHubHttpTests(unittest.TestCase):
                     training_run_root=Path(tmp) / "empty_training_runs",
                     training_feature_root=Path(tmp) / "empty_training_features",
                     training_runner_dry_run_root=Path(tmp) / "empty_training_runner_dry_runs",
+                    training_baseline_eval_root=Path(tmp) / "empty_training_baseline_evals",
                 ),
             )
             thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -1689,6 +1804,8 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(state["training_feature_manifest"]["reason"], "no_training_feature_manifest")
         self.assertIn("training_runner_dry_run", state)
         self.assertEqual(state["training_runner_dry_run"]["reason"], "no_training_runner_dry_run")
+        self.assertIn("training_baseline_eval", state)
+        self.assertEqual(state["training_baseline_eval"]["reason"], "no_training_baseline_eval")
 
     def test_http_raw_command_poll_and_ack_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
