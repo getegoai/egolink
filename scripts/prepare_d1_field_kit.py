@@ -267,6 +267,10 @@ def build_commands(
         report_path("power", run_id),
         "--d1-demo-output-dir",
         report_path("d1_demo", run_id),
+        "--field-observation-report",
+        report_path("d1_field_observation", run_id, "d1_field_observation_report.json"),
+        "--field-observation-status",
+        report_path("d1_field_observation", run_id, "d1_field_observation_status.json"),
         "--data-pipeline-run-id",
         f"{run_id}-data-pipeline",
         "--dataset-id",
@@ -398,7 +402,7 @@ def build_commands(
         ),
         "post_run_collect_evidence": command_record(
             description=(
-                "Recommended one-command post-run collector: Web/API gate, power curve, "
+                "Recommended one-command post-run collector: field observation binding, Web/API gate, power curve, "
                 "D1 demo report, data-flywheel pipeline, training-chain reports when the dataset is ready, "
                 "and a bounded artifact summary."
             ),
@@ -651,7 +655,7 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             "",
             "### Recommended Post-Run Collector",
             "",
-            "Runs the Web/API gate, power curve, D1 evidence report, data-flywheel pipeline, and TRAIN-003..008 reports when the dataset handoff is ready, then writes one bounded artifact summary.",
+            "Runs field-observation binding, the Web/API gate, power curve, D1 evidence report, data-flywheel pipeline, and TRAIN-003..008 reports when the dataset handoff is ready, then writes one bounded artifact summary.",
             "",
             "```powershell",
             commands["post_run_collect_evidence"]["powershell"],

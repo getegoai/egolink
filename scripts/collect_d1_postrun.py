@@ -1,10 +1,10 @@
 """Collect bounded D1 post-run evidence into one local summary.
 
 This command is the normal "back from the field" entry point for D1. It reads
-the Message Hub, builds existing Web/API, power, D1 demo, and data-flywheel
-reports, and writes one summary that points at the artifacts. It does not
-contact hardware, send device commands, deploy to the VPS, train a model, or
-copy raw training data.
+the Message Hub, binds the local field-observation report/status when present,
+builds existing Web/API, power, D1 demo, and data-flywheel reports, and writes
+one summary that points at the artifacts. It does not contact hardware, send
+device commands, deploy to the VPS, train a model, or copy raw training data.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from scripts import build_training_handoff_bundle
 from scripts import build_d1_demo_report
 from scripts import create_training_job_plan
 from scripts import export_training_feature_manifest
+from scripts import observe_d1_field_run
 from scripts import register_training_experiment
 from scripts import run_data_flywheel_pipeline
 from scripts import run_training_baseline_eval
@@ -35,8 +36,8 @@ from scripts import validate_d1_web_api
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_postrun"
 DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
-SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.4"
-BUILDER_VERSION = "data-018.0"
+SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.5"
+BUILDER_VERSION = "data-019.0"
 SUMMARY_JSON = "d1_postrun_collection_summary.json"
 SUMMARY_MARKDOWN = "d1_postrun_collection_summary.md"
 READY_DATA_PIPELINE_STATUS = "ready_for_training_handoff"
@@ -68,6 +69,13 @@ def write_json(path: Path, payload: Mapping[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def read_json_file(path: Path, *, label: str) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} JSON must be an object")
+    return payload
+
+
 def bounded_error(reason: str, exc: BaseException) -> dict[str, Any]:
     return {
         "status": "error",
@@ -75,6 +83,56 @@ def bounded_error(reason: str, exc: BaseException) -> dict[str, Any]:
         "error_type": type(exc).__name__,
         "message": str(exc),
     }
+
+
+def field_observation_summary(
+    report: Mapping[str, Any] | None,
+    status: Mapping[str, Any] | None,
+    error_summary: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if error_summary:
+        return dict(error_summary)
+    if report:
+        summary = as_dict(report.get("summary"))
+        return {
+            "status": "completed",
+            "result": report.get("result"),
+            "run_id": report.get("run_id"),
+            "observer_version": report.get("observer_version"),
+            "sample_count": summary.get("sample_count"),
+            "successful_sample_count": summary.get("successful_sample_count"),
+            "fetch_error_count": summary.get("fetch_error_count"),
+            "last_seq": summary.get("last_seq"),
+            "last_location_upload_at": summary.get("last_location_upload_at"),
+            "max_freshness_s": summary.get("max_freshness_s"),
+            "raw_post_success_delta": summary.get("raw_post_success_delta"),
+            "location_event_count_delta": summary.get("location_event_count_delta"),
+            "power_sample_count_delta": summary.get("power_sample_count_delta"),
+            "report_path": report.get("report_path"),
+            "markdown_report_path": report.get("markdown_report_path"),
+            "samples_path": report.get("samples_path"),
+            "status_path": report.get("status_path"),
+            "warnings": list(report.get("warnings") or []),
+            "errors": list(report.get("errors") or []),
+        }
+    if status:
+        return {
+            "status": status.get("status") or "running",
+            "result": status.get("result"),
+            "run_id": status.get("run_id"),
+            "observer_version": status.get("observer_version"),
+            "sample_count": status.get("sample_count"),
+            "successful_sample_count": status.get("successful_sample_count"),
+            "fetch_error_count": status.get("fetch_error_count"),
+            "last_seq": status.get("latest_seq"),
+            "last_location_upload_at": status.get("latest_location_upload_at"),
+            "max_freshness_s": status.get("latest_freshness_s"),
+            "report_path": status.get("report_path"),
+            "markdown_report_path": status.get("markdown_report_path"),
+            "samples_path": status.get("samples_path"),
+            "status_path": status.get("status_path"),
+        }
+    return {"status": "skipped", "reason": "field_observation_report_missing"}
 
 
 def web_api_summary(report: Mapping[str, Any] | None, error_summary: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -311,6 +369,41 @@ def collect_power_curve(
     except analyze_power_curve.PowerCurveError as exc:
         return None, bounded_error("power_curve_analysis_failed", exc), export_path
     return report, {"status": as_dict(report.get("result")).get("status") or "completed"}, export_path
+
+
+def collect_field_observation(
+    args: argparse.Namespace,
+    *,
+    run_id: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, dict[str, Any] | None]:
+    if args.skip_field_observation:
+        return None, None, {"status": "skipped", "reason": "skip_field_observation_requested"}
+    report_path = args.field_observation_report or (
+        observe_d1_field_run.DEFAULT_OUTPUT_ROOT / run_id / observe_d1_field_run.REPORT_JSON
+    )
+    status_path = args.field_observation_status or (
+        observe_d1_field_run.DEFAULT_OUTPUT_ROOT / run_id / observe_d1_field_run.STATUS_JSON
+    )
+    try:
+        if report_path.is_file():
+            return read_json_file(report_path, label="field observation report"), None, None
+        if status_path.is_file():
+            status = read_json_file(status_path, label="field observation status")
+            status = dict(status)
+            status.setdefault("status_path", str(status_path))
+            return None, status, None
+    except Exception as exc:
+        return None, None, bounded_error("field_observation_report_failed", exc)
+    return (
+        None,
+        None,
+        {
+            "status": "skipped",
+            "reason": "field_observation_report_missing",
+            "report_path": str(report_path),
+            "status_path": str(status_path),
+        },
+    )
 
 
 def collect_d1_demo(
@@ -605,6 +698,15 @@ def derive_result(components: Mapping[str, Mapping[str, Any]]) -> tuple[str, lis
     if demo_result != "PASS":
         warnings.append(f"d1_demo:{d1_demo.get('reason') or demo_result}")
 
+    field_observation = as_dict(components.get("field_observation"))
+    field_status = str(field_observation.get("result") or field_observation.get("status") or "")
+    if field_observation.get("status") == "error":
+        warnings.append(f"field_observation:{field_observation.get('reason') or field_status}")
+    elif field_status == "FAIL":
+        warnings.append("field_observation:result_fail")
+    elif field_status and field_status not in {"PASS", "WARN", "completed", "skipped"}:
+        warnings.append(f"field_observation:{field_observation.get('reason') or field_status}")
+
     data_pipeline = as_dict(components.get("data_flywheel_pipeline"))
     data_status = str(data_pipeline.get("status") or "unknown")
     if data_status != "ready_for_training_handoff":
@@ -634,6 +736,13 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
     elif power_result != "PASS":
         steps.append("Inspect the power report; WARN/FAIL is allowed for a shakedown but must explain the gap.")
 
+    field_observation = as_dict(components.get("field_observation"))
+    field_status = str(field_observation.get("result") or field_observation.get("status") or "")
+    if field_status == "running":
+        steps.append("Wait for the D1 field observer to finish, then rerun the post-run collector to bind the final observation report.")
+    elif field_status == "FAIL":
+        steps.append("Inspect the D1 field observation report before treating the run as reviewable.")
+
     data_pipeline = as_dict(components.get("data_flywheel_pipeline"))
     data_status = str(data_pipeline.get("status") or "")
     if data_status == "needs_recordings":
@@ -658,6 +767,7 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
 
 
 def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Path, summary_md: Path) -> dict[str, Any]:
+    field_observation = as_dict(components.get("field_observation"))
     data_pipeline = as_dict(components.get("data_flywheel_pipeline"))
     training_experiment = as_dict(data_pipeline.get("training_experiment"))
     training_chain = as_dict(components.get("training_chain"))
@@ -670,6 +780,9 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
     return {
         "postrun_summary_json": str(summary_json),
         "postrun_summary_markdown": str(summary_md),
+        "field_observation_report": field_observation.get("report_path"),
+        "field_observation_status": field_observation.get("status_path"),
+        "field_observation_samples": field_observation.get("samples_path"),
         "web_api_report": as_dict(components.get("web_api")).get("report_path"),
         "power_curve_report": as_dict(components.get("power_curve")).get("report_path"),
         "message_hub_export": as_dict(components.get("power_curve")).get("export_path"),
@@ -702,7 +815,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
         "## Components",
         "",
     ]
-    for name in ("web_api", "power_curve", "d1_demo", "data_flywheel_pipeline", "training_chain"):
+    for name in ("field_observation", "web_api", "power_curve", "d1_demo", "data_flywheel_pipeline", "training_chain"):
         component = as_dict(components.get(name))
         status = component.get("result") or component.get("status") or "unknown"
         reason = component.get("reason")
@@ -738,6 +851,7 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         device_id=args.device_id,
         timeout=args.timeout,
     )
+    field_report, field_status, field_error = collect_field_observation(args, run_id=run_id)
     power_report, power_status, export_path = collect_power_curve(
         args,
         token=token,
@@ -760,6 +874,7 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     components = {
+        "field_observation": field_observation_summary(field_report, field_status, field_error),
         "web_api": web_api_summary(web_report, web_error),
         "power_curve": power_summary(
             power_report,
@@ -803,6 +918,7 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         "boundaries": [
             "Read-only Message Hub collection plus local report generation only.",
             "No hardware, serial port, firmware, Message Hub command, deployment, or GitLab mutation is performed.",
+            "The field-observation step reads only an explicit or same-run local observer report/status file.",
             "The data-flywheel step ingests only recording directories explicitly passed with --recording-dir.",
             "The training-chain step runs only bounded local preflight, feature export, runner dry-run, aggregate baseline-eval, handoff-bundle, and job-plan reports after a ready dataset handoff.",
             "Dashboard state and curated summaries are not raw training data.",
@@ -833,6 +949,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--web-review-id", help="Review ID for the D1 Web/API report.")
     parser.add_argument("--web-api-output-dir", type=Path)
+    parser.add_argument("--skip-field-observation", action="store_true")
+    parser.add_argument("--field-observation-report", type=Path)
+    parser.add_argument("--field-observation-status", type=Path)
     parser.add_argument("--message-test-run-id", help="Message Hub test_run_id to export for PWR-001 analysis.")
     parser.add_argument("--power-export", type=Path, help="Existing Message Hub test_run_export.json to analyze.")
     parser.add_argument("--power-output-dir", type=Path)

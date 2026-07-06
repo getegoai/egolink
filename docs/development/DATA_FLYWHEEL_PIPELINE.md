@@ -270,6 +270,14 @@ DATA-018 still does not train a model, call a training endpoint, copy
 feature-row JSONL to the Dashboard, deploy to devices, or produce model
 artifacts, model cards, measured footprint/power data, or release claims.
 
+DATA-019 lets the D1 post-run collector bind the local D1 field-observation
+report or live status snapshot into the same bounded post-field summary. It
+shows observation result/state, sample counts, latest sequence/freshness,
+delta summaries, and artifact paths only. It does not copy sample JSONL
+contents, contact hardware, send commands, change firmware/protocol/API
+behavior, train a model, or add location, power, LTE, GNSS, battery-life,
+model, or product-readiness claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only

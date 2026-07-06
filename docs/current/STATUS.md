@@ -6,6 +6,17 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-019 post-run field-observation binding is implemented
+locally. The D1 post-run collector schema is now
+`egolink.d1_postrun_collection.v0.5`; it can bind an explicit or same-run
+local `d1_field_observation_report.json` or live
+`d1_field_observation_status.json` into the bounded post-run summary as a
+`field_observation` component. The D1 field kit recommended post-run command
+passes the expected observation report/status paths. This does not read sample
+JSONL contents into the summary, contact hardware, send commands, change
+firmware/protocol/API behavior, deploy to the VPS, or add location, power,
+LTE, GNSS, battery-life, model, or product-readiness claims.
+
 2026-07-06: FIELD-006 D1 observer live status snapshot is implemented
 locally. Future `scripts/observe_d1_field_run.py` runs now write
 `d1_field_observation_status.json` at startup, after each sample, and at

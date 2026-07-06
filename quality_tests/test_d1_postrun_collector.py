@@ -247,6 +247,8 @@ class D1PostrunCollectorTests(unittest.TestCase):
             self.assertIn(payload["components"]["d1_demo"]["result"], {"PASS", "WARN"})
             self.assertGreaterEqual(payload["components"]["power_curve"]["counts"]["measured_power_samples"], 1)
             self.assertEqual(payload["components"]["data_flywheel_pipeline"]["status"], "needs_recordings")
+            self.assertEqual(payload["components"]["field_observation"]["status"], "skipped")
+            self.assertEqual(payload["components"]["field_observation"]["reason"], "field_observation_report_missing")
             self.assertEqual(
                 payload["components"]["data_flywheel_pipeline"]["training_experiment"]["status"],
                 "blocked_dataset_not_ready",
@@ -278,6 +280,54 @@ class D1PostrunCollectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             db_path = write_reviewed_candidate_store(root)
+            field_dir = root / "field_observation"
+            field_dir.mkdir()
+            field_status = field_dir / "d1_field_observation_status.json"
+            field_report = field_dir / "d1_field_observation_report.json"
+            field_status.write_text(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "result": "WARN",
+                        "run_id": "D1-POSTRUN-ready-training",
+                        "sample_count": 2,
+                        "successful_sample_count": 2,
+                        "fetch_error_count": 0,
+                        "latest_seq": 11,
+                        "latest_freshness_s": 31,
+                        "report_path": str(field_report),
+                        "samples_path": str(field_dir / "d1_field_samples.jsonl"),
+                    }
+                ),
+                encoding="utf-8",
+            )
+            field_report.write_text(
+                json.dumps(
+                    {
+                        "result": "WARN",
+                        "observer_version": "D1.field_observer.v2",
+                        "run_id": "D1-POSTRUN-ready-training",
+                        "summary": {
+                            "sample_count": 2,
+                            "successful_sample_count": 2,
+                            "fetch_error_count": 0,
+                            "last_seq": 11,
+                            "last_location_upload_at": "2026-07-05T04:20:00+00:00",
+                            "max_freshness_s": 31,
+                            "raw_post_success_delta": 2,
+                            "location_event_count_delta": 1,
+                            "power_sample_count_delta": 1,
+                        },
+                        "warnings": ["d1_coordinate_not_observed"],
+                        "errors": [],
+                        "samples_path": str(field_dir / "d1_field_samples.jsonl"),
+                        "status_path": str(field_status),
+                        "report_path": str(field_report),
+                        "markdown_report_path": str(field_dir / "d1_field_observation_report.md"),
+                    }
+                ),
+                encoding="utf-8",
+            )
             store = message_hub.MessageHubStore(root / "hub.db")
             add_d1_messages(store)
             server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
@@ -324,6 +374,10 @@ class D1PostrunCollectorTests(unittest.TestCase):
                             str(root / "web"),
                             "--d1-demo-output-dir",
                             str(root / "demo"),
+                            "--field-observation-report",
+                            str(field_report),
+                            "--field-observation-status",
+                            str(field_status),
                             "--created-at",
                             "2026-07-05T04:30:00+00:00",
                             "--json",
@@ -338,6 +392,9 @@ class D1PostrunCollectorTests(unittest.TestCase):
             output_text = stdout.getvalue() + json.dumps(payload, ensure_ascii=False)
 
             self.assertEqual(exit_code, 0)
+            self.assertEqual(payload["components"]["field_observation"]["result"], "WARN")
+            self.assertEqual(payload["components"]["field_observation"]["sample_count"], 2)
+            self.assertEqual(payload["components"]["field_observation"]["last_seq"], 11)
             self.assertEqual(payload["components"]["data_flywheel_pipeline"]["status"], "ready_for_training_handoff")
             self.assertEqual(
                 payload["components"]["data_flywheel_pipeline"]["training_experiment"]["status"],
@@ -419,6 +476,8 @@ class D1PostrunCollectorTests(unittest.TestCase):
                 payload["artifacts"]["training_job_plan"],
                 "training_job_plan.json",
             )
+            self.assertEqual(payload["artifacts"]["field_observation_report"], str(field_report))
+            self.assertEqual(payload["artifacts"]["field_observation_status"], str(field_status))
             self.assertFalse(payload["scope"]["model_training_started"])
             self.assertFalse(payload["scope"]["model_evaluation_started"])
             self.assertFalse(payload["scope"]["model_artifact_written"])
