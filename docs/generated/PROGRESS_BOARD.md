@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-06 01:34 UTC
-- 分支: `autodev/egolink-p0` @ 6247f50 feat(train): add training job plan dry-run [D5]
+- 生成时间: 2026-07-06 01:41 UTC
+- 分支: `autodev/egolink-p0` @ 3c6e39d feat(data): surface training job plans [D5]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 107，进行中: 3，暂停: 3
+- 已完成任务总数: 108，进行中: 3，暂停: 3
 
 ## 里程碑
 
@@ -37,10 +37,10 @@
 | DATA-014 | Post-run training-chain collector | 2026-07-06 |
 | DATA-015 | Training handoff visibility | 2026-07-06 |
 | DATA-016 | Post-run handoff collector | 2026-07-06 |
+| DATA-017 | Training job visibility | 2026-07-06 |
 | FIELD-005 | D1 observer incremental samples | 2026-07-06 |
 | TRAIN-006 | Synthetic baseline evaluation | 2026-07-06 |
 | TRAIN-007 | Training handoff bundle | 2026-07-06 |
-| TRAIN-008 | Training job plan dry-run | 2026-07-06 |
 
 ## 等待创始人处理
 
