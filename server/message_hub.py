@@ -43,6 +43,7 @@ DEFAULT_TRAINING_BASELINE_EVAL_REPORTS = REPO_ROOT / "reports" / "training_basel
 DEFAULT_TRAINING_HANDOFF_REPORTS = REPO_ROOT / "reports" / "training_handoffs"
 DEFAULT_TRAINING_JOB_REPORTS = REPO_ROOT / "reports" / "training_jobs"
 DEFAULT_SYNTHETIC_TRAINING_CHAIN_REPORTS = REPO_ROOT / "reports" / "synthetic_training_chain"
+DEFAULT_D1_TRAINING_READINESS_REPORTS = REPO_ROOT / "reports" / "d1_training_readiness"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -872,6 +873,7 @@ def make_handler(
     training_handoff_root: Path = DEFAULT_TRAINING_HANDOFF_REPORTS,
     training_job_root: Path = DEFAULT_TRAINING_JOB_REPORTS,
     synthetic_training_chain_root: Path = DEFAULT_SYNTHETIC_TRAINING_CHAIN_REPORTS,
+    d1_training_readiness_root: Path = DEFAULT_D1_TRAINING_READINESS_REPORTS,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -923,6 +925,7 @@ def make_handler(
                 training_handoff_bundle = load_latest_training_handoff_bundle(training_handoff_root)
                 training_job_plan = load_latest_training_job_plan(training_job_root)
                 synthetic_training_chain = load_latest_synthetic_training_chain(synthetic_training_chain_root)
+                d1_training_readiness = load_latest_d1_training_readiness(d1_training_readiness_root)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -940,6 +943,7 @@ def make_handler(
                         "training_handoff_bundle": training_handoff_bundle,
                         "training_job_plan": training_job_plan,
                         "synthetic_training_chain": synthetic_training_chain,
+                        "d1_training_readiness": d1_training_readiness,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -1040,6 +1044,11 @@ def make_handler(
             if segments == ["api", "v1", "synthetic-training-chains", "latest"]:
                 self.respond_json(
                     {"synthetic_training_chain": load_latest_synthetic_training_chain(synthetic_training_chain_root)}
+                )
+                return
+            if segments == ["api", "v1", "d1-training-readiness", "latest"]:
+                self.respond_json(
+                    {"d1_training_readiness": load_latest_d1_training_readiness(d1_training_readiness_root)}
                 )
                 return
             raise MessageHubError("not_found", "route not found", status=404)
@@ -4423,6 +4432,158 @@ def load_latest_synthetic_training_chain(root: Path = DEFAULT_SYNTHETIC_TRAINING
     )
 
 
+def d1_training_readiness_unavailable(reason: str = "no_d1_training_readiness") -> dict[str, Any]:
+    return {
+        "available": False,
+        "status": "not_available",
+        "reason": reason,
+        "serves_demo": "D5",
+        "source_observation": {},
+        "evidence_coverage": {},
+        "readiness": {
+            "ready_for_labeling_review": False,
+            "ready_for_training_handoff": False,
+            "training_allowed": False,
+            "blockers": [reason],
+        },
+        "gates": {"training_readiness": "not_available"},
+        "scope": {
+            "sample_jsonl_read": False,
+            "message_hub_contacted": False,
+            "hardware_contacted": False,
+            "training_samples_written": False,
+            "model_training_started": False,
+            "model_artifact_written": False,
+            "release_claim_allowed": False,
+        },
+        "next_step": "Run scripts/assess_d1_training_readiness.py after a D1 field-observation summary exists.",
+    }
+
+
+def latest_d1_training_readiness_path(root: Path = DEFAULT_D1_TRAINING_READINESS_REPORTS) -> Path | None:
+    return latest_report_path(root, ["**/d1_training_readiness.json"])
+
+
+def compact_gate_statuses(gates: Mapping[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for name in (
+        "field_observation",
+        "transport",
+        "freshness",
+        "location_evidence",
+        "sensor_quality",
+        "privacy",
+        "labels",
+        "split_leakage",
+        "model_training",
+        "model_artifact",
+        "release_claim",
+    ):
+        item = as_dict(gates.get(name))
+        result[name] = compact_dict({"status": item.get("status"), "reason": item.get("reason")})
+    return result
+
+
+def load_latest_d1_training_readiness(root: Path = DEFAULT_D1_TRAINING_READINESS_REPORTS) -> dict[str, Any]:
+    path = latest_d1_training_readiness_path(root)
+    if path is None:
+        return d1_training_readiness_unavailable()
+    report = load_json_report(path)
+    if report is None:
+        return d1_training_readiness_unavailable("d1_training_readiness_unreadable")
+    source = as_dict(report.get("source_observation"))
+    coverage = as_dict(report.get("evidence_coverage"))
+    capture = as_dict(coverage.get("capture"))
+    transport = as_dict(coverage.get("transport"))
+    location = as_dict(coverage.get("location"))
+    sensors = as_dict(coverage.get("sensors"))
+    readiness = as_dict(report.get("readiness"))
+    scope = as_dict(report.get("scope"))
+    markdown_candidate = path.with_suffix(".md")
+    markdown_path = relative_repo_path(markdown_candidate) if markdown_candidate.exists() else None
+    return compact_dict(
+        {
+            "available": True,
+            "status": report.get("status", "unknown"),
+            "reason": report.get("reason"),
+            "run_id": report.get("run_id"),
+            "generated_at": report.get("generated_at") or report_file_time(path),
+            "serves_demo": report.get("serves_demo", "D5"),
+            "source_observation": {
+                "run_id": source.get("run_id"),
+                "source": source.get("source"),
+                "status": source.get("status"),
+                "result": source.get("result"),
+                "device_id": source.get("device_id"),
+                "sample_count": source.get("sample_count", 0),
+                "successful_sample_count": source.get("successful_sample_count", 0),
+                "latest_seq": source.get("latest_seq"),
+                "max_freshness_s": source.get("max_freshness_s"),
+                "last_location_upload_at": source.get("last_location_upload_at"),
+                "report_path": source.get("report_path"),
+                "status_path": source.get("status_path"),
+                "samples_jsonl_read": source.get("samples_jsonl_read", False),
+            },
+            "evidence_coverage": {
+                "capture": {
+                    "sample_count": capture.get("sample_count", 0),
+                    "successful_sample_count": capture.get("successful_sample_count", 0),
+                    "fetch_error_count": capture.get("fetch_error_count", 0),
+                    "ready_for_review": capture.get("ready_for_review", False),
+                },
+                "transport": {
+                    "raw_post_success_delta": transport.get("raw_post_success_delta", 0),
+                    "raw_post_failure_delta": transport.get("raw_post_failure_delta", 0),
+                    "lte_registration_seen": transport.get("lte_registration_seen", False),
+                    "pdp_active_seen": transport.get("pdp_active_seen", False),
+                },
+                "location": {
+                    "coordinate_sample_count": location.get("coordinate_sample_count", 0),
+                    "location_event_count_delta": location.get("location_event_count_delta", 0),
+                    "map_modes": list(location.get("map_modes") or []),
+                    "gnss_states": list(location.get("gnss_states") or []),
+                    "gnss_fix_seen": location.get("gnss_fix_seen", False),
+                    "coordinate_values_copied": location.get("coordinate_values_copied", False),
+                    "accuracy_claimed": location.get("accuracy_claimed", False),
+                },
+                "sensors": {
+                    "imu_evidence_statuses": list(sensors.get("imu_evidence_statuses") or []),
+                    "power_evidence_statuses": list(sensors.get("power_evidence_statuses") or []),
+                    "power_measured_seen": sensors.get("power_measured_seen", False),
+                    "real_imu_seen": sensors.get("real_imu_seen", False),
+                },
+            },
+            "readiness": {
+                "ready_for_labeling_review": readiness.get("ready_for_labeling_review", False),
+                "ready_for_training_handoff": readiness.get("ready_for_training_handoff", False),
+                "training_allowed": readiness.get("training_allowed", False),
+                "consent_status": readiness.get("consent_status"),
+                "privacy_review": readiness.get("privacy_review"),
+                "label_review_state": readiness.get("label_review_state"),
+                "split_leakage_checked": readiness.get("split_leakage_checked", False),
+                "quality_gaps": list(readiness.get("quality_gaps") or []),
+                "blockers": list(readiness.get("blockers") or []),
+            },
+            "gates": compact_gate_statuses(as_dict(report.get("gates"))),
+            "scope": {
+                "sample_jsonl_read": scope.get("sample_jsonl_read", False),
+                "message_hub_contacted": scope.get("message_hub_contacted", False),
+                "hardware_contacted": scope.get("hardware_contacted", False),
+                "training_samples_written": scope.get("training_samples_written", False),
+                "model_training_started": scope.get("model_training_started", False),
+                "model_artifact_written": scope.get("model_artifact_written", False),
+                "location_accuracy_claimed": scope.get("location_accuracy_claimed", False),
+                "battery_life_claimed": scope.get("battery_life_claimed", False),
+                "release_claim_allowed": scope.get("release_claim_allowed", False),
+            },
+            "next_step": report.get("next_step"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": markdown_path,
+            "non_claims": report.get("non_claims"),
+        }
+    )
+
+
 def relative_repo_path(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
@@ -5368,6 +5529,10 @@ def render_dashboard() -> str:
           <div id="syntheticTrainingChain"></div>
         </section>
         <section>
+          <h2>D1 Training Readiness</h2>
+          <div id="d1TrainingReadiness"></div>
+        </section>
+        <section>
           <h2>Product Demo</h2>
           <div id="productDemo"></div>
         </section>
@@ -5433,6 +5598,7 @@ def render_dashboard() -> str:
       trainingHandoffBundle.innerHTML = html;
       trainingJobPlan.innerHTML = html;
       syntheticTrainingChain.innerHTML = html;
+      d1TrainingReadiness.innerHTML = html;
       d1Link.innerHTML = html;
       fieldState.innerHTML = html;
       messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
@@ -5514,6 +5680,7 @@ def render_dashboard() -> str:
     }
     function statusClass(status) {
       if (status === 'pass' || status === 'released' || status === 'ready_for_training_handoff' || status === 'ready_for_runner' || status === 'ready_for_training_runner' || status === 'ready_for_training_server_handoff' || status === 'ready_for_runner_queue' || status === 'synthetic_baseline_eval_complete' || status === 'baseline_eval_complete' || status === 'ready_for_synthetic_feature_dry_run' || status === 'synthetic_runner_dry_run_complete') return 'ok';
+      if (status === 'ready_for_labeling_review') return 'warn';
       if (status === 'warn' || status === 'not_run' || status === 'release_candidate' || status === 'needs_review' || status === 'needs_labels' || status === 'needs_capture' || status === 'synthetic_ready_for_runner' || status === 'synthetic_training_chain_complete' || status === 'synthetic_handoff_dry_run_only' || status === 'synthetic_runner_queue_dry_run_only' || status === 'blocked_dataset_not_ready' || status === 'blocked_no_eligible_records' || status === 'blocked_synthetic_without_ack' || status === 'blocked_experiment_not_ready' || status === 'blocked_incomplete_dataset_records' || status === 'blocked_runner_dry_run_not_ready' || status === 'blocked_feature_rows_mismatch' || status === 'blocked_source_mismatch' || status === 'blocked_handoff_not_ready') return 'warn';
       return status === 'not_available' ? 'empty' : 'bad';
     }
@@ -5888,6 +6055,40 @@ def render_dashboard() -> str:
         <div class="metric"><span>Report</span><span>${escapeHtml(chain.markdown_path || chain.report_path || 'unknown')}</span></div>
       `;
     }
+    function d1TrainingReadinessPanel(report) {
+      if (!report || !report.available) {
+        return `
+          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(report && report.status || 'not_available')}</span></div>
+          <div class="metric"><span>Reason</span><span>${escapeHtml(report && report.reason || 'no_d1_training_readiness')}</span></div>
+          <div class="metric"><span>Next Step</span><span>${escapeHtml(report && report.next_step || 'Run a D1 training-readiness assessment')}</span></div>
+        `;
+      }
+      const source = report.source_observation || {};
+      const coverage = report.evidence_coverage || {};
+      const capture = coverage.capture || {};
+      const transport = coverage.transport || {};
+      const location = coverage.location || {};
+      const sensors = coverage.sensors || {};
+      const readiness = report.readiness || {};
+      const gates = report.gates || {};
+      const scope = report.scope || {};
+      return `
+        <div class="metric"><span>Status</span><span class="${statusClass(report.status)}">${escapeHtml(report.status || 'unknown')}</span></div>
+        <div class="metric"><span>Run</span><b>${escapeHtml(report.run_id || 'unknown')}</b></div>
+        <div class="metric"><span>Source</span><span>${escapeHtml(source.run_id || 'unknown')} / ${escapeHtml(source.status || 'unknown')} / ${escapeHtml(source.result || 'unknown')}</span></div>
+        <div class="metric"><span>Capture</span><span>${escapeHtml(capture.successful_sample_count ?? 0)} ok / ${escapeHtml(capture.sample_count ?? 0)} samples / seq ${escapeHtml(source.latest_seq ?? 'unknown')}</span></div>
+        <div class="metric"><span>Transport</span><span>${escapeHtml(transport.raw_post_success_delta ?? 0)} ok / ${escapeHtml(transport.raw_post_failure_delta ?? 0)} fail / LTE ${escapeHtml(transport.lte_registration_seen ?? false)} / PDP ${escapeHtml(transport.pdp_active_seen ?? false)}</span></div>
+        <div class="metric"><span>Location</span><span>${escapeHtml(location.coordinate_sample_count ?? 0)} coordinate samples / GNSS fix ${escapeHtml(location.gnss_fix_seen ?? false)} / copied ${escapeHtml(location.coordinate_values_copied ?? false)}</span></div>
+        <div class="metric"><span>Sensor Gaps</span><span>IMU ${escapeHtml((sensors.imu_evidence_statuses || []).join(', ') || 'unknown')} / Power ${escapeHtml((sensors.power_evidence_statuses || []).join(', ') || 'unknown')}</span></div>
+        <div class="metric"><span>Review Ready</span><span>${escapeHtml(readiness.ready_for_labeling_review ?? false)} / training handoff ${escapeHtml(readiness.ready_for_training_handoff ?? false)} / allowed ${escapeHtml(readiness.training_allowed ?? false)}</span></div>
+        <div class="metric"><span>Review State</span><span>privacy ${escapeHtml(readiness.privacy_review || 'unknown')} / labels ${escapeHtml(readiness.label_review_state || 'unknown')} / split ${escapeHtml(readiness.split_leakage_checked ?? false)}</span></div>
+        <div class="metric"><span>Gates</span><span>field ${escapeHtml((gates.field_observation || {}).status || 'unknown')} / privacy ${escapeHtml((gates.privacy || {}).status || 'unknown')} / labels ${escapeHtml((gates.labels || {}).status || 'unknown')} / claim ${escapeHtml((gates.release_claim || {}).status || 'unknown')}</span></div>
+        <div class="metric"><span>Blockers</span><span>${escapeHtml((readiness.blockers || []).join(', ') || 'none')}</span></div>
+        <div class="metric"><span>Scope</span><span>jsonl ${escapeHtml(scope.sample_jsonl_read ?? false)} / training ${escapeHtml(scope.model_training_started ?? false)} / artifact ${escapeHtml(scope.model_artifact_written ?? false)} / claim ${escapeHtml(scope.release_claim_allowed ?? false)}</span></div>
+        <div class="metric"><span>Next Step</span><span>${escapeHtml(report.next_step || 'Attach labels and privacy review')}</span></div>
+        <div class="metric"><span>Report</span><span>${escapeHtml(report.markdown_path || report.report_path || 'unknown')}</span></div>
+      `;
+    }
     function fieldResultsPanel(results) {
       if (!results || !results.available) {
         return `
@@ -6175,6 +6376,7 @@ def render_dashboard() -> str:
       trainingHandoffBundle.innerHTML = trainingHandoffBundlePanel(data.training_handoff_bundle || {});
       trainingJobPlan.innerHTML = trainingJobPlanPanel(data.training_job_plan || {});
       syntheticTrainingChain.innerHTML = syntheticTrainingChainPanel(data.synthetic_training_chain || {});
+      d1TrainingReadiness.innerHTML = d1TrainingReadinessPanel(data.d1_training_readiness || {});
       d1Link.innerHTML = d1LinkPanel(data.devices || []);
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>

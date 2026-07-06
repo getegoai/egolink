@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-06 06:42 UTC",
+  "generated_at": "2026-07-06 11:33 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "1b2fde3 feat(web): surface synthetic training chain [D5]"
+    "head": "ee8aea8 docs(progress): refresh synthetic chain board [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 114
+    "done_total": 115
   }
 }

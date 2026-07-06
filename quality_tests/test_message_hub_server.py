@@ -1985,6 +1985,151 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertNotIn('"features"', payload_text)
         self.assertNotIn("raw_payload", payload_text)
 
+    def test_state_api_and_d1_training_readiness_route_include_latest_report(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            report_root = tmp_path / "d1_training_readiness"
+            report_dir = report_root / "unit-d1-readiness"
+            report_dir.mkdir(parents=True)
+            (report_dir / "d1_training_readiness.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "egolink.d1_training_readiness.v0.1",
+                        "run_id": "unit-d1-readiness",
+                        "generated_at": "2026-07-06T11:30:00+00:00",
+                        "serves_demo": "D5",
+                        "status": "ready_for_labeling_review",
+                        "reason": "field_observation_can_enter_human_review_but_not_training",
+                        "source_observation": {
+                            "run_id": "field-private",
+                            "source": "field_observation_report",
+                            "status": "completed",
+                            "result": "PASS",
+                            "device_id": "ego-link-r1-connectivity-001",
+                            "sample_count": 5,
+                            "successful_sample_count": 5,
+                            "latest_seq": 52,
+                            "max_freshness_s": 62.0,
+                            "last_location_upload_at": "2026-07-06T11:20:18+00:00",
+                            "report_path": "reports/d1_field_observation/field/d1_field_observation_report.json",
+                            "status_path": "reports/d1_field_observation/field/d1_field_observation_status.json",
+                            "samples_path": "reports/d1_field_observation/field/d1_field_samples.jsonl",
+                            "samples_jsonl_read": False,
+                            "lat": 31.123456,
+                            "lon": 121.654321,
+                        },
+                        "evidence_coverage": {
+                            "capture": {
+                                "sample_count": 5,
+                                "successful_sample_count": 5,
+                                "fetch_error_count": 0,
+                                "ready_for_review": True,
+                            },
+                            "transport": {
+                                "raw_post_success_delta": 2,
+                                "raw_post_failure_delta": 0,
+                                "lte_registration_seen": True,
+                                "pdp_active_seen": True,
+                            },
+                            "location": {
+                                "coordinate_sample_count": 5,
+                                "location_event_count_delta": 0,
+                                "map_modes": ["memory_coordinate"],
+                                "gnss_states": ["unknown"],
+                                "gnss_fix_seen": False,
+                                "coordinate_values_copied": False,
+                                "accuracy_claimed": False,
+                                "coordinates": {"lat": 31.123456, "lon": 121.654321},
+                            },
+                            "sensors": {
+                                "imu_evidence_statuses": ["mock"],
+                                "power_evidence_statuses": ["measured"],
+                                "power_measured_seen": True,
+                                "real_imu_seen": False,
+                            },
+                        },
+                        "readiness": {
+                            "ready_for_labeling_review": True,
+                            "ready_for_training_handoff": False,
+                            "training_allowed": False,
+                            "consent_status": "not_reviewed",
+                            "privacy_review": "required",
+                            "label_review_state": "missing",
+                            "split_leakage_checked": False,
+                            "quality_gaps": ["gnss_fix_not_seen"],
+                            "blockers": [
+                                "privacy_review_required",
+                                "training_consent_not_granted",
+                                "operator_or_user_labels_missing",
+                                "split_plan_missing",
+                            ],
+                        },
+                        "gates": {
+                            "field_observation": {
+                                "status": "pass",
+                                "reason": "field_observation_summary_has_successful_samples",
+                                "evidence": {"sample_count": 5},
+                            },
+                            "transport": {"status": "pass", "reason": "raw_post_failures_absent"},
+                            "privacy": {"status": "blocked", "reason": "privacy_review_required_before_training_use"},
+                            "labels": {"status": "blocked", "reason": "operator_or_user_labels_missing"},
+                            "split_leakage": {"status": "blocked", "reason": "split_plan_missing_for_real_field_data"},
+                            "release_claim": {"status": "not_allowed", "reason": "readiness_report_is_not_product_metric"},
+                        },
+                        "scope": {
+                            "sample_jsonl_read": False,
+                            "message_hub_contacted": False,
+                            "hardware_contacted": False,
+                            "training_samples_written": False,
+                            "model_training_started": False,
+                            "model_artifact_written": False,
+                            "location_accuracy_claimed": False,
+                            "battery_life_claimed": False,
+                            "release_claim_allowed": False,
+                        },
+                        "next_step": "Attach labels and privacy review.",
+                        "raw_payload": {"secret": "do-not-copy"},
+                        "features": {"private": True},
+                        "target": {"label": "secret"},
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (report_dir / "d1_training_readiness.md").write_text("# D1 readiness\n", encoding="utf-8")
+            store = message_hub.MessageHubStore(tmp_path / "hub.db")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, d1_training_readiness_root=report_root),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                latest = get_json(base_url, "/api/v1/d1-training-readiness/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["d1_training_readiness"]["status"], "ready_for_labeling_review")
+        self.assertTrue(state["d1_training_readiness"]["readiness"]["ready_for_labeling_review"])
+        self.assertFalse(state["d1_training_readiness"]["readiness"]["ready_for_training_handoff"])
+        self.assertFalse(state["d1_training_readiness"]["readiness"]["training_allowed"])
+        self.assertEqual(latest["d1_training_readiness"]["source_observation"]["sample_count"], 5)
+        self.assertEqual(latest["d1_training_readiness"]["evidence_coverage"]["transport"]["raw_post_success_delta"], 2)
+        self.assertFalse(latest["d1_training_readiness"]["scope"]["sample_jsonl_read"])
+        self.assertEqual(latest["d1_training_readiness"]["markdown_path"], str(report_dir / "d1_training_readiness.md"))
+        payload_text = json.dumps(latest, sort_keys=True)
+        self.assertNotIn("31.123456", payload_text)
+        self.assertNotIn("121.654321", payload_text)
+        self.assertNotIn("raw_payload", payload_text)
+        self.assertNotIn("d1_field_samples.jsonl", payload_text)
+        self.assertNotIn('"features"', payload_text)
+        self.assertNotIn('"target"', payload_text)
+
     def test_raw_ingest_fail_once_injection_retains_raw_frame_without_deriving(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")

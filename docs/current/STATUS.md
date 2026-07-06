@@ -6,6 +6,21 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-06: DATA-022 D1 real-data training-readiness assessment is
+implemented locally. `scripts/assess_d1_training_readiness.py` reads bounded
+D1 field-observation report/status summaries and writes
+`reports/d1_training_readiness/**/d1_training_readiness.json/.md` showing
+whether the real D1 capture can enter labeling/privacy review before any
+training handoff. The Message Hub can expose the latest summary as
+`d1_training_readiness` in authenticated `/api/state`, serve
+`/api/v1/d1-training-readiness/latest`, and render a Dashboard
+`D1 Training Readiness` panel. `scripts/deploy_message_hub_vps.ps1` has a new
+explicit `-IncludeD1TrainingReadinessSummaries` switch that copies only
+`d1_training_readiness.json/.md`. This was not deployed to the VPS in this run
+and does not read sample JSONL, expose exact coordinates/raw payloads/feature
+rows/targets/candidate DBs, train/evaluate a model, write model artifacts,
+measure model footprint/power, deploy to a device, or allow release claims.
+
 2026-07-06: DATA-021 synthetic training-chain visibility is implemented
 locally. The Message Hub can now load the latest bounded
 `reports/synthetic_training_chain/**/synthetic_training_chain.json`, expose it

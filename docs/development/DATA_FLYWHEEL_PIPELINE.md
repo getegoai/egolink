@@ -296,6 +296,16 @@ records, feature-row contents, private endpoints, runtime logs, model
 artifacts, measured footprint/power data, device deployment results, and
 release claims are not.
 
+DATA-022 assesses whether a real D1 field-observation report/status summary is
+ready to enter human labeling and privacy review before any training-candidate
+handoff. It reads bounded D1 observation summaries only, then writes a
+`d1_training_readiness` summary with capture, transport, location, sensor,
+privacy, label, split, and non-claim gates. It can be surfaced through Web/API
+and curated deployment summaries. It does not read sample JSONL contents,
+copy exact coordinates, expose raw payloads, create training samples, train or
+evaluate a model, produce model artifacts, measure footprint/power, deploy to
+devices, or allow release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -355,6 +365,8 @@ deployment, or OTA update behavior changes in DATA-002.
     no-hardware smoke while real field evidence is sparse.
 23. Let DATA-021 surface latest DATA-020 smoke status in Web/API without
     exposing raw synthetic internals or model artifacts.
-24. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+24. Let DATA-022 surface whether real D1 captures are ready for labeling and
+    privacy review before any training handoff.
+25. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.
