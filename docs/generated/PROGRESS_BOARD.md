@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-06 15:37 UTC
-- 分支: `autodev/egolink-p0` @ d91cf1b feat(data): surface d1 decision template [D5]
+- 生成时间: 2026-07-07 02:22 UTC
+- 分支: `autodev/egolink-p0` @ a4be0a5 feat(data): surface d1 decision template [D5]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 125，进行中: 3，暂停: 3
+- 已完成任务总数: 126，进行中: 3，暂停: 3
 
 ## 里程碑
 
@@ -33,6 +33,7 @@
 
 | 任务 | 标题 | 日期 |
 |---|---|---|
+| DATA-032 | D1 labeling decision template validation | 2026-07-07 |
 | DATA-013 | Training baseline eval visibility | 2026-07-06 |
 | DATA-014 | Post-run training-chain collector | 2026-07-06 |
 | DATA-015 | Training handoff visibility | 2026-07-06 |
@@ -40,7 +41,6 @@
 | DATA-017 | Training job visibility | 2026-07-06 |
 | DATA-018 | Post-run job-plan collector | 2026-07-06 |
 | DATA-019 | Post-run field-observation binding | 2026-07-06 |
-| DATA-020 | Synthetic training-chain smoke runner | 2026-07-06 |
 
 ## 等待创始人处理
 

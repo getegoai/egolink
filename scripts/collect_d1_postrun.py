@@ -38,13 +38,14 @@ from scripts import run_training_experiment_preflight
 from scripts import run_training_runner_dry_run
 from scripts import summarize_d1_labeling_queue
 from scripts import validate_d1_web_api
+from scripts import validate_d1_labeling_decision_template
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_postrun"
 DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
-SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.10"
-BUILDER_VERSION = "data-030.0"
+SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.11"
+BUILDER_VERSION = "data-032.0"
 SUMMARY_JSON = "d1_postrun_collection_summary.json"
 SUMMARY_MARKDOWN = "d1_postrun_collection_summary.md"
 READY_DATA_PIPELINE_STATUS = "ready_for_training_handoff"
@@ -396,6 +397,41 @@ def labeling_decision_template_summary(
         "training_allowed_count": summary.get("training_allowed_count", 0),
         "report_path": paths.get("d1_labeling_decision_template_json"),
         "markdown_report_path": paths.get("d1_labeling_decision_template_markdown"),
+        "next_step": report.get("next_step"),
+    }
+
+
+def labeling_decision_validation_summary(
+    report: Mapping[str, Any] | None,
+    error_summary: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if error_summary:
+        return dict(error_summary)
+    if not report:
+        return {"status": "skipped", "reason": "labeling_decision_validation_not_run"}
+    summary = as_dict(report.get("summary"))
+    paths = as_dict(report.get("paths"))
+    validation = as_dict(report.get("validation"))
+    items = validation.get("items") if isinstance(validation.get("items"), list) else []
+    first_item = as_dict(items[0]) if items else {}
+    return {
+        "status": report.get("status"),
+        "reason": report.get("reason"),
+        "run_id": report.get("run_id"),
+        "validation_items": summary.get("validation_items", 0),
+        "required_decision_fields": summary.get("required_decision_fields", 0),
+        "selected_decision_fields": summary.get("selected_decision_fields", 0),
+        "missing_decision_fields": summary.get("missing_decision_fields", 0),
+        "invalid_decision_fields": summary.get("invalid_decision_fields", 0),
+        "candidate_promotion_ready_items": summary.get("candidate_promotion_ready_items", 0),
+        "ready_for_candidate_promotion": summary.get("ready_for_candidate_promotion", False),
+        "first_packet_item_id": first_item.get("packet_item_id"),
+        "first_source_run_id": first_item.get("source_run_id"),
+        "first_decision_status": first_item.get("decision_status"),
+        "candidate_record_written_count": summary.get("candidate_record_written_count", 0),
+        "training_allowed_count": summary.get("training_allowed_count", 0),
+        "report_path": paths.get("d1_labeling_decision_validation_json"),
+        "markdown_report_path": paths.get("d1_labeling_decision_validation_markdown"),
         "next_step": report.get("next_step"),
     }
 
@@ -887,6 +923,66 @@ def collect_labeling_decision_template(
     return report, None
 
 
+def collect_labeling_decision_validation(
+    args: argparse.Namespace,
+    *,
+    labeling_decision_template_report: Mapping[str, Any] | None,
+    labeling_decision_template_error: Mapping[str, Any] | None,
+    run_id: str,
+    created_at: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if args.skip_labeling_decision_validation:
+        return None, {"status": "skipped", "reason": "skip_labeling_decision_validation_requested"}
+    if labeling_decision_template_error:
+        return None, {
+            "status": "skipped",
+            "reason": "labeling_decision_template_not_available_for_validation",
+            "labeling_decision_template_reason": labeling_decision_template_error.get("reason"),
+        }
+    if not labeling_decision_template_report:
+        return None, {"status": "skipped", "reason": "labeling_decision_template_report_missing"}
+
+    decision_ref = args.labeling_decision_validation_template_report
+    if decision_ref is None:
+        paths = as_dict(labeling_decision_template_report.get("paths"))
+        report_path_text = paths.get("d1_labeling_decision_template_json")
+        decision_ref = Path(str(report_path_text)) if report_path_text else None
+    expected_decision_dir = args.labeling_decision_template_output_dir or (
+        args.labeling_decision_template_output_root
+        / (args.labeling_decision_template_run_id or f"{run_id}-labeling-decisions")
+    )
+    if decision_ref is None or (not decision_ref.is_absolute() and not (REPO_ROOT / decision_ref).is_file()):
+        expected_decision_ref = expected_decision_dir / "d1_labeling_decision_template.json"
+        if expected_decision_ref.is_file():
+            decision_ref = expected_decision_ref
+    if decision_ref is None:
+        return None, {"status": "skipped", "reason": "labeling_decision_template_report_missing"}
+    if not decision_ref.is_absolute():
+        decision_ref = REPO_ROOT / decision_ref
+
+    validation_run_id = args.labeling_decision_validation_run_id or f"{run_id}-labeling-decision-validation"
+    decision_root = (
+        args.labeling_decision_template_output_dir.parent
+        if args.labeling_decision_template_output_dir
+        else args.labeling_decision_template_output_root
+    )
+    namespace = argparse.Namespace(
+        decision_template_report=decision_ref,
+        decision_template_root=decision_root,
+        run_id=validation_run_id,
+        generated_at=created_at,
+        output_root=args.labeling_decision_validation_output_root,
+        output_dir=args.labeling_decision_validation_output_dir,
+        limit=args.labeling_decision_validation_limit,
+        json=False,
+    )
+    try:
+        report = validate_d1_labeling_decision_template.build_from_args(namespace)
+    except Exception as exc:
+        return None, bounded_error("labeling_decision_validation_failed", exc)
+    return report, None
+
+
 def collect_training_chain(
     args: argparse.Namespace,
     *,
@@ -1169,6 +1265,21 @@ def derive_result(components: Mapping[str, Mapping[str, Any]]) -> tuple[str, lis
             f"labeling_decision_template:{labeling_decision_template.get('reason') or labeling_decision_status}"
         )
 
+    labeling_decision_validation = as_dict(components.get("labeling_decision_validation"))
+    labeling_validation_status = str(labeling_decision_validation.get("status") or "unknown")
+    if labeling_validation_status not in {
+        "needs_decisions",
+        "ready_for_candidate_promotion",
+        "mixed_review_complete",
+        "review_complete_not_promotable",
+        "no_decision_items",
+        "no_decision_template",
+        "skipped",
+    }:
+        warnings.append(
+            f"labeling_decision_validation:{labeling_decision_validation.get('reason') or labeling_validation_status}"
+        )
+
     training_chain = as_dict(components.get("training_chain"))
     training_status = str(training_chain.get("status") or "unknown")
     if training_status == "error":
@@ -1276,6 +1387,39 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
             )
         )
 
+    labeling_decision_validation = as_dict(components.get("labeling_decision_validation"))
+    labeling_validation_status = str(labeling_decision_validation.get("status") or "")
+    if labeling_validation_status == "needs_decisions":
+        steps.append(
+            str(
+                labeling_decision_validation.get("next_step")
+                or "Fill missing selected values in the D1 labeling decision template, then rerun validation."
+            )
+        )
+    elif labeling_validation_status == "invalid_decisions":
+        steps.append(
+            str(
+                labeling_decision_validation.get("next_step")
+                or "Fix invalid selected values in the D1 labeling decision template, then rerun validation."
+            )
+        )
+    elif labeling_validation_status in {"ready_for_candidate_promotion", "mixed_review_complete"}:
+        steps.append(
+            str(
+                labeling_decision_validation.get("next_step")
+                or "Run a future explicit candidate-store promotion task; validation did not write records."
+            )
+        )
+    elif labeling_validation_status and labeling_validation_status not in {
+        "skipped",
+        "no_decision_items",
+        "no_decision_template",
+        "review_complete_not_promotable",
+    }:
+        steps.append(
+            str(labeling_decision_validation.get("next_step") or "Rerun D1 labeling decision validation.")
+        )
+
     training_chain = as_dict(components.get("training_chain"))
     training_status = str(training_chain.get("status") or "")
     if training_status == "skipped" and training_chain.get("reason") == "data_flywheel_pipeline_not_ready":
@@ -1297,6 +1441,7 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
     labeling_queue = as_dict(components.get("labeling_queue"))
     labeling_review_packet = as_dict(components.get("labeling_review_packet"))
     labeling_decision_template = as_dict(components.get("labeling_decision_template"))
+    labeling_decision_validation = as_dict(components.get("labeling_decision_validation"))
     data_pipeline = as_dict(components.get("data_flywheel_pipeline"))
     training_experiment = as_dict(data_pipeline.get("training_experiment"))
     training_chain = as_dict(components.get("training_chain"))
@@ -1317,6 +1462,7 @@ def artifact_paths(components: Mapping[str, Mapping[str, Any]], summary_json: Pa
         "d1_labeling_queue": labeling_queue.get("report_path"),
         "d1_labeling_review_packet": labeling_review_packet.get("report_path"),
         "d1_labeling_decision_template": labeling_decision_template.get("report_path"),
+        "d1_labeling_decision_validation": labeling_decision_validation.get("report_path"),
         "web_api_report": as_dict(components.get("web_api")).get("report_path"),
         "power_curve_report": as_dict(components.get("power_curve")).get("report_path"),
         "message_hub_export": as_dict(components.get("power_curve")).get("export_path"),
@@ -1356,6 +1502,7 @@ def render_markdown(summary: Mapping[str, Any]) -> str:
         "labeling_queue",
         "labeling_review_packet",
         "labeling_decision_template",
+        "labeling_decision_validation",
         "web_api",
         "power_curve",
         "d1_demo",
@@ -1434,6 +1581,13 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         run_id=run_id,
         created_at=created_at,
     )
+    labeling_decision_validation_report, labeling_decision_validation_error = collect_labeling_decision_validation(
+        args,
+        labeling_decision_template_report=labeling_decision_template_report,
+        labeling_decision_template_error=labeling_decision_template_error,
+        run_id=run_id,
+        created_at=created_at,
+    )
     power_report, power_status, export_path = collect_power_curve(
         args,
         token=token,
@@ -1467,6 +1621,10 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         "labeling_decision_template": labeling_decision_template_summary(
             labeling_decision_template_report,
             labeling_decision_template_error,
+        ),
+        "labeling_decision_validation": labeling_decision_validation_summary(
+            labeling_decision_validation_report,
+            labeling_decision_validation_error,
         ),
         "web_api": web_api_summary(web_report, web_error),
         "power_curve": power_summary(
@@ -1511,10 +1669,12 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
             "sample_jsonl_read_for_labeling_queue": False,
             "sample_jsonl_read_for_labeling_review_packet": False,
             "sample_jsonl_read_for_labeling_decision_template": False,
+            "sample_jsonl_read_for_labeling_decision_validation": False,
             "candidate_db_written_for_labeling_intake": False,
             "candidate_db_written_for_labeling_queue": False,
             "candidate_db_written_for_labeling_review_packet": False,
             "candidate_db_written_for_labeling_decision_template": False,
+            "candidate_db_written_for_labeling_decision_validation": False,
             "secrets_persisted": False,
         },
         "boundaries": [
@@ -1526,6 +1686,7 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
             "The labeling-queue step reads only D1 labeling-intake summaries and writes no candidate DB.",
             "The labeling-review packet step reads only the D1 labeling-queue summary and writes no candidate DB.",
             "The labeling-decision template step reads only the D1 labeling-review packet and writes no candidate DB.",
+            "The labeling-decision validation step reads only the D1 labeling-decision template and writes no candidate DB.",
             "The data-flywheel step ingests only recording directories explicitly passed with --recording-dir.",
             "The training-chain step runs only bounded local preflight, feature export, runner dry-run, aggregate baseline-eval, handoff-bundle, and job-plan reports after a ready dataset handoff.",
             "Dashboard state and curated summaries are not raw training data.",
@@ -1593,6 +1754,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--labeling-decision-template-output-dir", type=Path)
     parser.add_argument("--labeling-decision-template-limit", type=int)
+    parser.add_argument("--skip-labeling-decision-validation", action="store_true")
+    parser.add_argument("--labeling-decision-validation-run-id")
+    parser.add_argument("--labeling-decision-validation-template-report", type=Path)
+    parser.add_argument(
+        "--labeling-decision-validation-output-root",
+        type=Path,
+        default=validate_d1_labeling_decision_template.DEFAULT_OUTPUT_ROOT,
+    )
+    parser.add_argument("--labeling-decision-validation-output-dir", type=Path)
+    parser.add_argument("--labeling-decision-validation-limit", type=int)
     parser.add_argument("--message-test-run-id", help="Message Hub test_run_id to export for PWR-001 analysis.")
     parser.add_argument("--power-export", type=Path, help="Existing Message Hub test_run_export.json to analyze.")
     parser.add_argument("--power-output-dir", type=Path)

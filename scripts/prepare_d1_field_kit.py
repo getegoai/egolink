@@ -25,7 +25,7 @@ DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
 DEFAULT_FW_VERSION = "0.1.0-d1-periodic-location"
 DEFAULT_BOARD_ID = "connectivity-node-001"
 DEFAULT_DURATION_HOURS = 4.0
-KIT_VERSION = "D1.field_kit.v15"
+KIT_VERSION = "D1.field_kit.v16"
 MANIFEST_JSON = "field_manifest.json"
 RUNBOOK_MD = "FIELD_RUNBOOK.md"
 CHECKLIST_MD = "FIELD_CHECKLIST.md"
@@ -279,6 +279,8 @@ def build_commands(
         report_path("d1_labeling_reviews"),
         "--labeling-decision-template-output-root",
         report_path("d1_labeling_decisions"),
+        "--labeling-decision-validation-output-root",
+        report_path("d1_labeling_decision_validations"),
         "--json",
     ]
     if battery_capacity_mah is not None:
@@ -408,6 +410,7 @@ def build_commands(
             description=(
                 "Recommended one-command post-run collector: field observation binding, Web/API gate, power curve, "
                 "D1 demo report, data-flywheel pipeline, D1 labeling review packet, D1 decision template, "
+                "D1 decision validation, "
                 "training-chain reports when the dataset is ready, and a bounded artifact summary."
             ),
             argv=post_run_collect_argv,
@@ -532,7 +535,7 @@ def build_checklists(*, duration_hours: float) -> dict[str, list[str]]:
         "after_run": [
             "Record local and UTC stop time plus visible Dashboard state.",
             "Run the one-command post-run collector from this kit.",
-            "Confirm post-run training readiness, D1 labeling intake, D1 labeling queue, D1 review packet, and D1 decision template are generated before closing the run.",
+            "Confirm post-run training readiness, D1 labeling intake, D1 labeling queue, D1 review packet, D1 decision template, and D1 decision validation are generated before closing the run.",
             "Use the individual Web/API, power, D1 demo, and data-flywheel commands only when troubleshooting.",
             "Sync curated Field Test Results, Data Flywheel, TRAIN-003..008, D1 readiness, and D1 labeling-intake summaries to the VPS Dashboard.",
             "Keep raw Message Hub export, generated reports, and OPERATOR_NOTES.md together.",
@@ -668,7 +671,7 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             "",
             "### Recommended Post-Run Collector",
             "",
-            "Runs field-observation binding, the Web/API gate, power curve, D1 evidence report, data-flywheel pipeline, D1 training-readiness, D1 labeling-intake, D1 labeling-queue, D1 labeling-review packet, D1 labeling-decision template, and TRAIN-003..008 reports when the dataset handoff is ready, then writes one bounded artifact summary.",
+            "Runs field-observation binding, the Web/API gate, power curve, D1 evidence report, data-flywheel pipeline, D1 training-readiness, D1 labeling-intake, D1 labeling-queue, D1 labeling-review packet, D1 labeling-decision template, D1 labeling-decision validation, and TRAIN-003..008 reports when the dataset handoff is ready, then writes one bounded artifact summary.",
             "",
             "```powershell",
             commands["post_run_collect_evidence"]["powershell"],
@@ -698,7 +701,7 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             "",
             "### Data Flywheel Pipeline",
             "",
-            "This writes bounded pipeline, status, dataset-manifest, training-readiness, labeling-intake, labeling-queue, labeling-review packet, labeling-decision template, and training-experiment reports. It does not export raw candidate records.",
+            "This writes bounded pipeline, status, dataset-manifest, training-readiness, labeling-intake, labeling-queue, labeling-review packet, labeling-decision template, labeling-decision validation, and training-experiment reports. It does not export raw candidate records.",
             "",
             "```powershell",
             commands["post_run_data_flywheel_status"]["powershell"],
@@ -773,6 +776,7 @@ def write_notes_template(path: Path, manifest: dict[str, Any]) -> None:
         f"- D1 labeling queue: `{manifest['expected_outputs']['d1_labeling_queue']}`",
         f"- D1 labeling review packet: `{manifest['expected_outputs']['d1_labeling_review_packet']}`",
         f"- D1 labeling decision template: `{manifest['expected_outputs']['d1_labeling_decision_template']}`",
+        f"- D1 labeling decision validation: `{manifest['expected_outputs']['d1_labeling_decision_validation']}`",
         f"- Training experiment plan: `{manifest['expected_outputs']['training_experiment_plan']}`",
         f"- Training run preflight: `{manifest['expected_outputs']['training_run_preflight']}`",
         f"- Training feature manifest: `{manifest['expected_outputs']['training_feature_manifest']}`",
@@ -913,6 +917,11 @@ def build_manifest(
             "d1_labeling_decision_template": report_path(
                 "d1_labeling_decisions", f"{run_id}-labeling-decisions", "d1_labeling_decision_template.json"
             ),
+            "d1_labeling_decision_validation": report_path(
+                "d1_labeling_decision_validations",
+                f"{run_id}-labeling-decision-validation",
+                "d1_labeling_decision_validation.json",
+            ),
             "message_hub_export": report_path("power", run_id, "test_run_export.json"),
             "data_flywheel_pipeline": report_path(
                 "data_flywheel_pipeline", f"{run_id}-data-pipeline", "data_flywheel_pipeline_run.json"
@@ -955,7 +964,7 @@ def build_manifest(
             "AMOLED sidecar commands are PC-connected display aids and are not USB-Free product acceptance evidence.",
             "Voice calling and SMS are unverified and not implemented in the current D1 run path.",
             "A multi-hour D1 shakedown is not a 24h PWR-001 pass or a product battery-life claim.",
-            "D1 training-readiness, labeling-intake, labeling-queue, labeling-review-packet, and labeling-decision-template reports are review queues only and do not write candidate DBs or permit training.",
+            "D1 training-readiness, labeling-intake, labeling-queue, labeling-review-packet, labeling-decision-template, and labeling-decision-validation reports are review queues only and do not write candidate DBs or permit training.",
             "Post-run TRAIN-003..008 reports are local bounded handoff/job-plan checks and do not train or deploy a model.",
         ],
         "non_claims": non_claims(),

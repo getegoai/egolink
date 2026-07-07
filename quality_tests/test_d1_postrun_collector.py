@@ -274,6 +274,11 @@ class D1PostrunCollectorTests(unittest.TestCase):
                 payload["components"]["labeling_decision_template"]["reason"],
                 "labeling_review_packet_not_available_for_decision_template",
             )
+            self.assertEqual(payload["components"]["labeling_decision_validation"]["status"], "skipped")
+            self.assertEqual(
+                payload["components"]["labeling_decision_validation"]["reason"],
+                "labeling_decision_template_not_available_for_validation",
+            )
             self.assertEqual(
                 payload["components"]["data_flywheel_pipeline"]["training_experiment"]["status"],
                 "blocked_dataset_not_ready",
@@ -413,6 +418,8 @@ class D1PostrunCollectorTests(unittest.TestCase):
                             str(root / "d1_labeling_reviews"),
                             "--labeling-decision-template-output-root",
                             str(root / "d1_labeling_decisions"),
+                            "--labeling-decision-validation-output-root",
+                            str(root / "d1_labeling_decision_validations"),
                             "--created-at",
                             "2026-07-05T04:30:00+00:00",
                             "--json",
@@ -509,6 +516,27 @@ class D1PostrunCollectorTests(unittest.TestCase):
                     / "d1_labeling_decision_template.json"
                 ).is_file()
             )
+            labeling_decision_validation = payload["components"]["labeling_decision_validation"]
+            self.assertEqual(labeling_decision_validation["status"], "needs_decisions")
+            self.assertEqual(labeling_decision_validation["validation_items"], 1)
+            self.assertEqual(labeling_decision_validation["required_decision_fields"], 5)
+            self.assertEqual(labeling_decision_validation["selected_decision_fields"], 0)
+            self.assertEqual(labeling_decision_validation["missing_decision_fields"], 5)
+            self.assertEqual(labeling_decision_validation["invalid_decision_fields"], 0)
+            self.assertEqual(labeling_decision_validation["candidate_promotion_ready_items"], 0)
+            self.assertFalse(labeling_decision_validation["ready_for_candidate_promotion"])
+            self.assertEqual(labeling_decision_validation["candidate_record_written_count"], 0)
+            self.assertEqual(labeling_decision_validation["training_allowed_count"], 0)
+            self.assertEqual(labeling_decision_validation["first_source_run_id"], "D1-POSTRUN-ready-training")
+            self.assertEqual(labeling_decision_validation["first_decision_status"], "needs_decisions")
+            self.assertTrue(
+                (
+                    root
+                    / "d1_labeling_decision_validations"
+                    / "D1-POSTRUN-ready-training-labeling-decision-validation"
+                    / "d1_labeling_decision_validation.json"
+                ).is_file()
+            )
             self.assertEqual(payload["components"]["data_flywheel_pipeline"]["status"], "ready_for_training_handoff")
             self.assertEqual(
                 payload["components"]["data_flywheel_pipeline"]["training_experiment"]["status"],
@@ -597,6 +625,7 @@ class D1PostrunCollectorTests(unittest.TestCase):
             self.assertEqual(payload["artifacts"]["d1_labeling_queue"], "d1_labeling_queue.json")
             self.assertEqual(payload["artifacts"]["d1_labeling_review_packet"], "d1_labeling_review_packet.json")
             self.assertEqual(payload["artifacts"]["d1_labeling_decision_template"], "d1_labeling_decision_template.json")
+            self.assertEqual(payload["artifacts"]["d1_labeling_decision_validation"], "d1_labeling_decision_validation.json")
             self.assertFalse(payload["scope"]["model_training_started"])
             self.assertFalse(payload["scope"]["model_evaluation_started"])
             self.assertFalse(payload["scope"]["model_artifact_written"])
@@ -605,10 +634,12 @@ class D1PostrunCollectorTests(unittest.TestCase):
             self.assertFalse(payload["scope"]["sample_jsonl_read_for_labeling_queue"])
             self.assertFalse(payload["scope"]["sample_jsonl_read_for_labeling_review_packet"])
             self.assertFalse(payload["scope"]["sample_jsonl_read_for_labeling_decision_template"])
+            self.assertFalse(payload["scope"]["sample_jsonl_read_for_labeling_decision_validation"])
             self.assertFalse(payload["scope"]["candidate_db_written_for_labeling_intake"])
             self.assertFalse(payload["scope"]["candidate_db_written_for_labeling_queue"])
             self.assertFalse(payload["scope"]["candidate_db_written_for_labeling_review_packet"])
             self.assertFalse(payload["scope"]["candidate_db_written_for_labeling_decision_template"])
+            self.assertFalse(payload["scope"]["candidate_db_written_for_labeling_decision_validation"])
             self.assertNotIn(str(db_path), output_text)
             self.assertNotIn("record_json", output_text)
             self.assertNotIn("raw_payload", output_text)
@@ -662,6 +693,8 @@ class D1PostrunCollectorTests(unittest.TestCase):
         self.assertEqual(payload["components"]["labeling_intake"]["status"], "skipped")
         self.assertEqual(payload["components"]["labeling_queue"]["status"], "skipped")
         self.assertEqual(payload["components"]["labeling_review_packet"]["status"], "skipped")
+        self.assertEqual(payload["components"]["labeling_decision_template"]["status"], "skipped")
+        self.assertEqual(payload["components"]["labeling_decision_validation"]["status"], "skipped")
         self.assertEqual(payload["components"]["training_chain"]["status"], "skipped")
         self.assertEqual(payload["components"]["training_chain"]["reason"], "data_flywheel_pipeline_missing")
 

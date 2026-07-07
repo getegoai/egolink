@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-06 15:37 UTC",
+  "generated_at": "2026-07-07 02:22 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "d91cf1b feat(data): surface d1 decision template [D5]"
+    "head": "a4be0a5 feat(data): surface d1 decision template [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -223,6 +223,15 @@
   ],
   "recent_done": [
     {
+      "id": "DATA-032",
+      "title": "D1 labeling decision template validation",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-032_D1_LABELING_DECISION_VALIDATION.md"
+    },
+    {
       "id": "DATA-013",
       "title": "Training baseline eval visibility",
       "state": "done",
@@ -284,15 +293,6 @@
       "priority": "medium",
       "date": "2026-07-06",
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-019_POSTRUN_FIELD_OBSERVATION_BINDING.md"
-    },
-    {
-      "id": "DATA-020",
-      "title": "Synthetic training-chain smoke runner",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "medium",
-      "date": "2026-07-06",
-      "path": "D:/pywork/egolink/docs/tasks/done/DATA-020_SYNTHETIC_TRAINING_CHAIN_SMOKE.md"
     }
   ],
   "operator_asks": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 125
+    "done_total": 126
   }
 }

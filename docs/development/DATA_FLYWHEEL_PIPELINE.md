@@ -372,6 +372,14 @@ values/selected values, and non-training gates, but not raw sample rows, exact
 coordinates, raw payloads, private operator notes, feature rows, targets,
 candidate DBs, model artifacts, or release claims.
 
+DATA-032 validates a filled D1 labeling decision template before any
+candidate-store promotion. The validation report checks required selected
+values, allowed-value membership, privacy/consent/split/candidate gates, and
+which items are ready for a future explicit promotion task. It reads only the
+bounded decision template and does not apply decisions, write candidate
+records, create training samples, train/evaluate a model, expose raw samples or
+private notes, produce model artifacts, or allow release claims.
+
 DATA-009 may generate synthetic-only session recordings to exercise this
 pipeline while hardware runs are pending. Synthetic records must be explicitly
 marked `synthetic_only=true`, kept separate from field evidence, and used only
@@ -453,6 +461,8 @@ deployment, or OTA update behavior changes in DATA-002.
 33. Let DATA-031 surface the D1 labeling decision template in Web/API and
     curated deployment summaries without exposing raw samples, private notes,
     or candidate DBs.
-34. Let MODEL-001 and MotionNet work consume only reviewed candidate records
+34. Let DATA-032 validate filled D1 labeling decision templates before any
+    candidate-store promotion, without applying decisions or writing records.
+35. Let MODEL-001 and MotionNet work consume only reviewed candidate records
     whose manifests still pass consent, privacy, retention, deletion, quality,
     and split-leakage checks.

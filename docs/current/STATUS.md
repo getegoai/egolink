@@ -6,6 +6,20 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-07: DATA-032 D1 labeling decision-template validation is implemented
+locally. `scripts/validate_d1_labeling_decision_template.py` validates filled
+`d1_labeling_decision_template` selected values, reports missing/invalid
+decisions, and identifies items ready for a future explicit candidate-store
+promotion task. `scripts/collect_d1_postrun.py` is now schema
+`egolink.d1_postrun_collection.v0.11` and includes
+`labeling_decision_validation`; field kit v16 expects the
+`d1_labeling_decision_validation` artifact. This does not read sample JSONL,
+expose exact coordinates/raw payloads/private operator notes/feature rows/
+targets/candidate DBs, apply decisions, write candidate records, create
+training samples, train/evaluate a model, write model artifacts, deploy
+inference, measure model footprint/power, deploy to the VPS, or allow release
+claims.
+
 2026-07-06: DATA-031 D1 labeling decision-template Web/API visibility is
 implemented locally. The Message Hub can load the latest bounded
 `reports/d1_labeling_decisions/**/d1_labeling_decision_template.json`, expose it
