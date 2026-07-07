@@ -13,11 +13,12 @@ The Tiny Safety D1 firmware image built successfully as
 321248 bytes with SHA-256
 `4061161F59CB1F7056633E5316FE020E9EDA6C9042ED8643C880512A30DCDDAE`.
 Flashing is deferred because the host currently enumerates only `COM9`
-(`USB\VID_303A&PID_1001`, matching the AMOLED-side Espressif USB Serial/JTAG
-path) and no connectivity-node CH343/SIM7670G ports. No firmware flash,
-serial Tiny Safety validation, USB-Free D1 Web check, model accuracy, latency,
-RAM, flash, power, GNSS, battery-life, call/SMS, or release-readiness claim is
-made by this build-only pass.
+(`USB\VID_303A&PID_1001`, ESP32-S3 MAC `02:00:00:00:00:01`), which does not
+match the connectivity-node MAC recorded in current build evidence
+(`02:00:00:00:00:03`), and no connectivity-node CH343/SIM7670G ports are
+visible. No firmware flash, serial Tiny Safety validation, USB-Free D1 Web
+check, model accuracy, latency, RAM, flash, power, GNSS, battery-life,
+call/SMS, or release-readiness claim is made by this build-only pass.
 
 2026-07-07: MODEL-DEVICE-005 Tiny Safety device-loop runner is implemented
 locally. `scripts/prepare_tiny_safety_device_loop.py` writes an offline

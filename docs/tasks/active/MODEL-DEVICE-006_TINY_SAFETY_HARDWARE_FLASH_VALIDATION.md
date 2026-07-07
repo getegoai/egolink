@@ -111,6 +111,16 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
     and `COM3`; no connectivity-node USB device was enumerated.
   - Flash remains deferred because no safe connectivity-node target port is
     visible.
+- 2026-07-07 after operator replug attempt 2:
+  - Board probe report:
+    `reports/board_validation/20260707-210839/probe.md`.
+  - Probe again reported no CH343 ESP32 console, no SIM7670G USB serial ports,
+    no RNDIS adapter, and no AT identity.
+  - ESP-IDF `esptool` identity check on the only USB serial port, `COM9`,
+    returned ESP32-S3 MAC `02:00:00:00:00:01` in USB-Serial/JTAG mode.
+  - This does not match the connectivity-node MAC recorded in current build
+    evidence (`02:00:00:00:00:03`), so `COM9` is not accepted as the 4G board
+    flash target.
 - Current hardware result: `blocked_waiting_for_connectivity_node_usb_data_port`.
 - Non-claims: no firmware flash, serial Tiny Safety validation, USB-Free D1
   Web check, latency/RAM/flash/power measurement, model accuracy, GNSS
