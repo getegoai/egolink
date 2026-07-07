@@ -398,6 +398,19 @@ Teacher 标签不能替代重要测试集的人工复核。
 
 ## 12. 当前状态
 
+### MODEL-DEVICE-009 Tiny Safety hard-case review packet
+
+MODEL-DEVICE-009 adds a no-hardware review-packet exporter for the
+MODEL-DEVICE-008 synthetic stress report. It writes a bounded manifest,
+JSONL review records, Markdown summary, and hash file under the Tiny Safety
+model artifact `label_review/` directory. Each record keeps model prediction,
+synthetic oracle label, priority reasons, bounded synthetic features, privacy
+flags, and an empty human-review slot. The packet is synthetic-only,
+unreviewed, and training-disallowed; it does not read field/private data,
+change model behavior, train a model, create a dataset manifest, contact
+hardware, claim real-world accuracy, or enable real SMS/call/dispatch/external
+escalation.
+
 ### MODEL-DEVICE-008 Tiny Safety synthetic stress evaluation
 
 MODEL-DEVICE-008 adds a no-hardware synthetic stress evaluator for the

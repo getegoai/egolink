@@ -37,3 +37,16 @@ The stress report runs the existing Tiny Safety artifact against a
 deterministic synthetic boundary matrix and lists disagreements,
 low-confidence cases, and labeling priorities. Synthetic agreement is useful
 for model iteration triage, but it is not real-world accuracy.
+
+## Tiny Safety Hard-Case Review Packet
+
+Run:
+
+```powershell
+python model_lab\safety_companion\evaluation\export_tiny_safety_hard_case_review.py
+```
+
+The review packet converts synthetic stress hard-case examples into a bounded
+human-review manifest plus JSONL records. Records keep the synthetic oracle
+label separate from the empty reviewer label and are explicitly
+training-disallowed until later human review and real data gates exist.

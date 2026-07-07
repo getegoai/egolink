@@ -6,6 +6,19 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-07: MODEL-DEVICE-009 Tiny Safety hard-case review packet is
+implemented locally. The exporter consumes the MODEL-DEVICE-008 synthetic
+stress report and writes a bounded synthetic review packet under
+`model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/label_review/`.
+The current packet exports 24 hard-case review records; all 24 are
+synthetic-only, unreviewed, training-disallowed, low-confidence, low-margin,
+and synthetic-oracle disagreements. The records preserve model prediction,
+synthetic oracle label, priority reasons, bounded synthetic features, and an
+empty human-review slot. This is a labeling workflow fixture only: no
+field/private samples, candidate DBs, model training, firmware/hardware
+contact, real-world accuracy, runtime, power, SMS/call/escalation, or release
+readiness is claimed.
+
 2026-07-07: MODEL-DEVICE-008 Tiny Safety synthetic stress evaluation is
 implemented locally. The evaluator runs the existing MODEL-DEVICE-001 artifact
 against a deterministic 540-case synthetic boundary matrix and writes
