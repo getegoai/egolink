@@ -101,6 +101,16 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
   - No CH343/connectivity-node ESP32 console or SIM7670G USB AT ports were
     enumerated during a 3-minute poll, so flash is deferred to avoid writing
     the AMOLED board.
+- 2026-07-07 after operator reconnected the 4G board:
+  - Board probe report:
+    `reports/board_validation/20260707-202343/probe.md`.
+  - Probe result: `esp32_ch343_serial_present=FAIL`,
+    `sim7670_usb_serial_present=FAIL`, `sim7670_rndis_adapter_present=FAIL`,
+    and `sim7670_at_identity=FAIL`.
+  - A follow-up 5-minute port poll saw `COM9` disappear, leaving only `COM1`
+    and `COM3`; no connectivity-node USB device was enumerated.
+  - Flash remains deferred because no safe connectivity-node target port is
+    visible.
 - Current hardware result: `blocked_waiting_for_connectivity_node_usb_data_port`.
 - Non-claims: no firmware flash, serial Tiny Safety validation, USB-Free D1
   Web check, latency/RAM/flash/power measurement, model accuracy, GNSS
