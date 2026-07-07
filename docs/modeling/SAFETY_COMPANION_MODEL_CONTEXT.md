@@ -398,6 +398,19 @@ Teacher 标签不能替代重要测试集的人工复核。
 
 ## 12. 当前状态
 
+### MODEL-DEVICE-002 Tiny Safety firmware dry-run harness
+
+MODEL-DEVICE-002 connects the MODEL-DEVICE-001 generated C constants to the
+existing firmware `safety_model` component as an explicit dry-run harness. It
+can extract the 14-feature vector from `ego_sc_model_input_t`, run the tiny
+linear classifier, and self-check the exported synthetic test vectors. The
+existing deterministic `safety_model_evaluate()` path remains the active mock/
+rule baseline. The tiny harness does not map model output to real calls, SMS,
+dispatch, or external escalation; SOS/cancel still return
+`safety_rule_required` and must be handled by Safety Kernel rules. No firmware
+flash, device deployment, real-world accuracy, latency, RAM, flash, or power
+claim is made by this step.
+
 ### MODEL-DEVICE-001 Tiny Safety Model v0
 
 MODEL-DEVICE-001 adds the first local train/export loop for a device-shaped

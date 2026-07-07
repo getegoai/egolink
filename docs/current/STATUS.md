@@ -1,10 +1,21 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-06
+last_verified: 2026-07-07
 verified_by: codex
 ---
 
 ## Latest Deployment Note
+
+2026-07-07: MODEL-DEVICE-002 Tiny Safety firmware dry-run harness is
+implemented locally. The existing `firmware/mqtt_heartbeat/components/
+safety_model` component now includes `tiny_safety_harness.c`, which reads the
+MODEL-DEVICE-001 generated C constants, extracts the 14-feature vector from
+`ego_sc_model_input_t`, predicts the dry-run state label, and self-checks the
+exported synthetic test vectors. This does not change the existing
+`safety_model_evaluate()` deterministic mock/rule behavior, map model output
+to calls/SMS/dispatch/external escalation, flash or deploy a device, measure
+latency/RAM/flash/power, train on field/private samples, deploy to the VPS, or
+claim real-world model accuracy or release readiness.
 
 2026-07-07: MODEL-DEVICE-001 Tiny Safety Model v0 local train/export loop is
 implemented locally. `model_lab/safety_companion/src/tiny_safety_model.py`

@@ -28,6 +28,8 @@ class SafetyModelFirmwareTests(unittest.TestCase):
         self.assertIn('bool safety_model_evaluate(', self.header)
         self.assertIn('const char *safety_model_version(void);', self.header)
         self.assertIn('safety_model_input_from_mock_state', self.header)
+        self.assertIn('safety_model_tiny_predict_input', self.header)
+        self.assertIn('safety_model_tiny_self_test', self.header)
 
     def test_mock_is_explicit_and_sos_is_deterministic(self) -> None:
         self.assertIn('SAFETY_MODEL_MOCK_VERSION "safety-model-mock-0.1.0"', self.source)
