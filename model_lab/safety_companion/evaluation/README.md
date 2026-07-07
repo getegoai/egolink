@@ -1,9 +1,26 @@
 # Evaluation
 
-运行：
+## Deterministic M0 Baseline
+
+Run:
 
 ```powershell
 python model_lab\safety_companion\evaluation\evaluate_baseline.py --output artifacts\baseline_report.json
 ```
 
-M0 的 12/12 仅表示确定性场景与预期契约一致，不是安全识别准确率。
+The M0 scenario pass rate checks deterministic contract behavior only. It is
+not a real-world safety recognition accuracy claim.
+
+## Tiny Safety Static Footprint
+
+Run:
+
+```powershell
+python model_lab\safety_companion\evaluation\assess_tiny_safety_static_footprint.py
+```
+
+The report binds the existing MODEL-DEVICE-001 Tiny Safety artifact/export
+files to static footprint evidence. If the local MODEL-DEVICE-006 firmware
+build binary is present, the report records its app bytes as static build
+context. Runtime RAM, latency, power, model delta, MotionNet acceptance, and
+production MCU readiness remain `unknown` until separately measured.

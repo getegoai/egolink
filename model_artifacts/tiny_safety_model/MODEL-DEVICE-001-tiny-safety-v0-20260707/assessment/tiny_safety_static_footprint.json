@@ -1,0 +1,125 @@
+{
+  "artifact_files": {
+    "c_header": {
+      "bytes": 3058,
+      "path": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/export/tiny_safety_model.h",
+      "present": true,
+      "sha256": "41c5b9ffae6bce54badddcba87a4bcfd08a3eaab0753ef20eadfa680e0e1c5b6"
+    },
+    "export_report": {
+      "bytes": 1663,
+      "path": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/export/tiny_safety_model_export.json",
+      "present": true,
+      "sha256": "b6f32bc5b24a13f4ccc6ceea312dad225b12a703ed48034cd02e85740792ac05"
+    },
+    "firmware_binary": {
+      "bytes": 321248,
+      "path": "firmware/mqtt_heartbeat/build_model_device_006_tiny_safety/egolink_mqtt_heartbeat.bin",
+      "present": true,
+      "sha256": "aaaf79e7734c83b93a013a70dc0fe2714791acbd65b4abc1ec61f7f992008c00"
+    },
+    "model_artifact": {
+      "bytes": 7966,
+      "path": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/tiny_safety_model.json",
+      "present": true,
+      "sha256": "504de9511f18478002596c9ac90fcfd6941f08238f6f1b72c7307407adcbbbed"
+    },
+    "test_vectors": {
+      "bytes": 2654,
+      "path": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/export/tiny_safety_test_vectors.json",
+      "present": true,
+      "sha256": "0c87483a349af7c7f641c3c18f54cb3a0cd8589da12a32442295e4c93bf597a4"
+    }
+  },
+  "artifact_hash": "504de9511f18478002596c9ac90fcfd6941f08238f6f1b72c7307407adcbbbed",
+  "assessed_at": "2026-07-07T14:05:00+00:00",
+  "evidence_level": "L2_build_verified_static_partial",
+  "export_scope": {
+    "device_deployed": false,
+    "firmware_integrated": false,
+    "hardware_contacted": false,
+    "synthetic_only": true
+  },
+  "firmware_or_benchmark_version": "0.1.0-model-device-006-tiny-safety-hw",
+  "firmware_test_run_id": "MODEL-DEVICE-006-hw-20260707-d1",
+  "hardware_candidate": "esp32_s3_connectivity_node",
+  "input_manifest": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/tiny_safety_eval.jsonl",
+  "known_gaps": [
+    "Runtime RAM is unknown until measured on a target build.",
+    "Latency is unknown until measured on a target build.",
+    "Energy per inference is unknown until measured with a power path.",
+    "Firmware app bytes are not the model static delta.",
+    "Tiny Safety v0 is not MotionNet-class acceptance evidence.",
+    "PROD-001 TBD(MODEL-001) values must not be replaced from this report."
+  ],
+  "model_footprint_manifest": {
+    "energy_per_inference_mj": "unknown",
+    "evidence_paths": [
+      "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/tiny_safety_model.json",
+      "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/export/tiny_safety_model_export.json",
+      "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/export/tiny_safety_model.h",
+      "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/export/tiny_safety_test_vectors.json",
+      "firmware/mqtt_heartbeat/build_model_device_006_tiny_safety/egolink_mqtt_heartbeat.bin"
+    ],
+    "flash_total_bytes": 321248,
+    "latency_max_ms": "unknown",
+    "latency_p50_ms": "unknown",
+    "latency_p95_ms": "unknown",
+    "measurement_environment": "windows_static_file_assessment",
+    "model_static_delta_bytes": "unknown",
+    "power_profile": "unknown",
+    "ram_peak_bytes": "unknown",
+    "reviewer_outcome": "engineering_static_evidence_only"
+  },
+  "model_id": "MODEL-DEVICE-001-tiny-safety-v0-20260707",
+  "model_name": "tiny_safety_model",
+  "model_type": "linearized_centroid_classifier",
+  "model_version": "0.1.0-synthetic-dry-run",
+  "non_claims": [
+    "No real-world accuracy is claimed.",
+    "No runtime RAM, latency, or power measurement is claimed.",
+    "No MotionNet acceptance or production MCU selection is claimed.",
+    "No real SMS, call, dispatch, or external escalation is enabled."
+  ],
+  "operation_estimate": {
+    "argmax_class_comparisons": 4,
+    "confidence_expf_calls": 4,
+    "estimate_basis": "firmware tiny_safety_harness.c float32 linear score loop",
+    "feature_extract_slots": 14,
+    "notes": [
+      "Counts are static source-level estimates, not measured CPU cycles.",
+      "The current firmware computes confidence with expf; latency remains unknown until measured on target."
+    ],
+    "score_add_count": 56,
+    "score_multiply_count": 56,
+    "test_vector_score_multiply_count": 224
+  },
+  "runtime_backend": "esp32_s3_c_float32_tiny_safety_harness",
+  "schema_version": "egolink.tiny_safety_static_footprint.v0.1",
+  "scope": {
+    "contracts_changed": false,
+    "firmware_changed": false,
+    "hardware_contacted": false,
+    "model_behavior_changed": false,
+    "model_training_started": false,
+    "power_measured": false,
+    "prod_001_update_allowed": false,
+    "runtime_measured": false
+  },
+  "serves_demo": "D4-D5",
+  "source_status": "static_files_only_no_runtime_measurement",
+  "static_model_metrics": {
+    "bias_count": 4,
+    "class_count": 4,
+    "estimated_c_constant_bytes": 834,
+    "feature_count": 14,
+    "feature_name_bytes": 323,
+    "float32_model_bytes": 240,
+    "parameter_count": 60,
+    "state_label_bytes": 43,
+    "test_expected_bytes": 4,
+    "test_feature_bytes": 224,
+    "test_vector_count": 4,
+    "weight_count": 56
+  }
+}

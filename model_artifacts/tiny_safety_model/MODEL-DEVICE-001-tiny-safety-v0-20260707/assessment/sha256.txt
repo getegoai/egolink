@@ -1,0 +1,2 @@
+37b35de00c8912730ba87b1745900d60b84616e13599a7782c4b7daeff15ad1b  tiny_safety_static_footprint.json
+1ae369c0e652e57959aa650f44ca00f4e45f1e1327e7aeffd8be46a95f9b86ab  tiny_safety_static_footprint.md

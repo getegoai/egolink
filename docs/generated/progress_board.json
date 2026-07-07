@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-07 13:44 UTC",
+  "generated_at": "2026-07-07 14:20 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "cf5b4a6 docs(model): record tiny safety target mac mismatch [D5]"
+    "head": "82dd180 fix(model): validate tiny safety hardware loop [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -286,13 +286,13 @@
       "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-006_TINY_SAFETY_HARDWARE_FLASH_VALIDATION.md"
     },
     {
-      "id": "DATA-013",
-      "title": "Training baseline eval visibility",
+      "id": "MODEL-DEVICE-007",
+      "title": "Tiny Safety static footprint report",
       "state": "done",
       "packet_status": "done",
       "priority": "high",
-      "date": "2026-07-06",
-      "path": "D:/pywork/egolink/docs/tasks/done/DATA-013_TRAINING_BASELINE_EVAL_VISIBILITY.md"
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-007_TINY_SAFETY_STATIC_FOOTPRINT.md"
     }
   ],
   "operator_asks": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 132
+    "done_total": 133
   }
 }

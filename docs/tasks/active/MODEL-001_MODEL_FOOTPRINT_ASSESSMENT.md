@@ -103,6 +103,14 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 - protocol-baseline (2026-07-04, codex): created the MODEL-001 protocol and
   focused quality test. Remaining measurement gates stay open.
+- tiny-safety-static-footprint (2026-07-07, codex): MODEL-DEVICE-007 produced
+  a static footprint report for the existing MODEL-DEVICE-001 Tiny Safety v0
+  artifact at
+  `model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/assessment/tiny_safety_static_footprint.md`.
+  It records 60 parameters, 834 estimated C constant bytes, simple operation
+  counts, and the local MODEL-DEVICE-006 app binary size when present. This is
+  not MotionNet-class acceptance evidence and does not close the runtime RAM,
+  latency, power, MCU comparison, or PROD-001 gates.
 - Changed files:
   - `docs/modeling/MODEL_FOOTPRINT_ASSESSMENT.md`
   - `docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md`

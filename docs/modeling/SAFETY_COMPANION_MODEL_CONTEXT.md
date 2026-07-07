@@ -398,6 +398,17 @@ Teacher 标签不能替代重要测试集的人工复核。
 
 ## 12. 当前状态
 
+### MODEL-DEVICE-007 Tiny Safety static footprint report
+
+MODEL-DEVICE-007 adds a no-hardware static footprint evaluator for the existing
+MODEL-DEVICE-001 Tiny Safety artifact/export files. It records model identity,
+hashes, feature/class counts, parameter count, estimated C constant bytes,
+simple operation counts, and optional local MODEL-DEVICE-006 firmware app
+bytes when that build output is present. This is static evidence only: runtime
+RAM, latency, energy, model delta, MotionNet acceptance, PROD-001 budget
+updates, production MCU selection, real-world accuracy, and real SMS/call/
+dispatch/external escalation remain unclaimed.
+
 ### MODEL-DEVICE-005 Tiny Safety device-loop runner
 
 MODEL-DEVICE-005 adds an offline run-plan generator for the next Tiny Safety

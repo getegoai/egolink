@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-07: MODEL-DEVICE-007 Tiny Safety static footprint report is
+implemented locally. The new evaluator reads the existing MODEL-DEVICE-001
+artifact/export files and, when present, the MODEL-DEVICE-006 local firmware
+build binary, then writes a bounded static footprint report under
+`model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/assessment/`.
+Current Tiny Safety v0 static evidence is `L2_build_verified_static_partial`:
+60 parameters, 834 estimated C constant bytes, 56 score multiplies/adds, 4
+confidence `expf` calls, and local app binary size 321248 bytes. Runtime RAM,
+latency, energy, model delta, MotionNet acceptance, PROD-001 budget updates,
+real-world accuracy, real SMS/call/escalation, and release readiness remain
+unclaimed.
+
 2026-07-07: MODEL-DEVICE-006 Tiny Safety hardware flash validation is done.
 The connectivity node was identified on CH343 `COM4` with SIM7670G AT ports
 visible, then flashed with Tiny Safety D1 firmware
