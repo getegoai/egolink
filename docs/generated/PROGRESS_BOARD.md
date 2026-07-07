@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-07 14:20 UTC
-- 分支: `autodev/egolink-p0` @ 82dd180 fix(model): validate tiny safety hardware loop [D5]
+- 生成时间: 2026-07-07 14:27 UTC
+- 分支: `autodev/egolink-p0` @ f72921a feat(model): add tiny safety static footprint report [D5]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 133，进行中: 3，暂停: 3
+- 已完成任务总数: 134，进行中: 3，暂停: 3
 
 ## 里程碑
 

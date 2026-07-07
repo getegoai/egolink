@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-07: MODEL-DEVICE-008 Tiny Safety synthetic stress evaluation is
+implemented locally. The evaluator runs the existing MODEL-DEVICE-001 artifact
+against a deterministic 540-case synthetic boundary matrix and writes
+JSON/Markdown under
+`model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/evaluation/`.
+The current synthetic agreement is 365/540 (`0.675926`), with 523
+low-confidence and 331 low-margin cases; `uncertain` is the top labeling
+priority with 141 synthetic disagreements. This is model-iteration triage
+only: no field/private samples are read, no model behavior is changed, and no
+real-world accuracy, runtime, power, SMS/call/escalation, or release-readiness
+claim is made.
+
 2026-07-07: MODEL-DEVICE-007 Tiny Safety static footprint report is
 implemented locally. The new evaluator reads the existing MODEL-DEVICE-001
 artifact/export files and, when present, the MODEL-DEVICE-006 local firmware

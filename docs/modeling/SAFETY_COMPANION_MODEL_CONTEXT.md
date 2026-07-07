@@ -398,6 +398,18 @@ Teacher 标签不能替代重要测试集的人工复核。
 
 ## 12. 当前状态
 
+### MODEL-DEVICE-008 Tiny Safety synthetic stress evaluation
+
+MODEL-DEVICE-008 adds a no-hardware synthetic stress evaluator for the
+existing MODEL-DEVICE-001 Tiny Safety artifact. It runs a deterministic
+boundary matrix, compares predictions to a transparent synthetic oracle, and
+reports agreement, confusion, low-confidence cases, hard-case examples, and
+labeling priorities. The first report shows `uncertain` as the highest-priority
+synthetic boundary for review. This is model-iteration triage only: it does
+not read field/private data, change model behavior, train a new artifact,
+claim real-world accuracy, or enable real SMS/call/dispatch/external
+escalation.
+
 ### MODEL-DEVICE-007 Tiny Safety static footprint report
 
 MODEL-DEVICE-007 adds a no-hardware static footprint evaluator for the existing

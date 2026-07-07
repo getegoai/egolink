@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-07 14:20 UTC",
+  "generated_at": "2026-07-07 14:27 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "82dd180 fix(model): validate tiny safety hardware loop [D5]"
+    "head": "f72921a feat(model): add tiny safety static footprint report [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 133
+    "done_total": 134
   }
 }
