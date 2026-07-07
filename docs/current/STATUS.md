@@ -6,6 +6,17 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-07: MODEL-DEVICE-004 Tiny Safety firmware CLI validator is
+implemented locally. `scripts/validate_tiny_safety_firmware_cli.py` can write a
+default no-hardware dry-run report, parse fixture logs, or, only with an
+explicit `--port` plus `--i-understand-serial-hardware`, run a bounded serial
+validation of `safety tiny status/selftest/demo ...` marker lines and produce
+JSON/Markdown evidence under `reports/tiny_safety_firmware_cli/`. This does
+not flash firmware, change model or Safety Kernel behavior, map model output to
+SMS/calls/dispatch/external escalation, contact hardware by default, train on
+field/private data, deploy to the VPS, or claim real-world model accuracy,
+latency, RAM, flash, power, or release readiness.
+
 2026-07-07: MODEL-DEVICE-003 Tiny Safety firmware CLI closed loop is
 implemented locally. The `mqtt_heartbeat` firmware safety CLI now exposes
 `safety tiny status`, `safety tiny selftest`, and `safety tiny demo ...`

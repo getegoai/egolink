@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-07 05:40 UTC
-- 分支: `autodev/egolink-p0` @ 687bda6 feat(model): add tiny safety firmware harness [D5]
+- 生成时间: 2026-07-07 06:01 UTC
+- 分支: `autodev/egolink-p0` @ 457fab5 feat(model): expose tiny safety firmware cli loop [D5]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 129，进行中: 3，暂停: 3
+- 已完成任务总数: 130，进行中: 3，暂停: 3
 
 ## 里程碑
 
@@ -37,10 +37,10 @@
 | MODEL-DEVICE-001 | Tiny Safety Model v0 local train/export loop | 2026-07-07 |
 | MODEL-DEVICE-002 | Tiny Safety firmware dry-run harness | 2026-07-07 |
 | MODEL-DEVICE-003 | Tiny Safety firmware CLI closed loop | 2026-07-07 |
+| MODEL-DEVICE-004 | Tiny Safety firmware CLI validator | 2026-07-07 |
 | DATA-013 | Training baseline eval visibility | 2026-07-06 |
 | DATA-014 | Post-run training-chain collector | 2026-07-06 |
 | DATA-015 | Training handoff visibility | 2026-07-06 |
-| DATA-016 | Post-run handoff collector | 2026-07-06 |
 
 ## 等待创始人处理
 

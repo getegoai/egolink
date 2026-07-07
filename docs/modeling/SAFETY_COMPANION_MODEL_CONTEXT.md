@@ -398,6 +398,18 @@ Teacher 标签不能替代重要测试集的人工复核。
 
 ## 12. 当前状态
 
+### MODEL-DEVICE-004 Tiny Safety firmware CLI validator
+
+MODEL-DEVICE-004 adds the host-side validator for the MODEL-DEVICE-003 firmware
+serial CLI. The validator can write a no-hardware dry-run plan, replay fixture
+logs, or, with an explicit serial hardware guard, send the bounded `safety tiny
+...` commands and parse `TINY_SAFETY_STATUS`, `TINY_SAFETY_SELFTEST`, and
+`TINY_SAFETY_DEMO` marker lines into JSON/Markdown evidence. This is still a
+validation harness only: it does not flash firmware, change Safety Kernel
+behavior, trigger real SMS/call/dispatch/external escalation, measure runtime
+latency/RAM/flash/power, train on field/private data, deploy to the VPS, or
+claim real-world model accuracy or release readiness.
+
 ### MODEL-DEVICE-003 Tiny Safety firmware CLI closed loop
 
 MODEL-DEVICE-003 makes the Tiny Safety firmware harness operator-observable
