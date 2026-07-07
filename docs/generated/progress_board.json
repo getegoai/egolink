@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-07 10:59 UTC",
+  "generated_at": "2026-07-07 11:50 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "6f9d846 feat(model): add tiny safety cli validator [D5]"
+    "head": "4b0965b feat(model): add tiny safety device loop planner [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -203,6 +203,15 @@
       "path": "D:/pywork/egolink/docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md"
     },
     {
+      "id": "MODEL-DEVICE-006",
+      "title": "Tiny Safety hardware flash validation",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/active/MODEL-DEVICE-006_TINY_SAFETY_HARDWARE_FLASH_VALIDATION.md"
+    },
+    {
       "id": "PROD-001",
       "title": "Mass-production requirements definition and module/MCU selection gates",
       "state": "paused",
@@ -355,9 +364,9 @@
     }
   ],
   "counts": {
-    "active": 3,
+    "active": 4,
     "paused": 3,
-    "open_total": 6,
+    "open_total": 7,
     "done_total": 131
   }
 }

@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-07 10:59 UTC
-- 分支: `autodev/egolink-p0` @ 6f9d846 feat(model): add tiny safety cli validator [D5]
+- 生成时间: 2026-07-07 11:50 UTC
+- 分支: `autodev/egolink-p0` @ 4b0965b feat(model): add tiny safety device loop planner [D5]
 - 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
-- 已完成任务总数: 131，进行中: 3，暂停: 3
+- 已完成任务总数: 131，进行中: 4，暂停: 3
 
 ## 里程碑
 
@@ -26,6 +26,7 @@
 | FIELD-003 | Outdoor GNSS acceptance protocol and first measured run | paused | high | 暂停到D2：claude+创始人（户外执行） |
 | FIELD-004 | D1 outdoor multi-hour field run | active | high | - |
 | MODEL-001 | Model footprint assessment | paused | high | 暂停到D4/D5：codex |
+| MODEL-DEVICE-006 | Tiny Safety hardware flash validation | active | high | - |
 | PROD-001 | Mass-production requirements definition and module/MCU selection gates | paused | high | 暂停：等D1/创始人输入 |
 | PWR-001 | Real power telemetry and first 24h battery baseline run | active | high | claude+创始人（刷机/挂电池） |
 
