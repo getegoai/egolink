@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-07: MODEL-DEVICE-005 Tiny Safety device-loop runner is implemented
+locally. `scripts/prepare_tiny_safety_device_loop.py` writes an offline
+JSON/Markdown run plan that stitches together the D1 periodic-location firmware
+build, optional guarded flash, guarded `safety tiny ...` serial validation, and
+post-flash USB-Free D1 Web/API observer checks. A sample plan was generated at
+`reports/tiny_safety_device_loop/MODEL-DEVICE-005-plan-20260707/`. This does
+not run the generated commands, flash firmware, open serial ports, contact
+hardware, contact the VPS, read token values, change model or Safety Kernel
+behavior, map model output to SMS/calls/dispatch/external escalation, train on
+field/private data, or claim real-world model accuracy, latency, RAM, flash,
+power, or release readiness.
+
 2026-07-07: MODEL-DEVICE-004 Tiny Safety firmware CLI validator is
 implemented locally. `scripts/validate_tiny_safety_firmware_cli.py` can write a
 default no-hardware dry-run report, parse fixture logs, or, only with an

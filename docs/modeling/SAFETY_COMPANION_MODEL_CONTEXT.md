@@ -398,6 +398,18 @@ Teacher 标签不能替代重要测试集的人工复核。
 
 ## 12. 当前状态
 
+### MODEL-DEVICE-005 Tiny Safety device-loop runner
+
+MODEL-DEVICE-005 adds an offline run-plan generator for the next Tiny Safety
+hardware stage. The plan links the D1 periodic-location firmware build, the
+explicit guarded flash command, the guarded serial `safety tiny ...` validator,
+and short post-flash USB-Free D1 Web/API observer checks into one
+operator-visible package. It remains a planner only: it does not run commands,
+flash firmware, open serial ports, contact hardware, contact the VPS, read
+token values, change model or Safety Kernel behavior, route model output to
+SMS/calls/dispatch/external escalation, train on field/private data, or claim
+real-world model accuracy, latency, RAM, flash, power, or release readiness.
+
 ### MODEL-DEVICE-004 Tiny Safety firmware CLI validator
 
 MODEL-DEVICE-004 adds the host-side validator for the MODEL-DEVICE-003 firmware
