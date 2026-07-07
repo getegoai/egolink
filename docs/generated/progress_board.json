@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-07 11:50 UTC",
+  "generated_at": "2026-07-07 13:44 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "4b0965b feat(model): add tiny safety device loop planner [D5]"
+    "head": "cf5b4a6 docs(model): record tiny safety target mac mismatch [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -203,15 +203,6 @@
       "path": "D:/pywork/egolink/docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md"
     },
     {
-      "id": "MODEL-DEVICE-006",
-      "title": "Tiny Safety hardware flash validation",
-      "state": "in_progress",
-      "packet_status": "active",
-      "priority": "high",
-      "date": "2026-07-07",
-      "path": "D:/pywork/egolink/docs/tasks/active/MODEL-DEVICE-006_TINY_SAFETY_HARDWARE_FLASH_VALIDATION.md"
-    },
-    {
       "id": "PROD-001",
       "title": "Mass-production requirements definition and module/MCU selection gates",
       "state": "paused",
@@ -286,6 +277,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-005_TINY_SAFETY_DEVICE_LOOP_RUNNER.md"
     },
     {
+      "id": "MODEL-DEVICE-006",
+      "title": "Tiny Safety hardware flash validation",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-006_TINY_SAFETY_HARDWARE_FLASH_VALIDATION.md"
+    },
+    {
       "id": "DATA-013",
       "title": "Training baseline eval visibility",
       "state": "done",
@@ -293,15 +293,6 @@
       "priority": "high",
       "date": "2026-07-06",
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-013_TRAINING_BASELINE_EVAL_VISIBILITY.md"
-    },
-    {
-      "id": "DATA-014",
-      "title": "Post-run training-chain collector",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-06",
-      "path": "D:/pywork/egolink/docs/tasks/done/DATA-014_POSTRUN_TRAINING_CHAIN.md"
     }
   ],
   "operator_asks": [
@@ -364,9 +355,9 @@
     }
   ],
   "counts": {
-    "active": 4,
+    "active": 3,
     "paused": 3,
-    "open_total": 7,
-    "done_total": 131
+    "open_total": 6,
+    "done_total": 132
   }
 }

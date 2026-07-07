@@ -106,6 +106,9 @@ class TinySafetyFirmwareCliValidatorTests(unittest.TestCase):
 
     def test_parser_ignores_prefix_variants_and_non_marker_fail_lines(self) -> None:
         self.assertIsNone(validator.parse_marker_line("TINY_SAFETY_DEMO_INPUT_FAIL name=normal"))
+        self.assertIsNone(
+            validator.parse_marker_line("I (1) egolink: TINY_SAFETY_DEMO name=cancel")
+        )
         parsed = validator.parse_marker_line(
             "I (123) egolink: TINY_SAFETY_DEMO name=normal "
             f"model_id={MODEL_ID} model_version={MODEL_VERSION} harness={HARNESS} "
@@ -131,6 +134,38 @@ class TinySafetyFirmwareCliValidatorTests(unittest.TestCase):
         self.assertNotIn("CMGS", script_source)
         self.assertNotIn("write_flash", script_source)
         self.assertNotIn("idf.py -p", script_source)
+
+    def test_serial_powershell_preserves_command_array(self) -> None:
+        script = validator.serial_powershell_script(
+            port="COM_TEST",
+            baud_rate=115200,
+            command_rows=[
+                {"name": "status", "command": "safety tiny status", "expected_marker": "TINY_SAFETY_STATUS"},
+                {
+                    "name": "selftest",
+                    "command": "safety tiny selftest",
+                    "expected_marker": "TINY_SAFETY_SELFTEST",
+                },
+            ],
+            command_timeout_ms=1000,
+            read_timeout_ms=50,
+        )
+
+        self.assertIn("ConvertFrom-Json -InputObject $commandsJson", script)
+        self.assertNotIn("$commandsJson | ConvertFrom-Json", script)
+        self.assertIn("foreach ($cmd in $commands)", script)
+        self.assertIn('$sp.NewLine = "`r`n"', script)
+        self.assertIn('flush_command = "safety tiny status"', script)
+        self.assertIn("$expectedPatterns = @(", script)
+        self.assertIn("$result.lines +=", script)
+        self.assertIn("$allSeenUntil", script)
+        self.assertEqual(script.count("$sp.DiscardInBuffer()"), 1)
+        self.assertIn("$partialLine", script)
+
+    def test_default_command_timeout_allows_esp_idf_console_latency(self) -> None:
+        args = validator.parse_args([])
+
+        self.assertEqual(args.command_timeout_sec, 6.0)
 
 
 def passing_fixture_log() -> str:

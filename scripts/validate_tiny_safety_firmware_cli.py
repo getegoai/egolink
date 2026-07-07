@@ -118,7 +118,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--fixture-log", help="Parse an existing Tiny Safety CLI log file.")
     parser.add_argument("--port", help="Serial port for bounded hardware validation.")
     parser.add_argument("--baud-rate", type=int, default=115200)
-    parser.add_argument("--command-timeout-sec", type=float, default=4.0)
+    parser.add_argument("--command-timeout-sec", type=float, default=6.0)
     parser.add_argument("--read-timeout-ms", type=int, default=250)
     parser.add_argument(
         "--i-understand-serial-hardware",
@@ -205,7 +205,7 @@ def run_serial_validation(
         read_timeout_ms=read_timeout_ms,
     )
     records = ensure_list(serial_result.get("records"))
-    lines: list[str] = []
+    lines: list[str] = ensure_str_list(serial_result.get("lines"))
     for record in records:
         lines.extend(str(line) for line in ensure_str_list(record.get("lines")))
     observations = parse_marker_lines(lines)
@@ -215,7 +215,8 @@ def run_serial_validation(
         CheckResult(
             "serial_session",
             "PASS" if serial_result.get("ok") else "FAIL",
-            serial_result.get("error") or f"{len(records)} commands attempted on {port}",
+            serial_result.get("error")
+            or f"{len(records)} commands written to {port}; {len(lines)} transcript lines captured",
         ),
     )
     payload = base_payload(run_id=run_id, mode="serial")
@@ -255,6 +256,8 @@ def parse_marker_line(line: str) -> dict[str, Any] | None:
     if not match:
         return None
     fields = {token.group("key"): token.group("value") for token in TOKEN_RE.finditer(match.group("body"))}
+    if fields.get("model_id") != EXPECTED_MODEL_ID:
+        return None
     return {"marker": match.group("marker"), "fields": fields, "line": line.strip()}
 
 
@@ -467,24 +470,34 @@ $ErrorActionPreference = 'Stop'
 $commandsJson = @'
 __COMMANDS_JSON__
 '@
-$commands = @($commandsJson | ConvertFrom-Json)
+$convertedCommands = ConvertFrom-Json -InputObject $commandsJson
+if ($convertedCommands -is [System.Array]) {
+  $commands = $convertedCommands
+} else {
+  $commands = @($convertedCommands)
+}
 $result = [ordered]@{
   port = __PORT__
   ok = $false
   error = $null
   serial_port_opened = $false
   records = @()
+  lines = @()
+  flush_command = "safety tiny status"
 }
 $sp = $null
+$partialLine = ""
 try {
   $sp = [System.IO.Ports.SerialPort]::new(__PORT__, __BAUD_RATE__, [System.IO.Ports.Parity]::None, 8, [System.IO.Ports.StopBits]::One)
   $sp.ReadTimeout = __READ_TIMEOUT_MS__
   $sp.WriteTimeout = 500
+  $sp.NewLine = "`r`n"
   $sp.DtrEnable = $false
   $sp.RtsEnable = $false
   $sp.Open()
   $result.serial_port_opened = $true
   Start-Sleep -Milliseconds 300
+  $sp.DiscardInBuffer()
   foreach ($cmd in $commands) {
     $record = [ordered]@{
       name = [string]$cmd.name
@@ -497,37 +510,72 @@ try {
       error = $null
     }
     try {
-      $sp.DiscardInBuffer()
       $sp.WriteLine([string]$cmd.command)
-      $deadline = [DateTime]::UtcNow.AddMilliseconds(__COMMAND_TIMEOUT_MS__)
-      $text = ""
-      $markerRegex = '\b' + [regex]::Escape([string]$cmd.expected_marker) + '\b'
-      while ([DateTime]::UtcNow -lt $deadline) {
-        $chunk = $sp.ReadExisting()
-        if ($chunk) {
-          $text += $chunk
-          if ($text -match $markerRegex) {
-            break
-          }
-        }
-        Start-Sleep -Milliseconds 50
-      }
-      $lines = @($text -split "`r?`n" | Where-Object { $_ -ne "" })
-      $record.lines = $lines
-      foreach ($line in $lines) {
-        if ($line -match $markerRegex) {
-          $record.marker_line = $line
-          $record.ok = $true
-          break
-        }
-      }
-      if (-not $record.ok) {
-        $record.timeout = $true
-      }
+      Start-Sleep -Milliseconds 50
+      $record.ok = $true
     } catch {
       $record.error = $_.Exception.Message
     }
     $result.records += $record
+  }
+  $sp.WriteLine([string]$result.flush_command)
+  $deadline = [DateTime]::UtcNow.AddMilliseconds(__COMMAND_TIMEOUT_MS__ * ([Math]::Max(1, @($commands).Count + 1)))
+  $expectedPatterns = @(
+    '\bTINY_SAFETY_STATUS\b',
+    '\bTINY_SAFETY_SELFTEST\b',
+    '\bTINY_SAFETY_DEMO\b.*\bname=normal\b',
+    '\bTINY_SAFETY_DEMO\b.*\bname=uncertain\b',
+    '\bTINY_SAFETY_DEMO\b.*\bname=needs_check\b',
+    '\bTINY_SAFETY_DEMO\b.*\bname=possible_risk\b',
+    '\bTINY_SAFETY_DEMO\b.*\bname=sos\b',
+    '\bTINY_SAFETY_DEMO\b.*\bname=cancel\b'
+  )
+  $seenPatterns = @{}
+  $allSeenUntil = $null
+  while ([DateTime]::UtcNow -lt $deadline) {
+    $chunk = $sp.ReadExisting()
+    if ($chunk) {
+      $partialLine += $chunk
+      $normalized = $partialLine.Replace("`r`n", "`n").Replace("`r", "`n")
+      $parts = $normalized -split "`n", -1
+      if ($parts.Count -gt 1) {
+        for ($i = 0; $i -lt ($parts.Count - 1); $i++) {
+          if ($parts[$i] -ne "") {
+            $result.lines += $parts[$i]
+            foreach ($pattern in $expectedPatterns) {
+              if ($parts[$i] -match $pattern) {
+                $seenPatterns[$pattern] = $true
+              }
+            }
+          }
+        }
+        $partialLine = $parts[$parts.Count - 1]
+      }
+    }
+    if (($seenPatterns.Count -eq $expectedPatterns.Count) -and (-not $allSeenUntil)) {
+      $allSeenUntil = [DateTime]::UtcNow.AddMilliseconds(500)
+    }
+    if ($allSeenUntil -and ([DateTime]::UtcNow -ge $allSeenUntil)) {
+      $chunk = $sp.ReadExisting()
+      if ($chunk) {
+        $partialLine += $chunk
+        $normalized = $partialLine.Replace("`r`n", "`n").Replace("`r", "`n")
+        $parts = $normalized -split "`n", -1
+        if ($parts.Count -gt 1) {
+          for ($i = 0; $i -lt ($parts.Count - 1); $i++) {
+            if ($parts[$i] -ne "") {
+              $result.lines += $parts[$i]
+            }
+          }
+          $partialLine = $parts[$parts.Count - 1]
+        }
+      }
+      break
+    }
+    Start-Sleep -Milliseconds 50
+  }
+  if ($partialLine -ne "") {
+    $result.lines += $partialLine
   }
   $allOk = $true
   foreach ($record in $result.records) {
@@ -535,7 +583,7 @@ try {
       $allOk = $false
     }
   }
-  $result.ok = $allOk
+  $result.ok = $allOk -and ($seenPatterns.Count -eq $expectedPatterns.Count)
 } catch {
   $result.error = $_.Exception.Message
 } finally {

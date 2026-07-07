@@ -1,7 +1,7 @@
 ---
 id: MODEL-DEVICE-006
 title: Tiny Safety hardware flash validation
-status: active
+status: done
 priority: high
 requires_hardware: true
 serves_demo: D5
@@ -27,6 +27,7 @@ allowed_paths:
   - docs/current/ACTIVE_BUILD.md
   - docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md
   - docs/tasks/active/MODEL-DEVICE-006_TINY_SAFETY_HARDWARE_FLASH_VALIDATION.md
+  - docs/tasks/done/MODEL-DEVICE-006_TINY_SAFETY_HARDWARE_FLASH_VALIDATION.md
   - docs/generated/PROGRESS_BOARD.md
   - docs/generated/progress_board.json
 
@@ -47,15 +48,15 @@ hardware evidence that the `safety tiny ...` CLI runs on the board.
 # Acceptance Criteria
 
 - [x] Build the MODEL-DEVICE-005 D1 Tiny Safety firmware image.
-- [ ] Identify the connectivity-node ESP32 console port without relying on a
+- [x] Identify the connectivity-node ESP32 console port without relying on a
       hardcoded COM port.
-- [ ] If the board/port identity is clear, flash only the connectivity node
+- [x] If the board/port identity is clear, flash only the connectivity node
       with the guarded `-IUnderstandFlashWritesFirmware` command.
-- [ ] Run bounded serial Tiny Safety CLI validation after flash, or record why
+- [x] Run bounded serial Tiny Safety CLI validation after flash, or record why
       it is blocked/deferred.
-- [ ] Run a short post-flash read-only D1 Web/API or observer check, or record
+- [x] Run a short post-flash read-only D1 Web/API or observer check, or record
       why it is blocked/deferred.
-- [ ] Record board, port, firmware image/version, commit, timestamp, evidence
+- [x] Record board, port, firmware image/version, commit, timestamp, evidence
       path, validation commands, and non-claims.
 
 # Validation Commands
@@ -121,8 +122,51 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
   - This does not match the connectivity-node MAC recorded in current build
     evidence (`02:00:00:00:00:03`), so `COM9` is not accepted as the 4G board
     flash target.
-- Current hardware result: `blocked_waiting_for_connectivity_node_usb_data_port`.
-- Non-claims: no firmware flash, serial Tiny Safety validation, USB-Free D1
-  Web check, latency/RAM/flash/power measurement, model accuracy, GNSS
-  accuracy, battery-life, call/SMS, or release-readiness claim is made by the
-  build-only pass.
+- 2026-07-07 cold boot after the operator reseated the 4G board:
+  - Board probe report:
+    `reports/board_validation/20260707-coldboot-after-flash/20260707-213153/probe.md`.
+  - Connectivity-node target identified as CH343 ESP32 console `COM4`
+    (`USB\VID_1A86&PID_55D3`) with SIM7670G USB serial ports `COM5`-`COM8`.
+  - SIM7670G AT identity passed on `COM6` and `COM7` with model
+    `SIM7670G-MNGV`, `CPIN READY`, CSQ `20,0`, registered=true, and
+    attached=true.
+  - Guarded flash to `COM4` completed earlier in this hardware session after
+    the port identity matched the connectivity-node MAC `02:00:00:00:00:03`.
+    The flashed firmware app version observed on boot is commit `cf5b4a6`.
+- 2026-07-07 post-flash serial Tiny Safety CLI validation:
+  - Report:
+    `reports/tiny_safety_firmware_cli/MODEL-DEVICE-006-hw-20260707-serial-cli-transcript2/tiny_safety_cli_report.md`.
+  - Result: `pass`; 8 guarded `safety tiny ...` commands were written to
+    `COM4`, all required markers were observed, model identity matched
+    `MODEL-DEVICE-001-tiny-safety-v0-20260707`, synthetic selftest passed,
+    and SOS/cancel remained `safety_rule_required`.
+- 2026-07-07 controlled reset capture after the cold boot:
+  - Metadata:
+    `reports/board_validation/20260707-model-device-006-reset-log/capture_meta.json`.
+  - Log:
+    `reports/board_validation/20260707-model-device-006-reset-log/com4_reset_capture.log`.
+  - Capture action: bounded reset/log capture only; no additional flash or
+    configuration change was performed.
+  - Boot log observed `MESSAGE_HUB_BOOT`, `SAFETY_MODEL_INIT_OK`, LTE ready
+    with `registered_home`/PDP active, command diagnostic POST HTTP 200,
+    `LTE_HTTP_LOCATION_RAW_POST_DONE` HTTP 200, and
+    `LTE_HTTP_LOCATION_OBSERVATION_RAW_POST_DONE` HTTP 200.
+- 2026-07-07 post-reset Web/API and observer evidence:
+  - Web/API report:
+    `reports/d1_web_api/MODEL-DEVICE-006-hw-20260707-post-flash-web/d1_web_api_report.md`.
+  - Final observer report:
+    `reports/d1_field_observation/MODEL-DEVICE-006-hw-20260707-after-reset-observer/d1_field_observation_report.md`.
+  - Server state after reset showed firmware
+    `0.1.0-model-device-006-tiny-safety-hw`, test run ID
+    `MODEL-DEVICE-006-hw-20260707-d1`, fresh LTE command diagnostics, and raw
+    D1 periodic `location_report`/`location_observation` frames with matching
+    firmware/test-run IDs.
+  - Observer result: `PASS`, 3/3 samples, max freshness 67 s, latest device
+    upload advanced to `2026-07-07T13:41:28.438646+00:00`, raw POST success
+    delta `2`, and raw POST failure delta `0`.
+- Current hardware result:
+  `done_tiny_safety_firmware_flashed_and_short_web_observed`.
+- Non-claims: this task does not claim real-world model accuracy, latency, RAM,
+  flash delta, GNSS accuracy, battery life, long LTE stability, product
+  readiness, real SMS/call/dispatch/external escalation, or final power
+  behavior.

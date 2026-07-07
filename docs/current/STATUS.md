@@ -6,19 +6,22 @@ verified_by: codex
 
 ## Latest Deployment Note
 
-2026-07-07: MODEL-DEVICE-006 Tiny Safety hardware flash validation is active.
-The Tiny Safety D1 firmware image built successfully as
-`0.1.0-model-device-006-tiny-safety-hw` under
-`firmware/mqtt_heartbeat/build_model_device_006_tiny_safety/`; the binary is
-321248 bytes with SHA-256
-`4061161F59CB1F7056633E5316FE020E9EDA6C9042ED8643C880512A30DCDDAE`.
-Flashing is deferred because the host currently enumerates only `COM9`
-(`USB\VID_303A&PID_1001`, ESP32-S3 MAC `02:00:00:00:00:01`), which does not
-match the connectivity-node MAC recorded in current build evidence
-(`02:00:00:00:00:03`), and no connectivity-node CH343/SIM7670G ports are
-visible. No firmware flash, serial Tiny Safety validation, USB-Free D1 Web
-check, model accuracy, latency, RAM, flash, power, GNSS, battery-life,
-call/SMS, or release-readiness claim is made by this build-only pass.
+2026-07-07: MODEL-DEVICE-006 Tiny Safety hardware flash validation is done.
+The connectivity node was identified on CH343 `COM4` with SIM7670G AT ports
+visible, then flashed with Tiny Safety D1 firmware
+`0.1.0-model-device-006-tiny-safety-hw` / test run
+`MODEL-DEVICE-006-hw-20260707-d1`; boot log observed app commit `cf5b4a6`.
+Bounded serial CLI validation passed on `COM4`, and post-reset Web/API
+observation passed with fresh LTE uploads, firmware/test-run IDs matching the
+new image, raw D1 periodic `location_report`/`location_observation` frames, max
+freshness 67 s, raw POST success delta `2`, and raw POST failure delta `0`.
+Evidence is under
+`reports/tiny_safety_firmware_cli/MODEL-DEVICE-006-hw-20260707-serial-cli-transcript2/`,
+`reports/board_validation/20260707-model-device-006-reset-log/`, and
+`reports/d1_field_observation/MODEL-DEVICE-006-hw-20260707-after-reset-observer/`.
+This is still a bounded hardware/model-loop validation only: no real-world
+model accuracy, GNSS accuracy, battery-life, long LTE stability, call/SMS,
+external escalation, or release-readiness claim is made.
 
 2026-07-07: MODEL-DEVICE-005 Tiny Safety device-loop runner is implemented
 locally. `scripts/prepare_tiny_safety_device_loop.py` writes an offline
