@@ -398,6 +398,18 @@ Teacher 标签不能替代重要测试集的人工复核。
 
 ## 12. 当前状态
 
+### MODEL-DEVICE-003 Tiny Safety firmware CLI closed loop
+
+MODEL-DEVICE-003 makes the Tiny Safety firmware harness operator-observable
+through the existing `mqtt_heartbeat` safety serial CLI. A flashed image can
+run `safety tiny status`, `safety tiny selftest`, and `safety tiny demo ...` to
+report the MODEL-DEVICE-001 model identity, execute exported synthetic
+test-vector checks, and show dry-run candidate predictions. This remains a
+candidate-only loop: no model output is mapped to SMS, calls, dispatch, or
+external escalation, and SOS/cancel still require deterministic Safety Kernel
+handling. No hardware runtime, latency, RAM, flash, power, field-data accuracy,
+or release-readiness claim is made by this step.
+
 ### MODEL-DEVICE-002 Tiny Safety firmware dry-run harness
 
 MODEL-DEVICE-002 connects the MODEL-DEVICE-001 generated C constants to the

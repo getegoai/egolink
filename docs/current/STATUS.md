@@ -6,6 +6,17 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-07: MODEL-DEVICE-003 Tiny Safety firmware CLI closed loop is
+implemented locally. The `mqtt_heartbeat` firmware safety CLI now exposes
+`safety tiny status`, `safety tiny selftest`, and `safety tiny demo ...`
+commands so a flashed image can report the MODEL-DEVICE-001 model ID/version,
+run exported synthetic test-vector self-checks, and show dry-run candidate
+predictions for `normal`, `uncertain`, `needs_check`, `possible_risk`, SOS,
+and cancel paths. This does not flash or run on hardware yet, change
+deterministic Safety Kernel behavior, map model output to SMS/calls/dispatch/
+external escalation, measure latency/RAM/flash/power, deploy to the VPS, train
+on field/private data, or claim real-world model accuracy or release readiness.
+
 2026-07-07: MODEL-DEVICE-002 Tiny Safety firmware dry-run harness is
 implemented locally. The existing `firmware/mqtt_heartbeat/components/
 safety_model` component now includes `tiny_safety_harness.c`, which reads the

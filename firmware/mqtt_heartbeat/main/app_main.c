@@ -236,6 +236,153 @@ static void log_safety_output(const char *label, const ego_sc_model_output_t *ou
         output->evidence_mask);
 }
 
+static void log_tiny_safety_output(const char *label, const safety_model_tiny_result_t *result)
+{
+    ESP_LOGI(
+        TAG,
+        "TINY_SAFETY_DEMO name=%s model_id=%s model_version=%s harness=%s label=%s class=%u confidence=%.3f raw=%.3f margin=%.3f synthetic_only=%s safety_rule_required=%s dry_run=true",
+        label,
+        safety_model_tiny_model_id(),
+        safety_model_tiny_model_version(),
+        safety_model_tiny_harness_version(),
+        result->state_label,
+        (unsigned)result->class_index,
+        (double)result->confidence,
+        (double)result->raw_score,
+        (double)result->score_margin,
+        json_bool(result->synthetic_only),
+        json_bool(result->safety_rule_required));
+}
+
+static void configure_tiny_demo_input(const char *demo_name, ego_sc_model_input_t *input)
+{
+    input->activity = EGO_SC_ACTIVITY_WALKING;
+    input->activity_confidence = 0.892f;
+    input->impact_score = 0.058f;
+    input->fall_score = 0.0f;
+    input->stationary_seconds = 11.58f;
+    input->device_worn = 1;
+    input->speech_score = 0.0f;
+    input->distress_score = 0.0f;
+    input->impact_sound_score = 0.0f;
+    input->unknown_loud_sound_score = 0.029f;
+    input->audio_quality_score = 0.90f;
+    input->gnss_fix_valid = true;
+    input->speed_mps = 0.0f;
+    input->outside_safe_zone = false;
+    input->dwell_seconds = 174.8f;
+    input->route_deviation_m = 0.0f;
+    input->gnss_quality_score = 0.85f;
+    input->connectivity_score = 0.807f;
+    input->base_online = true;
+    input->upload_available = true;
+    input->signal_level = 3;
+    input->offline_seconds = 0.0f;
+    input->battery_percent = 89.1f;
+    input->charging = false;
+    input->privacy_mode = false;
+    input->camera_available = true;
+    input->microphone_available = true;
+    input->recent_risk_count_5m = 0;
+    input->last_user_response = EGO_SC_RESPONSE_NONE;
+    input->seconds_since_last_contact = 0.0f;
+    input->sos_pressed = false;
+    input->cancel_pressed = false;
+    input->audio_clip_available = false;
+    input->single_image_available = false;
+    input->fresh_gnss_available = true;
+    input->imu_window_available = true;
+
+    if (strcmp(demo_name, "uncertain") == 0) {
+        input->impact_score = 0.307f;
+        input->fall_score = 0.237f;
+        input->stationary_seconds = 19.5f;
+        input->activity_confidence = 0.564f;
+        input->distress_score = 0.243f;
+        input->impact_sound_score = 0.200f;
+        input->unknown_loud_sound_score = 0.421f;
+        input->dwell_seconds = 245.7f;
+        input->connectivity_score = 0.688f;
+        input->offline_seconds = 161.0f;
+        input->battery_percent = 81.2f;
+        input->recent_risk_count_5m = 1;
+    } else if (strcmp(demo_name, "needs_check") == 0) {
+        input->activity = EGO_SC_ACTIVITY_FALL_CANDIDATE;
+        input->impact_score = 0.510f;
+        input->fall_score = 0.597f;
+        input->stationary_seconds = 32.5f;
+        input->activity_confidence = 0.716f;
+        input->distress_score = 0.272f;
+        input->impact_sound_score = 0.440f;
+        input->unknown_loud_sound_score = 0.201f;
+        input->dwell_seconds = 276.2f;
+        input->connectivity_score = 0.518f;
+        input->offline_seconds = 245.8f;
+        input->battery_percent = 78.5f;
+        input->recent_risk_count_5m = 1;
+    } else if (strcmp(demo_name, "possible_risk") == 0) {
+        input->activity = EGO_SC_ACTIVITY_FALL_CANDIDATE;
+        input->impact_score = 0.903f;
+        input->fall_score = 0.806f;
+        input->stationary_seconds = 90.6f;
+        input->activity_confidence = 0.878f;
+        input->distress_score = 0.601f;
+        input->impact_sound_score = 0.757f;
+        input->unknown_loud_sound_score = 0.319f;
+        input->dwell_seconds = 429.1f;
+        input->connectivity_score = 0.403f;
+        input->offline_seconds = 404.2f;
+        input->battery_percent = 63.5f;
+        input->recent_risk_count_5m = 2;
+    } else if (strcmp(demo_name, "sos") == 0) {
+        input->sos_pressed = true;
+    } else if (strcmp(demo_name, "cancel") == 0) {
+        input->cancel_pressed = true;
+    }
+}
+
+static void run_tiny_safety_self_test(void)
+{
+    safety_model_tiny_self_test_result_t result;
+    bool ok = safety_model_tiny_self_test(&result);
+    ESP_LOGI(
+        TAG,
+        "TINY_SAFETY_SELFTEST result=%s model_id=%s model_version=%s harness=%s vectors=%u passed=%u failed=%u first_failed=%u synthetic_only=true dry_run=true",
+        ok ? "pass" : "fail",
+        safety_model_tiny_model_id(),
+        safety_model_tiny_model_version(),
+        safety_model_tiny_harness_version(),
+        (unsigned)result.vector_count,
+        (unsigned)result.passed_count,
+        (unsigned)result.failed_count,
+        (unsigned)result.first_failed_index);
+}
+
+static void run_tiny_safety_demo(const char *demo_name)
+{
+    if (strcmp(demo_name, "normal") != 0 && strcmp(demo_name, "uncertain") != 0 &&
+        strcmp(demo_name, "needs_check") != 0 && strcmp(demo_name, "possible_risk") != 0 &&
+        strcmp(demo_name, "sos") != 0 && strcmp(demo_name, "cancel") != 0) {
+        ESP_LOGW(TAG, "TINY_SAFETY_CLI_UNKNOWN_DEMO name=%s", demo_name);
+        return;
+    }
+
+    safety_model_mock_state_t state = default_safety_mock_state();
+    ego_sc_model_input_t input;
+    safety_model_tiny_result_t result;
+
+    if (!safety_model_input_from_mock_state(&state, &input)) {
+        ESP_LOGE(TAG, "TINY_SAFETY_DEMO_INPUT_FAIL name=%s", demo_name);
+        return;
+    }
+    configure_tiny_demo_input(demo_name, &input);
+    if (!safety_model_tiny_predict_input(&input, &result)) {
+        ESP_LOGE(TAG, "TINY_SAFETY_DEMO_FAIL name=%s", demo_name);
+        return;
+    }
+    log_tiny_safety_output(demo_name, &result);
+}
+
 static void run_safety_demo(const char *demo_name)
 {
     safety_model_mock_state_t state = default_safety_mock_state();
@@ -262,6 +409,19 @@ static void handle_safety_cli_line(const char *line)
 {
     if (strcmp(line, "safety status") == 0) {
         ESP_LOGI(TAG, "SAFETY_MODEL_STATUS version=%s mock=true", safety_model_version());
+    } else if (strcmp(line, "safety tiny status") == 0) {
+        ESP_LOGI(
+            TAG,
+            "TINY_SAFETY_STATUS model_id=%s model_version=%s harness=%s features=%u classes=%u synthetic_only=true dry_run=true external_actions=false",
+            safety_model_tiny_model_id(),
+            safety_model_tiny_model_version(),
+            safety_model_tiny_harness_version(),
+            (unsigned)safety_model_tiny_feature_count(),
+            (unsigned)safety_model_tiny_class_count());
+    } else if (strcmp(line, "safety tiny selftest") == 0) {
+        run_tiny_safety_self_test();
+    } else if (strncmp(line, "safety tiny demo ", 17) == 0) {
+        run_tiny_safety_demo(line + 17);
     } else if (strcmp(line, "safety demo normal") == 0) {
         run_safety_demo("normal");
     } else if (strcmp(line, "safety demo sos") == 0) {

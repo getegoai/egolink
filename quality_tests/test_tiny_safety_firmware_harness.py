@@ -22,6 +22,9 @@ class TinySafetyFirmwareHarnessTests(unittest.TestCase):
         self.harness_source = (self.component_dir / "tiny_safety_harness.c").read_text(
             encoding="utf-8"
         )
+        self.app_main = (
+            self.repo_root / "firmware" / "mqtt_heartbeat" / "main" / "app_main.c"
+        ).read_text(encoding="utf-8")
         self.component_cmake = (self.component_dir / "CMakeLists.txt").read_text(encoding="utf-8")
         self.export_dir = (
             self.repo_root
@@ -108,6 +111,48 @@ class TinySafetyFirmwareHarnessTests(unittest.TestCase):
         self.assertIn('"safety_rule_required"', self.harness_source)
         self.assertIn("result->safety_rule_required = true", self.harness_source)
         self.assertIn("result->synthetic_only = true", self.harness_source)
+
+    def test_firmware_cli_exposes_tiny_closed_loop_without_external_actions(self) -> None:
+        for command in [
+            "safety tiny status",
+            "safety tiny selftest",
+            "safety tiny demo ",
+        ]:
+            with self.subTest(command=command):
+                self.assertIn(command, self.app_main)
+        for demo_name in ["normal", "uncertain", "needs_check", "possible_risk", "sos", "cancel"]:
+            with self.subTest(demo_name=demo_name):
+                self.assertIn(f'"{demo_name}"', self.app_main)
+
+        for marker in [
+            "TINY_SAFETY_STATUS",
+            "TINY_SAFETY_SELFTEST",
+            "TINY_SAFETY_DEMO",
+            "dry_run=true",
+            "synthetic_only=true",
+            "external_actions=false",
+        ]:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.app_main)
+
+        tiny_lines = [
+            line
+            for line in self.app_main.splitlines()
+            if "TINY_SAFETY" in line or "safety_model_tiny" in line
+        ]
+        tiny_text = "\n".join(tiny_lines)
+        for forbidden in [
+            "EGO_SC_ACTION_URGENT_ESCALATION",
+            "EGO_SC_ACTION_SEND_SUMMARY",
+            "EGO_SC_ACTION_SEND_EVIDENCE",
+            "ATD",
+            "CMGS",
+            "send_sms",
+            "place_call",
+            "dispatch",
+        ]:
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, tiny_text)
 
     def test_feature_adapter_matches_model_device_001_feature_order(self) -> None:
         expected_fragments = [

@@ -60,6 +60,11 @@ class SafetyModelFirmwareTests(unittest.TestCase):
         self.assertIn('safety demo normal', self.app_main)
         self.assertIn('safety demo sos', self.app_main)
         self.assertIn('safety demo impact', self.app_main)
+        self.assertIn('safety tiny status', self.app_main)
+        self.assertIn('safety tiny selftest', self.app_main)
+        self.assertIn('safety tiny demo ', self.app_main)
+        self.assertIn('safety_model_tiny_predict_input', self.app_main)
+        self.assertIn('safety_model_tiny_self_test', self.app_main)
 
 
 if __name__ == "__main__":

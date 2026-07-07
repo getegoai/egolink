@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-07 05:07 UTC",
+  "generated_at": "2026-07-07 05:40 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "38de978 feat(model): add tiny safety model v0 [D5]"
+    "head": "687bda6 feat(model): add tiny safety firmware harness [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -250,6 +250,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-002_TINY_SAFETY_FIRMWARE_HARNESS.md"
     },
     {
+      "id": "MODEL-DEVICE-003",
+      "title": "Tiny Safety firmware CLI closed loop",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-003_TINY_SAFETY_FIRMWARE_CLI_LOOP.md"
+    },
+    {
       "id": "DATA-013",
       "title": "Training baseline eval visibility",
       "state": "done",
@@ -284,15 +293,6 @@
       "priority": "high",
       "date": "2026-07-06",
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-016_POSTRUN_HANDOFF_COLLECTOR.md"
-    },
-    {
-      "id": "DATA-017",
-      "title": "Training job visibility",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-06",
-      "path": "D:/pywork/egolink/docs/tasks/done/DATA-017_TRAINING_JOB_VISIBILITY.md"
     }
   ],
   "operator_asks": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 128
+    "done_total": 129
   }
 }
