@@ -6,6 +6,20 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-07: MODEL-DEVICE-001 Tiny Safety Model v0 local train/export loop is
+implemented locally. `model_lab/safety_companion/src/tiny_safety_model.py`
+defines a dependency-free four-state classifier (`normal`, `uncertain`,
+`needs_check`, `possible_risk`) over the existing `model_input` contract;
+`model_lab/safety_companion/training/train_tiny_safety_model.py` writes a
+synthetic-only `tiny_safety_model.json` artifact, model card, and eval JSONL
+under `model_artifacts/`; and
+`model_lab/safety_companion/export/export_tiny_safety_model.py` exports
+firmware-friendly C constants and test vectors for a future firmware task.
+This does not replace Safety Kernel SOS/cancel/privacy/power rules, train on
+private field samples, integrate firmware, flash or deploy a device, measure
+latency/RAM/flash/power, deploy to the VPS, or claim real-world model accuracy
+or release readiness.
+
 2026-07-07: DATA-032 D1 labeling decision-template validation is implemented
 locally. `scripts/validate_d1_labeling_decision_template.py` validates filled
 `d1_labeling_decision_template` selected values, reports missing/invalid

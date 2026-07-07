@@ -1,0 +1,34 @@
+{
+  "deployment": {
+    "device_deployed": false,
+    "firmware_integrated": false,
+    "measured_flash_bytes": null,
+    "measured_latency_ms": null,
+    "measured_power_mw": null,
+    "measured_ram_bytes": null
+  },
+  "exported_at": "2026-07-07T00:10:00+00:00",
+  "model_id": "MODEL-DEVICE-001-tiny-safety-v0-20260707",
+  "model_version": "0.1.0-synthetic-dry-run",
+  "non_claims": [
+    "C header export only; no firmware integration is performed.",
+    "Synthetic integration model only; no real-world accuracy is claimed.",
+    "No latency, RAM, flash, or power measurement is claimed."
+  ],
+  "paths": {
+    "c_header": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/export/tiny_safety_model.h",
+    "export_report_json": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/export/tiny_safety_model_export.json",
+    "export_report_markdown": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/export/tiny_safety_model_export.md",
+    "sha256": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/export/sha256.txt",
+    "test_vectors_json": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/export/tiny_safety_test_vectors.json"
+  },
+  "schema_version": "egolink.tiny_safety_model_export.v0.1",
+  "scope": {
+    "device_deployed": false,
+    "firmware_changed": false,
+    "hardware_contacted": false,
+    "model_training_started": false,
+    "synthetic_only": true
+  },
+  "source_artifact": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/tiny_safety_model.json"
+}

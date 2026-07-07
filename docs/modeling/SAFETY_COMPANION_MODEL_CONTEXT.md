@@ -398,6 +398,16 @@ Teacher 标签不能替代重要测试集的人工复核。
 
 ## 12. 当前状态
 
+### MODEL-DEVICE-001 Tiny Safety Model v0
+
+MODEL-DEVICE-001 adds the first local train/export loop for a device-shaped
+Tiny Safety Model artifact. It consumes the existing `model_input` contract and
+predicts `normal`, `uncertain`, `needs_check`, or `possible_risk` from bounded
+structured features. The artifact is synthetic-only and dry-run only: it does
+not replace Safety Kernel rules, does not handle SOS/cancel, does not use
+private field samples, does not integrate firmware, and does not claim
+real-world accuracy, latency, RAM, flash, power, or release readiness.
+
 当前 M0 已建立：
 
 - `sensor_frame`、`model_input`、`model_output`、`safety_event`、`base_command` 契约；

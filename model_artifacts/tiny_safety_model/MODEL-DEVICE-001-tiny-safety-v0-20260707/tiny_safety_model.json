@@ -1,0 +1,347 @@
+{
+  "deployment": {
+    "device_deployed": false,
+    "export_format": "c_header_ready",
+    "firmware_integrated": false,
+    "measured_flash_bytes": null,
+    "measured_latency_ms": null,
+    "measured_power_mw": null,
+    "measured_ram_bytes": null
+  },
+  "generated_at": "2026-07-07T00:00:00+00:00",
+  "input_contract": "shared/contracts/model_input.schema.json",
+  "linear_model": {
+    "biases": [
+      -3.81683,
+      -3.679824,
+      -4.468447,
+      -6.822304
+    ],
+    "centroids": {
+      "needs_check": [
+        0.522641,
+        0.575845,
+        0.32248,
+        0.715361,
+        0.994214,
+        0.317297,
+        0.420222,
+        0.245956,
+        0.196802,
+        0.190813,
+        0.549196,
+        0.182389,
+        0.248273,
+        0.252556
+      ],
+      "normal": [
+        0.040777,
+        0.038514,
+        0.044704,
+        0.838757,
+        0.996019,
+        0.017729,
+        0.034226,
+        0.032171,
+        0.005879,
+        0.054443,
+        0.836974,
+        0.016802,
+        0.152593,
+        0.014552
+      ],
+      "possible_risk": [
+        0.87576,
+        0.820998,
+        0.734719,
+        0.886003,
+        0.998086,
+        0.618711,
+        0.717908,
+        0.297791,
+        0.343459,
+        0.291061,
+        0.44394,
+        0.234285,
+        0.312786,
+        0.366966
+      ],
+      "uncertain": [
+        0.312536,
+        0.243092,
+        0.188299,
+        0.54293,
+        0.994395,
+        0.247926,
+        0.215062,
+        0.45582,
+        0.005861,
+        0.115263,
+        0.645312,
+        0.095967,
+        0.201602,
+        0.150383
+      ]
+    },
+    "feature_names": [
+      "motion_impact_score",
+      "motion_fall_score",
+      "motion_stationary_norm",
+      "motion_activity_confidence",
+      "motion_device_worn",
+      "audio_distress_score",
+      "audio_impact_sound_score",
+      "audio_unknown_loud_sound_score",
+      "location_outside_safe_zone",
+      "location_dwell_norm",
+      "network_connectivity_score",
+      "network_offline_norm",
+      "device_battery_low",
+      "history_recent_risk_norm"
+    ],
+    "score_type": "linearized_nearest_centroid",
+    "state_labels": [
+      "normal",
+      "uncertain",
+      "needs_check",
+      "possible_risk"
+    ],
+    "weights": [
+      [
+        0.081555,
+        0.077028,
+        0.089408,
+        1.677513,
+        1.992038,
+        0.035457,
+        0.068453,
+        0.064342,
+        0.011757,
+        0.108885,
+        1.673949,
+        0.033605,
+        0.305186,
+        0.029103
+      ],
+      [
+        0.625071,
+        0.486184,
+        0.376598,
+        1.085861,
+        1.988789,
+        0.495852,
+        0.430125,
+        0.911639,
+        0.011722,
+        0.230526,
+        1.290624,
+        0.191934,
+        0.403205,
+        0.300766
+      ],
+      [
+        1.045283,
+        1.151689,
+        0.644961,
+        1.430722,
+        1.988428,
+        0.634594,
+        0.840443,
+        0.491913,
+        0.393604,
+        0.381625,
+        1.098391,
+        0.364777,
+        0.496547,
+        0.505111
+      ],
+      [
+        1.751519,
+        1.641997,
+        1.469438,
+        1.772005,
+        1.996173,
+        1.237422,
+        1.435816,
+        0.595583,
+        0.686918,
+        0.582122,
+        0.887881,
+        0.46857,
+        0.625572,
+        0.733932
+      ]
+    ]
+  },
+  "metrics": {
+    "holdout": {
+      "accuracy": 1.0,
+      "by_label": {
+        "needs_check": {
+          "needs_check": 6
+        },
+        "normal": {
+          "normal": 6
+        },
+        "possible_risk": {
+          "possible_risk": 6
+        },
+        "uncertain": {
+          "uncertain": 6
+        }
+      },
+      "row_count": 24
+    },
+    "metric_scope": "synthetic_integration_only",
+    "training": {
+      "accuracy": 1.0,
+      "by_label": {
+        "needs_check": {
+          "needs_check": 18
+        },
+        "normal": {
+          "normal": 18
+        },
+        "possible_risk": {
+          "possible_risk": 18
+        },
+        "uncertain": {
+          "uncertain": 18
+        }
+      },
+      "row_count": 72
+    }
+  },
+  "model_id": "MODEL-DEVICE-001-tiny-safety-v0-20260707",
+  "model_name": "tiny_safety_model",
+  "model_type": "linearized_centroid_classifier",
+  "model_version": "0.1.0-synthetic-dry-run",
+  "non_claims": [
+    "Synthetic integration model only; no real-world accuracy is claimed.",
+    "The model does not replace deterministic SOS, cancel, privacy, power, or escalation rules.",
+    "No firmware integration, device deployment, latency, RAM, flash, or power measurement is claimed.",
+    "No private field samples or candidate DB rows are read by this artifact."
+  ],
+  "output_state_labels": [
+    "normal",
+    "uncertain",
+    "needs_check",
+    "possible_risk"
+  ],
+  "paths": {
+    "model_artifact_json": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/tiny_safety_model.json",
+    "model_card_markdown": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/tiny_safety_model_card.md",
+    "sha256": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/sha256.txt",
+    "synthetic_eval_jsonl": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/tiny_safety_eval.jsonl"
+  },
+  "safety": {
+    "model_controls_external_actions": false,
+    "real_emergency_escalation_allowed": false,
+    "release_claim_allowed": false,
+    "sos_cancel_handled_by_safety_kernel": true
+  },
+  "schema_version": "egolink.tiny_safety_model.v0.1",
+  "serves_demo": "D4-D5",
+  "test_vectors": [
+    {
+      "confidence": 0.526265,
+      "expected_label": "normal",
+      "features": [
+        0.058115,
+        0.0,
+        0.096525,
+        0.892398,
+        1.0,
+        0.0,
+        0.0,
+        0.028852,
+        0.0,
+        0.097111,
+        0.807036,
+        0.0,
+        0.108886,
+        0.026989
+      ],
+      "id": "synthetic-normal-000",
+      "predicted_label": "normal",
+      "synthetic_only": true
+    },
+    {
+      "confidence": 0.403821,
+      "expected_label": "uncertain",
+      "features": [
+        0.306651,
+        0.237168,
+        0.162603,
+        0.563743,
+        0.988331,
+        0.243015,
+        0.200429,
+        0.42108,
+        0.007206,
+        0.136479,
+        0.688245,
+        0.089464,
+        0.187928,
+        0.142297
+      ],
+      "id": "synthetic-uncertain-000",
+      "predicted_label": "uncertain",
+      "synthetic_only": true
+    },
+    {
+      "confidence": 0.385149,
+      "expected_label": "needs_check",
+      "features": [
+        0.510455,
+        0.596894,
+        0.270652,
+        0.716411,
+        0.993821,
+        0.272187,
+        0.44046,
+        0.200944,
+        0.186135,
+        0.153458,
+        0.518084,
+        0.136574,
+        0.215076,
+        0.268487
+      ],
+      "id": "synthetic-needs_check-000",
+      "predicted_label": "needs_check",
+      "synthetic_only": true
+    },
+    {
+      "confidence": 0.552707,
+      "expected_label": "possible_risk",
+      "features": [
+        0.902828,
+        0.806278,
+        0.755239,
+        0.877513,
+        1.0,
+        0.601129,
+        0.756999,
+        0.319108,
+        0.330238,
+        0.238406,
+        0.403199,
+        0.224577,
+        0.36461,
+        0.387571
+      ],
+      "id": "synthetic-possible_risk-000",
+      "predicted_label": "possible_risk",
+      "synthetic_only": true
+    }
+  ],
+  "training_data": {
+    "holdout_rows": 24,
+    "private_rows": 0,
+    "real_field_rows": 0,
+    "source": "deterministic_templates",
+    "synthetic_only": true,
+    "training_rows": 72
+  }
+}

@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-07 02:22 UTC",
+  "generated_at": "2026-07-07 03:12 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "a4be0a5 feat(data): surface d1 decision template [D5]"
+    "head": "84a1d8c feat(data): validate d1 decision template [D5]"
   },
   "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
   "milestones": [
@@ -232,6 +232,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-032_D1_LABELING_DECISION_VALIDATION.md"
     },
     {
+      "id": "MODEL-DEVICE-001",
+      "title": "Tiny Safety Model v0 local train/export loop",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-001_TINY_SAFETY_MODEL_V0.md"
+    },
+    {
       "id": "DATA-013",
       "title": "Training baseline eval visibility",
       "state": "done",
@@ -284,15 +293,6 @@
       "priority": "high",
       "date": "2026-07-06",
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-018_POSTRUN_JOB_PLAN_COLLECTOR.md"
-    },
-    {
-      "id": "DATA-019",
-      "title": "Post-run field-observation binding",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "medium",
-      "date": "2026-07-06",
-      "path": "D:/pywork/egolink/docs/tasks/done/DATA-019_POSTRUN_FIELD_OBSERVATION_BINDING.md"
     }
   ],
   "operator_asks": [
@@ -358,6 +358,6 @@
     "active": 3,
     "paused": 3,
     "open_total": 6,
-    "done_total": 126
+    "done_total": 127
   }
 }
