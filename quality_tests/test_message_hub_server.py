@@ -417,10 +417,10 @@ class MessageHubStoreTests(unittest.TestCase):
             "last_known_after_unknown_location_observation",
         )
 
-    def test_d1_track_points_survive_indoor_no_fix_burst(self) -> None:
+    def test_d1_track_points_survive_long_indoor_no_fix_burst(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
-            base = datetime.now(timezone.utc) - timedelta(seconds=220)
+            base = datetime.now(timezone.utc) - timedelta(seconds=700)
 
             def ts(offset: int) -> str:
                 return (base + timedelta(seconds=offset)).isoformat()
@@ -458,7 +458,7 @@ class MessageHubStoreTests(unittest.TestCase):
                     ),
                 )
 
-            for seq in range(3, 153):
+            for seq in range(3, 603):
                 store.ingest(
                     "ego-link-001",
                     "telemetry",
@@ -494,8 +494,9 @@ class MessageHubStoreTests(unittest.TestCase):
         diagnostics = d1["map_surface"]["coordinate_diagnostics"]
         self.assertEqual(d1["acceptance_gate"]["status"], "ready")
         self.assertEqual(d1["acceptance_gate"]["track_points"], 2)
+        self.assertEqual(diagnostics["location_event_count"], message_hub.D1_SUMMARY_MESSAGE_LIMIT + 2)
         self.assertEqual(diagnostics["coordinate_event_count"], 2)
-        self.assertEqual(diagnostics["missing_coordinate_event_count"], 150)
+        self.assertEqual(diagnostics["missing_coordinate_event_count"], message_hub.D1_SUMMARY_MESSAGE_LIMIT)
         self.assertEqual(diagnostics["latest_missing_reason"], "cell_observation_without_position_fix")
 
     def test_lte_reason_code_is_part_of_observability_explainability(self) -> None:

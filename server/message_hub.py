@@ -56,6 +56,8 @@ D1_FIELD_READY_FRESHNESS_S = 180
 D1_FIELD_STALE_FRESHNESS_S = 600
 D1_LOCATION_EVENT_TYPES = {"location_report", "location_observation"}
 D1_SUMMARY_MESSAGE_LIMIT = 300
+D1_COORDINATE_HISTORY_LIMIT = 48
+D1_COORDINATE_MESSAGE_SCAN_LIMIT = 5000
 
 
 def utc_now() -> str:
@@ -451,7 +453,7 @@ class MessageHubStore:
         device["observability"] = build_observability(device, device["last_command"])
         device["d1_link"] = build_d1_link_summary(
             device,
-            self._recent_device_messages(db, device["device_id"], limit=D1_SUMMARY_MESSAGE_LIMIT),
+            self._d1_summary_messages(db, device["device_id"]),
         )
         return device
 
@@ -499,6 +501,39 @@ class MessageHubStore:
             (device_id, limit),
         ).fetchall()
         return [json.loads(row["payload_json"]) for row in rows]
+
+    def _d1_summary_messages(self, db: sqlite3.Connection, device_id: str) -> list[dict[str, Any]]:
+        rows = db.execute(
+            """
+            SELECT id, payload_json FROM messages
+            WHERE device_id = ?
+              AND message_type IN ('status', 'event', 'ack', 'error')
+            ORDER BY id DESC LIMIT ?
+            """,
+            (device_id, D1_SUMMARY_MESSAGE_LIMIT),
+        ).fetchall()
+        messages_by_id = {int(row["id"]): json.loads(row["payload_json"]) for row in rows}
+
+        coordinate_rows = db.execute(
+            """
+            SELECT id, payload_json FROM messages
+            WHERE device_id = ?
+              AND message_type = 'event'
+              AND event_type IN ('location_observation', 'location_report')
+            ORDER BY id DESC LIMIT ?
+            """,
+            (device_id, D1_COORDINATE_MESSAGE_SCAN_LIMIT),
+        ).fetchall()
+        coordinate_count = 0
+        for row in coordinate_rows:
+            message = json.loads(row["payload_json"])
+            if d1_location_point(message, source="d1_summary_history") is None:
+                continue
+            messages_by_id.setdefault(int(row["id"]), message)
+            coordinate_count += 1
+            if coordinate_count >= D1_COORDINATE_HISTORY_LIMIT:
+                break
+        return [messages_by_id[key] for key in sorted(messages_by_id, reverse=True)]
 
     def _latest_command(self, db: sqlite3.Connection, device_id: str) -> dict[str, Any] | None:
         row = db.execute(
