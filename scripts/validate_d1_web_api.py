@@ -363,6 +363,9 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
     d1 = as_dict(report.get("d1"))
     power = as_dict(d1.get("power_curve"))
     uplink = as_dict(d1.get("uplink_metrics"))
+    map_surface = as_dict(d1.get("map_surface"))
+    trajectory = as_dict(map_surface.get("trajectory"))
+    coord = as_dict(map_surface.get("coordinate_diagnostics"))
     lines = [
         "# D1 Web/API Review Gate",
         "",
@@ -374,7 +377,9 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- D1 status: {d1.get('status')}",
         f"- D1 gate: {as_dict(d1.get('acceptance_gate')).get('status')}",
         f"- Location uploads: {uplink.get('location_event_count')}",
-        f"- Map points: {as_dict(d1.get('map_surface')).get('trajectory', {}).get('point_count')}",
+        f"- Map points: {trajectory.get('point_count')}",
+        f"- Coordinate uploads: {coord.get('coordinate_event_count')} / {coord.get('location_event_count')} events; missing {coord.get('missing_coordinate_event_count')}",
+        f"- Latest coordinate missing reason: {coord.get('latest_missing_reason')}",
         f"- Raw POST: {uplink.get('raw_post_success_count')} ok / {uplink.get('raw_post_failure_count')} fail / {uplink.get('raw_post_attempt_count')} attempts",
         f"- Power samples: {power.get('sample_count')}",
         f"- Power delta: {power.get('delta_battery_mv')} mV / {power.get('delta_soc_pct')}%",

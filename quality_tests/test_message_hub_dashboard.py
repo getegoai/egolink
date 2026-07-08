@@ -138,6 +138,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("D1 Acceptance Gate", html)
         self.assertIn("acceptanceClass", html)
         self.assertIn("acceptanceLabel", html)
+        self.assertIn("Coordinate data", html)
+        self.assertIn("Latest missing reason", html)
         self.assertIn("Ready Reason", html)
         self.assertIn("Operator Action", html)
         self.assertIn("Freshness Gate", html)
@@ -319,10 +321,67 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertTrue(map_surface["trajectory"]["visible"])
         self.assertGreaterEqual(len(map_surface["points"]), 2)
         self.assertEqual(map_surface["points"][-1]["source"], "telemetry_history")
+        self.assertEqual(map_surface["coordinate_diagnostics"]["coordinate_event_count"], 2)
+        self.assertEqual(map_surface["coordinate_diagnostics"]["missing_coordinate_event_count"], 0)
         self.assertEqual(summary["acceptance_gate"]["status"], "ready")
         self.assertEqual(summary["acceptance_gate"]["track_points"], 2)
         self.assertEqual(summary["acceptance_gate"]["blockers"], [])
         self.assertEqual(summary["acceptance_gate"]["next_action"], "run_d1_field_kit_and_postrun_collector")
+
+    def test_d1_link_summary_explains_location_uploads_without_coordinates(self) -> None:
+        now = message_hub.utc_now()
+        location = {
+            "message_type": "event",
+            "event_type": "location_observation",
+            "seq": 77,
+            "server_received_at": now,
+            "cell": {"rat": "LTE", "cell_id": "unit-cell", "registration_state": "registered_home"},
+            "imu": {"motion": "stationary", "evidence_status": "mock"},
+            "location_belief": {
+                "state": "Unknown",
+                "reason": "cell_observation_without_position_fix",
+                "source": ["cell", "lte", "imu", "power"],
+            },
+            "lte": {"registered": True, "pdp_active": True, "reason_code": "LTE_READY"},
+            "power": {"battery_mv": 4070, "soc_pct": 90, "evidence_status": "measured"},
+            "reliability": {
+                "network": {
+                    "raw_post_attempt_count": 7,
+                    "raw_post_success_count": 7,
+                    "raw_post_failure_count": 0,
+                }
+            },
+        }
+        device = {
+            "device_id": "ego-link-r1-connectivity-001",
+            "last_seen_at": now,
+            "last_seq": 77,
+            "latest_location": location,
+            "observability": {
+                "location_belief": location["location_belief"],
+                "transport": {"type": "lte"},
+                "gnss": {"fix": False, "state": "no_fix"},
+                "cell": location["cell"],
+                "lte": location["lte"],
+                "imu": location["imu"],
+                "power": location["power"],
+            },
+        }
+
+        summary = message_hub.build_d1_link_summary(device, messages=[location])
+
+        diagnostics = summary["map_surface"]["coordinate_diagnostics"]
+        self.assertEqual(diagnostics["location_event_count"], 1)
+        self.assertEqual(diagnostics["coordinate_event_count"], 0)
+        self.assertEqual(diagnostics["missing_coordinate_event_count"], 1)
+        self.assertEqual(diagnostics["latest_missing_reason"], "cell_observation_without_position_fix")
+        self.assertEqual(diagnostics["operator_hint"], "move_outdoors_until_two_coordinate_uploads_are_seen")
+        self.assertIn("d1_map_trajectory_needs_two_points", summary["acceptance_gate"]["blockers"])
+        self.assertIn("d1_location_events_without_coordinate", summary["acceptance_gate"]["warnings"])
+        self.assertEqual(
+            summary["acceptance_gate"]["next_action"],
+            "move_outdoors_until_two_coordinate_uploads_are_seen",
+        )
 
     def test_d1_link_summary_waits_without_periodic_location_upload(self) -> None:
         now = datetime.now(timezone.utc).isoformat()

@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-08 07:16 UTC",
+  "generated_at": "2026-07-08 07:44 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "d4bc174 fix(d1): restore D1 acceptance gate focus [D1]"
+    "head": "8dec738 feat(d1): show acceptance gate on dashboard [D1]"
   },
   "current_focus": "Director指令(07-08)：模型/飞轮脚手架冻结，全力推 D1 外场验收（3-4h实测→tag v0.1.0→创始人验收），随后 D2 定位精度基线；PWR-001 24h 电池曲线与 FIELD-003 并入本波",
   "milestones": [

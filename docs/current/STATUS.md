@@ -22,6 +22,12 @@ warnings, and next action from `/api/state.d1_link.acceptance_gate`. This is
 D1 preflight/post-run review only and does not claim location accuracy or
 battery life.
 
+2026-07-08: D1 Dashboard/Web API now explains coordinate blockers. The
+`map_surface.coordinate_diagnostics` and acceptance gate show location uploads
+vs coordinate-bearing uploads, missing count, latest missing reason, and the
+operator hint; live no-fix uploads remain a D1 blocker until at least two
+coordinate-bearing points arrive.
+
 2026-07-07: MODEL-DEVICE-009 Tiny Safety hard-case review packet is
 implemented locally. The exporter consumes the MODEL-DEVICE-008 synthetic
 stress report and writes a bounded synthetic review packet under

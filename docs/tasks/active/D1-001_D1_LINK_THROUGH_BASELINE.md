@@ -47,6 +47,9 @@ and the Dashboard shows it.
       than two coordinate points are available.
 - [x] Dashboard exposes a first-screen `D1 Acceptance Gate` with ready/blocked
       state, track-point count, blockers, warnings, and next action.
+- [x] Dashboard/Web API explains coordinate blockers by showing location upload
+      count, coordinate-bearing upload count, latest missing-coordinate reason,
+      and operator hint.
 - [x] A no-hardware test fixture proves the Web/API path using synthetic or
       existing bounded evidence.
 - [x] Operator instructions exist for the battery-powered 4G-board D1 run.
@@ -94,6 +97,12 @@ battery power.
   `d1_link.acceptance_gate` now summarizes ready/blocked state, track-point
   count, blockers, warnings, and next action; Dashboard renders it above the
   D1 field readiness details.
+- D1 coordinate diagnostics (2026-07-08, codex): `/api/state`
+  `d1_link.map_surface.coordinate_diagnostics` and
+  `d1_link.acceptance_gate.coordinate_diagnostics` now show location events vs
+  coordinate-bearing uploads, latest missing-coordinate reason, and the
+  operator hint. Live no-fix uploads remain blocked until two coordinate points
+  are visible.
 - D1 acceptance field kit v17 (2026-07-08, codex): generated
   `reports/d1_field/FIELD-004-d1-acceptance-20260708-4h/` with preflight,
   flashing, 4h observer/AMOLED companion, post-run D1-only collection, one-page

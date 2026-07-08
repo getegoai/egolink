@@ -53,6 +53,10 @@ Through` panel:
   loop is live enough to start walking.
 - `Field Ready stale`, `not ready`, or `waiting` means wait for the next upload
   or check device power, SIM/LTE, and placement before treating the run as live.
+- `Coordinate data` shows how many location uploads include latitude/longitude.
+  If it is `0 / N` with `Latest missing reason` like
+  `cell_observation_without_position_fix` or `gnss_no_fix`, go outdoors and
+  wait until at least two coordinate-bearing uploads appear.
 - This Web preflight does not claim GNSS accuracy or battery life; it only says
   fresh D1 periodic data is reaching the server.
 
@@ -63,7 +67,8 @@ Through` panel:
       freshness, LTE, location estimate, and power evidence.
 - [ ] Dashboard D1 map view shows position points plus a trajectory line from
       recent coordinate-bearing uploads. The D1 Web/API gate must fail
-      explainably if fewer than two map points are available.
+      explainably if fewer than two map points are available, including the
+      latest missing-coordinate reason when uploads arrive without lat/lon.
 - [ ] Field companion report records sample count, stale samples, raw POST
       success/failure delta, coordinate sample count, and power sample count.
 - [ ] Post-run collector summary records Web/API, power, one-page D1 demo

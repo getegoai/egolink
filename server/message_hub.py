@@ -54,6 +54,7 @@ EALE_P0_GENERATOR_NAME = "EALE-P0"
 EALE_P0_GENERATOR_VERSION = "0.1.0-alg001"
 D1_FIELD_READY_FRESHNESS_S = 180
 D1_FIELD_STALE_FRESHNESS_S = 600
+D1_LOCATION_EVENT_TYPES = {"location_report", "location_observation"}
 
 
 def utc_now() -> str:
@@ -2429,7 +2430,7 @@ def build_d1_uplink_metrics(messages: list[dict[str, Any]]) -> dict[str, Any]:
     location_events = [
         message
         for message in ordered
-        if message.get("message_type") == "event" and message.get("event_type") in {"location_report", "location_observation"}
+        if message.get("message_type") == "event" and message.get("event_type") in D1_LOCATION_EVENT_TYPES
     ]
     latest_counters: dict[str, int | None] = {"attempt_count": None, "success_count": None, "failure_count": None}
     for message in ordered:
@@ -2503,7 +2504,7 @@ def build_d1_power_curve(messages: list[dict[str, Any]]) -> dict[str, Any]:
 def d1_location_point(message: dict[str, Any], *, source: str) -> dict[str, Any] | None:
     if message.get("message_type") != "event":
         return None
-    if message.get("event_type") not in {"location_report", "location_observation"}:
+    if message.get("event_type") not in D1_LOCATION_EVENT_TYPES:
         return None
     position = location_position(message)
     lat = as_number(position.get("lat"))
@@ -2519,6 +2520,63 @@ def d1_location_point(message: dict[str, Any], *, source: str) -> dict[str, Any]
             "event_type": message.get("event_type"),
             "source": source,
             "fix": first_known(message.get("fix"), dict_value(message, "gnss", "fix")),
+        }
+    )
+
+
+def d1_coordinate_missing_reason(message: dict[str, Any]) -> str:
+    belief = as_dict(first_known(message.get("location_belief"), dict_value(message, "payload", "location_belief")))
+    reason = first_known(belief.get("reason"), message.get("location_reason"))
+    if reason:
+        return str(reason)
+    fix = first_known(message.get("fix"), dict_value(message, "gnss", "fix"))
+    gnss_state = first_known(message.get("gnss_state"), dict_value(message, "gnss", "state"), dict_value(message, "gnss", "result"))
+    if fix is False or str(gnss_state or "").strip().lower() in {"no_fix", "nofix", "no-fix"}:
+        return "gnss_no_fix"
+    if message.get("event_type") == "location_observation":
+        return "observation_without_position_fix"
+    return "coordinate_fields_missing"
+
+
+def d1_coordinate_diagnostics(messages: list[dict[str, Any]], points: list[dict[str, Any]]) -> dict[str, Any]:
+    location_events = [
+        message
+        for message in d1_history_chronological(messages)
+        if message.get("message_type") == "event" and message.get("event_type") in D1_LOCATION_EVENT_TYPES
+    ]
+    coordinate_points = [
+        point
+        for point in points
+        if point.get("source") in {"telemetry_history", "latest_location"}
+    ]
+    missing_events = [
+        message
+        for message in location_events
+        if d1_location_point(message, source="diagnostics") is None
+    ]
+    latest_event = location_events[-1] if location_events else {}
+    latest_missing = missing_events[-1] if missing_events else {}
+    latest_coordinate = coordinate_points[-1] if coordinate_points else {}
+    coordinate_event_count = len(coordinate_points)
+    missing_count = max(0, len(location_events) - coordinate_event_count)
+    if coordinate_event_count >= 2:
+        operator_hint = "enough_coordinate_uploads_for_d1_map_gate"
+    elif location_events:
+        operator_hint = "move_outdoors_until_two_coordinate_uploads_are_seen"
+    else:
+        operator_hint = "wait_for_periodic_location_upload"
+    return compact_dict(
+        {
+            "location_event_count": len(location_events),
+            "coordinate_event_count": coordinate_event_count,
+            "missing_coordinate_event_count": missing_count,
+            "latest_event_type": latest_event.get("event_type"),
+            "latest_event_seq": latest_event.get("seq"),
+            "latest_coordinate_seq": latest_coordinate.get("seq"),
+            "latest_missing_reason": d1_coordinate_missing_reason(latest_missing) if latest_missing else None,
+            "latest_gnss_state": first_known(latest_event.get("gnss_state"), dict_value(latest_event, "gnss", "state")),
+            "latest_fix": first_known(latest_event.get("fix"), dict_value(latest_event, "gnss", "fix")),
+            "operator_hint": operator_hint,
         }
     )
 
@@ -2567,6 +2625,7 @@ def build_d1_map_surface(
                 )
             )
     visible_points = points[-24:]
+    coordinate_diagnostics = d1_coordinate_diagnostics(messages, points)
     return {
         "visible": visible,
         "mode": map_mode,
@@ -2574,6 +2633,7 @@ def build_d1_map_surface(
         "lon": map_lon,
         "coordinate_source": coordinate_source,
         "points": visible_points,
+        "coordinate_diagnostics": coordinate_diagnostics,
         "trajectory": {
             "point_count": len(visible_points),
             "visible": len(visible_points) >= 2,
@@ -2668,6 +2728,7 @@ def build_d1_acceptance_gate(
     required_track_points = 2
     points = as_list(map_surface.get("points"))
     trajectory = as_dict(map_surface.get("trajectory"))
+    coordinate_diagnostics = as_dict(map_surface.get("coordinate_diagnostics"))
     track_points = parse_optional_int(trajectory.get("point_count")) or len(points)
 
     if status != "estimate_visible" or location_estimate.get("available") is not True:
@@ -2690,6 +2751,8 @@ def build_d1_acceptance_gate(
     raw_failures = parse_optional_int(uplink_metrics.get("raw_post_failure_count")) or 0
     if raw_failures > 0:
         warnings.append("d1_raw_post_failures_seen")
+    if (parse_optional_int(coordinate_diagnostics.get("missing_coordinate_event_count")) or 0) > 0:
+        warnings.append("d1_location_events_without_coordinate")
 
     components = as_dict(evidence.get("components"))
     for component in ("gnss", "cell_lte", "imu", "power"):
@@ -2702,7 +2765,7 @@ def build_d1_acceptance_gate(
         blockers.append(f"{claim}_missing")
 
     if "d1_map_trajectory_needs_two_points" in blockers:
-        next_action = "collect_at_least_two_coordinate_uploads_outdoors"
+        next_action = str(coordinate_diagnostics.get("operator_hint") or "collect_at_least_two_coordinate_uploads_outdoors")
     elif any(item.startswith("field_readiness_") for item in blockers):
         next_action = "wait_for_fresh_periodic_upload_or_check_power_sim_lte"
     elif blockers:
@@ -2719,6 +2782,7 @@ def build_d1_acceptance_gate(
         "blockers": unique_text(blockers),
         "warnings": unique_text(warnings),
         "next_action": next_action,
+        "coordinate_diagnostics": coordinate_diagnostics,
         "scope": "D1 acceptance preflight and post-run review only",
         "non_claims": ["location_accuracy_not_claimed", "battery_life_not_claimed"],
     }
@@ -7295,9 +7359,12 @@ def render_dashboard() -> str:
       const mode = map.mode || 'waiting_for_location_upload';
       const points = Array.isArray(map.points) ? map.points : [];
       const trajectory = map.trajectory || {};
+      const coord = map.coordinate_diagnostics || {};
       const pointCount = trajectory.point_count ?? points.length;
+      const coordCount = coord.coordinate_event_count ?? pointCount;
+      const eventCount = coord.location_event_count ?? pointCount;
       const caption = map.visible
-        ? `${mode} / ${estimate.state || 'unknown'} / ${coordinateLabel(map.lat, map.lon)} / ${pointCount} points`
+        ? `${mode} / ${estimate.state || 'unknown'} / ${coordinateLabel(map.lat, map.lon)} / ${pointCount} points / ${coordCount}/${eventCount} coordinate uploads`
         : 'waiting for location upload';
       const marker = map.visible
         ? d1MapTrack(points) || '<div class="map-waiting">no coordinate points</div>'
@@ -7318,6 +7385,7 @@ def render_dashboard() -> str:
       const acceptance = d1.acceptance_gate || {};
       const estimate = d1.location_estimate || {};
       const map = d1.map_surface || {};
+      const coord = map.coordinate_diagnostics || acceptance.coordinate_diagnostics || {};
       const freshness = d1.upload_freshness || {};
       const uplink = d1.uplink_metrics || {};
       const powerCurve = d1.power_curve || {};
@@ -7353,6 +7421,8 @@ def render_dashboard() -> str:
               <span class="card-label">D1 Acceptance Gate</span>
               <strong>${escapeHtml(acceptance.headline || 'Checking D1 acceptance readiness')}</strong>
               <span class="card-note">Track points: ${escapeHtml(acceptance.track_points ?? 0)} / required ${escapeHtml(acceptance.required_track_points ?? 2)}</span>
+              <span class="card-note">Coordinate data: ${escapeHtml(coord.coordinate_event_count ?? 0)} / ${escapeHtml(coord.location_event_count ?? 0)} events, missing ${escapeHtml(coord.missing_coordinate_event_count ?? 0)}</span>
+              <span class="card-note">Latest missing reason: ${escapeHtml(valueOrUnknown(coord.latest_missing_reason))}</span>
               <span class="card-note">Blockers: ${escapeHtml(arrayLabel(acceptance.blockers))}</span>
               <span class="card-note">Warnings: ${escapeHtml(arrayLabel(acceptance.warnings))}</span>
               <span class="card-note">Next: ${escapeHtml(acceptance.next_action || 'review_d1_gate')}</span>
@@ -7398,6 +7468,7 @@ def render_dashboard() -> str:
                 <span class="card-value">${escapeHtml(coordinateLabel(map.lat, map.lon))}</span>
                 <span class="card-note">Map mode: ${escapeHtml(mapMode)}</span>
                 <span class="card-note">Track points: ${escapeHtml(trajectory.point_count ?? 0)} / ${escapeHtml(trajectory.source || 'recent_location_events')}</span>
+                <span class="card-note">Coordinate uploads: ${escapeHtml(coord.coordinate_event_count ?? 0)} / ${escapeHtml(coord.location_event_count ?? 0)}; hint ${escapeHtml(valueOrUnknown(coord.operator_hint))}</span>
                 <span class="card-note">No accuracy or battery-life claim is made from this panel.</span>
               </div>
             </div>
