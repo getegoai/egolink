@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
 import threading
@@ -415,6 +416,87 @@ class MessageHubStoreTests(unittest.TestCase):
             device["observability"]["location_belief"]["reason"],
             "last_known_after_unknown_location_observation",
         )
+
+    def test_d1_track_points_survive_indoor_no_fix_burst(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            base = datetime.now(timezone.utc) - timedelta(seconds=220)
+
+            def ts(offset: int) -> str:
+                return (base + timedelta(seconds=offset)).isoformat()
+
+            for seq, lat, lon in (
+                (1, 22.5431, 113.9321),
+                (2, 22.5438, 113.9328),
+            ):
+                store.ingest(
+                    "ego-link-001",
+                    "telemetry",
+                    protocol.event_message(
+                        "ego-link-001",
+                        ts(seq),
+                        seq,
+                        "location_report",
+                        "normal",
+                        source="sim7670g_firmware_gnss",
+                        source_status="observed",
+                        fix=True,
+                        lat=lat,
+                        lon=lon,
+                        gnss={"fix": True, "state": "fix"},
+                        cell={"rat": "LTE", "cell_id": "unit-cell", "registration_state": "registered_home"},
+                        lte={"registered": True, "pdp_active": True, "reason_code": "LTE_READY"},
+                        imu={"motion": "walking", "evidence_status": "mock"},
+                        power={"battery_mv": 4100 - seq, "soc_pct": 90, "evidence_status": "measured"},
+                        reliability={
+                            "network": {
+                                "raw_post_attempt_count": seq,
+                                "raw_post_success_count": seq,
+                                "raw_post_failure_count": 0,
+                            }
+                        },
+                    ),
+                )
+
+            for seq in range(3, 153):
+                store.ingest(
+                    "ego-link-001",
+                    "telemetry",
+                    protocol.event_message(
+                        "ego-link-001",
+                        ts(seq),
+                        seq,
+                        "location_observation",
+                        "normal",
+                        source="sim7670g_firmware_cell",
+                        source_status="observed",
+                        cell={"rat": "LTE", "cell_id": "unit-cell", "registration_state": "registered_home"},
+                        lte={"registered": True, "pdp_active": True, "reason_code": "LTE_READY"},
+                        imu={"motion": "stationary", "evidence_status": "mock"},
+                        power={"battery_mv": 4090 - (seq % 5), "soc_pct": 89, "evidence_status": "measured"},
+                        location_belief={
+                            "state": "Unknown",
+                            "reason": "cell_observation_without_position_fix",
+                            "source": ["cell", "lte", "imu", "power"],
+                        },
+                        reliability={
+                            "network": {
+                                "raw_post_attempt_count": seq,
+                                "raw_post_success_count": seq,
+                                "raw_post_failure_count": 0,
+                            }
+                        },
+                    ),
+                )
+
+            d1 = store.get_device("ego-link-001")["d1_link"]
+
+        diagnostics = d1["map_surface"]["coordinate_diagnostics"]
+        self.assertEqual(d1["acceptance_gate"]["status"], "ready")
+        self.assertEqual(d1["acceptance_gate"]["track_points"], 2)
+        self.assertEqual(diagnostics["coordinate_event_count"], 2)
+        self.assertEqual(diagnostics["missing_coordinate_event_count"], 150)
+        self.assertEqual(diagnostics["latest_missing_reason"], "cell_observation_without_position_fix")
 
     def test_lte_reason_code_is_part_of_observability_explainability(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

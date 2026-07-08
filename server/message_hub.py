@@ -55,6 +55,7 @@ EALE_P0_GENERATOR_VERSION = "0.1.0-alg001"
 D1_FIELD_READY_FRESHNESS_S = 180
 D1_FIELD_STALE_FRESHNESS_S = 600
 D1_LOCATION_EVENT_TYPES = {"location_report", "location_observation"}
+D1_SUMMARY_MESSAGE_LIMIT = 300
 
 
 def utc_now() -> str:
@@ -448,7 +449,10 @@ class MessageHubStore:
         device["location_memory"] = self._location_memory(db, device["device_id"])
         device["last_command"] = self._latest_command(db, device["device_id"])
         device["observability"] = build_observability(device, device["last_command"])
-        device["d1_link"] = build_d1_link_summary(device, self._recent_device_messages(db, device["device_id"]))
+        device["d1_link"] = build_d1_link_summary(
+            device,
+            self._recent_device_messages(db, device["device_id"], limit=D1_SUMMARY_MESSAGE_LIMIT),
+        )
         return device
 
     def _location_memory(self, db: sqlite3.Connection, device_id: str) -> dict[str, Any] | None:
