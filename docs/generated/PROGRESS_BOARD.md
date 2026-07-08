@@ -1,7 +1,7 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-08 04:36 UTC
-- 分支: `autodev/egolink-p0` @ d935efe feat(model): add tiny safety hard-case review packet [D5]
+- 生成时间: 2026-07-08 07:16 UTC
+- 分支: `autodev/egolink-p0` @ d4bc174 fix(d1): restore D1 acceptance gate focus [D1]
 - 当前焦点: Director指令(07-08)：模型/飞轮脚手架冻结，全力推 D1 外场验收（3-4h实测→tag v0.1.0→创始人验收），随后 D2 定位精度基线；PWR-001 24h 电池曲线与 FIELD-003 并入本波
 - 已完成任务总数: 135，进行中: 3，暂停: 3
 

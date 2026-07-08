@@ -131,8 +131,13 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("d1StatusStrip", html)
         self.assertIn("d1FreshnessBadge", html)
         self.assertIn("d1FieldReadyBadge", html)
+        self.assertIn("d1AcceptanceBadge", html)
         self.assertIn("field_readiness", html)
+        self.assertIn("acceptance_gate", html)
         self.assertIn("Field Ready", html)
+        self.assertIn("D1 Acceptance Gate", html)
+        self.assertIn("acceptanceClass", html)
+        self.assertIn("acceptanceLabel", html)
         self.assertIn("Ready Reason", html)
         self.assertIn("Operator Action", html)
         self.assertIn("Freshness Gate", html)
@@ -267,6 +272,10 @@ class MessageHubDashboardTests(unittest.TestCase):
                     "updated_at": now,
                 },
                 "transport": {"type": "lte"},
+                "gnss": {"fix": False, "state": "no_fix"},
+                "cell": {"rat": "LTE", "cell_id": "unit-cell", "registration_state": "registered_home"},
+                "imu": {"motion": "stationary", "evidence_status": "mock"},
+                "power": {"battery_mv": 4070, "soc_pct": 90, "evidence_status": "measured"},
             },
         }
         messages = [
@@ -274,6 +283,7 @@ class MessageHubDashboardTests(unittest.TestCase):
                 **location,
                 "lat": 31.200001,
                 "lon": 121.400001,
+                "power": {"battery_mv": 4070, "soc_pct": 90, "evidence_status": "measured"},
                 "reliability": {
                     "network": {
                         "raw_post_attempt_count": 4,
@@ -290,6 +300,7 @@ class MessageHubDashboardTests(unittest.TestCase):
                 "server_received_at": now,
                 "lat": 31.200501,
                 "lon": 121.400601,
+                "power": {"battery_mv": 4065, "soc_pct": 89, "evidence_status": "measured"},
             }
         )
 
@@ -308,6 +319,10 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertTrue(map_surface["trajectory"]["visible"])
         self.assertGreaterEqual(len(map_surface["points"]), 2)
         self.assertEqual(map_surface["points"][-1]["source"], "telemetry_history")
+        self.assertEqual(summary["acceptance_gate"]["status"], "ready")
+        self.assertEqual(summary["acceptance_gate"]["track_points"], 2)
+        self.assertEqual(summary["acceptance_gate"]["blockers"], [])
+        self.assertEqual(summary["acceptance_gate"]["next_action"], "run_d1_field_kit_and_postrun_collector")
 
     def test_d1_link_summary_waits_without_periodic_location_upload(self) -> None:
         now = datetime.now(timezone.utc).isoformat()
@@ -325,6 +340,9 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(readiness["state"], "waiting_for_data")
         self.assertEqual(readiness["reason"], "no_periodic_location_upload")
         self.assertEqual(readiness["operator_action"], "wait_for_new_dashboard_data")
+        self.assertEqual(summary["acceptance_gate"]["status"], "blocked")
+        self.assertIn("field_readiness_no_periodic_location_upload", summary["acceptance_gate"]["blockers"])
+        self.assertIn("d1_map_trajectory_needs_two_points", summary["acceptance_gate"]["blockers"])
 
     def test_d1_link_summary_marks_old_periodic_upload_not_ready(self) -> None:
         old = (datetime.now(timezone.utc) - timedelta(seconds=message_hub.D1_FIELD_STALE_FRESHNESS_S + 60)).isoformat()
@@ -349,6 +367,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(readiness["state"], "not_ready")
         self.assertEqual(readiness["reason"], "periodic_upload_too_old")
         self.assertEqual(readiness["operator_action"], "check_power_sim_lte_or_reboot")
+        self.assertEqual(summary["acceptance_gate"]["status"], "blocked")
+        self.assertIn("field_readiness_periodic_upload_too_old", summary["acceptance_gate"]["blockers"])
 
     def test_latest_field_results_summary_is_bounded_for_dashboard(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

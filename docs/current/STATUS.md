@@ -16,6 +16,12 @@ existing Tiny Safety and data-chain assets are retained for later D5 reuse and
 must not be expanded now. The D1 field kit v17 is generated at
 `reports/d1_field/FIELD-004-d1-acceptance-20260708-4h/`.
 
+2026-07-08: D1 Dashboard now exposes a first-screen `D1 Acceptance Gate`.
+It shows ready/blocked state, current vs required track points, blockers,
+warnings, and next action from `/api/state.d1_link.acceptance_gate`. This is
+D1 preflight/post-run review only and does not claim location accuracy or
+battery life.
+
 2026-07-07: MODEL-DEVICE-009 Tiny Safety hard-case review packet is
 implemented locally. The exporter consumes the MODEL-DEVICE-008 synthetic
 stress report and writes a bounded synthetic review packet under

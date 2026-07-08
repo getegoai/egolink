@@ -2651,6 +2651,79 @@ def build_d1_field_readiness(
     }
 
 
+def build_d1_acceptance_gate(
+    *,
+    status: str,
+    field_readiness: dict[str, Any],
+    location_estimate: dict[str, Any],
+    map_surface: dict[str, Any],
+    upload_freshness: dict[str, Any],
+    uplink_metrics: dict[str, Any],
+    power_curve: dict[str, Any],
+    evidence: dict[str, Any],
+    non_claims: list[str],
+) -> dict[str, Any]:
+    blockers: list[str] = []
+    warnings: list[str] = []
+    required_track_points = 2
+    points = as_list(map_surface.get("points"))
+    trajectory = as_dict(map_surface.get("trajectory"))
+    track_points = parse_optional_int(trajectory.get("point_count")) or len(points)
+
+    if status != "estimate_visible" or location_estimate.get("available") is not True:
+        blockers.append("d1_location_estimate_missing")
+    if field_readiness.get("ready") is not True:
+        blockers.append(f"field_readiness_{field_readiness.get('reason') or 'not_ready'}")
+    if map_surface.get("visible") is not True:
+        blockers.append("d1_map_surface_not_visible")
+    if track_points < required_track_points:
+        blockers.append("d1_map_trajectory_needs_two_points")
+    if not upload_freshness.get("last_location_upload_at"):
+        blockers.append("d1_location_upload_freshness_missing")
+    if (parse_optional_int(uplink_metrics.get("location_event_count")) or 0) <= 0:
+        blockers.append("d1_location_upload_count_missing")
+    if (parse_optional_int(uplink_metrics.get("raw_post_success_count")) or 0) <= 0:
+        blockers.append("d1_raw_post_success_missing")
+    if (parse_optional_int(power_curve.get("sample_count")) or 0) <= 0:
+        blockers.append("d1_power_sample_count_missing")
+
+    raw_failures = parse_optional_int(uplink_metrics.get("raw_post_failure_count")) or 0
+    if raw_failures > 0:
+        warnings.append("d1_raw_post_failures_seen")
+
+    components = as_dict(evidence.get("components"))
+    for component in ("gnss", "cell_lte", "imu", "power"):
+        if as_dict(components.get(component)).get("seen") is not True:
+            blockers.append(f"d1_{component}_evidence_missing")
+
+    required_non_claims = {"location_accuracy_not_claimed", "battery_life_not_claimed"}
+    missing_non_claims = sorted(required_non_claims.difference(set(non_claims)))
+    for claim in missing_non_claims:
+        blockers.append(f"{claim}_missing")
+
+    if "d1_map_trajectory_needs_two_points" in blockers:
+        next_action = "collect_at_least_two_coordinate_uploads_outdoors"
+    elif any(item.startswith("field_readiness_") for item in blockers):
+        next_action = "wait_for_fresh_periodic_upload_or_check_power_sim_lte"
+    elif blockers:
+        next_action = "fix_blockers_before_d1_field_acceptance"
+    else:
+        next_action = "run_d1_field_kit_and_postrun_collector"
+
+    gate_status = "ready" if not blockers else "blocked"
+    return {
+        "status": gate_status,
+        "headline": "Ready for D1 field acceptance run" if gate_status == "ready" else "Blocked for D1 acceptance",
+        "track_points": track_points,
+        "required_track_points": required_track_points,
+        "blockers": unique_text(blockers),
+        "warnings": unique_text(warnings),
+        "next_action": next_action,
+        "scope": "D1 acceptance preflight and post-run review only",
+        "non_claims": ["location_accuracy_not_claimed", "battery_life_not_claimed"],
+    }
+
+
 def build_d1_link_summary(device: dict[str, Any], messages: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     messages = messages or []
     latest_location = as_dict(device.get("latest_location"))
@@ -2709,65 +2782,81 @@ def build_d1_link_summary(device: dict[str, Any], messages: list[dict[str, Any]]
         lte,
         ["registered", "attached", "pdp_active", "assigned_ip", "registration_state", "pdp_state", "reason_code"],
     )
+    field_readiness = build_d1_field_readiness(status, upload_freshness, uplink_metrics)
+    location_estimate = {
+        "available": estimate_available,
+        "state": state,
+        "radius_m": belief.get("radius_m"),
+        "confidence": belief.get("confidence"),
+        "source": belief.get("source") if isinstance(belief.get("source"), list) else [],
+        "reason": first_known(belief.get("reason"), "no_location_estimate"),
+        "updated_at": first_known(belief.get("updated_at"), last_location_upload_at),
+        "accuracy_claim": "none",
+    }
+    map_surface = build_d1_map_surface(
+        messages=messages,
+        latest_location=latest_location,
+        location_memory=location_memory,
+        map_mode=map_mode,
+        map_lat=map_lat,
+        map_lon=map_lon,
+        coordinate_source=coordinate_source,
+        visible=estimate_available or has_coordinate,
+    )
+    evidence = {
+        "transport_type": first_known(transport.get("type"), "unknown"),
+        "components": {
+            "gnss": {
+                "seen": bool(latest_location),
+                "fix": first_known(latest_location.get("fix"), gnss.get("fix")),
+                "state": first_known(latest_location.get("gnss_state"), gnss.get("state"), "unknown"),
+                "reason_code": gnss.get("reason_code"),
+            },
+            "cell_lte": {
+                "seen": cell_lte_seen,
+                "cell_id": cell.get("cell_id"),
+                "rat": cell.get("rat"),
+                "registration_state": first_known(cell.get("registration_state"), lte.get("registration_state")),
+                "pdp_state": first_known(cell.get("pdp_state"), lte.get("pdp_state")),
+            },
+            "imu": {
+                "seen": d1_component_seen(imu, ["motion", "confidence", "hardware_present", "driver_enabled", "data_is_mock", "backend_status", "source_status", "evidence_status"]),
+                "motion": imu.get("motion"),
+                "confidence": imu.get("confidence"),
+                "evidence_status": imu.get("evidence_status"),
+            },
+            "power": {
+                "seen": d1_component_seen(power, ["battery_mv", "soc_pct", "charging", "state", "marker_seq", "source_status", "evidence_status"]),
+                "battery_mv": power.get("battery_mv"),
+                "soc_pct": power.get("soc_pct"),
+                "evidence_status": power.get("evidence_status"),
+            },
+        },
+    }
+    non_claims = ["location_accuracy_not_claimed", "battery_life_not_claimed"]
 
     return {
         "demo": "D1",
         "status": status,
-        "field_readiness": build_d1_field_readiness(status, upload_freshness, uplink_metrics),
-        "location_estimate": {
-            "available": estimate_available,
-            "state": state,
-            "radius_m": belief.get("radius_m"),
-            "confidence": belief.get("confidence"),
-            "source": belief.get("source") if isinstance(belief.get("source"), list) else [],
-            "reason": first_known(belief.get("reason"), "no_location_estimate"),
-            "updated_at": first_known(belief.get("updated_at"), last_location_upload_at),
-            "accuracy_claim": "none",
-        },
-        "map_surface": build_d1_map_surface(
-            messages=messages,
-            latest_location=latest_location,
-            location_memory=location_memory,
-            map_mode=map_mode,
-            map_lat=map_lat,
-            map_lon=map_lon,
-            coordinate_source=coordinate_source,
-            visible=estimate_available or has_coordinate,
+        "field_readiness": field_readiness,
+        "acceptance_gate": build_d1_acceptance_gate(
+            status=status,
+            field_readiness=field_readiness,
+            location_estimate=location_estimate,
+            map_surface=map_surface,
+            upload_freshness=upload_freshness,
+            uplink_metrics=uplink_metrics,
+            power_curve=power_curve,
+            evidence=evidence,
+            non_claims=non_claims,
         ),
+        "location_estimate": location_estimate,
+        "map_surface": map_surface,
         "upload_freshness": upload_freshness,
         "uplink_metrics": uplink_metrics,
         "power_curve": power_curve,
-        "evidence": {
-            "transport_type": first_known(transport.get("type"), "unknown"),
-            "components": {
-                "gnss": {
-                    "seen": bool(latest_location),
-                    "fix": first_known(latest_location.get("fix"), gnss.get("fix")),
-                    "state": first_known(latest_location.get("gnss_state"), gnss.get("state"), "unknown"),
-                    "reason_code": gnss.get("reason_code"),
-                },
-                "cell_lte": {
-                    "seen": cell_lte_seen,
-                    "cell_id": cell.get("cell_id"),
-                    "rat": cell.get("rat"),
-                    "registration_state": first_known(cell.get("registration_state"), lte.get("registration_state")),
-                    "pdp_state": first_known(cell.get("pdp_state"), lte.get("pdp_state")),
-                },
-                "imu": {
-                    "seen": d1_component_seen(imu, ["motion", "confidence", "hardware_present", "driver_enabled", "data_is_mock", "backend_status", "source_status", "evidence_status"]),
-                    "motion": imu.get("motion"),
-                    "confidence": imu.get("confidence"),
-                    "evidence_status": imu.get("evidence_status"),
-                },
-                "power": {
-                    "seen": d1_component_seen(power, ["battery_mv", "soc_pct", "charging", "state", "marker_seq", "source_status", "evidence_status"]),
-                    "battery_mv": power.get("battery_mv"),
-                    "soc_pct": power.get("soc_pct"),
-                    "evidence_status": power.get("evidence_status"),
-                },
-            },
-        },
-        "non_claims": ["location_accuracy_not_claimed", "battery_life_not_claimed"],
+        "evidence": evidence,
+        "non_claims": non_claims,
     }
 
 
@@ -7129,6 +7218,16 @@ def render_dashboard() -> str:
       if (state === 'stale' || state === 'waiting_for_data') return 'warn';
       return 'bad';
     }
+    function acceptanceClass(gate) {
+      if ((gate.status || '') === 'ready') return 'ok';
+      if ((gate.status || '') === 'blocked') return 'bad';
+      return 'warn';
+    }
+    function acceptanceLabel(gate) {
+      if ((gate.status || '') === 'ready') return 'ready';
+      if ((gate.status || '') === 'blocked') return 'blocked';
+      return 'checking';
+    }
     function readinessLabel(readiness) {
       const state = readiness.state || 'waiting_for_data';
       if (state === 'ready') return 'ready';
@@ -7216,6 +7315,7 @@ def render_dashboard() -> str:
       const d = devices[0];
       const d1 = d.d1_link || {};
       const readiness = d1.field_readiness || {};
+      const acceptance = d1.acceptance_gate || {};
       const estimate = d1.location_estimate || {};
       const map = d1.map_surface || {};
       const freshness = d1.upload_freshness || {};
@@ -7243,10 +7343,19 @@ def render_dashboard() -> str:
           <div class="d1-summary-pane">
             <div id="d1StatusStrip" class="d1-status-strip">
               <span id="d1FieldReadyBadge" class="status-chip ${readinessClass(readiness)}">Field Ready ${escapeHtml(readinessLabel(readiness))}</span>
+              <span id="d1AcceptanceBadge" class="status-chip ${acceptanceClass(acceptance)}">D1 Gate ${escapeHtml(acceptanceLabel(acceptance))}</span>
               <span class="status-chip ${d1StatusClass(status)}">D1 Status ${escapeHtml(status)}</span>
               <span id="d1FreshnessBadge" class="status-chip ${freshnessClass(freshness)}">Upload Freshness ${escapeHtml(freshnessLabel(freshness))}</span>
               <span class="status-chip">Transport ${escapeHtml(valueOrUnknown(evidence.transport_type))}</span>
               <span class="status-chip">Map Surface ${escapeHtml(mapMode)}</span>
+            </div>
+            <div class="d1-primary">
+              <span class="card-label">D1 Acceptance Gate</span>
+              <strong>${escapeHtml(acceptance.headline || 'Checking D1 acceptance readiness')}</strong>
+              <span class="card-note">Track points: ${escapeHtml(acceptance.track_points ?? 0)} / required ${escapeHtml(acceptance.required_track_points ?? 2)}</span>
+              <span class="card-note">Blockers: ${escapeHtml(arrayLabel(acceptance.blockers))}</span>
+              <span class="card-note">Warnings: ${escapeHtml(arrayLabel(acceptance.warnings))}</span>
+              <span class="card-note">Next: ${escapeHtml(acceptance.next_action || 'review_d1_gate')}</span>
             </div>
             <div class="d1-primary">
               <span class="card-label">Field Ready</span>

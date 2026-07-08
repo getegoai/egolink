@@ -21,6 +21,15 @@ def d1_state() -> dict:
                 "device_id": "ego-link-001",
                 "d1_link": {
                     "status": "estimate_visible",
+                    "acceptance_gate": {
+                        "status": "ready",
+                        "headline": "Ready for D1 field acceptance run",
+                        "track_points": 2,
+                        "required_track_points": 2,
+                        "blockers": [],
+                        "warnings": [],
+                        "next_action": "run_d1_field_kit_and_postrun_collector",
+                    },
                     "location_estimate": {
                         "available": True,
                         "state": "Coarse",
@@ -68,7 +77,10 @@ def d1_state() -> dict:
 
 
 def dashboard_html() -> str:
-    return "<html>D1 Link Through d1LinkPanel Upload Success Location Uploads Power Curve data-d1-map-mode map-track Track points</html>"
+    return (
+        "<html>D1 Link Through d1LinkPanel D1 Acceptance Gate d1AcceptanceBadge "
+        "Upload Success Location Uploads Power Curve data-d1-map-mode map-track Track points</html>"
+    )
 
 
 class D1WebApiValidationTests(unittest.TestCase):
@@ -86,6 +98,7 @@ class D1WebApiValidationTests(unittest.TestCase):
         self.assertFalse(report["scope"]["commands_sent"])
         self.assertFalse(report["scope"]["location_accuracy_claimed"])
         self.assertFalse(report["scope"]["battery_life_claimed"])
+        self.assertEqual(report["d1"]["acceptance_gate"]["status"], "ready")
         self.assertTrue(all(item["status"] == "PASS" for item in report["gates"]))
 
     def test_missing_d1_metrics_fails_explainably(self) -> None:

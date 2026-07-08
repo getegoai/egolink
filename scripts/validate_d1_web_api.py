@@ -36,6 +36,8 @@ DASHBOARD_MARKERS = (
     "data-d1-map-mode",
     "map-track",
     "Track points",
+    "D1 Acceptance Gate",
+    "d1AcceptanceBadge",
 )
 
 
@@ -182,6 +184,7 @@ def select_d1_device(state: dict[str, Any], device_id: str | None = None) -> dic
 
 def d1_state_gate(device: dict[str, Any]) -> dict[str, Any]:
     d1 = as_dict(device.get("d1_link"))
+    acceptance = as_dict(d1.get("acceptance_gate"))
     estimate = as_dict(d1.get("location_estimate"))
     map_surface = as_dict(d1.get("map_surface"))
     trajectory = as_dict(map_surface.get("trajectory"))
@@ -191,6 +194,8 @@ def d1_state_gate(device: dict[str, Any]) -> dict[str, Any]:
     errors: list[str] = []
     if not device:
         errors.append("d1_device_missing")
+    if not acceptance.get("status"):
+        errors.append("d1_acceptance_gate_missing")
     if estimate.get("available") is not True:
         errors.append("d1_location_estimate_not_available")
     if map_surface.get("visible") is not True:
@@ -208,14 +213,14 @@ def d1_state_gate(device: dict[str, Any]) -> dict[str, Any]:
         return gate(
             "G3_D1_STATE",
             "FAIL",
-            "/api/state does not expose a complete D1 location-estimate surface.",
+            "/api/state does not expose a complete D1 acceptance/location-estimate surface.",
             errors=errors,
             evidence=summarize_d1_device(device),
         )
     return gate(
         "G3_D1_STATE",
         "PASS",
-        "/api/state exposes the D1 location estimate, map points/trajectory, freshness, and non-claim boundaries.",
+        "/api/state exposes the D1 acceptance gate, location estimate, map points/trajectory, freshness, and non-claim boundaries.",
         evidence=summarize_d1_device(device),
     )
 
@@ -297,6 +302,7 @@ def summarize_d1_device(device: dict[str, Any]) -> dict[str, Any]:
     return {
         "device_id": device.get("device_id"),
         "status": d1.get("status"),
+        "acceptance_gate": d1.get("acceptance_gate"),
         "location_estimate": d1.get("location_estimate"),
         "map_surface": d1.get("map_surface"),
         "upload_freshness": d1.get("upload_freshness"),
@@ -366,6 +372,7 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- Hub: {report.get('hub_url')}",
         f"- Device: {report.get('device_id')}",
         f"- D1 status: {d1.get('status')}",
+        f"- D1 gate: {as_dict(d1.get('acceptance_gate')).get('status')}",
         f"- Location uploads: {uplink.get('location_event_count')}",
         f"- Map points: {as_dict(d1.get('map_surface')).get('trajectory', {}).get('point_count')}",
         f"- Raw POST: {uplink.get('raw_post_success_count')} ok / {uplink.get('raw_post_failure_count')} fail / {uplink.get('raw_post_attempt_count')} attempts",
