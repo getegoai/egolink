@@ -24,7 +24,7 @@ from scripts import validate_d1_web_api as d1_web  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_field_observation"
-OBSERVER_VERSION = "D1.field_observer.v2"
+OBSERVER_VERSION = "D1.field_observer.v3"
 SAMPLES_JSONL = "d1_field_samples.jsonl"
 STATUS_JSON = "d1_field_observation_status.json"
 REPORT_JSON = "d1_field_observation_report.json"
@@ -53,11 +53,23 @@ def int_or_none(value: object) -> int | None:
     return None
 
 
+def first_known(*values: object) -> object | None:
+    for value in values:
+        if value not in (None, ""):
+            return value
+    return None
+
+
 def summarize_sample(state: dict[str, Any], *, device_id: str | None, collected_at: str) -> dict[str, Any]:
     device = d1_web.select_d1_device(state, device_id=device_id)
     d1 = as_dict(device.get("d1_link"))
     estimate = as_dict(d1.get("location_estimate"))
+    acceptance = as_dict(d1.get("acceptance_gate"))
     surface = as_dict(d1.get("map_surface"))
+    trajectory = as_dict(surface.get("trajectory"))
+    coordinate_diagnostics = as_dict(
+        surface.get("coordinate_diagnostics") or acceptance.get("coordinate_diagnostics")
+    )
     freshness = as_dict(d1.get("upload_freshness"))
     uplink = as_dict(d1.get("uplink_metrics"))
     power_curve = as_dict(d1.get("power_curve"))
@@ -73,6 +85,8 @@ def summarize_sample(state: dict[str, Any], *, device_id: str | None, collected_
         "ok": bool(device),
         "device_id": device.get("device_id") or device_id,
         "d1_status": d1.get("status"),
+        "d1_gate_status": acceptance.get("status"),
+        "d1_gate_next_action": acceptance.get("next_action"),
         "location_state": estimate.get("state"),
         "location_reason": estimate.get("reason"),
         "location_updated_at": estimate.get("updated_at"),
@@ -85,6 +99,14 @@ def summarize_sample(state: dict[str, Any], *, device_id: str | None, collected_
         "lat": lat,
         "lon": lon,
         "coordinate_seen": lat is not None and lon is not None,
+        "track_point_count": int_or_none(first_known(acceptance.get("track_points"), trajectory.get("point_count"))),
+        "required_track_points": int_or_none(acceptance.get("required_track_points")),
+        "coordinate_event_count": int_or_none(coordinate_diagnostics.get("coordinate_event_count")),
+        "coordinate_location_event_count": int_or_none(coordinate_diagnostics.get("location_event_count")),
+        "missing_coordinate_event_count": int_or_none(coordinate_diagnostics.get("missing_coordinate_event_count")),
+        "latest_coordinate_seq": int_or_none(coordinate_diagnostics.get("latest_coordinate_seq")),
+        "latest_missing_coordinate_reason": coordinate_diagnostics.get("latest_missing_reason"),
+        "coordinate_operator_hint": coordinate_diagnostics.get("operator_hint"),
         "raw_post_attempt_count": int_or_none(uplink.get("raw_post_attempt_count")),
         "raw_post_success_count": int_or_none(uplink.get("raw_post_success_count")),
         "raw_post_failure_count": int_or_none(uplink.get("raw_post_failure_count")),
@@ -173,11 +195,17 @@ def evaluate_observation(
         sample for sample in ok_samples if number_or_none(sample.get("freshness_s")) is not None and float(sample["freshness_s"]) > max_stale_sec
     ]
     missing_freshness = [sample for sample in ok_samples if sample.get("freshness_s") is None]
-    coordinate_samples = [sample for sample in ok_samples if sample.get("coordinate_seen")]
+    coordinate_samples = [
+        sample
+        for sample in ok_samples
+        if sample.get("coordinate_seen") or bool((int_or_none(sample.get("coordinate_event_count")) or 0) > 0)
+    ]
     raw_failure_delta = metric_delta(ok_samples, "raw_post_failure_count")
     raw_success_delta = metric_delta(ok_samples, "raw_post_success_count")
     location_event_delta = metric_delta(ok_samples, "location_event_count")
     power_sample_delta = metric_delta(ok_samples, "power_sample_count")
+    coordinate_event_delta = metric_delta(ok_samples, "coordinate_event_count")
+    track_point_delta = metric_delta(ok_samples, "track_point_count")
 
     if fetch_error_count:
         warnings.append("d1_observer_fetch_errors_seen")
@@ -226,6 +254,17 @@ def evaluate_observation(
         "location_event_count_start": first_value(ok_samples, "location_event_count"),
         "location_event_count_end": last_value(ok_samples, "location_event_count"),
         "location_event_count_delta": location_event_delta,
+        "coordinate_event_count_start": first_value(ok_samples, "coordinate_event_count"),
+        "coordinate_event_count_end": last_value(ok_samples, "coordinate_event_count"),
+        "coordinate_event_count_delta": coordinate_event_delta,
+        "missing_coordinate_event_count_start": first_value(ok_samples, "missing_coordinate_event_count"),
+        "missing_coordinate_event_count_end": last_value(ok_samples, "missing_coordinate_event_count"),
+        "track_point_count_start": first_value(ok_samples, "track_point_count"),
+        "track_point_count_end": last_value(ok_samples, "track_point_count"),
+        "track_point_count_delta": track_point_delta,
+        "d1_gate_statuses": unique_values(ok_samples, "d1_gate_status"),
+        "latest_missing_coordinate_reasons": unique_values(ok_samples, "latest_missing_coordinate_reason"),
+        "coordinate_operator_hints": unique_values(ok_samples, "coordinate_operator_hint"),
         "power_sample_count_start": first_value(ok_samples, "power_sample_count"),
         "power_sample_count_end": last_value(ok_samples, "power_sample_count"),
         "power_sample_count_delta": power_sample_delta,
@@ -322,6 +361,10 @@ def write_status(
         "latest_location_upload_at": latest.get("last_location_upload_at"),
         "latest_freshness_s": latest.get("freshness_s"),
         "latest_d1_status": latest.get("d1_status"),
+        "latest_d1_gate_status": latest.get("d1_gate_status"),
+        "latest_track_point_count": latest.get("track_point_count"),
+        "latest_coordinate_event_count": latest.get("coordinate_event_count"),
+        "latest_missing_coordinate_reason": latest.get("latest_missing_coordinate_reason"),
         "samples_path": str(samples_path),
         "report_path": str(report_json),
         "markdown_report_path": str(report_md),
@@ -353,11 +396,15 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- Location upload window: {summary.get('first_location_upload_at')} -> {summary.get('last_location_upload_at')}",
         f"- Raw POST delta: {summary.get('raw_post_success_delta')} ok / {summary.get('raw_post_failure_delta')} fail",
         f"- Location event delta: {summary.get('location_event_count_delta')}",
+        f"- Coordinate uploads: {summary.get('coordinate_event_count_start')} -> {summary.get('coordinate_event_count_end')} (delta {summary.get('coordinate_event_count_delta')})",
+        f"- Track points: {summary.get('track_point_count_start')} -> {summary.get('track_point_count_end')} (delta {summary.get('track_point_count_delta')})",
         f"- Power sample delta: {summary.get('power_sample_count_delta')}",
         f"- Battery: {summary.get('battery_mv_first')} mV -> {summary.get('battery_mv_last')} mV",
         f"- SoC: {summary.get('soc_pct_first')}% -> {summary.get('soc_pct_last')}%",
+        f"- D1 gates: {', '.join(str(item) for item in summary.get('d1_gate_statuses') or [])}",
         f"- Map modes: {', '.join(str(item) for item in summary.get('map_modes') or [])}",
         f"- GNSS states: {', '.join(str(item) for item in summary.get('gnss_states') or [])}",
+        f"- Latest missing-coordinate reasons: {', '.join(str(item) for item in summary.get('latest_missing_coordinate_reasons') or [])}",
         "",
         "## Warnings",
         "",

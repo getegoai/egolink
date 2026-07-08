@@ -29,6 +29,10 @@ def sample(
         "ok": True,
         "device_id": "ego-link-r1-connectivity-001",
         "d1_status": "estimate_visible",
+        "d1_gate_status": "ready" if coordinate else "blocked",
+        "d1_gate_next_action": "run_d1_field_kit_and_postrun_collector"
+        if coordinate
+        else "move_outdoors_until_two_coordinate_uploads_are_seen",
         "last_device_upload_at": "2026-07-04T08:00:00+00:00",
         "last_location_upload_at": "2026-07-04T08:00:00+00:00",
         "freshness_s": freshness_s,
@@ -37,6 +41,16 @@ def sample(
         "lat": 22.5 if coordinate else None,
         "lon": 113.9 if coordinate else None,
         "coordinate_seen": coordinate,
+        "track_point_count": 2 if coordinate else 0,
+        "required_track_points": 2,
+        "coordinate_event_count": 2 if coordinate else 0,
+        "coordinate_location_event_count": location_count,
+        "missing_coordinate_event_count": max(0, location_count - (2 if coordinate else 0)),
+        "latest_coordinate_seq": seq if coordinate else None,
+        "latest_missing_coordinate_reason": None if coordinate else "gnss_no_fix",
+        "coordinate_operator_hint": "enough_coordinate_uploads_for_d1_map_gate"
+        if coordinate
+        else "move_outdoors_until_two_coordinate_uploads_are_seen",
         "raw_post_attempt_count": success_count + failure_count,
         "raw_post_success_count": success_count,
         "raw_post_failure_count": failure_count,
@@ -65,12 +79,31 @@ def api_state(seq: int, *, success_count: int, location_count: int, power_count:
                 "device_id": "ego-link-r1-connectivity-001",
                 "d1_link": {
                     "status": "estimate_visible",
+                    "acceptance_gate": {
+                        "status": "ready",
+                        "track_points": 2,
+                        "required_track_points": 2,
+                        "next_action": "run_d1_field_kit_and_postrun_collector",
+                    },
                     "location_estimate": {
                         "state": "Predicted",
                         "reason": "unit",
                         "updated_at": f"2026-07-04T08:00:{seq:02d}+00:00",
                     },
-                    "map_surface": {"mode": "memory_coordinate", "lat": 22.5, "lon": 113.9},
+                    "map_surface": {
+                        "mode": "memory_coordinate",
+                        "lat": 22.5,
+                        "lon": 113.9,
+                        "coordinate_diagnostics": {
+                            "coordinate_event_count": 2,
+                            "location_event_count": location_count,
+                            "missing_coordinate_event_count": max(0, location_count - 2),
+                            "latest_coordinate_seq": seq,
+                            "latest_missing_reason": "gnss_no_fix",
+                            "operator_hint": "enough_coordinate_uploads_for_d1_map_gate",
+                        },
+                        "trajectory": {"point_count": 2},
+                    },
                     "upload_freshness": {
                         "last_device_upload_at": f"2026-07-04T08:00:{seq:02d}+00:00",
                         "last_location_upload_at": f"2026-07-04T08:00:{seq:02d}+00:00",
@@ -133,9 +166,30 @@ class D1FieldObserverTests(unittest.TestCase):
         self.assertNotIn("d1_location_event_count_did_not_advance", report["warnings"])
         self.assertEqual(report["summary"]["raw_post_success_delta"], 2)
         self.assertEqual(report["summary"]["power_sample_count_delta"], 1)
+        self.assertEqual(report["summary"]["coordinate_event_count_start"], 0)
+        self.assertEqual(report["summary"]["coordinate_event_count_end"], 0)
+        self.assertEqual(report["summary"]["track_point_count_end"], 0)
         self.assertFalse(report["scope"]["commands_sent"])
         self.assertFalse(report["scope"]["hardware_contacted_directly"])
         self.assertFalse(report["scope"]["location_accuracy_claimed"])
+
+    def test_summarize_sample_records_coordinate_diagnostics(self) -> None:
+        state = api_state(7, success_count=5, location_count=8, power_count=3)
+
+        result = observer.summarize_sample(
+            state,
+            device_id="ego-link-r1-connectivity-001",
+            collected_at="2026-07-04T08:00:07+00:00",
+        )
+
+        self.assertEqual(result["d1_gate_status"], "ready")
+        self.assertEqual(result["track_point_count"], 2)
+        self.assertEqual(result["coordinate_event_count"], 2)
+        self.assertEqual(result["coordinate_location_event_count"], 8)
+        self.assertEqual(result["missing_coordinate_event_count"], 6)
+        self.assertEqual(result["latest_coordinate_seq"], 7)
+        self.assertEqual(result["latest_missing_coordinate_reason"], "gnss_no_fix")
+        self.assertEqual(result["coordinate_operator_hint"], "enough_coordinate_uploads_for_d1_map_gate")
 
     def test_evaluate_observation_fails_when_no_successful_samples(self) -> None:
         report = observer.evaluate_observation(
