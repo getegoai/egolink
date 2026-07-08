@@ -63,6 +63,8 @@ def add_d1_messages(store: message_hub.MessageHubStore) -> None:
             source="sim7670g_firmware_gnss",
             source_status="observed",
             fix=False,
+            lat=31.200000,
+            lon=121.400000,
             gnss_state="no_fix",
             power={
                 "battery_mv": 4070,
@@ -96,6 +98,8 @@ def add_d1_messages(store: message_hub.MessageHubStore) -> None:
             fw_version="0.1.0-d1-periodic-location",
             source="d1_postrun_unit",
             source_status="observed",
+            lat=31.200500,
+            lon=121.400600,
             gnss={"fix": False, "state": "no_fix", "reason_code": "GNSS_NO_FIX"},
             cell={"rat": "LTE", "cell_id": "180571649", "registration_state": "registered_home"},
             lte={"registered": True, "pdp_active": True, "reason_code": "LTE_READY", "pdp_state": "active"},

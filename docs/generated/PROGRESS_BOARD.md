@@ -1,8 +1,8 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-07 14:37 UTC
-- 分支: `autodev/egolink-p0` @ 6c15863 feat(model): add tiny safety synthetic stress eval [D5]
-- 当前焦点: D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度
+- 生成时间: 2026-07-08 04:36 UTC
+- 分支: `autodev/egolink-p0` @ d935efe feat(model): add tiny safety hard-case review packet [D5]
+- 当前焦点: Director指令(07-08)：模型/飞轮脚手架冻结，全力推 D1 外场验收（3-4h实测→tag v0.1.0→创始人验收），随后 D2 定位精度基线；PWR-001 24h 电池曲线与 FIELD-003 并入本波
 - 已完成任务总数: 135，进行中: 3，暂停: 3
 
 ## 里程碑

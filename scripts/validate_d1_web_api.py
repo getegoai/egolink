@@ -34,6 +34,8 @@ DASHBOARD_MARKERS = (
     "Location Uploads",
     "Power Curve",
     "data-d1-map-mode",
+    "map-track",
+    "Track points",
 )
 
 
@@ -182,6 +184,8 @@ def d1_state_gate(device: dict[str, Any]) -> dict[str, Any]:
     d1 = as_dict(device.get("d1_link"))
     estimate = as_dict(d1.get("location_estimate"))
     map_surface = as_dict(d1.get("map_surface"))
+    trajectory = as_dict(map_surface.get("trajectory"))
+    points = as_list(map_surface.get("points"))
     freshness = as_dict(d1.get("upload_freshness"))
     non_claims = set(str(item) for item in as_list(d1.get("non_claims")))
     errors: list[str] = []
@@ -191,6 +195,10 @@ def d1_state_gate(device: dict[str, Any]) -> dict[str, Any]:
         errors.append("d1_location_estimate_not_available")
     if map_surface.get("visible") is not True:
         errors.append("d1_map_surface_not_visible")
+    if len(points) < 2:
+        errors.append("d1_map_trajectory_points_missing")
+    if int(trajectory.get("point_count") or 0) < 2:
+        errors.append("d1_map_trajectory_missing")
     if not freshness.get("last_location_upload_at"):
         errors.append("d1_location_upload_freshness_missing")
     for claim in ("location_accuracy_not_claimed", "battery_life_not_claimed"):
@@ -207,7 +215,7 @@ def d1_state_gate(device: dict[str, Any]) -> dict[str, Any]:
     return gate(
         "G3_D1_STATE",
         "PASS",
-        "/api/state exposes the D1 location estimate, map surface, freshness, and non-claim boundaries.",
+        "/api/state exposes the D1 location estimate, map points/trajectory, freshness, and non-claim boundaries.",
         evidence=summarize_d1_device(device),
     )
 
@@ -359,6 +367,7 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- Device: {report.get('device_id')}",
         f"- D1 status: {d1.get('status')}",
         f"- Location uploads: {uplink.get('location_event_count')}",
+        f"- Map points: {as_dict(d1.get('map_surface')).get('trajectory', {}).get('point_count')}",
         f"- Raw POST: {uplink.get('raw_post_success_count')} ok / {uplink.get('raw_post_failure_count')} fail / {uplink.get('raw_post_attempt_count')} attempts",
         f"- Power samples: {power.get('sample_count')}",
         f"- Power delta: {power.get('delta_battery_mv')} mV / {power.get('delta_soc_pct')}%",

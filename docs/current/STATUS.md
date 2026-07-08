@@ -1,10 +1,20 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-07
+last_verified: 2026-07-08
 verified_by: codex
 ---
 
 ## Latest Deployment Note
+
+2026-07-08: Director reset applied from `docs/product/NORTH_STAR.md`. The
+current lowest unaccepted demo is D1, so active work is narrowed to D1
+acceptance only: 3-4h outdoor link-through run, Dashboard map point plus
+trajectory view, Web/API freshness gate, measured power curve, one-page D1
+report, founder acceptance, and tag `v0.1.0`. Data flywheel, labeling,
+`MODEL-DEVICE`, `DATA`, and `TRAIN` work is frozen until D2 is accepted;
+existing Tiny Safety and data-chain assets are retained for later D5 reuse and
+must not be expanded now. The D1 field kit v17 is generated at
+`reports/d1_field/FIELD-004-d1-acceptance-20260708-4h/`.
 
 2026-07-07: MODEL-DEVICE-009 Tiny Safety hard-case review packet is
 implemented locally. The exporter consumes the MODEL-DEVICE-008 synthetic

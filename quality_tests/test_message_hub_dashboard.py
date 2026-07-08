@@ -143,7 +143,12 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("D1 Status", html)
         self.assertIn("Map Surface", html)
         self.assertIn("map-surface", html)
+        self.assertIn("map-track", html)
+        self.assertIn("map-point-current", html)
+        self.assertIn("normalizeMapPoints", html)
+        self.assertIn("d1MapTrack", html)
         self.assertIn("data-d1-map-mode", html)
+        self.assertIn("Track points", html)
         self.assertIn("Accuracy Claim", html)
         self.assertIn("Upload Freshness", html)
         self.assertIn("Upload Success", html)
@@ -267,6 +272,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         messages = [
             {
                 **location,
+                "lat": 31.200001,
+                "lon": 121.400001,
                 "reliability": {
                     "network": {
                         "raw_post_attempt_count": 4,
@@ -276,10 +283,20 @@ class MessageHubDashboardTests(unittest.TestCase):
                 },
             }
         ]
+        messages.append(
+            {
+                **location,
+                "seq": 43,
+                "server_received_at": now,
+                "lat": 31.200501,
+                "lon": 121.400601,
+            }
+        )
 
         summary = message_hub.build_d1_link_summary(device, messages)
 
         readiness = summary["field_readiness"]
+        map_surface = summary["map_surface"]
         self.assertTrue(readiness["ready"])
         self.assertEqual(readiness["state"], "ready")
         self.assertEqual(readiness["reason"], "fresh_periodic_upload")
@@ -287,6 +304,10 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertLessEqual(readiness["freshness_s"], message_hub.D1_FIELD_READY_FRESHNESS_S)
         self.assertEqual(readiness["raw_post_health"], "ok")
         self.assertIn("location_accuracy_not_claimed", readiness["non_claims"])
+        self.assertGreaterEqual(map_surface["trajectory"]["point_count"], 2)
+        self.assertTrue(map_surface["trajectory"]["visible"])
+        self.assertGreaterEqual(len(map_surface["points"]), 2)
+        self.assertEqual(map_surface["points"][-1]["source"], "telemetry_history")
 
     def test_d1_link_summary_waits_without_periodic_location_upload(self) -> None:
         now = datetime.now(timezone.utc).isoformat()

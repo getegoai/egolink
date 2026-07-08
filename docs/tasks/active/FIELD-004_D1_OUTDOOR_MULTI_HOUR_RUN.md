@@ -6,14 +6,14 @@ priority: high
 requires_hardware: true
 serves_demo: D1
 created: 2026-07-04
-last_updated: 2026-07-06
+last_updated: 2026-07-08
 
 context:
   - docs/product/NORTH_STAR.md
   - docs/development/FIELD_TEST.md
   - docs/current/ACTIVE_BUILD.md
   - docs/hardware/BOARD_MATRIX.md
-  - reports/d1_field/FIELD-004-d1-outdoor-20260707-3h5/FIELD_RUNBOOK.md
+  - reports/d1_field/FIELD-004-d1-acceptance-20260708-4h/FIELD_RUNBOOK.md
 
 allowed_paths:
   - reports/
@@ -26,6 +26,8 @@ out_of_scope:
   - claiming location accuracy or battery life
   - raw private coordinate publication outside bounded evidence
 ---
+
+本任务服务于 D1；当前最低未验收 Demo 是 D1；n == m，且本任务是 D1 验收的直接执行项。
 
 # Goal
 
@@ -59,18 +61,24 @@ Through` panel:
 - [ ] Device runs on battery/independent power for 3-4 hours.
 - [ ] Dashboard stays usable and shows `Field Ready`, online/stale, upload
       freshness, LTE, location estimate, and power evidence.
+- [ ] Dashboard D1 map view shows position points plus a trajectory line from
+      recent coordinate-bearing uploads. The D1 Web/API gate must fail
+      explainably if fewer than two map points are available.
 - [ ] Field companion report records sample count, stale samples, raw POST
       success/failure delta, coordinate sample count, and power sample count.
-- [ ] Post-run collector summary records Web/API, power, D1 demo,
-      data-flywheel, D1 training-readiness, D1 labeling-intake, and D1
-      labeling-queue artifact paths.
+- [ ] Post-run collector summary records Web/API, power, one-page D1 demo
+      report, field-observation binding, and bounded artifact summary paths.
 - [ ] Post-run D1 Web/API report passes or fails explainably.
 - [ ] Post-run power report is generated; it may be WARN/FAIL, but must record
       why.
 - [ ] Curated report summaries are synced to the VPS Dashboard `Field Test
       Results` panel.
+- [ ] Founder reviews the one-page D1 report; only after acceptance, tag
+      `v0.1.0`.
 - [ ] The result does not claim location accuracy or battery life unless a later
       acceptance task defines those metrics.
+- [ ] Data flywheel, labeling, `MODEL-DEVICE`, `DATA`, and `TRAIN` work remain
+      frozen until D2 is accepted.
 
 # Optional Companion Recording
 
@@ -80,46 +88,86 @@ sidecar visibility.
 
 For the next planned run, use the generated kit:
 
-- Run ID: `FIELD-004-d1-outdoor-20260707-3h5`
-- Runbook: `reports\d1_field\FIELD-004-d1-outdoor-20260707-3h5\FIELD_RUNBOOK.md`
-- Checklist: `reports\d1_field\FIELD-004-d1-outdoor-20260707-3h5\FIELD_CHECKLIST.md`
+- Run ID: `FIELD-004-d1-acceptance-20260708-4h`
+- Runbook: `reports\d1_field\FIELD-004-d1-acceptance-20260708-4h\FIELD_RUNBOOK.md`
+- Checklist: `reports\d1_field\FIELD-004-d1-acceptance-20260708-4h\FIELD_CHECKLIST.md`
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\run_d1_field_companion.ps1 `
   -HubUrl http://203.0.113.10:8790 `
-  -DurationMinutes 210 `
-  -PollIntervalSec 30 `
-  -ReadWindowSeconds 8 `
-  -SessionId FIELD-004-d1-outdoor-20260707-3h5 `
-  -OutputDir reports\d1_field_companion\FIELD-004-d1-outdoor-20260707-3h5
+  -TokenFile server/runtime/vps_message_hub_token.txt `
+  -RunId FIELD-004-d1-acceptance-20260708-4h `
+  -DeviceId ego-link-r1-connectivity-001 `
+  -DurationMinutes 240 `
+  -PollIntervalSec 60 `
+  -AmoledReadWindowSeconds 10 `
+  -OutputRoot reports\d1_field_companion
 ```
 
 # Post-Run Commands
 
-Recommended one-command collection after returning. The generated v9 runbook
-above is the source of exact field-observation report/status paths.
+Recommended one-command collection after returning. The generated v17 runbook
+above is the source of exact field-observation report/status paths. This command
+explicitly skips data-flywheel, labeling, and training outputs until D2 is
+accepted.
 
 ```powershell
-python scripts\collect_d1_postrun.py --run-id FIELD-004-d1-outdoor-20260707-3h5 --hub-url http://203.0.113.10:8790 --message-test-run-id FIELD-004-d1-outdoor-20260707-3h5 --output-root reports\d1_postrun --json
+python scripts\collect_d1_postrun.py `
+  --run-id FIELD-004-d1-acceptance-20260708-4h `
+  --hub-url http://203.0.113.10:8790 `
+  --token-file server/runtime/vps_message_hub_token.txt `
+  --device-id ego-link-r1-connectivity-001 `
+  --message-test-run-id FIELD-004-d1-acceptance-20260708-4h `
+  --min-duration-hours 4 `
+  --output-root reports\d1_postrun `
+  --web-api-output-dir reports\d1_web_api\FIELD-004-d1-acceptance-20260708-4h `
+  --power-output-dir reports\power\FIELD-004-d1-acceptance-20260708-4h `
+  --d1-demo-output-dir reports\d1_demo\FIELD-004-d1-acceptance-20260708-4h `
+  --field-observation-report reports\d1_field_observation\FIELD-004-d1-acceptance-20260708-4h\d1_field_observation_report.json `
+  --field-observation-status reports\d1_field_observation\FIELD-004-d1-acceptance-20260708-4h\d1_field_observation_status.json `
+  --skip-data-flywheel `
+  --skip-training-chain `
+  --skip-training-readiness `
+  --skip-labeling-intake `
+  --skip-labeling-queue `
+  --skip-labeling-review-packet `
+  --skip-labeling-decision-template `
+  --skip-labeling-decision-validation `
+  --json
 ```
 
 Use the component commands below only when rerunning or troubleshooting one
 step:
 
 ```powershell
-python scripts\validate_d1_web_api.py --hub-url http://203.0.113.10:8790 --review-id FIELD-004-d1-outdoor-20260707-3h5 --output-dir reports\d1_web_api\FIELD-004-d1-outdoor-20260707-3h5 --json
+python scripts\validate_d1_web_api.py --hub-url http://203.0.113.10:8790 --review-id FIELD-004-d1-acceptance-20260708-4h --output-dir reports\d1_web_api\FIELD-004-d1-acceptance-20260708-4h --json
 
-python scripts\analyze_power_curve.py --hub http://203.0.113.10:8790 --test-run-id FIELD-004-d1-outdoor-20260707-3h5 --output-dir reports\power\FIELD-004-d1-outdoor-20260707-3h5 --min-duration-hours 3.5 --json
+python scripts\analyze_power_curve.py --hub http://203.0.113.10:8790 --test-run-id FIELD-004-d1-acceptance-20260708-4h --output-dir reports\power\FIELD-004-d1-acceptance-20260708-4h --min-duration-hours 4 --json
 
-python scripts\build_d1_demo_report.py --web-api-report reports\d1_web_api\FIELD-004-d1-outdoor-20260707-3h5\d1_web_api_report.json --power-curve-report reports\power\FIELD-004-d1-outdoor-20260707-3h5\power_curve_report.json --report-id FIELD-004-d1-outdoor-20260707-3h5 --output-dir reports\d1_demo\FIELD-004-d1-outdoor-20260707-3h5 --json
+python scripts\build_d1_demo_report.py --web-api-report reports\d1_web_api\FIELD-004-d1-acceptance-20260708-4h\d1_web_api_report.json --power-curve-report reports\power\FIELD-004-d1-acceptance-20260708-4h\power_curve_report.json --report-id FIELD-004-d1-acceptance-20260708-4h --output-dir reports\d1_demo\FIELD-004-d1-acceptance-20260708-4h --json
 
-python scripts\run_data_flywheel_pipeline.py --run-id FIELD-004-d1-outdoor-20260707-3h5-data-pipeline --dataset-id FIELD-004-d1-outdoor-20260707-3h5-dataset --json
+powershell -ExecutionPolicy Bypass -File scripts\deploy_message_hub_vps.ps1 -HostName 203.0.113.10 -SshKey $HOME\.ssh\egolink_vps_ed25519 -Public -IncludeFieldReportSummaries
+```
 
-powershell -ExecutionPolicy Bypass -File scripts\deploy_message_hub_vps.ps1 -HostName 203.0.113.10 -SshKey $HOME\.ssh\egolink_vps_ed25519 -Public -IncludeFieldReportSummaries -IncludeDataFlywheelSummaries -IncludeTrainingExperimentSummaries -IncludeTrainingRunSummaries -IncludeTrainingFeatureSummaries -IncludeTrainingRunnerDryRunSummaries -IncludeTrainingBaselineEvalSummaries -IncludeTrainingHandoffSummaries -IncludeTrainingJobSummaries -IncludeSyntheticTrainingChainSummaries -IncludeD1TrainingReadinessSummaries -IncludeD1LabelingIntakeSummaries
+# Acceptance Tag
+
+After the founder accepts the one-page D1 report:
+
+```powershell
+git tag -a v0.1.0 -m "D1 link-through accepted"
 ```
 
 # Progress Evidence
 
+- 2026-07-08 Director reset:
+  - Current lowest unaccepted demo is D1; this task is the D1 acceptance path.
+  - Generated D1-only field kit v17:
+    `reports/d1_field/FIELD-004-d1-acceptance-20260708-4h/`.
+  - D1 Dashboard map point plus recent trajectory is now a D1 Web/API
+    acceptance gate.
+  - Data flywheel, labeling, `MODEL-DEVICE`, `DATA`, and `TRAIN` work is
+    explicitly frozen until D2 is accepted; existing assets are retained for
+    later reuse.
 - 2026-07-05 unattended read-only D1 observation:
   - Board/device: `connectivity-node-001` /
     `ego-link-r1-connectivity-001`.

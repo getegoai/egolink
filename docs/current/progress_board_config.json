@@ -1,5 +1,5 @@
 {
-  "current_focus": "D1 链路通：4G板+电池独立运行，定时采集 GNSS/基站/IMU/电量，经 LTE 上报，服务器给位置估计，看板地图可见；先通链路，不追求精度",
+  "current_focus": "Director指令(07-08)：模型/飞轮脚手架冻结，全力推 D1 外场验收（3-4h实测→tag v0.1.0→创始人验收），随后 D2 定位精度基线；PWR-001 24h 电池曲线与 FIELD-003 并入本波",
   "recent_done_limit": 8,
   "milestones": [
     {

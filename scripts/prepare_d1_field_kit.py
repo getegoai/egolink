@@ -25,7 +25,7 @@ DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
 DEFAULT_FW_VERSION = "0.1.0-d1-periodic-location"
 DEFAULT_BOARD_ID = "connectivity-node-001"
 DEFAULT_DURATION_HOURS = 4.0
-KIT_VERSION = "D1.field_kit.v16"
+KIT_VERSION = "D1.field_kit.v17"
 MANIFEST_JSON = "field_manifest.json"
 RUNBOOK_MD = "FIELD_RUNBOOK.md"
 CHECKLIST_MD = "FIELD_CHECKLIST.md"
@@ -271,16 +271,14 @@ def build_commands(
         report_path("d1_field_observation", run_id, "d1_field_observation_report.json"),
         "--field-observation-status",
         report_path("d1_field_observation", run_id, "d1_field_observation_status.json"),
-        "--data-pipeline-run-id",
-        f"{run_id}-data-pipeline",
-        "--dataset-id",
-        f"{run_id}-dataset",
-        "--labeling-review-packet-output-root",
-        report_path("d1_labeling_reviews"),
-        "--labeling-decision-template-output-root",
-        report_path("d1_labeling_decisions"),
-        "--labeling-decision-validation-output-root",
-        report_path("d1_labeling_decision_validations"),
+        "--skip-data-flywheel",
+        "--skip-training-chain",
+        "--skip-training-readiness",
+        "--skip-labeling-intake",
+        "--skip-labeling-queue",
+        "--skip-labeling-review-packet",
+        "--skip-labeling-decision-template",
+        "--skip-labeling-decision-validation",
         "--json",
     ]
     if battery_capacity_mah is not None:
@@ -408,10 +406,9 @@ def build_commands(
         ),
         "post_run_collect_evidence": command_record(
             description=(
-                "Recommended one-command post-run collector: field observation binding, Web/API gate, power curve, "
-                "D1 demo report, data-flywheel pipeline, D1 labeling review packet, D1 decision template, "
-                "D1 decision validation, "
-                "training-chain reports when the dataset is ready, and a bounded artifact summary."
+                "Recommended one-command post-run collector for D1 acceptance only: field observation binding, "
+                "Web/API gate, power curve, one-page D1 demo report, and a bounded artifact summary. "
+                "Data flywheel, labeling, and TRAIN reports are explicitly skipped until D2 is accepted."
             ),
             argv=post_run_collect_argv,
         ),
@@ -451,26 +448,10 @@ def build_commands(
                 "--json",
             ],
         ),
-        "post_run_data_flywheel_status": command_record(
-            description=(
-                "Run the local data-flywheel pipeline after the field run. "
-                "This writes bounded pipeline/status/dataset/experiment manifests only, not raw candidate records."
-            ),
-            argv=[
-                "python",
-                "scripts\\run_data_flywheel_pipeline.py",
-                "--run-id",
-                f"{run_id}-data-pipeline",
-                "--dataset-id",
-                f"{run_id}-dataset",
-                "--json",
-            ],
-        ),
         "post_run_sync_dashboard_summaries": command_record(
             description=(
-                "Sync only curated Field Test Results, Data Flywheel, Training Experiment, TRAIN-003..008, "
-                "D1 readiness, D1 labeling-intake, D1 labeling-queue, D1 labeling-review, and D1 "
-                "labeling-decision summaries to the VPS Dashboard."
+                "Sync only curated D1 Field Test Results to the VPS Dashboard. "
+                "Data flywheel, labeling, and TRAIN summaries remain frozen until D2 acceptance."
             ),
             argv=[
                 "powershell",
@@ -484,20 +465,6 @@ def build_commands(
                 "$HOME\\.ssh\\egolink_vps_ed25519",
                 "-Public",
                 "-IncludeFieldReportSummaries",
-                "-IncludeDataFlywheelSummaries",
-                "-IncludeTrainingExperimentSummaries",
-                "-IncludeTrainingRunSummaries",
-                "-IncludeTrainingFeatureSummaries",
-                "-IncludeTrainingRunnerDryRunSummaries",
-                "-IncludeTrainingBaselineEvalSummaries",
-                "-IncludeTrainingHandoffSummaries",
-                "-IncludeTrainingJobSummaries",
-                "-IncludeSyntheticTrainingChainSummaries",
-                "-IncludeD1TrainingReadinessSummaries",
-                "-IncludeD1LabelingIntakeSummaries",
-                "-IncludeD1LabelingQueueSummaries",
-                "-IncludeD1LabelingReviewSummaries",
-                "-IncludeD1LabelingDecisionSummaries",
             ],
             requires_operator_intent=True,
         ),
@@ -535,9 +502,11 @@ def build_checklists(*, duration_hours: float) -> dict[str, list[str]]:
         "after_run": [
             "Record local and UTC stop time plus visible Dashboard state.",
             "Run the one-command post-run collector from this kit.",
-            "Confirm post-run training readiness, D1 labeling intake, D1 labeling queue, D1 review packet, D1 decision template, and D1 decision validation are generated before closing the run.",
-            "Use the individual Web/API, power, D1 demo, and data-flywheel commands only when troubleshooting.",
-            "Sync curated Field Test Results, Data Flywheel, TRAIN-003..008, D1 readiness, and D1 labeling-intake summaries to the VPS Dashboard.",
+            "Confirm the D1 Web/API report, power curve, one-page D1 report, and post-run summary are generated before closing the run.",
+            "Use the individual Web/API, power, and D1 demo commands only when troubleshooting.",
+            "Sync curated Field Test Results to the VPS Dashboard.",
+            "Do not run data-flywheel, labeling, MODEL-DEVICE, DATA, or TRAIN work as part of D1 acceptance.",
+            "After founder acceptance, create tag v0.1.0 and attach the one-page D1 report to the acceptance note.",
             "Keep raw Message Hub export, generated reports, and OPERATOR_NOTES.md together.",
             "Do not claim location accuracy, battery life, GNSS acceptance, or 24h PWR-001 pass from a short D1 run.",
         ],
@@ -671,7 +640,7 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             "",
             "### Recommended Post-Run Collector",
             "",
-            "Runs field-observation binding, the Web/API gate, power curve, D1 evidence report, data-flywheel pipeline, D1 training-readiness, D1 labeling-intake, D1 labeling-queue, D1 labeling-review packet, D1 labeling-decision template, D1 labeling-decision validation, and TRAIN-003..008 reports when the dataset handoff is ready, then writes one bounded artifact summary.",
+            "Runs field-observation binding, the Web/API gate, power curve, one-page D1 evidence report, and one bounded artifact summary. It explicitly skips data-flywheel, labeling, and TRAIN reports until D2 has been accepted.",
             "",
             "```powershell",
             commands["post_run_collect_evidence"]["powershell"],
@@ -699,20 +668,20 @@ def write_runbook(path: Path, manifest: dict[str, Any]) -> None:
             commands["post_run_d1_demo_report"]["powershell"],
             "```",
             "",
-            "### Data Flywheel Pipeline",
-            "",
-            "This writes bounded pipeline, status, dataset-manifest, training-readiness, labeling-intake, labeling-queue, labeling-review packet, labeling-decision template, labeling-decision validation, and training-experiment reports. It does not export raw candidate records.",
-            "",
-            "```powershell",
-            commands["post_run_data_flywheel_status"]["powershell"],
-            "```",
-            "",
             "### Sync Dashboard Summaries",
             "",
-            "This syncs curated report summaries, including D1 readiness and labeling-intake queues, to the Web Dashboard. It does not copy candidate DBs, feature-row JSONL, raw JSONL logs, model artifacts, or private payloads.",
+            "This syncs curated D1 field report summaries to the Web Dashboard. It does not copy candidate DBs, feature-row JSONL, raw JSONL logs, model artifacts, or private payloads.",
             "",
             "```powershell",
             commands["post_run_sync_dashboard_summaries"]["powershell"],
+            "```",
+            "",
+            "### Acceptance Tag",
+            "",
+            "Run only after founder accepts the one-page D1 report.",
+            "",
+            "```powershell",
+            "git tag -a v0.1.0 -m \"D1 link-through accepted\"",
             "```",
             "",
             "## Boundaries",
@@ -771,19 +740,7 @@ def write_notes_template(path: Path, manifest: dict[str, Any]) -> None:
         f"- Web/API report: `{manifest['expected_outputs']['web_api_report']}`",
         f"- Power report: `{manifest['expected_outputs']['power_report']}`",
         f"- D1 demo report: `{manifest['expected_outputs']['d1_demo_report']}`",
-        f"- D1 training readiness: `{manifest['expected_outputs']['d1_training_readiness']}`",
-        f"- D1 labeling intake: `{manifest['expected_outputs']['d1_labeling_intake']}`",
-        f"- D1 labeling queue: `{manifest['expected_outputs']['d1_labeling_queue']}`",
-        f"- D1 labeling review packet: `{manifest['expected_outputs']['d1_labeling_review_packet']}`",
-        f"- D1 labeling decision template: `{manifest['expected_outputs']['d1_labeling_decision_template']}`",
-        f"- D1 labeling decision validation: `{manifest['expected_outputs']['d1_labeling_decision_validation']}`",
-        f"- Training experiment plan: `{manifest['expected_outputs']['training_experiment_plan']}`",
-        f"- Training run preflight: `{manifest['expected_outputs']['training_run_preflight']}`",
-        f"- Training feature manifest: `{manifest['expected_outputs']['training_feature_manifest']}`",
-        f"- Training runner dry-run: `{manifest['expected_outputs']['training_runner_dry_run']}`",
-        f"- Training baseline eval: `{manifest['expected_outputs']['training_baseline_eval']}`",
-        f"- Training handoff bundle: `{manifest['expected_outputs']['training_handoff_bundle']}`",
-        f"- Training job plan: `{manifest['expected_outputs']['training_job_plan']}`",
+        f"- Founder acceptance tag after approval: `{manifest['acceptance']['tag']}`",
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -902,59 +859,13 @@ def build_manifest(
             "power_report": report_path("power", run_id, "power_curve_report.json"),
             "d1_demo_report": report_path("d1_demo", run_id, "d1_demo_report.json"),
             "postrun_summary": report_path("d1_postrun", run_id, "d1_postrun_collection_summary.json"),
-            "d1_training_readiness": report_path(
-                "d1_training_readiness", f"{run_id}-training-readiness", "d1_training_readiness.json"
-            ),
-            "d1_labeling_intake": report_path(
-                "d1_labeling_intake", f"{run_id}-labeling-intake", "d1_labeling_intake.json"
-            ),
-            "d1_labeling_queue": report_path(
-                "d1_labeling_queue", f"{run_id}-labeling-queue", "d1_labeling_queue.json"
-            ),
-            "d1_labeling_review_packet": report_path(
-                "d1_labeling_reviews", f"{run_id}-labeling-review", "d1_labeling_review_packet.json"
-            ),
-            "d1_labeling_decision_template": report_path(
-                "d1_labeling_decisions", f"{run_id}-labeling-decisions", "d1_labeling_decision_template.json"
-            ),
-            "d1_labeling_decision_validation": report_path(
-                "d1_labeling_decision_validations",
-                f"{run_id}-labeling-decision-validation",
-                "d1_labeling_decision_validation.json",
-            ),
             "message_hub_export": report_path("power", run_id, "test_run_export.json"),
-            "data_flywheel_pipeline": report_path(
-                "data_flywheel_pipeline", f"{run_id}-data-pipeline", "data_flywheel_pipeline_run.json"
-            ),
-            "data_flywheel_status": report_path(
-                "data_flywheel", f"{run_id}-data-pipeline-data-flywheel", "data_flywheel_status.json"
-            ),
-            "training_dataset_manifest": report_path(
-                "training_datasets", f"{run_id}-dataset", "training_dataset_manifest.json"
-            ),
-            "training_experiment_plan": report_path(
-                "training_experiments",
-                f"{run_id}-data-pipeline-experiment",
-                "training_experiment_plan.json",
-            ),
-            "training_run_preflight": report_path(
-                "training_runs", f"{run_id}-training-preflight", "training_run_preflight.json"
-            ),
-            "training_feature_manifest": report_path(
-                "training_features", f"{run_id}-features", "training_feature_manifest.json"
-            ),
-            "training_runner_dry_run": report_path(
-                "training_runner_dry_runs", f"{run_id}-runner-dry-run", "training_runner_dry_run.json"
-            ),
-            "training_baseline_eval": report_path(
-                "training_baseline_evals", f"{run_id}-baseline-eval", "training_baseline_eval.json"
-            ),
-            "training_handoff_bundle": report_path(
-                "training_handoffs", f"{run_id}-training-handoff", "training_handoff_bundle.json"
-            ),
-            "training_job_plan": report_path(
-                "training_jobs", f"{run_id}-training-job", "training_job_plan.json"
-            ),
+        },
+        "acceptance": {
+            "status": "pending_founder_review",
+            "tag": "v0.1.0",
+            "tag_command": "git tag -a v0.1.0 -m \"D1 link-through accepted\"",
+            "required_report": report_path("d1_demo", run_id, "d1_demo_report.json"),
         },
         "boundaries": [
             "This generator only writes local kit files.",
@@ -964,8 +875,7 @@ def build_manifest(
             "AMOLED sidecar commands are PC-connected display aids and are not USB-Free product acceptance evidence.",
             "Voice calling and SMS are unverified and not implemented in the current D1 run path.",
             "A multi-hour D1 shakedown is not a 24h PWR-001 pass or a product battery-life claim.",
-            "D1 training-readiness, labeling-intake, labeling-queue, labeling-review-packet, labeling-decision-template, and labeling-decision-validation reports are review queues only and do not write candidate DBs or permit training.",
-            "Post-run TRAIN-003..008 reports are local bounded handoff/job-plan checks and do not train or deploy a model.",
+            "Data flywheel, labeling, MODEL-DEVICE, DATA, and TRAIN work is frozen until D2 is accepted.",
         ],
         "non_claims": non_claims(),
     }

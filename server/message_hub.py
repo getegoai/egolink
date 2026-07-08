@@ -2500,6 +2500,89 @@ def build_d1_power_curve(messages: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def d1_location_point(message: dict[str, Any], *, source: str) -> dict[str, Any] | None:
+    if message.get("message_type") != "event":
+        return None
+    if message.get("event_type") not in {"location_report", "location_observation"}:
+        return None
+    position = location_position(message)
+    lat = as_number(position.get("lat"))
+    lon = as_number(position.get("lon"))
+    if lat is None or lon is None:
+        return None
+    return compact_dict(
+        {
+            "lat": lat,
+            "lon": lon,
+            "server_received_at": d1_event_time(message),
+            "seq": message.get("seq"),
+            "event_type": message.get("event_type"),
+            "source": source,
+            "fix": first_known(message.get("fix"), dict_value(message, "gnss", "fix")),
+        }
+    )
+
+
+def build_d1_map_surface(
+    *,
+    messages: list[dict[str, Any]],
+    latest_location: dict[str, Any],
+    location_memory: dict[str, Any],
+    map_mode: str,
+    map_lat: Any,
+    map_lon: Any,
+    coordinate_source: str | None,
+    visible: bool,
+) -> dict[str, Any]:
+    points = [
+        point
+        for message in d1_history_chronological(messages)
+        if (point := d1_location_point(message, source="telemetry_history")) is not None
+    ]
+    latest_point = d1_location_point(latest_location, source="latest_location") if latest_location else None
+    if latest_point and not any(
+        point.get("server_received_at") == latest_point.get("server_received_at")
+        and point.get("seq") == latest_point.get("seq")
+        for point in points
+    ):
+        points.append(latest_point)
+    if not points and map_lat is not None and map_lon is not None:
+        fallback_lat = as_number(map_lat)
+        fallback_lon = as_number(map_lon)
+        if fallback_lat is not None and fallback_lon is not None:
+            points.append(
+                compact_dict(
+                    {
+                        "lat": fallback_lat,
+                        "lon": fallback_lon,
+                        "server_received_at": first_known(
+                            latest_location.get("server_received_at"),
+                            dict_value(location_memory, "last_known_location", "updated_at"),
+                            location_memory.get("updated_at"),
+                        ),
+                        "seq": latest_location.get("seq"),
+                        "event_type": latest_location.get("event_type"),
+                        "source": coordinate_source or "map_surface",
+                    }
+                )
+            )
+    visible_points = points[-24:]
+    return {
+        "visible": visible,
+        "mode": map_mode,
+        "lat": map_lat,
+        "lon": map_lon,
+        "coordinate_source": coordinate_source,
+        "points": visible_points,
+        "trajectory": {
+            "point_count": len(visible_points),
+            "visible": len(visible_points) >= 2,
+            "source": "recent_location_events",
+            "non_claim": "trajectory_is_visual_evidence_not_accuracy",
+        },
+    }
+
+
 def build_d1_field_readiness(
     status: str,
     upload_freshness: dict[str, Any],
@@ -2641,13 +2724,16 @@ def build_d1_link_summary(device: dict[str, Any], messages: list[dict[str, Any]]
             "updated_at": first_known(belief.get("updated_at"), last_location_upload_at),
             "accuracy_claim": "none",
         },
-        "map_surface": {
-            "visible": estimate_available or has_coordinate,
-            "mode": map_mode,
-            "lat": map_lat,
-            "lon": map_lon,
-            "coordinate_source": coordinate_source,
-        },
+        "map_surface": build_d1_map_surface(
+            messages=messages,
+            latest_location=latest_location,
+            location_memory=location_memory,
+            map_mode=map_mode,
+            map_lat=map_lat,
+            map_lon=map_lon,
+            coordinate_source=coordinate_source,
+            visible=estimate_available or has_coordinate,
+        ),
         "upload_freshness": upload_freshness,
         "uplink_metrics": uplink_metrics,
         "power_curve": power_curve,
@@ -6160,7 +6246,9 @@ def render_dashboard() -> str:
     .report-metrics { display: grid; gap: 4px; font-size: 13px; color: var(--ink-soft); }
     .map-surface { min-height: 260px; border: 1px solid #c8d0dc; border-radius: 8px; background: #eef2f6; position: relative; display: grid; place-items: center; overflow: hidden; }
     .map-grid { position: absolute; inset: 0; background-image: linear-gradient(#d9e0ea 1px, transparent 1px), linear-gradient(90deg, #d9e0ea 1px, transparent 1px); background-size: 28px 28px; }
-    .map-dot { width: 16px; height: 16px; border-radius: 50%; background: var(--blue); border: 3px solid #fff; box-shadow: 0 0 0 2px var(--blue); z-index: 1; }
+    .map-track { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+    .map-point { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #667085; border: 2px solid #fff; box-shadow: 0 0 0 1px #667085; transform: translate(-50%, -50%); z-index: 2; }
+    .map-point-current { width: 16px; height: 16px; background: var(--blue); box-shadow: 0 0 0 2px var(--blue); }
     .map-waiting { z-index: 1; color: var(--muted); font-size: 13px; font-weight: 600; border: 1px solid #c8d0dc; border-radius: 999px; padding: 6px 10px; background: rgba(255,255,255,0.82); }
     .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: var(--ink-soft); font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 5px 6px; }
     @media (max-width: 980px) { .dashboard-grid, .d1-overview { grid-template-columns: 1fr; } }
@@ -7068,13 +7156,52 @@ def render_dashboard() -> str:
       }
       return 'no coordinate';
     }
+    function normalizeMapPoints(points) {
+      const parsed = (Array.isArray(points) ? points : [])
+        .map(point => ({
+          ...point,
+          lat: Number(point.lat),
+          lon: Number(point.lon),
+        }))
+        .filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lon));
+      if (!parsed.length) return [];
+      const lats = parsed.map(point => point.lat);
+      const lons = parsed.map(point => point.lon);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      const minLon = Math.min(...lons);
+      const maxLon = Math.max(...lons);
+      const latRange = Math.max(maxLat - minLat, 0.000001);
+      const lonRange = Math.max(maxLon - minLon, 0.000001);
+      return parsed.map(point => ({
+        ...point,
+        x: 8 + ((point.lon - minLon) / lonRange) * 84,
+        y: 92 - ((point.lat - minLat) / latRange) * 84,
+      }));
+    }
+    function d1MapTrack(points) {
+      const normalized = normalizeMapPoints(points);
+      if (!normalized.length) return '';
+      const polyline = normalized.length >= 2
+        ? `<svg class="map-track" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${normalized.map(point => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}" fill="none" stroke="#1f6feb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/></svg>`
+        : '';
+      const markers = normalized.map((point, index) => {
+        const current = index === normalized.length - 1;
+        const label = `${point.event_type || 'location'} seq ${point.seq ?? 'unknown'} ${coordinateLabel(point.lat, point.lon)}`;
+        return `<span class="map-point ${current ? 'map-point-current' : ''}" title="${escapeHtml(label)}" style="left:${point.x.toFixed(2)}%; top:${point.y.toFixed(2)}%;"></span>`;
+      }).join('');
+      return polyline + markers;
+    }
     function d1MapSurface(map, estimate) {
       const mode = map.mode || 'waiting_for_location_upload';
+      const points = Array.isArray(map.points) ? map.points : [];
+      const trajectory = map.trajectory || {};
+      const pointCount = trajectory.point_count ?? points.length;
       const caption = map.visible
-        ? `${mode} / ${estimate.state || 'unknown'} / ${coordinateLabel(map.lat, map.lon)}`
+        ? `${mode} / ${estimate.state || 'unknown'} / ${coordinateLabel(map.lat, map.lon)} / ${pointCount} points`
         : 'waiting for location upload';
       const marker = map.visible
-        ? `<div class="map-dot" title="${escapeHtml(caption)}"></div>`
+        ? d1MapTrack(points) || '<div class="map-waiting">no coordinate points</div>'
         : '<div class="map-waiting">waiting for location</div>';
       return `
         <div class="map-surface" data-d1-map-mode="${escapeHtml(mode)}">
@@ -7102,6 +7229,7 @@ def render_dashboard() -> str:
       const power = components.power || {};
       const status = d1.status || 'unknown';
       const mapMode = map.mode || 'waiting_for_location_upload';
+      const trajectory = map.trajectory || {};
       const locationText = `${valueOrUnknown(estimate.state)} / ${valueOrUnknown(estimate.confidence)} / ${valueOrUnknown(estimate.radius_m)} m`;
       const uploadText = `${valueOrUnknown(uplink.raw_post_success_count)} ok / ${valueOrUnknown(uplink.raw_post_failure_count)} fail / ${valueOrUnknown(uplink.raw_post_attempt_count)} attempts / rate ${valueOrUnknown(uplink.raw_post_success_rate)}`;
       const powerText = `${valueOrUnknown(powerCurve.sample_count, 0)} samples / ${valueOrUnknown(powerCurve.window_s)} s`;
@@ -7160,6 +7288,7 @@ def render_dashboard() -> str:
                 <span class="card-label">Field Notes</span>
                 <span class="card-value">${escapeHtml(coordinateLabel(map.lat, map.lon))}</span>
                 <span class="card-note">Map mode: ${escapeHtml(mapMode)}</span>
+                <span class="card-note">Track points: ${escapeHtml(trajectory.point_count ?? 0)} / ${escapeHtml(trajectory.source || 'recent_location_events')}</span>
                 <span class="card-note">No accuracy or battery-life claim is made from this panel.</span>
               </div>
             </div>

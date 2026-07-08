@@ -6,7 +6,7 @@ priority: high
 requires_hardware: true
 serves_demo: D1
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-07-08
 
 context:
   - docs/product/NORTH_STAR.md
@@ -28,6 +28,8 @@ allowed_paths:
   - quality_tests/
 ---
 
+本任务服务于 D1；当前最低未验收 Demo 是 D1；n == m，且本任务是 D1 验收的直接阻塞项。
+
 # Goal
 
 Serve D1: make the 4G-board chain visible end to end: battery-powered board
@@ -40,6 +42,9 @@ and the Dashboard shows it.
       `location_report` / `location_observation`.
 - [x] Dashboard shows the latest D1 location estimate/map surface and upload
       freshness without claiming accuracy.
+- [x] Dashboard map surface can render recent coordinate points plus a
+      trajectory line, and the D1 Web/API gate fails explainably when fewer
+      than two coordinate points are available.
 - [x] A no-hardware test fixture proves the Web/API path using synthetic or
       existing bounded evidence.
 - [x] Operator instructions exist for the battery-powered 4G-board D1 run.
@@ -74,6 +79,19 @@ battery power.
 
 # Progress
 
+- Director reset (2026-07-08, codex): re-centered active work on D1
+  acceptance. `MODEL-DEVICE`, `DATA`, `TRAIN`, data-flywheel, and labeling work
+  are frozen until D2 is accepted; existing assets are retained for later D5
+  reuse.
+- D1 map trajectory gate (2026-07-08, codex): `/api/state` `d1_link.map_surface`
+  now includes bounded recent coordinate `points` plus `trajectory` metadata,
+  Dashboard renders those points as a visual track, and
+  `scripts/validate_d1_web_api.py` requires at least two map points for the D1
+  acceptance gate.
+- D1 acceptance field kit v17 (2026-07-08, codex): generated
+  `reports/d1_field/FIELD-004-d1-acceptance-20260708-4h/` with preflight,
+  flashing, 4h observer/AMOLED companion, post-run D1-only collection, one-page
+  report, Field Test Results sync, and `v0.1.0` founder-acceptance tag steps.
 - alignment (2026-07-04, codex): opened D1 as the current North Star task and
   paused non-D1 work so execution serves the current demo.
 - Web/API baseline (2026-07-04, codex): `/api/state` now exposes per-device
