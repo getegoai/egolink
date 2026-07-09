@@ -3975,7 +3975,13 @@ def load_latest_data_flywheel_status(root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS)
                 "training_allowed_records": counts.get("training_allowed_records", 0),
                 "reviewed_training_candidate_records": counts.get("reviewed_training_candidate_records", 0),
                 "experiment_input_records": counts.get("experiment_input_records", 0),
+                "location_baseline_reports": counts.get("location_baseline_reports", 0),
+                "reference_points": counts.get("reference_points", 0),
+                "location_attempts": counts.get("location_attempts", 0),
+                "fixed_attempts": counts.get("fixed_attempts", 0),
+                "no_fix_attempts": counts.get("no_fix_attempts", 0),
             },
+            "source_reports": report.get("source_reports"),
             "state_counts": report.get("state_counts"),
             "candidate_type_counts": report.get("candidate_type_counts"),
             "quality_gate_counts": report.get("quality_gate_counts"),
@@ -4004,6 +4010,8 @@ def load_latest_data_flywheel_status(root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS)
             "next_step": report.get("next_step"),
             "report_path": relative_repo_path(path),
             "markdown_path": markdown_path,
+            "review_packet_path": paths.get("location_review_packet_markdown"),
+            "dataset_manifest_path": paths.get("location_dataset_manifest_markdown"),
             "non_claims": report.get("non_claims"),
         }
     )
@@ -6985,6 +6993,17 @@ def render_dashboard() -> str:
       const store = flywheel.candidate_store || {};
       const blockers = flywheel.blockers || [];
       const warnings = flywheel.warnings || [];
+      const locationMetrics = (counts.location_baseline_reports || counts.reference_points || counts.location_attempts) ? `
+        <div class="metric"><span>D2 Baselines</span><span>${escapeHtml(counts.location_baseline_reports ?? 0)} reports / ${escapeHtml(counts.reference_points ?? 0)} refs</span></div>
+        <div class="metric"><span>D2 Attempts</span><span>${escapeHtml(counts.location_attempts ?? 0)} total / ${escapeHtml(counts.fixed_attempts ?? 0)} fixed / ${escapeHtml(counts.no_fix_attempts ?? 0)} no-fix</span></div>
+      ` : '';
+      const sourceReports = (flywheel.source_reports || []).slice(0, 3).map(report => `
+        <div class="metric"><span>${escapeHtml(report.type || 'source')}</span><span>${escapeHtml(report.run_id || 'unknown')} / ${escapeHtml(report.result_status || report.reason || 'unknown')}</span></div>
+      `).join('');
+      const locationArtifacts = [
+        flywheel.review_packet_path ? `review ${flywheel.review_packet_path}` : '',
+        flywheel.dataset_manifest_path ? `manifest ${flywheel.dataset_manifest_path}` : '',
+      ].filter(Boolean).join(' / ');
       const reviewSamples = (reviewQueue.sample_records || []).slice(0, 5).map(record => `
         <div class="metric"><span>${escapeHtml(record.record_id || 'candidate')}</span><span>${escapeHtml(record.state || 'unknown')} / ${escapeHtml(record.label || 'unknown')} / split ${escapeHtml(record.split_name || 'unknown')} / ${escapeHtml(record.label_review_state || 'unknown')}</span></div>
       `).join('') || '<div class="metric"><span>Review Samples</span><span class="empty">none</span></div>';
@@ -6994,6 +7013,7 @@ def render_dashboard() -> str:
         <div class="metric"><span>Candidate Store</span><span>${escapeHtml(store.available ?? false)} / ${escapeHtml(store.schema_version || store.reason || 'unknown')}</span></div>
         <div class="metric"><span>Sessions</span><span>${escapeHtml(counts.sessions_total ?? 0)}</span></div>
         <div class="metric"><span>Candidate Records</span><span>${escapeHtml(counts.records_total ?? 0)} total / ${escapeHtml(counts.needs_review_records ?? 0)} needs review</span></div>
+        ${locationMetrics}
         <div class="metric"><span>Training Gate</span><span>${escapeHtml(readiness.model_training_ready ?? false)} / ${escapeHtml(readiness.reason || 'unknown')}</span></div>
         <div class="metric"><span>Reviewed Candidates</span><span>${escapeHtml(counts.reviewed_training_candidate_records ?? 0)} reviewed / ${escapeHtml(counts.training_allowed_records ?? 0)} training_allowed</span></div>
         <div class="metric"><span>Review Queues</span><span>label ${escapeHtml(review.label_review_pending_records ?? 0)} / split ${escapeHtml(review.split_leakage_unchecked_records ?? 0)} / privacy ${escapeHtml(review.privacy_or_consent_blocked_records ?? 0)} / quality ${escapeHtml(review.quality_blocked_records ?? 0)}</span></div>
@@ -7003,6 +7023,8 @@ def render_dashboard() -> str:
         <div class="metric"><span>Warnings</span><span>${escapeHtml(warnings.join(', ') || 'none')}</span></div>
         <div class="metric"><span>Next Step</span><span>${escapeHtml(flywheel.next_step || 'Create the next data task')}</span></div>
         <div class="metric"><span>Report</span><span>${escapeHtml(flywheel.markdown_path || flywheel.report_path || 'unknown')}</span></div>
+        ${locationArtifacts ? `<div class="metric"><span>D5 Artifacts</span><span>${escapeHtml(locationArtifacts)}</span></div>` : ''}
+        ${sourceReports}
         ${reviewSamples}
       `;
     }

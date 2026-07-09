@@ -118,6 +118,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Classification Metrics", html)
         self.assertIn("Footprint Metrics", html)
         self.assertIn("Candidate Records", html)
+        self.assertIn("D2 Baselines", html)
+        self.assertIn("D2 Attempts", html)
         self.assertIn("Training Gate", html)
         self.assertIn("Review Queues", html)
         self.assertIn("Review Queue", html)
@@ -125,6 +127,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("sample_records", html)
         self.assertIn("available_actions", html)
         self.assertIn("Training Server", html)
+        self.assertIn("D5 Artifacts", html)
         self.assertIn("fieldResultsPanel", html)
         self.assertIn("fieldResultsCards", html)
         self.assertIn("d1FieldOverview", html)
@@ -789,7 +792,20 @@ class MessageHubDashboardTests(unittest.TestCase):
                             "training_allowed_records": 0,
                             "reviewed_training_candidate_records": 0,
                             "experiment_input_records": 0,
+                            "location_baseline_reports": 1,
+                            "reference_points": 3,
+                            "location_attempts": 30,
+                            "fixed_attempts": 27,
+                            "no_fix_attempts": 3,
                         },
+                        "source_reports": [
+                            {
+                                "type": "d2_location_accuracy_baseline",
+                                "run_id": "FIELD-003-unit",
+                                "result_status": "PASS",
+                                "report_sha256": "abc123",
+                            }
+                        ],
                         "state_counts": {"candidate": 3},
                         "candidate_type_counts": {"needs_help": 3},
                         "quality_gate_counts": {"pass": 3},
@@ -826,7 +842,9 @@ class MessageHubDashboardTests(unittest.TestCase):
                         "warnings": [],
                         "next_step": "Create the labeling/review loop.",
                         "paths": {
-                            "data_flywheel_status_markdown": "reports/data_flywheel/run-a/data_flywheel_status.md"
+                            "data_flywheel_status_markdown": "reports/data_flywheel/run-a/data_flywheel_status.md",
+                            "location_review_packet_markdown": "reports/data_flywheel/run-a/location_review_packet.md",
+                            "location_dataset_manifest_markdown": "reports/data_flywheel/run-a/location_dataset_manifest.md",
                         },
                     }
                 )
@@ -839,11 +857,17 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertTrue(summary["available"])
         self.assertEqual(summary["status"], "needs_review")
         self.assertEqual(summary["counts"]["records_total"], 3)
+        self.assertEqual(summary["counts"]["location_baseline_reports"], 1)
+        self.assertEqual(summary["counts"]["reference_points"], 3)
+        self.assertEqual(summary["counts"]["location_attempts"], 30)
+        self.assertEqual(summary["source_reports"][0]["run_id"], "FIELD-003-unit")
         self.assertEqual(summary["review"]["label_review_pending_records"], 3)
         self.assertEqual(summary["review_queue"]["pending_records"], 3)
         self.assertEqual(summary["review_queue"]["sample_records"][0]["record_id"], "cand-unit")
         self.assertIn("approve_for_training", summary["review_queue"]["available_actions"])
         self.assertFalse(summary["readiness"]["model_training_ready"])
+        self.assertEqual(summary["review_packet_path"], "reports/data_flywheel/run-a/location_review_packet.md")
+        self.assertEqual(summary["dataset_manifest_path"], "reports/data_flywheel/run-a/location_dataset_manifest.md")
         payload = json.dumps(summary)
         self.assertNotIn("training_candidates.db", payload)
         self.assertNotIn("record_json", payload)

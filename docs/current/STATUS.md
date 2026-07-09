@@ -12,9 +12,11 @@ locally. `scripts/summarize_location_data_flywheel.py` converts a bounded D2
 `reports/data_flywheel/<run-id>/data_flywheel_status.json`, plus a location
 review packet and dataset-manifest gate. It supports reference-point,
 known-place, no-fix, and bad-fix review formats, keeps raw private coordinates
-out of summaries, and blocks model training/deployment until explicit reviewed
-selection plus founder approval. First real D2 baseline ingestion remains
-pending field data.
+out of summaries, and the Web Data Flywheel card shows D2 baseline counts,
+reference points, fixed/no-fix attempts, source report, review packet, and
+manifest gate paths. Model training/deployment remains blocked until explicit
+reviewed selection plus founder approval. First real D2 baseline ingestion
+remains pending field data.
 
 2026-07-09: D2-001 location accuracy baseline toolchain is now implemented
 locally. `scripts/analyze_location_accuracy_baseline.py` converts a FIELD-003

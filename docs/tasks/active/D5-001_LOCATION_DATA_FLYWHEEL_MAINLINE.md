@@ -109,11 +109,16 @@ FIELD, and PWR runs and must be explicitly referenced by path.
     remains blocked pending founder approval.
   - Added focused tests for Dashboard compatibility, privacy redaction, and
     explicit-selection gating.
+- 2026-07-09 D5 Dashboard location summary:
+  - The Data Flywheel panel now preserves and displays D2 baseline count,
+    reference points, fixed/no-fix attempts, source report summary, review
+    packet path, and dataset manifest gate path.
 
 # Completion Evidence
 
 - Changed files: `scripts/summarize_location_data_flywheel.py`,
-  `quality_tests/test_location_data_flywheel.py`
+  `server/message_hub.py`, `quality_tests/test_location_data_flywheel.py`,
+  `quality_tests/test_message_hub_dashboard.py`
 - Test result: focused D5/D2/Dashboard tests PASS; `python
   scripts/context_lint.py` PASS; `powershell -ExecutionPolicy Bypass -File
   scripts\verify.ps1` PASS with 535 tests

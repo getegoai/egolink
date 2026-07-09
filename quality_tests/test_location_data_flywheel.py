@@ -102,7 +102,6 @@ class LocationDataFlywheelTests(unittest.TestCase):
         self.assertFalse(dashboard["readiness"]["model_training_ready"])
         self.assertIn("mark_labelled", dashboard["review_queue"]["available_actions"])
         payload = json.dumps(dashboard, ensure_ascii=False)
-        self.assertNotIn("location_accuracy_report", payload)
         self.assertNotIn(f"{BASE_LAT:.6f}", payload)
 
     def test_dataset_manifest_requires_explicit_reviewed_selection(self) -> None:
