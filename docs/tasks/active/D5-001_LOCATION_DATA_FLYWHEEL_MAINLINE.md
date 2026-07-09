@@ -113,15 +113,21 @@ FIELD, and PWR runs and must be explicitly referenced by path.
   - The Data Flywheel panel now preserves and displays D2 baseline count,
     reference points, fixed/no-fix attempts, source report summary, review
     packet path, and dataset manifest gate path.
+- 2026-07-09 D2->D5 post-field pipeline:
+  - Added `scripts/run_location_d2_d5_pipeline.py`, a one-command offline
+    processor from explicit Message Hub export plus FIELD manifest into D2
+    baseline, D5 data-flywheel status, and a bounded pipeline summary.
 
 # Completion Evidence
 
 - Changed files: `scripts/summarize_location_data_flywheel.py`,
-  `server/message_hub.py`, `quality_tests/test_location_data_flywheel.py`,
+  `scripts/run_location_d2_d5_pipeline.py`, `server/message_hub.py`,
+  `quality_tests/test_location_data_flywheel.py`,
+  `quality_tests/test_location_d2_d5_pipeline.py`,
   `quality_tests/test_message_hub_dashboard.py`
 - Test result: focused D5/D2/Dashboard tests PASS; `python
   scripts/context_lint.py` PASS; `powershell -ExecutionPolicy Bypass -File
-  scripts\verify.ps1` PASS with 535 tests
+  scripts\verify.ps1` PASS with 536 tests
 - Data evidence: no real D2 baseline report was present locally during this
   implementation, so only synthetic fixture tests were used for tool behavior
 - Remaining risks: first real D2 outdoor baseline still needs to be analyzed,

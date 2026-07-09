@@ -14,9 +14,11 @@ review packet and dataset-manifest gate. It supports reference-point,
 known-place, no-fix, and bad-fix review formats, keeps raw private coordinates
 out of summaries, and the Web Data Flywheel card shows D2 baseline counts,
 reference points, fixed/no-fix attempts, source report, review packet, and
-manifest gate paths. Model training/deployment remains blocked until explicit
-reviewed selection plus founder approval. First real D2 baseline ingestion
-remains pending field data.
+manifest gate paths. `scripts/run_location_d2_d5_pipeline.py` now provides a
+one-command offline post-field path from explicit export+manifest into D2
+baseline, D5 status, and a bounded pipeline summary. Model
+training/deployment remains blocked until explicit reviewed selection plus
+founder approval. First real D2 baseline ingestion remains pending field data.
 
 2026-07-09: D2-001 location accuracy baseline toolchain is now implemented
 locally. `scripts/analyze_location_accuracy_baseline.py` converts a FIELD-003
