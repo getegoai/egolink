@@ -1,10 +1,20 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-08
+last_verified: 2026-07-09
 verified_by: codex
 ---
 
 ## Latest Deployment Note
+
+2026-07-09: D5-001 location-data flywheel plumbing is now implemented
+locally. `scripts/summarize_location_data_flywheel.py` converts a bounded D2
+`location_accuracy_report.json` into Dashboard-compatible
+`reports/data_flywheel/<run-id>/data_flywheel_status.json`, plus a location
+review packet and dataset-manifest gate. It supports reference-point,
+known-place, no-fix, and bad-fix review formats, keeps raw private coordinates
+out of summaries, and blocks model training/deployment until explicit reviewed
+selection plus founder approval. First real D2 baseline ingestion remains
+pending field data.
 
 2026-07-09: D2-001 location accuracy baseline toolchain is now implemented
 locally. `scripts/analyze_location_accuracy_baseline.py` converts a FIELD-003

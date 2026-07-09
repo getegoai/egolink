@@ -59,17 +59,19 @@ artifacts without claiming model performance or starting training prematurely.
 
 # Acceptance Criteria
 
-- [ ] Define the D5 location-data flywheel status model and Dashboard summary.
-- [ ] Bind D2 baseline reports as first-class data sources, not transient
+- [x] Define the D5 location-data flywheel status model and Dashboard summary.
+- [x] Bind D2 baseline reports as first-class data sources, not transient
       Dashboard snapshots.
-- [ ] Reuse existing DATA/labeling pipeline assets where compatible, but orient
+- [x] Reuse existing DATA/labeling pipeline assets where compatible, but orient
       them to location accuracy labels and privacy gates.
-- [ ] Produce a review packet format for reference point, known-place, no-fix,
+- [x] Produce a review packet format for reference point, known-place, no-fix,
       and bad-fix samples.
-- [ ] Produce a dataset manifest only from explicitly selected evidence with
+- [x] Produce a dataset manifest only from explicitly selected evidence with
       privacy/training flags.
-- [ ] Keep model training/deployment blocked until labelled D2-quality samples
+- [x] Keep model training/deployment blocked until labelled D2-quality samples
       are available and founder approves the next model task.
+- [ ] First real D2 baseline report is consumed into the D5 location-data
+      flywheel and reviewed.
 
 # Validation Commands
 
@@ -91,9 +93,31 @@ FIELD, and PWR runs and must be explicitly referenced by path.
 - Synthetic data may be used only for tool/format tests. It must stay
   synthetic-only and cannot be promoted to product model performance evidence.
 
+# Progress
+
+- 2026-07-09 D5 location-data flywheel plumbing:
+  - Added `scripts/summarize_location_data_flywheel.py`, an offline
+    no-hardware tool that converts a bounded D2
+    `location_accuracy_report.json` into Dashboard-compatible
+    `data_flywheel_status.json`.
+  - The tool also writes a location review packet and a location dataset
+    manifest gate under `reports/data_flywheel/<run-id>/`.
+  - Review records are oriented to `location_reference_point`,
+    `location_known_place`, `location_no_fix`, and `location_bad_fix` labels.
+  - Dataset records are emitted only from an explicit selection file with
+    privacy, quality, training, and split-leakage review flags; model training
+    remains blocked pending founder approval.
+  - Added focused tests for Dashboard compatibility, privacy redaction, and
+    explicit-selection gating.
+
 # Completion Evidence
 
-- Changed files:
-- Test result:
-- Data evidence:
-- Remaining risks:
+- Changed files: `scripts/summarize_location_data_flywheel.py`,
+  `quality_tests/test_location_data_flywheel.py`
+- Test result: focused D5/D2/Dashboard tests PASS; `python
+  scripts/context_lint.py` PASS; `powershell -ExecutionPolicy Bypass -File
+  scripts\verify.ps1` PASS with 535 tests
+- Data evidence: no real D2 baseline report was present locally during this
+  implementation, so only synthetic fixture tests were used for tool behavior
+- Remaining risks: first real D2 outdoor baseline still needs to be analyzed,
+  then rerun through the D5 flywheel for review and selection
