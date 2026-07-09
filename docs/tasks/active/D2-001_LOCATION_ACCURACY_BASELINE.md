@@ -57,15 +57,16 @@ After a D2 run, the project can answer these questions with evidence:
 
 # Acceptance Criteria
 
-- [ ] FIELD-003 protocol is current and runnable for D2 reference-point tests.
-- [ ] A D2 analysis script computes fix rate, TTFF, median error, p90 error,
+- [x] FIELD-003 protocol is current and runnable for D2 reference-point tests.
+- [x] A D2 analysis script computes fix rate, TTFF, median error, p90 error,
       and per-point breakdown from bounded VPS/export evidence.
-- [ ] A synthetic fixture test protects error-distance and TTFF calculations.
-- [ ] A D2 report writes JSON/Markdown under `reports/location_accuracy/`.
-- [ ] Dashboard/Field Test Results can surface the latest D2 baseline summary
+- [x] A synthetic fixture test protects error-distance and TTFF calculations.
+- [x] A D2 report writes JSON/Markdown under `reports/location_accuracy/`.
+- [x] Dashboard/Field Test Results can surface the latest D2 baseline summary
       without exposing private raw coordinates.
-- [ ] D2 baseline clearly records non-claims: engineering baseline only, no
+- [x] D2 baseline clearly records non-claims: engineering baseline only, no
       product accuracy guarantee.
+- [ ] First real outdoor D2 baseline run is analyzed and reviewed.
 
 # Validation Commands
 
@@ -89,10 +90,27 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 - D5 may prepare data flywheel plumbing in parallel, but training or model
   improvement claims require D2-quality labelled evidence.
 
+# Progress
+
+- 2026-07-09 D2 baseline toolchain:
+  - Added `scripts/analyze_location_accuracy_baseline.py`, a no-hardware
+    wrapper over FIELD-003 GNSS analysis that writes
+    `location_accuracy_report.json` and `location_accuracy_report.md` under
+    `reports/location_accuracy/`.
+  - The report exposes fix rate, TTFF median/p90, median error, p90 error,
+    per-point breakdown, and EALE-P0 radius comparison while omitting raw
+    private coordinates from Dashboard summaries.
+  - Added focused synthetic tests for D2 metric computation, CLI report
+    writing, and privacy/non-claim boundaries.
+
 # Completion Evidence
 
-- Changed files:
-- Test result:
-- Hardware result:
-- Evidence path:
-- Remaining risks:
+- Changed files: `scripts/analyze_location_accuracy_baseline.py`,
+  `quality_tests/test_location_accuracy_baseline.py`
+- Test result: focused D2/FIELD/Dashboard tests PASS; `python
+  scripts/context_lint.py` PASS; `powershell -ExecutionPolicy Bypass -File
+  scripts\verify.ps1` PASS with 532 tests
+- Hardware result: pending first real D2 outdoor baseline run
+- Evidence path: future runs write to `reports/location_accuracy/<run-id>/`
+- Remaining risks: real D2 metrics still depend on an outdoor reference-point
+  run and a matching VPS export/field manifest

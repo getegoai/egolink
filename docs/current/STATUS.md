@@ -6,6 +6,14 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-09: D2-001 location accuracy baseline toolchain is now implemented
+locally. `scripts/analyze_location_accuracy_baseline.py` converts a FIELD-003
+VPS export plus field manifest into `reports/location_accuracy/<run-id>/`
+JSON/Markdown with fix rate, TTFF median/p90, median error, p90 error,
+per-point breakdown, and EALE-P0 radius comparison. The report is an
+engineering baseline only and omits raw private coordinates from Dashboard
+summaries. First real D2 outdoor baseline analysis remains pending field data.
+
 2026-07-09: MAP-001 no-key evidence map baseline is implemented locally. The
 Dashboard D1 map surface now explicitly shows local no-key mode, provider
 status, track/current/reference legend, privacy policy, and no accuracy claim.
