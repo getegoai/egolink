@@ -3684,11 +3684,134 @@ def latest_d1_field_observation_result(root: Path) -> dict[str, Any] | None:
     )
 
 
+def latest_power_curve_result(root: Path) -> dict[str, Any] | None:
+    path = latest_report_path(root / "power", ["**/power_curve_report.json"])
+    if path is None:
+        return None
+    report = load_json_report(path)
+    if report is None:
+        return None
+    result = as_dict(report.get("result"))
+    counts = as_dict(report.get("counts"))
+    estimate = as_dict(report.get("consumption_estimate"))
+    target = as_dict(report.get("target_comparison"))
+    status = normalized_report_status(result.get("status"))
+    markdown_candidate = path.with_name("power_curve_report.md")
+    measured = counts.get("measured_power_samples", 0)
+    total = counts.get("samples", 0)
+    return compact_dict(
+        {
+            "kind": "power_curve",
+            "title": "D1 Power Curve",
+            "status": status,
+            "run_id": as_dict(report.get("source")).get("test_run_id"),
+            "created_at": as_dict(report.get("generator")).get("created_at") or report_file_time(path),
+            "summary": f"Power curve {status}: {measured} measured / {total} samples",
+            "metrics": {
+                "duration_hours": report.get("duration_hours"),
+                "measured_power_samples": measured,
+                "battery_mv_samples": counts.get("battery_mv_samples"),
+                "soc_pct_samples": counts.get("soc_pct_samples"),
+                "average_current_status": estimate.get("status"),
+                "target_gap_status": target.get("status"),
+            },
+            "warnings": result.get("warnings"),
+            "errors": result.get("errors"),
+            "report_path": relative_repo_path(path),
+            "markdown_path": path_if_exists(markdown_candidate),
+        }
+    )
+
+
+def latest_d1_demo_result(root: Path) -> dict[str, Any] | None:
+    path = latest_report_path(root / "d1_demo", ["**/d1_demo_report.json"])
+    if path is None:
+        return None
+    report = load_json_report(path)
+    if report is None:
+        return None
+    status = normalized_report_status(report.get("result"))
+    power = as_dict(report.get("power"))
+    power_counts = as_dict(power.get("counts"))
+    markdown_candidate = path.with_name("d1_demo_report.md")
+    return compact_dict(
+        {
+            "kind": "d1_demo",
+            "title": "D1 Demo Report",
+            "status": status,
+            "run_id": report.get("report_id"),
+            "created_at": report.get("created_at") or report_file_time(path),
+            "summary": f"D1 demo {status}: founder ready {bool(report.get('ready_for_founder_review'))}",
+            "metrics": {
+                "ready_for_founder_review": bool(report.get("ready_for_founder_review")),
+                "d1_status": as_dict(report.get("d1")).get("status"),
+                "power_result": power.get("result"),
+                "power_duration_hours": power.get("duration_hours"),
+                "measured_power_samples": power_counts.get("measured_power_samples"),
+            },
+            "gates": [
+                compact_dict(
+                    {
+                        "id": as_dict(gate).get("id"),
+                        "status": as_dict(gate).get("status"),
+                        "summary": as_dict(gate).get("summary"),
+                    }
+                )
+                for gate in as_list(report.get("gates"))
+            ],
+            "report_path": relative_repo_path(path),
+            "markdown_path": path_if_exists(markdown_candidate),
+            "boundaries": report.get("boundaries"),
+        }
+    )
+
+
+def latest_d1_postrun_result(root: Path) -> dict[str, Any] | None:
+    path = latest_report_path(root / "d1_postrun", ["**/d1_postrun_collection_summary.json"])
+    if path is None:
+        return None
+    report = load_json_report(path)
+    if report is None:
+        return None
+    components = as_dict(report.get("components"))
+    web_api = as_dict(components.get("web_api"))
+    power = as_dict(components.get("power_curve"))
+    demo = as_dict(components.get("d1_demo"))
+    field = as_dict(components.get("field_observation"))
+    status = normalized_report_status(report.get("result"))
+    markdown_candidate = path.with_name("d1_postrun_collection_summary.md")
+    return compact_dict(
+        {
+            "kind": "d1_postrun",
+            "title": "D1 Post-Run Summary",
+            "status": status,
+            "run_id": report.get("run_id"),
+            "created_at": report.get("created_at") or report_file_time(path),
+            "summary": f"D1 post-run {status}: web {web_api.get('result', web_api.get('status'))} / power {power.get('result', power.get('status'))} / demo {demo.get('result', demo.get('status'))}",
+            "metrics": {
+                "web_api": web_api.get("result") or web_api.get("status"),
+                "field_observation": field.get("result") or field.get("status"),
+                "power_curve": power.get("result") or power.get("status"),
+                "d1_demo": demo.get("result") or demo.get("status"),
+                "ready_for_founder_review": demo.get("ready_for_founder_review"),
+            },
+            "warnings": report.get("warnings"),
+            "errors": report.get("errors"),
+            "next_steps": as_list(report.get("next_steps"))[:3],
+            "report_path": relative_repo_path(path),
+            "markdown_path": path_if_exists(markdown_candidate),
+        }
+    )
+
+
 def load_latest_field_results(root: Path = DEFAULT_FIELD_RESULT_REPORTS) -> dict[str, Any]:
     reports = [
         result
         for result in (
             latest_d1_web_api_result(root),
+            latest_d1_postrun_result(root),
+            latest_d1_demo_result(root),
+            latest_power_curve_result(root),
             latest_d1_field_observation_result(root),
             latest_d1_companion_result(root),
             latest_amoled_status_result(root),

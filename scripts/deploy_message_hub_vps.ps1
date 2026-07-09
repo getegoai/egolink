@@ -70,10 +70,16 @@ function Copy-FieldReportSummaries {
         "d1_field_companion_summary.md",
         "d1_field_observation_report.json",
         "d1_field_observation_report.md",
-        "d1_field_observation_status.json"
+        "d1_field_observation_status.json",
+        "power_curve_report.json",
+        "power_curve_report.md",
+        "d1_demo_report.json",
+        "d1_demo_report.md",
+        "d1_postrun_collection_summary.json",
+        "d1_postrun_collection_summary.md"
     )
     $reportFiles = @()
-    foreach ($dir in @("reports\d1_web_api", "reports\d1_field_companion", "reports\d1_field_observation")) {
+    foreach ($dir in @("reports\d1_web_api", "reports\d1_field_companion", "reports\d1_field_observation", "reports\power", "reports\d1_demo", "reports\d1_postrun")) {
         $sourceDir = Join-Path $repoRoot $dir
         if (Test-Path $sourceDir -PathType Container) {
             $reportFiles += Get-ChildItem -Path $sourceDir -Recurse -File |

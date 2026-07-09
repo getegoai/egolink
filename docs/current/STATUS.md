@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-09: D1 field evidence from `FIELD-004-outdoor-20260709-0900`
+is now bound into a power report and one-page demo report. Web/API passed,
+with 24 trajectory points and 237/237 raw POST success in the post-run view;
+the observer-derived power report has 126 measured samples over 2.192 h but
+is WARN because it is below the 3 h field threshold and no battery-capacity
+estimate was supplied. D1 demo remains WARN and not founder-review-ready:
+`reports/d1_demo/FIELD-004-outdoor-20260709-0900/d1_demo_report.md`.
+`collect_d1_postrun.py` schema v0.12 can now derive the power export from
+`d1_field_samples.jsonl` when no Message Hub test-run export is available.
+The VPS Field Test Results panel now shows 7 bounded D1 cards, including
+post-run, D1 demo, and power curve summaries.
+
 2026-07-08: Director reset applied from `docs/product/NORTH_STAR.md`. The
 current lowest unaccepted demo is D1, so active work is narrowed to D1
 acceptance only: 3-4h outdoor link-through run, Dashboard map point plus

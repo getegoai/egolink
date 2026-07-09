@@ -583,13 +583,103 @@ class MessageHubDashboardTests(unittest.TestCase):
             )
             os.utime(live_status_path, (2_000_000_000, 2_000_000_000))
 
+            power_dir = root / "power" / "run-f"
+            power_dir.mkdir(parents=True)
+            (power_dir / "power_curve_report.json").write_text(
+                json.dumps(
+                    {
+                        "generator": {"created_at": "2026-07-04T11:42:00+00:00"},
+                        "result": {"status": "WARN", "warnings": ["duration below threshold"], "errors": []},
+                        "source": {
+                            "test_run_id": "run-f",
+                            "input_path": "C:/private/local/field_observer_power_export.json",
+                        },
+                        "duration_hours": 2.19,
+                        "counts": {
+                            "samples": 132,
+                            "measured_power_samples": 126,
+                            "battery_mv_samples": 126,
+                            "soc_pct_samples": 132,
+                        },
+                        "consumption_estimate": {"status": "not_estimated"},
+                        "target_comparison": {"status": "not_estimated"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (power_dir / "power_curve_report.md").write_text("# Power\n", encoding="utf-8")
+
+            demo_dir = root / "d1_demo" / "run-g"
+            demo_dir.mkdir(parents=True)
+            (demo_dir / "d1_demo_report.json").write_text(
+                json.dumps(
+                    {
+                        "result": "WARN",
+                        "report_id": "run-g",
+                        "created_at": "2026-07-04T11:43:00+00:00",
+                        "ready_for_founder_review": False,
+                        "d1": {"status": "estimate_visible"},
+                        "power": {
+                            "result": "WARN",
+                            "duration_hours": 2.19,
+                            "counts": {"measured_power_samples": 126},
+                        },
+                        "gates": [
+                            {"id": "G1_D1_WEB_API", "status": "PASS", "summary": "D1 Web/API gate passed"},
+                            {"id": "G2_PWR001_POWER_REPORT", "status": "WARN", "summary": "Power report warned"},
+                        ],
+                        "boundaries": {"battery_life_claimed": False},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (demo_dir / "d1_demo_report.md").write_text("# Demo\n", encoding="utf-8")
+
+            postrun_dir = root / "d1_postrun" / "run-h"
+            postrun_dir.mkdir(parents=True)
+            (postrun_dir / "d1_postrun_collection_summary.json").write_text(
+                json.dumps(
+                    {
+                        "result": "WARN",
+                        "run_id": "run-h",
+                        "created_at": "2026-07-04T11:44:00+00:00",
+                        "components": {
+                            "web_api": {"result": "PASS"},
+                            "field_observation": {"result": "PASS"},
+                            "power_curve": {"result": "WARN"},
+                            "d1_demo": {"result": "WARN", "ready_for_founder_review": False},
+                        },
+                        "warnings": ["power_curve:WARN"],
+                        "errors": [],
+                        "next_steps": ["Keep work on D1 acceptance and keep DATA/TRAIN frozen."],
+                        "artifacts": {"field_observation_samples": "C:/private/local/d1_field_samples.jsonl"},
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (postrun_dir / "d1_postrun_collection_summary.md").write_text("# Postrun\n", encoding="utf-8")
+
             summary = message_hub.load_latest_field_results(root)
 
         self.assertTrue(summary["available"])
-        self.assertEqual(summary["status"], "running")
-        self.assertEqual(summary["report_count"], 4)
+        self.assertEqual(summary["status"], "warn")
+        self.assertEqual(summary["report_count"], 7)
         kinds = {item["kind"] for item in summary["reports"]}
-        self.assertEqual(kinds, {"d1_web_api", "amoled_status", "d1_field_companion", "d1_field_observation"})
+        self.assertEqual(
+            kinds,
+            {
+                "d1_web_api",
+                "d1_postrun",
+                "d1_demo",
+                "power_curve",
+                "amoled_status",
+                "d1_field_companion",
+                "d1_field_observation",
+            },
+        )
         amoled = next(item for item in summary["reports"] if item["kind"] == "amoled_status")
         self.assertNotIn("jsonl_path", json.dumps(amoled))
         self.assertEqual(amoled["metrics"]["command_ack_count"], 1)
@@ -601,6 +691,15 @@ class MessageHubDashboardTests(unittest.TestCase):
         observation_payload = json.dumps(observation)
         self.assertNotIn("d1_field_samples.jsonl", observation_payload)
         self.assertNotIn("C:/private", observation_payload)
+        power = next(item for item in summary["reports"] if item["kind"] == "power_curve")
+        self.assertEqual(power["metrics"]["measured_power_samples"], 126)
+        demo = next(item for item in summary["reports"] if item["kind"] == "d1_demo")
+        self.assertFalse(demo["metrics"]["ready_for_founder_review"])
+        postrun = next(item for item in summary["reports"] if item["kind"] == "d1_postrun")
+        self.assertEqual(postrun["metrics"]["power_curve"], "WARN")
+        all_results = json.dumps(summary)
+        self.assertNotIn("d1_field_samples.jsonl", all_results)
+        self.assertNotIn("C:/private", all_results)
 
     def test_field_results_missing_returns_explainable_not_available(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1960,6 +2059,9 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("d1_field_observation_report.json", script)
         self.assertIn("d1_field_observation_report.md", script)
         self.assertIn("d1_field_observation_status.json", script)
+        self.assertIn("power_curve_report.json", script)
+        self.assertIn("d1_demo_report.json", script)
+        self.assertIn("d1_postrun_collection_summary.json", script)
         self.assertIn("data_flywheel_status.json", script)
         self.assertIn("data_flywheel_status.md", script)
         self.assertIn("training_experiment_plan.json", script)

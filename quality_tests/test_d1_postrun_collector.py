@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from contextlib import redirect_stdout
 from http.server import ThreadingHTTPServer
 import io
@@ -701,6 +702,74 @@ class D1PostrunCollectorTests(unittest.TestCase):
         self.assertEqual(payload["components"]["labeling_decision_validation"]["status"], "skipped")
         self.assertEqual(payload["components"]["training_chain"]["status"], "skipped")
         self.assertEqual(payload["components"]["training_chain"]["reason"], "data_flywheel_pipeline_missing")
+        next_steps = "\n".join(payload["next_steps"])
+        self.assertIn("keep DATA/TRAIN frozen", next_steps)
+        self.assertNotIn("Continue the next DATA/TRAIN task", next_steps)
+
+    def test_power_curve_falls_back_to_field_observer_samples(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            samples_path = root / "d1_field_samples.jsonl"
+            rows = []
+            for index, hour in enumerate((0, 1, 2), start=1):
+                rows.append(
+                    {
+                        "collected_at": f"2026-07-09T0{hour}:00:05+00:00",
+                        "ok": True,
+                        "device_id": DEVICE_ID,
+                        "last_seq": index,
+                        "last_location_event_type": "location_observation",
+                        "power_latest_sample_at": f"2026-07-09T0{hour}:00:00+00:00",
+                        "battery_mv": 4100 - index * 20,
+                        "soc_pct": 90 - index,
+                        "power_evidence_status": "measured",
+                        "cell_lte_seen": True,
+                        "power_sample_count": index,
+                        "freshness_s": 5,
+                        "d1_gate_status": "ready",
+                    }
+                )
+            samples_path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+            field_report_path = root / "d1_field_observation_report.json"
+            field_report = {
+                "run_id": "D1-POSTRUN-field-power",
+                "samples_path": str(samples_path),
+                "report_path": str(field_report_path),
+            }
+            field_report_path.write_text(json.dumps(field_report) + "\n", encoding="utf-8")
+            args = argparse.Namespace(
+                skip_power=False,
+                field_power_samples=None,
+                power_export=None,
+                message_test_run_id=None,
+                hub_url="http://127.0.0.1:1",
+                timeout=1.0,
+                min_duration_hours=1.0,
+                battery_capacity_mah=1000,
+                target_hours=48.0,
+                usable_capacity_factor=0.8,
+                run_id="D1-POSTRUN-field-power",
+                device_id=DEVICE_ID,
+                field_observation_report=field_report_path,
+            )
+
+            report, status, export_path = collector.collect_power_curve(
+                args,
+                token=None,
+                output_dir=root / "power",
+                created_at="2026-07-09T04:00:00+00:00",
+                field_report=field_report,
+                field_status=None,
+            )
+
+            self.assertIsNotNone(report)
+            self.assertEqual(status["status"], "PASS")
+            self.assertEqual(report["result"]["status"], "PASS")
+            self.assertEqual(report["counts"]["measured_power_samples"], 3)
+            self.assertEqual(report["source"]["test_run_id"], "D1-POSTRUN-field-power")
+            self.assertTrue(export_path and export_path.name == "field_observer_power_export.json")
+            self.assertTrue((root / "power" / "field_observer_power_export.json").is_file())
+            self.assertTrue((root / "power" / "power_curve_report.json").is_file())
 
 
 if __name__ == "__main__":

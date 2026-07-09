@@ -25,6 +25,7 @@ from scripts import analyze_power_curve
 from scripts import assess_d1_training_readiness
 from scripts import build_d1_labeling_intake
 from scripts import build_training_handoff_bundle
+from scripts import convert_d1_field_samples_to_power_export
 from scripts import build_d1_demo_report
 from scripts import build_d1_labeling_decision_template
 from scripts import build_d1_labeling_review_packet
@@ -44,7 +45,7 @@ from scripts import validate_d1_labeling_decision_template
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "reports" / "d1_postrun"
 DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
-SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.11"
+SCHEMA_VERSION = "egolink.d1_postrun_collection.v0.12"
 BUILDER_VERSION = "data-032.0"
 SUMMARY_JSON = "d1_postrun_collection_summary.json"
 SUMMARY_MARKDOWN = "d1_postrun_collection_summary.md"
@@ -82,6 +83,13 @@ def read_json_file(path: Path, *, label: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"{label} JSON must be an object")
     return payload
+
+
+def resolve_path_reference(value: object) -> Path | None:
+    if value in (None, ""):
+        return None
+    path = Path(str(value))
+    return path if path.is_absolute() else REPO_ROOT / path
 
 
 def bounded_error(reason: str, exc: BaseException) -> dict[str, Any]:
@@ -532,15 +540,50 @@ def collect_web_api(
     return report, None
 
 
+def field_power_samples_path(
+    args: argparse.Namespace,
+    *,
+    field_report: Mapping[str, Any] | None,
+    field_status: Mapping[str, Any] | None,
+) -> Path | None:
+    if args.field_power_samples:
+        return args.field_power_samples
+    for source in (field_report, field_status):
+        path = resolve_path_reference(as_dict(source).get("samples_path"))
+        if path:
+            return path
+    return None
+
+
+def field_report_path_for_power_export(
+    args: argparse.Namespace,
+    *,
+    field_report: Mapping[str, Any] | None,
+) -> Path | None:
+    explicit_report = args.field_observation_report
+    if explicit_report and explicit_report.is_file():
+        return explicit_report
+    report_path = resolve_path_reference(as_dict(field_report).get("report_path"))
+    return report_path if report_path and report_path.is_file() else None
+
+
 def collect_power_curve(
     args: argparse.Namespace,
     *,
     token: str | None,
     output_dir: Path,
     created_at: str,
+    field_report: Mapping[str, Any] | None = None,
+    field_status: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any], Path | None]:
     if args.skip_power:
         return None, {"status": "skipped", "reason": "skip_power_requested"}, None
+    if args.field_power_samples and (args.power_export or args.message_test_run_id):
+        return (
+            None,
+            {"status": "error", "reason": "field_power_samples_is_mutually_exclusive_with_power_export_or_message_test_run_id"},
+            None,
+        )
     if args.power_export and args.message_test_run_id:
         return (
             None,
@@ -563,11 +606,33 @@ def collect_power_curve(
         except analyze_power_curve.PowerCurveError as exc:
             return None, bounded_error("message_hub_test_run_export_failed", exc), export_path
     else:
-        return (
-            None,
-            {"status": "skipped", "reason": "message_test_run_id_or_power_export_required"},
-            None,
-        )
+        samples_path = field_power_samples_path(args, field_report=field_report, field_status=field_status)
+        if samples_path and samples_path.is_file():
+            output_dir.mkdir(parents=True, exist_ok=True)
+            export_path = output_dir / convert_d1_field_samples_to_power_export.EXPORT_JSON
+            try:
+                export = convert_d1_field_samples_to_power_export.build_power_export(
+                    samples_path=samples_path,
+                    field_report_path=field_report_path_for_power_export(args, field_report=field_report),
+                    run_id=args.run_id,
+                    device_id=args.device_id,
+                    created_at=created_at,
+                )
+                convert_d1_field_samples_to_power_export.write_power_export(export_path, export)
+            except convert_d1_field_samples_to_power_export.FieldPowerExportError as exc:
+                return None, bounded_error("field_power_export_failed", exc), export_path
+        elif samples_path:
+            return (
+                None,
+                {"status": "skipped", "reason": "field_power_samples_missing", "samples_path": str(samples_path)},
+                None,
+            )
+        else:
+            return (
+                None,
+                {"status": "skipped", "reason": "message_test_run_id_power_export_or_field_samples_required"},
+                None,
+            )
 
     try:
         report = analyze_power_curve.analyze_power_curve(
@@ -1300,9 +1365,19 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
     power = as_dict(components.get("power_curve"))
     power_result = str(power.get("result") or power.get("status") or "")
     if power_result in {"skipped", ""}:
-        steps.append("Rerun with --message-test-run-id or --power-export to bind a power curve report.")
+        steps.append(
+            "Rerun with --message-test-run-id, --power-export, or a field observer report/status "
+            "with d1_field_samples.jsonl to bind a power curve report."
+        )
     elif power_result != "PASS":
         steps.append("Inspect the power report; WARN/FAIL is allowed for a shakedown but must explain the gap.")
+
+    d1_demo = as_dict(components.get("d1_demo"))
+    if d1_demo and not d1_demo.get("ready_for_founder_review"):
+        steps.append(
+            "Keep work on D1 acceptance: rerun the 3-4h field session or PWR-001 evidence as needed, "
+            "and keep DATA/TRAIN frozen until founder acceptance."
+        )
 
     field_observation = as_dict(components.get("field_observation"))
     field_status = str(field_observation.get("result") or field_observation.get("status") or "")
@@ -1317,7 +1392,7 @@ def derive_next_steps(components: Mapping[str, Mapping[str, Any]], result: str) 
         steps.append("Attach explicit --recording-dir inputs when there are reviewed session recordings to ingest.")
     elif data_status == "needs_review":
         steps.append("Review pending candidates, then rerun the data-flywheel pipeline.")
-    elif data_status and data_status != "ready_for_training_handoff":
+    elif data_status and data_status not in {"ready_for_training_handoff", "skipped"}:
         steps.append(str(data_pipeline.get("next_step") or "Continue the next DATA/TRAIN task."))
 
     training_readiness = as_dict(components.get("training_readiness"))
@@ -1593,6 +1668,8 @@ def collect_postrun(args: argparse.Namespace) -> dict[str, Any]:
         token=token,
         output_dir=args.power_output_dir or (analyze_power_curve.DEFAULT_OUTPUT_ROOT / run_id),
         created_at=created_at,
+        field_report=field_report,
+        field_status=field_status,
     )
     demo_report, demo_error = collect_d1_demo(
         web_report=web_report,
@@ -1766,6 +1843,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--labeling-decision-validation-limit", type=int)
     parser.add_argument("--message-test-run-id", help="Message Hub test_run_id to export for PWR-001 analysis.")
     parser.add_argument("--power-export", type=Path, help="Existing Message Hub test_run_export.json to analyze.")
+    parser.add_argument(
+        "--field-power-samples",
+        type=Path,
+        help="Existing d1_field_samples.jsonl to convert into a PWR-001-compatible power export.",
+    )
     parser.add_argument("--power-output-dir", type=Path)
     parser.add_argument("--min-duration-hours", type=float, default=2.0)
     parser.add_argument("--battery-capacity-mah", type=float)

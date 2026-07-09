@@ -122,7 +122,6 @@ python scripts\collect_d1_postrun.py `
   --hub-url http://203.0.113.10:8790 `
   --token-file server/runtime/vps_message_hub_token.txt `
   --device-id ego-link-r1-connectivity-001 `
-  --message-test-run-id FIELD-004-d1-acceptance-20260708-4h `
   --min-duration-hours 4 `
   --output-root reports\d1_postrun `
   --web-api-output-dir reports\d1_web_api\FIELD-004-d1-acceptance-20260708-4h `
@@ -140,6 +139,11 @@ python scripts\collect_d1_postrun.py `
   --skip-labeling-decision-validation `
   --json
 ```
+
+Collector v0.12 derives the power export from the field observer
+`d1_field_samples.jsonl` when no `--message-test-run-id` or `--power-export`
+is supplied. Add `--message-test-run-id <run_id>` only when the Message Hub
+test-run export is known to exist and should be the power source.
 
 Use the component commands below only when rerunning or troubleshooting one
 step:
@@ -164,6 +168,21 @@ git tag -a v0.1.0 -m "D1 link-through accepted"
 
 # Progress Evidence
 
+- 2026-07-09 outdoor observer binding:
+  - Evidence:
+    `reports/d1_field_observation/FIELD-004-outdoor-20260709-0900/`,
+    `reports/power/FIELD-004-outdoor-20260709-0900/`, and
+    `reports/d1_demo/FIELD-004-outdoor-20260709-0900/`.
+  - Field observer result: `PASS`, 132/132 successful samples, max freshness
+    `67 s`, raw POST delta `234 ok / 0 fail`, GNSS states included
+    `unknown`, `no_fix`, and `fix`.
+  - Web/API result: `PASS`; post-run view showed 24 trajectory points and
+    237/237 raw POST success.
+  - Power result: `WARN`; observer-derived export has 126 measured samples
+    over `2.192 h`, below the 3 h field threshold, with no battery-capacity
+    estimate supplied.
+  - D1 demo result: `WARN`, `ready_for_founder_review=false`; no location
+    accuracy, battery-life, 24h PWR-001, or product-readiness claim.
 - 2026-07-08 Director reset:
   - Current lowest unaccepted demo is D1; this task is the D1 acceptance path.
   - Generated D1-only field kit v17:
