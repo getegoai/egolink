@@ -152,9 +152,18 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("map-surface", html)
         self.assertIn("map-track", html)
         self.assertIn("map-point-current", html)
+        self.assertIn("map-point-reference", html)
         self.assertIn("normalizeMapPoints", html)
         self.assertIn("d1MapTrack", html)
         self.assertIn("data-d1-map-mode", html)
+        self.assertIn("data-map-review-mode", html)
+        self.assertIn("data-map-provider-mode", html)
+        self.assertIn("No-key Local Map", html)
+        self.assertIn("Provider Status", html)
+        self.assertIn("D2 Reference", html)
+        self.assertIn("fieldEvidenceLanes", html)
+        self.assertIn("D2 Baseline", html)
+        self.assertIn("D5 Flywheel", html)
         self.assertIn("Track points", html)
         self.assertIn("Accuracy Claim", html)
         self.assertIn("Upload Freshness", html)
@@ -323,6 +332,14 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(map_surface["points"][-1]["source"], "telemetry_history")
         self.assertEqual(map_surface["coordinate_diagnostics"]["coordinate_event_count"], 2)
         self.assertEqual(map_surface["coordinate_diagnostics"]["missing_coordinate_event_count"], 0)
+        self.assertEqual(map_surface["review_mode"], "local_no_key")
+        self.assertEqual(map_surface["surface_role"], "d2_d5_evidence_review")
+        self.assertEqual(map_surface["provider"]["status"], "not_configured")
+        self.assertFalse(map_surface["provider"]["blocking_d1"])
+        self.assertFalse(map_surface["layers"]["provider_tiles"])
+        self.assertEqual(map_surface["reference_points"], [])
+        self.assertEqual(map_surface["privacy"]["static_report_policy"], "bounded_summary_no_raw_coordinates")
+        self.assertEqual(map_surface["accuracy_claim"], "none")
         self.assertEqual(summary["acceptance_gate"]["status"], "ready")
         self.assertEqual(summary["acceptance_gate"]["track_points"], 2)
         self.assertEqual(summary["acceptance_gate"]["blockers"], [])
@@ -458,6 +475,34 @@ class MessageHubDashboardTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (d1_dir / "d1_web_api_report.md").write_text("# D1\n", encoding="utf-8")
+
+            location_dir = root / "location_accuracy" / "run-d2"
+            location_dir.mkdir(parents=True)
+            (location_dir / "location_accuracy_report.json").write_text(
+                json.dumps(
+                    {
+                        "status": "PASS",
+                        "run_id": "d2-baseline-unit",
+                        "created_at": "2026-07-04T11:45:00+00:00",
+                        "device_id": "ego-link-r1-connectivity-001",
+                        "metrics": {
+                            "fix_rate": 0.8,
+                            "ttff_median_s": 38,
+                            "median_error_m": 12.5,
+                            "p90_error_m": 31.0,
+                            "reference_point_count": 3,
+                            "sample_count": 15,
+                        },
+                        "raw_reference_points": [
+                            {"lat": 31.123456, "lon": 121.654321, "label": "private-home"}
+                        ],
+                        "private_samples_path": "C:/private/location_accuracy_samples.jsonl",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (location_dir / "location_accuracy_report.md").write_text("# D2\n", encoding="utf-8")
 
             amoled_dir = root / "amoled_visible_status" / "run-b"
             amoled_dir.mkdir(parents=True)
@@ -666,11 +711,12 @@ class MessageHubDashboardTests(unittest.TestCase):
 
         self.assertTrue(summary["available"])
         self.assertEqual(summary["status"], "warn")
-        self.assertEqual(summary["report_count"], 7)
+        self.assertEqual(summary["report_count"], 8)
         kinds = {item["kind"] for item in summary["reports"]}
         self.assertEqual(
             kinds,
             {
+                "d2_location_accuracy",
                 "d1_web_api",
                 "d1_postrun",
                 "d1_demo",
@@ -680,6 +726,13 @@ class MessageHubDashboardTests(unittest.TestCase):
                 "d1_field_observation",
             },
         )
+        d2 = next(item for item in summary["reports"] if item["kind"] == "d2_location_accuracy")
+        self.assertEqual(d2["metrics"]["median_error_m"], 12.5)
+        self.assertEqual(d2["metrics"]["reference_point_count"], 3)
+        d2_payload = json.dumps(d2)
+        self.assertNotIn("31.123456", d2_payload)
+        self.assertNotIn("121.654321", d2_payload)
+        self.assertNotIn("location_accuracy_samples.jsonl", d2_payload)
         amoled = next(item for item in summary["reports"] if item["kind"] == "amoled_status")
         self.assertNotIn("jsonl_path", json.dumps(amoled))
         self.assertEqual(amoled["metrics"]["command_ack_count"], 1)
@@ -699,6 +752,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(postrun["metrics"]["power_curve"], "WARN")
         all_results = json.dumps(summary)
         self.assertNotIn("d1_field_samples.jsonl", all_results)
+        self.assertNotIn("location_accuracy_samples.jsonl", all_results)
         self.assertNotIn("C:/private", all_results)
 
     def test_field_results_missing_returns_explainable_not_available(self) -> None:

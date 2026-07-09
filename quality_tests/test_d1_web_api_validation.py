@@ -38,12 +38,32 @@ def d1_state() -> dict:
                     "map_surface": {
                         "visible": True,
                         "mode": "coordinate",
+                        "review_mode": "local_no_key",
+                        "surface_role": "d2_d5_evidence_review",
                         "lat": 31.2,
                         "lon": 121.4,
+                        "provider": {
+                            "mode": "none",
+                            "status": "not_configured",
+                            "blocking_d1": False,
+                        },
+                        "layers": {
+                            "current_point": True,
+                            "trajectory": True,
+                            "reference_points": False,
+                            "provider_tiles": False,
+                        },
                         "points": [
                             {"lat": 31.2, "lon": 121.4, "server_received_at": "2026-07-04T00:00:01Z", "seq": 1},
                             {"lat": 31.2005, "lon": 121.4006, "server_received_at": "2026-07-04T00:00:02Z", "seq": 2},
                         ],
+                        "reference_points": [],
+                        "privacy": {
+                            "coordinate_visibility": "authenticated_runtime_only",
+                            "static_report_policy": "bounded_summary_no_raw_coordinates",
+                            "training_allowed": False,
+                        },
+                        "accuracy_claim": "none",
                         "trajectory": {"point_count": 2, "visible": True, "source": "recent_location_events"},
                     },
                     "upload_freshness": {"last_location_upload_at": "2026-07-04T00:00:01Z"},
@@ -79,7 +99,8 @@ def d1_state() -> dict:
 def dashboard_html() -> str:
     return (
         "<html>D1 Link Through d1LinkPanel D1 Acceptance Gate d1AcceptanceBadge "
-        "Upload Success Location Uploads Power Curve data-d1-map-mode map-track Track points</html>"
+        "Upload Success Location Uploads Power Curve data-d1-map-mode data-map-review-mode "
+        "data-map-provider-mode map-track Track points No-key Local Map Provider Status D2 Reference</html>"
     )
 
 

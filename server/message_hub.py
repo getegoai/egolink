@@ -2668,11 +2668,32 @@ def build_d1_map_surface(
     return {
         "visible": visible,
         "mode": map_mode,
+        "review_mode": "local_no_key",
+        "surface_role": "d2_d5_evidence_review",
         "lat": map_lat,
         "lon": map_lon,
         "coordinate_source": coordinate_source,
+        "provider": {
+            "mode": "none",
+            "status": "not_configured",
+            "blocking_d1": False,
+            "next_step": "select_provider_key_privacy_before_tile_mode",
+        },
+        "layers": {
+            "current_point": bool(visible_points),
+            "trajectory": len(visible_points) >= 2,
+            "reference_points": False,
+            "provider_tiles": False,
+        },
         "points": visible_points,
+        "reference_points": [],
         "coordinate_diagnostics": coordinate_diagnostics,
+        "privacy": {
+            "coordinate_visibility": "authenticated_runtime_only",
+            "static_report_policy": "bounded_summary_no_raw_coordinates",
+            "training_allowed": False,
+        },
+        "accuracy_claim": "none",
         "trajectory": {
             "point_count": len(visible_points),
             "visible": len(visible_points) >= 2,
@@ -3804,10 +3825,76 @@ def latest_d1_postrun_result(root: Path) -> dict[str, Any] | None:
     )
 
 
+def latest_location_accuracy_result(root: Path) -> dict[str, Any] | None:
+    path = latest_report_path(
+        root / "location_accuracy",
+        ["**/location_accuracy_report.json", "**/d2_location_accuracy_report.json"],
+    )
+    if path is None:
+        return None
+    report = load_json_report(path)
+    if report is None:
+        return None
+    result = as_dict(report.get("result"))
+    metrics = as_dict(first_known(report.get("metrics"), report.get("summary"), result))
+    source = as_dict(report.get("source"))
+    status = normalized_report_status(first_known(result.get("status"), report.get("status")))
+    markdown_candidate = path.with_suffix(".md")
+    fix_rate = first_known(metrics.get("fix_rate"), metrics.get("fix_rate_pct"), report.get("fix_rate"))
+    median_error_m = first_known(metrics.get("median_error_m"), report.get("median_error_m"))
+    p90_error_m = first_known(metrics.get("p90_error_m"), report.get("p90_error_m"))
+    ttff_median_s = first_known(
+        metrics.get("ttff_median_s"),
+        metrics.get("median_ttff_s"),
+        metrics.get("ttff_p50_s"),
+        report.get("ttff_median_s"),
+    )
+    return compact_dict(
+        {
+            "kind": "d2_location_accuracy",
+            "title": "D2 Location Accuracy Baseline",
+            "status": status,
+            "run_id": first_known(report.get("run_id"), report.get("baseline_id"), source.get("run_id")),
+            "created_at": first_known(report.get("created_at"), as_dict(report.get("generator")).get("created_at"), report_file_time(path)),
+            "device_id": first_known(report.get("device_id"), source.get("device_id")),
+            "summary": (
+                f"D2 location baseline {status}: median {median_error_m if median_error_m is not None else 'unknown'} m"
+                f" / p90 {p90_error_m if p90_error_m is not None else 'unknown'} m"
+                f" / fix {fix_rate if fix_rate is not None else 'unknown'}"
+            ),
+            "metrics": {
+                "fix_rate": fix_rate,
+                "ttff_median_s": ttff_median_s,
+                "median_error_m": median_error_m,
+                "p90_error_m": p90_error_m,
+                "reference_point_count": first_known(
+                    metrics.get("reference_point_count"),
+                    metrics.get("reference_points"),
+                    report.get("reference_point_count"),
+                ),
+                "sample_count": first_known(metrics.get("sample_count"), metrics.get("attempt_count")),
+            },
+            "warnings": first_known(report.get("warnings"), result.get("warnings")),
+            "errors": first_known(report.get("errors"), result.get("errors")),
+            "report_path": relative_repo_path(path),
+            "markdown_path": path_if_exists(markdown_candidate),
+            "privacy": {
+                "raw_coordinates_exposed": False,
+                "static_report_policy": "bounded_summary_no_raw_coordinates",
+            },
+            "scope": {
+                "location_accuracy_claimed": False,
+                "engineering_baseline_only": True,
+            },
+        }
+    )
+
+
 def load_latest_field_results(root: Path = DEFAULT_FIELD_RESULT_REPORTS) -> dict[str, Any]:
     reports = [
         result
         for result in (
+            latest_location_accuracy_result(root),
             latest_d1_web_api_result(root),
             latest_d1_postrun_result(root),
             latest_d1_demo_result(root),
@@ -3829,7 +3916,7 @@ def load_latest_field_results(root: Path = DEFAULT_FIELD_RESULT_REPORTS) -> dict
         "report_count": len(reports),
         "latest_created_at": latest_created,
         "reports": reports,
-        "next_step": "Run the D1 outdoor field companion and sync report summaries after the walk.",
+        "next_step": "Run D2 location baseline or continue D1 regression, then sync bounded report summaries.",
     }
 
 
@@ -6559,15 +6646,28 @@ def render_dashboard() -> str:
     .report-title { font-size: 15px; font-weight: 700; }
     .report-meta, .report-path { color: var(--ink-soft); font-size: 13px; overflow-wrap: anywhere; }
     .report-metrics { display: grid; gap: 4px; font-size: 13px; color: var(--ink-soft); }
+    .evidence-lanes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
+    .evidence-lane { border: 1px solid #d8dde6; border-radius: 8px; padding: 10px; background: #fbfcfe; min-width: 0; }
+    .lane-label { display: block; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; }
+    .lane-value { display: block; margin-top: 4px; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+    .lane-note { display: block; margin-top: 4px; color: var(--ink-soft); font-size: 12px; overflow-wrap: anywhere; }
     .map-surface { min-height: 260px; border: 1px solid #c8d0dc; border-radius: 8px; background: #eef2f6; position: relative; display: grid; place-items: center; overflow: hidden; }
     .map-grid { position: absolute; inset: 0; background-image: linear-gradient(#d9e0ea 1px, transparent 1px), linear-gradient(90deg, #d9e0ea 1px, transparent 1px); background-size: 28px 28px; }
     .map-track { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+    .map-provider-banner { position: absolute; left: 10px; right: 10px; top: 8px; z-index: 3; display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; color: var(--ink-soft); font-size: 12px; background: rgba(255, 255, 255, 0.9); border: 1px solid #d8dde6; border-radius: 6px; padding: 6px 8px; }
+    .map-legend { position: absolute; right: 10px; top: 52px; z-index: 3; display: grid; gap: 5px; color: var(--ink-soft); font-size: 12px; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 6px 8px; }
+    .map-legend-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .map-legend-dot { width: 10px; height: 10px; border-radius: 50%; background: #667085; border: 2px solid #fff; box-shadow: 0 0 0 1px #667085; }
+    .map-legend-current { background: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+    .map-legend-reference { border-radius: 3px; background: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
     .map-point { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #667085; border: 2px solid #fff; box-shadow: 0 0 0 1px #667085; transform: translate(-50%, -50%); z-index: 2; }
     .map-point-current { width: 16px; height: 16px; background: var(--blue); box-shadow: 0 0 0 2px var(--blue); }
+    .map-point-reference { width: 13px; height: 13px; border-radius: 3px; background: var(--amber); box-shadow: 0 0 0 2px var(--amber); }
     .map-waiting { z-index: 1; color: var(--muted); font-size: 13px; font-weight: 600; border: 1px solid #c8d0dc; border-radius: 999px; padding: 6px 10px; background: rgba(255,255,255,0.82); }
     .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: var(--ink-soft); font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 5px 6px; }
     @media (max-width: 980px) { .dashboard-grid, .d1-overview { grid-template-columns: 1fr; } }
-    @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } }
+    @media (max-width: 760px) { .evidence-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } .map-legend { left: 10px; right: auto; } }
   </style>
 </head>
 <body>
@@ -7383,15 +7483,47 @@ def render_dashboard() -> str:
         <div class="metric"><span>Report</span><span>${escapeHtml(report.markdown_path || report.report_path || 'unknown')}</span></div>
       `;
     }
-    function fieldResultsPanel(results) {
+    function firstReportByKind(reports, kinds) {
+      return (Array.isArray(reports) ? reports : []).find(report => kinds.includes(report.kind)) || {};
+    }
+    function evidenceLane(label, report, fallbackStatus = 'not_available', fallbackNote = 'waiting for report') {
+      const status = report.status || fallbackStatus;
+      const detail = report.run_id || report.summary || fallbackNote;
+      return `
+        <div class="evidence-lane">
+          <span class="lane-label">${escapeHtml(label)}</span>
+          <span class="lane-value ${statusClass(status)}">${escapeHtml(status)}</span>
+          <span class="lane-note">${escapeHtml(detail)}</span>
+        </div>
+      `;
+    }
+    function fieldResultsPanel(results, flywheel = {}) {
+      const reports = Array.isArray(results && results.reports) ? results.reports : [];
+      const d2Baseline = firstReportByKind(reports, ['d2_location_accuracy', 'location_accuracy']);
+      const d1Regression = firstReportByKind(reports, ['d1_postrun', 'd1_field_observation', 'd1_web_api']);
+      const powerBaseline = firstReportByKind(reports, ['power_curve']);
+      const flywheelReport = flywheel && flywheel.available ? {
+        status: flywheel.status || 'unknown',
+        run_id: flywheel.run_id || flywheel.dataset_id,
+        summary: flywheel.next_step || 'data flywheel status available',
+      } : {};
+      const lanes = `
+        <div id="fieldEvidenceLanes" class="evidence-lanes">
+          ${evidenceLane('D2 Baseline', d2Baseline, 'not_available', 'reports/location_accuracy')}
+          ${evidenceLane('D1 Regression', d1Regression, results && results.status || 'not_available', 'field results')}
+          ${evidenceLane('Power', powerBaseline, 'not_available', 'power curve')}
+          ${evidenceLane('D5 Flywheel', flywheelReport, flywheel && flywheel.status || 'not_available', flywheel && flywheel.next_step || 'data flywheel')}
+        </div>
+      `;
       if (!results || !results.available) {
         return `
+          ${lanes}
           <div class="metric"><span>Overall</span><span class="empty">${escapeHtml(results && results.status || 'not_available')}</span></div>
           <div class="metric"><span>Reason</span><span>${escapeHtml(results && results.reason || 'no_field_result_reports')}</span></div>
           <div class="metric"><span>Next Step</span><span>${escapeHtml(results && results.next_step || 'Run a D1 field report')}</span></div>
         `;
       }
-      const cards = (results.reports || []).map(report => `
+      const cards = reports.map(report => `
         <div class="report-card">
           <div class="report-head">
             <span class="report-title">${escapeHtml(report.title || report.kind || 'Report')}</span>
@@ -7405,6 +7537,7 @@ def render_dashboard() -> str:
         </div>
       `).join('');
       return `
+        ${lanes}
         <div class="metric"><span>Overall</span><span class="${statusClass(results.status)}">${escapeHtml(results.status || 'unknown')}</span></div>
         <div class="metric"><span>Reports</span><span>${escapeHtml(results.report_count ?? 0)} summaries / latest ${escapeHtml(results.latest_created_at || 'unknown')}</span></div>
         <div class="metric"><span>Next Step</span><span>${escapeHtml(results.next_step || 'Run the next field report')}</span></div>
@@ -7504,38 +7637,64 @@ def render_dashboard() -> str:
         y: 92 - ((point.lat - minLat) / latRange) * 84,
       }));
     }
-    function d1MapTrack(points) {
-      const normalized = normalizeMapPoints(points);
+    function d1MapTrack(points, referencePoints = []) {
+      const observedInput = (Array.isArray(points) ? points : []).map(point => ({...point, point_kind: 'observed'}));
+      const referenceInput = (Array.isArray(referencePoints) ? referencePoints : []).map(point => ({...point, point_kind: 'reference'}));
+      const normalized = normalizeMapPoints([...observedInput, ...referenceInput]);
       if (!normalized.length) return '';
-      const polyline = normalized.length >= 2
-        ? `<svg class="map-track" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${normalized.map(point => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}" fill="none" stroke="#1f6feb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/></svg>`
+      const observed = normalized.filter(point => point.point_kind !== 'reference');
+      const references = normalized.filter(point => point.point_kind === 'reference');
+      const polyline = observed.length >= 2
+        ? `<svg class="map-track" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${observed.map(point => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}" fill="none" stroke="#1f6feb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/></svg>`
         : '';
-      const markers = normalized.map((point, index) => {
-        const current = index === normalized.length - 1;
+      const markers = observed.map((point, index) => {
+        const current = index === observed.length - 1;
         const label = `${point.event_type || 'location'} seq ${point.seq ?? 'unknown'} ${coordinateLabel(point.lat, point.lon)}`;
         return `<span class="map-point ${current ? 'map-point-current' : ''}" title="${escapeHtml(label)}" style="left:${point.x.toFixed(2)}%; top:${point.y.toFixed(2)}%;"></span>`;
       }).join('');
-      return polyline + markers;
+      const referenceMarkers = references.map(point => {
+        const label = `${point.label || point.name || 'D2 reference'} ${coordinateLabel(point.lat, point.lon)}`;
+        return `<span class="map-point map-point-reference" title="${escapeHtml(label)}" style="left:${point.x.toFixed(2)}%; top:${point.y.toFixed(2)}%;"></span>`;
+      }).join('');
+      return polyline + markers + referenceMarkers;
     }
     function d1MapSurface(map, estimate) {
       const mode = map.mode || 'waiting_for_location_upload';
       const points = Array.isArray(map.points) ? map.points : [];
+      const referencePoints = Array.isArray(map.reference_points) ? map.reference_points : [];
+      const provider = map.provider || {};
+      const privacy = map.privacy || {};
+      const layers = map.layers || {};
       const trajectory = map.trajectory || {};
       const coord = map.coordinate_diagnostics || {};
       const pointCount = trajectory.point_count ?? points.length;
       const coordCount = coord.coordinate_event_count ?? pointCount;
       const eventCount = coord.location_event_count ?? pointCount;
+      const providerMode = provider.mode || 'none';
+      const providerStatus = provider.status || 'not_configured';
+      const reviewMode = map.review_mode || 'local_no_key';
+      const providerLabel = providerMode === 'none' ? 'No-key Local Map' : `Provider Map ${providerMode}`;
       const caption = map.visible
-        ? `${mode} / ${estimate.state || 'unknown'} / ${coordinateLabel(map.lat, map.lon)} / ${pointCount} points / ${coordCount}/${eventCount} coordinate uploads`
+        ? `${mode} / ${estimate.state || 'unknown'} / ${coordinateLabel(map.lat, map.lon)} / ${pointCount} track points / ${coordCount}/${eventCount} coordinate uploads`
         : 'waiting for location upload';
       const marker = map.visible
-        ? d1MapTrack(points) || '<div class="map-waiting">no coordinate points</div>'
+        ? d1MapTrack(points, referencePoints) || '<div class="map-waiting">no coordinate points</div>'
         : '<div class="map-waiting">waiting for location</div>';
       return `
-        <div class="map-surface" data-d1-map-mode="${escapeHtml(mode)}">
+        <div class="map-surface" data-d1-map-mode="${escapeHtml(mode)}" data-map-review-mode="${escapeHtml(reviewMode)}" data-map-provider-mode="${escapeHtml(providerMode)}">
           <div class="map-grid"></div>
+          <div class="map-provider-banner">
+            <span>${escapeHtml(providerLabel)}</span>
+            <span>Provider Status ${escapeHtml(providerStatus)} / D1 blocker ${escapeHtml(provider.blocking_d1 ?? false)}</span>
+          </div>
+          <div class="map-legend">
+            <span class="map-legend-item"><span class="map-legend-dot map-legend-current"></span>Current</span>
+            <span class="map-legend-item"><span class="map-legend-dot"></span>Track ${escapeHtml(pointCount)}</span>
+            <span class="map-legend-item"><span class="map-legend-dot map-legend-reference"></span>D2 Reference ${escapeHtml(referencePoints.length)}</span>
+            <span class="map-legend-item">Tiles ${escapeHtml(layers.provider_tiles ? 'provider' : 'off')}</span>
+          </div>
           ${marker}
-          <div class="map-caption">${escapeHtml(caption)}</div>
+          <div class="map-caption">${escapeHtml(caption)} / privacy ${escapeHtml(privacy.coordinate_visibility || 'bounded')} / accuracy claim ${escapeHtml(map.accuracy_claim || 'none')}</div>
         </div>
       `;
     }
@@ -7548,6 +7707,8 @@ def render_dashboard() -> str:
       const estimate = d1.location_estimate || {};
       const map = d1.map_surface || {};
       const coord = map.coordinate_diagnostics || acceptance.coordinate_diagnostics || {};
+      const provider = map.provider || {};
+      const privacy = map.privacy || {};
       const freshness = d1.upload_freshness || {};
       const uplink = d1.uplink_metrics || {};
       const powerCurve = d1.power_curve || {};
@@ -7559,7 +7720,9 @@ def render_dashboard() -> str:
       const power = components.power || {};
       const status = d1.status || 'unknown';
       const mapMode = map.mode || 'waiting_for_location_upload';
+      const reviewMode = map.review_mode || 'local_no_key';
       const trajectory = map.trajectory || {};
+      const referencePoints = Array.isArray(map.reference_points) ? map.reference_points : [];
       const locationText = `${valueOrUnknown(estimate.state)} / ${valueOrUnknown(estimate.confidence)} / ${valueOrUnknown(estimate.radius_m)} m`;
       const uploadText = `${valueOrUnknown(uplink.raw_post_success_count)} ok / ${valueOrUnknown(uplink.raw_post_failure_count)} fail / ${valueOrUnknown(uplink.raw_post_attempt_count)} attempts / rate ${valueOrUnknown(uplink.raw_post_success_rate)}`;
       const powerText = `${valueOrUnknown(powerCurve.sample_count, 0)} samples / ${valueOrUnknown(powerCurve.window_s)} s`;
@@ -7577,7 +7740,9 @@ def render_dashboard() -> str:
               <span class="status-chip ${d1StatusClass(status)}">D1 Status ${escapeHtml(status)}</span>
               <span id="d1FreshnessBadge" class="status-chip ${freshnessClass(freshness)}">Upload Freshness ${escapeHtml(freshnessLabel(freshness))}</span>
               <span class="status-chip">Transport ${escapeHtml(valueOrUnknown(evidence.transport_type))}</span>
-              <span class="status-chip">Map Surface ${escapeHtml(mapMode)}</span>
+              <span class="status-chip">Map Surface ${escapeHtml(reviewMode)}</span>
+              <span class="status-chip">Provider ${escapeHtml(valueOrUnknown(provider.status, 'not_configured'))}</span>
+              <span class="status-chip">D2 Reference ${escapeHtml(referencePoints.length)}</span>
             </div>
             <div class="d1-primary">
               <span class="card-label">D1 Acceptance Gate</span>
@@ -7628,9 +7793,12 @@ def render_dashboard() -> str:
               <div class="d1-card">
                 <span class="card-label">Field Notes</span>
                 <span class="card-value">${escapeHtml(coordinateLabel(map.lat, map.lon))}</span>
-                <span class="card-note">Map mode: ${escapeHtml(mapMode)}</span>
+                <span class="card-note">Map mode: ${escapeHtml(mapMode)} / ${escapeHtml(reviewMode)}</span>
+                <span class="card-note">Provider: ${escapeHtml(valueOrUnknown(provider.status, 'not_configured'))}; D1 blocker ${escapeHtml(provider.blocking_d1 ?? false)}</span>
                 <span class="card-note">Track points: ${escapeHtml(trajectory.point_count ?? 0)} / ${escapeHtml(trajectory.source || 'recent_location_events')}</span>
+                <span class="card-note">D2 reference points: ${escapeHtml(referencePoints.length)}</span>
                 <span class="card-note">Coordinate uploads: ${escapeHtml(coord.coordinate_event_count ?? 0)} / ${escapeHtml(coord.location_event_count ?? 0)}; hint ${escapeHtml(valueOrUnknown(coord.operator_hint))}</span>
+                <span class="card-note">Privacy: ${escapeHtml(privacy.static_report_policy || 'bounded_summary_no_raw_coordinates')}</span>
                 <span class="card-note">No accuracy or battery-life claim is made from this panel.</span>
               </div>
             </div>
@@ -7728,7 +7896,7 @@ def render_dashboard() -> str:
       const data = await response.json();
       runContext.innerHTML = runContextPanel(data.current_run || {});
       productDemo.innerHTML = productDemoPanel(data.product_demo || {});
-      fieldResults.innerHTML = fieldResultsPanel(data.field_results || {});
+      fieldResults.innerHTML = fieldResultsPanel(data.field_results || {}, data.data_flywheel || {});
       dataFlywheel.innerHTML = dataFlywheelPanel(data.data_flywheel || {});
       trainingExperiment.innerHTML = trainingExperimentPanel(data.training_experiment || {});
       trainingRunPreflight.innerHTML = trainingRunPreflightPanel(data.training_run_preflight || {});

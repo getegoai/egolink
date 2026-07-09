@@ -34,8 +34,13 @@ DASHBOARD_MARKERS = (
     "Location Uploads",
     "Power Curve",
     "data-d1-map-mode",
+    "data-map-review-mode",
+    "data-map-provider-mode",
     "map-track",
     "Track points",
+    "No-key Local Map",
+    "Provider Status",
+    "D2 Reference",
     "D1 Acceptance Gate",
     "d1AcceptanceBadge",
 )
@@ -187,6 +192,8 @@ def d1_state_gate(device: dict[str, Any]) -> dict[str, Any]:
     acceptance = as_dict(d1.get("acceptance_gate"))
     estimate = as_dict(d1.get("location_estimate"))
     map_surface = as_dict(d1.get("map_surface"))
+    provider = as_dict(map_surface.get("provider"))
+    privacy = as_dict(map_surface.get("privacy"))
     trajectory = as_dict(map_surface.get("trajectory"))
     points = as_list(map_surface.get("points"))
     freshness = as_dict(d1.get("upload_freshness"))
@@ -204,6 +211,14 @@ def d1_state_gate(device: dict[str, Any]) -> dict[str, Any]:
         errors.append("d1_map_trajectory_points_missing")
     if int(trajectory.get("point_count") or 0) < 2:
         errors.append("d1_map_trajectory_missing")
+    if map_surface.get("accuracy_claim") != "none":
+        errors.append("d1_map_surface_must_not_claim_accuracy")
+    if provider.get("blocking_d1") is True:
+        errors.append("d1_map_provider_must_not_block_d1")
+    if provider.get("mode") in (None, ""):
+        errors.append("d1_map_provider_mode_missing")
+    if privacy.get("static_report_policy") != "bounded_summary_no_raw_coordinates":
+        errors.append("d1_map_static_report_policy_not_bounded")
     if not freshness.get("last_location_upload_at"):
         errors.append("d1_location_upload_freshness_missing")
     for claim in ("location_accuracy_not_claimed", "battery_life_not_claimed"):
@@ -220,7 +235,7 @@ def d1_state_gate(device: dict[str, Any]) -> dict[str, Any]:
     return gate(
         "G3_D1_STATE",
         "PASS",
-        "/api/state exposes the D1 acceptance gate, location estimate, map points/trajectory, freshness, and non-claim boundaries.",
+        "/api/state exposes the D1 gate, local map evidence, freshness, provider non-blocking, and non-claim boundaries.",
         evidence=summarize_d1_device(device),
     )
 
@@ -364,6 +379,7 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
     power = as_dict(d1.get("power_curve"))
     uplink = as_dict(d1.get("uplink_metrics"))
     map_surface = as_dict(d1.get("map_surface"))
+    provider = as_dict(map_surface.get("provider"))
     trajectory = as_dict(map_surface.get("trajectory"))
     coord = as_dict(map_surface.get("coordinate_diagnostics"))
     lines = [
@@ -378,6 +394,8 @@ def write_markdown_report(path: Path, report: dict[str, Any]) -> None:
         f"- D1 gate: {as_dict(d1.get('acceptance_gate')).get('status')}",
         f"- Location uploads: {uplink.get('location_event_count')}",
         f"- Map points: {trajectory.get('point_count')}",
+        f"- Map review mode: {map_surface.get('review_mode')} / provider {provider.get('status')}",
+        f"- Map accuracy claim: {map_surface.get('accuracy_claim')}",
         f"- Coordinate uploads: {coord.get('coordinate_event_count')} / {coord.get('location_event_count')} events; missing {coord.get('missing_coordinate_event_count')}",
         f"- Latest coordinate missing reason: {coord.get('latest_missing_reason')}",
         f"- Raw POST: {uplink.get('raw_post_success_count')} ok / {uplink.get('raw_post_failure_count')} fail / {uplink.get('raw_post_attempt_count')} attempts",

@@ -73,9 +73,31 @@ Not required. This is Web/API/report visibility work over existing evidence.
   surface with coordinates, relative trajectory, and reference markers.
 - A map is a review aid, not an accuracy claim.
 
+# Progress
+
+- 2026-07-09 no-key evidence map baseline:
+  - Dashboard map surface now labels itself as `local_no_key`, shows provider
+    status, track/current/reference-point legend, privacy policy, and no
+    accuracy claim.
+  - `/api/state` `d1_link.map_surface` now exposes provider, layer, privacy,
+    reference-point, and accuracy-claim metadata without changing device
+    protocol fields.
+  - Field Test Results now has evidence lanes for D2 Baseline, D1 Regression,
+    Power, and D5 Flywheel. D2 location accuracy reports under
+    `reports/location_accuracy/` are summarized without copying raw private
+    coordinates.
+
 # Completion Evidence
 
-- Changed files:
-- Test result:
-- Web result:
-- Remaining risks:
+- Changed files: `server/message_hub.py`, `scripts/validate_d1_web_api.py`,
+  `quality_tests/test_message_hub_dashboard.py`,
+  `quality_tests/test_d1_web_api_validation.py`
+- Test result: focused Dashboard/Web tests PASS; `python scripts/context_lint.py`
+  PASS; `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` PASS
+  with 530 tests
+- Web result: local smoke on `127.0.0.1:8879` confirmed Dashboard HTML contains
+  no-key map markers and evidence lanes, and `/api/state` returns Field Results
+  structure. Provider-backed map remains future work after provider/key/privacy
+  decision.
+- Remaining risks: real D2 reference-point overlay still depends on D2 baseline
+  report production and future provider selection

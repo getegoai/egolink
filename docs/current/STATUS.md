@@ -6,6 +6,14 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-09: MAP-001 no-key evidence map baseline is implemented locally. The
+Dashboard D1 map surface now explicitly shows local no-key mode, provider
+status, track/current/reference legend, privacy policy, and no accuracy claim.
+Field Test Results now has evidence lanes for D2 Baseline, D1 Regression,
+Power, and D5 Flywheel. D2 location accuracy summaries under
+`reports/location_accuracy/` can appear without exposing raw private
+coordinates.
+
 2026-07-09: Founder direction update: D1 continuous outdoor testing is now a
 regression loop, not an endless transition blocker. D1 has reached the
 link-through transition standard because the 4G board -> LTE -> VPS ->
