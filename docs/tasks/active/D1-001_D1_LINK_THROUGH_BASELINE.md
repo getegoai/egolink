@@ -1,12 +1,12 @@
 ---
 id: D1-001
 title: D1 link-through baseline
-status: active
+status: accepted_for_transition
 priority: high
 requires_hardware: true
 serves_demo: D1
 created: 2026-07-04
-last_updated: 2026-07-08
+last_updated: 2026-07-09
 
 context:
   - docs/product/NORTH_STAR.md
@@ -28,7 +28,9 @@ allowed_paths:
   - quality_tests/
 ---
 
-本任务服务于 D1；当前最低未验收 Demo 是 D1；n == m，且本任务是 D1 验收的直接阻塞项。
+This task records the accepted D1 link-through baseline. As of the 2026-07-09
+founder update, continuous outdoor and power testing continue as regression,
+while the active mainline moves to D2/D5.
 
 # Goal
 
@@ -84,10 +86,13 @@ battery power.
 
 # Progress
 
+- Founder transition update (2026-07-09, codex): D1 is accepted for
+  transition because the link-through loop is visible, repeatable, and
+  reportable. FIELD/PWR continue as regression and evidence collection; D2
+  location accuracy baseline and D5 location-data flywheel are now active.
 - Director reset (2026-07-08, codex): re-centered active work on D1
-  acceptance. `MODEL-DEVICE`, `DATA`, `TRAIN`, data-flywheel, and labeling work
-  are frozen until D2 is accepted; existing assets are retained for later D5
-  reuse.
+  acceptance. This freeze is superseded by the 2026-07-09 founder transition
+  update above.
 - D1 map trajectory gate (2026-07-08, codex): `/api/state` `d1_link.map_surface`
   now includes bounded recent coordinate `points` plus `trajectory` metadata,
   Dashboard renders those points as a visual track, and

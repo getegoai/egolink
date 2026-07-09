@@ -145,12 +145,25 @@ power and battery accuracy. R3.2 validates GNSS performance under enclosure,
 mounting, and body/vehicle conditions. None of these may be inferred from
 build success, USB serial logs, or the current Wi-Fi transport gate.
 
-## 2026-07-04 D1 Field-Test Result Visibility And Next Runs
+## 2026-07-09 D1 Transition And D2/D5 Mainline
 
-D1 is now in a live shakedown posture: the connectivity node periodically
-uploads LTE D1 state to the VPS, the Dashboard shows the current estimate,
-upload success, and power curve entry point, and the AMOLED companion can mirror
-the state while connected as a PC sidecar.
+D1 is now accepted for transition, not because outdoor testing is "done", but
+because the link-through loop is visible, repeatable, and reportable with
+honest non-claims. Continuous outdoor FIELD/PWR runs remain part of product
+regression and evidence collection. They no longer block D2/D5 startup.
+
+The active route is now:
+
+```text
+D1 link-through regression
+-> D2 location accuracy baseline and map/evidence visibility
+-> D5 location-data flywheel for cleaned, labelled, privacy-reviewed samples
+```
+
+The connectivity node periodically uploads LTE D1 state to the VPS, the
+Dashboard shows the current estimate, upload success, field results, and power
+curve entry point, and the AMOLED companion can mirror the state while
+connected as a PC sidecar.
 
 Current evidence lives in two places:
 
@@ -160,28 +173,26 @@ Current evidence lives in two places:
   Dashboard `Field Test Results` panel when the curated summaries are present
   on the VPS.
 
-Immediate next task:
+Immediate D2/D5 tasks:
 
-- `FIELD-004`: a 2-3 hour outdoor D1 walk/run using the 4G board as the primary
-  device, battery/independent power, and optional AMOLED sidecar. The run should
-  produce D1 field-companion evidence, a D1 Web/API report, and a power-curve
-  report. After the run, sync only report summaries to the VPS Dashboard.
+- `D2-001`: establish the first location-accuracy baseline: reference points,
+  median error, fix rate, TTFF, and dashboard/map visibility.
+- `D5-001`: start the location-data flywheel from field evidence into cleaned,
+  labelled, privacy-reviewed samples. This serves location accuracy first; it
+  does not train or deploy a safety-classification model.
+- `MAP-001`: improve the Dashboard map from a no-key coordinate/trajectory
+  surface toward a real provider-backed map after a provider/key/privacy
+  decision.
 
 Near-term follow-up:
 
-- finish `PWR-001` with a longer battery/power baseline once the short outdoor
-  run proves the reporting loop is stable;
-- promote the D1 demo only after the field report shows stable uploads,
-  interpretable location state, and a started power curve without claiming
-  accuracy or battery life.
+- continue `FIELD-004` and `PWR-001` as ongoing D1 regression and product
+  evidence collection;
+- keep the D1 demo report and VPS Field Test Results as visible regression
+  surfaces without claiming location accuracy or battery life.
 
 Later tasks:
 
-- `MAP-001`: replace the placeholder grid with an optional map/track provider
-  after a provider/key/privacy decision. Until then the map block remains a
-  no-API coordinate/estimate placeholder.
-- D2 begins only after D1 has a usable field report: Wi-Fi/known-place inputs,
-  reference-point error measurement, and first accuracy metrics.
 - D3 follows D2 with 24h wearable-style power/reliability evidence.
 
 ## 2026-07-04 On-Device AI And Data Flywheel Side Track

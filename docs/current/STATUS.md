@@ -6,6 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-09: Founder direction update: D1 continuous outdoor testing is now a
+regression loop, not an endless transition blocker. D1 has reached the
+link-through transition standard because the 4G board -> LTE -> VPS ->
+Dashboard loop is visible, repeatable, and reportable with explicit
+non-claims. FIELD/PWR runs continue, but active development now moves to the
+D2 -> D5 mainline: D2 location-accuracy baseline, map/evidence visibility, and
+D5 location-data flywheel. Tiny Safety/safety-classification assets remain
+reusable later, but immediate AI/data work must serve location accuracy.
+
 2026-07-09: D1 field evidence from `FIELD-004-outdoor-20260709-0900`
 is now bound into a power report and one-page demo report. Web/API passed,
 with 24 trajectory points and 237/237 raw POST success in the post-run view;
@@ -18,14 +27,13 @@ estimate was supplied. D1 demo remains WARN and not founder-review-ready:
 The VPS Field Test Results panel now shows 7 bounded D1 cards, including
 post-run, D1 demo, and power curve summaries.
 
-2026-07-08: Director reset applied from `docs/product/NORTH_STAR.md`. The
-current lowest unaccepted demo is D1, so active work is narrowed to D1
-acceptance only: 3-4h outdoor link-through run, Dashboard map point plus
-trajectory view, Web/API freshness gate, measured power curve, one-page D1
-report, founder acceptance, and tag `v0.1.0`. Data flywheel, labeling,
-`MODEL-DEVICE`, `DATA`, and `TRAIN` work is frozen until D2 is accepted;
-existing Tiny Safety and data-chain assets are retained for later D5 reuse and
-must not be expanded now. The D1 field kit v17 is generated at
+2026-07-08: Director reset applied from `docs/product/NORTH_STAR.md`. This
+D1-only freeze is superseded by the 2026-07-09 founder transition update above.
+At the time, active work was narrowed to D1 acceptance only: 3-4h outdoor
+link-through run, Dashboard map point plus trajectory view, Web/API freshness
+gate, measured power curve, one-page D1 report, founder acceptance, and tag
+`v0.1.0`. Existing Tiny Safety and data-chain assets were retained for later
+D5 reuse. The D1 field kit v17 is generated at
 `reports/d1_field/FIELD-004-d1-acceptance-20260708-4h/`.
 
 2026-07-08: D1 Dashboard now exposes a first-screen `D1 Acceptance Gate`.

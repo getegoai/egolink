@@ -1,9 +1,32 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-04
-verified_by: claude
+last_verified: 2026-07-09
+verified_by: codex
 owner: founder
 ---
+
+## 2026-07-09 Founder Direction Update
+
+Continuous outdoor testing is a product regression loop, not an endless gate.
+D1 is accepted for transition once the 4G board -> LTE -> VPS -> Dashboard
+link is visible, repeatable, and reportable with honest non-claims. Longer
+FIELD/PWR runs continue as regression and evidence collection, but they do not
+block D2/D5 startup.
+
+Current execution focus moves to the D2 -> D5 mainline:
+
+- D2: establish the first location-accuracy baseline using median error,
+  fix rate, and TTFF, with reference-point evidence and Dashboard/map
+  visibility.
+- D5: build the location-data flywheel from collected field evidence into
+  cleaned, labelled, privacy-reviewed samples and eventually model/rule
+  improvement loops.
+- Map view is a D2/D5 usability and evidence-review requirement. Absence of a
+  third-party map API is not a D1 blocker; use no-key/local coordinate and
+  trajectory views until a provider/key/privacy decision is made.
+- Tiny Safety and safety-classification assets remain reusable later, but the
+  immediate AI/data mainline is location accuracy improvement, not synthetic
+  safety classification.
 
 # EgoLink 北极星与开发指导原则（NORTH STAR）
 
@@ -106,5 +129,7 @@ NORTH_STAR（本文件，方向）→ `docs/roadmap/V1_PRODUCT_PLAN.md`（里程
 
 ## 变更记录
 
+- 2026-07-09 创始人更新：D1 连续外场测试改为持续回归，不再作为无限期转入卡点；
+  启动 D2 定位精度基线与 D5 定位数据飞轮，地图视图进入 D2/D5 证据可视化。
 - 2026-07-04 创始人定调：Demo 阶梯 + 敏捷轻流程 + 4G 板为主板 + 省电定位
   优先、AI 主动安全其次；初版发布。

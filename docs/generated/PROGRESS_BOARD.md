@@ -1,16 +1,16 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-08 07:44 UTC
-- 分支: `autodev/egolink-p0` @ 8dec738 feat(d1): show acceptance gate on dashboard [D1]
+- 生成时间: 2026-07-09 05:33 UTC
+- 分支: `autodev/egolink-p0` @ 3bf4d52 ops(d1): bind field power evidence and dashboard results [D1]
 - 当前焦点: Director指令(07-08)：模型/飞轮脚手架冻结，全力推 D1 外场验收（3-4h实测→tag v0.1.0→创始人验收），随后 D2 定位精度基线；PWR-001 24h 电池曲线与 FIELD-003 并入本波
-- 已完成任务总数: 135，进行中: 3，暂停: 3
+- 已完成任务总数: 135，进行中: 7，暂停: 2
 
 ## 里程碑
 
 | 里程碑 | 进度 | 任务 |
 |---|---|---|
 | D1 链路通 | 0/2 | ⏳D1-001 4G板链路通 ⏳PWR-001 |
-| V1-M1 可靠性收尾 | 1/5 | ⏳PWR-001 ⏸FIELD-003 ✅OPS-001 📋STAB-002 LTE长运行/重连门 📋FT-1 可穿戴测试版组装 |
+| V1-M1 可靠性收尾 | 1/5 | ⏳PWR-001 ⏳FIELD-003 ✅OPS-001 📋STAB-002 LTE长运行/重连门 📋FT-1 可穿戴测试版组装 |
 | V1-M2 家人端 MVP | 0/2 | 📋WEB-003 家人看板 📋围栏引擎+通知通道 |
 | V1-M3 设备端 AI 轨道（核心） | 1/7 | 📋M1-002 端侧会话记录器 ⏸MODEL-001 模型footprint评估 ✅DATA-002 数据飞轮管线 📋M1-005 标注闭环 📋M1-006 场景采集协议执行 📋MotionNet v0.1 训练+端侧PoC 📋FW-004 固件能力真值源 |
 | V1-M4 量产定义与选型 | 0/4 | ⏸PROD-001 📋中国移动模组评估（等资料） 📋MCU渠道报价与选型ADR（等报价） 📋麦克风方案决策 |
@@ -22,9 +22,12 @@
 
 | 任务 | 标题 | 状态 | 优先级 | 执行者 |
 |---|---|---|---|---|
-| D1-001 | D1 link-through baseline | active | high | codex |
-| FIELD-003 | Outdoor GNSS acceptance protocol and first measured run | paused | high | 暂停到D2：claude+创始人（户外执行） |
-| FIELD-004 | D1 outdoor multi-hour field run | active | high | - |
+| D1-001 | D1 link-through baseline | accepted_for_transition | high | codex |
+| D2-001 | D2 location accuracy baseline and metric gate | active | high | - |
+| D5-001 | D5 location data flywheel mainline | active | high | - |
+| FIELD-003 | Outdoor GNSS acceptance protocol and first measured run | active | high | 暂停到D2：claude+创始人（户外执行） |
+| FIELD-004 | D1 outdoor multi-hour field run | continuous_regression | high | - |
+| MAP-001 | D2/D5 map evidence view | active | high | - |
 | MODEL-001 | Model footprint assessment | paused | high | 暂停到D4/D5：codex |
 | PROD-001 | Mass-production requirements definition and module/MCU selection gates | paused | high | 暂停：等D1/创始人输入 |
 | PWR-001 | Real power telemetry and first 24h battery baseline run | active | high | claude+创始人（刷机/挂电池） |

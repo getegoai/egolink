@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-08 07:44 UTC",
+  "generated_at": "2026-07-09 05:33 UTC",
   "git": {
     "branch": "autodev/egolink-p0",
-    "head": "8dec738 feat(d1): show acceptance gate on dashboard [D1]"
+    "head": "3bf4d52 ops(d1): bind field power evidence and dashboard results [D1]"
   },
   "current_focus": "Director指令(07-08)：模型/飞轮脚手架冻结，全力推 D1 外场验收（3-4h实测→tag v0.1.0→创始人验收），随后 D2 定位精度基线；PWR-001 24h 电池曲线与 FIELD-003 并入本波",
   "milestones": [
@@ -38,7 +38,7 @@
         {
           "id": "FIELD-003",
           "label": "FIELD-003",
-          "state": "paused"
+          "state": "in_progress"
         },
         {
           "id": "OPS-001",
@@ -170,28 +170,55 @@
       "id": "D1-001",
       "title": "D1 link-through baseline",
       "state": "in_progress",
+      "packet_status": "accepted_for_transition",
+      "priority": "high",
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/D1-001_D1_LINK_THROUGH_BASELINE.md"
+    },
+    {
+      "id": "D2-001",
+      "title": "D2 location accuracy baseline and metric gate",
+      "state": "in_progress",
       "packet_status": "active",
       "priority": "high",
-      "date": "2026-07-08",
-      "path": "D:/pywork/egolink/docs/tasks/active/D1-001_D1_LINK_THROUGH_BASELINE.md"
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/D2-001_LOCATION_ACCURACY_BASELINE.md"
+    },
+    {
+      "id": "D5-001",
+      "title": "D5 location data flywheel mainline",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/D5-001_LOCATION_DATA_FLYWHEEL_MAINLINE.md"
     },
     {
       "id": "FIELD-003",
       "title": "Outdoor GNSS acceptance protocol and first measured run",
-      "state": "paused",
-      "packet_status": "paused",
+      "state": "in_progress",
+      "packet_status": "active",
       "priority": "high",
-      "date": "2026-07-04",
+      "date": "2026-07-09",
       "path": "D:/pywork/egolink/docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md"
     },
     {
       "id": "FIELD-004",
       "title": "D1 outdoor multi-hour field run",
       "state": "in_progress",
+      "packet_status": "continuous_regression",
+      "priority": "high",
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md"
+    },
+    {
+      "id": "MAP-001",
+      "title": "D2/D5 map evidence view",
+      "state": "in_progress",
       "packet_status": "active",
       "priority": "high",
-      "date": "2026-07-08",
-      "path": "D:/pywork/egolink/docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md"
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/MAP-001_D2_D5_MAP_EVIDENCE_VIEW.md"
     },
     {
       "id": "MODEL-001",
@@ -217,7 +244,7 @@
       "state": "in_progress",
       "packet_status": "active",
       "priority": "high",
-      "date": "2026-07-04",
+      "date": "2026-07-09",
       "path": "D:/pywork/egolink/docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md"
     }
   ],
@@ -355,9 +382,9 @@
     }
   ],
   "counts": {
-    "active": 3,
-    "paused": 3,
-    "open_total": 6,
+    "active": 7,
+    "paused": 2,
+    "open_total": 9,
     "done_total": 135
   }
 }

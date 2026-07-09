@@ -1,6 +1,6 @@
 ---
 document_status: current_task_tree
-generated_at: 2026-07-03
+generated_at: 2026-07-09
 generated_by: codex
 ---
 
@@ -482,17 +482,27 @@ motion candidate
 
 ## Active Queue
 
-Current active packets (2026-07-04, per NORTH_STAR D1 link-through):
+Current active packets (2026-07-09, per founder D1 transition and D2/D5
+mainline update):
 
-- `D1-001` D1 link-through baseline -
+- `D1-001` D1 link-through baseline accepted for transition -
   `docs/tasks/active/D1-001_D1_LINK_THROUGH_BASELINE.md`
-- `PWR-001` Real power telemetry + 24h battery baseline (serves D1) -
-  `docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md`
-- Paused until D2: `FIELD-003` Outdoor GNSS acceptance protocol + first run -
+- `D2-001` Location accuracy baseline and metric gate -
+  `docs/tasks/active/D2-001_LOCATION_ACCURACY_BASELINE.md`
+- `FIELD-003` Outdoor GNSS acceptance protocol and measured run (serves D2) -
   `docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md`
+- `D5-001` Location data flywheel mainline -
+  `docs/tasks/active/D5-001_LOCATION_DATA_FLYWHEEL_MAINLINE.md`
+- `MAP-001` D2/D5 map evidence view -
+  `docs/tasks/active/MAP-001_D2_D5_MAP_EVIDENCE_VIEW.md`
+- `FIELD-004` D1 outdoor run as continuous regression and D2/D5 evidence -
+  `docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md`
+- `PWR-001` Real power telemetry + 24h battery baseline (D1/D3 regression) -
+  `docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md`
 - Paused until D1/founder input: `PROD-001` Mass-production requirements -
   `docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md`
-- Paused until D4-D5: `MODEL-001` Model footprint assessment -
+- Paused until a D5 model candidate exists: `MODEL-001` Model footprint
+  assessment -
   `docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md`
 
 - `MODEL-001 Model Footprint Assessment`

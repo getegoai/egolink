@@ -4,9 +4,9 @@ title: Real power telemetry and first 24h battery baseline run
 status: active
 priority: high
 requires_hardware: true
-serves_demo: D1
+serves_demo: D1-D3
 created: 2026-07-03
-last_updated: 2026-07-04
+last_updated: 2026-07-09
 
 context:
   - docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md
@@ -85,8 +85,10 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 - Development-board numbers do not represent production hardware; the report
   must carry this caveat (per POWER_AND_BATTERY_ENGINEERING_TARGETS.md rule 6).
-- 2026-07-04: This task is D1-critical because NORTH_STAR defines power curve
+- 2026-07-04: This task was D1-critical because NORTH_STAR defined power curve
   recording as part of D1 link-through acceptance.
+- 2026-07-09: Founder transition update: power runs continue as D1/D3
+  regression and product evidence, but they no longer block D2/D5 startup.
 
 # Completion Evidence
 

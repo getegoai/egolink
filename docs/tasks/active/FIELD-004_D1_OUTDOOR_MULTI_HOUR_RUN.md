@@ -1,12 +1,12 @@
 ---
 id: FIELD-004
 title: D1 outdoor multi-hour field run
-status: active
+status: continuous_regression
 priority: high
 requires_hardware: true
 serves_demo: D1
 created: 2026-07-04
-last_updated: 2026-07-08
+last_updated: 2026-07-09
 
 context:
   - docs/product/NORTH_STAR.md
@@ -27,13 +27,16 @@ out_of_scope:
   - raw private coordinate publication outside bounded evidence
 ---
 
-本任务服务于 D1；当前最低未验收 Demo 是 D1；n == m，且本任务是 D1 验收的直接执行项。
+This task serves D2 evidence collection while preserving D1 regression
+coverage. The current active mainline starts at D2, and this task is a direct
+evidence source for `D2-001`. D1 outdoor testing continues throughout the
+product, but it no longer blocks D2/D5 startup.
 
 # Goal
 
-Run the current D1 link outdoors for 3-4 hours so the founder can judge whether
-the LTE upload loop, visible estimate, and power curve are stable enough to keep
-building on.
+Run the current D1 link outdoors as a repeatable regression and evidence source
+for D2/D5. The run still checks LTE upload, visible estimate, trajectory, and
+power curve health, but it is no longer an endless D1 transition blocker.
 
 # Operator Setup
 
@@ -78,12 +81,12 @@ Through` panel:
       why.
 - [ ] Curated report summaries are synced to the VPS Dashboard `Field Test
       Results` panel.
-- [ ] Founder reviews the one-page D1 report; only after acceptance, tag
-      `v0.1.0`.
+- [ ] Founder reviews regression trends when needed; D2/D5 work may continue
+      while these runs repeat.
 - [ ] The result does not claim location accuracy or battery life unless a later
       acceptance task defines those metrics.
-- [ ] Data flywheel, labeling, `MODEL-DEVICE`, `DATA`, and `TRAIN` work remain
-      frozen until D2 is accepted.
+- [ ] Data flywheel work may proceed only when it serves D2/D5 location
+      accuracy and keeps training/model claims gated by labelled evidence.
 
 # Optional Companion Recording
 
@@ -168,6 +171,12 @@ git tag -a v0.1.0 -m "D1 link-through accepted"
 
 # Progress Evidence
 
+- 2026-07-09 founder transition:
+  - D1 outdoor testing is now continuous regression and D2/D5 evidence
+    collection, not a transition blocker.
+  - Continue syncing Field Test Results to the VPS Dashboard, but do not block
+    D2 accuracy baseline or D5 location-data flywheel work on a never-ending
+    field-test loop.
 - 2026-07-09 outdoor observer binding:
   - Evidence:
     `reports/d1_field_observation/FIELD-004-outdoor-20260709-0900/`,

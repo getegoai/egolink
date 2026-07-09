@@ -1,12 +1,12 @@
 ---
 id: FIELD-003
 title: Outdoor GNSS acceptance protocol and first measured run
-status: paused
+status: active
 priority: high
 requires_hardware: true
 serves_demo: D2
 created: 2026-07-03
-last_updated: 2026-07-04
+last_updated: 2026-07-09
 
 context:
   - docs/development/LOCATION_ENGINE.md
@@ -88,6 +88,8 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
   (consistent with EALE-P0 non-claim policy).
 - 2026-07-04: Paused by NORTH_STAR alignment. D1 only requires a visible
   location estimate, not outdoor accuracy acceptance; resume for D2.
+- 2026-07-09: Resumed by founder direction. D1 outdoor testing continues as
+  regression, while D2 now needs measured fix rate, TTFF, and error evidence.
 
 # Completion Evidence
 
