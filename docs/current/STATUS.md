@@ -6,6 +6,21 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-09: D5-001 now has a field-observation intake path for real outdoor
+runs that do not yet have a D2 reference manifest.
+`scripts/summarize_location_field_evidence.py` converts D1
+`d1_field_samples.jsonl` into a bounded `location_field_evidence` report and
+Dashboard-compatible D5 review packet/status without copying raw coordinates,
+cell-ID lists, raw JSONL rows, or payload bytes. The Web Data Flywheel card now
+shows field evidence counts, sample counts, GNSS fix/no-fix/unknown counts,
+LTE unique-cell count, raw POST delta, and field power delta. The 2026-07-09
+`FIELD-004-outdoor-20260709-0900` run is summarized locally as D5 evidence:
+132 samples, 4 GNSS fix samples, 2 no-fix samples, 17 unique LTE cells, 234 raw
+POST successes, 0 raw POST failures, and 6 pending review records. This is D5
+evidence intake only; D2 accuracy baseline and model training remain blocked
+until a FIELD-003 reference manifest, reviewed labels, privacy/split review,
+and founder model-task approval exist.
+
 2026-07-09: D5-001 location-data flywheel plumbing is now implemented
 locally. `scripts/summarize_location_data_flywheel.py` converts a bounded D2
 `location_accuracy_report.json` into Dashboard-compatible

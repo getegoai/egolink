@@ -303,6 +303,30 @@ def record_type_templates() -> dict[str, Any]:
             "purpose": "label high-error fixes that should drive rule/model correction",
             "required_decisions": required_decisions,
         },
+        "location_field_session": {
+            "purpose": "review a real field session summary before it can become D2/D5 evidence",
+            "required_decisions": required_decisions,
+        },
+        "location_gnss_fix_window": {
+            "purpose": "review GNSS fix windows that may seed D2 reference or quality work",
+            "required_decisions": required_decisions,
+        },
+        "location_no_fix_window": {
+            "purpose": "label no-fix field windows and likely failure context",
+            "required_decisions": required_decisions,
+        },
+        "location_cell_transition_window": {
+            "purpose": "review LTE/cell transition evidence with retention and privacy constraints",
+            "required_decisions": required_decisions,
+        },
+        "location_power_window": {
+            "purpose": "review field power windows before using them for product or model-power claims",
+            "required_decisions": required_decisions,
+        },
+        "location_memory_coordinate_window": {
+            "purpose": "review redacted coordinate-bearing windows before D2 reference or training use",
+            "required_decisions": required_decisions,
+        },
     }
 
 
@@ -629,6 +653,8 @@ def render_status_markdown(status: Mapping[str, Any]) -> str:
         f"- Reference points: {counts.get('reference_points', 0)}",
         f"- Location attempts: {counts.get('location_attempts', 0)}",
         f"- Fixed / no-fix attempts: {counts.get('fixed_attempts', 0)} / {counts.get('no_fix_attempts', 0)}",
+        f"- Field evidence: {counts.get('location_field_evidence_reports', 0)} reports / {counts.get('field_samples', 0)} samples",
+        f"- Field GNSS: {counts.get('field_gnss_fix_samples', 0)} fix / {counts.get('field_gnss_no_fix_samples', 0)} no-fix / {counts.get('field_gnss_unknown_samples', 0)} unknown",
         f"- Review records: {counts.get('records_total', 0)}",
         f"- Model training ready: {readiness.get('model_training_ready', False)} ({readiness.get('reason', 'unknown')})",
         "",

@@ -3980,6 +3980,18 @@ def load_latest_data_flywheel_status(root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS)
                 "location_attempts": counts.get("location_attempts", 0),
                 "fixed_attempts": counts.get("fixed_attempts", 0),
                 "no_fix_attempts": counts.get("no_fix_attempts", 0),
+                "location_field_evidence_reports": counts.get("location_field_evidence_reports", 0),
+                "field_samples": counts.get("field_samples", 0),
+                "field_successful_samples": counts.get("field_successful_samples", 0),
+                "field_coordinate_samples": counts.get("field_coordinate_samples", 0),
+                "field_gnss_fix_samples": counts.get("field_gnss_fix_samples", 0),
+                "field_gnss_no_fix_samples": counts.get("field_gnss_no_fix_samples", 0),
+                "field_gnss_unknown_samples": counts.get("field_gnss_unknown_samples", 0),
+                "field_unique_cell_count": counts.get("field_unique_cell_count", 0),
+                "field_raw_post_success_delta": counts.get("field_raw_post_success_delta", 0),
+                "field_raw_post_failure_delta": counts.get("field_raw_post_failure_delta", 0),
+                "field_track_point_delta": counts.get("field_track_point_delta", 0),
+                "field_power_sample_count_delta": counts.get("field_power_sample_count_delta", 0),
             },
             "source_reports": report.get("source_reports"),
             "state_counts": report.get("state_counts"),
@@ -6997,6 +7009,11 @@ def render_dashboard() -> str:
         <div class="metric"><span>D2 Baselines</span><span>${escapeHtml(counts.location_baseline_reports ?? 0)} reports / ${escapeHtml(counts.reference_points ?? 0)} refs</span></div>
         <div class="metric"><span>D2 Attempts</span><span>${escapeHtml(counts.location_attempts ?? 0)} total / ${escapeHtml(counts.fixed_attempts ?? 0)} fixed / ${escapeHtml(counts.no_fix_attempts ?? 0)} no-fix</span></div>
       ` : '';
+      const fieldEvidenceMetrics = (counts.location_field_evidence_reports || counts.field_samples) ? `
+        <div class="metric"><span>Field Evidence</span><span>${escapeHtml(counts.location_field_evidence_reports ?? 0)} reports / ${escapeHtml(counts.field_samples ?? 0)} samples / ${escapeHtml(counts.field_successful_samples ?? 0)} ok</span></div>
+        <div class="metric"><span>Field GNSS</span><span>${escapeHtml(counts.field_gnss_fix_samples ?? 0)} fix / ${escapeHtml(counts.field_gnss_no_fix_samples ?? 0)} no-fix / ${escapeHtml(counts.field_gnss_unknown_samples ?? 0)} unknown</span></div>
+        <div class="metric"><span>Field LTE/Power</span><span>${escapeHtml(counts.field_unique_cell_count ?? 0)} cells / raw ${escapeHtml(counts.field_raw_post_success_delta ?? 0)} ok ${escapeHtml(counts.field_raw_post_failure_delta ?? 0)} fail / power ${escapeHtml(counts.field_power_sample_count_delta ?? 0)}</span></div>
+      ` : '';
       const sourceReports = (flywheel.source_reports || []).slice(0, 3).map(report => `
         <div class="metric"><span>${escapeHtml(report.type || 'source')}</span><span>${escapeHtml(report.run_id || 'unknown')} / ${escapeHtml(report.result_status || report.reason || 'unknown')}</span></div>
       `).join('');
@@ -7014,6 +7031,7 @@ def render_dashboard() -> str:
         <div class="metric"><span>Sessions</span><span>${escapeHtml(counts.sessions_total ?? 0)}</span></div>
         <div class="metric"><span>Candidate Records</span><span>${escapeHtml(counts.records_total ?? 0)} total / ${escapeHtml(counts.needs_review_records ?? 0)} needs review</span></div>
         ${locationMetrics}
+        ${fieldEvidenceMetrics}
         <div class="metric"><span>Training Gate</span><span>${escapeHtml(readiness.model_training_ready ?? false)} / ${escapeHtml(readiness.reason || 'unknown')}</span></div>
         <div class="metric"><span>Reviewed Candidates</span><span>${escapeHtml(counts.reviewed_training_candidate_records ?? 0)} reviewed / ${escapeHtml(counts.training_allowed_records ?? 0)} training_allowed</span></div>
         <div class="metric"><span>Review Queues</span><span>label ${escapeHtml(review.label_review_pending_records ?? 0)} / split ${escapeHtml(review.split_leakage_unchecked_records ?? 0)} / privacy ${escapeHtml(review.privacy_or_consent_blocked_records ?? 0)} / quality ${escapeHtml(review.quality_blocked_records ?? 0)}</span></div>
