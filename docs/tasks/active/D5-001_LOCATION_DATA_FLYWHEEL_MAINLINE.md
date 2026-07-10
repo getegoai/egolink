@@ -117,6 +117,11 @@ FIELD, and PWR runs and must be explicitly referenced by path.
   - Added `scripts/run_location_d2_d5_pipeline.py`, a one-command offline
     processor from explicit Message Hub export plus FIELD manifest into D2
     baseline, D5 data-flywheel status, and a bounded pipeline summary.
+- 2026-07-10 field readiness observer:
+  - Added `scripts/observe_field_readiness.py` so long field sessions can
+    produce bounded server-side readiness samples and reports while preserving
+    the D5 boundary: summaries and artifact refs only, no raw private
+    coordinate export and no model-training claim.
 
 # Completion Evidence
 

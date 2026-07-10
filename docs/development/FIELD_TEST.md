@@ -32,6 +32,41 @@ It is not allowed as the formal runtime path or the only acceptance evidence.
 [ ] test_run_id has been created.
 ```
 
+## Server Field Readiness Observer
+
+Before leaving for a field run, use the server-side readiness observer against
+the VPS Message Hub, not the local `127.0.0.1` development Hub:
+
+```powershell
+python scripts\observe_field_readiness.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id ego-link-r1-connectivity-001 `
+  --run-id field-readiness-<date> `
+  --duration-sec 0 `
+  --json
+```
+
+For unattended monitoring while the operator is outside, give it a window and
+poll interval:
+
+```powershell
+python scripts\observe_field_readiness.py `
+  --hub http://<operator-vps>:8790 `
+  --device-id ego-link-r1-connectivity-001 `
+  --run-id field-readiness-<date>-long `
+  --duration-sec 14400 `
+  --poll-interval-sec 60
+```
+
+The observer reads `/health`, `/api/state`, and Dashboard HTML, then writes
+`reports/field_readiness/<run-id>/field_readiness_report.json/.md`,
+`field_readiness_status.json`, and incremental `field_readiness_samples.jsonl`.
+It is read-only: no device commands, serial ports, flashing, deployment,
+GitLab changes, model training, or raw private coordinate export. A `PASS`
+means the server-side Web/API surface is ready enough to begin or continue a
+field observation; it is not a GNSS acceptance, location-accuracy,
+battery-life, LTE long-run, model, or product-readiness claim.
+
 ## D1 Long-Run Observer Monitoring
 
 `scripts/observe_d1_field_run.py` is read-only and writes future run samples

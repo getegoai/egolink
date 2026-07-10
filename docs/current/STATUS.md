@@ -6,6 +6,14 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-10: Added `scripts/observe_field_readiness.py`, a read-only
+server-side field readiness observer for D2/D5. It checks the VPS Message Hub
+health, `/api/state`, Dashboard markers, target-device freshness, D1 field
+readiness, Field Test Results, and D5 data-flywheel summaries, then writes
+bounded reports under `reports/field_readiness/<run-id>/`. This is a
+preflight/long-run monitoring tool only; it sends no commands and makes no
+GNSS accuracy, LTE long-run, battery-life, model, or product-readiness claim.
+
 2026-07-10: KR-008 `v0.1.0 Engineering Alpha` is the first main release-line
 checkpoint. The release keeps the 4G board -> LTE -> Message Hub -> Web
 Dashboard -> bounded field evidence -> D2/D5 location data-flywheel loop

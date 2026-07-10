@@ -49,6 +49,10 @@
         {
           "id": "MAP-001",
           "label": "no-key evidence map"
+        },
+        {
+          "id": "FIELD-010",
+          "label": "server readiness observer"
         }
       ]
     },
@@ -93,6 +97,7 @@
     "PWR-001": "codex + founder field tests",
     "D2-001": "codex",
     "FIELD-003": "founder outdoor run + codex postrun",
+    "FIELD-010": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",
     "MODEL-LOC-001": "codex",

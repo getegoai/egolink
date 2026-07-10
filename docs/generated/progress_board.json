@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-10 00:14 UTC",
+  "generated_at": "2026-07-10 01:19 UTC",
   "git": {
-    "branch": "release/v0.1.0-main-merge",
-    "head": "fdcc4d8 Merge egolink-p0 for v0.1.0 Engineering Alpha"
+    "branch": "main",
+    "head": "9ee3151 ops(release): mark v0.1.0 engineering alpha released [D5]"
   },
   "current_focus": "v0.1.0 Engineering Alpha is the main release-line checkpoint; next focus is D2 reference-point field baseline and D5 location data review/flywheel continuity.",
   "milestones": [
@@ -50,8 +50,8 @@
     {
       "id": "D2",
       "title": "Location Accuracy Baseline",
-      "done": 0,
-      "total": 3,
+      "done": 1,
+      "total": 4,
       "tasks": [
         {
           "id": "D2-001",
@@ -67,6 +67,11 @@
           "id": "MAP-001",
           "label": "no-key evidence map",
           "state": "in_progress"
+        },
+        {
+          "id": "FIELD-010",
+          "label": "server readiness observer",
+          "state": "done"
         }
       ]
     },
@@ -197,6 +202,15 @@
   ],
   "recent_done": [
     {
+      "id": "FIELD-010",
+      "title": "Server field readiness observer",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-10",
+      "path": "D:/pywork/egolink/docs/tasks/done/FIELD-010_SERVER_FIELD_READINESS_OBSERVER.md"
+    },
+    {
       "id": "REL-012",
       "title": "v0.1.0 Engineering Alpha Release Gate",
       "state": "done",
@@ -258,15 +272,6 @@
       "priority": "high",
       "date": "2026-07-07",
       "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-005_TINY_SAFETY_DEVICE_LOOP_RUNNER.md"
-    },
-    {
-      "id": "MODEL-DEVICE-006",
-      "title": "Tiny Safety hardware flash validation",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-07",
-      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-006_TINY_SAFETY_HARDWARE_FLASH_VALIDATION.md"
     }
   ],
   "operator_asks": [
@@ -281,6 +286,7 @@
     "PWR-001": "codex + founder field tests",
     "D2-001": "codex",
     "FIELD-003": "founder outdoor run + codex postrun",
+    "FIELD-010": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",
     "MODEL-LOC-001": "codex",
@@ -334,6 +340,6 @@
     "active": 7,
     "paused": 2,
     "open_total": 9,
-    "done_total": 136
+    "done_total": 137
   }
 }

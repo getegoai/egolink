@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-10 00:14 UTC
-- 分支: `release/v0.1.0-main-merge` @ fdcc4d8 Merge egolink-p0 for v0.1.0 Engineering Alpha
+- 生成时间: 2026-07-10 01:19 UTC
+- 分支: `main` @ 9ee3151 ops(release): mark v0.1.0 engineering alpha released [D5]
 - 当前焦点: v0.1.0 Engineering Alpha is the main release-line checkpoint; next focus is D2 reference-point field baseline and D5 location data review/flywheel continuity.
-- 已完成任务总数: 136，进行中: 7，暂停: 2
+- 已完成任务总数: 137，进行中: 7，暂停: 2
 
 ## 里程碑
 
@@ -11,7 +11,7 @@
 |---|---|---|
 | RELEASE Engineering Alpha Release Gate | 3/3 | ✅v0.1.0 alpha readiness ✅retire autonomous queue ✅progress board |
 | D1 Link-Through Regression | 0/2 | ⏳4G link-through ⏳power baseline |
-| D2 Location Accuracy Baseline | 0/3 | ⏳location baseline tooling ⏳reference-point field run ⏳no-key evidence map |
+| D2 Location Accuracy Baseline | 1/4 | ⏳location baseline tooling ⏳reference-point field run ⏳no-key evidence map ✅server readiness observer |
 | D5 Location Data Flywheel | 0/2 | ⏳location data flywheel 📋location model loop |
 | PRODUCT Product Alpha Gaps | 1/3 | 📋call/SMS verification ✅long power baseline 📋location data policy |
 
@@ -35,6 +35,7 @@
 
 | 任务 | 标题 | 日期 |
 |---|---|---|
+| FIELD-010 | Server field readiness observer | 2026-07-10 |
 | REL-012 | v0.1.0 Engineering Alpha Release Gate | 2026-07-10 |
 | DATA-032 | D1 labeling decision template validation | 2026-07-07 |
 | MODEL-DEVICE-001 | Tiny Safety Model v0 local train/export loop | 2026-07-07 |
@@ -42,7 +43,6 @@
 | MODEL-DEVICE-003 | Tiny Safety firmware CLI closed loop | 2026-07-07 |
 | MODEL-DEVICE-004 | Tiny Safety firmware CLI validator | 2026-07-07 |
 | MODEL-DEVICE-005 | Tiny Safety device loop runner | 2026-07-07 |
-| MODEL-DEVICE-006 | Tiny Safety hardware flash validation | 2026-07-07 |
 
 ## 等待创始人处理
 

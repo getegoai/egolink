@@ -102,6 +102,13 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
     private coordinates from Dashboard summaries.
   - Added focused synthetic tests for D2 metric computation, CLI report
     writing, and privacy/non-claim boundaries.
+- 2026-07-10 server-side field readiness observer:
+  - Added `scripts/observe_field_readiness.py`, a read-only preflight and
+    long-run observer for the VPS Message Hub / Dashboard path.
+  - It checks health, `/api/state`, Dashboard markers, target-device
+    freshness, D1 field readiness, no-key map status, Field Test Results, and
+    D5 data-flywheel availability before or during D2 field work.
+  - It does not replace the pending real FIELD-003 reference-point run.
 
 # Completion Evidence
 
