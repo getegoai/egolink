@@ -56,9 +56,10 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 - V1 product sequencing is authoritative in `docs/roadmap/V1_PRODUCT_PLAN.md`;
   where it conflicts with `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`, ADR-0002
   governs.
-- The active execution workflow is authoritative in
-  `docs/development/DIRECTOR_WORKFLOW.md`; AutoDev and Dual Codex documents
-  are deprecated (retirement tracked in ENG-007).
+- The active execution workflow is GitHub Flow plus interactive
+  founder/Codex collaboration, documented in `docs/development/GIT_FLOW.md`
+  and `docs/development/DIRECTOR_WORKFLOW.md`; archived autonomous-queue
+  documents are historical evidence only.
 - Machine-readable model schemas are authoritative in `shared/contracts/`; the P0 message-hub protocol baseline is documented in `docs/development/PROTOCOL.md` until matching schemas are added.
 - Archive files are historical evidence and must not be cited as current authority.
 

@@ -6,12 +6,11 @@ verified_by: claude
 
 # Director Workflow
 
-This workflow replaces the retired AutoDev autonomous loop and the Dual Codex
-workflow (`docs/development/AUTODEV.md`, `docs/development/AUTODEV_MONITORING.md`,
-`docs/development/DUAL_CODEX_WORKFLOW.md` are deprecated; see ADR-0002). The
-AutoDev attempt failed because autonomous queue execution lacked rigorous task
-definition and acceptance judgment. This workflow keeps a strong model in the
-planning/acceptance loop and restricts builder AIs to explicitly scoped work.
+This workflow replaces the retired autonomous queue and multi-agent handoff
+experiments. Those attempts failed because queue execution lacked rigorous task
+definition and acceptance judgment. Current work uses GitHub Flow plus direct
+founder/Codex collaboration: a strong model remains in the planning and
+acceptance loop, and any helper AI is limited to explicitly scoped work.
 
 ## Roles
 

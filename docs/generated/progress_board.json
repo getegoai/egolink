@@ -1,166 +1,113 @@
 {
-  "generated_at": "2026-07-09 05:33 UTC",
+  "generated_at": "2026-07-10 00:00 UTC",
   "git": {
-    "branch": "autodev/egolink-p0",
-    "head": "3bf4d52 ops(d1): bind field power evidence and dashboard results [D1]"
+    "branch": "egolink-p0",
+    "head": "f3ea0db ops(repo): ignore local workspace artifacts [D5]"
   },
-  "current_focus": "Director指令(07-08)：模型/飞轮脚手架冻结，全力推 D1 外场验收（3-4h实测→tag v0.1.0→创始人验收），随后 D2 定位精度基线；PWR-001 24h 电池曲线与 FIELD-003 并入本波",
+  "current_focus": "v0.1.0 Engineering Alpha release gate: keep main always runnable, validate egolink-p0 as the product-like field-test branch, then merge/tag only if the gate passes.",
   "milestones": [
     {
+      "id": "RELEASE",
+      "title": "Engineering Alpha Release Gate",
+      "done": 3,
+      "total": 3,
+      "tasks": [
+        {
+          "id": "REL-012",
+          "label": "v0.1.0 alpha readiness",
+          "state": "done"
+        },
+        {
+          "id": "ENG-007",
+          "label": "retire autonomous queue",
+          "state": "done"
+        },
+        {
+          "id": "ENG-008",
+          "label": "progress board",
+          "state": "done"
+        }
+      ]
+    },
+    {
       "id": "D1",
-      "title": "链路通",
+      "title": "Link-Through Regression",
       "done": 0,
       "total": 2,
       "tasks": [
         {
           "id": "D1-001",
-          "label": "D1-001 4G板链路通",
+          "label": "4G link-through",
           "state": "in_progress"
         },
         {
           "id": "PWR-001",
-          "label": "PWR-001",
+          "label": "power baseline",
           "state": "in_progress"
         }
       ]
     },
     {
-      "id": "V1-M1",
-      "title": "可靠性收尾",
-      "done": 1,
-      "total": 5,
+      "id": "D2",
+      "title": "Location Accuracy Baseline",
+      "done": 0,
+      "total": 3,
       "tasks": [
         {
-          "id": "PWR-001",
-          "label": "PWR-001",
+          "id": "D2-001",
+          "label": "location baseline tooling",
           "state": "in_progress"
         },
         {
           "id": "FIELD-003",
-          "label": "FIELD-003",
+          "label": "reference-point field run",
           "state": "in_progress"
         },
         {
-          "id": "OPS-001",
-          "label": "OPS-001",
-          "state": "done"
-        },
-        {
-          "id": "STAB-002",
-          "label": "STAB-002 LTE长运行/重连门",
-          "state": "planned"
-        },
-        {
-          "id": "FT-1",
-          "label": "FT-1 可穿戴测试版组装",
-          "state": "planned"
+          "id": "MAP-001",
+          "label": "no-key evidence map",
+          "state": "in_progress"
         }
       ]
     },
     {
-      "id": "V1-M2",
-      "title": "家人端 MVP",
+      "id": "D5",
+      "title": "Location Data Flywheel",
       "done": 0,
       "total": 2,
       "tasks": [
         {
-          "id": "WEB-003",
-          "label": "WEB-003 家人看板",
-          "state": "planned"
+          "id": "D5-001",
+          "label": "location data flywheel",
+          "state": "in_progress"
         },
         {
-          "id": "SRV-GEOFENCE",
-          "label": "围栏引擎+通知通道",
+          "id": "MODEL-LOC-001",
+          "label": "location model loop",
           "state": "planned"
         }
       ]
     },
     {
-      "id": "V1-M3",
-      "title": "设备端 AI 轨道（核心）",
+      "id": "PRODUCT",
+      "title": "Product Alpha Gaps",
       "done": 1,
-      "total": 7,
+      "total": 3,
       "tasks": [
         {
-          "id": "M1-002",
-          "label": "M1-002 端侧会话记录器",
+          "id": "CALLSMS-001",
+          "label": "call/SMS verification",
           "state": "planned"
         },
         {
-          "id": "MODEL-001",
-          "label": "MODEL-001 模型footprint评估",
-          "state": "paused"
-        },
-        {
-          "id": "DATA-002",
-          "label": "DATA-002 数据飞轮管线",
+          "id": "PWR-002",
+          "label": "long power baseline",
           "state": "done"
         },
         {
-          "id": "M1-005",
-          "label": "M1-005 标注闭环",
+          "id": "PRIVACY-LOC-001",
+          "label": "location data policy",
           "state": "planned"
-        },
-        {
-          "id": "M1-006",
-          "label": "M1-006 场景采集协议执行",
-          "state": "planned"
-        },
-        {
-          "id": "MOTIONNET-01",
-          "label": "MotionNet v0.1 训练+端侧PoC",
-          "state": "planned"
-        },
-        {
-          "id": "FW-004",
-          "label": "FW-004 固件能力真值源",
-          "state": "planned"
-        }
-      ]
-    },
-    {
-      "id": "V1-M4",
-      "title": "量产定义与选型",
-      "done": 0,
-      "total": 4,
-      "tasks": [
-        {
-          "id": "PROD-001",
-          "label": "PROD-001",
-          "state": "paused"
-        },
-        {
-          "id": "MODULE-EVAL-CM",
-          "label": "中国移动模组评估（等资料）",
-          "state": "planned"
-        },
-        {
-          "id": "MCU-QUOTES",
-          "label": "MCU渠道报价与选型ADR（等报价）",
-          "state": "planned"
-        },
-        {
-          "id": "MIC-DECISION",
-          "label": "麦克风方案决策",
-          "state": "planned"
-        }
-      ]
-    },
-    {
-      "id": "GOV",
-      "title": "治理",
-      "done": 2,
-      "total": 2,
-      "tasks": [
-        {
-          "id": "ENG-007",
-          "label": "ENG-007",
-          "state": "done"
-        },
-        {
-          "id": "ENG-008",
-          "label": "ENG-008",
-          "state": "done"
         }
       ]
     }
@@ -250,6 +197,15 @@
   ],
   "recent_done": [
     {
+      "id": "REL-012",
+      "title": "v0.1.0 Engineering Alpha Release Gate",
+      "state": "done",
+      "packet_status": "completed",
+      "priority": "",
+      "date": "2026-07-10",
+      "path": "D:/pywork/egolink/docs/tasks/done/REL-012_V010_ENGINEERING_ALPHA_RELEASE_GATE.md"
+    },
+    {
       "id": "DATA-032",
       "title": "D1 labeling decision template validation",
       "state": "done",
@@ -311,38 +267,27 @@
       "priority": "high",
       "date": "2026-07-07",
       "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-006_TINY_SAFETY_HARDWARE_FLASH_VALIDATION.md"
-    },
-    {
-      "id": "MODEL-DEVICE-007",
-      "title": "Tiny Safety static footprint report",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-07",
-      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-007_TINY_SAFETY_STATIC_FOOTPRINT.md"
     }
   ],
   "operator_asks": [
-    "采购：PH2.0 锂电池（建议 ≥1500mAh）+ 临时挂绳外壳",
-    "刷机操作（每次固件更新约 10 分钟）",
-    "24h 电池独立运行（摆放+起止记录）",
-    "D1 验收：确认看板地图可见、位置估计出现、上报成功率和电量曲线开始记录",
-    "安全：修改 VPS root 密码（已在聊天中出现过）并考虑关闭 SSH 密码登录（运维手册第1节有步骤）",
-    "一次 2-3 小时户外佩戴走动测试（FIELD-003）",
-    "填写 docs/product/MASS_PRODUCTION_FOUNDER_DECISION_SHEET.md，并据此审阅 docs/product/MASS_PRODUCTION_REQUIREMENTS.md 的 TBD(founder) 值",
-    "商务：中国移动 4G 模组详细资料",
-    "商务：ESP32-S3 / STM32U5A5 / Apollo4 渠道报价",
-    "决策：麦克风/交互硬件方案（V1 端侧 AI 陪伴需要）",
-    "审阅并提交当前工作区变更（或授权我按任务粒度提交）"
+    "Confirm whether egolink-p0 should be pushed as a remote branch before any main merge.",
+    "For D2 baseline, collect a FIELD-003 outdoor run with reference points when convenient.",
+    "Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists."
   ],
   "assignees": {
-    "D1-001": "codex",
-    "PROD-001": "暂停：等D1/创始人输入",
-    "OPS-001": "claude（已完成）",
-    "FIELD-003-tooling": "codex（执行中）",
-    "PWR-001": "claude+创始人（刷机/挂电池）",
-    "FIELD-003": "暂停到D2：claude+创始人（户外执行）",
-    "MODEL-001": "暂停到D4/D5：codex"
+    "REL-012": "codex",
+    "ENG-007": "codex",
+    "ENG-008": "codex",
+    "D1-001": "codex + founder field tests",
+    "PWR-001": "codex + founder field tests",
+    "D2-001": "codex",
+    "FIELD-003": "founder outdoor run + codex postrun",
+    "MAP-001": "codex",
+    "D5-001": "codex",
+    "MODEL-LOC-001": "codex",
+    "CALLSMS-001": "blocked until explicit hardware task",
+    "PWR-002": "planned",
+    "PRIVACY-LOC-001": "planned"
   },
   "key_releases": [
     {
@@ -379,12 +324,17 @@
       "id": "KR-007",
       "status": "released",
       "title": ""
+    },
+    {
+      "id": "KR-008",
+      "status": "released",
+      "title": ""
     }
   ],
   "counts": {
     "active": 7,
     "paused": 2,
     "open_total": 9,
-    "done_total": 135
+    "done_total": 136
   }
 }

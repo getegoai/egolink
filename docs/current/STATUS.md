@@ -6,6 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-10: Current development flow is reset to GitHub Flow plus direct
+founder/Codex collaboration. The retired autonomous queue code and wrapper
+scripts were removed from the active workspace; historical notes remain under
+`docs/archive/`. The working branch is now `egolink-p0`, remote `origin` points
+to `https://git.example.invalid/ego/egolink.git`, and `main` is treated as the
+always-runnable release line. v0.1.0 Engineering Alpha may merge only if the
+release gate passes: README runnable path, context lint, full verify, clean
+tracked worktree, explicit non-claims, and no committed secrets/runtime data.
+
 2026-07-09: D5-001 now has a field-observation intake path for real outdoor
 runs that do not yet have a D2 reference manifest.
 `scripts/summarize_location_field_evidence.py` converts D1
@@ -2274,7 +2283,7 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。2026-06-24 �
 
 产品锚点：AI 主动守护定位器。近期 v0.1 目标聚焦设备联网、MQTT 上报、网页看板、SOS / 唤醒 / 定位事件闭环，并为后续 AI 主动提醒打基础。
 
-2026-06-27 工程控制面快照已生成：`docs/current/PROJECT_SNAPSHOT.md` 和 `docs/tasks/TASK_TREE.md`。事实状态是：Demo v0.5 runner 已完成并通过 quality/replay；`DEMO-001` 和 `DEMO-004` 已从 `docs/tasks/active/` 移动到 `docs/tasks/done/`；当前没有 `status: active` 的任务包；Git 工作区仍包含待确认的上下文迁移/文档改动。
+2026-06-27 工程控制面快照已生成：`docs/archive/development/PROJECT_SNAPSHOT_20260627.md` 和 `docs/tasks/TASK_TREE.md`。事实状态是：Demo v0.5 runner 已完成并通过 quality/replay；`DEMO-001` 和 `DEMO-004` 已从 `docs/tasks/active/` 移动到 `docs/tasks/done/`；当前没有 `status: active` 的任务包；Git 工作区仍包含待确认的上下文迁移/文档改动。
 
 2026-06-27 开发流程基线调整为 **USB-Free / VPS Message-First / Demo-Driven / Contract-First Walking Skeleton**。新增 `ENG-005 P0 Dev Flow Baseline` 文档基线：后续先建立设备或模拟器到公网 VPS 消息中枢再到 Web Dashboard 的可演示闭环，再按 Firmware、Server-Web、Protocol 三条轨道版本化增强；USB 仅用于烧录、临时调试和失败后日志导出，不作为正式外场运行或验收链路。
 

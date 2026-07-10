@@ -1,20 +1,19 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-09 05:33 UTC
-- 分支: `autodev/egolink-p0` @ 3bf4d52 ops(d1): bind field power evidence and dashboard results [D1]
-- 当前焦点: Director指令(07-08)：模型/飞轮脚手架冻结，全力推 D1 外场验收（3-4h实测→tag v0.1.0→创始人验收），随后 D2 定位精度基线；PWR-001 24h 电池曲线与 FIELD-003 并入本波
-- 已完成任务总数: 135，进行中: 7，暂停: 2
+- 生成时间: 2026-07-10 00:00 UTC
+- 分支: `egolink-p0` @ f3ea0db ops(repo): ignore local workspace artifacts [D5]
+- 当前焦点: v0.1.0 Engineering Alpha release gate: keep main always runnable, validate egolink-p0 as the product-like field-test branch, then merge/tag only if the gate passes.
+- 已完成任务总数: 136，进行中: 7，暂停: 2
 
 ## 里程碑
 
 | 里程碑 | 进度 | 任务 |
 |---|---|---|
-| D1 链路通 | 0/2 | ⏳D1-001 4G板链路通 ⏳PWR-001 |
-| V1-M1 可靠性收尾 | 1/5 | ⏳PWR-001 ⏳FIELD-003 ✅OPS-001 📋STAB-002 LTE长运行/重连门 📋FT-1 可穿戴测试版组装 |
-| V1-M2 家人端 MVP | 0/2 | 📋WEB-003 家人看板 📋围栏引擎+通知通道 |
-| V1-M3 设备端 AI 轨道（核心） | 1/7 | 📋M1-002 端侧会话记录器 ⏸MODEL-001 模型footprint评估 ✅DATA-002 数据飞轮管线 📋M1-005 标注闭环 📋M1-006 场景采集协议执行 📋MotionNet v0.1 训练+端侧PoC 📋FW-004 固件能力真值源 |
-| V1-M4 量产定义与选型 | 0/4 | ⏸PROD-001 📋中国移动模组评估（等资料） 📋MCU渠道报价与选型ADR（等报价） 📋麦克风方案决策 |
-| GOV 治理 | 2/2 | ✅ENG-007 ✅ENG-008 |
+| RELEASE Engineering Alpha Release Gate | 3/3 | ✅v0.1.0 alpha readiness ✅retire autonomous queue ✅progress board |
+| D1 Link-Through Regression | 0/2 | ⏳4G link-through ⏳power baseline |
+| D2 Location Accuracy Baseline | 0/3 | ⏳location baseline tooling ⏳reference-point field run ⏳no-key evidence map |
+| D5 Location Data Flywheel | 0/2 | ⏳location data flywheel 📋location model loop |
+| PRODUCT Product Alpha Gaps | 1/3 | 📋call/SMS verification ✅long power baseline 📋location data policy |
 
 图例: ✅完成 ⏳进行中 ⏸暂停 📋计划中
 
@@ -22,20 +21,21 @@
 
 | 任务 | 标题 | 状态 | 优先级 | 执行者 |
 |---|---|---|---|---|
-| D1-001 | D1 link-through baseline | accepted_for_transition | high | codex |
-| D2-001 | D2 location accuracy baseline and metric gate | active | high | - |
-| D5-001 | D5 location data flywheel mainline | active | high | - |
-| FIELD-003 | Outdoor GNSS acceptance protocol and first measured run | active | high | 暂停到D2：claude+创始人（户外执行） |
+| D1-001 | D1 link-through baseline | accepted_for_transition | high | codex + founder field tests |
+| D2-001 | D2 location accuracy baseline and metric gate | active | high | codex |
+| D5-001 | D5 location data flywheel mainline | active | high | codex |
+| FIELD-003 | Outdoor GNSS acceptance protocol and first measured run | active | high | founder outdoor run + codex postrun |
 | FIELD-004 | D1 outdoor multi-hour field run | continuous_regression | high | - |
-| MAP-001 | D2/D5 map evidence view | active | high | - |
-| MODEL-001 | Model footprint assessment | paused | high | 暂停到D4/D5：codex |
-| PROD-001 | Mass-production requirements definition and module/MCU selection gates | paused | high | 暂停：等D1/创始人输入 |
-| PWR-001 | Real power telemetry and first 24h battery baseline run | active | high | claude+创始人（刷机/挂电池） |
+| MAP-001 | D2/D5 map evidence view | active | high | codex |
+| MODEL-001 | Model footprint assessment | paused | high | - |
+| PROD-001 | Mass-production requirements definition and module/MCU selection gates | paused | high | - |
+| PWR-001 | Real power telemetry and first 24h battery baseline run | active | high | codex + founder field tests |
 
 ## 最近完成
 
 | 任务 | 标题 | 日期 |
 |---|---|---|
+| REL-012 | v0.1.0 Engineering Alpha Release Gate | 2026-07-10 |
 | DATA-032 | D1 labeling decision template validation | 2026-07-07 |
 | MODEL-DEVICE-001 | Tiny Safety Model v0 local train/export loop | 2026-07-07 |
 | MODEL-DEVICE-002 | Tiny Safety firmware dry-run harness | 2026-07-07 |
@@ -43,21 +43,12 @@
 | MODEL-DEVICE-004 | Tiny Safety firmware CLI validator | 2026-07-07 |
 | MODEL-DEVICE-005 | Tiny Safety device loop runner | 2026-07-07 |
 | MODEL-DEVICE-006 | Tiny Safety hardware flash validation | 2026-07-07 |
-| MODEL-DEVICE-007 | Tiny Safety static footprint report | 2026-07-07 |
 
 ## 等待创始人处理
 
-- [ ] 采购：PH2.0 锂电池（建议 ≥1500mAh）+ 临时挂绳外壳
-- [ ] 刷机操作（每次固件更新约 10 分钟）
-- [ ] 24h 电池独立运行（摆放+起止记录）
-- [ ] D1 验收：确认看板地图可见、位置估计出现、上报成功率和电量曲线开始记录
-- [ ] 安全：修改 VPS root 密码（已在聊天中出现过）并考虑关闭 SSH 密码登录（运维手册第1节有步骤）
-- [ ] 一次 2-3 小时户外佩戴走动测试（FIELD-003）
-- [ ] 填写 docs/product/MASS_PRODUCTION_FOUNDER_DECISION_SHEET.md，并据此审阅 docs/product/MASS_PRODUCTION_REQUIREMENTS.md 的 TBD(founder) 值
-- [ ] 商务：中国移动 4G 模组详细资料
-- [ ] 商务：ESP32-S3 / STM32U5A5 / Apollo4 渠道报价
-- [ ] 决策：麦克风/交互硬件方案（V1 端侧 AI 陪伴需要）
-- [ ] 审阅并提交当前工作区变更（或授权我按任务粒度提交）
+- [ ] Confirm whether egolink-p0 should be pushed as a remote branch before any main merge.
+- [ ] For D2 baseline, collect a FIELD-003 outdoor run with reference points when convenient.
+- [ ] Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists.
 
 ## 关键版本 (KR)
 
@@ -70,6 +61,7 @@
 | KR-005 | released |  |
 | KR-006 | released |  |
 | KR-007 | released |  |
+| KR-008 | released |  |
 
 ---
 

@@ -10,6 +10,41 @@ This file records Ego Link P0 engineering key releases. A key release is not a
 product readiness claim. It is a versioned Walking Skeleton point with a frozen
 scope, evidence manifest, release gate, and explicit non-claims.
 
+## KR-008 v0.1.0 Engineering Alpha
+
+- Status: release candidate.
+- Release date: 2026-07-10.
+- Release version: `v0.1.0-engineering-alpha`.
+- Branch: `egolink-p0`.
+- Manifest:
+  `docs/current/key_releases/KR-008_V010_ENGINEERING_ALPHA.json`.
+- Gate tool:
+  `python scripts\run_key_release_gate.py --manifest docs/current/key_releases/KR-008_V010_ENGINEERING_ALPHA.json --json`.
+
+### Release Meaning
+
+KR-008 freezes the current product-like engineering-alpha loop:
+
+```text
+4G board -> LTE -> Message Hub -> Web Dashboard
+          -> bounded field evidence -> D2/D5 location data flywheel
+```
+
+It is suitable for founder/internal engineering field testing and can be merged
+to `main` only when the release gate, full verification, and clean tracked
+worktree checks pass.
+
+### Non-Claims
+
+- No commercial product-readiness or mass-production claim.
+- No product location-accuracy claim.
+- No real calling, SMS, emergency dispatch, or contact-notification claim.
+- No product battery-life claim.
+- No model-performance, model-training-readiness, or on-device AI deployment
+  claim.
+- No training use of private field data without explicit label, privacy,
+  quality, split, and founder approval gates.
+
 ## KR-001 P0 USB-Free Raw LTE Location Walking Skeleton
 
 - Status: released engineering key version.

@@ -1,70 +1,65 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-27
+last_verified: 2026-07-10
 verified_by: codex
 ---
 
-# Git Flow Policy
+# GitHub Flow Policy
 
-EGOLINK currently uses a local GitHub Flow style.
+Ego Link uses a GitHub Flow style adapted for a small founder/operator plus
+Codex development loop.
 
-## Current Integration Line
+## Branch Model
 
-- Current integration branch: `autodev/egolink-p0`
-- Remote status: no remote is currently configured.
-- Until a remote is configured, push, pull request, and remote merge steps are
-  represented by local branch, local review, validation, and local merge/commit
-  discipline.
+- `main` is the release line. It must stay buildable, runnable, and honest
+  about product claims.
+- `egolink-p0` is the current P0 engineering-alpha candidate branch.
+- Task branches may be created from `main` or `egolink-p0` when a narrower
+  review boundary is useful: `task/<TASK-ID>-short-name`.
+- A branch that cannot be run like the current engineering product must not be
+  merged to `main`.
 
-## Branch Rules
+## Remote
 
-- Use one task branch per task.
-- Preferred task branch pattern: `task/<TASK-ID>-short-name`.
-- Keep task branches short-lived and scoped to one task packet.
-- Do not mix firmware, simulator, modeling, and documentation work in one branch
-  unless the active task explicitly allows those paths.
-- Do not commit local secrets, API keys, runtime logs, large build artifacts, or
-  private device logs.
-
-## Task Rules
-
-Each task should have a task packet or equivalent report that records:
-
-- objective;
-- context;
-- allowed paths;
-- out-of-scope boundaries;
-- validation commands;
-- completion evidence;
-- remaining risks.
-
-Completed task packets should live under `docs/tasks/done/`. Active task packets
-should live under `docs/tasks/active/`.
+- Remote: `origin`
+- URL: `https://git.example.invalid/ego/egolink.git`
+- Remote `main` is the protected integration target.
 
 ## Merge Gate
 
-Before merging a task branch into the integration line, run:
+Before merging into `main`:
 
 ```powershell
 python scripts/context_lint.py
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify.ps1
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 ```
 
-If a task is documentation-only and does not affect repository behavior,
-`python scripts/context_lint.py` is the minimum gate. If there is any reasonable
-chance repository behavior changed, run the full verification command too.
+The release candidate must also have:
 
-## Local GitHub Flow Until Remote Exists
+- a clear current-state note in `docs/current/STATUS.md`;
+- a runnable path in `README.md`;
+- no uncommitted tracked files;
+- no secrets, runtime databases, private logs, large build outputs, or raw
+  private device logs committed;
+- explicit non-claims for unverified location accuracy, calling/SMS, model
+  performance, and battery life.
 
-Without a remote, the local equivalent is:
+## Release Tags
 
-1. Start from `autodev/egolink-p0`.
-2. Create `task/<TASK-ID>-short-name`.
-3. Implement only the task scope.
-4. Run the declared validation commands.
-5. Review the diff.
-6. Commit the task.
-7. Merge or fast-forward into `autodev/egolink-p0` after validation.
+Use `v0.x.y` tags only for founder-visible engineering-alpha checkpoints.
 
-When a remote is configured, replace local review/merge with pull request review
-and protected-branch merge rules.
+For v0.1.0 Engineering Alpha, the release meaning is:
+
+```text
+4G board -> LTE -> Message Hub -> Web Dashboard
+          -> field evidence summaries -> D2/D5 location data flywheel
+```
+
+This is not a mass-production or commercial product-readiness claim.
+
+## Push Policy
+
+- Push branches for review or backup when useful.
+- Do not force-push `main`.
+- Prefer merging `egolink-p0` to `main` only when the release gate is green.
+- Delete short-lived task branches after merge when no longer needed.

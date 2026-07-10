@@ -33,7 +33,7 @@ motion candidate
     `docs/safety/`, module `AGENTS.md` files, and `scripts/context_lint.py`.
 - `ENG-001 Control Plane Baseline`
   - Status: completed.
-  - Evidence: `docs/current/PROJECT_SNAPSHOT.md`,
+  - Evidence: `docs/archive/development/PROJECT_SNAPSHOT_20260627.md`,
     `docs/tasks/TASK_TREE.md`, `docs/development/`, and
     `reports/dev_runs/ENG-001-control-plane-baseline.md`.
 - `ENG-002 Control Plane Commit / Remote Policy`
