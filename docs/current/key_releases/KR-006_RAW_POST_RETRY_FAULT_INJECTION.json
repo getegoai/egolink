@@ -1,0 +1,488 @@
+{
+  "release_id": "KR-006",
+  "release_name": "Raw POST Retry Fault Injection Baseline",
+  "release_version": "0.1.0-key-release-006",
+  "status": "released",
+  "release_date": "2026-07-01",
+  "summary": "Sixth Ego Link P0 engineering key release. It freezes the bounded current-boot raw POST retry proof after LTE-008 fix1 and LTE-009: a controlled first raw LTE location_report POST failure is retained as raw evidence, no derived event is created from that failed attempt, the same raw frame is retried successfully, and the USB-Free request_location -> location_report -> location_observation -> ACK loop completes over SIM7670G LTE with retry counters visible.",
+  "firmware_version": "0.1.0-lte009-raw-post-retry-fault",
+  "firmware_test_run_id": "lte009-raw-post-retry-fault-20260701-001",
+  "protocol_profiles": [
+    "egolink.p0.v1",
+    "raw-frame.p0.v1"
+  ],
+  "device_id": "ego-link-r1-connectivity-001",
+  "in_scope": [
+    "LTE-008 fix1 bounded current-boot raw POST retry visibility",
+    "LTE-009 Message Hub fail-once raw POST injection and retention",
+    "LTE-009 default-off firmware fail-once test switch",
+    "LTE-009 validator gate for command-scoped retained injected failure plus retry success",
+    "VPS deployment and in-memory fail-once smoke without modifying GitLab",
+    "ESP-IDF build evidence for the LTE-009 firmware image",
+    "COM4 flash evidence for the LTE-009 image",
+    "USB-Free LTE-009 request_location runtime evidence over SIM7670G LTE",
+    "Released manifest and gate report for raw POST retry fault-injection"
+  ],
+  "non_claims": [
+    "No product readiness claim",
+    "No long LTE stability claim",
+    "No reconnect recovery claim",
+    "No durable offline cache or store-forward claim",
+    "No multi-message outage recovery claim",
+    "No GNSS fix or outdoor GNSS acceptance claim",
+    "No battery accuracy, charging, or product power behavior claim",
+    "No learned model, learned personal-place, route prediction, or positioning-accuracy claim",
+    "No final enclosure, mounting, camera, audio, storage, calling, SMS, or dispatch claim"
+  ],
+  "gates": [
+    {
+      "id": "G1-LTE008-BOUNDED-RETRY-BASE",
+      "status": "PASS",
+      "summary": "LTE-008 fix1 provides the bounded current-boot raw POST retry helper and retry counter visibility used by LTE-009"
+    },
+    {
+      "id": "G2-LTE009-FAIL-ONCE-RETENTION",
+      "status": "PASS",
+      "summary": "Message Hub retains the first marked raw frame as injected_failure, returns HTTP 503, suppresses derived telemetry for that attempt, and accepts the repeated raw frame"
+    },
+    {
+      "id": "G3-LTE009-VPS-SMOKE",
+      "status": "PASS",
+      "summary": "VPS Message Hub deployment and in-memory fail-once smoke passed without modifying the existing GitLab service"
+    },
+    {
+      "id": "G4-LTE009-BUILD-FLASH",
+      "status": "PASS",
+      "summary": "Guarded ESP-IDF build produced the LTE-009 binary and COM4 flash passed after explicit operator confirmation"
+    },
+    {
+      "id": "G5-LTE009-USB-FREE-RUNTIME",
+      "status": "PASS",
+      "summary": "USB-Free runtime validation passed on independent power with USB disconnected, proving one injected first-POST failure followed by retry-derived location_report, location_observation, and ACK"
+    },
+    {
+      "id": "G6-REGRESSION",
+      "status": "PASS",
+      "summary": "focused tests, validator tests, full verify, context_lint, key-release gate, and git diff checks passed"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "status",
+      "path": "docs/current/STATUS.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "active_build",
+      "path": "docs/current/ACTIVE_BUILD.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "release_index",
+      "path": "docs/current/KEY_RELEASES.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "protocol",
+      "path": "docs/development/PROTOCOL.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte_transport",
+      "path": "docs/development/LTE_TRANSPORT.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte008_task_packet",
+      "path": "docs/tasks/done/LTE-008_BOUNDED_RAW_POST_RETRY_OBSERVABILITY.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte009_task_packet",
+      "path": "docs/tasks/done/LTE-009_RAW_POST_RETRY_FAULT_INJECTION.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "rel008_task_packet",
+      "path": "docs/tasks/done/REL-008_KR006_RAW_POST_RETRY_FAULT_RELEASE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "release_gate_script",
+      "path": "scripts/run_key_release_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte_command_loop_validator",
+      "path": "scripts/validate_lte_command_loop.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "hardware_runner",
+      "path": "scripts/run_fw001_hw_r1.ps1",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "message_hub_source",
+      "path": "server/message_hub.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_source",
+      "path": "firmware/mqtt_heartbeat/main/app_main.c",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_kconfig",
+      "path": "firmware/mqtt_heartbeat/components/sim7670_gnss/Kconfig.projbuild",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_binary",
+      "path": "firmware/mqtt_heartbeat/build_lte009_raw_post_retry_fault/egolink_mqtt_heartbeat.bin",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte009_flash_report",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/flash_report.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte009_runtime_report_json",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte009_runtime_report_markdown",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte009_runtime_export",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/test_run_export.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "message_hub_tests",
+      "path": "quality_tests/test_message_hub_server.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_static_tests",
+      "path": "quality_tests/test_mqtt_heartbeat_firmware.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "validator_tests",
+      "path": "quality_tests/test_lte_command_loop_validation.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "runner_tests",
+      "path": "quality_tests/test_fw001_hw_runner.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "key_release_tests",
+      "path": "quality_tests/test_key_release_gate.py",
+      "required": true,
+      "local_only": false
+    }
+  ],
+  "json_checks": [
+    {
+      "id": "LTE009-RUNTIME-PASS",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.result",
+      "operator": "equals",
+      "expected": "PASS",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-USB-FREE",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.connection_path",
+      "operator": "equals",
+      "expected": "independent_power_usb_disconnected",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-FIRMWARE",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.expected_fw_version",
+      "operator": "equals",
+      "expected": "0.1.0-lte009-raw-post-retry-fault",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-TEST-RUN",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.test_run_id",
+      "operator": "equals",
+      "expected": "lte009-raw-post-retry-fault-20260701-001",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-REQUIRE-FAIL-ONCE",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.require_raw_post_fail_once",
+      "operator": "equals",
+      "expected": true,
+      "local_only": true
+    },
+    {
+      "id": "LTE009-COMMAND-OK",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.command.status",
+      "operator": "equals",
+      "expected": "ok",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-LOCATION-REPORT-FRAME",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.location_report.raw_frame.frame_id",
+      "operator": "equals",
+      "expected": "loc-cmd-000031",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-LOCATION-REPORT-LTE",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.location_report.transport.type",
+      "operator": "equals",
+      "expected": "lte",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-OBS-LTE-READY",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.lte.reason_code",
+      "operator": "equals",
+      "expected": "LTE_READY",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-OBS-BELIEF-UNKNOWN",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.location_belief.state",
+      "operator": "equals",
+      "expected": "Unknown",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-OBS-RETRY-POLICY",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.reliability.cache.retry_policy",
+      "operator": "equals",
+      "expected": "single_retry_current_boot",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-OBS-RETRY-ATTEMPTS",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.reliability.cache.retry_attempt_count",
+      "operator": "equals",
+      "expected": 1,
+      "local_only": true
+    },
+    {
+      "id": "LTE009-OBS-RETRY-SUCCESS",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.reliability.cache.retry_success_count",
+      "operator": "equals",
+      "expected": 1,
+      "local_only": true
+    },
+    {
+      "id": "LTE009-OBS-RETRY-FAILURE-ZERO",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.reliability.cache.retry_failure_count",
+      "operator": "equals",
+      "expected": 0,
+      "local_only": true
+    },
+    {
+      "id": "LTE009-OBS-RAW-POST-FAILURE-COUNT",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.reliability.network.raw_post_failure_count",
+      "operator": "equals",
+      "expected": 1,
+      "local_only": true
+    },
+    {
+      "id": "LTE009-ACK-OK",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.ack_summary.ack_status",
+      "operator": "equals",
+      "expected": "ok",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-ACK-HTTP-200",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.ack_summary.poll_status_code",
+      "operator": "equals",
+      "expected": 200,
+      "local_only": true
+    },
+    {
+      "id": "LTE009-RAW-RETRY-STATUS",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.raw_post_retry.status",
+      "operator": "equals",
+      "expected": "ok",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-RAW-RETRY-INJECTED-COUNT",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.raw_post_retry.injected_failure_count",
+      "operator": "equals",
+      "expected": 1,
+      "local_only": true
+    },
+    {
+      "id": "LTE009-RAW-RETRY-OK-LOCATION-COUNT",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.raw_post_retry.ok_location_report_count",
+      "operator": "equals",
+      "expected": 1,
+      "local_only": true
+    },
+    {
+      "id": "LTE009-RAW-RETRY-FIRST-STATUS",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.raw_post_retry.statuses.0",
+      "operator": "equals",
+      "expected": "injected_failure",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-RAW-RETRY-SECOND-STATUS",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/lte_command_loop_report.json",
+      "json_path": "$.raw_post_retry.statuses.1",
+      "operator": "equals",
+      "expected": "ok",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-RAW-RETAINED-INJECTED-STATUS",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/test_run_export.json",
+      "json_path": "$.raw_frames.1.parse_result.status",
+      "operator": "equals",
+      "expected": "injected_failure",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-RAW-RETAINED-INJECTED-ERROR",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/test_run_export.json",
+      "json_path": "$.raw_frames.1.parse_result.error_code",
+      "operator": "equals",
+      "expected": "RAW_POST_FAIL_ONCE_INJECTED",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-RAW-RETAINED-SUPPRESSED-DERIVED",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/test_run_export.json",
+      "json_path": "$.raw_frames.1.parse_result.suppressed_derived_message_type",
+      "operator": "equals",
+      "expected": "event",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-RAW-RETRY-SAME-FRAME-ID",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/test_run_export.json",
+      "json_path": "$.raw_frames.2.frame_id",
+      "operator": "equals",
+      "expected": "loc-cmd-000031",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-RAW-RETRY-SAME-PAYLOAD-HASH",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/test_run_export.json",
+      "json_path": "$.raw_frames.2.raw_payload.sha256",
+      "operator": "equals",
+      "expected": "a924a17f6709f53d164a6c4857918b2e2b0fbea578ab5232752f33a8df1d3e95",
+      "local_only": true
+    },
+    {
+      "id": "LTE009-RAW-RETRY-DERIVED-LOCATION",
+      "path": "reports/field_validation/lte009-raw-post-retry-fault-20260701-001/test_run_export.json",
+      "json_path": "$.raw_frames.2.parse_result.derived_message.event_type",
+      "operator": "equals",
+      "expected": "location_report",
+      "local_only": true
+    }
+  ],
+  "commits": [
+    {
+      "label": "LTE-008 bounded raw POST retry visibility",
+      "commit": "d67c3e8"
+    },
+    {
+      "label": "LTE-008 fix1 runtime pass",
+      "commit": "cf122ee"
+    },
+    {
+      "label": "LTE-009 raw POST fail-once retry gate",
+      "commit": "10e28fe"
+    },
+    {
+      "label": "LTE-009 VPS deploy smoke",
+      "commit": "2762b8d"
+    },
+    {
+      "label": "LTE-009 raw retry validator gate",
+      "commit": "85d799a"
+    },
+    {
+      "label": "LTE-009 validator build version",
+      "commit": "88945b9"
+    },
+    {
+      "label": "LTE-009 USB-Free runtime evidence",
+      "commit": "eb14385"
+    }
+  ],
+  "validation_commands": [
+    "python -m unittest quality_tests.test_message_hub_server quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_fw001_hw_config quality_tests.test_fw001_hw_runner -v",
+    "python -m unittest quality_tests.test_lte_command_loop_validation quality_tests.test_fw001_hw_runner -v",
+    "powershell -ExecutionPolicy Bypass -File scripts\\verify.ps1",
+    "python scripts\\context_lint.py",
+    "powershell -ExecutionPolicy Bypass -File scripts\\prepare_fw001_hw_config.ps1 -HostName 203.0.113.10 -FwVersion 0.1.0-lte009-raw-post-retry-fault -TestRunId lte009-raw-post-retry-fault-20260701-001 -BuildDir build_lte009_raw_post_retry_fault -EnableSim7670Gnss -EnableSim7670LocationObservation -EnableRawPostFailOnceTest -Build -Json",
+    "powershell -ExecutionPolicy Bypass -File scripts\\run_fw001_hw_r1.ps1 -HostName 203.0.113.10 -FwVersion 0.1.0-lte009-raw-post-retry-fault -TestRunId lte009-raw-post-retry-fault-20260701-001 -BuildDir build_lte009_raw_post_retry_fault -EnableSim7670Gnss -EnableSim7670LocationObservation -EnableRawPostFailOnceTest -Flash -FlashPort COM4 -IUnderstandFlashWritesFirmware -Json",
+    "powershell -ExecutionPolicy Bypass -File scripts\\run_fw001_hw_r1.ps1 -HostName 203.0.113.10 -FwVersion 0.1.0-lte009-raw-post-retry-fault -TestRunId lte009-raw-post-retry-fault-20260701-001 -BuildDir build_lte009_raw_post_retry_fault -EnableSim7670Gnss -EnableSim7670LocationObservation -EnableRawPostFailOnceTest -Validate -OperatorConfirmedIndependentPower -OperatorConfirmedUsbDisconnected -LteCommandName request_location -RequireRawPostFailOnce -RequireLteLocationObservation -ValidationTimeoutSec 240 -ValidationPollIntervalSec 5 -Json",
+    "python scripts\\run_key_release_gate.py --manifest docs/current/key_releases/KR-006_RAW_POST_RETRY_FAULT_INJECTION.json --json",
+    "git diff --check"
+  ],
+  "next_release_gates": [
+    "Design reconnect recovery evidence before treating modem/network interruptions as recovered",
+    "Design bounded store-forward semantics before claiming durable offline cache",
+    "Add a later long-run LTE reliability gate only after reconnect and store-forward evidence are visible",
+    "Keep GNSS acceptance, battery/power behavior, and enclosure behavior outside this retry gate"
+  ]
+}

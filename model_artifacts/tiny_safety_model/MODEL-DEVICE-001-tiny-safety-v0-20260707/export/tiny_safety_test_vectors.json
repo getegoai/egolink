@@ -1,0 +1,121 @@
+{
+  "feature_names": [
+    "motion_impact_score",
+    "motion_fall_score",
+    "motion_stationary_norm",
+    "motion_activity_confidence",
+    "motion_device_worn",
+    "audio_distress_score",
+    "audio_impact_sound_score",
+    "audio_unknown_loud_sound_score",
+    "location_outside_safe_zone",
+    "location_dwell_norm",
+    "network_connectivity_score",
+    "network_offline_norm",
+    "device_battery_low",
+    "history_recent_risk_norm"
+  ],
+  "model_id": "MODEL-DEVICE-001-tiny-safety-v0-20260707",
+  "model_version": "0.1.0-synthetic-dry-run",
+  "state_labels": [
+    "normal",
+    "uncertain",
+    "needs_check",
+    "possible_risk"
+  ],
+  "synthetic_only": true,
+  "test_vectors": [
+    {
+      "confidence": 0.526265,
+      "expected_label": "normal",
+      "features": [
+        0.058115,
+        0.0,
+        0.096525,
+        0.892398,
+        1.0,
+        0.0,
+        0.0,
+        0.028852,
+        0.0,
+        0.097111,
+        0.807036,
+        0.0,
+        0.108886,
+        0.026989
+      ],
+      "id": "synthetic-normal-000",
+      "predicted_label": "normal",
+      "synthetic_only": true
+    },
+    {
+      "confidence": 0.403821,
+      "expected_label": "uncertain",
+      "features": [
+        0.306651,
+        0.237168,
+        0.162603,
+        0.563743,
+        0.988331,
+        0.243015,
+        0.200429,
+        0.42108,
+        0.007206,
+        0.136479,
+        0.688245,
+        0.089464,
+        0.187928,
+        0.142297
+      ],
+      "id": "synthetic-uncertain-000",
+      "predicted_label": "uncertain",
+      "synthetic_only": true
+    },
+    {
+      "confidence": 0.385149,
+      "expected_label": "needs_check",
+      "features": [
+        0.510455,
+        0.596894,
+        0.270652,
+        0.716411,
+        0.993821,
+        0.272187,
+        0.44046,
+        0.200944,
+        0.186135,
+        0.153458,
+        0.518084,
+        0.136574,
+        0.215076,
+        0.268487
+      ],
+      "id": "synthetic-needs_check-000",
+      "predicted_label": "needs_check",
+      "synthetic_only": true
+    },
+    {
+      "confidence": 0.552707,
+      "expected_label": "possible_risk",
+      "features": [
+        0.902828,
+        0.806278,
+        0.755239,
+        0.877513,
+        1.0,
+        0.601129,
+        0.756999,
+        0.319108,
+        0.330238,
+        0.238406,
+        0.403199,
+        0.224577,
+        0.36461,
+        0.387571
+      ],
+      "id": "synthetic-possible_risk-000",
+      "predicted_label": "possible_risk",
+      "synthetic_only": true
+    }
+  ]
+}

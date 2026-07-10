@@ -1,0 +1,363 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/location_fusion_sample.schema.json",
+  "title": "Ego Link Location Fusion Dataset Sample",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "sample_id",
+    "sample_type",
+    "device_id",
+    "test_run_id",
+    "window",
+    "lineage",
+    "features",
+    "labels",
+    "quality",
+    "privacy",
+    "split",
+    "generator"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "0.1.0"
+    },
+    "sample_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sample_type": {
+      "type": "string",
+      "enum": [
+        "location_request_window",
+        "passive_observation_window",
+        "known_place_calibration_window",
+        "failure_window"
+      ]
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "test_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_server_received_at",
+        "end_server_received_at",
+        "anchor_event_id",
+        "anchor_cmd_id"
+      ],
+      "properties": {
+        "start_server_received_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "end_server_received_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "anchor_event_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "anchor_cmd_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_frame_refs",
+        "derived_event_refs"
+      ],
+      "properties": {
+        "raw_frame_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "frame_id",
+              "parse_status",
+              "server_received_at"
+            ],
+            "properties": {
+              "frame_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "direction": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "device_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "test_run_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "cmd_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "seq": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "fw_version": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "frame_type": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "server_received_at": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "byte_len": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "sha256": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "crc32": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "parse_status": {
+                "type": "string"
+              },
+              "parser_version": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "derived_message_type": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "derived_event_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "location_state",
+        "label_source",
+        "confidence",
+        "failure_modes"
+      ],
+      "properties": {
+        "location_state": {
+          "type": "string",
+          "enum": [
+            "Fine",
+            "Coarse",
+            "Predicted",
+            "Unknown"
+          ]
+        },
+        "label_source": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "failure_modes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "status",
+        "warnings",
+        "errors"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "warn",
+            "fail"
+          ]
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "privacy_class",
+        "redacted",
+        "collection_allowed",
+        "training_allowed",
+        "raw_audio_allowed",
+        "raw_image_allowed",
+        "exclusion_reasons"
+      ],
+      "properties": {
+        "privacy_class": {
+          "type": "string",
+          "enum": [
+            "engineering",
+            "private_location",
+            "private_media",
+            "unknown"
+          ]
+        },
+        "redacted": {
+          "type": "boolean"
+        },
+        "collection_allowed": {
+          "type": "boolean"
+        },
+        "training_allowed": {
+          "type": "boolean"
+        },
+        "raw_audio_allowed": {
+          "type": "boolean"
+        },
+        "raw_image_allowed": {
+          "type": "boolean"
+        },
+        "exclusion_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "split": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "rule"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "train",
+            "validation",
+            "test",
+            "holdout",
+            "unassigned"
+          ]
+        },
+        "rule": {
+          "type": "string"
+        }
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "created_at"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

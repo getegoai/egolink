@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/message_hub_command.schema.json",
+  "title": "Ego Link P0 Message Hub Command",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "protocol_version",
+    "message_type",
+    "cmd_id",
+    "cmd"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": "egolink.p0.v1"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "message_type": {
+      "const": "command"
+    },
+    "cmd_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cmd": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "test_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "expires_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}

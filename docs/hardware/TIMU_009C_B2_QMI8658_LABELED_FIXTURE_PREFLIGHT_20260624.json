@@ -1,0 +1,161 @@
+{
+  "schema_version": "egolink.imu_acceptance_preflight.v0.1",
+  "report_id": "timu009c-b2-qmi8658-labeled-fixture-preflight-20260624",
+  "generated_at": "2026-06-24T09:52:51.117303+00:00",
+  "calibration_profile_id": "timu009a-qmi8658-engineering-20260624",
+  "hardware_profile": "esp32-s3-touch-amoled-2.06-qmi8658",
+  "calibration_profile_stage": "engineering",
+  "calibration_profile_production_ready": false,
+  "calibration_profile_formal_imu_acceptance": false,
+  "required_evidence_schema_version": "egolink.imu_acceptance_evidence.v0.1",
+  "gate_results": [
+    {
+      "id": "product_mounting_direction_frozen",
+      "label": "Product mounting direction frozen",
+      "passed": false,
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "reason": "status_partial",
+      "next_action": "Freeze the IMU board orientation in the target enclosure or wearable fixture."
+    },
+    {
+      "id": "production_fixture_defined",
+      "label": "Production fixture defined",
+      "passed": false,
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "reason": "status_partial",
+      "next_action": "Define the production or lab fixture used for repeatable IMU calibration."
+    },
+    {
+      "id": "six_face_or_equivalent_accel_calibration_complete",
+      "label": "Six-face or equivalent accel calibration complete",
+      "passed": false,
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "reason": "status_pending",
+      "next_action": "Capture the final accel calibration after the mechanical stack is frozen."
+    },
+    {
+      "id": "signed_static_gyro_bias_complete",
+      "label": "Signed static gyro bias complete",
+      "passed": false,
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "reason": "status_partial",
+      "next_action": "Capture signed static gyro bias with the final mounting orientation."
+    },
+    {
+      "id": "temperature_drift_characterized",
+      "label": "Temperature drift characterized",
+      "passed": false,
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "reason": "status_pending",
+      "next_action": "Characterize accel/gyro drift across the expected operating temperature range."
+    },
+    {
+      "id": "fifo_drdy_interrupt_validated",
+      "label": "FIFO/DRDY interrupt validated",
+      "passed": false,
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "reason": "status_pending",
+      "next_action": "Validate the selected FIFO or DRDY interrupt path on hardware."
+    },
+    {
+      "id": "power_current_waveform_validated",
+      "label": "Power/current waveform validated",
+      "passed": false,
+      "status": "pending",
+      "artifact": null,
+      "observed_on_hardware": false,
+      "reason": "status_pending",
+      "next_action": "Align firmware power markers with PPK2/Otii or equivalent current waveforms."
+    },
+    {
+      "id": "backend_quality_gate_passed",
+      "label": "Backend quality gate passed",
+      "passed": false,
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "reason": "status_partial",
+      "next_action": "Repeat backend live capture, quality gate, and replay with the final configuration."
+    },
+    {
+      "id": "m1_recording_replay_passed",
+      "label": "M1 recording and replay passed",
+      "passed": false,
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "reason": "status_partial",
+      "next_action": "Record and replay an M1 session using the accepted IMU backend evidence."
+    },
+    {
+      "id": "recalibration_triggers_reviewed",
+      "label": "Recalibration triggers reviewed",
+      "passed": false,
+      "status": "partial",
+      "artifact": "docs/hardware/TIMU_009C_B2_QMI8658_LABELED_FIXTURE_REPEATABILITY_CAPTURE_20260624.md",
+      "observed_on_hardware": true,
+      "reason": "status_partial",
+      "next_action": "Review hardware, mounting, firmware, power, and fixture changes against recalibration triggers."
+    }
+  ],
+  "all_evidence_gates_passed": false,
+  "profile_blockers": [
+    "calibration_profile_not_production_stage",
+    "calibration_profile_production_ready_false",
+    "calibration_profile_formal_imu_acceptance_false"
+  ],
+  "failed_gates": [
+    "product_mounting_direction_frozen",
+    "production_fixture_defined",
+    "six_face_or_equivalent_accel_calibration_complete",
+    "signed_static_gyro_bias_complete",
+    "temperature_drift_characterized",
+    "fifo_drdy_interrupt_validated",
+    "power_current_waveform_validated",
+    "backend_quality_gate_passed",
+    "m1_recording_replay_passed",
+    "recalibration_triggers_reviewed"
+  ],
+  "formal_imu_acceptance": false,
+  "motionnet_training_enabled": false,
+  "boundary": {
+    "can_use_for": [
+      "product_acceptance_preflight",
+      "operator_checklist_generation",
+      "missing_evidence_tracking"
+    ],
+    "must_not_use_for": [
+      "claiming_product_imu_acceptance_without_hardware_evidence",
+      "motionnet_training_enablement",
+      "fall_or_impact_product_claims"
+    ],
+    "notes": "This preflight report is a gate ledger. It does not create hardware evidence; each pass requires a hardware-observed artifact for the final mechanical and firmware configuration."
+  },
+  "next_actions": [
+    "Freeze the IMU board orientation in the target enclosure or wearable fixture.",
+    "Define the production or lab fixture used for repeatable IMU calibration.",
+    "Capture the final accel calibration after the mechanical stack is frozen.",
+    "Capture signed static gyro bias with the final mounting orientation.",
+    "Characterize accel/gyro drift across the expected operating temperature range.",
+    "Validate the selected FIFO or DRDY interrupt path on hardware.",
+    "Align firmware power markers with PPK2/Otii or equivalent current waveforms.",
+    "Repeat backend live capture, quality gate, and replay with the final configuration.",
+    "Record and replay an M1 session using the accepted IMU backend evidence.",
+    "Review hardware, mounting, firmware, power, and fixture changes against recalibration triggers.",
+    "calibration_profile_not_production_stage",
+    "calibration_profile_production_ready_false",
+    "calibration_profile_formal_imu_acceptance_false"
+  ]
+}

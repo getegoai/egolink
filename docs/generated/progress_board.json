@@ -1,0 +1,340 @@
+{
+  "generated_at": "2026-07-10 00:00 UTC",
+  "git": {
+    "branch": "egolink-p0",
+    "head": "f3ea0db ops(repo): ignore local workspace artifacts [D5]"
+  },
+  "current_focus": "v0.1.0 Engineering Alpha release gate: keep main always runnable, validate egolink-p0 as the product-like field-test branch, then merge/tag only if the gate passes.",
+  "milestones": [
+    {
+      "id": "RELEASE",
+      "title": "Engineering Alpha Release Gate",
+      "done": 3,
+      "total": 3,
+      "tasks": [
+        {
+          "id": "REL-012",
+          "label": "v0.1.0 alpha readiness",
+          "state": "done"
+        },
+        {
+          "id": "ENG-007",
+          "label": "retire autonomous queue",
+          "state": "done"
+        },
+        {
+          "id": "ENG-008",
+          "label": "progress board",
+          "state": "done"
+        }
+      ]
+    },
+    {
+      "id": "D1",
+      "title": "Link-Through Regression",
+      "done": 0,
+      "total": 2,
+      "tasks": [
+        {
+          "id": "D1-001",
+          "label": "4G link-through",
+          "state": "in_progress"
+        },
+        {
+          "id": "PWR-001",
+          "label": "power baseline",
+          "state": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "D2",
+      "title": "Location Accuracy Baseline",
+      "done": 0,
+      "total": 3,
+      "tasks": [
+        {
+          "id": "D2-001",
+          "label": "location baseline tooling",
+          "state": "in_progress"
+        },
+        {
+          "id": "FIELD-003",
+          "label": "reference-point field run",
+          "state": "in_progress"
+        },
+        {
+          "id": "MAP-001",
+          "label": "no-key evidence map",
+          "state": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "D5",
+      "title": "Location Data Flywheel",
+      "done": 0,
+      "total": 2,
+      "tasks": [
+        {
+          "id": "D5-001",
+          "label": "location data flywheel",
+          "state": "in_progress"
+        },
+        {
+          "id": "MODEL-LOC-001",
+          "label": "location model loop",
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "PRODUCT",
+      "title": "Product Alpha Gaps",
+      "done": 1,
+      "total": 3,
+      "tasks": [
+        {
+          "id": "CALLSMS-001",
+          "label": "call/SMS verification",
+          "state": "planned"
+        },
+        {
+          "id": "PWR-002",
+          "label": "long power baseline",
+          "state": "done"
+        },
+        {
+          "id": "PRIVACY-LOC-001",
+          "label": "location data policy",
+          "state": "planned"
+        }
+      ]
+    }
+  ],
+  "active_tasks": [
+    {
+      "id": "D1-001",
+      "title": "D1 link-through baseline",
+      "state": "in_progress",
+      "packet_status": "accepted_for_transition",
+      "priority": "high",
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/D1-001_D1_LINK_THROUGH_BASELINE.md"
+    },
+    {
+      "id": "D2-001",
+      "title": "D2 location accuracy baseline and metric gate",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/D2-001_LOCATION_ACCURACY_BASELINE.md"
+    },
+    {
+      "id": "D5-001",
+      "title": "D5 location data flywheel mainline",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/D5-001_LOCATION_DATA_FLYWHEEL_MAINLINE.md"
+    },
+    {
+      "id": "FIELD-003",
+      "title": "Outdoor GNSS acceptance protocol and first measured run",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md"
+    },
+    {
+      "id": "FIELD-004",
+      "title": "D1 outdoor multi-hour field run",
+      "state": "in_progress",
+      "packet_status": "continuous_regression",
+      "priority": "high",
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md"
+    },
+    {
+      "id": "MAP-001",
+      "title": "D2/D5 map evidence view",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/MAP-001_D2_D5_MAP_EVIDENCE_VIEW.md"
+    },
+    {
+      "id": "MODEL-001",
+      "title": "Model footprint assessment",
+      "state": "paused",
+      "packet_status": "paused",
+      "priority": "high",
+      "date": "2026-07-04",
+      "path": "D:/pywork/egolink/docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md"
+    },
+    {
+      "id": "PROD-001",
+      "title": "Mass-production requirements definition and module/MCU selection gates",
+      "state": "paused",
+      "packet_status": "paused",
+      "priority": "high",
+      "date": "2026-07-04",
+      "path": "D:/pywork/egolink/docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md"
+    },
+    {
+      "id": "PWR-001",
+      "title": "Real power telemetry and first 24h battery baseline run",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-07-09",
+      "path": "D:/pywork/egolink/docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md"
+    }
+  ],
+  "recent_done": [
+    {
+      "id": "REL-012",
+      "title": "v0.1.0 Engineering Alpha Release Gate",
+      "state": "done",
+      "packet_status": "completed",
+      "priority": "",
+      "date": "2026-07-10",
+      "path": "D:/pywork/egolink/docs/tasks/done/REL-012_V010_ENGINEERING_ALPHA_RELEASE_GATE.md"
+    },
+    {
+      "id": "DATA-032",
+      "title": "D1 labeling decision template validation",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/DATA-032_D1_LABELING_DECISION_VALIDATION.md"
+    },
+    {
+      "id": "MODEL-DEVICE-001",
+      "title": "Tiny Safety Model v0 local train/export loop",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-001_TINY_SAFETY_MODEL_V0.md"
+    },
+    {
+      "id": "MODEL-DEVICE-002",
+      "title": "Tiny Safety firmware dry-run harness",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-002_TINY_SAFETY_FIRMWARE_HARNESS.md"
+    },
+    {
+      "id": "MODEL-DEVICE-003",
+      "title": "Tiny Safety firmware CLI closed loop",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-003_TINY_SAFETY_FIRMWARE_CLI_LOOP.md"
+    },
+    {
+      "id": "MODEL-DEVICE-004",
+      "title": "Tiny Safety firmware CLI validator",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-004_TINY_SAFETY_FIRMWARE_CLI_VALIDATOR.md"
+    },
+    {
+      "id": "MODEL-DEVICE-005",
+      "title": "Tiny Safety device loop runner",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-005_TINY_SAFETY_DEVICE_LOOP_RUNNER.md"
+    },
+    {
+      "id": "MODEL-DEVICE-006",
+      "title": "Tiny Safety hardware flash validation",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-07",
+      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-006_TINY_SAFETY_HARDWARE_FLASH_VALIDATION.md"
+    }
+  ],
+  "operator_asks": [
+    "Confirm whether egolink-p0 should be pushed as a remote branch before any main merge.",
+    "For D2 baseline, collect a FIELD-003 outdoor run with reference points when convenient.",
+    "Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists."
+  ],
+  "assignees": {
+    "REL-012": "codex",
+    "ENG-007": "codex",
+    "ENG-008": "codex",
+    "D1-001": "codex + founder field tests",
+    "PWR-001": "codex + founder field tests",
+    "D2-001": "codex",
+    "FIELD-003": "founder outdoor run + codex postrun",
+    "MAP-001": "codex",
+    "D5-001": "codex",
+    "MODEL-LOC-001": "codex",
+    "CALLSMS-001": "blocked until explicit hardware task",
+    "PWR-002": "planned",
+    "PRIVACY-LOC-001": "planned"
+  },
+  "key_releases": [
+    {
+      "id": "KR-001",
+      "status": "released",
+      "title": ""
+    },
+    {
+      "id": "KR-002",
+      "status": "release_candidate",
+      "title": ""
+    },
+    {
+      "id": "KR-003",
+      "status": "released",
+      "title": ""
+    },
+    {
+      "id": "KR-004",
+      "status": "released",
+      "title": ""
+    },
+    {
+      "id": "KR-005",
+      "status": "released",
+      "title": ""
+    },
+    {
+      "id": "KR-006",
+      "status": "released",
+      "title": ""
+    },
+    {
+      "id": "KR-007",
+      "status": "released",
+      "title": ""
+    },
+    {
+      "id": "KR-008",
+      "status": "released",
+      "title": ""
+    }
+  ],
+  "counts": {
+    "active": 7,
+    "paused": 2,
+    "open_total": 9,
+    "done_total": 136
+  }
+}

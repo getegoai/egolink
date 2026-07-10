@@ -1,0 +1,893 @@
+[
+  {
+    "id": "normal_walk",
+    "description": "Normal walking with healthy device and network state.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "normal_walk",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "personal_safety",
+      "features": {
+        "motion": {
+          "activity_label": "walking",
+          "activity_confidence": 0.9,
+          "impact_score": 0.05,
+          "fall_score": 0.03,
+          "stationary_seconds": 0.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.1,
+          "distress_score": 0.02,
+          "impact_sound_score": 0.03,
+          "unknown_loud_sound_score": 0.02,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": false,
+          "dwell_seconds": 0.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.85,
+          "base_online": true,
+          "upload_available": true,
+          "signal_level": 3,
+          "offline_seconds": 0.0
+        },
+        "device": {
+          "battery_percent": 78.0,
+          "charging": false,
+          "privacy_mode": false,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "none",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": false,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "normal_walk"
+      }
+    },
+    "expected": {
+      "risk_type": "none",
+      "recommended_action": "ignore",
+      "priority": "info",
+      "forbidden_evidence": []
+    }
+  },
+  {
+    "id": "manual_sos",
+    "description": "User presses the physical SOS control.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "manual_sos",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "personal_safety",
+      "features": {
+        "motion": {
+          "activity_label": "walking",
+          "activity_confidence": 0.9,
+          "impact_score": 0.05,
+          "fall_score": 0.03,
+          "stationary_seconds": 0.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.1,
+          "distress_score": 0.02,
+          "impact_sound_score": 0.03,
+          "unknown_loud_sound_score": 0.02,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": false,
+          "dwell_seconds": 0.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.85,
+          "base_online": true,
+          "upload_available": true,
+          "signal_level": 3,
+          "offline_seconds": 0.0
+        },
+        "device": {
+          "battery_percent": 78.0,
+          "charging": false,
+          "privacy_mode": false,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "none",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": true,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "manual_sos"
+      }
+    },
+    "expected": {
+      "risk_type": "manual_sos",
+      "recommended_action": "urgent_escalation",
+      "priority": "critical",
+      "forbidden_evidence": []
+    }
+  },
+  {
+    "id": "post_impact_inactivity",
+    "description": "Strong impact followed by twenty seconds of inactivity.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "post_impact_inactivity",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "personal_safety",
+      "features": {
+        "motion": {
+          "activity_label": "impact",
+          "activity_confidence": 0.9,
+          "impact_score": 0.92,
+          "fall_score": 0.03,
+          "stationary_seconds": 20.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.1,
+          "distress_score": 0.02,
+          "impact_sound_score": 0.76,
+          "unknown_loud_sound_score": 0.02,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": false,
+          "dwell_seconds": 0.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.85,
+          "base_online": true,
+          "upload_available": true,
+          "signal_level": 3,
+          "offline_seconds": 0.0
+        },
+        "device": {
+          "battery_percent": 78.0,
+          "charging": false,
+          "privacy_mode": false,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "none",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": false,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "post_impact_inactivity"
+      }
+    },
+    "expected": {
+      "risk_type": "post_impact_inactivity",
+      "recommended_action": "ask_user",
+      "priority": "high",
+      "forbidden_evidence": []
+    }
+  },
+  {
+    "id": "post_impact_no_response",
+    "description": "Strong impact, long inactivity, and no response from the user.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "post_impact_no_response",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "personal_safety",
+      "features": {
+        "motion": {
+          "activity_label": "impact",
+          "activity_confidence": 0.9,
+          "impact_score": 0.95,
+          "fall_score": 0.03,
+          "stationary_seconds": 55.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.1,
+          "distress_score": 0.02,
+          "impact_sound_score": 0.82,
+          "unknown_loud_sound_score": 0.02,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": false,
+          "dwell_seconds": 0.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.85,
+          "base_online": true,
+          "upload_available": true,
+          "signal_level": 3,
+          "offline_seconds": 0.0
+        },
+        "device": {
+          "battery_percent": 78.0,
+          "charging": false,
+          "privacy_mode": false,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "no_response",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": false,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "post_impact_no_response"
+      }
+    },
+    "expected": {
+      "risk_type": "post_impact_inactivity",
+      "recommended_action": "urgent_escalation",
+      "priority": "critical",
+      "forbidden_evidence": []
+    }
+  },
+  {
+    "id": "possible_fall",
+    "description": "Motion model reports a high fall score without long inactivity yet.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "possible_fall",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "personal_safety",
+      "features": {
+        "motion": {
+          "activity_label": "fall_candidate",
+          "activity_confidence": 0.9,
+          "impact_score": 0.05,
+          "fall_score": 0.91,
+          "stationary_seconds": 5.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.1,
+          "distress_score": 0.02,
+          "impact_sound_score": 0.03,
+          "unknown_loud_sound_score": 0.02,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": false,
+          "dwell_seconds": 0.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.85,
+          "base_online": true,
+          "upload_available": true,
+          "signal_level": 3,
+          "offline_seconds": 0.0
+        },
+        "device": {
+          "battery_percent": 78.0,
+          "charging": false,
+          "privacy_mode": false,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "none",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": false,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "possible_fall"
+      }
+    },
+    "expected": {
+      "risk_type": "possible_fall",
+      "recommended_action": "ask_user",
+      "priority": "high",
+      "forbidden_evidence": []
+    }
+  },
+  {
+    "id": "distress_audio",
+    "description": "Audio gate detects a strong distress signal.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "distress_audio",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "personal_safety",
+      "features": {
+        "motion": {
+          "activity_label": "walking",
+          "activity_confidence": 0.9,
+          "impact_score": 0.05,
+          "fall_score": 0.03,
+          "stationary_seconds": 0.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.88,
+          "distress_score": 0.91,
+          "impact_sound_score": 0.03,
+          "unknown_loud_sound_score": 0.02,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": false,
+          "dwell_seconds": 0.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.85,
+          "base_online": true,
+          "upload_available": true,
+          "signal_level": 3,
+          "offline_seconds": 0.0
+        },
+        "device": {
+          "battery_percent": 78.0,
+          "charging": false,
+          "privacy_mode": false,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "none",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": false,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "distress_audio"
+      }
+    },
+    "expected": {
+      "risk_type": "distress_audio",
+      "recommended_action": "ask_user",
+      "priority": "high",
+      "forbidden_evidence": []
+    }
+  },
+  {
+    "id": "child_geofence",
+    "description": "Child safety mode remains outside a configured safe zone.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "child_geofence",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "child_safety",
+      "features": {
+        "motion": {
+          "activity_label": "walking",
+          "activity_confidence": 0.9,
+          "impact_score": 0.05,
+          "fall_score": 0.03,
+          "stationary_seconds": 0.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.1,
+          "distress_score": 0.02,
+          "impact_sound_score": 0.03,
+          "unknown_loud_sound_score": 0.02,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": true,
+          "dwell_seconds": 180.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.85,
+          "base_online": true,
+          "upload_available": true,
+          "signal_level": 3,
+          "offline_seconds": 0.0
+        },
+        "device": {
+          "battery_percent": 78.0,
+          "charging": false,
+          "privacy_mode": false,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "none",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": false,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "child_geofence"
+      }
+    },
+    "expected": {
+      "risk_type": "geofence_exit",
+      "recommended_action": "ask_user",
+      "priority": "high",
+      "forbidden_evidence": []
+    }
+  },
+  {
+    "id": "abnormal_dwell",
+    "description": "Device remains stationary at one location for an unusually long period.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "abnormal_dwell",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "personal_safety",
+      "features": {
+        "motion": {
+          "activity_label": "stationary",
+          "activity_confidence": 0.94,
+          "impact_score": 0.05,
+          "fall_score": 0.03,
+          "stationary_seconds": 0.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.1,
+          "distress_score": 0.02,
+          "impact_sound_score": 0.03,
+          "unknown_loud_sound_score": 0.02,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": false,
+          "dwell_seconds": 1200.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.85,
+          "base_online": true,
+          "upload_available": true,
+          "signal_level": 3,
+          "offline_seconds": 0.0
+        },
+        "device": {
+          "battery_percent": 78.0,
+          "charging": false,
+          "privacy_mode": false,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "none",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": false,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "abnormal_dwell"
+      }
+    },
+    "expected": {
+      "risk_type": "abnormal_dwell",
+      "recommended_action": "send_summary",
+      "priority": "warning",
+      "forbidden_evidence": []
+    }
+  },
+  {
+    "id": "communication_loss",
+    "description": "Device has remained offline and cannot reach the base.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "communication_loss",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "personal_safety",
+      "features": {
+        "motion": {
+          "activity_label": "walking",
+          "activity_confidence": 0.9,
+          "impact_score": 0.05,
+          "fall_score": 0.03,
+          "stationary_seconds": 0.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.1,
+          "distress_score": 0.02,
+          "impact_sound_score": 0.03,
+          "unknown_loud_sound_score": 0.02,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": false,
+          "dwell_seconds": 0.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.0,
+          "base_online": false,
+          "upload_available": false,
+          "signal_level": 0,
+          "offline_seconds": 1200.0
+        },
+        "device": {
+          "battery_percent": 78.0,
+          "charging": false,
+          "privacy_mode": false,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "none",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": false,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "communication_loss"
+      }
+    },
+    "expected": {
+      "risk_type": "communication_loss",
+      "recommended_action": "local_prompt",
+      "priority": "high",
+      "forbidden_evidence": []
+    }
+  },
+  {
+    "id": "low_battery",
+    "description": "Battery falls below the warning threshold while the link is still available.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "low_battery",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "personal_safety",
+      "features": {
+        "motion": {
+          "activity_label": "walking",
+          "activity_confidence": 0.9,
+          "impact_score": 0.05,
+          "fall_score": 0.03,
+          "stationary_seconds": 0.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.1,
+          "distress_score": 0.02,
+          "impact_sound_score": 0.03,
+          "unknown_loud_sound_score": 0.02,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": false,
+          "dwell_seconds": 0.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.85,
+          "base_online": true,
+          "upload_available": true,
+          "signal_level": 3,
+          "offline_seconds": 0.0
+        },
+        "device": {
+          "battery_percent": 9.0,
+          "charging": false,
+          "privacy_mode": false,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "none",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": false,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "low_battery"
+      }
+    },
+    "expected": {
+      "risk_type": "low_battery",
+      "recommended_action": "send_summary",
+      "priority": "warning",
+      "forbidden_evidence": []
+    }
+  },
+  {
+    "id": "ambiguous_loud_event",
+    "description": "Uncertain loud event should request more evidence rather than escalate.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "ambiguous_loud_event",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "personal_safety",
+      "features": {
+        "motion": {
+          "activity_label": "walking",
+          "activity_confidence": 0.9,
+          "impact_score": 0.05,
+          "fall_score": 0.03,
+          "stationary_seconds": 0.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.1,
+          "distress_score": 0.02,
+          "impact_sound_score": 0.03,
+          "unknown_loud_sound_score": 0.66,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": false,
+          "dwell_seconds": 0.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.85,
+          "base_online": true,
+          "upload_available": true,
+          "signal_level": 3,
+          "offline_seconds": 0.0
+        },
+        "device": {
+          "battery_percent": 78.0,
+          "charging": false,
+          "privacy_mode": false,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "none",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": false,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "ambiguous_loud_event"
+      }
+    },
+    "expected": {
+      "risk_type": "uncertain",
+      "recommended_action": "capture_more",
+      "priority": "warning",
+      "forbidden_evidence": []
+    }
+  },
+  {
+    "id": "privacy_restricted_impact",
+    "description": "Impact event in privacy mode must not request raw audio or image evidence.",
+    "input": {
+      "contract_version": "1.0.0",
+      "input_id": "privacy_restricted_impact",
+      "device_id": "ego-link-sim-001",
+      "timestamp_ms": 1781952000000,
+      "mode": "personal_safety",
+      "features": {
+        "motion": {
+          "activity_label": "impact",
+          "activity_confidence": 0.9,
+          "impact_score": 0.93,
+          "fall_score": 0.03,
+          "stationary_seconds": 22.0,
+          "device_worn": true
+        },
+        "audio": {
+          "speech_score": 0.1,
+          "distress_score": 0.02,
+          "impact_sound_score": 0.8,
+          "unknown_loud_sound_score": 0.02,
+          "quality_score": 0.9
+        },
+        "location": {
+          "fix_valid": true,
+          "speed_mps": 1.2,
+          "outside_safe_zone": false,
+          "dwell_seconds": 0.0,
+          "route_deviation_m": 0.0,
+          "quality_score": 0.9
+        },
+        "network": {
+          "connectivity_score": 0.85,
+          "base_online": true,
+          "upload_available": true,
+          "signal_level": 3,
+          "offline_seconds": 0.0
+        },
+        "device": {
+          "battery_percent": 78.0,
+          "charging": false,
+          "privacy_mode": true,
+          "camera_available": true,
+          "microphone_available": true
+        },
+        "history": {
+          "recent_risk_count_5m": 0,
+          "last_user_response": "none",
+          "seconds_since_last_contact": 20.0
+        },
+        "user": {
+          "sos_pressed": false,
+          "cancel_pressed": false
+        }
+      },
+      "evidence_available": {
+        "audio_clip": false,
+        "single_image": false,
+        "fresh_gnss": true,
+        "imu_window": true
+      },
+      "metadata": {
+        "scenario": "privacy_restricted_impact"
+      }
+    },
+    "expected": {
+      "risk_type": "post_impact_inactivity",
+      "recommended_action": "ask_user",
+      "priority": "high",
+      "forbidden_evidence": [
+        "audio_5s",
+        "image_single"
+      ]
+    }
+  }
+]

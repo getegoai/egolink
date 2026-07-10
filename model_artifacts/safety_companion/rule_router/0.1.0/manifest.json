@@ -1,0 +1,29 @@
+{
+  "artifact_name": "safety_rule_router",
+  "artifact_version": "0.1.0",
+  "artifact_type": "deterministic_rule_baseline",
+  "contract_version": "1.0.0",
+  "runtime": "Python reference; firmware adapter pending",
+  "files": [
+    {
+      "path": "model_artifacts/safety_companion/rule_router/0.1.0/model_config.json",
+      "sha256": "c77245ea2a6c9caa30508a7d3e6594bcdb806bbd6086bc71f0d6ca088e85d279",
+      "bytes": 1115
+    },
+    {
+      "path": "model_artifacts/safety_companion/rule_router/0.1.0/thresholds.json",
+      "sha256": "c77245ea2a6c9caa30508a7d3e6594bcdb806bbd6086bc71f0d6ca088e85d279",
+      "bytes": 1115
+    },
+    {
+      "path": "model_artifacts/safety_companion/rule_router/0.1.0/model_card.md",
+      "sha256": "a00fc914f82c2f53c650b8c7309e2cb9e216d7cf0d99590bace931b7b684e3f9",
+      "bytes": 1168
+    },
+    {
+      "path": "model_artifacts/safety_companion/rule_router/0.1.0/include/safety_router_thresholds.h",
+      "sha256": "2d6777dc76851126313a76e986f5205c16fe884a5f1e63d5c47e849cddf80617",
+      "bytes": 1731
+    }
+  ]
+}

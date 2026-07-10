@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/message_hub_event.schema.json",
+  "title": "Ego Link P0 Message Hub Event",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "protocol_version",
+    "device_id",
+    "ts",
+    "seq",
+    "message_type",
+    "event_type",
+    "priority"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": "egolink.p0.v1"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fw_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ts": {
+      "type": "string",
+      "minLength": 1
+    },
+    "server_received_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "boot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "uptime_s": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "message_type": {
+      "const": "event"
+    },
+    "event_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "debug",
+        "normal",
+        "warning",
+        "critical"
+      ]
+    },
+    "source": {
+      "type": "string"
+    },
+    "source_status": {
+      "type": "string",
+      "enum": [
+        "verified",
+        "observed",
+        "mock",
+        "pc_side_verified",
+        "unknown",
+        "unverified"
+      ]
+    },
+    "reset_reason": {
+      "type": "string",
+      "enum": [
+        "unknown",
+        "poweron",
+        "external",
+        "software",
+        "panic",
+        "interrupt_watchdog",
+        "task_watchdog",
+        "watchdog",
+        "deepsleep",
+        "brownout",
+        "sdio"
+      ]
+    },
+    "boot_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "boot_uptime_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "rtt_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "last_error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "command": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "reliability": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "network": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "cache": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "power": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "gnss": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "lte": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "wifi": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "imu": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "location_belief": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "test_run_id": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

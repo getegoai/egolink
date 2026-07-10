@@ -1,0 +1,71 @@
+{
+  "builder_version": "model-device-009.0",
+  "counts": {
+    "expected_labels": {
+      "uncertain": 24
+    },
+    "predicted_labels": {
+      "needs_check": 20,
+      "normal": 4
+    },
+    "priority_reasons": {
+      "low_confidence": 24,
+      "low_margin": 24,
+      "synthetic_oracle_disagreement": 24
+    },
+    "records_available": 24,
+    "records_exported": 24
+  },
+  "gates": {
+    "external_escalation_enabled": false,
+    "field_or_private_data_read": false,
+    "hardware_contacted": false,
+    "human_review_completed": false,
+    "model_behavior_changed": false,
+    "model_training": "not_run",
+    "real_accuracy_claimed": false,
+    "synthetic_only": true,
+    "training_dataset_manifest": "not_created"
+  },
+  "generated_at": "2026-07-07T15:05:00+00:00",
+  "known_gaps": [
+    "Records are synthetic stress cases only and are not reviewed labels.",
+    "Synthetic oracle labels are triage hints, not training targets.",
+    "No field samples, private data, candidate DBs, hardware, or firmware are contacted.",
+    "No real-world accuracy, latency, RAM, flash, power, or release-readiness claim is made."
+  ],
+  "next_step": "Review these records as UI/workflow fixtures, then repeat the same review handoff with consented real field/session candidates before training.",
+  "outputs": {
+    "manifest": "tiny_safety_hard_case_review_manifest.json",
+    "markdown": "tiny_safety_hard_case_review.md",
+    "records_jsonl": "tiny_safety_hard_case_review_records.jsonl",
+    "sha256": "sha256.txt"
+  },
+  "reason": "synthetic_hard_cases_exported_for_human_review",
+  "review_policy": {
+    "allowed_labels": [
+      "normal",
+      "uncertain",
+      "needs_check",
+      "possible_risk",
+      "exclude_from_training"
+    ],
+    "record_state": "needs_human_review",
+    "reviewer_label_required_before_training": true,
+    "synthetic_oracle_is_truth_source": false,
+    "training_allowed": false
+  },
+  "review_set_id": "MODEL-DEVICE-009-tiny-safety-hardcase-review-20260707",
+  "schema_version": "egolink.tiny_safety_hard_case_review_manifest.v0.1",
+  "source": {
+    "artifact_hash": "504de9511f18478002596c9ac90fcfd6941f08238f6f1b72c7307407adcbbbed",
+    "model_id": "MODEL-DEVICE-001-tiny-safety-v0-20260707",
+    "model_version": "0.1.0-synthetic-dry-run",
+    "source_hard_case_examples": 24,
+    "stress_case_count": 540,
+    "stress_report_hash": "281915c921547dff6b397702af889ba96c87a6bfe0c613650cbf389f0456802c",
+    "stress_report_path": "model_artifacts/tiny_safety_model/MODEL-DEVICE-001-tiny-safety-v0-20260707/evaluation/tiny_safety_synthetic_stress.json",
+    "stress_schema_version": "egolink.tiny_safety_synthetic_stress.v0.1"
+  },
+  "status": "ready_for_synthetic_review"
+}

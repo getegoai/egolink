@@ -1,0 +1,212 @@
+menu "Ego Link SIM7670G GNSS"
+
+config EGOLINK_SIM7670_GNSS_ENABLED
+    bool "Enable SIM7670G firmware GNSS AT query"
+    default n
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    help
+        Opt-in FW-002B path. When enabled, request_location queries the
+        SIM7670G module through UART AT commands and reports a real module
+        no-fix/fix state. It does not prove outdoor fix or LTE data transport.
+
+config EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    bool "Enable SIM7670G LTE registration and cell state query"
+    default n
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    help
+        Opt-in LTE-001A observability path. When enabled, status and telemetry
+        uploads include SIM, registration, PDP, APN, cell fingerprint, and
+        signal state queried through SIM7670G UART AT commands. It does not
+        route Message Hub HTTP traffic through LTE or prove LTE data transport.
+
+config EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    bool "Enable SIM7670G LTE HTTP uplink probe"
+    default n
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    help
+        Opt-in LTE-002 path. When enabled, firmware skips Wi-Fi as the runtime
+        data path and uses SIM7670G AT HTTP commands to POST a bounded
+        lte_http_probe event to the Message Hub telemetry endpoint. This is a
+        bounded LTE HTTP uplink slice only; command polling, ACK, reconnect,
+        and long-run stability remain separate tasks.
+
+config EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    bool "Enable SIM7670G LTE HTTP command poll and ACK"
+    default n
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    help
+        Opt-in LTE-003 path. When enabled, firmware skips Wi-Fi as the runtime
+        data path, polls the Message Hub command queue through SIM7670G AT HTTP
+        GET, and ACKs one harmless command through SIM7670G AT HTTP POST.
+        This does not prove long-run reconnect behavior or product LTE
+        acceptance.
+
+config EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+    bool "Enable SIM7670G raw LTE cell location observation upload"
+    default n
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED && EGOLINK_SIM7670_LTE_STATUS_ENABLED && EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    help
+        Opt-in LOC-004A path. When enabled, request_location keeps uploading
+        the raw LTE location_report and additionally uploads a raw
+        location_observation with firmware-side SIM7670G cell/LTE evidence.
+        This makes no GNSS fix and weak-location cases explainable without
+        depending on USB logs. It does not infer a user position from cell
+        evidence yet.
+
+config EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED
+    bool "Enable D1 periodic raw LTE location upload"
+    default n
+    depends on EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+    help
+        Opt-in D1 field mode. When enabled, the raw LTE command-loop task keeps
+        running and periodically uploads a commandless location_report plus
+        location_observation pair. This is for live Dashboard field shakedowns;
+        it does not claim GNSS accuracy, battery life, long LTE stability, or
+        production power behavior.
+
+config EGOLINK_SIM7670_D1_PERIODIC_LOCATION_INTERVAL_SEC
+    int "D1 periodic location upload interval seconds"
+    default 60
+    range 15 3600
+    depends on EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED
+
+config EGOLINK_SIM7670_UART_NUM
+    int "SIM7670G UART number"
+    default 1
+    range 1 2
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED || EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED
+
+config EGOLINK_SIM7670_UART_RX_GPIO
+    int "SIM7670G UART RX GPIO"
+    default 17
+    range 0 48
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED || EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED
+    help
+        Official Waveshare ESP-IDF examples for ESP32-S3 + SIM7670X use
+        ESP32-S3 RX GPIO17 connected to module TX.
+
+config EGOLINK_SIM7670_UART_TX_GPIO
+    int "SIM7670G UART TX GPIO"
+    default 18
+    range 0 48
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED || EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED
+    help
+        Official Waveshare ESP-IDF examples for ESP32-S3 + SIM7670X use
+        ESP32-S3 TX GPIO18 connected to module RX.
+
+config EGOLINK_SIM7670_UART_BAUD
+    int "SIM7670G UART baud"
+    default 115200
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED || EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED
+
+config EGOLINK_SIM7670_AT_TIMEOUT_MS
+    int "SIM7670G AT command timeout milliseconds"
+    default 3000
+    range 500 30000
+    depends on EGOLINK_SIM7670_GNSS_ENABLED || EGOLINK_SIM7670_LTE_STATUS_ENABLED || EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED || EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED
+
+config EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS
+    int "SIM7670G HTTPACTION timeout milliseconds"
+    default 30000
+    range 5000 120000
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+
+config EGOLINK_SIM7670_LTE_HTTP_SET_CID_PARAM
+    bool "Send AT+HTTPPARA CID before SIM7670G HTTP action"
+    default n
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+    help
+        Some SIMCom HTTP examples for older modules set HTTPPARA CID manually,
+        while the A7600/A7670-style HTTP flow activates PDP during HTTPINIT and
+        does not require it. Keep this disabled for the SIM7670G thin slice
+        unless hardware evidence shows this module accepts and needs it.
+
+config EGOLINK_SIM7670_LTE_HTTP_READY_WAIT_SEC
+    int "SIM7670G LTE HTTP probe readiness wait seconds"
+    default 120
+    range 0 600
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+    help
+        Maximum time LTE-002 waits for the SIM7670G status query to report
+        LTE_READY before attempting HTTP. A value of 0 attempts immediately.
+
+config EGOLINK_SIM7670_LTE_HTTP_READY_POLL_SEC
+    int "SIM7670G LTE HTTP probe readiness poll seconds"
+    default 5
+    range 1 60
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+
+config EGOLINK_SIM7670_LTE_HTTP_PROBE_MAX_ATTEMPTS
+    int "SIM7670G LTE HTTP probe max attempts"
+    default 6
+    range 1 60
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    help
+        Maximum number of LTE HTTP probe rounds to attempt before the LTE-002
+        slice gives up. Each round refreshes LTE readiness and then posts the
+        attempt/result telemetry pair.
+
+config EGOLINK_SIM7670_LTE_HTTP_PROBE_RETRY_INTERVAL_SEC
+    int "SIM7670G LTE HTTP probe retry interval seconds"
+    default 20
+    range 0 600
+    depends on EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    help
+        Delay between failed LTE HTTP probe rounds. Keeping this bounded lets
+        USB-Free validation observe retries without turning LTE-002 into a
+        long-run reconnect supervisor.
+
+config EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS
+    int "SIM7670G LTE HTTP command poll max attempts"
+    default 120
+    range 1 360
+    depends on EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    help
+        Maximum number of LTE command poll rounds before the LTE-003 thin
+        slice stops. This keeps the field run bounded while giving operators
+        enough time to switch to independent power and start the validator
+        without making LTE-003 a long-run reconnect supervisor.
+
+config EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_INTERVAL_SEC
+    int "SIM7670G LTE HTTP command poll interval seconds"
+    default 5
+    range 1 120
+    depends on EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+
+config EGOLINK_SIM7670_LTE_HTTP_RAW_POST_RETRY_MAX
+    int "SIM7670G raw-frame HTTP POST retry attempts"
+    default 1
+    range 0 3
+    depends on EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    help
+        Maximum immediate retry attempts after a raw-frame LTE HTTP POST
+        fails. This is a bounded current-boot retry, not durable offline
+        cache or store-forward recovery.
+
+config EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST
+    bool "Inject one server-side raw POST failure for retry validation"
+    default n
+    depends on EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    help
+        Test-only LTE-009 switch. When enabled, raw LTE location_report
+        payloads request one Message Hub fail-once injection so the first
+        POST is retained as raw evidence and rejected with HTTP 503, then the
+        bounded current-boot retry can succeed. Do not enable this for normal
+        field runtime or product demos.
+
+config EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST
+    bool "Emit LTE-011 reconnect/store-forward evidence test fields"
+    default n
+    depends on EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    help
+        Test-only LTE-011 switch. When enabled, raw LTE location observation
+        and ACK payloads emit reconnect/store-forward evidence fields in the
+        shape required by the offline LTE-010 gate. This does not implement
+        real modem reconnect recovery, durable storage, or queue replay.
+
+config EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
+    bool "Send AT+CGNSSPWR=1 before GNSS query"
+    default y
+    depends on EGOLINK_SIM7670_GNSS_ENABLED
+
+endmenu

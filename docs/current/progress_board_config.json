@@ -1,0 +1,108 @@
+{
+  "current_focus": "v0.1.0 Engineering Alpha release gate: keep main always runnable, validate egolink-p0 as the product-like field-test branch, then merge/tag only if the gate passes.",
+  "recent_done_limit": 8,
+  "milestones": [
+    {
+      "id": "RELEASE",
+      "title": "Engineering Alpha Release Gate",
+      "tasks": [
+        {
+          "id": "REL-012",
+          "label": "v0.1.0 alpha readiness"
+        },
+        {
+          "id": "ENG-007",
+          "label": "retire autonomous queue"
+        },
+        {
+          "id": "ENG-008",
+          "label": "progress board"
+        }
+      ]
+    },
+    {
+      "id": "D1",
+      "title": "Link-Through Regression",
+      "tasks": [
+        {
+          "id": "D1-001",
+          "label": "4G link-through"
+        },
+        {
+          "id": "PWR-001",
+          "label": "power baseline"
+        }
+      ]
+    },
+    {
+      "id": "D2",
+      "title": "Location Accuracy Baseline",
+      "tasks": [
+        {
+          "id": "D2-001",
+          "label": "location baseline tooling"
+        },
+        {
+          "id": "FIELD-003",
+          "label": "reference-point field run"
+        },
+        {
+          "id": "MAP-001",
+          "label": "no-key evidence map"
+        }
+      ]
+    },
+    {
+      "id": "D5",
+      "title": "Location Data Flywheel",
+      "tasks": [
+        {
+          "id": "D5-001",
+          "label": "location data flywheel"
+        },
+        {
+          "id": "MODEL-LOC-001",
+          "label": "location model loop"
+        }
+      ]
+    },
+    {
+      "id": "PRODUCT",
+      "title": "Product Alpha Gaps",
+      "tasks": [
+        {
+          "id": "CALLSMS-001",
+          "label": "call/SMS verification"
+        },
+        {
+          "id": "PWR-002",
+          "label": "long power baseline"
+        },
+        {
+          "id": "PRIVACY-LOC-001",
+          "label": "location data policy"
+        }
+      ]
+    }
+  ],
+  "assignees": {
+    "REL-012": "codex",
+    "ENG-007": "codex",
+    "ENG-008": "codex",
+    "D1-001": "codex + founder field tests",
+    "PWR-001": "codex + founder field tests",
+    "D2-001": "codex",
+    "FIELD-003": "founder outdoor run + codex postrun",
+    "MAP-001": "codex",
+    "D5-001": "codex",
+    "MODEL-LOC-001": "codex",
+    "CALLSMS-001": "blocked until explicit hardware task",
+    "PWR-002": "planned",
+    "PRIVACY-LOC-001": "planned"
+  },
+  "operator_asks": [
+    "Confirm whether egolink-p0 should be pushed as a remote branch before any main merge.",
+    "For D2 baseline, collect a FIELD-003 outdoor run with reference points when convenient.",
+    "Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists."
+  ]
+}

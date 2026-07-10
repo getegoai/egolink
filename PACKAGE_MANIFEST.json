@@ -1,0 +1,56 @@
+{
+  "package": "EGOLINK_HARDWARE_CONTEXT_V0_3",
+  "version": "0.3",
+  "files": [
+    {
+      "path": "HARDWARE_CONTEXT_PACKAGE_README.md",
+      "bytes": 1247,
+      "sha256": "e233ba6a6ed4d687a3368e2b80a5cdbdd14183c2e0d02a6548dbd042196e0429"
+    },
+    {
+      "path": "docs/hardware/AGENTS_HARDWARE_SNIPPET.md",
+      "bytes": 901,
+      "sha256": "92375aa1cc8500d642ef216f4a5cff53a9ca23337ca602b8c7ed2d883fd23a75"
+    },
+    {
+      "path": "docs/hardware/CODEX_HARDWARE_INTEGRATION_TASKS.md",
+      "bytes": 2162,
+      "sha256": "f87a13d34b1328f1ce6434c2cea7aaeb10d5310affa018636bc668f38c5af69d"
+    },
+    {
+      "path": "docs/hardware/CODEX_HARDWARE_PROMPT.md",
+      "bytes": 1480,
+      "sha256": "e0ceb06a86b315a126f9e334041b1615b677047526f40caef3c3d7844aceb8e5"
+    },
+    {
+      "path": "docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md",
+      "bytes": 6185,
+      "sha256": "b00a4e008b14a8b0c81a90e2ecffd71aed7ea5d2276b88da615e3ca34e6c2323"
+    },
+    {
+      "path": "docs/hardware/EGOLINK_硬件开发采购清单_v1.xlsx",
+      "bytes": 34570,
+      "sha256": "9965c72313ddf203174e4e9fc4d75633fd0fb3804a70917ba38078e641804d59"
+    },
+    {
+      "path": "docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md",
+      "bytes": 2326,
+      "sha256": "bf91efe31453c21635b1e14c5c37d68400d09883c1b8f8a9c2f1c9a7ca4f15e6"
+    },
+    {
+      "path": "docs/hardware/PLATFORM_PORTABILITY_ARCHITECTURE.md",
+      "bytes": 3430,
+      "sha256": "bca7cf4090d8483f7b0e6210949173563a5e61432c461994dde5189b38be7801"
+    },
+    {
+      "path": "docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md",
+      "bytes": 2725,
+      "sha256": "c3358b96deee6152280c722d13bc9500bd78758ac4178c4388efdf2218610d6a"
+    },
+    {
+      "path": "docs/hardware/README.md",
+      "bytes": 1124,
+      "sha256": "d4dff16521d995e646fd959838d37b7c3ef0ad26b6db4001e3dba4b6bb5b3519"
+    }
+  ]
+}

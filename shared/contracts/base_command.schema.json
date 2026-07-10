@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/base_command.schema.json",
+  "title": "Ego Base or PC Simulator Command",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "command_id",
+    "device_id",
+    "issued_at_ms",
+    "expires_at_ms",
+    "command",
+    "args",
+    "requires_user_consent",
+    "safety_class"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "1.0.0"
+    },
+    "command_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issued_at_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "expires_at_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "command": {
+      "type": "string",
+      "enum": [
+        "play_prompt",
+        "ask_user",
+        "capture_audio",
+        "capture_image",
+        "request_location",
+        "set_mode",
+        "acknowledge_event",
+        "start_call",
+        "cancel_action",
+        "update_policy"
+      ]
+    },
+    "args": {
+      "type": "object"
+    },
+    "requires_user_consent": {
+      "type": "boolean"
+    },
+    "safety_class": {
+      "type": "string",
+      "enum": [
+        "reversible",
+        "sensitive",
+        "emergency"
+      ]
+    },
+    "correlation_event_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

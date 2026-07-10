@@ -1,0 +1,251 @@
+{
+  "release_id": "KR-008",
+  "release_name": "v0.1.0 Engineering Alpha",
+  "release_version": "v0.1.0-engineering-alpha",
+  "status": "release_candidate",
+  "release_date": "2026-07-10",
+  "summary": "Engineering Alpha release gate for the product-like Ego Link P0 field-test loop: 4G board telemetry over LTE to the Message Hub, Web Dashboard live view, bounded field evidence summaries, and D2/D5 location data-flywheel intake. This release is suitable for founder/internal engineering field testing, not mass-production or commercial product claims.",
+  "device_id": "ego-link-r1-connectivity-001",
+  "branch": "egolink-p0",
+  "remote": "https://git.example.invalid/ego/egolink.git",
+  "protocol_profiles": [
+    "egolink.p0.v1",
+    "raw-frame.p0.v1"
+  ],
+  "in_scope": [
+    "Local product-like run instructions in README",
+    "Message Hub and Web Dashboard source paths",
+    "D1 live/field observation tooling",
+    "D5 location field-evidence intake",
+    "D2 location accuracy baseline tooling",
+    "D2/D5 no-key map/evidence visibility",
+    "GitHub Flow release-line policy with main as always runnable"
+  ],
+  "out_of_scope": [
+    "Commercial product readiness",
+    "Mass-production enclosure or PCB readiness",
+    "Real calling, SMS, emergency dispatch, or contact notification",
+    "Product location-accuracy claims",
+    "Model performance claims",
+    "Battery-life or long-power claims",
+    "Training use of private field data without explicit review gates"
+  ],
+  "gates": [
+    {
+      "id": "G1-RUNNABLE-PATH",
+      "status": "PASS",
+      "summary": "README documents the product-like local run path for Message Hub, Web Dashboard, D1 observer, D5 field evidence, and D2/D5 pipeline"
+    },
+    {
+      "id": "G2-CURRENT-FLOW",
+      "status": "PASS",
+      "summary": "Current flow is GitHub Flow plus direct founder/Codex collaboration; retired autonomous queue code is removed from active workspace"
+    },
+    {
+      "id": "G3-LINK-THROUGH-EVIDENCE",
+      "status": "PASS",
+      "summary": "D1 field observation evidence exists for the 4G board -> LTE -> VPS -> Dashboard loop with successful samples"
+    },
+    {
+      "id": "G4-D5-FIELD-EVIDENCE",
+      "status": "PASS",
+      "summary": "FIELD-004 outdoor samples are summarized into D5 field evidence and a data-flywheel review packet without raw coordinates or cell-ID lists in committed summaries"
+    },
+    {
+      "id": "G5-D2-D5-TOOLING",
+      "status": "PASS",
+      "summary": "D2 baseline and D5 data-flywheel offline tooling are present and covered by tests"
+    },
+    {
+      "id": "G6-NON-CLAIMS",
+      "status": "PASS",
+      "summary": "Release explicitly blocks unverified call/SMS, product location accuracy, model performance, battery life, and training-readiness claims"
+    },
+    {
+      "id": "G7-REGRESSION",
+      "status": "PASS",
+      "summary": "Release requires context lint, full verify, clean tracked worktree, and key-release gate pass before main merge/tag"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "readme",
+      "path": "README.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "status",
+      "path": "docs/current/STATUS.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "active_build",
+      "path": "docs/current/ACTIVE_BUILD.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "git_flow",
+      "path": "docs/development/GIT_FLOW.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "dev_flow",
+      "path": "docs/development/DEV_FLOW.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "board_matrix",
+      "path": "docs/hardware/BOARD_MATRIX.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "message_hub",
+      "path": "server/message_hub.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "web_dashboard",
+      "path": "server/message_hub.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "pc_simulator",
+      "path": "pc_simulator/app.py",
+      "required": false,
+      "local_only": false
+    },
+    {
+      "kind": "d1_observer",
+      "path": "scripts/observe_d1_field_run.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "d5_field_evidence",
+      "path": "scripts/summarize_location_field_evidence.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "d2_d5_pipeline",
+      "path": "scripts/run_location_d2_d5_pipeline.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "field_observation_report",
+      "path": "reports/d1_field_observation/FIELD-004-outdoor-20260709-0900/d1_field_observation_report.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "location_field_evidence_report",
+      "path": "reports/location_field_evidence/FIELD-004-outdoor-20260709-0900-field-evidence/location_field_evidence.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "data_flywheel_status",
+      "path": "reports/data_flywheel/FIELD-004-outdoor-20260709-0900-field-flywheel/data_flywheel_status.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "location_field_evidence_tests",
+      "path": "quality_tests/test_location_field_evidence.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "location_data_flywheel_tests",
+      "path": "quality_tests/test_location_data_flywheel.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "key_release_gate",
+      "path": "scripts/run_key_release_gate.py",
+      "required": true,
+      "local_only": false
+    }
+  ],
+  "json_checks": [
+    {
+      "id": "FIELD004-OBSERVATION-PASS",
+      "path": "reports/d1_field_observation/FIELD-004-outdoor-20260709-0900/d1_field_observation_report.json",
+      "json_path": "$.result",
+      "operator": "equals",
+      "expected": "PASS",
+      "local_only": true
+    },
+    {
+      "id": "FIELD004-SAMPLE-COUNT",
+      "path": "reports/location_field_evidence/FIELD-004-outdoor-20260709-0900-field-evidence/location_field_evidence.json",
+      "json_path": "$.summary.samples_total",
+      "operator": "equals",
+      "expected": 132,
+      "local_only": true
+    },
+    {
+      "id": "FIELD004-GNSS-FIX-SAMPLES",
+      "path": "reports/location_field_evidence/FIELD-004-outdoor-20260709-0900-field-evidence/location_field_evidence.json",
+      "json_path": "$.summary.gnss_fix_samples",
+      "operator": "equals",
+      "expected": 4,
+      "local_only": true
+    },
+    {
+      "id": "D5-FIELD-FLYWHEEL-NEEDS-REVIEW",
+      "path": "reports/data_flywheel/FIELD-004-outdoor-20260709-0900-field-flywheel/data_flywheel_status.json",
+      "json_path": "$.status",
+      "operator": "equals",
+      "expected": "needs_review",
+      "local_only": true
+    },
+    {
+      "id": "D5-FIELD-FLYWHEEL-RECORDS",
+      "path": "reports/data_flywheel/FIELD-004-outdoor-20260709-0900-field-flywheel/data_flywheel_status.json",
+      "json_path": "$.counts.records_total",
+      "operator": "equals",
+      "expected": 6,
+      "local_only": true
+    },
+    {
+      "id": "D5-FIELD-FLYWHEEL-MODEL-NOT-READY",
+      "path": "reports/data_flywheel/FIELD-004-outdoor-20260709-0900-field-flywheel/data_flywheel_status.json",
+      "json_path": "$.readiness.model_training_ready",
+      "operator": "equals",
+      "expected": false,
+      "local_only": true
+    }
+  ],
+  "non_claims": [
+    "No commercial product-readiness or mass-production claim",
+    "No product location-accuracy claim; D2 median error, fix rate, and TTFF baseline still require reference-point field evidence",
+    "No real calling, SMS, emergency dispatch, or contact-notification claim",
+    "No product battery-life claim",
+    "No model-performance, model-training-readiness, or on-device AI deployment claim",
+    "No training use of private field data without explicit label, privacy, quality, split, and founder approval gates",
+    "No raw private coordinates, raw payload bytes, or cell-ID lists are committed as release summaries"
+  ],
+  "validation_commands": [
+    "python scripts/context_lint.py",
+    "python -m unittest quality_tests.test_key_release_gate quality_tests.test_location_field_evidence quality_tests.test_location_data_flywheel quality_tests.test_location_d2_d5_pipeline -v",
+    "python scripts/run_key_release_gate.py --manifest docs/current/key_releases/KR-008_V010_ENGINEERING_ALPHA.json --json",
+    "powershell -ExecutionPolicy Bypass -File scripts/verify.ps1"
+  ],
+  "next_release_gates": [
+    "D2 reference-point location baseline with median error, fix rate, and TTFF",
+    "MODEL-LOC-001 location model loop with offline comparison to baseline",
+    "CALLSMS-001 explicit call/SMS hardware validation",
+    "Long power baseline with accepted battery-life evidence"
+  ]
+}

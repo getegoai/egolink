@@ -1,0 +1,27 @@
+* text=auto
+
+.gitattributes text eol=lf
+.gitignore text eol=lf
+
+*.c text eol=lf
+*.h text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+*.lock text eol=lf
+*.sh text eol=lf
+*.txt text eol=lf
+CMakeLists.txt text eol=lf
+sdkconfig text eol=lf
+sdkconfig.defaults text eol=lf
+
+*.ps1 text eol=crlf
+scripts/run_safety_companion_tests.ps1 text eol=lf
+
+*.bin binary
+*.jpg binary
+*.jpeg binary
+*.png binary

@@ -1,0 +1,16 @@
+menu "Ego Link Camera Smoke"
+
+config EGOLINK_WIFI_SSID
+    string "Wi-Fi SSID"
+    default ""
+    help
+        Optional Wi-Fi SSID. When empty, the firmware only captures one local
+        frame and prints the result on UART.
+
+config EGOLINK_WIFI_PASSWORD
+    string "Wi-Fi password"
+    default ""
+    help
+        Optional Wi-Fi password for the smoke-test HTTP camera endpoint.
+
+endmenu

@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/model_output.schema.json",
+  "title": "Safety Companion Router Output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "output_id",
+    "input_id",
+    "model_name",
+    "model_version",
+    "risk_type",
+    "risk_score",
+    "confidence",
+    "priority",
+    "recommended_action",
+    "requires_base",
+    "evidence_request",
+    "reason_codes",
+    "safety_rule_applied",
+    "decision_ttl_ms"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "1.0.0"
+    },
+    "output_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "input_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "risk_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "manual_sos",
+        "possible_fall",
+        "possible_collision",
+        "post_impact_inactivity",
+        "distress_audio",
+        "geofence_exit",
+        "abnormal_dwell",
+        "communication_loss",
+        "low_battery",
+        "privacy_violation",
+        "uncertain"
+      ]
+    },
+    "risk_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "high",
+        "critical"
+      ]
+    },
+    "recommended_action": {
+      "type": "string",
+      "enum": [
+        "ignore",
+        "local_prompt",
+        "ask_user",
+        "capture_more",
+        "send_summary",
+        "send_evidence",
+        "urgent_escalation"
+      ]
+    },
+    "requires_base": {
+      "type": "boolean"
+    },
+    "evidence_request": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "audio_5s",
+          "image_single",
+          "gnss_refresh",
+          "imu_10s",
+          "user_confirmation"
+        ]
+      }
+    },
+    "reason_codes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "safety_rule_applied": {
+      "type": "boolean"
+    },
+    "decision_ttl_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3600000
+    },
+    "debug": {
+      "type": "object"
+    }
+  }
+}

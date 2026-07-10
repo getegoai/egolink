@@ -1,0 +1,141 @@
+{
+  "release_id": "KR-002",
+  "release_name": "Location Memory And Explainable No-Fix Gate",
+  "release_version": "0.1.0-key-release-002-rc1",
+  "status": "release_candidate",
+  "release_date": "2026-06-30",
+  "summary": "Second Ego Link P0 engineering key-release candidate. It adds VPS-side location memory and a rerunnable gate so later no-fix reports are explainable and do not erase prior useful calibration.",
+  "firmware_version": "unchanged-from-KR-001",
+  "protocol_profiles": [
+    "egolink.p0.v1",
+    "raw-frame.p0.v1"
+  ],
+  "device_id": "synthetic-or-existing-message-hub-device",
+  "in_scope": [
+    "Message Hub location_memory persistence table",
+    "Derived location memory from location_observation.location_belief",
+    "Derived Fine memory from location_report fix=true",
+    "No-fix preservation of prior memory through last_no_fix",
+    "Active Predicted location_belief when latest GNSS report is no-fix but memory exists",
+    "/api/state, Dashboard, and test-run export visibility",
+    "Hardware-free location memory gate script"
+  ],
+  "non_claims": [
+    "No product readiness claim",
+    "No firmware-side multi-source collection claim",
+    "No learned personal-place or route-prediction claim",
+    "No outdoor GNSS acceptance claim",
+    "No long LTE stability or reconnect recovery claim",
+    "No final enclosure, mounting, battery, charging, or power behavior claim",
+    "No emergency calling, SMS, dispatch, camera, audio, or storage acceptance claim"
+  ],
+  "gates": [
+    {
+      "id": "G1-SERVER",
+      "status": "PASS",
+      "summary": "Message Hub persists and exposes location memory without changing the device wire protocol"
+    },
+    {
+      "id": "G2-NO-FIX-EXPLAINABILITY",
+      "status": "PASS",
+      "summary": "Later no-fix report preserves prior memory and derives active Predicted belief"
+    },
+    {
+      "id": "G3-GATE-TOOL",
+      "status": "PASS",
+      "summary": "validate_location_memory_gate.py provides a hardware-free rerunnable gate"
+    },
+    {
+      "id": "G4-REGRESSION",
+      "status": "PASS",
+      "summary": "focused tests, context lint, full verify, git diff checks, and release gate pass"
+    },
+    {
+      "id": "G5-VPS-DEPLOY",
+      "status": "PASS",
+      "summary": "Message Hub deployed to the VPS and live synthetic location memory gate passed"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "task_packet",
+      "path": "docs/tasks/done/LOC-003_LOCATION_MEMORY_GATE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "protocol",
+      "path": "docs/development/PROTOCOL.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "location_engine",
+      "path": "docs/development/LOCATION_ENGINE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "release_status",
+      "path": "docs/current/KEY_RELEASES.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "server_code",
+      "path": "server/message_hub.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "gate_script",
+      "path": "scripts/validate_location_memory_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "server_tests",
+      "path": "quality_tests/test_message_hub_server.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "gate_tests",
+      "path": "quality_tests/test_location_memory_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "gate_report_json",
+      "path": "reports/location_memory/location-memory-gate-kr002-20260630/location_memory_gate_report.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "gate_report_markdown",
+      "path": "reports/location_memory/location-memory-gate-kr002-20260630/location_memory_gate_report.md",
+      "required": true,
+      "local_only": true
+    }
+  ],
+  "commits": [
+    {
+      "label": "KR-002 location memory gate implementation",
+      "commit": "65acd60"
+    }
+  ],
+  "validation_commands": [
+    "python -m unittest quality_tests.test_message_hub_server quality_tests.test_message_hub_dashboard quality_tests.test_location_memory_gate -v",
+    "python -m py_compile server/message_hub.py scripts/validate_location_memory_gate.py",
+    "python scripts\\validate_location_memory_gate.py --hub-url <hub-url> --test-run-id location-memory-gate-kr002-20260630 --output-dir reports\\location_memory\\location-memory-gate-kr002-20260630 --json",
+    "python scripts\\context_lint.py",
+    "powershell -ExecutionPolicy Bypass -File scripts\\verify.ps1",
+    "git diff --check",
+    "python scripts\\run_key_release_gate.py --manifest docs/current/key_releases/KR-002_LOCATION_MEMORY_GATE.json --json"
+  ],
+  "next_release_gates": [
+    "Add richer LOC-004 belief rules for known places, decayed confidence, and source quality",
+    "Add firmware-side real cell, Wi-Fi, IMU, and power observations behind explicit tasks",
+    "Run long LTE stability only after transport, reset, power, command, and location failures are explainable"
+  ]
+}

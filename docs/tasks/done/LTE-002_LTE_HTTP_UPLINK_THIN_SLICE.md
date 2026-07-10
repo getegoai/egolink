@@ -1,0 +1,408 @@
+---
+title: LTE HTTP Uplink Thin-Slice
+task_id: LTE-002
+status: completed
+last_verified: 2026-06-28
+context:
+  - docs/current/ACTIVE_BUILD.md
+  - docs/current/STATUS.md
+  - docs/development/LTE_TRANSPORT.md
+  - docs/development/PROTOCOL.md
+  - docs/tasks/done/LTE-001B_USB_FREE_LTE_STATUS_OBSERVATION.md
+  - firmware/AGENTS.md
+  - firmware/mqtt_heartbeat/README.md
+  - scripts/run_fw001_hw_r1.ps1
+allowed_paths:
+  - docs/current/STATUS.md
+  - docs/current/ACTIVE_BUILD.md
+  - docs/development/LTE_TRANSPORT.md
+  - docs/development/PROTOCOL.md
+  - docs/tasks/TASK_TREE.md
+  - docs/tasks/done/LTE-002_LTE_HTTP_UPLINK_THIN_SLICE.md
+  - firmware/mqtt_heartbeat/components/sim7670_gnss/Kconfig.projbuild
+  - firmware/mqtt_heartbeat/components/sim7670_gnss/include/sim7670_gnss.h
+  - firmware/mqtt_heartbeat/components/sim7670_gnss/sim7670_gnss.c
+  - firmware/mqtt_heartbeat/main/app_main.c
+  - scripts/prepare_fw001_hw_config.ps1
+  - scripts/run_fw001_hw_r1.ps1
+  - scripts/diag_lte_http_at.py
+  - scripts/validate_lte_http_probe.py
+  - quality_tests/test_fw001_hw_config.py
+  - quality_tests/test_fw001_hw_runner.py
+  - quality_tests/test_fw002b_sim7670_gnss_firmware.py
+  - quality_tests/test_lte_http_at_diag.py
+  - quality_tests/test_lte_http_probe_validation.py
+  - quality_tests/test_mqtt_heartbeat_firmware.py
+---
+
+# LTE-002 LTE HTTP Uplink Thin-Slice
+
+## Goal
+
+Send at least one Message Hub telemetry event from the ESP32-S3 through the
+SIM7670G LTE HTTP stack with Wi-Fi disabled for the run. The event should make
+`transport.type=lte` visible in `/api/state` and preserve LTE/cell context so
+HTTP failures are not confused with GNSS, Web, or command-loop failures.
+
+## Scope
+
+- Add an opt-in firmware mode:
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED`.
+- Reuse the existing SIM7670G UART AT backend and LTE status query.
+- Skip Wi-Fi initialization, device registration over Wi-Fi, command polling,
+  heartbeat task, and sensor task while the LTE HTTP probe mode is enabled.
+- POST a compact `event_type=lte_http_probe` telemetry event to the existing
+  VPS Message Hub `/telemetry` endpoint through SIM7670G AT HTTP commands.
+- Upload additive `transport`, `cell`, `lte`, and `lte_http` evidence when the
+  LTE POST reaches the Message Hub.
+- Add a Message Hub-side validator that requires fresh LTE telemetry,
+  `transport.type=lte`, matching firmware/test-run IDs, and a successful HTTP
+  probe result.
+
+## Out Of Scope
+
+- Do not implement LTE command polling or ACK; that is `LTE-003`.
+- Do not run a long LTE stability or reconnect gate.
+- Do not replace the default MQTT path or the existing Wi-Fi HTTP development
+  path.
+- Do not claim battery, charging, power, enclosure GNSS, or product LTE
+  acceptance.
+- Do not modify GitLab or unrelated VPS services.
+
+## Operator Actions Required
+
+1. Connect the connectivity node back to USB.
+2. Confirm the flash port explicitly, expected currently `COM4`.
+3. After flashing, connect independent power and disconnect USB.
+4. Confirm USB-Free runtime before validation starts.
+
+## Acceptance
+
+- Firmware builds with SIM7670G LTE status and LTE HTTP probe enabled.
+- The flashed device runs without USB as a runtime data path.
+- Wi-Fi is disabled by firmware mode during the LTE HTTP probe.
+- The VPS Message Hub receives a fresh `lte_http_probe` event for the expected
+  `test_run_id`.
+- `/api/state` derives `observability.transport.type=lte`.
+- The validation report records LTE/cell state, HTTP status, and evidence
+  paths under ignored `reports/field_validation/`.
+
+## Known Boundary
+
+If the SIM7670G HTTP stack fails before any request reaches the VPS, the VPS
+cannot receive that failure detail over the same failed path. In that case the
+validator must fail explicitly as "no fresh LTE telemetry reached Message Hub"
+and keep LTE-001B `LTE_READY` status evidence as the preceding readiness
+context.
+
+## Build Evidence
+
+- Firmware version: `0.1.0-lte002-lte-http-probe`
+- Test run ID: `lte002-lte-http-probe-20260628-141656`
+- Build directory:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe/egolink_mqtt_heartbeat.bin`
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
+- Flash result: PASS on `COM4`; ESP32-S3 detected, bootloader/app/partition
+  table written, hashes verified, hard reset completed.
+- Flash evidence:
+  `reports/field_validation/lte002-lte-http-probe-20260628-141656/flash_report.md`
+- Runtime validation: not run; requires independent power and USB disconnected.
+
+## Validation So Far
+
+- `python -m unittest quality_tests.test_fw001_hw_config quality_tests.test_fw001_hw_runner quality_tests.test_fw002b_sim7670_gnss_firmware quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_lte_http_probe_validation -v`
+  passed with 31 tests.
+- `python scripts/context_lint.py` passed.
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` passed with
+  253 tests.
+
+## Validation Attempt 1
+
+- Firmware version: `0.1.0-lte002-lte-http-probe`
+- Test run ID: `lte002-lte-http-probe-20260628-141656`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte002-lte-http-probe-20260628-141656/lte_http_probe_report.json`
+- Result: FAIL.
+- Started at: `2026-06-28T06:30:38.364317+00:00`
+- Completed at: `2026-06-28T06:34:41.148585+00:00`
+- Failure: no fresh `lte_http_probe` telemetry reached the Message Hub.
+- VPS state remained on the prior LTE-001B fix1 Wi-Fi message lineage:
+  `observability.transport.type=mock_4g_over_wifi` and firmware
+  `0.1.0-lte001b-observe-fix1`.
+- Interpretation: LTE-002 did not reach the VPS over SIM7670G HTTP. The first
+  fix candidate adds a bounded LTE readiness wait before AT HTTP POST so the
+  module has time to re-register and activate PDP after independent-power boot.
+
+## Fix1 Build And Flash
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix1`
+- Test run ID: `lte002-lte-http-probe-fix1-20260628-143631`
+- Change: wait up to `CONFIG_EGOLINK_SIM7670_LTE_HTTP_READY_WAIT_SEC=120`
+  seconds, polling every `CONFIG_EGOLINK_SIM7670_LTE_HTTP_READY_POLL_SEC=5`
+  seconds, for SIM7670G LTE status to report `LTE_READY` before attempting
+  HTTP.
+- Build directory:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix1/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix1/egolink_mqtt_heartbeat.bin`
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
+- Flash result: PASS on `COM4`; ESP32-S3 detected, bootloader/app/partition
+  table written, hashes verified, hard reset completed.
+- Flash evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix1-20260628-143631/flash_report.md`
+- Runtime validation: FAIL as recorded in Validation Attempt 2.
+
+## Validation Attempt 2
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix1`
+- Test run ID: `lte002-lte-http-probe-fix1-20260628-143631`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix1-20260628-143631/lte_http_probe_report.json`
+- Result: FAIL.
+- Started at: `2026-06-28T08:12:31.014047+00:00`
+- Completed at: `2026-06-28T08:16:34.309635+00:00`
+- Failure: no fresh `lte_http_probe` telemetry reached the Message Hub.
+- VPS state remained on the prior LTE-001B fix1 Wi-Fi message lineage:
+  `observability.transport.type=mock_4g_over_wifi` and firmware
+  `0.1.0-lte001b-observe-fix1`.
+- Interpretation: readiness wait alone is not sufficient for the USB-Free
+  thin slice. Because the firmware only sends one attempt/result pair, a
+  transient SIM7670G HTTP stack failure or an attempt outside the validator
+  window leaves no retry path and no VPS-visible failure detail.
+
+## Fix2 Candidate
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix2`
+- Test run ID: `lte002-lte-http-probe-fix2-20260628-161844`
+- Change: keep Wi-Fi disabled for the LTE HTTP probe path, but retry the probe
+  as a bounded loop: up to
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_MAX_ATTEMPTS=6`, waiting
+  `CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_RETRY_INTERVAL_SEC=20` seconds
+  between failed rounds. Each round refreshes LTE readiness before posting.
+- Build directory:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix2/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix2/egolink_mqtt_heartbeat.bin`
+- Focused tests:
+  `python -m unittest quality_tests.test_fw002b_sim7670_gnss_firmware quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_lte_http_probe_validation -v`
+  passed with 19 tests.
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
+- Flash result: PASS on `COM4`; ESP32-S3 detected, bootloader/app/partition
+  table written, hashes verified, hard reset completed.
+- Flash evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix2-20260628-161844/flash_report.md`
+- Runtime validation: FAIL as recorded in Validation Attempt 3.
+
+## Validation Attempt 3
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix2`
+- Test run ID: `lte002-lte-http-probe-fix2-20260628-161844`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix2-20260628-161844/lte_http_probe_report.json`
+- Result: FAIL.
+- Started at: `2026-06-28T08:55:08.460247+00:00`
+- Completed at: `2026-06-28T09:02:11.118918+00:00`
+- Failure: no fresh `lte_http_probe` telemetry reached the Message Hub.
+- VPS state remained on the prior LTE-001B fix1 Wi-Fi message lineage:
+  `observability.transport.type=mock_4g_over_wifi` and firmware
+  `0.1.0-lte001b-observe-fix1`.
+- Interpretation: bounded retries did not make any LTE HTTP attempt visible to
+  the VPS. The next likely blocker is an AT HTTP command sequence issue before
+  `AT+HTTPACTION=1`, so fix3 removes the default `HTTPPARA CID` setup that is
+  not part of the A7600/A7670-style SIMCom HTTP POST flow.
+
+## Fix3 Candidate
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix3`
+- Test run ID: `lte002-lte-http-probe-fix3-20260628-170508`
+- Change: keep Wi-Fi disabled and keep the fix2 bounded retry behavior, but
+  default `CONFIG_EGOLINK_SIM7670_LTE_HTTP_SET_CID_PARAM=n` so LTE-002 skips
+  `AT+HTTPPARA="CID",1` unless explicitly enabled by hardware evidence.
+- Build directory:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix3/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix3/egolink_mqtt_heartbeat.bin`
+- Focused tests:
+  `python -m unittest quality_tests.test_fw002b_sim7670_gnss_firmware quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_lte_http_probe_validation -v`
+  passed with 19 tests.
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
+- Flash result: PASS on `COM4`; ESP32-S3 detected, bootloader/app/partition
+  table written, hashes verified, hard reset completed.
+- Flash evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix3-20260628-170508/flash_report.md`
+- Runtime validation: FAIL as recorded in Validation Attempt 4.
+
+## Validation Attempt 4
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix3`
+- Test run ID: `lte002-lte-http-probe-fix3-20260628-170508`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix3-20260628-170508/lte_http_probe_report.json`
+- Result: FAIL.
+- Started at: `2026-06-28T09:51:18.488421+00:00`
+- Completed at: `2026-06-28T09:58:22.863467+00:00`
+- Failure: no fresh `lte_http_probe` telemetry reached the Message Hub.
+- VPS state remained on the prior LTE-001B fix1 Wi-Fi message lineage:
+  `observability.transport.type=mock_4g_over_wifi` and firmware
+  `0.1.0-lte001b-observe-fix1`.
+- Interpretation: removing the default `HTTPPARA CID` setup did not make any
+  LTE HTTP attempt visible to the VPS. Further LTE-002 progress needs
+  USB-attached bounded SIM7670G AT/serial diagnosis of the HTTP command path;
+  another blind USB-Free retry would not explain the failure.
+
+## USB AT Diagnosis
+
+- Operator reconnected USB and allowed LTE HTTP AT diagnosis.
+- Port scan evidence:
+  `reports/field_validation/lte002-atdiag-port-scan/20260628-182344/probe.md`
+- Result: SIM7670G USB AT ports `COM6` and `COM7` were reachable; SIM was
+  ready, CEREG registered, CGATT attached, PDP active, and assigned IP was
+  `10.63.36.116`.
+- Public health GET evidence:
+  `reports/field_validation/lte002-atdiag-http-20260628/20260628-182752/lte_http_at_diag.md`
+- Result: `AT+HTTPACTION=0` returned HTTP 200 for
+  `http://203.0.113.10:8790/health`.
+- Bearer-auth compact POST evidence:
+  `reports/field_validation/lte002-atdiag-authpost-20260628/20260628-183650/lte_http_at_diag.md`
+- Result: compact authenticated telemetry POST returned HTTP 200 with token
+  value redacted from the report.
+- Payload-size comparison:
+  - 1232-byte authenticated POST passed:
+    `reports/field_validation/lte002-atdiag-authpost-pad1000-20260628/20260628-184002/lte_http_at_diag.md`
+  - 2237-byte authenticated POST returned `+HTTPACTION: 1,706,0`:
+    `reports/field_validation/lte002-atdiag-authpost-pad2000-com7-20260628/20260628-184258/lte_http_at_diag.md`
+  - 3230-byte authenticated POST returned `+HTTPACTION: 1,706,0`:
+    `reports/field_validation/lte002-atdiag-authpost-large-20260628/20260628-183924/lte_http_at_diag.md`
+- Interpretation: the SIM7670G module, LTE registration, PDP, token length, and
+  VPS auth path work for compact HTTP bodies. The likely LTE-002 blocker is
+  the oversized firmware `lte_http_probe` payload, not APN/VPS reachability or
+  the basic SIMCom HTTP command sequence.
+
+## Fix4 Candidate
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix4`
+- Test run ID: `lte002-lte-http-probe-fix4-20260628-184644`
+- Change: use a compact LTE/cell fragment for `lte_http_probe`, and remove
+  raw AT command/response fields plus verbose HTTP boolean fields from the
+  probe event. The payload still preserves `transport.type=lte`,
+  `lte_http.phase`, `lte_http.reason_code`, HTTP status/data/action timing, and
+  LTE/cell readiness fields needed by the validator and dashboard.
+- Build directory:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix4/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix4/egolink_mqtt_heartbeat.bin`
+- Focused tests:
+  `python -m unittest quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_fw002b_sim7670_gnss_firmware quality_tests.test_lte_http_probe_validation quality_tests.test_lte_http_at_diag -v`
+  passed with 31 tests.
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
+- Flash result: PASS on `COM4`; ESP32-S3 detected, bootloader/app/partition
+  table written, hashes verified, hard reset completed.
+- Flash evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix4-20260628-184644/flash_report.md`
+- Runtime validation: FAIL as recorded in Validation Attempt 5.
+
+## Validation Attempt 5
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix4`
+- Test run ID: `lte002-lte-http-probe-fix4-20260628-184644`
+- Connection path: independent power, USB disconnected, operator-confirmed.
+- Evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix4-20260628-184644/lte_http_probe_report.json`
+- Result: FAIL.
+- Started at: `2026-06-28T11:00:01.555786+00:00`
+- Completed at: `2026-06-28T11:07:03.762627+00:00`
+- Failure: no fresh `lte_http_probe` telemetry reached the Message Hub.
+- VPS `/health` returned `ok=true`, and the test-run export contained zero
+  messages.
+- VPS state remained on the prior LTE-001B fix1 Wi-Fi message lineage:
+  `observability.transport.type=mock_4g_over_wifi`, firmware
+  `0.1.0-lte001b-observe-fix1`, and no `lte_http_probe`.
+- Interpretation: compacting the firmware payload was necessary but not
+  sufficient for USB-Free LTE HTTP transport. Since USB-attached SIM7670G AT
+  diagnosis proved compact HTTP bodies can reach the VPS, the next useful step
+  is USB-attached firmware console diagnosis of the ESP32-S3 UART AT path:
+  capture payload byte logs, LTE readiness, `HTTPDATA`, `HTTPACTION`, and AT
+  result codes from the actual firmware path.
+
+## Fix4 Firmware Console Diagnosis
+
+- Connection path: USB-attached bounded console capture on `COM4`.
+- Evidence:
+  `reports/field_validation/lte002-fix4-console-diag-20260628/console_diag_report.md`
+- Raw log:
+  `reports/field_validation/lte002-fix4-console-diag-20260628/com4_capture_no_reset.log`
+- Result: FAIL.
+- Capture window: `2026-06-28T11:33:16Z` to `2026-06-28T11:36:16Z`.
+- Observed 340 repeated boots, 340 `LTE_HTTP_PROBE_ROUND_START attempt=1`
+  lines, and 340 `***ERROR*** A stack overflow in task main has been detected.`
+  panics.
+- No `LTE_HTTP_PROBE_READY_CHECK`, payload byte, `HTTPDATA`, or `HTTPACTION`
+  logs appeared.
+- Interpretation: fix4 does not reach LTE readiness or SIMCom HTTP commands.
+  It reset-loops because LTE HTTP probe execution runs synchronously inside the
+  ESP-IDF `main` task without enough stack margin.
+
+## Fix5 Candidate
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix5`
+- Test run ID: `lte002-lte-http-probe-fix5-20260628-193815`
+- Change: move LTE HTTP probe execution out of synchronous `app_main` and into
+  a dedicated `lte_http_probe_task` with
+  `LTE_HTTP_PROBE_TASK_STACK_SIZE=12288`, while keeping Wi-Fi disabled for the
+  LTE HTTP probe mode.
+- Build directory:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix5/`
+- Binary:
+  `firmware/mqtt_heartbeat/build_lte002_lte_http_probe_fix5/egolink_mqtt_heartbeat.bin`
+- Focused tests:
+  `python -m unittest quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_fw002b_sim7670_gnss_firmware quality_tests.test_lte_http_probe_validation quality_tests.test_lte_http_at_diag -v`
+  passed with 31 tests.
+- Build result: PASS through
+  `scripts/run_fw001_hw_r1.ps1 -PrepareBuild -EnableSim7670Gnss -EnableSim7670LteHttpProbe`.
+- Flash result: PASS on `COM4`; ESP32-S3 detected, bootloader/app/partition
+  table written, hashes verified, hard reset completed.
+- Flash evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix5-20260628-193815/flash_report.md`
+- Runtime validation: not run. It requires independent power and USB
+  disconnected.
+
+## Validation Attempt 6
+
+- Firmware version: `0.1.0-lte002-lte-http-probe-fix5`
+- Test run ID: `lte002-lte-http-probe-fix5-20260628-193815`
+- Connection path: independent power, USB disconnected, operator power-cycled
+  the board before validation evidence was collected.
+- Evidence:
+  `reports/field_validation/lte002-lte-http-probe-fix5-20260628-193815/lte_http_probe_report.json`
+- Result: PASS.
+- Latest accepted result message:
+  `server_received_at=2026-06-28T12:37:04.490795+00:00`,
+  `boot_count=26006`, `seq=2`, `boot_uptime_ms=14764`.
+- LTE HTTP result: `phase=result`, `reason_code=LTE_HTTP_OK`,
+  `status_code=200`, `action_elapsed_ms=1570`, `data_len=1454`.
+- Transport and LTE state: `transport.type=lte`, LTE `reason_code=LTE_READY`,
+  registration `registered_home`, PDP `active`, assigned IP `10.160.15.113`,
+  RAT `LTE`, cell ID `180571649`, RSSI `-91`, RSRP `-95`, RSRQ `-4`, SINR
+  `24`.
+- Validator note: the firmware emits a one-shot boot probe. The validator now
+  supports explicit `--allow-existing-message-sec` for this workflow and picks
+  the latest matching `server_received_at`, so the accepted evidence is the
+  post-USB-disconnect reboot (`boot_count=26006`) rather than the earlier
+  post-flash boot (`boot_count=26005`).
+
+## Completion
+
+LTE-002 is complete as a USB-Free LTE HTTP telemetry uplink thin-slice. It does
+not validate LTE command polling, ACK migration, reconnect behavior, long-run
+LTE stability, battery/power behavior, or product LTE acceptance.

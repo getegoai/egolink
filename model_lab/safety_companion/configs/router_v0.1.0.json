@@ -1,0 +1,39 @@
+{
+  "config_version": "0.1.0",
+  "contract_version": "1.0.0",
+  "model_name": "safety_rule_router",
+  "model_version": "0.1.0",
+  "thresholds": {
+    "manual_sos_score": 1.0,
+    "impact_high": 0.78,
+    "fall_high": 0.82,
+    "post_impact_stationary_seconds": 15.0,
+    "post_impact_urgent_seconds": 45.0,
+    "distress_high": 0.8,
+    "distress_supporting_motion": 0.45,
+    "geofence_dwell_seconds": 120.0,
+    "abnormal_dwell_seconds": 900.0,
+    "network_offline_warning_seconds": 180.0,
+    "network_offline_high_seconds": 900.0,
+    "low_battery_warning_percent": 15.0,
+    "low_battery_critical_percent": 5.0,
+    "uncertainty_capture_threshold": 0.55
+  },
+  "weights": {
+    "post_impact_motion": 0.45,
+    "post_impact_audio": 0.2,
+    "post_impact_stationary": 0.25,
+    "post_impact_no_response": 0.1,
+    "fall_motion": 0.75,
+    "fall_stationary": 0.15,
+    "fall_audio": 0.1,
+    "distress_audio": 0.75,
+    "distress_motion": 0.15,
+    "distress_context": 0.1
+  },
+  "defaults": {
+    "decision_ttl_ms": 30000,
+    "event_retention_seconds": 604800,
+    "raw_evidence_retention_seconds": 3600
+  }
+}

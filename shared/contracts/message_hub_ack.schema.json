@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/message_hub_ack.schema.json",
+  "title": "Ego Link P0 Message Hub ACK",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "protocol_version",
+    "device_id",
+    "ts",
+    "seq",
+    "message_type",
+    "cmd_id",
+    "status"
+  ],
+  "properties": {
+    "protocol_version": {
+      "const": "egolink.p0.v1"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "fw_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ts": {
+      "type": "string",
+      "minLength": 1
+    },
+    "server_received_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "test_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "message_type": {
+      "const": "ack"
+    },
+    "cmd_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "error",
+        "rejected",
+        "timeout",
+        "pending",
+        "mock_only"
+      ]
+    },
+    "message": {
+      "type": "string"
+    }
+  }
+}

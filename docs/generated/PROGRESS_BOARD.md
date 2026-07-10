@@ -1,0 +1,70 @@
+# EgoLink 项目进度看板
+
+- 生成时间: 2026-07-10 00:00 UTC
+- 分支: `egolink-p0` @ f3ea0db ops(repo): ignore local workspace artifacts [D5]
+- 当前焦点: v0.1.0 Engineering Alpha release gate: keep main always runnable, validate egolink-p0 as the product-like field-test branch, then merge/tag only if the gate passes.
+- 已完成任务总数: 136，进行中: 7，暂停: 2
+
+## 里程碑
+
+| 里程碑 | 进度 | 任务 |
+|---|---|---|
+| RELEASE Engineering Alpha Release Gate | 3/3 | ✅v0.1.0 alpha readiness ✅retire autonomous queue ✅progress board |
+| D1 Link-Through Regression | 0/2 | ⏳4G link-through ⏳power baseline |
+| D2 Location Accuracy Baseline | 0/3 | ⏳location baseline tooling ⏳reference-point field run ⏳no-key evidence map |
+| D5 Location Data Flywheel | 0/2 | ⏳location data flywheel 📋location model loop |
+| PRODUCT Product Alpha Gaps | 1/3 | 📋call/SMS verification ✅long power baseline 📋location data policy |
+
+图例: ✅完成 ⏳进行中 ⏸暂停 📋计划中
+
+## 进行中/暂停的任务
+
+| 任务 | 标题 | 状态 | 优先级 | 执行者 |
+|---|---|---|---|---|
+| D1-001 | D1 link-through baseline | accepted_for_transition | high | codex + founder field tests |
+| D2-001 | D2 location accuracy baseline and metric gate | active | high | codex |
+| D5-001 | D5 location data flywheel mainline | active | high | codex |
+| FIELD-003 | Outdoor GNSS acceptance protocol and first measured run | active | high | founder outdoor run + codex postrun |
+| FIELD-004 | D1 outdoor multi-hour field run | continuous_regression | high | - |
+| MAP-001 | D2/D5 map evidence view | active | high | codex |
+| MODEL-001 | Model footprint assessment | paused | high | - |
+| PROD-001 | Mass-production requirements definition and module/MCU selection gates | paused | high | - |
+| PWR-001 | Real power telemetry and first 24h battery baseline run | active | high | codex + founder field tests |
+
+## 最近完成
+
+| 任务 | 标题 | 日期 |
+|---|---|---|
+| REL-012 | v0.1.0 Engineering Alpha Release Gate | 2026-07-10 |
+| DATA-032 | D1 labeling decision template validation | 2026-07-07 |
+| MODEL-DEVICE-001 | Tiny Safety Model v0 local train/export loop | 2026-07-07 |
+| MODEL-DEVICE-002 | Tiny Safety firmware dry-run harness | 2026-07-07 |
+| MODEL-DEVICE-003 | Tiny Safety firmware CLI closed loop | 2026-07-07 |
+| MODEL-DEVICE-004 | Tiny Safety firmware CLI validator | 2026-07-07 |
+| MODEL-DEVICE-005 | Tiny Safety device loop runner | 2026-07-07 |
+| MODEL-DEVICE-006 | Tiny Safety hardware flash validation | 2026-07-07 |
+
+## 等待创始人处理
+
+- [ ] Confirm whether egolink-p0 should be pushed as a remote branch before any main merge.
+- [ ] For D2 baseline, collect a FIELD-003 outdoor run with reference points when convenient.
+- [ ] Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists.
+
+## 关键版本 (KR)
+
+| KR | 状态 | 标题 |
+|---|---|---|
+| KR-001 | released |  |
+| KR-002 | release_candidate |  |
+| KR-003 | released |  |
+| KR-004 | released |  |
+| KR-005 | released |  |
+| KR-006 | released |  |
+| KR-007 | released |  |
+| KR-008 | released |  |
+
+---
+
+本文件由 `python scripts/build_progress_board.py` 生成，请勿手工编辑。
+数据来源: docs/tasks/ 任务包 frontmatter、docs/current/progress_board_config.json、
+docs/current/key_releases/。

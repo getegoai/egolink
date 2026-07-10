@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local agent/editor state
+.agents/
+.codex/
+.claude/
+
+# Runtime data
+pc_simulator/runtime/
+server/runtime/
+reports/
+
+# ESP-IDF generated output
+firmware/**/build/
+firmware/**/build_*/
+firmware/**/build-*/
+firmware/**/managed_components/
+firmware/**/sdkconfig.old
+firmware/**/sdkconfig.local
+firmware/**/sdkconfig.*.local
+
+# Hardware smoke-test captures
+firmware/**/captures/
+
+# Local editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

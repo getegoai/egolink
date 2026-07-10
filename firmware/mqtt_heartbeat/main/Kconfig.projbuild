@@ -1,0 +1,85 @@
+menu "Ego Link MQTT Heartbeat"
+
+config EGOLINK_WIFI_SSID
+    string "Wi-Fi SSID"
+    default "home"
+
+config EGOLINK_WIFI_PASSWORD
+    string "Wi-Fi password"
+    default ""
+
+config EGOLINK_MQTT_BROKER_URI
+    string "MQTT broker URI"
+    default "mqtt://192.168.31.250:1883"
+
+config EGOLINK_DEVICE_ID
+    string "Device ID"
+    default "ego-link-001"
+
+config EGOLINK_FW_VERSION
+    string "Firmware version label"
+    default "0.1.0-mqtt-smoke"
+
+config EGOLINK_TEST_RUN_ID
+    string "Optional field-test run ID"
+    default ""
+    help
+        Optional evidence binding for USB-Free field tests. Leave empty for
+        normal local smoke builds. Real field-run IDs belong in ignored local
+        sdkconfig files and must not contain secrets.
+
+config EGOLINK_STATUS_TOPIC
+    string "Status topic"
+    default "ego/link/ego-link-001/status"
+
+config EGOLINK_EVENT_TOPIC
+    string "Event topic"
+    default "ego/link/ego-link-001/event"
+
+config EGOLINK_HEARTBEAT_INTERVAL_SEC
+    int "Heartbeat interval seconds"
+    default 10
+    range 1 3600
+
+config EGOLINK_SENSOR_EVENT_INTERVAL_SEC
+    int "Sensor event interval seconds"
+    default 30
+    range 5 3600
+
+config EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    bool "Enable HTTP VPS Message Hub transport"
+    default n
+    help
+        Keep this disabled for the existing local MQTT smoke path. Enable it
+        for FW-001/R1 field tests that post directly to the VPS Message Hub.
+
+config EGOLINK_MESSAGE_HUB_BASE_URL
+    string "HTTP Message Hub base URL"
+    default "http://127.0.0.1:8790"
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+
+config EGOLINK_MESSAGE_HUB_BEARER_TOKEN
+    string "HTTP Message Hub bearer token"
+    default ""
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    help
+        Runtime field-test secret. Do not commit a real token in sdkconfig,
+        defaults, docs, or task packets.
+
+config EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC
+    int "HTTP Message Hub command poll interval seconds"
+    default 10
+    range 2 3600
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+
+config EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
+    bool "Enable request_location GNSS telemetry scaffold"
+    default y
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    help
+        When enabled, the HTTP Message Hub path responds to request_location
+        by uploading an explicit location_report event with fix=false and
+        source_status=unverified. This is a command/telemetry scaffold only;
+        it does not control SIM7670G GNSS or claim a real fix.
+
+endmenu

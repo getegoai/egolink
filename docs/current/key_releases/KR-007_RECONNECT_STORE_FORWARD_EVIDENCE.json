@@ -1,0 +1,410 @@
+{
+  "release_id": "KR-007",
+  "release_name": "Reconnect Store-Forward Evidence Baseline",
+  "release_version": "0.1.0-key-release-007",
+  "status": "released",
+  "release_date": "2026-07-02",
+  "summary": "Seventh Ego Link P0 engineering key release. It freezes the LTE-011 fix1 reconnect/store-forward evidence baseline: a USB-Free request_location run over SIM7670G LTE produced raw location_report, raw location_observation, and raw ACK evidence; the observation carried reconnect/store-forward-shaped evidence; the ACK showed post-reconnect ready/cache-drained evidence; and the LTE-010 offline reconnect/store-forward gate passed over the export.",
+  "firmware_version": "0.1.0-lte011-reconnect-store-forward-test-fix1",
+  "firmware_test_run_id": "lte011-reconnect-store-forward-test-fix1-20260702-001",
+  "protocol_profiles": [
+    "egolink.p0.v1",
+    "raw-frame.p0.v1"
+  ],
+  "device_id": "ego-link-r1-connectivity-001",
+  "in_scope": [
+    "LTE-010 offline reconnect/store-forward gate baseline",
+    "LTE-011 default-off reconnect/store-forward evidence test mode",
+    "LTE-011 fix1 observation payload margin",
+    "COM4 flash evidence for LTE-011 fix1",
+    "USB-Free LTE-011 fix1 request_location runtime evidence over SIM7670G LTE",
+    "LTE-010 gate PASS over the LTE-011 fix1 export",
+    "Released manifest and gate report for reconnect/store-forward evidence"
+  ],
+  "non_claims": [
+    "No product readiness claim",
+    "No real modem reconnect recovery claim",
+    "No durable local storage or durable offline cache claim",
+    "No queue replay or multi-message outage recovery claim",
+    "No long LTE stability claim",
+    "No GNSS fix or outdoor GNSS acceptance claim",
+    "No battery accuracy, charging, or product power behavior claim",
+    "No learned model, learned personal-place, route prediction, or positioning-accuracy claim",
+    "No final enclosure, mounting, camera, audio, storage, calling, SMS, or dispatch claim"
+  ],
+  "gates": [
+    {
+      "id": "G1-LTE010-GATE-BASELINE",
+      "status": "PASS",
+      "summary": "LTE-010 offline gate exists and checks LTE runtime evidence, reconnect attempt/reason, failure reason, post-reconnect ACK, and store-forward evidence"
+    },
+    {
+      "id": "G2-LTE011-EVIDENCE-MODE",
+      "status": "PASS",
+      "summary": "LTE-011 adds an explicit default-off evidence test mode for reconnect/store-forward-shaped raw LTE observation and ACK fields"
+    },
+    {
+      "id": "G3-LTE011-FIX1-BUILD-FLASH",
+      "status": "PASS",
+      "summary": "LTE-011 fix1 increases the location_observation local buffer margin, builds successfully, and was flashed on COM4 after explicit operator confirmation"
+    },
+    {
+      "id": "G4-LTE011-FIX1-USB-FREE-RUNTIME",
+      "status": "PASS",
+      "summary": "USB-Free runtime validation passed on independent power with USB disconnected for cmd-000033, producing location_report, location_observation, and ACK over LTE"
+    },
+    {
+      "id": "G5-LTE010-GATE-PASS",
+      "status": "PASS",
+      "summary": "The LTE-010 reconnect/store-forward offline gate returned PASS over the LTE-011 fix1 test-run export"
+    },
+    {
+      "id": "G6-REGRESSION",
+      "status": "PASS",
+      "summary": "Focused firmware tests, full verify, context_lint, guarded ESP-IDF build, git diff checks, and KR-007 gate checks passed"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "status",
+      "path": "docs/current/STATUS.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "active_build",
+      "path": "docs/current/ACTIVE_BUILD.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "release_index",
+      "path": "docs/current/KEY_RELEASES.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte_transport",
+      "path": "docs/development/LTE_TRANSPORT.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte010_task_packet",
+      "path": "docs/tasks/done/LTE-010_RECONNECT_STORE_FORWARD_GATE_BASELINE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte011_task_packet",
+      "path": "docs/tasks/done/LTE-011_RECONNECT_STORE_FORWARD_EVIDENCE_TEST_MODE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte011_fix1_task_packet",
+      "path": "docs/tasks/done/LTE-011_FIX1_OBSERVATION_PAYLOAD_MARGIN.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "rel010_task_packet",
+      "path": "docs/tasks/done/REL-010_KR007_RECONNECT_STORE_FORWARD_EVIDENCE_RELEASE_GATE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "rel011_task_packet",
+      "path": "docs/tasks/done/REL-011_KR007_RECONNECT_STORE_FORWARD_EVIDENCE_RELEASE.md",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "release_gate_script",
+      "path": "scripts/run_key_release_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte_reconnect_store_forward_gate_script",
+      "path": "scripts/validate_lte_reconnect_store_forward_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_source",
+      "path": "firmware/mqtt_heartbeat/main/app_main.c",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_static_tests",
+      "path": "quality_tests/test_mqtt_heartbeat_firmware.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "lte_reconnect_store_forward_tests",
+      "path": "quality_tests/test_lte_reconnect_store_forward_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "key_release_tests",
+      "path": "quality_tests/test_key_release_gate.py",
+      "required": true,
+      "local_only": false
+    },
+    {
+      "kind": "firmware_binary",
+      "path": "firmware/mqtt_heartbeat/build_lte011_reconnect_store_forward_test_fix1/egolink_mqtt_heartbeat.bin",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte011_fix1_flash_report",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/flash_report.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte011_fix1_runtime_report_json",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte011_fix1_runtime_report_markdown",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.md",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte011_fix1_runtime_export",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/test_run_export.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte010_gate_report_json",
+      "path": "reports/lte_reconnect_store_forward/lte011-fix1-20260702-001/lte_reconnect_store_forward_gate_report.json",
+      "required": true,
+      "local_only": true
+    },
+    {
+      "kind": "lte010_gate_report_markdown",
+      "path": "reports/lte_reconnect_store_forward/lte011-fix1-20260702-001/lte_reconnect_store_forward_gate_report.md",
+      "required": true,
+      "local_only": true
+    }
+  ],
+  "json_checks": [
+    {
+      "id": "LTE011-FIX1-RUNTIME-PASS",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.result",
+      "operator": "equals",
+      "expected": "PASS",
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-USB-FREE",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.connection_path",
+      "operator": "equals",
+      "expected": "independent_power_usb_disconnected",
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-FIRMWARE",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.expected_fw_version",
+      "operator": "equals",
+      "expected": "0.1.0-lte011-reconnect-store-forward-test-fix1",
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-COMMAND",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.command.cmd_id",
+      "operator": "equals",
+      "expected": "cmd-000033",
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-ACK-OK",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.command.ack.status",
+      "operator": "equals",
+      "expected": "ok",
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-ACK-LTE",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.command.ack.transport.type",
+      "operator": "equals",
+      "expected": "lte",
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-LOCATION-REPORT",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.location_report.raw_frame.frame_id",
+      "operator": "equals",
+      "expected": "loc-cmd-000033",
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-LOCATION-OBSERVATION",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.raw_frame.frame_id",
+      "operator": "equals",
+      "expected": "obs-cmd-000033",
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-RECONNECT-COUNT",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.reliability.network.reconnect_count",
+      "operator": "equals",
+      "expected": 1,
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-RECONNECT-REASON",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.reliability.network.last_reconnect_reason",
+      "operator": "equals",
+      "expected": "pdp_reactivate",
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-FAILURE-REASON",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.reliability.network.last_error",
+      "operator": "equals",
+      "expected": "LTE_HTTP_ACTION_FAILED",
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-STORE-FORWARD-QUEUE",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.location_observation.reliability.cache.queued_message_count",
+      "operator": "equals",
+      "expected": 1,
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-ACK-READY-AFTER-RECONNECT",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.command.ack.reliability.network.state",
+      "operator": "equals",
+      "expected": "ready_after_reconnect",
+      "local_only": true
+    },
+    {
+      "id": "LTE011-FIX1-ACK-CACHE-DRAINED",
+      "path": "reports/field_validation/lte011-reconnect-store-forward-test-fix1-20260702-001/lte_command_loop_report.json",
+      "json_path": "$.command.ack.reliability.cache.queued_message_count",
+      "operator": "equals",
+      "expected": 0,
+      "local_only": true
+    },
+    {
+      "id": "LTE010-GATE-PASS",
+      "path": "reports/lte_reconnect_store_forward/lte011-fix1-20260702-001/lte_reconnect_store_forward_gate_report.json",
+      "json_path": "$.result",
+      "operator": "equals",
+      "expected": "PASS",
+      "local_only": true
+    },
+    {
+      "id": "LTE010-GATE-G1",
+      "path": "reports/lte_reconnect_store_forward/lte011-fix1-20260702-001/lte_reconnect_store_forward_gate_report.json",
+      "json_path": "$.gates.0.status",
+      "operator": "equals",
+      "expected": "PASS",
+      "local_only": true
+    },
+    {
+      "id": "LTE010-GATE-G2",
+      "path": "reports/lte_reconnect_store_forward/lte011-fix1-20260702-001/lte_reconnect_store_forward_gate_report.json",
+      "json_path": "$.gates.1.status",
+      "operator": "equals",
+      "expected": "PASS",
+      "local_only": true
+    },
+    {
+      "id": "LTE010-GATE-G3",
+      "path": "reports/lte_reconnect_store_forward/lte011-fix1-20260702-001/lte_reconnect_store_forward_gate_report.json",
+      "json_path": "$.gates.2.status",
+      "operator": "equals",
+      "expected": "PASS",
+      "local_only": true
+    },
+    {
+      "id": "LTE010-GATE-G4",
+      "path": "reports/lte_reconnect_store_forward/lte011-fix1-20260702-001/lte_reconnect_store_forward_gate_report.json",
+      "json_path": "$.gates.3.status",
+      "operator": "equals",
+      "expected": "PASS",
+      "local_only": true
+    },
+    {
+      "id": "LTE010-GATE-G5",
+      "path": "reports/lte_reconnect_store_forward/lte011-fix1-20260702-001/lte_reconnect_store_forward_gate_report.json",
+      "json_path": "$.gates.4.status",
+      "operator": "equals",
+      "expected": "PASS",
+      "local_only": true
+    }
+  ],
+  "commits": [
+    {
+      "label": "LTE-011 reconnect/store-forward evidence mode",
+      "commit": "3b3151d"
+    },
+    {
+      "label": "LTE-011 flash evidence",
+      "commit": "e85414e"
+    },
+    {
+      "label": "LTE-011 fix1 observation payload margin",
+      "commit": "c110a5e"
+    },
+    {
+      "label": "LTE-011 fix1 flash evidence",
+      "commit": "9717036"
+    },
+    {
+      "label": "LTE-011 fix1 runtime gate pass",
+      "commit": "e07abb7"
+    },
+    {
+      "label": "Product demo release path alignment",
+      "commit": "5e47a82"
+    },
+    {
+      "label": "KR-007 release candidate",
+      "commit": "517f973"
+    }
+  ],
+  "validation_commands": [
+    "python -m unittest quality_tests.test_mqtt_heartbeat_firmware -v",
+    "powershell -ExecutionPolicy Bypass -File scripts\\verify.ps1",
+    "python scripts\\context_lint.py",
+    "powershell -ExecutionPolicy Bypass -File scripts\\prepare_fw001_hw_config.ps1 -HostName 203.0.113.10 -FwVersion 0.1.0-lte011-reconnect-store-forward-test-fix1 -TestRunId lte011-reconnect-store-forward-test-fix1-20260702-001 -BuildDir build_lte011_reconnect_store_forward_test_fix1 -EnableSim7670Gnss -EnableReconnectStoreForwardTest -Build -Json",
+    "powershell -ExecutionPolicy Bypass -File scripts\\run_fw001_hw_r1.ps1 -HostName 203.0.113.10 -FwVersion 0.1.0-lte011-reconnect-store-forward-test-fix1 -TestRunId lte011-reconnect-store-forward-test-fix1-20260702-001 -BuildDir build_lte011_reconnect_store_forward_test_fix1 -EnableSim7670Gnss -EnableReconnectStoreForwardTest -PrepareBuild -Flash -FlashPort COM4 -IUnderstandFlashWritesFirmware -Json",
+    "powershell -ExecutionPolicy Bypass -File scripts\\run_fw001_hw_r1.ps1 -HostName 203.0.113.10 -FwVersion 0.1.0-lte011-reconnect-store-forward-test-fix1 -TestRunId lte011-reconnect-store-forward-test-fix1-20260702-001 -BuildDir build_lte011_reconnect_store_forward_test_fix1 -EnableSim7670Gnss -EnableReconnectStoreForwardTest -Validate -OperatorConfirmedIndependentPower -OperatorConfirmedUsbDisconnected -LteCommandName request_location -RequireLteLocationReport -RequireLteLocationObservation -ValidationTimeoutSec 240 -ValidationPollIntervalSec 5 -Json",
+    "python scripts\\validate_lte_reconnect_store_forward_gate.py --input reports\\field_validation\\lte011-reconnect-store-forward-test-fix1-20260702-001\\test_run_export.json --output-dir reports\\lte_reconnect_store_forward\\lte011-fix1-20260702-001 --json",
+    "python scripts\\run_key_release_gate.py --manifest docs/current/key_releases/KR-007_RECONNECT_STORE_FORWARD_EVIDENCE.json --json",
+    "git diff --check"
+  ],
+  "next_release_gates": [
+    "Design real reconnect recovery evidence before treating modem/network interruptions as recovered",
+    "Design durable bounded store-forward semantics before claiming offline cache or replay",
+    "Add a later long-run LTE reliability gate only after real reconnect and store-forward evidence are visible",
+    "Track the product-demo closed loop as KR-008 or DEMO-001, not KR-006 or KR-007"
+  ]
+}

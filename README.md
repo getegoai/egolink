@@ -1,93 +1,109 @@
-# egolink
+# Ego Link P0
 
+Ego Link P0 is the first engineering-alpha slice of an AI-assisted active
+safety locator. The current product-like loop is:
 
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
-```
-cd existing_repo
-git remote add origin https://git.example.invalid/ego/egolink.git
-git branch -M main
-git push -uf origin main
+```text
+4G device -> LTE -> Message Hub -> Web Dashboard
+          -> bounded field evidence -> D2/D5 location data flywheel
 ```
 
-## Integrate with your tools
+The current release target is **v0.1.0 Engineering Alpha**. It is usable as an
+engineering field-test product, but it is not a mass-production claim.
 
-* [Set up project integrations](https://git.example.invalid/ego/egolink/-/settings/integrations)
+## What Works Now
 
-## Collaborate with your team
+- 4G board periodically uploads location, LTE/cell, IMU status, power, and raw
+  POST counters to the Message Hub.
+- The Web Dashboard shows live device state, location estimate, local no-key
+  map/trajectory evidence, field-test results, and D5 data-flywheel status.
+- D1 outdoor field observations can be summarized into bounded evidence without
+  exposing raw coordinates or cell-ID lists in committed summaries.
+- D2/D5 offline tooling exists for location accuracy baselines, review packets,
+  dataset manifest gates, and field-evidence intake.
+- The AMOLED board is a sidecar display/interaction surface for field status.
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## Non-Claims
 
-## Test and Deploy
+- No production location-accuracy claim until a D2 reference-point baseline
+  reports median error, fix rate, and TTFF.
+- No real calling, SMS, emergency dispatch, or contact-notification claim.
+- No product battery-life claim until long-duration power evidence is accepted.
+- No model-performance claim. Tiny Safety assets are retained as engineering
+  scaffolding; the active model mainline is location accuracy.
+- No training use of private field data without explicit review, privacy,
+  quality, split, and founder approval gates.
 
-Use the built-in continuous integration in GitLab.
+## Product-Like Local Run
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+Start the local Message Hub and Web Dashboard:
 
-***
+```powershell
+python scripts\run_message_hub.py --port 8790
+```
 
-# Editing this README
+Then open:
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```text
+http://127.0.0.1:8790
+```
 
-## Suggestions for a good README
+The older PC simulator remains useful for mock safety/UI exercises, but it is
+not the primary product-like D1/D2/D5 dashboard path:
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```powershell
+python pc_simulator\app.py --port 8787
+```
 
-## Name
-Choose a self-explaining name for your project.
+For a live field session, use the D1 field observer against the configured hub
+and device:
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+```powershell
+python scripts\observe_d1_field_run.py --help
+```
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+After a field run, summarize real D1 samples into D5 field evidence:
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+```powershell
+python scripts\summarize_location_field_evidence.py --samples reports\d1_field_observation\<run-id>\d1_field_samples.jsonl
+```
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+When a FIELD-003 reference manifest and test-run export are available, run the
+D2 -> D5 location pipeline:
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```powershell
+python scripts\run_location_d2_d5_pipeline.py --input <test_run_export.json> --manifest <field_manifest.json>
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+## Development Flow
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+Use GitHub Flow:
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+1. `main` must stay buildable, runnable, and releaseable.
+2. Work happens on short branches such as `egolink-p0` or
+   `task/<TASK-ID>-short-name`.
+3. Merge only after validation and a clear release/readiness statement.
+4. Tag demo or engineering-alpha checkpoints with `v0.x.y`.
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Core context:
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+- North star: `docs/product/NORTH_STAR.md`
+- Context router: `docs/CONTEXT_INDEX.md`
+- Current state: `docs/current/STATUS.md`
+- Active build: `docs/current/ACTIVE_BUILD.md`
+- Git/task flow: `docs/development/GIT_FLOW.md`
+- P0 walking skeleton: `docs/development/DEV_FLOW.md`
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+## Validation
 
-## License
-For open source projects, say how it is licensed.
+For context-only changes:
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+```powershell
+python scripts\context_lint.py
+```
+
+For behavior or release changes:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+```

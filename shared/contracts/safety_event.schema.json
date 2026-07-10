@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/safety_event.schema.json",
+  "title": "Ego Link Safety Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "event_id",
+    "device_id",
+    "timestamp_ms",
+    "sequence",
+    "event_type",
+    "priority",
+    "source",
+    "model_result",
+    "context",
+    "evidence",
+    "privacy"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "1.0.0"
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timestamp_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "manual_sos",
+        "possible_fall",
+        "possible_collision",
+        "post_impact_inactivity",
+        "distress_audio",
+        "geofence_exit",
+        "abnormal_dwell",
+        "communication_loss",
+        "low_battery",
+        "uncertain"
+      ]
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "high",
+        "critical"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "rule_router",
+        "motion_model",
+        "audio_model",
+        "vision_gate",
+        "device_rule",
+        "simulator"
+      ]
+    },
+    "model_result": {
+      "type": "object"
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "battery_percent",
+        "base_online",
+        "upload_available"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string"
+        },
+        "battery_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "base_online": {
+          "type": "boolean"
+        },
+        "upload_available": {
+          "type": "boolean"
+        },
+        "latitude_deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude_deg": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": -180,
+          "maximum": 180
+        },
+        "speed_mps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 200
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audio_clip_ref",
+        "image_ref",
+        "imu_window_ref",
+        "location_fresh"
+      ],
+      "properties": {
+        "audio_clip_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "image_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "imu_window_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location_fresh": {
+          "type": "boolean"
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "privacy_mode",
+        "raw_evidence_allowed",
+        "retention_seconds"
+      ],
+      "properties": {
+        "privacy_mode": {
+          "type": "boolean"
+        },
+        "raw_evidence_allowed": {
+          "type": "boolean"
+        },
+        "retention_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2592000
+        }
+      }
+    }
+  }
+}

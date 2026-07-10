@@ -1,0 +1,102 @@
+import importlib.util
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+MODULE_PATH = REPO_ROOT / "scripts" / "build_progress_board.py"
+
+spec = importlib.util.spec_from_file_location("build_progress_board", MODULE_PATH)
+board_mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(board_mod)
+
+
+def make_repo(root: Path) -> None:
+    (root / "docs" / "tasks" / "active").mkdir(parents=True)
+    (root / "docs" / "tasks" / "done").mkdir(parents=True)
+    (root / "docs" / "current" / "key_releases").mkdir(parents=True)
+    (root / "docs" / "tasks" / "active" / "AAA-001_X.md").write_text(
+        "---\nid: AAA-001\ntitle: Active thing\nstatus: active\n"
+        "priority: high\ncreated: 2026-07-01\n---\n# Body\n",
+        encoding="utf-8",
+    )
+    (root / "docs" / "tasks" / "active" / "BBB-001_Y.md").write_text(
+        "---\nid: BBB-001\ntitle: Paused thing\nstatus: paused\n"
+        "created: 2026-07-01\n---\n# Body\n",
+        encoding="utf-8",
+    )
+    (root / "docs" / "tasks" / "done" / "CCC-001_Z.md").write_text(
+        "---\ntask_id: CCC-001\ntitle: Done thing\nstatus: superseded\n"
+        "last_verified: 2026-07-02\n---\n# Body\n",
+        encoding="utf-8",
+    )
+    (root / "docs" / "current" / "key_releases" / "KR-001_TEST.json").write_text(
+        json.dumps({"id": "KR-001", "status": "released", "title": "First"}),
+        encoding="utf-8",
+    )
+    (root / "docs" / "current" / "progress_board_config.json").write_text(
+        json.dumps({
+            "current_focus": "test focus",
+            "milestones": [
+                {"id": "M1", "title": "one", "tasks": [
+                    "AAA-001", "CCC-001", {"id": "DDD-001", "label": "planned thing"},
+                ]},
+            ],
+            "assignees": {"AAA-001": "codex"},
+            "operator_asks": ["do a thing"],
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
+class ProgressBoardTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        make_repo(self.root)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_frontmatter_parsing_handles_both_id_keys(self):
+        packets = board_mod.scan_packets(self.root / "docs" / "tasks")
+        self.assertEqual(packets["AAA-001"]["state"], "in_progress")
+        self.assertEqual(packets["BBB-001"]["state"], "paused")
+        self.assertEqual(packets["CCC-001"]["state"], "done")
+        self.assertEqual(packets["CCC-001"]["packet_status"], "superseded")
+
+    def test_milestone_progress_counts_done_and_planned(self):
+        board = board_mod.build_board(self.root)
+        ms = board["milestones"][0]
+        self.assertEqual(ms["done"], 1)
+        self.assertEqual(ms["total"], 3)
+        states = {t["id"]: t["state"] for t in ms["tasks"]}
+        self.assertEqual(states["AAA-001"], "in_progress")
+        self.assertEqual(states["CCC-001"], "done")
+        self.assertEqual(states["DDD-001"], "planned")
+
+    def test_markdown_render_contains_key_sections(self):
+        board = board_mod.build_board(self.root)
+        md = board_mod.render_markdown(board)
+        self.assertEqual(board["counts"]["active"], 1)
+        self.assertEqual(board["counts"]["paused"], 1)
+        self.assertEqual(board["counts"]["open_total"], 2)
+        for expected in ("里程碑", "进行中/暂停的任务", "最近完成",
+                         "等待创始人处理", "KR-001", "do a thing",
+                         "planned thing"):
+            self.assertIn(expected, md)
+
+    def test_key_release_scan_is_defensive(self):
+        (self.root / "docs" / "current" / "key_releases" / "broken.json").write_text(
+            "{not json", encoding="utf-8"
+        )
+        releases = board_mod.scan_key_releases(
+            self.root / "docs" / "current" / "key_releases"
+        )
+        self.assertEqual(len(releases), 1)
+        self.assertEqual(releases[0]["id"], "KR-001")
+
+
+if __name__ == "__main__":
+    unittest.main()
