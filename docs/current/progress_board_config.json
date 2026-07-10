@@ -1,5 +1,5 @@
 {
-  "current_focus": "v0.1.0 Engineering Alpha release gate: keep main always runnable, validate egolink-p0 as the product-like field-test branch, then merge/tag only if the gate passes.",
+  "current_focus": "v0.1.0 Engineering Alpha is the main release-line checkpoint; next focus is D2 reference-point field baseline and D5 location data review/flywheel continuity.",
   "recent_done_limit": 8,
   "milestones": [
     {
@@ -101,7 +101,6 @@
     "PRIVACY-LOC-001": "planned"
   },
   "operator_asks": [
-    "Confirm whether egolink-p0 should be pushed as a remote branch before any main merge.",
     "For D2 baseline, collect a FIELD-003 outdoor run with reference points when convenient.",
     "Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists."
   ]

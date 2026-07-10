@@ -12,10 +12,11 @@ scope, evidence manifest, release gate, and explicit non-claims.
 
 ## KR-008 v0.1.0 Engineering Alpha
 
-- Status: release candidate.
+- Status: released engineering alpha.
 - Release date: 2026-07-10.
 - Release version: `v0.1.0-engineering-alpha`.
-- Branch: `egolink-p0`.
+- Branch: `main`.
+- Source branch: `egolink-p0`.
 - Manifest:
   `docs/current/key_releases/KR-008_V010_ENGINEERING_ALPHA.json`.
 - Gate tool:

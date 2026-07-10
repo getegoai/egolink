@@ -6,14 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
-2026-07-10: Current development flow is reset to GitHub Flow plus direct
-founder/Codex collaboration. The retired autonomous queue code and wrapper
-scripts were removed from the active workspace; historical notes remain under
-`docs/archive/`. The working branch is now `egolink-p0`, remote `origin` points
-to `https://git.example.invalid/ego/egolink.git`, and `main` is treated as the
-always-runnable release line. v0.1.0 Engineering Alpha may merge only if the
-release gate passes: README runnable path, context lint, full verify, clean
-tracked worktree, explicit non-claims, and no committed secrets/runtime data.
+2026-07-10: KR-008 `v0.1.0 Engineering Alpha` is the first main release-line
+checkpoint. The release keeps the 4G board -> LTE -> Message Hub -> Web
+Dashboard -> bounded field evidence -> D2/D5 location data-flywheel loop
+runnable with explicit non-claims. The old GitLab template `origin/main` had
+no shared history with the engineering branch, so `egolink-p0` was merged into
+`main` through an unrelated-history bootstrap merge rather than a force push.
+Current development flow is GitHub Flow plus direct founder/Codex
+collaboration; retired autonomous queue code and wrapper scripts were removed
+from the active workspace, with historical notes kept under `docs/archive/`.
 
 2026-07-09: D5-001 now has a field-observation intake path for real outdoor
 runs that do not yet have a D2 reference manifest.

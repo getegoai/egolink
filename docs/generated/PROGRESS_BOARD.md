@@ -1,8 +1,8 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-10 00:00 UTC
-- 分支: `egolink-p0` @ f3ea0db ops(repo): ignore local workspace artifacts [D5]
-- 当前焦点: v0.1.0 Engineering Alpha release gate: keep main always runnable, validate egolink-p0 as the product-like field-test branch, then merge/tag only if the gate passes.
+- 生成时间: 2026-07-10 00:14 UTC
+- 分支: `release/v0.1.0-main-merge` @ fdcc4d8 Merge egolink-p0 for v0.1.0 Engineering Alpha
+- 当前焦点: v0.1.0 Engineering Alpha is the main release-line checkpoint; next focus is D2 reference-point field baseline and D5 location data review/flywheel continuity.
 - 已完成任务总数: 136，进行中: 7，暂停: 2
 
 ## 里程碑
@@ -46,7 +46,6 @@
 
 ## 等待创始人处理
 
-- [ ] Confirm whether egolink-p0 should be pushed as a remote branch before any main merge.
 - [ ] For D2 baseline, collect a FIELD-003 outdoor run with reference points when convenient.
 - [ ] Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists.
 

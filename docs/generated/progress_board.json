@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-07-10 00:00 UTC",
+  "generated_at": "2026-07-10 00:14 UTC",
   "git": {
-    "branch": "egolink-p0",
-    "head": "f3ea0db ops(repo): ignore local workspace artifacts [D5]"
+    "branch": "release/v0.1.0-main-merge",
+    "head": "fdcc4d8 Merge egolink-p0 for v0.1.0 Engineering Alpha"
   },
-  "current_focus": "v0.1.0 Engineering Alpha release gate: keep main always runnable, validate egolink-p0 as the product-like field-test branch, then merge/tag only if the gate passes.",
+  "current_focus": "v0.1.0 Engineering Alpha is the main release-line checkpoint; next focus is D2 reference-point field baseline and D5 location data review/flywheel continuity.",
   "milestones": [
     {
       "id": "RELEASE",
@@ -270,7 +270,6 @@
     }
   ],
   "operator_asks": [
-    "Confirm whether egolink-p0 should be pushed as a remote branch before any main merge.",
     "For D2 baseline, collect a FIELD-003 outdoor run with reference points when convenient.",
     "Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists."
   ],
