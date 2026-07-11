@@ -586,6 +586,8 @@ $startCommand
 systemctl --no-pager --full status egolink-message-hub.service || true
 "@
 
+    # Windows here-strings use CRLF; remote bash must receive LF-only input.
+    $remoteScript = $remoteScript.Replace("`r", "")
     $remoteScript | ssh @((SshArgs)) "bash -s"
     if ($LASTEXITCODE -ne 0) {
         throw "remote install failed with exit code $LASTEXITCODE"

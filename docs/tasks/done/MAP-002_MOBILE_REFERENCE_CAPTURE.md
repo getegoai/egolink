@@ -55,6 +55,11 @@ phone-side paper/JSON timestamp work from the pending reference-point run.
   `context_lint` PASS; full `scripts/verify.ps1` PASS with 548 tests
 - Browser visual result: not run because no in-app browser instance was
   available; no screenshot or visual-overlap claim is made
-- VPS deployment: stopped before upload by SSH public-key authentication;
-  existing Message Hub health remains PASS and the live route returns 404
+- VPS deployment: PASS after verified ED25519 key authentication and a fix for
+  Windows CRLF in the remote Bash script. Message Hub health, Dashboard link,
+  route HTTP 200, and live JavaScript syntax checks pass; existing GitLab was
+  untouched.
+- Post-deploy observer: Message Hub and history are available; field readiness
+  is `not_ready` because the device's periodic upload is stale, not because of
+  the deployment.
 - Hardware result: not applicable

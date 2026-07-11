@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-03
+last_verified: 2026-07-11
 verified_by: codex
 ---
 
@@ -46,6 +46,12 @@ A public VPS is available for message-service deployment. GitLab is already
 installed on that server and must not be modified by Ego Link message-hub tasks.
 Repository files must not contain real passwords, tokens, private keys, IP
 allowlists, or private device logs. Provide only `.env.example` style templates.
+
+For Windows deployment, `scripts/deploy_message_hub_vps.ps1` normalizes the
+generated remote Bash input to LF before SSH execution. Preserve that step so
+carriage returns cannot become part of remote service names or paths. Prefer a
+dedicated ED25519 key through `-SshKey`; never place VPS passwords or private
+key contents in repository files or command arguments.
 
 ## Transport Options
 

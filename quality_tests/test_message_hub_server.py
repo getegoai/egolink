@@ -872,6 +872,7 @@ class MessageHubDeployScriptTests(unittest.TestCase):
         self.assertIn("function Copy-ServerSource", script)
         self.assertIn('rm -rf \'$RemoteDir/server/runtime\' \'$RemoteDir/server/__pycache__\'', script)
         self.assertIn('Copy-RelativePath "docs\\current\\key_releases"', script)
+        self.assertIn('$remoteScript = $remoteScript.Replace("`r", "")', script)
         self.assertNotIn('Copy-RelativePath "server"', script)
 
 

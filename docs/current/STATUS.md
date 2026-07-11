@@ -12,9 +12,11 @@ attempt windows, strict progress, and exports `field_manifest.json`. Exact
 reference coordinates stay in browser `localStorage`; no server write API was
 added. Single phone browser fixes remain partial evidence and now fail the
 strict FIELD-003 method gate. Local HTTP/route and JavaScript syntax checks
-pass; visual browser screenshot review remains unavailable. VPS deployment
-stopped before upload because SSH public-key authentication was unavailable;
-the live service remains healthy and the new path still returns HTTP 404.
+pass; visual browser screenshot review remains unavailable. SSH key auth was
+verified, the Windows CRLF-to-remote-Bash deployment bug was fixed, and the
+VPS now serves the page with HTTP 200 plus a Dashboard link. Post-deploy field
+readiness is not ready only because device uploads are stale; service health,
+stored device history, and the no-key map remain available.
 
 2026-07-11: D2 reference-point field automation is ready. The new
 `scripts/prepare_d2_field_kit.py` writes a strict three-environment,
