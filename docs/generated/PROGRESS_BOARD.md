@@ -1,7 +1,7 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-11 08:59 UTC
-- 分支: `d2/local-reference-overlay` @ cb8fc5e docs(d2): record bounded export deployment [D2]
+- 生成时间: 2026-07-11 09:06 UTC
+- 分支: `main` @ 43c04d6 feat(map): add local D2 reference overlay [D2]
 - 当前焦点: D2 field kit, bounded export, and browser-local reference overlay are ready; next focus is the first real reference-point baseline.
 - 已完成任务总数: 142，进行中: 6，暂停: 2
 

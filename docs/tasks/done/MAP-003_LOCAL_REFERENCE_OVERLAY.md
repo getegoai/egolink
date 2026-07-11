@@ -48,6 +48,8 @@ removes the map-review gap while real FIELD-003 data collection is unavailable.
 - Local HTTP: Dashboard and `/health` served on `127.0.0.1:8892`
 - JavaScript checks: inline script compiled; behavior check over two fixture
   reference points passed and rejected blank coordinates
+- VPS deployment: service active; live HTML markers and inline JavaScript
+  compile check PASS; no reference-point upload route is present
 - Visual boundary: in-app browser unavailable; no screenshot or responsive
   visual-overlap claim
 - Hardware result: not required; no serial, flash, command, or device action

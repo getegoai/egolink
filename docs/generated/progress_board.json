@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-11 08:59 UTC",
+  "generated_at": "2026-07-11 09:06 UTC",
   "git": {
-    "branch": "d2/local-reference-overlay",
-    "head": "cb8fc5e docs(d2): record bounded export deployment [D2]"
+    "branch": "main",
+    "head": "43c04d6 feat(map): add local D2 reference overlay [D2]"
   },
   "current_focus": "D2 field kit, bounded export, and browser-local reference overlay are ready; next focus is the first real reference-point baseline.",
   "milestones": [

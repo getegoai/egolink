@@ -13,7 +13,8 @@ oversized files, excessive points, and active-device mismatches are rejected;
 no upload API was added. Local HTTP and JavaScript compile/behavior checks
 pass. The in-app browser was unavailable, so no screenshot claim is made. No
 SIM, outdoor data, hardware command, firmware change, or accuracy claim was
-required for this step.
+required for this step. The VPS now serves the controls, its health check
+passes, and the live inline JavaScript compiles successfully.
 
 2026-07-11: D2 field export is now bounded by device and manifest time window.
 The authenticated read-only API caps a window at 48 hours, limits each record

@@ -117,5 +117,8 @@ Not required. This is Web/API/report visibility work over existing evidence.
 - Browser result: local HTTP and JavaScript compile/behavior checks PASS. The
   in-app browser was unavailable, so no screenshot or visual-overlap claim is
   made.
+- VPS result: Message Hub health PASS; live Dashboard contains the local
+  import/clear controls and no reference-upload route; live JavaScript compile
+  check PASS.
 - Remaining risks: real reference/trajectory comparison still depends on the
   first D2 field manifest; provider tiles remain a future privacy/key decision
