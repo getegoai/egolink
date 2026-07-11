@@ -57,6 +57,10 @@
         {
           "id": "D2-002",
           "label": "reference field automation"
+        },
+        {
+          "id": "MAP-002",
+          "label": "mobile reference capture"
         }
       ]
     },
@@ -103,6 +107,7 @@
     "FIELD-003": "founder outdoor run + codex postrun",
     "FIELD-010": "codex",
     "D2-002": "codex",
+    "MAP-002": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",
     "MODEL-LOC-001": "codex",

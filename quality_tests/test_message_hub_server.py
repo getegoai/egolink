@@ -2977,6 +2977,7 @@ class MessageHubHttpTests(unittest.TestCase):
             base_url = f"http://127.0.0.1:{server.server_port}"
             try:
                 health = get_json(base_url, "/health")
+                capture_body, capture_type = get_bytes(base_url, "/d2-reference-capture")
                 with self.assertRaises(error.HTTPError) as context:
                     get_json(base_url, "/api/state")
                 state = get_json(base_url, "/api/state", headers={"Authorization": "Bearer secret"})
@@ -2986,6 +2987,9 @@ class MessageHubHttpTests(unittest.TestCase):
                 server.server_close()
 
         self.assertTrue(health["ok"])
+        self.assertIn("text/html", capture_type)
+        self.assertIn(b"D2 Reference Capture", capture_body)
+        self.assertIn(b"localStorage", capture_body)
         self.assertEqual(context.exception.code, 401)
         self.assertEqual(state["devices"], [])
         self.assertIn("training_experiment", state)

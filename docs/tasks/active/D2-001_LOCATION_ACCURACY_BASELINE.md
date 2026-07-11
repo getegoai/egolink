@@ -121,6 +121,12 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
     firmware-emitted `MODEL-DEVICE-006-hw-20260707-d1` ID. Read-only export
     then succeeded with 39,745 messages and 8,548 raw frames; the larger
     historical batch is why the post-run export timeout defaults to 120 s.
+- 2026-07-11 mobile reference capture:
+  - Dashboard `/d2-reference-capture` now creates a FIELD-003-compatible
+    manifest from browser-local reference points and attempt timestamps.
+  - The strict analyzer now rejects `phone_browser_single_fix`; only a phone
+    five-minute average, satellite map pick, or survey marker can pass the
+    reference-method gate.
 
 # Completion Evidence
 

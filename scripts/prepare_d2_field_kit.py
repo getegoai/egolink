@@ -204,6 +204,9 @@ median error, and p90 error. It does not claim product accuracy.
 3. Confirm the firmware version and Message Hub test-run ID match this kit.
 4. Keep `field_manifest.json` private. Exact coordinates belong only in this
    ignored evidence directory.
+5. On a phone, open `{kit['hub_url']}/d2-reference-capture`. The page stores
+   reference coordinates and attempt timestamps only in that browser and can
+   export a compatible `field_manifest.json`.
 
 ## At Each Reference Point
 
@@ -230,7 +233,8 @@ Optional four-hour read-only observer:
 ## After Returning
 
 Finish the run timestamps and remove every unexecuted placeholder attempt.
-Then fetch the bounded Message Hub export and run D2 -> D5 in one command:
+The mobile capture page can provide the completed manifest instead of manual
+JSON editing. Then fetch the bounded Message Hub export and run D2 -> D5 in one command:
 
 ```powershell
 {commands['postrun']['powershell']}

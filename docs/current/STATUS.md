@@ -6,6 +6,14 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-11: Added the mobile-sized `/d2-reference-capture` Web surface for D2
+field work. It records the three required reference environments, cold/warm
+attempt windows, strict progress, and exports `field_manifest.json`. Exact
+reference coordinates stay in browser `localStorage`; no server write API was
+added. Single phone browser fixes remain partial evidence and now fail the
+strict FIELD-003 method gate. Local HTTP/route and JavaScript syntax checks
+pass; visual browser screenshot review remains unavailable in this run.
+
 2026-07-11: D2 reference-point field automation is ready. The new
 `scripts/prepare_d2_field_kit.py` writes a strict three-environment,
 30-attempt FIELD-003 manifest plus runbook/checklist under `reports/d2_field/`.

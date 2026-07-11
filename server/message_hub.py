@@ -952,6 +952,9 @@ def make_handler(
             if path == "/":
                 self.respond_html(render_dashboard())
                 return
+            if path == "/d2-reference-capture":
+                self.respond_html(render_d2_reference_capture())
+                return
             if path == "/health":
                 self.respond_json({"ok": True, "service": "egolink-message-hub", "time": utc_now()})
                 return
@@ -6593,6 +6596,476 @@ def summarize_test_run_observability(
     }
 
 
+def render_d2_reference_capture() -> str:
+    return """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>D2 Reference Capture</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --line: #d7dde5;
+      --text: #17202a;
+      --muted: #667085;
+      --blue: #1f6feb;
+      --blue-soft: #eaf2ff;
+      --green: #0f766e;
+      --green-soft: #e8f5f2;
+      --amber: #a85b00;
+      --amber-soft: #fff5df;
+      --red: #b42318;
+      --red-soft: #fff0ee;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Segoe UI, Arial, sans-serif; color: var(--text); background: var(--bg); }
+    header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
+    .header-inner { max-width: 980px; margin: 0 auto; min-height: 64px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .title-group { min-width: 0; }
+    h1 { margin: 0; font-size: 20px; letter-spacing: 0; }
+    .subtitle { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    .header-link { color: var(--blue); text-decoration: none; font-size: 13px; font-weight: 600; white-space: nowrap; }
+    main { max-width: 980px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+    .status-band { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .status-copy { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--green); flex: 0 0 auto; }
+    .status-title { font-weight: 700; font-size: 14px; }
+    .status-note { color: var(--muted); font-size: 12px; }
+    .strict-state { padding: 5px 9px; border-radius: 999px; background: var(--amber-soft); color: var(--amber); font-size: 12px; font-weight: 700; }
+    .strict-state.pass { background: var(--green-soft); color: var(--green); }
+    .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    h2 { margin: 0; font-size: 15px; letter-spacing: 0; }
+    .section-meta { color: var(--muted); font-size: 12px; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+    .field { display: grid; gap: 5px; min-width: 0; }
+    .field-wide { grid-column: 1 / -1; }
+    label, .field-label { color: var(--muted); font-size: 12px; font-weight: 600; }
+    input, select, textarea { width: 100%; min-height: 40px; border: 1px solid #bcc6d3; border-radius: 6px; padding: 8px 10px; background: #fff; color: var(--text); font: inherit; font-size: 14px; }
+    textarea { min-height: 72px; resize: vertical; }
+    input:focus, select:focus, textarea:focus { outline: 2px solid #b8d2ff; border-color: var(--blue); }
+    .segments { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+    .segments.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .segment { position: relative; }
+    .segment input { position: absolute; opacity: 0; pointer-events: none; }
+    .segment span { min-height: 42px; border: 1px solid #bcc6d3; border-radius: 6px; display: grid; place-items: center; padding: 7px; text-align: center; color: #344054; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .segment input:checked + span { border-color: var(--blue); color: var(--blue); background: var(--blue-soft); }
+    .action-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+    button { min-height: 40px; padding: 8px 12px; border: 1px solid var(--blue); border-radius: 6px; background: var(--blue); color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #fff; color: var(--blue); }
+    button.warn { border-color: var(--amber); background: #fff; color: var(--amber); }
+    button.danger { border-color: var(--red); background: #fff; color: var(--red); }
+    button:disabled { cursor: not-allowed; opacity: 0.45; }
+    .inline-status { min-height: 18px; color: var(--muted); font-size: 12px; }
+    .inline-status.ok { color: var(--green); }
+    .inline-status.warn { color: var(--amber); }
+    .progress-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .point-progress { border: 1px solid var(--line); border-radius: 8px; padding: 10px; display: grid; gap: 7px; min-width: 0; }
+    .point-name { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+    .point-counts { display: flex; gap: 6px; flex-wrap: wrap; }
+    .count-chip { padding: 4px 7px; border-radius: 999px; background: #f2f4f7; color: #344054; font-size: 11px; font-weight: 700; }
+    .count-chip.done { background: var(--green-soft); color: var(--green); }
+    .reference-state { color: var(--muted); font-size: 11px; }
+    .reference-state.ok { color: var(--green); }
+    .reference-state.warn { color: var(--amber); }
+    .active-attempt { border-left: 4px solid var(--blue); background: #fbfdff; }
+    .active-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+    .active-id { font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+    .active-time { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .attempt-list { display: grid; gap: 7px; max-height: 360px; overflow: auto; }
+    .attempt-row { border-bottom: 1px solid #edf0f4; padding: 7px 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+    .attempt-row:last-child { border-bottom: 0; }
+    .attempt-name { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+    .attempt-time { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+    .attempt-tag { align-self: start; color: var(--green); font-size: 11px; font-weight: 700; }
+    .export-bar { position: sticky; bottom: 0; z-index: 4; box-shadow: 0 -8px 24px rgba(23, 32, 42, 0.08); }
+    .export-layout { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .export-summary { min-width: 0; }
+    .export-title { font-size: 14px; font-weight: 700; }
+    .export-note { margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .export-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    @media (max-width: 720px) {
+      .form-grid, .progress-grid { grid-template-columns: 1fr; }
+      .field-wide { grid-column: auto; }
+      .header-inner, main { padding-left: 10px; padding-right: 10px; }
+      .segments { grid-template-columns: 1fr; }
+      .segments.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .export-layout, .export-actions { align-items: stretch; }
+      .export-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .export-actions button:last-child { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="title-group">
+        <h1>D2 Reference Capture</h1>
+        <div class="subtitle">Field manifest · local browser storage</div>
+      </div>
+      <a class="header-link" href="/">Dashboard</a>
+    </div>
+  </header>
+  <main>
+    <section class="status-band">
+      <div class="status-copy">
+        <span class="status-dot"></span>
+        <div>
+          <div class="status-title">Local only</div>
+          <div class="status-note">Reference coordinates are not uploaded to Message Hub</div>
+        </div>
+      </div>
+      <span id="strictState" class="strict-state">0 / 30 attempts</span>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Run Identity</h2><span class="section-meta">saved automatically</span></div>
+      <div class="form-grid">
+        <div class="field"><label for="fieldRunId">Field run ID</label><input id="fieldRunId" autocomplete="off" /></div>
+        <div class="field"><label for="messageRunId">Message test run ID</label><input id="messageRunId" autocomplete="off" /></div>
+        <div class="field"><label for="deviceId">Device ID</label><input id="deviceId" autocomplete="off" /></div>
+        <div class="field"><label for="firmwareVersion">Firmware version</label><input id="firmwareVersion" autocomplete="off" /></div>
+        <div class="field"><label for="boardId">Board ID</label><input id="boardId" autocomplete="off" /></div>
+        <div class="field"><label for="operator">Operator initials</label><input id="operator" autocomplete="off" /></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Reference Point</h2><span id="pointMeta" class="section-meta"></span></div>
+      <div class="segments" id="pointSegments">
+        <label class="segment"><input type="radio" name="point" value="open_sky_01" checked /><span>Open sky</span></label>
+        <label class="segment"><input type="radio" name="point" value="street_between_buildings_01" /><span>Between buildings</span></label>
+        <label class="segment"><input type="radio" name="point" value="tree_cover_01" /><span>Tree cover</span></label>
+      </div>
+      <div class="form-grid" style="margin-top:12px">
+        <div class="field"><label for="referenceLat">Latitude</label><input id="referenceLat" inputmode="decimal" autocomplete="off" /></div>
+        <div class="field"><label for="referenceLon">Longitude</label><input id="referenceLon" inputmode="decimal" autocomplete="off" /></div>
+        <div class="field">
+          <label for="referenceMethod">Reference method</label>
+          <select id="referenceMethod">
+            <option value="phone_browser_single_fix">Phone browser fix</option>
+            <option value="phone_gnss_5min_average">Phone GNSS 5 min average</option>
+            <option value="map_pick_satellite_view">Satellite map pick</option>
+            <option value="survey_marker">Survey marker</option>
+          </select>
+        </div>
+        <div class="field"><label for="referenceAccuracy">Phone accuracy (m)</label><input id="referenceAccuracy" inputmode="decimal" autocomplete="off" /></div>
+        <div class="field field-wide"><label for="referenceNotes">Site notes</label><textarea id="referenceNotes"></textarea></div>
+      </div>
+      <div class="action-row">
+        <button id="capturePosition" type="button">Use phone position</button>
+        <button id="saveReference" class="secondary" type="button">Save reference</button>
+        <span id="positionStatus" class="inline-status"></span>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Attempt</h2><span class="section-meta">UTC timestamps</span></div>
+      <div class="segments two">
+        <label class="segment"><input type="radio" name="attemptMode" value="cold" checked /><span>Cold</span></label>
+        <label class="segment"><input type="radio" name="attemptMode" value="warm" /><span>Warm</span></label>
+      </div>
+      <div class="field" style="margin-top:10px"><label for="attemptNotes">Attempt notes</label><input id="attemptNotes" autocomplete="off" /></div>
+      <div class="action-row">
+        <button id="startAttempt" type="button">Start attempt</button>
+        <span id="attemptStatus" class="inline-status"></span>
+      </div>
+    </section>
+
+    <section id="activeAttemptPanel" class="active-attempt" hidden>
+      <div class="active-layout">
+        <div><div id="activeAttemptId" class="active-id"></div><div id="activeAttemptTime" class="active-time"></div></div>
+        <button id="stopAttempt" type="button">Stop attempt</button>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Strict Gate Progress</h2><span class="section-meta">5 cold + 5 warm per point</span></div>
+      <div id="progressGrid" class="progress-grid"></div>
+    </section>
+
+    <section>
+      <div class="section-head"><h2>Completed Attempts</h2><span id="attemptTotal" class="section-meta">0</span></div>
+      <div id="attemptList" class="attempt-list"><span class="status-note">No completed attempts</span></div>
+    </section>
+
+    <section class="export-bar">
+      <div class="export-layout">
+        <div class="export-summary"><div class="export-title">field_manifest.json</div><div id="exportNote" class="export-note">Partial evidence · not acceptance</div></div>
+        <div class="export-actions">
+          <button id="copyManifest" class="secondary" type="button">Copy JSON</button>
+          <button id="downloadManifest" type="button">Export JSON</button>
+          <button id="resetCapture" class="danger" type="button">Reset</button>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script>
+    const STORAGE_KEY = 'egolink.d2_reference_capture.v1';
+    const REQUIRED_METHODS = new Set(['phone_gnss_5min_average', 'map_pick_satellite_view', 'survey_marker']);
+    const POINTS = [
+      { point_id: 'open_sky_01', point_type: 'open_sky', name: 'Open sky' },
+      { point_id: 'street_between_buildings_01', point_type: 'street_between_buildings', name: 'Between buildings' },
+      { point_id: 'tree_cover_01', point_type: 'tree_cover', name: 'Tree cover' },
+    ];
+    const defaults = () => ({
+      schema_version: 'egolink.field003_manifest.v0.2',
+      field_run_id: `D2-001-reference-${new Date().toISOString().slice(0,10).replaceAll('-', '')}`,
+      test_run_id: 'MODEL-DEVICE-006-hw-20260707-d1',
+      board_id: 'connectivity-node-001',
+      device_id: 'ego-link-r1-connectivity-001',
+      firmware_version: '0.1.0-model-device-006-tiny-safety-hw',
+      firmware_commit_or_image: 'app-commit:cf5b4a6',
+      connection_path: 'vps_message_hub_usb_free',
+      runtime_usb_connected: false,
+      operator: '',
+      started_at: null,
+      ended_at: null,
+      reference_points: POINTS.map(point => ({ ...point, reference: {}, notes: '' })),
+      attempts: [],
+      active_attempt_id: null,
+    });
+    function loadState() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (parsed && Array.isArray(parsed.reference_points) && Array.isArray(parsed.attempts)) return parsed;
+      } catch (_) {}
+      return defaults();
+    }
+    let state = loadState();
+    let selectedPointId = 'open_sky_01';
+    const byId = id => document.getElementById(id);
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+    function selectedPoint() {
+      return state.reference_points.find(point => point.point_id === selectedPointId);
+    }
+    function selectedMode() {
+      return document.querySelector('input[name="attemptMode"]:checked').value;
+    }
+    function numeric(value) {
+      const number = Number.parseFloat(String(value).trim());
+      return Number.isFinite(number) ? number : null;
+    }
+    function countAttempts(pointId, mode) {
+      return state.attempts.filter(row => row.point_id === pointId && row.mode === mode && row.ended_at).length;
+    }
+    function referenceIsSaved(point) {
+      return Number.isFinite(Number(point?.reference?.lat)) && Number.isFinite(Number(point?.reference?.lon));
+    }
+    function referenceIsStrict(point) {
+      return referenceIsSaved(point) && REQUIRED_METHODS.has(point.reference.method);
+    }
+    function strictReady() {
+      return POINTS.every(point => {
+        const saved = state.reference_points.find(item => item.point_id === point.point_id);
+        return referenceIsStrict(saved) && countAttempts(point.point_id, 'cold') >= 5 && countAttempts(point.point_id, 'warm') >= 5;
+      });
+    }
+    function activeAttempt() {
+      return state.attempts.find(row => row.attempt_id === state.active_attempt_id && !row.ended_at);
+    }
+    function syncMetadata() {
+      state.field_run_id = byId('fieldRunId').value.trim();
+      state.test_run_id = byId('messageRunId').value.trim();
+      state.device_id = byId('deviceId').value.trim();
+      state.firmware_version = byId('firmwareVersion').value.trim();
+      state.board_id = byId('boardId').value.trim();
+      state.operator = byId('operator').value.trim();
+      saveState();
+    }
+    function loadReferenceForm() {
+      const point = selectedPoint();
+      byId('referenceLat').value = point?.reference?.lat ?? '';
+      byId('referenceLon').value = point?.reference?.lon ?? '';
+      byId('referenceMethod').value = point?.reference?.method || 'phone_browser_single_fix';
+      byId('referenceAccuracy').value = point?.reference?.phone_accuracy_m ?? '';
+      byId('referenceNotes').value = point?.notes || '';
+      byId('pointMeta').textContent = point?.point_id || '';
+      byId('positionStatus').textContent = referenceIsSaved(point) ? 'Reference saved locally' : '';
+      byId('positionStatus').className = referenceIsSaved(point) ? 'inline-status ok' : 'inline-status';
+    }
+    function renderProgress() {
+      byId('progressGrid').innerHTML = POINTS.map(point => {
+        const saved = state.reference_points.find(item => item.point_id === point.point_id);
+        const cold = countAttempts(point.point_id, 'cold');
+        const warm = countAttempts(point.point_id, 'warm');
+        const refClass = referenceIsStrict(saved) ? 'ok' : (referenceIsSaved(saved) ? 'warn' : '');
+        const refText = referenceIsStrict(saved) ? 'strict reference ready' : (referenceIsSaved(saved) ? 'reference needs approved method' : 'reference missing');
+        return `<div class="point-progress"><div class="point-name">${point.name}</div><div class="point-counts"><span class="count-chip ${cold >= 5 ? 'done' : ''}">cold ${cold}/5</span><span class="count-chip ${warm >= 5 ? 'done' : ''}">warm ${warm}/5</span></div><div class="reference-state ${refClass}">${refText}</div></div>`;
+      }).join('');
+      const completed = state.attempts.filter(row => row.ended_at).length;
+      byId('strictState').textContent = strictReady() ? 'Strict gate complete' : `${completed} / 30 attempts`;
+      byId('strictState').className = strictReady() ? 'strict-state pass' : 'strict-state';
+      byId('exportNote').textContent = strictReady() ? 'Strict manifest complete · analysis still required' : 'Partial evidence · not acceptance';
+    }
+    function renderAttempts() {
+      const completed = state.attempts.filter(row => row.ended_at).slice().reverse();
+      byId('attemptTotal').textContent = String(completed.length);
+      byId('attemptList').innerHTML = completed.length ? completed.map(row => `<div class="attempt-row"><div><div class="attempt-name">${row.attempt_id}</div><div class="attempt-time">${row.started_at} → ${row.ended_at}</div></div><span class="attempt-tag">saved</span></div>`).join('') : '<span class="status-note">No completed attempts</span>';
+    }
+    function renderActive() {
+      const row = activeAttempt();
+      byId('activeAttemptPanel').hidden = !row;
+      byId('startAttempt').disabled = Boolean(row);
+      if (row) {
+        byId('activeAttemptId').textContent = row.attempt_id;
+        byId('activeAttemptTime').textContent = `Started ${row.started_at}`;
+      }
+    }
+    function renderAll() {
+      renderProgress();
+      renderAttempts();
+      renderActive();
+    }
+    function saveReference() {
+      const point = selectedPoint();
+      const lat = numeric(byId('referenceLat').value);
+      const lon = numeric(byId('referenceLon').value);
+      if (lat === null || lon === null || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        byId('positionStatus').textContent = 'Enter a valid latitude and longitude';
+        byId('positionStatus').className = 'inline-status warn';
+        return;
+      }
+      point.reference = {
+        lat,
+        lon,
+        method: byId('referenceMethod').value,
+        recorded_at: new Date().toISOString(),
+        phone_accuracy_m: numeric(byId('referenceAccuracy').value),
+      };
+      point.notes = byId('referenceNotes').value.trim();
+      saveState();
+      byId('positionStatus').textContent = REQUIRED_METHODS.has(point.reference.method) ? 'Strict reference saved locally' : 'Single phone fix saved as partial reference';
+      byId('positionStatus').className = REQUIRED_METHODS.has(point.reference.method) ? 'inline-status ok' : 'inline-status warn';
+      renderProgress();
+    }
+    function capturePosition() {
+      if (!navigator.geolocation) {
+        byId('positionStatus').textContent = 'Phone location unavailable; enter coordinates manually';
+        byId('positionStatus').className = 'inline-status warn';
+        return;
+      }
+      byId('capturePosition').disabled = true;
+      byId('positionStatus').textContent = 'Waiting for phone location';
+      navigator.geolocation.getCurrentPosition(position => {
+        byId('referenceLat').value = position.coords.latitude.toFixed(7);
+        byId('referenceLon').value = position.coords.longitude.toFixed(7);
+        byId('referenceAccuracy').value = Math.round(position.coords.accuracy).toString();
+        byId('referenceMethod').value = 'phone_browser_single_fix';
+        byId('capturePosition').disabled = false;
+        byId('positionStatus').textContent = 'Phone fix captured; save reference';
+        byId('positionStatus').className = 'inline-status warn';
+      }, () => {
+        byId('capturePosition').disabled = false;
+        byId('positionStatus').textContent = 'Phone location blocked; use manual coordinates or HTTPS';
+        byId('positionStatus').className = 'inline-status warn';
+      }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    }
+    function startAttempt() {
+      syncMetadata();
+      const point = selectedPoint();
+      if (!referenceIsSaved(point)) {
+        byId('attemptStatus').textContent = 'Save this reference point first';
+        byId('attemptStatus').className = 'inline-status warn';
+        return;
+      }
+      if (activeAttempt()) return;
+      const mode = selectedMode();
+      const number = countAttempts(point.point_id, mode) + 1;
+      const row = {
+        attempt_id: `${point.point_id}-${mode}-${String(number).padStart(2, '0')}`,
+        point_id: point.point_id,
+        mode,
+        command_id: null,
+        started_at: new Date().toISOString(),
+        ended_at: null,
+        operator_notes: byId('attemptNotes').value.trim(),
+      };
+      state.attempts.push(row);
+      state.active_attempt_id = row.attempt_id;
+      state.started_at ||= row.started_at;
+      saveState();
+      byId('attemptNotes').value = '';
+      byId('attemptStatus').textContent = 'Attempt running';
+      byId('attemptStatus').className = 'inline-status ok';
+      renderAll();
+    }
+    function stopAttempt() {
+      const row = activeAttempt();
+      if (!row) return;
+      row.ended_at = new Date().toISOString();
+      state.active_attempt_id = null;
+      state.ended_at = row.ended_at;
+      saveState();
+      byId('attemptStatus').textContent = 'Attempt saved locally';
+      byId('attemptStatus').className = 'inline-status ok';
+      renderAll();
+    }
+    function exportPayload() {
+      syncMetadata();
+      const payload = JSON.parse(JSON.stringify(state));
+      delete payload.active_attempt_id;
+      payload.attempts = payload.attempts.filter(row => row.ended_at);
+      return payload;
+    }
+    async function copyManifest() {
+      const text = JSON.stringify(exportPayload(), null, 2);
+      try {
+        await navigator.clipboard.writeText(text);
+        byId('exportNote').textContent = 'Manifest copied';
+      } catch (_) {
+        const area = document.createElement('textarea');
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand('copy');
+        area.remove();
+        byId('exportNote').textContent = 'Manifest copied';
+      }
+    }
+    function downloadManifest() {
+      const blob = new Blob([JSON.stringify(exportPayload(), null, 2) + '\\n'], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'field_manifest.json';
+      link.click();
+      URL.revokeObjectURL(url);
+      byId('exportNote').textContent = 'field_manifest.json exported';
+    }
+    function resetCapture() {
+      if (!window.confirm('Reset all locally stored D2 reference data?')) return;
+      state = defaults();
+      saveState();
+      location.reload();
+    }
+    ['fieldRunId','messageRunId','deviceId','firmwareVersion','boardId','operator'].forEach(id => byId(id).addEventListener('change', syncMetadata));
+    document.querySelectorAll('input[name="point"]').forEach(input => input.addEventListener('change', event => { selectedPointId = event.target.value; loadReferenceForm(); }));
+    byId('capturePosition').addEventListener('click', capturePosition);
+    byId('saveReference').addEventListener('click', saveReference);
+    byId('startAttempt').addEventListener('click', startAttempt);
+    byId('stopAttempt').addEventListener('click', stopAttempt);
+    byId('copyManifest').addEventListener('click', copyManifest);
+    byId('downloadManifest').addEventListener('click', downloadManifest);
+    byId('resetCapture').addEventListener('click', resetCapture);
+    byId('fieldRunId').value = state.field_run_id || '';
+    byId('messageRunId').value = state.test_run_id || '';
+    byId('deviceId').value = state.device_id || '';
+    byId('firmwareVersion').value = state.firmware_version || '';
+    byId('boardId').value = state.board_id || '';
+    byId('operator').value = state.operator || '';
+    loadReferenceForm();
+    renderAll();
+  </script>
+</body>
+</html>"""
+
+
 def render_dashboard() -> str:
     return """<!doctype html>
 <html lang="en">
@@ -6617,7 +7090,8 @@ def render_dashboard() -> str:
     body { margin: 0; font-family: Segoe UI, Arial, sans-serif; background: var(--bg); color: var(--text); }
     header { padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     h1 { margin: 0; font-size: 21px; letter-spacing: 0; }
-    .auth { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .header-actions, .auth { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .header-link { color: var(--blue); text-decoration: none; font-size: 13px; font-weight: 600; white-space: nowrap; }
     input { width: min(360px, 56vw); padding: 8px 10px; border: 1px solid #c8d0dc; border-radius: 6px; font: inherit; }
     button { padding: 8px 12px; border: 1px solid var(--blue); border-radius: 6px; background: var(--blue); color: #fff; font: inherit; cursor: pointer; }
     #authStatus { min-width: 92px; color: var(--muted); font-size: 13px; }
@@ -6687,16 +7161,19 @@ def render_dashboard() -> str:
     .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: var(--ink-soft); font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 5px 6px; }
     @media (max-width: 980px) { .dashboard-grid, .d1-overview { grid-template-columns: 1fr; } }
     @media (max-width: 760px) { .evidence-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } .map-legend { left: 10px; right: auto; } }
+    @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } }
   </style>
 </head>
 <body>
   <header>
     <h1>Ego Link Message Hub</h1>
-    <div class="auth">
-      <input id="tokenInput" type="password" autocomplete="off" placeholder="Bearer token" />
-      <button id="saveToken" type="button">Save</button>
-      <span id="authStatus"></span>
+    <div class="header-actions">
+      <a class="header-link" href="/d2-reference-capture">D2 Reference Capture</a>
+      <div class="auth">
+        <input id="tokenInput" type="password" autocomplete="off" placeholder="Bearer token" />
+        <button id="saveToken" type="button">Save</button>
+        <span id="authStatus"></span>
+      </div>
     </div>
   </header>
   <main class="dashboard-shell">

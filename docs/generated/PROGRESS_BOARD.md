@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-11 05:57 UTC
-- 分支: `main` @ 43ff54f field: add server readiness observer [D2]
+- 生成时间: 2026-07-11 07:26 UTC
+- 分支: `main` @ 2dab8ad field(d2): automate reference run intake [D2]
 - 当前焦点: D2 field kit and one-command D2-to-D5 post-run processing are ready; next focus is the first real reference-point field baseline.
-- 已完成任务总数: 138，进行中: 7，暂停: 2
+- 已完成任务总数: 139，进行中: 7，暂停: 2
 
 ## 里程碑
 
@@ -11,7 +11,7 @@
 |---|---|---|
 | RELEASE Engineering Alpha Release Gate | 3/3 | ✅v0.1.0 alpha readiness ✅retire autonomous queue ✅progress board |
 | D1 Link-Through Regression | 0/2 | ⏳4G link-through ⏳power baseline |
-| D2 Location Accuracy Baseline | 2/5 | ⏳location baseline tooling ⏳reference-point field run ⏳no-key evidence map ✅server readiness observer ✅reference field automation |
+| D2 Location Accuracy Baseline | 3/6 | ⏳location baseline tooling ⏳reference-point field run ⏳no-key evidence map ✅server readiness observer ✅reference field automation ✅mobile reference capture |
 | D5 Location Data Flywheel | 0/2 | ⏳location data flywheel 📋location model loop |
 | PRODUCT Product Alpha Gaps | 1/3 | 📋call/SMS verification ✅long power baseline 📋location data policy |
 
@@ -36,13 +36,13 @@
 | 任务 | 标题 | 日期 |
 |---|---|---|
 | D2-002 | D2 reference-point field-run automation | 2026-07-11 |
+| MAP-002 | Mobile local-only D2 reference capture | 2026-07-11 |
 | FIELD-010 | Server field readiness observer | 2026-07-10 |
 | REL-012 | v0.1.0 Engineering Alpha Release Gate | 2026-07-10 |
 | DATA-032 | D1 labeling decision template validation | 2026-07-07 |
 | MODEL-DEVICE-001 | Tiny Safety Model v0 local train/export loop | 2026-07-07 |
 | MODEL-DEVICE-002 | Tiny Safety firmware dry-run harness | 2026-07-07 |
 | MODEL-DEVICE-003 | Tiny Safety firmware CLI closed loop | 2026-07-07 |
-| MODEL-DEVICE-004 | Tiny Safety firmware CLI validator | 2026-07-07 |
 
 ## 等待创始人处理
 

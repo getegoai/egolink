@@ -11,6 +11,32 @@ from server import message_hub
 
 
 class MessageHubDashboardTests(unittest.TestCase):
+    def test_dashboard_links_to_local_only_d2_reference_capture(self) -> None:
+        html = message_hub.render_dashboard()
+
+        self.assertIn('href="/d2-reference-capture"', html)
+        self.assertIn("D2 Reference Capture", html)
+
+    def test_d2_reference_capture_is_mobile_local_only_and_manifest_compatible(self) -> None:
+        html = message_hub.render_d2_reference_capture()
+
+        self.assertIn('<meta name="viewport" content="width=device-width, initial-scale=1"', html)
+        self.assertIn("Local only", html)
+        self.assertIn("Reference coordinates are not uploaded", html)
+        self.assertIn("egolink.field003_manifest.v0.2", html)
+        self.assertIn("open_sky_01", html)
+        self.assertIn("street_between_buildings_01", html)
+        self.assertIn("tree_cover_01", html)
+        self.assertIn("phone_browser_single_fix", html)
+        self.assertIn("phone_gnss_5min_average", html)
+        self.assertIn("5 cold + 5 warm per point", html)
+        self.assertIn("navigator.geolocation", html)
+        self.assertIn("localStorage", html)
+        self.assertIn("field_manifest.json", html)
+        self.assertIn("Partial evidence · not acceptance", html)
+        self.assertNotIn("fetch(", html)
+        self.assertNotIn("/api/v1/", html)
+
     def test_dashboard_exposes_field_state_and_command_panels(self) -> None:
         html = message_hub.render_dashboard()
 

@@ -25,6 +25,7 @@ GENERATOR_VERSION = "0.1.0"
 REPORT_JSON = "gnss_acceptance_report.json"
 REPORT_MARKDOWN = "gnss_acceptance_report.md"
 REQUIRED_POINT_TYPES = ("open_sky", "street_between_buildings", "tree_cover")
+ALLOWED_REFERENCE_METHODS = ("phone_gnss_5min_average", "map_pick_satellite_view", "survey_marker")
 MIN_ATTEMPTS_PER_MODE = 5
 ATTEMPT_MODES = ("cold", "warm")
 
@@ -353,6 +354,15 @@ def protocol_checks(manifest: dict[str, Any], points: dict[str, dict[str, Any]],
         for point_id, point in points.items()
         if not point.get("reference_method") or point.get("reference_lat") is None or point.get("reference_lon") is None
     ]
+    unsupported_reference_methods = [
+        {
+            "point_id": point_id,
+            "method": point.get("reference_method"),
+        }
+        for point_id, point in points.items()
+        if point.get("reference_method")
+        and normalize_key(point.get("reference_method")) not in ALLOWED_REFERENCE_METHODS
+    ]
     attempt_counter: dict[str, Counter[str]] = defaultdict(Counter)
     for attempt in attempts:
         attempt_counter[str(attempt.get("point_id") or "")][str(attempt.get("mode") or "unknown")] += 1
@@ -374,7 +384,9 @@ def protocol_checks(manifest: dict[str, Any], points: dict[str, dict[str, Any]],
         "observed_point_types": point_types,
         "missing_point_types": missing_point_types,
         "reference_methods_recorded": not missing_reference_methods,
+        "allowed_reference_methods": list(ALLOWED_REFERENCE_METHODS),
         "points_missing_reference": missing_reference_methods,
+        "unsupported_reference_methods": unsupported_reference_methods,
         "minimum_attempts_per_point_mode": MIN_ATTEMPTS_PER_MODE,
         "attempt_counts_by_point": counts_by_point,
         "insufficient_attempts": insufficient_attempts,
@@ -566,6 +578,8 @@ def evaluate_gnss_acceptance(export: dict[str, Any], manifest: dict[str, Any], *
         errors.append("one or more reference points lack coordinates or reference method")
     if protocol["insufficient_attempts"]:
         errors.append("one or more points has fewer than five cold or five warm attempts")
+    if protocol["unsupported_reference_methods"]:
+        errors.append("one or more reference points uses an unsupported reference method")
     if not protocol["usb_free_vps_only_recorded"]:
         errors.append("manifest does not record runtime_usb_connected=false with VPS Message Hub connection")
     errors.extend(attempt_errors)

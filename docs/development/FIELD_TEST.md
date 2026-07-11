@@ -85,6 +85,15 @@ street-between-buildings, and tree-cover points plus five cold and five warm
 attempts per point. Exact reference coordinates stay only in the ignored
 evidence directory.
 
+The VPS Dashboard now links to `/d2-reference-capture`, a phone-sized local
+capture surface for run identity, the three reference environments, cold/warm
+attempt start/stop timestamps, strict 5+5 progress, and manifest export. It
+uses browser `localStorage`; it has no server write API and does not upload
+reference coordinates. Browser geolocation on plain HTTP may be unavailable,
+so manual coordinates remain supported. A one-shot phone browser fix is marked
+partial evidence; strict FIELD-003 still requires one of the approved reference
+methods in `FIELD_GNSS_ACCEPTANCE_PROTOCOL.md`.
+
 After the run, the generated command can fetch the named Message Hub test-run
 export and run D2 accuracy analysis plus D5 review intake in one step:
 

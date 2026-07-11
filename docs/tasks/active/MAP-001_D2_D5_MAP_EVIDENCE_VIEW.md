@@ -6,7 +6,7 @@ priority: high
 requires_hardware: false
 serves_demo: D2-D5
 created: 2026-07-09
-last_updated: 2026-07-09
+last_updated: 2026-07-11
 
 context:
   - docs/product/NORTH_STAR.md
@@ -86,6 +86,13 @@ Not required. This is Web/API/report visibility work over existing evidence.
     Power, and D5 Flywheel. D2 location accuracy reports under
     `reports/location_accuracy/` are summarized without copying raw private
     coordinates.
+- 2026-07-11 local-only mobile reference capture:
+  - Added `/d2-reference-capture` and a Dashboard header link. The responsive
+    page records run metadata, three reference environments, cold/warm attempt
+    windows, strict progress, and exports `field_manifest.json`.
+  - Exact reference coordinates stay in browser `localStorage`; there is no
+    server write API. A single phone browser fix is explicitly partial and is
+    rejected by the strict FIELD-003 analyzer as an unsupported method.
 
 # Completion Evidence
 

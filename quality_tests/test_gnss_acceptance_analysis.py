@@ -160,6 +160,22 @@ class GnssAcceptanceAnalysisTests(unittest.TestCase):
         )
         self.assertIn("one or more points has fewer than five cold or five warm attempts", report["result"]["errors"])
 
+    def test_single_browser_fix_is_partial_not_strict_reference_evidence(self) -> None:
+        export, manifest = synthetic_fixture()
+        manifest["reference_points"][0]["reference"]["method"] = "phone_browser_single_fix"
+
+        report = analyzer.evaluate_gnss_acceptance(export, manifest, created_at=FIXED_CREATED_AT)
+
+        self.assertEqual(report["result"]["status"], "FAIL")
+        self.assertIn(
+            "one or more reference points uses an unsupported reference method",
+            report["result"]["errors"],
+        )
+        self.assertEqual(
+            report["protocol"]["unsupported_reference_methods"],
+            [{"point_id": "open_sky_01", "method": "phone_browser_single_fix"}],
+        )
+
     def test_cli_writes_json_and_markdown_report(self) -> None:
         export, manifest = synthetic_fixture()
         with tempfile.TemporaryDirectory() as tmp:

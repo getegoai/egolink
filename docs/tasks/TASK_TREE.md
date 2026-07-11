@@ -489,6 +489,10 @@ Recent D2 completion:
   - Generates the strict FIELD-003 kit and performs read-only VPS export plus
     one-command D2/D5 post-run processing.
   - The real outdoor reference-point run remains under `D2-001`/`FIELD-003`.
+- `MAP-002` Mobile local-only D2 reference capture -
+  `docs/tasks/done/MAP-002_MOBILE_REFERENCE_CAPTURE.md`
+  - Adds the phone-sized local-only manifest capture page linked from the
+    Dashboard; real reference measurements remain pending.
 
 Current active packets (2026-07-09, per founder D1 transition and D2/D5
 mainline update):

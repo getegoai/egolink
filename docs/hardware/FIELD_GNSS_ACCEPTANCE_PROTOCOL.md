@@ -56,6 +56,12 @@ these methods:
 The method, timestamp, latitude, longitude, and point notes are required for
 each reference point.
 
+The Dashboard `/d2-reference-capture` page can record these values locally in
+the phone browser and export `field_manifest.json`. A browser geolocation
+single fix is recorded as `phone_browser_single_fix`; it is useful partial
+evidence but is not one of the three strict reference methods above and must
+not pass FIELD-003 by itself.
+
 ## Evidence Directory
 
 Create this layout before the run:

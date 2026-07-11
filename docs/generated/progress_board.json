@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-11 05:57 UTC",
+  "generated_at": "2026-07-11 07:26 UTC",
   "git": {
     "branch": "main",
-    "head": "43ff54f field: add server readiness observer [D2]"
+    "head": "2dab8ad field(d2): automate reference run intake [D2]"
   },
   "current_focus": "D2 field kit and one-command D2-to-D5 post-run processing are ready; next focus is the first real reference-point field baseline.",
   "milestones": [
@@ -50,8 +50,8 @@
     {
       "id": "D2",
       "title": "Location Accuracy Baseline",
-      "done": 2,
-      "total": 5,
+      "done": 3,
+      "total": 6,
       "tasks": [
         {
           "id": "D2-001",
@@ -76,6 +76,11 @@
         {
           "id": "D2-002",
           "label": "reference field automation",
+          "state": "done"
+        },
+        {
+          "id": "MAP-002",
+          "label": "mobile reference capture",
           "state": "done"
         }
       ]
@@ -174,7 +179,7 @@
       "state": "in_progress",
       "packet_status": "active",
       "priority": "high",
-      "date": "2026-07-09",
+      "date": "2026-07-11",
       "path": "D:/pywork/egolink/docs/tasks/active/MAP-001_D2_D5_MAP_EVIDENCE_VIEW.md"
     },
     {
@@ -214,6 +219,15 @@
       "priority": "high",
       "date": "2026-07-11",
       "path": "D:/pywork/egolink/docs/tasks/done/D2-002_REFERENCE_FIELD_RUN_AUTOMATION.md"
+    },
+    {
+      "id": "MAP-002",
+      "title": "Mobile local-only D2 reference capture",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-11",
+      "path": "D:/pywork/egolink/docs/tasks/done/MAP-002_MOBILE_REFERENCE_CAPTURE.md"
     },
     {
       "id": "FIELD-010",
@@ -268,15 +282,6 @@
       "priority": "high",
       "date": "2026-07-07",
       "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-003_TINY_SAFETY_FIRMWARE_CLI_LOOP.md"
-    },
-    {
-      "id": "MODEL-DEVICE-004",
-      "title": "Tiny Safety firmware CLI validator",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-07",
-      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-004_TINY_SAFETY_FIRMWARE_CLI_VALIDATOR.md"
     }
   ],
   "operator_asks": [
@@ -293,6 +298,7 @@
     "FIELD-003": "founder outdoor run + codex postrun",
     "FIELD-010": "codex",
     "D2-002": "codex",
+    "MAP-002": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",
     "MODEL-LOC-001": "codex",
@@ -346,6 +352,6 @@
     "active": 7,
     "paused": 2,
     "open_total": 9,
-    "done_total": 138
+    "done_total": 139
   }
 }
