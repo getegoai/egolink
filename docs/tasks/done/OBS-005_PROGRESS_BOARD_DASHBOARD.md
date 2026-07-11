@@ -61,4 +61,8 @@ API and a compact responsive Dashboard section.
 - `python scripts/context_lint.py`: pass.
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`: pass, 564
   tests.
-- Live VPS smoke: pending deployment.
+- Live VPS smoke: pass; service health is true, progress status is available,
+  five milestones and five founder action items are visible, and the sanitized
+  payload contains no local drive path. HTML/DOM markers and mobile layout
+  passed; screenshot review was unavailable because no in-app browser instance
+  was present.

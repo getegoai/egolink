@@ -12,7 +12,10 @@ Message Hub as a sanitized read-only view. Authenticated `/api/state` and
 action items through an explicit allowlist; local task paths and packet
 contents are removed. The Dashboard now renders this near the top as a compact
 responsive `Project Progress` section. Deployment packages always include the
-small generated JSON board and do not scan or expose task files directly.
+small generated JSON board and do not scan or expose task files directly. The
+VPS deployment is active; health, authenticated progress API, sanitized-path
+checks, Dashboard DOM markers, and mobile layout markers pass. No screenshot
+claim is made because the in-app browser was unavailable.
 
 2026-07-11: D2-005 prepared the external QMI8658 path without flashing. The
 local firmware config generator now enables QMI8658 at explicit `0x6A/0x6B`,
