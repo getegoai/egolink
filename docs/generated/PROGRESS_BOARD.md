@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-11 13:20 UTC
-- 分支: `d2/historical-baseline-and-rule-freeze` @ 703eed0 docs(map): record local overlay deployment [D2]
-- 当前焦点: D2 historical VPS baseline is visible but provisional; next focus is the strict reference-point baseline, 24h measured battery run, and external QMI8658 bring-up.
-- 已完成任务总数: 143，进行中: 6，暂停: 2
+- 生成时间: 2026-07-11 14:58 UTC
+- 分支: `d2/qmi-motion-readiness` @ a62035c docs(d2): record baseline deployment [D2]
+- 当前焦点: QMI8658 configuration and motion-data readiness are prepared; next focus is module probe, bounded high-rate IMU windows, strict D2 reference points, and the 24h battery run.
+- 已完成任务总数: 144，进行中: 6，暂停: 2
 
 ## 里程碑
 
@@ -11,7 +11,7 @@
 |---|---|---|
 | RELEASE Engineering Alpha Release Gate | 3/3 | ✅v0.1.0 alpha readiness ✅retire autonomous queue ✅progress board |
 | D1 Link-Through Regression | 0/2 | ⏳4G link-through ⏳power baseline |
-| D2 Location Accuracy Baseline | 7/9 | ⏳location baseline tooling ⏳reference-point field run ✅no-key evidence map ✅server readiness observer ✅reference field automation ✅bounded field export ✅mobile reference capture ✅local reference overlay ✅historical VPS baseline and rule freeze |
+| D2 Location Accuracy Baseline | 8/10 | ⏳location baseline tooling ⏳reference-point field run ✅no-key evidence map ✅server readiness observer ✅reference field automation ✅bounded field export ✅mobile reference capture ✅local reference overlay ✅historical VPS baseline and rule freeze ✅QMI configuration and motion readiness |
 | D5 Location Data Flywheel | 0/2 | ⏳location data flywheel 📋location model loop |
 | PRODUCT Product Alpha Gaps | 1/3 | 📋call/SMS verification ✅long power baseline 📋location data policy |
 
@@ -37,16 +37,16 @@
 | D2-002 | D2 reference-point field-run automation | 2026-07-11 |
 | D2-003 | Bounded device and time-window field export | 2026-07-11 |
 | D2-004 | Historical VPS baseline and P0 location rule freeze | 2026-07-11 |
+| D2-005 | QMI8658 4G-board configuration and motion-data readiness | 2026-07-11 |
 | MAP-001 | D2/D5 map evidence view | 2026-07-11 |
 | MAP-002 | Mobile local-only D2 reference capture | 2026-07-11 |
 | MAP-003 | Browser-local D2 reference overlay | 2026-07-11 |
 | FIELD-010 | Server field readiness observer | 2026-07-10 |
-| REL-012 | v0.1.0 Engineering Alpha Release Gate | 2026-07-10 |
 
 ## 等待创始人处理
 
 - [ ] 24h 电池运行：现有 2.6Ah 18650 可用于工程基线；先确认板版本/极性，再刷 PWR-001 固件并断 USB 独立运行
-- [ ] 采购：QMI8658/I2C IMU 小模块×2-3，优先选 3.3V、地址可确认、带 INT 和固定孔的模块
+- [ ] QMI8658 到手后：先拍模块正反面/引脚标识并确认 0x6A 或 0x6B，再接线；不要直接使用当前 0x6B 占位固件刷机
 - [ ] 3D 打印：4G板+电池+IMU 挂绳壳（D3 佩戴测试机）
 - [ ] 决策：EVT-1 自制合并板启动（嘉立创打样）—— 待创始人确认后我起草 HW-EVT1-001
 - [ ] Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists.

@@ -52,6 +52,38 @@ Do not flash until the module is physically connected, polarity and voltage
 are checked, the board revision is recorded, and the operator explicitly
 starts the hardware task.
 
+## Prepared Build Profile
+
+`scripts/prepare_fw001_hw_config.ps1` now accepts
+`-EnableQmi8658Imu`, explicit QMI I2C pins/address, sample interval, and a
+bounded boot sample count. When MAX17048 and QMI8658 are enabled together the
+generator rejects different I2C port/SDA/SCL settings. It always disables
+`EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS` for this external-module path.
+
+Example for the documented V2 pin map and a module confirmed at `0x6B`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
+  -HostName <message-hub-host> `
+  -TokenFile <local-token-file> `
+  -ConfigPath firmware\mqtt_heartbeat\sdkconfig.qmi-4g.local `
+  -TestRunId QMI-4G-YYYYMMDD-001 `
+  -EnableSim7670Gnss -EnableSim7670LocationObservation `
+  -EnableD1PeriodicLocation -EnableMax17048Power -EnableQmi8658Imu `
+  -Qmi8658I2CAddress 107 -Qmi8658BootSampleCount 100 -Build -Json
+```
+
+Change the address to decimal `106` only after confirming `0x6A`. Use GPIO3/2
+only after recording a V1 board. A 2026-07-11 no-flash profile compiled with
+QMI8658, MAX17048, GNSS, LTE, and periodic location enabled; this is static
+evidence only and does not prove the external module or shared bus works.
+
+The current LTE field corpus contains IMU source metadata but no uploaded
+six-axis windows. The existing 30-second sensor-status cadence is not a model
+training cadence. After module probe, use the readiness report to decide the
+smallest bounded high-rate capture mode instead of enabling a permanent
+always-on stream.
+
 ## Pilot Readiness Sequence
 
 1. Bench probe and sample the external module on the 4G board.
@@ -68,4 +100,3 @@ starts the hardware task.
 - Waveshare board documentation: https://docs.waveshare.com/ESP32-S3-SIM7670G-4G
 - QST QMI8658 product page: https://www.qstcorp.com/en_imu_prod/QMI8658
 - QST QMI8658C datasheet: https://qstcorp.com/upload/pdf/202202/QMI8658C%20datasheet%20rev%200.9.pdf
-

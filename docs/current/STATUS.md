@@ -6,6 +6,18 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-11: D2-005 prepared the external QMI8658 path without flashing. The
+local firmware config generator now enables QMI8658 at explicit `0x6A/0x6B`,
+disables AMOLED-only AXP2101 rails, and rejects a different I2C bus from
+MAX17048. A V2-pin/`0x6B` placeholder profile with QMI, MAX17048, GNSS, LTE,
+and periodic location compiled successfully; hardware remains unverified.
+The new aggregate motion-data readiness gate assessed the 2026-07-09 bounded
+VPS field window: 1081 messages, 118 mock IMU metadata events, zero real
+six-axis samples, 79 good-fix speed samples, and zero IMU/GNSS joins. Dataset
+export and training remain blocked. This proves the next missing capability is
+a bounded high-rate IMU window uplink after the external module is probed, not
+more synthetic model training.
+
 2026-07-11: D2 now has a first evidence-backed historical VPS baseline from
 two explicitly named outdoor observer windows. The read-only generator found
 203 unique location-report events: 96 fix and 107 no-fix, for provisional

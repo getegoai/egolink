@@ -74,6 +74,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertFalse(payload["sim7670_location_observation_enabled"])
         self.assertFalse(payload["reconnect_store_forward_test_enabled"])
         self.assertFalse(payload["max17048_power_enabled"])
+        self.assertFalse(payload["qmi8658_imu_enabled"])
         self.assertNotIn("unit-secret-token", result.stdout)
         self.assertIn('CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED=y', config)
         self.assertIn('CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL="http://example.invalid:8790"', config)
@@ -89,6 +90,8 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST is not set", config)
         self.assertIn("CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MOCK=y", config)
         self.assertIn("# CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048 is not set", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_MOCK=y", config)
+        self.assertIn("# CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658 is not set", config)
         self.assertIn("SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.vps.local", payload["build_command"])
         self.assertNotIn("flash", payload["build_command"].lower())
         self.assertFalse(config_bytes.startswith(b"\xef\xbb\xbf"))
@@ -190,6 +193,101 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_I2C_PORT=0", config)
         self.assertIn("CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_SDA_GPIO=3", config)
         self.assertIn("CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_SCL_GPIO=2", config)
+
+    def test_script_can_enable_qmi8658_and_max17048_on_shared_bus(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            firmware_dir = tmp_path / "firmware"
+            firmware_dir.mkdir()
+            token_file = tmp_path / "token.txt"
+            token_file.write_text("unit-secret-token\n", encoding="utf-8")
+            config_path = firmware_dir / "sdkconfig.qmi.local"
+
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(self.script),
+                    "-HostName",
+                    "example.invalid",
+                    "-TokenFile",
+                    str(token_file),
+                    "-FirmwareDir",
+                    str(firmware_dir),
+                    "-ConfigPath",
+                    str(config_path),
+                    "-EnableMax17048Power",
+                    "-EnableQmi8658Imu",
+                    "-Qmi8658I2CAddress",
+                    "106",
+                    "-Qmi8658BootSampleCount",
+                    "100",
+                    "-Json",
+                ],
+                cwd=self.repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(result.stdout)
+            config = config_path.read_text(encoding="utf-8-sig")
+
+        self.assertTrue(payload["max17048_power_enabled"])
+        self.assertTrue(payload["qmi8658_imu_enabled"])
+        self.assertEqual(payload["qmi8658_i2c_address"], 106)
+        self.assertEqual(payload["qmi8658_boot_sample_count"], 100)
+        self.assertFalse(payload["qmi8658_axp2101_rails_enabled"])
+        self.assertIn("# CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_MOCK is not set", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658=y", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SDA_GPIO=15", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SCL_GPIO=16", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_I2C_ADDR=106", config)
+        self.assertIn("# CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS is not set", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT=100", config)
+        self.assertNotIn("unit-secret-token", result.stdout)
+
+    def test_script_rejects_qmi8658_and_max17048_bus_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            firmware_dir = tmp_path / "firmware"
+            firmware_dir.mkdir()
+            token_file = tmp_path / "token.txt"
+            token_file.write_text("unit-secret-token\n", encoding="utf-8")
+            config_path = firmware_dir / "sdkconfig.qmi.local"
+
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(self.script),
+                    "-HostName",
+                    "example.invalid",
+                    "-TokenFile",
+                    str(token_file),
+                    "-FirmwareDir",
+                    str(firmware_dir),
+                    "-ConfigPath",
+                    str(config_path),
+                    "-EnableMax17048Power",
+                    "-EnableQmi8658Imu",
+                    "-Qmi8658SclGpio",
+                    "14",
+                    "-Json",
+                ],
+                cwd=self.repo_root,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must use the same I2C", result.stderr)
+        self.assertNotIn("unit-secret-token", result.stderr)
 
     def test_script_can_enable_lte_status_config_without_gnss(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

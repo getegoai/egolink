@@ -25,6 +25,7 @@ param(
     [switch]$EnableRawPostFailOnceTest,
     [switch]$EnableReconnectStoreForwardTest,
     [switch]$EnableMax17048Power,
+    [switch]$EnableQmi8658Imu,
     [int]$Sim7670UartNum = 1,
     [int]$Sim7670UartRxGpio = 17,
     [int]$Sim7670UartTxGpio = 18,
@@ -32,6 +33,12 @@ param(
     [int]$Max17048I2CPort = 0,
     [int]$Max17048SdaGpio = 15,
     [int]$Max17048SclGpio = 16,
+    [int]$Qmi8658I2CPort = 0,
+    [int]$Qmi8658SdaGpio = 15,
+    [int]$Qmi8658SclGpio = 16,
+    [int]$Qmi8658I2CAddress = 107,
+    [int]$Qmi8658SampleIntervalMs = 50,
+    [int]$Qmi8658BootSampleCount = 0,
     [switch]$Build,
     [switch]$Json
 )
@@ -110,6 +117,23 @@ if (-not $Token) {
 }
 if ($EnableD1PeriodicLocation -and ($D1PeriodicLocationIntervalSec -lt 15 -or $D1PeriodicLocationIntervalSec -gt 3600)) {
     throw "D1PeriodicLocationIntervalSec must be between 15 and 3600 seconds."
+}
+if ($EnableQmi8658Imu -and $Qmi8658I2CAddress -notin @(106, 107)) {
+    throw "Qmi8658I2CAddress must be decimal 106 (0x6A) or 107 (0x6B)."
+}
+if ($EnableQmi8658Imu -and ($Qmi8658SampleIntervalMs -lt 1 -or $Qmi8658SampleIntervalMs -gt 1000)) {
+    throw "Qmi8658SampleIntervalMs must be between 1 and 1000."
+}
+if ($EnableQmi8658Imu -and ($Qmi8658BootSampleCount -lt 0 -or $Qmi8658BootSampleCount -gt 1000)) {
+    throw "Qmi8658BootSampleCount must be between 0 and 1000."
+}
+if ($EnableQmi8658Imu -and $EnableMax17048Power) {
+    $sameI2CBus = $Qmi8658I2CPort -eq $Max17048I2CPort -and
+        $Qmi8658SdaGpio -eq $Max17048SdaGpio -and
+        $Qmi8658SclGpio -eq $Max17048SclGpio
+    if (-not $sameI2CBus) {
+        throw "QMI8658 and MAX17048 must use the same I2C port/SDA/SCL when enabled together."
+    }
 }
 
 $effectiveEnableSim7670LocationObservation = [bool]($EnableSim7670LocationObservation -or $EnableReconnectStoreForwardTest)
@@ -197,6 +221,27 @@ if ($EnableMax17048Power) {
         "# CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048 is not set"
     )
 }
+if ($EnableQmi8658Imu) {
+    $lines += @(
+        "# CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_MOCK is not set",
+        "CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658=y",
+        "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_I2C_PORT=$Qmi8658I2CPort",
+        "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SDA_GPIO=$Qmi8658SdaGpio",
+        "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SCL_GPIO=$Qmi8658SclGpio",
+        "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_I2C_ADDR=$Qmi8658I2CAddress",
+        "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_WHOAMI_EXPECTED=5",
+        "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SAMPLE_INTERVAL_MS=$Qmi8658SampleIntervalMs",
+        "# CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS is not set",
+        "CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT=$Qmi8658BootSampleCount",
+        "CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_INTERVAL_MS=$Qmi8658SampleIntervalMs"
+    )
+} else {
+    $lines += @(
+        "CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_MOCK=y",
+        "# CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658 is not set",
+        "CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT=0"
+    )
+}
 if ($EnableSim7670Gnss -or $effectiveEnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop -or $effectiveEnableSim7670LocationObservation) {
     $lines += @(
         "CONFIG_EGOLINK_SIM7670_UART_NUM=$Sim7670UartNum",
@@ -267,6 +312,14 @@ $result = [pscustomobject]@{
     max17048_i2c_port = $Max17048I2CPort
     max17048_sda_gpio = $Max17048SdaGpio
     max17048_scl_gpio = $Max17048SclGpio
+    qmi8658_imu_enabled = [bool]$EnableQmi8658Imu
+    qmi8658_i2c_port = $Qmi8658I2CPort
+    qmi8658_sda_gpio = $Qmi8658SdaGpio
+    qmi8658_scl_gpio = $Qmi8658SclGpio
+    qmi8658_i2c_address = $Qmi8658I2CAddress
+    qmi8658_sample_interval_ms = $Qmi8658SampleIntervalMs
+    qmi8658_boot_sample_count = $Qmi8658BootSampleCount
+    qmi8658_axp2101_rails_enabled = $false
     build_command = $buildCommand
     flash_intentionally_not_run = $true
 }

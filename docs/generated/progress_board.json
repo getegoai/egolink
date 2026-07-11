@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-07-11 13:20 UTC",
+  "generated_at": "2026-07-11 14:58 UTC",
   "git": {
-    "branch": "d2/historical-baseline-and-rule-freeze",
-    "head": "703eed0 docs(map): record local overlay deployment [D2]"
+    "branch": "d2/qmi-motion-readiness",
+    "head": "a62035c docs(d2): record baseline deployment [D2]"
   },
-  "current_focus": "D2 historical VPS baseline is visible but provisional; next focus is the strict reference-point baseline, 24h measured battery run, and external QMI8658 bring-up.",
+  "current_focus": "QMI8658 configuration and motion-data readiness are prepared; next focus is module probe, bounded high-rate IMU windows, strict D2 reference points, and the 24h battery run.",
   "milestones": [
     {
       "id": "RELEASE",
@@ -50,8 +50,8 @@
     {
       "id": "D2",
       "title": "Location Accuracy Baseline",
-      "done": 7,
-      "total": 9,
+      "done": 8,
+      "total": 10,
       "tasks": [
         {
           "id": "D2-001",
@@ -96,6 +96,11 @@
         {
           "id": "D2-004",
           "label": "historical VPS baseline and rule freeze",
+          "state": "done"
+        },
+        {
+          "id": "D2-005",
+          "label": "QMI configuration and motion readiness",
           "state": "done"
         }
       ]
@@ -245,6 +250,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/D2-004_HISTORICAL_VPS_BASELINE_AND_P0_RULE_FREEZE.md"
     },
     {
+      "id": "D2-005",
+      "title": "QMI8658 4G-board configuration and motion-data readiness",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-11",
+      "path": "D:/pywork/egolink/docs/tasks/done/D2-005_QMI8658_MOTION_DATA_READINESS.md"
+    },
+    {
       "id": "MAP-001",
       "title": "D2/D5 map evidence view",
       "state": "done",
@@ -279,20 +293,11 @@
       "priority": "high",
       "date": "2026-07-10",
       "path": "D:/pywork/egolink/docs/tasks/done/FIELD-010_SERVER_FIELD_READINESS_OBSERVER.md"
-    },
-    {
-      "id": "REL-012",
-      "title": "v0.1.0 Engineering Alpha Release Gate",
-      "state": "done",
-      "packet_status": "completed",
-      "priority": "",
-      "date": "2026-07-10",
-      "path": "D:/pywork/egolink/docs/tasks/done/REL-012_V010_ENGINEERING_ALPHA_RELEASE_GATE.md"
     }
   ],
   "operator_asks": [
     "24h 电池运行：现有 2.6Ah 18650 可用于工程基线；先确认板版本/极性，再刷 PWR-001 固件并断 USB 独立运行",
-    "采购：QMI8658/I2C IMU 小模块×2-3，优先选 3.3V、地址可确认、带 INT 和固定孔的模块",
+    "QMI8658 到手后：先拍模块正反面/引脚标识并确认 0x6A 或 0x6B，再接线；不要直接使用当前 0x6B 占位固件刷机",
     "3D 打印：4G板+电池+IMU 挂绳壳（D3 佩戴测试机）",
     "决策：EVT-1 自制合并板启动（嘉立创打样）—— 待创始人确认后我起草 HW-EVT1-001",
     "Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists."
@@ -311,6 +316,7 @@
     "MAP-002": "codex",
     "MAP-003": "codex",
     "D2-004": "codex",
+    "D2-005": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",
     "MODEL-LOC-001": "codex",
@@ -364,6 +370,6 @@
     "active": 6,
     "paused": 2,
     "open_total": 8,
-    "done_total": 143
+    "done_total": 144
   }
 }

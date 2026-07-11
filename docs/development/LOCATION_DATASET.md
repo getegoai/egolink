@@ -128,6 +128,13 @@ do not create a second ingest pipeline just for model work.
   require shadow-mode, footprint, latency, and power evidence before device
   control is enabled.
 
+`scripts/assess_motion_data_readiness.py` is the pre-export gate. It reads a
+bounded Message Hub field export in memory and writes only aggregate counts:
+real/mock IMU coverage, cadence, good-fix speed coverage, IMU/GNSS join
+coverage, weak-label balance, and blockers. It never writes coordinates,
+cells, raw messages, training rows, or walking/vehicle labels. A passing gate
+permits a later dataset export task; it does not permit model training.
+
 ## Privacy And Retention
 
 Default retention should favor structured evidence and hashes over raw private
