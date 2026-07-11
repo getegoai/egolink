@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-04
+last_verified: 2026-07-11
 verified_by: codex
 ---
 
@@ -109,6 +109,25 @@ The split rule must avoid leakage. Do not randomly split individual rows from
 the same field session across train and test. Prefer session-, device-, place-,
 or time-blocked splits.
 
+## Motion Labels
+
+The first approved learned-model dataset target is IMU motion state, not
+location belief. Reuse the raw-frame/message evidence and bounded export path;
+do not create a second ingest pipeline just for model work.
+
+- high-quality GNSS speed plus stable fix quality can generate weak
+  moving/not-moving candidates;
+- `speed > 2 m/s` alone must not label `vehicle`, and it cannot separate
+  walking from vehicle;
+- exclude no-fix windows, unstable speed, poor-quality fixes, and transition
+  windows from automatic high-confidence labels;
+- use controlled runs or reviewed labels for the three-class ground truth;
+- split by whole session/device/place/time block so adjacent IMU windows do
+  not leak across train and test;
+- compare against a threshold/features rules baseline before training, then
+  require shadow-mode, footprint, latency, and power evidence before device
+  control is enabled.
+
 ## Privacy And Retention
 
 Default retention should favor structured evidence and hashes over raw private
@@ -126,6 +145,10 @@ payloads. Product-demo and V1 field-test exports must also obey
   run for DATA-002 or model work.
 - Dataset exports under `model_artifacts/` or runtime directories are not
   committed unless explicitly converted into small synthetic fixtures.
+- P0 VPS location memory is transitional engineering storage. Product known
+  places, common routes, and GNSS-bad zones migrate to the device or local Ego
+  Base by default; server retention requires explicit consent, minimization,
+  purpose, and deletion policy.
 
 ## Implemented DATA-001 Baseline
 

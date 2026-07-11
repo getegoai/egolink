@@ -1,5 +1,5 @@
 {
-  "current_focus": "D2 field kit, bounded export, and browser-local reference overlay are ready; next focus is the first real reference-point baseline.",
+  "current_focus": "D2 historical VPS baseline is visible but provisional; next focus is the strict reference-point baseline, 24h measured battery run, and external QMI8658 bring-up.",
   "recent_done_limit": 8,
   "milestones": [
     {
@@ -69,6 +69,10 @@
         {
           "id": "MAP-003",
           "label": "local reference overlay"
+        },
+        {
+          "id": "D2-004",
+          "label": "historical VPS baseline and rule freeze"
         }
       ]
     },
@@ -118,6 +122,7 @@
     "D2-003": "codex",
     "MAP-002": "codex",
     "MAP-003": "codex",
+    "D2-004": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",
     "MODEL-LOC-001": "codex",
@@ -126,7 +131,10 @@
     "PRIVACY-LOC-001": "planned"
   },
   "operator_asks": [
-    "For D2 baseline, collect a FIELD-003 outdoor run with reference points when convenient.",
+    "24h 电池运行：现有 2.6Ah 18650 可用于工程基线；先确认板版本/极性，再刷 PWR-001 固件并断 USB 独立运行",
+    "采购：QMI8658/I2C IMU 小模块×2-3，优先选 3.3V、地址可确认、带 INT 和固定孔的模块",
+    "3D 打印：4G板+电池+IMU 挂绳壳（D3 佩戴测试机）",
+    "决策：EVT-1 自制合并板启动（嘉立创打样）—— 待创始人确认后我起草 HW-EVT1-001",
     "Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists."
   ]
 }

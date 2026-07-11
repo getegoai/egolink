@@ -2182,6 +2182,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("d1_field_observation_report.json", script)
         self.assertIn("d1_field_observation_report.md", script)
         self.assertIn("d1_field_observation_status.json", script)
+        self.assertIn("location_accuracy_report.json", script)
+        self.assertIn('"reports\\location_accuracy"', script)
         self.assertIn("power_curve_report.json", script)
         self.assertIn("d1_demo_report.json", script)
         self.assertIn("d1_postrun_collection_summary.json", script)

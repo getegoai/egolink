@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-30
+last_verified: 2026-07-11
 verified_by: codex
 ---
 
@@ -96,9 +96,22 @@ The formal P0 rule/scoring design is EALE-P0 in
 outcomes such as known-place, last-known hold, no-fix, stale, and runtime
 failure as reasons, substates, and quality flags.
 
+ADR-0004 freezes this as the P0 product decision. Cell/Wi-Fi matching,
+known-place and GNSS-bad-zone discovery, and belief fusion use explainable
+lookup, history statistics, clustering, thresholds, and rules. P0 does not add
+a learned location-fusion model merely to make this path appear more
+intelligent.
+
+The only current learned-model candidate is IMU motion state
+(`stationary`/`walking`/`vehicle`) because it can directly inform the low-power
+scheduler and GNSS pulse policy. It remains a candidate until a rules baseline,
+held-out real-session evaluation, int8 resource measurements, shadow-mode
+behavior, and inference power evidence pass.
+
 ## Data Assets
 
-Future VPS tables should be introduced by task, not all at once:
+Future VPS materialized tables or query views should be introduced by task,
+not all at once:
 
 - `location_observations`
 - `gnss_attempts`
@@ -109,6 +122,12 @@ Future VPS tables should be introduced by task, not all at once:
 - `route_segments`
 - `location_beliefs`
 - `observation_windows`
+
+These names are a target data model, not a claim that every physical table
+exists today. The current Message Hub truth is `raw_frames`, normalized
+`messages`, and the LOC-003 `location_memory` table. Bounded exporters should
+rebuild algorithm and training views from that evidence until measured scale
+or query cost justifies another store.
 - `location_fusion_samples`
 - `dataset_exports`
 

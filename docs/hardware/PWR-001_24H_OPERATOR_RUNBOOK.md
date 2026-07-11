@@ -16,6 +16,13 @@ engineering baseline only and must not be used as a 48h or 7d product claim.
   - documented V1 override: SDA GPIO3 / SCL GPIO2.
 - Record battery rated capacity, starting condition, firmware commit, firmware
   app version, hub URL, test-run ID, start time, and evidence directory.
+- A labelled single-cell 18650 rated `2.6 Ah`, `3.7 V`, `9.62 Wh` is suitable
+  for this engineering baseline when it is genuine, undamaged, correctly
+  polarized, and compatible with the onboard holder. It is not production
+  battery qualification or proof of its actual usable capacity.
+- Reject cells with torn wrap, dents, corrosion, leakage, unusual heat, or
+  uncertain provenance. Check polarity before insertion and supervise the
+  first charge/run on a non-flammable surface.
 - Use a local token file or `EGOLINK_MESSAGE_HUB_TOKEN`; do not write tokens
   into the runbook, reports, commits, or screenshots.
 
@@ -61,7 +68,7 @@ python scripts\analyze_power_curve.py `
   --hub http://<message-hub-host>:8790 `
   --test-run-id PWR-001-YYYYMMDD-24h-001 `
   --output-dir reports\power\PWR-001-YYYYMMDD-24h-001 `
-  --battery-capacity-mah <rated-capacity>
+  --battery-capacity-mah 2600
 ```
 
 Expected outputs:

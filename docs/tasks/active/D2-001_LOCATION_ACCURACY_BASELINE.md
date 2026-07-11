@@ -141,6 +141,14 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
     markers with the server trajectory without uploading coordinates.
   - MAP-001 Web capability is complete; real D2 metric production still waits
     for the first outdoor reference run.
+- 2026-07-11 historical VPS baseline:
+  - Added `scripts/build_d2_historical_baseline.py` to summarize explicitly
+    named field-observer windows through the bounded read-only VPS export.
+  - Historical outdoor evidence contains 203 unique location-report events:
+    96 fix and 107 no-fix, for provisional event fix rate `0.472906`.
+  - Median/P90 position error and TTFF remain not measurable because these
+    runs have no external reference truth or attempt boundaries. This is a
+    useful starting observation, not the open strict FIELD-003 acceptance.
 
 # Completion Evidence
 

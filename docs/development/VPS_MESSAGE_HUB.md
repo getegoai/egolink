@@ -40,6 +40,12 @@ The VPS Message Hub is not responsible for:
 - calling a cloud LLM as the core safety path;
 - treating USB serial logs as formal runtime evidence.
 
+`location_memory` is a P0 engineering exception, not a permanent product
+ownership decision. Personal known places, common routes, GNSS-bad zones, and
+long-term location memory must migrate to the device or local Ego Base by
+default during productization. Server retention must be consented, minimized,
+purpose-bounded, time-bounded, and deletable. See ADR-0004.
+
 ## Existing VPS Boundary
 
 A public VPS is available for message-service deployment. GitLab is already

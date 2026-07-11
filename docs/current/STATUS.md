@@ -6,6 +6,19 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-11: D2 now has a first evidence-backed historical VPS baseline from
+two explicitly named outdoor observer windows. The read-only generator found
+203 unique location-report events: 96 fix and 107 no-fix, for provisional
+event fix rate `0.472906`. The result is WARN because historical messages have
+neither external reference coordinates nor GNSS attempt boundaries; median
+and P90 error plus TTFF remain not measurable and no accuracy claim is made.
+ADR-0004 now freezes P0 location belief to explainable rules/statistics and
+limits learned-model work to a future real-data IMU motion candidate. VPS
+personal location memory is explicitly transitional and must migrate toward
+device/local ownership for productization. An external QMI8658-on-4G-board
+integration guide and the 2.6 Ah 18650 engineering baseline boundary are ready;
+no firmware or hardware was changed in this step.
+
 2026-07-11: MAP-001 Web capability is complete without a map provider. The
 Dashboard can load a bounded FIELD-003 manifest into browser-local storage and
 overlay D2 reference markers with the server trajectory. Invalid coordinates,
