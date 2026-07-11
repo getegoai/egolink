@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-11 08:34 UTC",
+  "generated_at": "2026-07-11 08:41 UTC",
   "git": {
-    "branch": "d2/bounded-field-window-export",
-    "head": "87d626d ops(vps): harden Windows SSH deploy path [D2]"
+    "branch": "main",
+    "head": "9f4e9ad feat(d2): add bounded field window export [D2]"
   },
   "current_focus": "D2 field kit, mobile reference capture, and bounded device/time-window export are ready; next focus is the first real reference-point baseline.",
   "milestones": [

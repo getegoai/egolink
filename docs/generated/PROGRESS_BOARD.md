@@ -1,7 +1,7 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-11 08:34 UTC
-- 分支: `d2/bounded-field-window-export` @ 87d626d ops(vps): harden Windows SSH deploy path [D2]
+- 生成时间: 2026-07-11 08:41 UTC
+- 分支: `main` @ 9f4e9ad feat(d2): add bounded field window export [D2]
 - 当前焦点: D2 field kit, mobile reference capture, and bounded device/time-window export are ready; next focus is the first real reference-point baseline.
 - 已完成任务总数: 140，进行中: 7，暂停: 2
 

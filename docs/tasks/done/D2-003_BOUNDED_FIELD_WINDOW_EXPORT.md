@@ -55,6 +55,9 @@ of thousands of historical records and did not isolate one reference outing.
 - Focused validation: 45 tests PASS
 - Full validation: `scripts/context_lint.py` PASS and
   `scripts/verify.ps1` PASS with 551 tests
+- VPS deployment: `egolink-message-hub.service` active; a historical 10-minute
+  authenticated smoke returned 42 messages, 0 commands, and 10 redacted raw
+  frames with `complete=true` and no truncated collection
 - Hardware result: not required; no serial, flash, command, or device action
 - Privacy boundary: exact field coordinates remain only in authenticated,
   ignored runtime evidence and are not copied into static Dashboard summaries

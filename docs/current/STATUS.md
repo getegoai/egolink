@@ -12,8 +12,10 @@ collection, redacts raw-frame bytes, and reports truncation explicitly. The
 D2 -> D5 command now reads field start/end from `field_manifest.json`, verifies
 device identity, and stops before analysis if the export is incomplete. The
 legacy named test-run export remains available. This replaces the prior
-39,745-message accumulated input for future field runs; no hardware action,
-accuracy claim, model training, or private-coordinate publication occurred.
+39,745-message accumulated input for future field runs. The VPS service is
+active; a historical 10-minute smoke returned 42 messages and 10 redacted raw
+frames with a complete, non-truncated window. No hardware action, accuracy
+claim, model training, or private-coordinate publication occurred.
 
 2026-07-11: Added the mobile-sized `/d2-reference-capture` Web surface for D2
 field work. It records the three required reference environments, cold/warm
