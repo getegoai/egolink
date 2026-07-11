@@ -1,7 +1,7 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-11 15:17 UTC
-- 分支: `d2/obs005-progress-dashboard` @ 1a262c4 docs(progress): refresh QMI readiness board [D2]
+- 生成时间: 2026-07-11 15:21 UTC
+- 分支: `main` @ 5c64bb0 feat(obs): show progress board on dashboard [D2]
 - 当前焦点: QMI8658 configuration and motion-data readiness are prepared; next focus is module probe, bounded high-rate IMU windows, strict D2 reference points, and the 24h battery run.
 - 已完成任务总数: 145，进行中: 6，暂停: 2
 

@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-11 15:17 UTC",
+  "generated_at": "2026-07-11 15:21 UTC",
   "git": {
-    "branch": "d2/obs005-progress-dashboard",
-    "head": "1a262c4 docs(progress): refresh QMI readiness board [D2]"
+    "branch": "main",
+    "head": "5c64bb0 feat(obs): show progress board on dashboard [D2]"
   },
   "current_focus": "QMI8658 configuration and motion-data readiness are prepared; next focus is module probe, bounded high-rate IMU windows, strict D2 reference points, and the 24h battery run.",
   "milestones": [
