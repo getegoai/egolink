@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-07-11 07:26 UTC",
+  "generated_at": "2026-07-11 08:34 UTC",
   "git": {
-    "branch": "main",
-    "head": "2dab8ad field(d2): automate reference run intake [D2]"
+    "branch": "d2/bounded-field-window-export",
+    "head": "87d626d ops(vps): harden Windows SSH deploy path [D2]"
   },
-  "current_focus": "D2 field kit and one-command D2-to-D5 post-run processing are ready; next focus is the first real reference-point field baseline.",
+  "current_focus": "D2 field kit, mobile reference capture, and bounded device/time-window export are ready; next focus is the first real reference-point baseline.",
   "milestones": [
     {
       "id": "RELEASE",
@@ -50,8 +50,8 @@
     {
       "id": "D2",
       "title": "Location Accuracy Baseline",
-      "done": 3,
-      "total": 6,
+      "done": 4,
+      "total": 7,
       "tasks": [
         {
           "id": "D2-001",
@@ -76,6 +76,11 @@
         {
           "id": "D2-002",
           "label": "reference field automation",
+          "state": "done"
+        },
+        {
+          "id": "D2-003",
+          "label": "bounded field export",
           "state": "done"
         },
         {
@@ -152,7 +157,7 @@
       "state": "in_progress",
       "packet_status": "active",
       "priority": "high",
-      "date": "2026-07-09",
+      "date": "2026-07-11",
       "path": "D:/pywork/egolink/docs/tasks/active/D5-001_LOCATION_DATA_FLYWHEEL_MAINLINE.md"
     },
     {
@@ -221,6 +226,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/D2-002_REFERENCE_FIELD_RUN_AUTOMATION.md"
     },
     {
+      "id": "D2-003",
+      "title": "Bounded device and time-window field export",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-11",
+      "path": "D:/pywork/egolink/docs/tasks/done/D2-003_BOUNDED_FIELD_WINDOW_EXPORT.md"
+    },
+    {
       "id": "MAP-002",
       "title": "Mobile local-only D2 reference capture",
       "state": "done",
@@ -273,15 +287,6 @@
       "priority": "high",
       "date": "2026-07-07",
       "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-002_TINY_SAFETY_FIRMWARE_HARNESS.md"
-    },
-    {
-      "id": "MODEL-DEVICE-003",
-      "title": "Tiny Safety firmware CLI closed loop",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-07",
-      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-003_TINY_SAFETY_FIRMWARE_CLI_LOOP.md"
     }
   ],
   "operator_asks": [
@@ -298,6 +303,7 @@
     "FIELD-003": "founder outdoor run + codex postrun",
     "FIELD-010": "codex",
     "D2-002": "codex",
+    "D2-003": "codex",
     "MAP-002": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",
@@ -352,6 +358,6 @@
     "active": 7,
     "paused": 2,
     "open_total": 9,
-    "done_total": 139
+    "done_total": 140
   }
 }

@@ -21,7 +21,7 @@ import sqlite3
 import sys
 import threading
 from typing import Any, Mapping
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -58,6 +58,9 @@ D1_LOCATION_EVENT_TYPES = {"location_report", "location_observation"}
 D1_SUMMARY_MESSAGE_LIMIT = 300
 D1_COORDINATE_HISTORY_LIMIT = 48
 D1_COORDINATE_MESSAGE_SCAN_LIMIT = 5000
+FIELD_EXPORT_DEFAULT_MAX_RECORDS = 5000
+FIELD_EXPORT_HARD_MAX_RECORDS = 10000
+FIELD_EXPORT_MAX_DURATION_S = 48 * 60 * 60
 
 
 def utc_now() -> str:
@@ -123,6 +126,9 @@ class MessageHubStore:
                 CREATE INDEX IF NOT EXISTS idx_messages_device_time
                 ON messages (device_id, id DESC);
 
+                CREATE INDEX IF NOT EXISTS idx_messages_device_received
+                ON messages (device_id, server_received_at);
+
                 CREATE TABLE IF NOT EXISTS commands (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     cmd_id TEXT NOT NULL UNIQUE,
@@ -138,6 +144,9 @@ class MessageHubStore:
 
                 CREATE INDEX IF NOT EXISTS idx_commands_device_status
                 ON commands (device_id, status, id);
+
+                CREATE INDEX IF NOT EXISTS idx_commands_device_created
+                ON commands (device_id, created_at);
 
                 CREATE TABLE IF NOT EXISTS errors (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -180,6 +189,9 @@ class MessageHubStore:
 
                 CREATE INDEX IF NOT EXISTS idx_raw_frames_device_time
                 ON raw_frames (device_id, id DESC);
+
+                CREATE INDEX IF NOT EXISTS idx_raw_frames_device_received
+                ON raw_frames (device_id, server_received_at);
 
                 CREATE INDEX IF NOT EXISTS idx_raw_frames_test_run
                 ON raw_frames (test_run_id, id);
@@ -844,6 +856,116 @@ class MessageHubStore:
             ),
         }
 
+    def export_device_time_window(
+        self,
+        device_id: str,
+        *,
+        started_at: str,
+        ended_at: str,
+        max_records: int = FIELD_EXPORT_DEFAULT_MAX_RECORDS,
+    ) -> dict[str, Any]:
+        start_text, end_text, duration_s, record_limit = validate_field_export_window(
+            started_at,
+            ended_at,
+            max_records,
+        )
+        query_limit = record_limit + 1
+        with self.connection() as db:
+            device = db.execute(
+                "SELECT device_id FROM devices WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()
+            if device is None:
+                raise MessageHubError("device_not_found", f"unknown device: {device_id}", status=404)
+            messages = db.execute(
+                """
+                SELECT payload_json FROM messages
+                WHERE device_id = ?
+                  AND server_received_at >= ?
+                  AND server_received_at <= ?
+                ORDER BY id
+                LIMIT ?
+                """,
+                (device_id, start_text, end_text, query_limit),
+            ).fetchall()
+            commands = db.execute(
+                """
+                SELECT * FROM commands
+                WHERE device_id = ?
+                  AND (
+                    (created_at >= ? AND created_at <= ?)
+                    OR (updated_at >= ? AND updated_at <= ?)
+                    OR (ack_at >= ? AND ack_at <= ?)
+                  )
+                ORDER BY id
+                LIMIT ?
+                """,
+                (device_id, start_text, end_text, start_text, end_text, start_text, end_text, query_limit),
+            ).fetchall()
+            raw_frames = db.execute(
+                """
+                SELECT record_json FROM raw_frames
+                WHERE device_id = ?
+                  AND server_received_at >= ?
+                  AND server_received_at <= ?
+                ORDER BY id
+                LIMIT ?
+                """,
+                (device_id, start_text, end_text, query_limit),
+            ).fetchall()
+
+        truncated = {
+            "messages": len(messages) > record_limit,
+            "commands": len(commands) > record_limit,
+            "raw_frames": len(raw_frames) > record_limit,
+        }
+        message_list = [json.loads(row["payload_json"]) for row in messages[:record_limit]]
+        command_list = [command_row(row) for row in commands[:record_limit]]
+        raw_frame_list = [
+            redact_raw_frame_record(json.loads(row["record_json"]))
+            for row in raw_frames[:record_limit]
+        ]
+        window_key = sha256_hex(f"{device_id}|{start_text}|{end_text}".encode("utf-8"))[:16]
+        test_run = {
+            "test_run_id": f"field-window-{window_key}",
+            "status": "bounded_export",
+            "device_id": device_id,
+            "started_at": start_text,
+            "ended_at": end_text,
+            "created_at": utc_now(),
+        }
+        observability_summary = summarize_test_run_observability(message_list, command_list, raw_frame_list)
+        return {
+            "test_run": test_run,
+            "messages": message_list,
+            "commands": command_list,
+            "raw_frames": raw_frame_list,
+            "window": {
+                "mode": "device_server_received_time",
+                "device_id": device_id,
+                "started_at": start_text,
+                "ended_at": end_text,
+                "duration_s": duration_s,
+                "max_records_per_collection": record_limit,
+                "returned": {
+                    "messages": len(message_list),
+                    "commands": len(command_list),
+                    "raw_frames": len(raw_frame_list),
+                },
+                "truncated": truncated,
+                "complete": not any(truncated.values()),
+                "privacy_boundary": "authenticated runtime evidence; do not publish raw coordinates",
+            },
+            "observability_summary": observability_summary,
+            "run_context": build_run_context(
+                messages=message_list,
+                commands=command_list,
+                raw_frames=raw_frame_list,
+                test_run=test_run,
+                latest_observability=as_dict(observability_summary.get("latest_observability")),
+            ),
+        }
+
 
 def normalize_message(
     store: MessageHubStore,
@@ -947,7 +1069,9 @@ def make_handler(
                 self.respond_error(MessageHubError("server_error", str(error), status=500))
 
         def route_get(self) -> None:
-            path = urlparse(self.path).path
+            parsed_url = urlparse(self.path)
+            path = parsed_url.path
+            query = parse_qs(parsed_url.query, keep_blank_values=True)
             segments = split_path(path)
             if path == "/":
                 self.respond_html(render_dashboard())
@@ -1038,6 +1162,27 @@ def make_handler(
                 return
             if len(segments) == 5 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "raw-frames":
                 self.respond_json({"raw_frames": store.list_raw_frames(segments[3])})
+                return
+            if len(segments) == 5 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "field-export":
+                started_at = query_text(query, "started_at")
+                ended_at = query_text(query, "ended_at")
+                max_records_text = query_text(query, "max_records", required=False)
+                try:
+                    max_records = (
+                        int(max_records_text)
+                        if max_records_text is not None
+                        else FIELD_EXPORT_DEFAULT_MAX_RECORDS
+                    )
+                except ValueError as exc:
+                    raise MessageHubError("invalid_max_records", "max_records must be an integer") from exc
+                self.respond_json(
+                    store.export_device_time_window(
+                        segments[3],
+                        started_at=started_at,
+                        ended_at=ended_at,
+                        max_records=max_records,
+                    )
+                )
                 return
             if len(segments) == 6 and segments[:3] == ["api", "v1", "devices"] and segments[4:] == [
                 "commands",
@@ -1273,6 +1418,16 @@ def require_text(payload: dict[str, Any], field: str) -> str:
     if value is None or str(value) == "":
         raise MessageHubError("missing_field", f"missing required field: {field}")
     return str(value)
+
+
+def query_text(query: Mapping[str, list[str]], field: str, *, required: bool = True) -> str | None:
+    values = query.get(field) or []
+    value = values[0].strip() if values else ""
+    if not value:
+        if required:
+            raise MessageHubError("missing_query_parameter", f"missing required query parameter: {field}")
+        return None
+    return value
 
 
 def dumps(payload: Any, *, indent: int | None = None) -> str:
@@ -2382,6 +2537,26 @@ def parse_iso_timestamp(value: Any) -> datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
+
+
+def validate_field_export_window(started_at: str, ended_at: str, max_records: int) -> tuple[str, str, int, int]:
+    start_dt = parse_iso_timestamp(started_at)
+    end_dt = parse_iso_timestamp(ended_at)
+    if start_dt is None or end_dt is None:
+        raise MessageHubError("invalid_time_window", "started_at and ended_at must be ISO-8601 timestamps")
+    start_utc = start_dt.astimezone(timezone.utc)
+    end_utc = end_dt.astimezone(timezone.utc)
+    duration_s = int((end_utc - start_utc).total_seconds())
+    if duration_s < 0:
+        raise MessageHubError("invalid_time_window", "started_at must be before or equal to ended_at")
+    if duration_s > FIELD_EXPORT_MAX_DURATION_S:
+        raise MessageHubError("field_export_window_too_large", "field export window cannot exceed 48 hours")
+    if max_records < 1 or max_records > FIELD_EXPORT_HARD_MAX_RECORDS:
+        raise MessageHubError(
+            "invalid_max_records",
+            f"max_records must be between 1 and {FIELD_EXPORT_HARD_MAX_RECORDS}",
+        )
+    return start_utc.isoformat(), end_utc.isoformat(), duration_s, max_records
 
 
 def elapsed_ms(start: Any, end: Any) -> int | None:

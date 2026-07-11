@@ -127,14 +127,23 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
   - The strict analyzer now rejects `phone_browser_single_fix`; only a phone
     five-minute average, satellite map pick, or survey marker can pass the
     reference-method gate.
+- 2026-07-11 bounded field-window export:
+  - Added authenticated `GET /api/v1/devices/{device_id}/field-export` with a
+    48-hour window cap, bounded collections, raw-frame redaction, and explicit
+    completeness/truncation metadata.
+  - The one-command D2 -> D5 processor now reads field start/end from the
+    manifest, verifies device identity, and rejects truncated exports before
+    analysis. Existing named test-run exports remain compatible.
+  - The first real reference-point run remains the only open acceptance item;
+    this change removes accumulated historical records from that run's input.
 
 # Completion Evidence
 
-- Changed files: `scripts/analyze_location_accuracy_baseline.py`,
-  `quality_tests/test_location_accuracy_baseline.py`
-- Test result: focused D2/FIELD/Dashboard tests PASS; `python
-  scripts/context_lint.py` PASS; `powershell -ExecutionPolicy Bypass -File
-  scripts\verify.ps1` PASS with 532 tests
+- Changed files: D2 baseline/field-kit/pipeline scripts, bounded Message Hub
+  export, Dashboard reference capture, focused tests, and routed docs
+- Test result: focused D2/FIELD/Message Hub tests PASS; `python
+  scripts/context_lint.py` PASS; latest `powershell -ExecutionPolicy Bypass
+  -File scripts\verify.ps1` PASS with 551 tests
 - Hardware result: pending first real D2 outdoor baseline run
 - Evidence path: future runs write to `reports/location_accuracy/<run-id>/`
 - Remaining risks: real D2 metrics still depend on an outdoor reference-point

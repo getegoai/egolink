@@ -37,6 +37,8 @@ class D2FieldKitTests(unittest.TestCase):
         self.assertFalse(manifest["runtime_usb_connected"])
         self.assertTrue(all(command["read_only"] for command in kit["commands"].values()))
         self.assertFalse(any(kit["scope"].values()))
+        self.assertIn("--device-id", kit["commands"]["postrun"]["argv"])
+        self.assertNotIn("--test-run-id", kit["commands"]["postrun"]["argv"])
         self.assertIn("run_location_d2_d5_pipeline.py", runbook)
         self.assertIn("partial/failed gate", runbook)
         self.assertIn("Exact coordinates were not copied", checklist)

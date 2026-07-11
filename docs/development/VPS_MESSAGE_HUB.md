@@ -103,6 +103,7 @@ GET  /api/v1/devices/{device_id}
 GET  /api/v1/devices/{device_id}/telemetry/latest
 GET  /api/v1/devices/{device_id}/telemetry/history
 GET  /api/v1/devices/{device_id}/raw-frames
+GET  /api/v1/devices/{device_id}/field-export?started_at=...&ended_at=...
 POST /api/v1/devices/{device_id}/commands
 GET  /api/v1/devices/{device_id}/commands
 
@@ -114,6 +115,12 @@ GET  /api/v1/product-demo/latest
 GET  /health
 WS   /ws/dashboard
 ```
+
+`field-export` is an authenticated, read-only D2 evidence route. It accepts an
+ISO-8601 server-receive-time window no longer than 48 hours, returns messages,
+command lifecycle records, and redacted raw-frame records for one device, and
+caps each collection at 5,000 rows by default (10,000 hard maximum). Callers
+must treat any `window.truncated=true` collection as incomplete evidence.
 
 ## Product Demo Review Gate
 

@@ -94,21 +94,24 @@ so manual coordinates remain supported. A one-shot phone browser fix is marked
 partial evidence; strict FIELD-003 still requires one of the approved reference
 methods in `FIELD_GNSS_ACCEPTANCE_PROTOCOL.md`.
 
-After the run, the generated command can fetch the named Message Hub test-run
-export and run D2 accuracy analysis plus D5 review intake in one step:
+After the run, the generated command reads `started_at` and `ended_at` from the
+manifest, fetches only that device/time window from the Message Hub, and runs
+D2 accuracy analysis plus D5 review intake in one step:
 
 ```powershell
 python scripts\run_location_d2_d5_pipeline.py `
   --hub http://<operator-vps>:8790 `
-  --test-run-id <firmware-message-test-run-id> `
+  --device-id ego-link-r1-connectivity-001 `
   --manifest reports\d2_field\<run-id>\field_manifest.json `
   --run-id <run-id> `
   --token-file server\runtime\vps_message_hub_token.txt
 ```
 
-The VPS operation is a read-only export. A shorter or incomplete reference run
-is still preserved for D5 review, but it does not pass strict FIELD-003 and
-must not be described as a location-accuracy acceptance.
+The VPS operation is an authenticated read-only export, capped at 48 hours and
+5,000 records per collection by default. Truncated exports are rejected before
+analysis. A shorter or incomplete reference run is still preserved for D5
+review, but it does not pass strict FIELD-003 and must not be described as a
+location-accuracy acceptance.
 
 ## D1 Long-Run Observer Monitoring
 

@@ -6,7 +6,7 @@ priority: high
 requires_hardware: false
 serves_demo: D5
 created: 2026-07-09
-last_updated: 2026-07-09
+last_updated: 2026-07-11
 
 context:
   - docs/product/NORTH_STAR.md
@@ -122,6 +122,12 @@ FIELD, and PWR runs and must be explicitly referenced by path.
     produce bounded server-side readiness samples and reports while preserving
     the D5 boundary: summaries and artifact refs only, no raw private
     coordinate export and no model-training claim.
+- 2026-07-11 bounded D2 intake:
+  - D2 post-run intake now uses an authenticated device/time-window export
+    derived from the field manifest instead of the firmware's indefinitely
+    accumulating test-run ID.
+  - Truncated exports, incomplete timestamps, and device mismatches stop before
+    D5 review artifacts are produced; no model-training gate was relaxed.
 
 # Completion Evidence
 

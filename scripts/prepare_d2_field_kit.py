@@ -168,7 +168,7 @@ def build_commands(
     ]
     postrun = [
         "python", "scripts\\run_location_d2_d5_pipeline.py", "--hub", hub_url,
-        "--test-run-id", message_test_run_id, "--manifest", str(manifest_path),
+        "--device-id", device_id, "--manifest", str(manifest_path),
         "--run-id", run_id, "--token-file", token_file,
         "--request-timeout-sec", "120", "--json",
     ]

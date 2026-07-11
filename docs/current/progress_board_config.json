@@ -1,5 +1,5 @@
 {
-  "current_focus": "D2 field kit and one-command D2-to-D5 post-run processing are ready; next focus is the first real reference-point field baseline.",
+  "current_focus": "D2 field kit, mobile reference capture, and bounded device/time-window export are ready; next focus is the first real reference-point baseline.",
   "recent_done_limit": 8,
   "milestones": [
     {
@@ -59,6 +59,10 @@
           "label": "reference field automation"
         },
         {
+          "id": "D2-003",
+          "label": "bounded field export"
+        },
+        {
           "id": "MAP-002",
           "label": "mobile reference capture"
         }
@@ -107,6 +111,7 @@
     "FIELD-003": "founder outdoor run + codex postrun",
     "FIELD-010": "codex",
     "D2-002": "codex",
+    "D2-003": "codex",
     "MAP-002": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",

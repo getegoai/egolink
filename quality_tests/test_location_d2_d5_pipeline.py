@@ -132,6 +132,107 @@ class LocationD2D5PipelineTests(unittest.TestCase):
         self.assertNotIn("unit-secret-token", json.dumps(summary))
         self.assertTrue(summary["input_refs"]["test_run_export"].endswith("test_run_export.json"))
 
+    def test_cli_fetches_device_window_from_manifest_and_preserves_bounded_export(self) -> None:
+        export, manifest = synthetic_fixture()
+        manifest["device_id"] = "device-window-unit"
+        manifest["started_at"] = "2026-07-11T00:00:00Z"
+        manifest["ended_at"] = "2026-07-11T04:00:00Z"
+        export["window"] = {
+            "complete": True,
+            "truncated": {"messages": False, "commands": False, "raw_frames": False},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "field_manifest.json"
+            token_path = root / "token.txt"
+            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+            token_path.write_text("window-secret-token\n", encoding="utf-8")
+            stdout = io.StringIO()
+            with mock.patch.object(pipeline, "fetch_device_window_export", return_value=export) as fetch:
+                with redirect_stdout(stdout):
+                    exit_code = pipeline.main(
+                        [
+                            "--hub",
+                            "http://hub.example:8790",
+                            "--device-id",
+                            "device-window-unit",
+                            "--max-records",
+                            "4321",
+                            "--token-file",
+                            str(token_path),
+                            "--manifest",
+                            str(manifest_path),
+                            "--run-id",
+                            "window-unit",
+                            "--gnss-output-root",
+                            str(root / "gnss"),
+                            "--location-output-root",
+                            str(root / "location"),
+                            "--flywheel-output-root",
+                            str(root / "flywheel"),
+                            "--pipeline-output-root",
+                            str(root / "pipeline"),
+                            "--generated-at",
+                            "2026-07-11T05:00:00+00:00",
+                            "--json",
+                        ]
+                    )
+            summary = json.loads(stdout.getvalue())
+            preserved_export = json.loads(
+                (root / "gnss" / "window-unit" / "test_run_export.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(exit_code, 0)
+        fetch.assert_called_once_with(
+            hub_url="http://hub.example:8790",
+            device_id="device-window-unit",
+            started_at="2026-07-11T00:00:00Z",
+            ended_at="2026-07-11T04:00:00Z",
+            max_records=4321,
+            token="window-secret-token",
+            timeout_sec=120.0,
+        )
+        self.assertTrue(preserved_export["window"]["complete"])
+        self.assertNotIn("window-secret-token", json.dumps(summary))
+
+    def test_device_window_requires_completed_times_and_matching_device(self) -> None:
+        _export, manifest = synthetic_fixture()
+        manifest["device_id"] = "manifest-device"
+        manifest["started_at"] = "<fill-ISO-8601-UTC>"
+        manifest["ended_at"] = "<fill-ISO-8601-UTC>"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "field_manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with mock.patch("sys.stderr", new=io.StringIO()):
+                exit_code = pipeline.main(
+                    [
+                        "--hub",
+                        "http://hub.example:8790",
+                        "--device-id",
+                        "manifest-device",
+                        "--manifest",
+                        str(manifest_path),
+                    ]
+                )
+            manifest["started_at"] = "2026-07-11T00:00:00Z"
+            manifest["ended_at"] = "2026-07-11T01:00:00Z"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with mock.patch("sys.stderr", new=io.StringIO()):
+                mismatch_exit = pipeline.main(
+                    [
+                        "--hub",
+                        "http://hub.example:8790",
+                        "--device-id",
+                        "other-device",
+                        "--manifest",
+                        str(manifest_path),
+                    ]
+                )
+
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(mismatch_exit, 1)
+
     def test_cli_rejects_ambiguous_input_sources(self) -> None:
         export, manifest = synthetic_fixture()
         with tempfile.TemporaryDirectory() as tmp:

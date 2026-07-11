@@ -1,7 +1,8 @@
 """Run the D2 -> D5 location evidence pipeline from one bounded input pair.
 
-Input is a FIELD-003 field manifest plus either an existing Message Hub export
-or a read-only VPS test-run export request. The command writes:
+Input is a FIELD-003 field manifest plus either an existing Message Hub export,
+a legacy named test-run export, or a read-only device/time-window export. The
+command writes:
 
 - D2 location accuracy baseline report under `reports/location_accuracy/`;
 - D5 location data-flywheel status under `reports/data_flywheel/`;
@@ -22,6 +23,7 @@ import sys
 from typing import Any, Mapping
 from urllib import error as urlerror
 from urllib import request
+from urllib.parse import quote, urlencode
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -96,6 +98,46 @@ def fetch_message_hub_export(
     return payload
 
 
+def fetch_device_window_export(
+    *,
+    hub_url: str,
+    device_id: str,
+    started_at: str,
+    ended_at: str,
+    max_records: int,
+    token: str | None,
+    timeout_sec: float,
+) -> dict[str, Any]:
+    query = urlencode(
+        {
+            "started_at": started_at,
+            "ended_at": ended_at,
+            "max_records": max_records,
+        }
+    )
+    url = f"{hub_url.rstrip('/')}/api/v1/devices/{quote(device_id, safe='')}/field-export?{query}"
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    try:
+        with request.urlopen(request.Request(url, headers=headers), timeout=timeout_sec) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urlerror.HTTPError as exc:
+        raise LocationD2D5PipelineError(
+            f"Message Hub field export failed with HTTP {exc.code} for device {device_id}"
+        ) from exc
+    except (urlerror.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        raise LocationD2D5PipelineError(
+            f"Message Hub field export failed for device {device_id}: {type(exc).__name__}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise LocationD2D5PipelineError("Message Hub field export must be a JSON object")
+    window = as_dict(payload.get("window"))
+    if window.get("complete") is not True or any(as_dict(window.get("truncated")).values()):
+        raise LocationD2D5PipelineError(
+            "Message Hub field export was truncated; narrow the manifest time window before analysis"
+        )
+    return payload
+
+
 def write_export(path: Path, payload: Mapping[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -105,19 +147,59 @@ def write_export(path: Path, payload: Mapping[str, Any]) -> Path:
     return path
 
 
+def read_manifest_window(manifest_path: Path, *, device_id: str) -> tuple[str, str]:
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LocationD2D5PipelineError(f"cannot read FIELD-003 manifest: {type(exc).__name__}") from exc
+    if not isinstance(manifest, dict):
+        raise LocationD2D5PipelineError("FIELD-003 manifest must be a JSON object")
+    manifest_device_id = str(manifest.get("device_id") or "").strip()
+    if manifest_device_id and manifest_device_id != device_id:
+        raise LocationD2D5PipelineError(
+            f"manifest device_id {manifest_device_id} does not match --device-id {device_id}"
+        )
+    started_at = str(manifest.get("started_at") or "").strip()
+    ended_at = str(manifest.get("ended_at") or "").strip()
+    if not started_at or not ended_at or started_at.startswith("<") or ended_at.startswith("<"):
+        raise LocationD2D5PipelineError(
+            "manifest started_at and ended_at must be completed before a device-window export"
+        )
+    return started_at, ended_at
+
+
 def resolve_input_path(args: argparse.Namespace, *, run_id: str) -> Path:
     if args.input_path:
-        if args.hub or args.test_run_id:
-            raise LocationD2D5PipelineError("--input cannot be combined with --hub or --test-run-id")
+        if args.hub or args.test_run_id or args.device_id:
+            raise LocationD2D5PipelineError(
+                "--input cannot be combined with --hub, --test-run-id, or --device-id"
+            )
         return args.input_path
-    if not args.hub or not args.test_run_id:
-        raise LocationD2D5PipelineError("provide --input or both --hub and --test-run-id")
-    export = fetch_message_hub_export(
-        hub_url=args.hub,
-        test_run_id=args.test_run_id,
-        token=read_token(args.token_file),
-        timeout_sec=args.request_timeout_sec,
-    )
+    if not args.hub:
+        raise LocationD2D5PipelineError(
+            "provide --input, --hub with --device-id, or --hub with legacy --test-run-id"
+        )
+    if bool(args.test_run_id) == bool(args.device_id):
+        raise LocationD2D5PipelineError("choose exactly one of --device-id or --test-run-id with --hub")
+    token = read_token(args.token_file)
+    if args.device_id:
+        started_at, ended_at = read_manifest_window(args.manifest, device_id=args.device_id)
+        export = fetch_device_window_export(
+            hub_url=args.hub,
+            device_id=args.device_id,
+            started_at=started_at,
+            ended_at=ended_at,
+            max_records=args.max_records,
+            token=token,
+            timeout_sec=args.request_timeout_sec,
+        )
+    else:
+        export = fetch_message_hub_export(
+            hub_url=args.hub,
+            test_run_id=args.test_run_id,
+            token=token,
+            timeout_sec=args.request_timeout_sec,
+        )
     return write_export(args.gnss_output_root / run_id / "test_run_export.json", export)
 
 
@@ -201,7 +283,8 @@ def build_summary(
         "next_step": next_step_for(status),
         "non_claims": [
             "This pipeline is offline post-field processing only.",
-            "No hardware command, VPS query, model training, model evaluation, model artifact, or on-device deployment is performed.",
+            "No hardware command, model training, model evaluation, model artifact, or on-device deployment is performed.",
+            "Remote input mode performs only an authenticated read-only Message Hub export.",
             "Pipeline summaries contain bounded metrics and artifact refs only, not raw private coordinates or raw payload bytes.",
         ],
     }
@@ -272,8 +355,10 @@ def write_summary(summary: Mapping[str, Any], output_dir: Path) -> dict[str, Any
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", "--export", dest="input_path", type=Path)
-    parser.add_argument("--hub", help="Message Hub base URL for a read-only test-run export.")
-    parser.add_argument("--test-run-id", help="Message Hub test_run_id to export.")
+    parser.add_argument("--hub", help="Message Hub base URL for a read-only evidence export.")
+    parser.add_argument("--device-id", help="Device to export over the manifest's started_at/ended_at window.")
+    parser.add_argument("--test-run-id", help="Legacy Message Hub test_run_id to export.")
+    parser.add_argument("--max-records", type=int, default=5000, help="Maximum rows per exported collection.")
     parser.add_argument("--token-file", type=Path, default=DEFAULT_TOKEN_FILE)
     parser.add_argument("--request-timeout-sec", type=float, default=120.0)
     parser.add_argument("--manifest", required=True, type=Path)

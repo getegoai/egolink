@@ -984,6 +984,110 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(exported["observability_summary"]["eale_p0"]["location_belief"]["generator"]["name"], "EALE-P0")
         self.assertEqual(exported["observability_summary"]["failure_summary"]["reason"], "GNSS_NO_OBSERVATION")
 
+    def test_device_field_export_is_authenticated_bounded_and_time_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.register_device({"device_id": "field-device", "fw_version": "field-fw"})
+            store.register_device({"device_id": "other-device", "fw_version": "other-fw"})
+            for device_id, seq in (
+                ("field-device", 1),
+                ("field-device", 2),
+                ("other-device", 3),
+                ("field-device", 4),
+            ):
+                store.ingest(
+                    device_id,
+                    "heartbeat",
+                    {
+                        "device_id": device_id,
+                        "seq": seq,
+                        "battery": 80,
+                        "link_type": "lte",
+                        "guard_mode": "field",
+                        "queue_size": 0,
+                    },
+                )
+            command = store.create_command("field-device", {"cmd": "status_snapshot", "payload": {}})
+            raw_record = store.ingest_raw_frame("field-device", b"malformed-field-frame")
+            with store.connection() as db:
+                message_rows = db.execute(
+                    "SELECT id, payload_json FROM messages ORDER BY id"
+                ).fetchall()
+                message_times = (
+                    "2026-07-10T23:59:00+00:00",
+                    "2026-07-11T00:30:00+00:00",
+                    "2026-07-11T00:30:00+00:00",
+                    "2026-07-11T00:50:00+00:00",
+                )
+                for row, received_at in zip(message_rows, message_times, strict=True):
+                    payload = json.loads(row["payload_json"])
+                    payload["server_received_at"] = received_at
+                    db.execute(
+                        "UPDATE messages SET server_received_at = ?, payload_json = ? WHERE id = ?",
+                        (received_at, message_hub.dumps(payload), row["id"]),
+                    )
+                db.execute(
+                    "UPDATE commands SET created_at = ?, updated_at = ? WHERE cmd_id = ?",
+                    ("2026-07-11T00:20:00+00:00", "2026-07-11T00:20:00+00:00", command["cmd_id"]),
+                )
+                raw_row = db.execute(
+                    "SELECT id, record_json FROM raw_frames WHERE frame_id = ?",
+                    (raw_record["frame_id"],),
+                ).fetchone()
+                raw_payload = json.loads(raw_row["record_json"])
+                raw_payload["server_received_at"] = "2026-07-11T00:40:00+00:00"
+                db.execute(
+                    "UPDATE raw_frames SET server_received_at = ?, record_json = ? WHERE id = ?",
+                    (
+                        "2026-07-11T00:40:00+00:00",
+                        message_hub.dumps(raw_payload),
+                        raw_row["id"],
+                    ),
+                )
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store, token="secret"))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            route = (
+                "/api/v1/devices/field-device/field-export"
+                "?started_at=2026-07-11T00%3A00%3A00Z"
+                "&ended_at=2026-07-11T01%3A00%3A00Z&max_records=10"
+            )
+            try:
+                with self.assertRaises(error.HTTPError) as unauthorized:
+                    get_json(base_url, route)
+                exported = get_json(base_url, route, headers={"Authorization": "Bearer secret"})
+                limited = get_json(
+                    base_url,
+                    route.replace("max_records=10", "max_records=1"),
+                    headers={"Authorization": "Bearer secret"},
+                )
+                with self.assertRaises(error.HTTPError) as too_wide:
+                    get_json(
+                        base_url,
+                        "/api/v1/devices/field-device/field-export"
+                        "?started_at=2026-07-01T00%3A00%3A00Z&ended_at=2026-07-11T00%3A00%3A00Z",
+                        headers={"Authorization": "Bearer secret"},
+                    )
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(unauthorized.exception.code, 401)
+        self.assertEqual(exported["window"]["device_id"], "field-device")
+        self.assertEqual(exported["window"]["duration_s"], 3600)
+        self.assertTrue(exported["window"]["complete"])
+        self.assertEqual(len(exported["messages"]), 2)
+        self.assertEqual(exported["messages"][0]["seq"], 2)
+        self.assertEqual(len(exported["commands"]), 1)
+        self.assertEqual(len(exported["raw_frames"]), 1)
+        self.assertNotIn("data", exported["raw_frames"][0].get("raw_payload", {}))
+        self.assertTrue(limited["window"]["truncated"]["messages"])
+        self.assertFalse(limited["window"]["complete"])
+        self.assertEqual(too_wide.exception.code, 400)
+
     def test_state_api_includes_current_run_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")

@@ -6,6 +6,15 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-11: D2 field export is now bounded by device and manifest time window.
+The authenticated read-only API caps a window at 48 hours, limits each record
+collection, redacts raw-frame bytes, and reports truncation explicitly. The
+D2 -> D5 command now reads field start/end from `field_manifest.json`, verifies
+device identity, and stops before analysis if the export is incomplete. The
+legacy named test-run export remains available. This replaces the prior
+39,745-message accumulated input for future field runs; no hardware action,
+accuracy claim, model training, or private-coordinate publication occurred.
+
 2026-07-11: Added the mobile-sized `/d2-reference-capture` Web surface for D2
 field work. It records the three required reference environments, cold/warm
 attempt windows, strict progress, and exports `field_manifest.json`. Exact
