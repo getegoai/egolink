@@ -46,6 +46,8 @@ directly establishes historical evidence and freezes the P0 algorithm scope.
   evidence has no external reference truth or GNSS attempt boundaries.
 - Allowed curated D2 JSON/Markdown summaries in the VPS Dashboard deployment
   package without copying raw coordinates or messages.
+- Deployed the curated summary and verified the VPS health endpoint plus the
+  authenticated Field Test Results API selected this D2 run.
 - Accepted ADR-0004: P0 location stays rule/statistics based; the only current
   learned candidate is IMU motion state; VPS personal location memory is
   transitional.

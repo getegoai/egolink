@@ -12,6 +12,9 @@ two explicitly named outdoor observer windows. The read-only generator found
 event fix rate `0.472906`. The result is WARN because historical messages have
 neither external reference coordinates nor GNSS attempt boundaries; median
 and P90 error plus TTFF remain not measurable and no accuracy claim is made.
+The curated JSON/Markdown summary is deployed to the VPS; the authenticated
+Field Test Results API and Dashboard now select this run as the latest D2
+baseline while exposing no raw coordinates.
 ADR-0004 now freezes P0 location belief to explainable rules/statistics and
 limits learned-model work to a future real-data IMU motion candidate. VPS
 personal location memory is explicitly transitional and must migrate toward
