@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-30
+last_verified: 2026-07-11
 verified_by: codex
 ---
 
@@ -66,6 +66,40 @@ GitLab changes, model training, or raw private coordinate export. A `PASS`
 means the server-side Web/API surface is ready enough to begin or continue a
 field observation; it is not a GNSS acceptance, location-accuracy,
 battery-life, LTE long-run, model, or product-readiness claim.
+
+## D2 Reference-Point Field Kit
+
+Generate the strict FIELD-003 worksheet and a one-command post-run path before
+the next reference-point outing:
+
+```powershell
+python scripts\prepare_d2_field_kit.py `
+  --run-id D2-001-reference-<date> `
+  --json
+```
+
+The kit is written under `reports/d2_field/<run-id>/` and includes
+`field_manifest.json`, `D2_FIELD_RUNBOOK.md`, `D2_FIELD_CHECKLIST.md`, and a
+machine-readable command manifest. It preallocates the required open-sky,
+street-between-buildings, and tree-cover points plus five cold and five warm
+attempts per point. Exact reference coordinates stay only in the ignored
+evidence directory.
+
+After the run, the generated command can fetch the named Message Hub test-run
+export and run D2 accuracy analysis plus D5 review intake in one step:
+
+```powershell
+python scripts\run_location_d2_d5_pipeline.py `
+  --hub http://<operator-vps>:8790 `
+  --test-run-id <firmware-message-test-run-id> `
+  --manifest reports\d2_field\<run-id>\field_manifest.json `
+  --run-id <run-id> `
+  --token-file server\runtime\vps_message_hub_token.txt
+```
+
+The VPS operation is a read-only export. A shorter or incomplete reference run
+is still preserved for D5 review, but it does not pass strict FIELD-003 and
+must not be described as a location-accuracy acceptance.
 
 ## D1 Long-Run Observer Monitoring
 

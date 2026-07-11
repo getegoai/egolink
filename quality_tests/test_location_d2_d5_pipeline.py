@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 from quality_tests.test_gnss_acceptance_analysis import BASE_LAT, BASE_LON, synthetic_fixture
 from scripts import analyze_location_accuracy_baseline as baseline
@@ -63,7 +64,7 @@ class LocationD2D5PipelineTests(unittest.TestCase):
             ).exists()
 
         self.assertEqual(exit_code, 0)
-        self.assertEqual(summary["schema_version"], "egolink.location_d2_d5_pipeline.v0.1")
+        self.assertEqual(summary["schema_version"], "egolink.location_d2_d5_pipeline.v0.2")
         self.assertEqual(summary["status"], "needs_location_review")
         self.assertEqual(summary["d2_baseline"]["status"], "PASS")
         self.assertEqual(summary["d2_baseline"]["reference_points"], 3)
@@ -79,6 +80,82 @@ class LocationD2D5PipelineTests(unittest.TestCase):
         self.assertNotIn(f"{BASE_LAT:.6f}", payload)
         self.assertNotIn(f"{BASE_LON:.6f}", payload)
         self.assertNotIn("selected_observation", payload)
+
+    def test_cli_can_fetch_read_only_export_and_preserve_it_in_gnss_evidence(self) -> None:
+        export, manifest = synthetic_fixture()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            manifest_path = root / "field_manifest.json"
+            token_path = root / "token.txt"
+            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+            token_path.write_text("unit-secret-token\n", encoding="utf-8")
+            stdout = io.StringIO()
+            with mock.patch.object(pipeline, "fetch_message_hub_export", return_value=export) as fetch:
+                with redirect_stdout(stdout):
+                    exit_code = pipeline.main(
+                        [
+                            "--hub",
+                            "http://hub.example:8790",
+                            "--test-run-id",
+                            "FIELD-003-remote-unit",
+                            "--token-file",
+                            str(token_path),
+                            "--manifest",
+                            str(manifest_path),
+                            "--run-id",
+                            "remote-unit",
+                            "--gnss-output-root",
+                            str(root / "gnss"),
+                            "--location-output-root",
+                            str(root / "location"),
+                            "--flywheel-output-root",
+                            str(root / "flywheel"),
+                            "--pipeline-output-root",
+                            str(root / "pipeline"),
+                            "--generated-at",
+                            "2026-07-11T01:00:00+00:00",
+                            "--json",
+                        ]
+                    )
+            summary = json.loads(stdout.getvalue())
+            preserved_export = root / "gnss" / "remote-unit" / "test_run_export.json"
+            preserved_export_exists = preserved_export.exists()
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(preserved_export_exists)
+        fetch.assert_called_once_with(
+            hub_url="http://hub.example:8790",
+            test_run_id="FIELD-003-remote-unit",
+            token="unit-secret-token",
+            timeout_sec=120.0,
+        )
+        self.assertNotIn("unit-secret-token", json.dumps(summary))
+        self.assertTrue(summary["input_refs"]["test_run_export"].endswith("test_run_export.json"))
+
+    def test_cli_rejects_ambiguous_input_sources(self) -> None:
+        export, manifest = synthetic_fixture()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            input_path = root / "test_run_export.json"
+            manifest_path = root / "field_manifest.json"
+            input_path.write_text(json.dumps(export), encoding="utf-8")
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with mock.patch("sys.stderr", new=io.StringIO()):
+                with redirect_stdout(io.StringIO()):
+                    exit_code = pipeline.main(
+                        [
+                            "--input",
+                            str(input_path),
+                            "--hub",
+                            "http://hub.example:8790",
+                            "--test-run-id",
+                            "run-unit",
+                            "--manifest",
+                            str(manifest_path),
+                        ]
+                    )
+
+        self.assertEqual(exit_code, 1)
 
 
 if __name__ == "__main__":

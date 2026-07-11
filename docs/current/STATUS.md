@@ -1,10 +1,20 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-09
+last_verified: 2026-07-11
 verified_by: codex
 ---
 
 ## Latest Deployment Note
+
+2026-07-11: D2 reference-point field automation is ready. The new
+`scripts/prepare_d2_field_kit.py` writes a strict three-environment,
+30-attempt FIELD-003 manifest plus runbook/checklist under `reports/d2_field/`.
+`scripts/run_location_d2_d5_pipeline.py` can now fetch a named Message Hub
+test-run export read-only and continue directly through D2 baseline and D5
+review intake. The current firmware-emitted test-run ID was backfilled into
+the VPS test-run registry, and a read-only smoke exported 39,745 messages plus
+8,548 raw frames. This removes manual export assembly; the first real D2
+reference-point measurement remains pending and no accuracy claim is made.
 
 2026-07-10: Added `scripts/observe_field_readiness.py`, a read-only
 server-side field readiness observer for D2/D5. It checks the VPS Message Hub

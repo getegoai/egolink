@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-03
+last_verified: 2026-07-11
 verified_by: codex
 ---
 
@@ -18,6 +18,8 @@ or use USB/serial logs as runtime acceptance evidence.
 - Required command path: request_location -> location_report, plus location_observation when the flashed image supports it.
 - Required output path: reports/gnss/FIELD-003-YYYYMMDD/.
 - Analysis tool: python scripts/analyze_gnss_acceptance.py --input <export> --manifest <manifest> --output-dir <evidence-dir>.
+- Operator kit: python scripts/prepare_d2_field_kit.py --run-id <run-id>.
+- One-command post-run: python scripts/run_location_d2_d5_pipeline.py --hub <hub> --test-run-id <message-test-run-id> --manifest <manifest> --run-id <run-id>.
 
 ## Acceptance Design
 
@@ -142,6 +144,11 @@ bounded evidence directory.
     }
 
 ## Preflight
+
+The recommended starting point is the generated kit under
+`reports/d2_field/<run-id>/`. The kit does not contact hardware or the VPS;
+it creates this protocol's strict 30-attempt manifest plus read-only preflight
+and post-run commands.
 
 1. Confirm the VPS Message Hub and Web Dashboard are reachable.
 2. Confirm the existing GitLab service on the VPS is untouched.

@@ -1,5 +1,5 @@
 {
-  "current_focus": "v0.1.0 Engineering Alpha is the main release-line checkpoint; next focus is D2 reference-point field baseline and D5 location data review/flywheel continuity.",
+  "current_focus": "D2 field kit and one-command D2-to-D5 post-run processing are ready; next focus is the first real reference-point field baseline.",
   "recent_done_limit": 8,
   "milestones": [
     {
@@ -53,6 +53,10 @@
         {
           "id": "FIELD-010",
           "label": "server readiness observer"
+        },
+        {
+          "id": "D2-002",
+          "label": "reference field automation"
         }
       ]
     },
@@ -98,6 +102,7 @@
     "D2-001": "codex",
     "FIELD-003": "founder outdoor run + codex postrun",
     "FIELD-010": "codex",
+    "D2-002": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",
     "MODEL-LOC-001": "codex",

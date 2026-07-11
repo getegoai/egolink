@@ -6,7 +6,7 @@ priority: high
 requires_hardware: true
 serves_demo: D2
 created: 2026-07-09
-last_updated: 2026-07-09
+last_updated: 2026-07-11
 
 context:
   - docs/product/NORTH_STAR.md
@@ -109,6 +109,18 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
     freshness, D1 field readiness, no-key map status, Field Test Results, and
     D5 data-flywheel availability before or during D2 field work.
   - It does not replace the pending real FIELD-003 reference-point run.
+- 2026-07-11 D2 field-run automation:
+  - Added `scripts/prepare_d2_field_kit.py` to generate the strict three-point,
+    30-attempt FIELD-003 manifest, runbook, checklist, and bounded commands.
+  - Extended `scripts/run_location_d2_d5_pipeline.py` so post-run processing
+    can fetch a named Message Hub test-run export read-only and preserve it
+    under `reports/gnss/<run-id>/` before producing D2 and D5 reports.
+  - The first real reference-point run remains the only open D2 acceptance
+    item; partial runs remain review evidence, not accuracy acceptance.
+  - VPS smoke backfilled the missing non-secret test-run registry row for the
+    firmware-emitted `MODEL-DEVICE-006-hw-20260707-d1` ID. Read-only export
+    then succeeded with 39,745 messages and 8,548 raw frames; the larger
+    historical batch is why the post-run export timeout defaults to 120 s.
 
 # Completion Evidence
 

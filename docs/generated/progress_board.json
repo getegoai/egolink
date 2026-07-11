@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-07-10 01:19 UTC",
+  "generated_at": "2026-07-11 05:57 UTC",
   "git": {
     "branch": "main",
-    "head": "9ee3151 ops(release): mark v0.1.0 engineering alpha released [D5]"
+    "head": "43ff54f field: add server readiness observer [D2]"
   },
-  "current_focus": "v0.1.0 Engineering Alpha is the main release-line checkpoint; next focus is D2 reference-point field baseline and D5 location data review/flywheel continuity.",
+  "current_focus": "D2 field kit and one-command D2-to-D5 post-run processing are ready; next focus is the first real reference-point field baseline.",
   "milestones": [
     {
       "id": "RELEASE",
@@ -50,8 +50,8 @@
     {
       "id": "D2",
       "title": "Location Accuracy Baseline",
-      "done": 1,
-      "total": 4,
+      "done": 2,
+      "total": 5,
       "tasks": [
         {
           "id": "D2-001",
@@ -71,6 +71,11 @@
         {
           "id": "FIELD-010",
           "label": "server readiness observer",
+          "state": "done"
+        },
+        {
+          "id": "D2-002",
+          "label": "reference field automation",
           "state": "done"
         }
       ]
@@ -133,7 +138,7 @@
       "state": "in_progress",
       "packet_status": "active",
       "priority": "high",
-      "date": "2026-07-09",
+      "date": "2026-07-11",
       "path": "D:/pywork/egolink/docs/tasks/active/D2-001_LOCATION_ACCURACY_BASELINE.md"
     },
     {
@@ -151,7 +156,7 @@
       "state": "in_progress",
       "packet_status": "active",
       "priority": "high",
-      "date": "2026-07-09",
+      "date": "2026-07-11",
       "path": "D:/pywork/egolink/docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md"
     },
     {
@@ -201,6 +206,15 @@
     }
   ],
   "recent_done": [
+    {
+      "id": "D2-002",
+      "title": "D2 reference-point field-run automation",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-11",
+      "path": "D:/pywork/egolink/docs/tasks/done/D2-002_REFERENCE_FIELD_RUN_AUTOMATION.md"
+    },
     {
       "id": "FIELD-010",
       "title": "Server field readiness observer",
@@ -263,15 +277,6 @@
       "priority": "high",
       "date": "2026-07-07",
       "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-004_TINY_SAFETY_FIRMWARE_CLI_VALIDATOR.md"
-    },
-    {
-      "id": "MODEL-DEVICE-005",
-      "title": "Tiny Safety device loop runner",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-07",
-      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-005_TINY_SAFETY_DEVICE_LOOP_RUNNER.md"
     }
   ],
   "operator_asks": [
@@ -287,6 +292,7 @@
     "D2-001": "codex",
     "FIELD-003": "founder outdoor run + codex postrun",
     "FIELD-010": "codex",
+    "D2-002": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",
     "MODEL-LOC-001": "codex",
@@ -340,6 +346,6 @@
     "active": 7,
     "paused": 2,
     "open_total": 9,
-    "done_total": 137
+    "done_total": 138
   }
 }

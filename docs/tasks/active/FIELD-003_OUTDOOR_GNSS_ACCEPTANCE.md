@@ -6,7 +6,7 @@ priority: high
 requires_hardware: true
 serves_demo: D2
 created: 2026-07-03
-last_updated: 2026-07-09
+last_updated: 2026-07-11
 
 context:
   - docs/development/LOCATION_ENGINE.md
@@ -98,6 +98,18 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 - Hardware result:
 - Evidence path:
 - Remaining risks:
+
+# Progress
+
+- 2026-07-11: `scripts/prepare_d2_field_kit.py` now generates the full strict
+  manifest, operator runbook, checklist, preflight observer, and one-command
+  post-run path. `run_location_d2_d5_pipeline.py` can fetch the named VPS
+  test-run export read-only and run the existing D2/D5 processors. The real
+  outdoor reference-point measurements remain pending.
+- 2026-07-11 VPS smoke: registered the already firmware-emitted
+  `MODEL-DEVICE-006-hw-20260707-d1` test-run ID in Message Hub metadata, then
+  confirmed its read-only export endpoint. No device command or firmware
+  action was performed.
 
 # Builder Prompt
 

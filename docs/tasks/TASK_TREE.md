@@ -482,6 +482,14 @@ motion candidate
 
 ## Active Queue
 
+Recent D2 completion:
+
+- `D2-002` Reference-point field-run automation -
+  `docs/tasks/done/D2-002_REFERENCE_FIELD_RUN_AUTOMATION.md`
+  - Generates the strict FIELD-003 kit and performs read-only VPS export plus
+    one-command D2/D5 post-run processing.
+  - The real outdoor reference-point run remains under `D2-001`/`FIELD-003`.
+
 Current active packets (2026-07-09, per founder D1 transition and D2/D5
 mainline update):
 

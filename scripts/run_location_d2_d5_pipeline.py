@@ -1,14 +1,14 @@
 """Run the D2 -> D5 location evidence pipeline from one bounded input pair.
 
-Input is an explicit Message Hub test-run export plus FIELD-003 field manifest.
-The command writes:
+Input is a FIELD-003 field manifest plus either an existing Message Hub export
+or a read-only VPS test-run export request. The command writes:
 
 - D2 location accuracy baseline report under `reports/location_accuracy/`;
 - D5 location data-flywheel status under `reports/data_flywheel/`;
 - a small pipeline summary under `reports/location_pipeline/`.
 
-It does not contact hardware, query the VPS, train a model, deploy a model, or
-copy raw private coordinates into the pipeline summary.
+It does not contact hardware, send device commands, train a model, deploy a
+model, or copy raw private coordinates into the pipeline summary.
 """
 
 from __future__ import annotations
@@ -16,24 +16,33 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any, Mapping
+from urllib import error as urlerror
+from urllib import request
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PIPELINE_OUTPUT_ROOT = REPO_ROOT / "reports" / "location_pipeline"
+DEFAULT_GNSS_OUTPUT_ROOT = REPO_ROOT / "reports" / "gnss"
+DEFAULT_TOKEN_FILE = REPO_ROOT / "server" / "runtime" / "vps_message_hub_token.txt"
 SUMMARY_JSON = "location_d2_d5_pipeline.json"
 SUMMARY_MARKDOWN = "location_d2_d5_pipeline.md"
 GENERATOR_NAME = "D2_D5.location_pipeline"
-GENERATOR_VERSION = "0.1.0"
-SCHEMA_VERSION = "egolink.location_d2_d5_pipeline.v0.1"
+GENERATOR_VERSION = "0.2.0"
+SCHEMA_VERSION = "egolink.location_d2_d5_pipeline.v0.2"
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts import analyze_location_accuracy_baseline as baseline  # noqa: E402
 from scripts import summarize_location_data_flywheel as flywheel  # noqa: E402
+
+
+class LocationD2D5PipelineError(RuntimeError):
+    """Raised when the post-field input cannot be resolved safely."""
 
 
 def utc_now() -> str:
@@ -50,6 +59,66 @@ def safe_path_ref(path: Path | None) -> str | None:
 
 def default_run_id(generated_at: str) -> str:
     return "location-d2-d5-" + flywheel.slugify(generated_at.replace("+00:00", "Z"))
+
+
+def read_token(token_file: Path | None) -> str | None:
+    env_token = os.environ.get("EGOLINK_MESSAGE_HUB_TOKEN", "").strip()
+    if env_token:
+        return env_token
+    if token_file and token_file.exists():
+        token = token_file.read_text(encoding="utf-8").strip()
+        return token or None
+    return None
+
+
+def fetch_message_hub_export(
+    *,
+    hub_url: str,
+    test_run_id: str,
+    token: str | None,
+    timeout_sec: float,
+) -> dict[str, Any]:
+    url = f"{hub_url.rstrip('/')}/api/v1/test-runs/{test_run_id}/export"
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    try:
+        with request.urlopen(request.Request(url, headers=headers), timeout=timeout_sec) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urlerror.HTTPError as exc:
+        raise LocationD2D5PipelineError(
+            f"Message Hub export failed with HTTP {exc.code} for test run {test_run_id}"
+        ) from exc
+    except (urlerror.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        raise LocationD2D5PipelineError(
+            f"Message Hub export failed for test run {test_run_id}: {type(exc).__name__}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise LocationD2D5PipelineError("Message Hub test-run export must be a JSON object")
+    return payload
+
+
+def write_export(path: Path, payload: Mapping[str, Any]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(dict(payload), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def resolve_input_path(args: argparse.Namespace, *, run_id: str) -> Path:
+    if args.input_path:
+        if args.hub or args.test_run_id:
+            raise LocationD2D5PipelineError("--input cannot be combined with --hub or --test-run-id")
+        return args.input_path
+    if not args.hub or not args.test_run_id:
+        raise LocationD2D5PipelineError("provide --input or both --hub and --test-run-id")
+    export = fetch_message_hub_export(
+        hub_url=args.hub,
+        test_run_id=args.test_run_id,
+        token=read_token(args.token_file),
+        timeout_sec=args.request_timeout_sec,
+    )
+    return write_export(args.gnss_output_root / run_id / "test_run_export.json", export)
 
 
 def derive_pipeline_status(d2_report: Mapping[str, Any], d5_status: Mapping[str, Any]) -> str:
@@ -202,7 +271,11 @@ def write_summary(summary: Mapping[str, Any], output_dir: Path) -> dict[str, Any
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", "--export", dest="input_path", required=True, type=Path)
+    parser.add_argument("--input", "--export", dest="input_path", type=Path)
+    parser.add_argument("--hub", help="Message Hub base URL for a read-only test-run export.")
+    parser.add_argument("--test-run-id", help="Message Hub test_run_id to export.")
+    parser.add_argument("--token-file", type=Path, default=DEFAULT_TOKEN_FILE)
+    parser.add_argument("--request-timeout-sec", type=float, default=120.0)
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--selection", type=Path, help="Optional D5 explicit selection file.")
     parser.add_argument("--run-id", help="Stable run directory name.")
@@ -210,6 +283,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--location-output-root", type=Path, default=baseline.DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--flywheel-output-root", type=Path, default=flywheel.DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--pipeline-output-root", type=Path, default=DEFAULT_PIPELINE_OUTPUT_ROOT)
+    parser.add_argument("--gnss-output-root", type=Path, default=DEFAULT_GNSS_OUTPUT_ROOT)
     parser.add_argument("--json", action="store_true", help="Print the pipeline summary JSON.")
     return parser.parse_args(argv)
 
@@ -219,8 +293,9 @@ def main(argv: list[str] | None = None) -> int:
     generated = args.generated_at or utc_now()
     run_id = args.run_id or default_run_id(generated)
     try:
+        input_path = resolve_input_path(args, run_id=run_id)
         d2_report = baseline.analyze_location_accuracy_baseline(
-            input_path=args.input_path,
+            input_path=input_path,
             manifest_path=args.manifest,
             output_dir=args.location_output_root / run_id,
             created_at=generated,
@@ -239,13 +314,17 @@ def main(argv: list[str] | None = None) -> int:
         summary = build_summary(
             run_id=run_id,
             generated_at=generated,
-            input_path=args.input_path,
+            input_path=input_path,
             manifest_path=args.manifest,
             d2_report=d2_report,
             d5_written=d5_written,
         )
         written = write_summary(summary, args.pipeline_output_root / run_id)
-    except (baseline.LocationAccuracyBaselineError, flywheel.LocationDataFlywheelError) as exc:
+    except (
+        LocationD2D5PipelineError,
+        baseline.LocationAccuracyBaselineError,
+        flywheel.LocationDataFlywheelError,
+    ) as exc:
         print(f"FAIL D2 -> D5 location pipeline: {exc}", file=sys.stderr)
         return 1
 
