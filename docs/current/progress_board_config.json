@@ -1,5 +1,5 @@
 {
-  "current_focus": "D2 field kit, mobile reference capture, and bounded device/time-window export are ready; next focus is the first real reference-point baseline.",
+  "current_focus": "D2 field kit, bounded export, and browser-local reference overlay are ready; next focus is the first real reference-point baseline.",
   "recent_done_limit": 8,
   "milestones": [
     {
@@ -65,6 +65,10 @@
         {
           "id": "MAP-002",
           "label": "mobile reference capture"
+        },
+        {
+          "id": "MAP-003",
+          "label": "local reference overlay"
         }
       ]
     },
@@ -113,6 +117,7 @@
     "D2-002": "codex",
     "D2-003": "codex",
     "MAP-002": "codex",
+    "MAP-003": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",
     "MODEL-LOC-001": "codex",

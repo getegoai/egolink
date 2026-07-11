@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-07-11 08:41 UTC",
+  "generated_at": "2026-07-11 08:59 UTC",
   "git": {
-    "branch": "main",
-    "head": "9f4e9ad feat(d2): add bounded field window export [D2]"
+    "branch": "d2/local-reference-overlay",
+    "head": "cb8fc5e docs(d2): record bounded export deployment [D2]"
   },
-  "current_focus": "D2 field kit, mobile reference capture, and bounded device/time-window export are ready; next focus is the first real reference-point baseline.",
+  "current_focus": "D2 field kit, bounded export, and browser-local reference overlay are ready; next focus is the first real reference-point baseline.",
   "milestones": [
     {
       "id": "RELEASE",
@@ -50,8 +50,8 @@
     {
       "id": "D2",
       "title": "Location Accuracy Baseline",
-      "done": 4,
-      "total": 7,
+      "done": 6,
+      "total": 8,
       "tasks": [
         {
           "id": "D2-001",
@@ -66,7 +66,7 @@
         {
           "id": "MAP-001",
           "label": "no-key evidence map",
-          "state": "in_progress"
+          "state": "done"
         },
         {
           "id": "FIELD-010",
@@ -86,6 +86,11 @@
         {
           "id": "MAP-002",
           "label": "mobile reference capture",
+          "state": "done"
+        },
+        {
+          "id": "MAP-003",
+          "label": "local reference overlay",
           "state": "done"
         }
       ]
@@ -179,15 +184,6 @@
       "path": "D:/pywork/egolink/docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md"
     },
     {
-      "id": "MAP-001",
-      "title": "D2/D5 map evidence view",
-      "state": "in_progress",
-      "packet_status": "active",
-      "priority": "high",
-      "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/active/MAP-001_D2_D5_MAP_EVIDENCE_VIEW.md"
-    },
-    {
       "id": "MODEL-001",
       "title": "Model footprint assessment",
       "state": "paused",
@@ -235,6 +231,15 @@
       "path": "D:/pywork/egolink/docs/tasks/done/D2-003_BOUNDED_FIELD_WINDOW_EXPORT.md"
     },
     {
+      "id": "MAP-001",
+      "title": "D2/D5 map evidence view",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-11",
+      "path": "D:/pywork/egolink/docs/tasks/done/MAP-001_D2_D5_MAP_EVIDENCE_VIEW.md"
+    },
+    {
       "id": "MAP-002",
       "title": "Mobile local-only D2 reference capture",
       "state": "done",
@@ -242,6 +247,15 @@
       "priority": "high",
       "date": "2026-07-11",
       "path": "D:/pywork/egolink/docs/tasks/done/MAP-002_MOBILE_REFERENCE_CAPTURE.md"
+    },
+    {
+      "id": "MAP-003",
+      "title": "Browser-local D2 reference overlay",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-07-11",
+      "path": "D:/pywork/egolink/docs/tasks/done/MAP-003_LOCAL_REFERENCE_OVERLAY.md"
     },
     {
       "id": "FIELD-010",
@@ -269,24 +283,6 @@
       "priority": "high",
       "date": "2026-07-07",
       "path": "D:/pywork/egolink/docs/tasks/done/DATA-032_D1_LABELING_DECISION_VALIDATION.md"
-    },
-    {
-      "id": "MODEL-DEVICE-001",
-      "title": "Tiny Safety Model v0 local train/export loop",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-07",
-      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-001_TINY_SAFETY_MODEL_V0.md"
-    },
-    {
-      "id": "MODEL-DEVICE-002",
-      "title": "Tiny Safety firmware dry-run harness",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-07",
-      "path": "D:/pywork/egolink/docs/tasks/done/MODEL-DEVICE-002_TINY_SAFETY_FIRMWARE_HARNESS.md"
     }
   ],
   "operator_asks": [
@@ -305,6 +301,7 @@
     "D2-002": "codex",
     "D2-003": "codex",
     "MAP-002": "codex",
+    "MAP-003": "codex",
     "MAP-001": "codex",
     "D5-001": "codex",
     "MODEL-LOC-001": "codex",
@@ -355,9 +352,9 @@
     }
   ],
   "counts": {
-    "active": 7,
+    "active": 6,
     "paused": 2,
-    "open_total": 9,
-    "done_total": 140
+    "open_total": 8,
+    "done_total": 142
   }
 }

@@ -136,6 +136,11 @@ powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
     analysis. Existing named test-run exports remain compatible.
   - The first real reference-point run remains the only open acceptance item;
     this change removes accumulated historical records from that run's input.
+- 2026-07-11 local reference overlay:
+  - Dashboard can now import a FIELD-003 manifest locally and overlay reference
+    markers with the server trajectory without uploading coordinates.
+  - MAP-001 Web capability is complete; real D2 metric production still waits
+    for the first outdoor reference run.
 
 # Completion Evidence
 

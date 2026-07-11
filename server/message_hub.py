@@ -7269,6 +7269,8 @@ def render_dashboard() -> str:
     .header-link { color: var(--blue); text-decoration: none; font-size: 13px; font-weight: 600; white-space: nowrap; }
     input { width: min(360px, 56vw); padding: 8px 10px; border: 1px solid #c8d0dc; border-radius: 6px; font: inherit; }
     button { padding: 8px 12px; border: 1px solid var(--blue); border-radius: 6px; background: var(--blue); color: #fff; font: inherit; cursor: pointer; }
+    button.secondary { background: #fff; color: var(--blue); }
+    button:disabled { cursor: not-allowed; opacity: 0.45; }
     #authStatus { min-width: 92px; color: var(--muted); font-size: 13px; }
     .dashboard-shell { max-width: 1440px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
     .dashboard-grid { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -7277,6 +7279,9 @@ def render_dashboard() -> str:
     .focus-panel { padding: 0; overflow: hidden; }
     .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #edf0f5; }
     .section-head h2 { margin: 0; }
+    .section-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+    .section-actions button { min-height: 34px; padding: 6px 10px; font-size: 12px; }
+    .map-import-status { min-width: 126px; max-width: 260px; color: var(--muted); font-size: 12px; text-align: right; overflow-wrap: anywhere; }
     .section-kicker, .refresh-note { color: var(--muted); font-size: 12px; }
     h2 { margin: 0 0 10px; font-size: 16px; letter-spacing: 0; }
     h3 { margin: 0; font-size: 14px; letter-spacing: 0; }
@@ -7336,7 +7341,7 @@ def render_dashboard() -> str:
     .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: var(--ink-soft); font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 5px 6px; }
     @media (max-width: 980px) { .dashboard-grid, .d1-overview { grid-template-columns: 1fr; } }
     @media (max-width: 760px) { .evidence-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } }
+    @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } .section-head { align-items: flex-start; flex-direction: column; } .section-actions { width: 100%; justify-content: flex-start; } .map-import-status { max-width: 100%; text-align: left; } }
   </style>
 </head>
 <body>
@@ -7358,7 +7363,13 @@ def render_dashboard() -> str:
           <h2>D1 Link Through</h2>
           <span class="section-kicker">Field live view</span>
         </div>
-        <span class="refresh-note">auto refresh 3s</span>
+        <div class="section-actions">
+          <button id="loadD2Manifest" class="secondary" type="button">Load D2 manifest</button>
+          <button id="clearD2References" class="secondary" type="button">Clear refs</button>
+          <input id="d2ManifestFile" type="file" accept="application/json,.json" hidden />
+          <span id="d2ManifestStatus" class="map-import-status">No local references</span>
+          <span class="refresh-note">auto refresh 3s</span>
+        </div>
       </div>
       <div id="d1Link"></div>
     </section>
@@ -7491,6 +7502,105 @@ def render_dashboard() -> str:
       const token = currentToken();
       return token ? { Authorization: `Bearer ${token}` } : {};
     }
+    const D2_MAP_REVIEW_KEY = 'egolink.d2.map_review.v1';
+    const D2_MAP_REVIEW_DISABLED_KEY = 'egolink.d2.map_review.disabled.v1';
+    const D2_CAPTURE_KEY = 'egolink.d2.reference_capture.v1';
+    const D2_MANIFEST_MAX_BYTES = 262144;
+    const D2_REFERENCE_POINT_LIMIT = 16;
+    let latestDashboardState = null;
+    let localD2MapReview = null;
+    function finiteCoordinate(value, min, max, field) {
+      if (value === null || value === undefined || String(value).trim() === '') {
+        throw new Error(`missing ${field}`);
+      }
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+        throw new Error(`invalid ${field}`);
+      }
+      return parsed;
+    }
+    function compactD2MapReview(manifest) {
+      if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
+        throw new Error('manifest must be a JSON object');
+      }
+      const sourcePoints = Array.isArray(manifest.reference_points) ? manifest.reference_points : [];
+      if (!sourcePoints.length) throw new Error('manifest has no reference points');
+      if (sourcePoints.length > D2_REFERENCE_POINT_LIMIT) {
+        throw new Error(`reference point limit is ${D2_REFERENCE_POINT_LIMIT}`);
+      }
+      const referencePoints = sourcePoints.map((point, index) => {
+        const reference = point && typeof point.reference === 'object' ? point.reference : point || {};
+        return {
+          point_id: String(point.point_id || `reference-${index + 1}`).slice(0, 96),
+          label: String(point.label || point.name || point.point_id || `D2 reference ${index + 1}`).slice(0, 120),
+          lat: finiteCoordinate(reference.lat, -90, 90, 'latitude'),
+          lon: finiteCoordinate(reference.lon, -180, 180, 'longitude'),
+          source: 'browser_local_manifest',
+        };
+      });
+      return {
+        schema_version: 'egolink.d2_map_review.v0.1',
+        field_run_id: String(manifest.field_run_id || manifest.run_id || 'local-reference-review').slice(0, 120),
+        device_id: String(manifest.device_id || '').slice(0, 120),
+        reference_points: referencePoints,
+      };
+    }
+    function loadLocalD2MapReview() {
+      const savedReview = localStorage.getItem(D2_MAP_REVIEW_KEY);
+      const keys = savedReview
+        ? [D2_MAP_REVIEW_KEY]
+        : localStorage.getItem(D2_MAP_REVIEW_DISABLED_KEY) ? [] : [D2_CAPTURE_KEY];
+      for (const key of keys) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) continue;
+          const review = compactD2MapReview(JSON.parse(raw));
+          localStorage.setItem(D2_MAP_REVIEW_KEY, JSON.stringify(review));
+          return review;
+        } catch (_error) {
+          if (key === D2_MAP_REVIEW_KEY) localStorage.removeItem(key);
+        }
+      }
+      return null;
+    }
+    function setD2ManifestStatus(message, state = '') {
+      d2ManifestStatus.textContent = message;
+      d2ManifestStatus.className = `map-import-status ${state}`.trim();
+      clearD2References.disabled = !localD2MapReview;
+    }
+    function updateD2ManifestStatus(deviceId = '') {
+      if (!localD2MapReview) {
+        setD2ManifestStatus('No local references');
+        return;
+      }
+      if (localD2MapReview.device_id && deviceId && localD2MapReview.device_id !== deviceId) {
+        setD2ManifestStatus(`${localD2MapReview.reference_points.length} refs / device mismatch`, 'warn');
+        return;
+      }
+      setD2ManifestStatus(
+        `${localD2MapReview.reference_points.length} refs / ${localD2MapReview.field_run_id}`,
+        'ok',
+      );
+    }
+    function mapWithLocalReferences(map, deviceId) {
+      if (!localD2MapReview) return map;
+      if (localD2MapReview.device_id && deviceId && localD2MapReview.device_id !== deviceId) {
+        return map;
+      }
+      const references = localD2MapReview.reference_points || [];
+      return {
+        ...map,
+        reference_points: references,
+        reference_source: 'browser_local_manifest',
+        layers: {...(map.layers || {}), reference_points: references.length > 0},
+      };
+    }
+    function renderD1LinkFromLatestState() {
+      if (!latestDashboardState) return;
+      const devices = latestDashboardState.devices || [];
+      updateD2ManifestStatus(devices[0] ? devices[0].device_id : '');
+      d1Link.innerHTML = d1LinkPanel(devices);
+    }
     function showStateMessage(message) {
       const html = `<span class="empty">${escapeHtml(message)}</span>`;
       devices.innerHTML = html;
@@ -7521,6 +7631,37 @@ def render_dashboard() -> str:
     saveToken.addEventListener('click', () => {
       localStorage.setItem('egolinkHubToken', tokenInput.value.trim());
       refresh();
+    });
+    localD2MapReview = loadLocalD2MapReview();
+    updateD2ManifestStatus();
+    loadD2Manifest.addEventListener('click', () => d2ManifestFile.click());
+    d2ManifestFile.addEventListener('change', async () => {
+      const file = d2ManifestFile.files && d2ManifestFile.files[0];
+      if (!file) return;
+      try {
+        if (file.size > D2_MANIFEST_MAX_BYTES) throw new Error('manifest exceeds 256 KiB');
+        const review = compactD2MapReview(JSON.parse(await file.text()));
+        const activeDevice = latestDashboardState && (latestDashboardState.devices || [])[0];
+        if (review.device_id && activeDevice && review.device_id !== activeDevice.device_id) {
+          throw new Error('manifest device does not match active device');
+        }
+        localStorage.setItem(D2_MAP_REVIEW_KEY, JSON.stringify(review));
+        localStorage.removeItem(D2_MAP_REVIEW_DISABLED_KEY);
+        localD2MapReview = review;
+        updateD2ManifestStatus();
+        renderD1LinkFromLatestState();
+      } catch (error) {
+        setD2ManifestStatus(error instanceof Error ? error.message : 'invalid manifest', 'bad');
+      } finally {
+        d2ManifestFile.value = '';
+      }
+    });
+    clearD2References.addEventListener('click', () => {
+      localStorage.removeItem(D2_MAP_REVIEW_KEY);
+      localStorage.setItem(D2_MAP_REVIEW_DISABLED_KEY, '1');
+      localD2MapReview = null;
+      updateD2ManifestStatus();
+      renderD1LinkFromLatestState();
     });
     function parseResult(rawFrame) {
       return rawFrame.parse_result || {};
@@ -8366,10 +8507,11 @@ def render_dashboard() -> str:
       const providerStatus = provider.status || 'not_configured';
       const reviewMode = map.review_mode || 'local_no_key';
       const providerLabel = providerMode === 'none' ? 'No-key Local Map' : `Provider Map ${providerMode}`;
-      const caption = map.visible
+      const surfaceVisible = map.visible || referencePoints.length > 0;
+      const caption = surfaceVisible
         ? `${mode} / ${estimate.state || 'unknown'} / ${coordinateLabel(map.lat, map.lon)} / ${pointCount} track points / ${coordCount}/${eventCount} coordinate uploads`
         : 'waiting for location upload';
-      const marker = map.visible
+      const marker = surfaceVisible
         ? d1MapTrack(points, referencePoints) || '<div class="map-waiting">no coordinate points</div>'
         : '<div class="map-waiting">waiting for location</div>';
       return `
@@ -8397,7 +8539,7 @@ def render_dashboard() -> str:
       const readiness = d1.field_readiness || {};
       const acceptance = d1.acceptance_gate || {};
       const estimate = d1.location_estimate || {};
-      const map = d1.map_surface || {};
+      const map = mapWithLocalReferences(d1.map_surface || {}, d.device_id);
       const coord = map.coordinate_diagnostics || acceptance.coordinate_diagnostics || {};
       const provider = map.provider || {};
       const privacy = map.privacy || {};
@@ -8586,6 +8728,7 @@ def render_dashboard() -> str:
       }
       authStatus.textContent = 'connected';
       const data = await response.json();
+      latestDashboardState = data;
       runContext.innerHTML = runContextPanel(data.current_run || {});
       productDemo.innerHTML = productDemoPanel(data.product_demo || {});
       fieldResults.innerHTML = fieldResultsPanel(data.field_results || {}, data.data_flywheel || {});
@@ -8603,7 +8746,7 @@ def render_dashboard() -> str:
       d1LabelingQueue.innerHTML = d1LabelingQueuePanel(data.d1_labeling_queue || {});
       d1LabelingReviewPacket.innerHTML = d1LabelingReviewPacketPanel(data.d1_labeling_review_packet || {});
       d1LabelingDecisionTemplate.innerHTML = d1LabelingDecisionTemplatePanel(data.d1_labeling_decision_template || {});
-      d1Link.innerHTML = d1LinkPanel(data.devices || []);
+      renderD1LinkFromLatestState();
       devices.innerHTML = data.devices.map(d => `
         <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>
         <div class="metric"><span>Status</span><span class="${ageClass(d.last_seen_at)}">${escapeHtml(onlineLabel(d.last_seen_at))}</span></div>

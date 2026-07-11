@@ -17,6 +17,25 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn('href="/d2-reference-capture"', html)
         self.assertIn("D2 Reference Capture", html)
 
+    def test_dashboard_loads_d2_reference_manifest_locally_without_upload_api(self) -> None:
+        html = message_hub.render_dashboard()
+
+        self.assertIn('id="loadD2Manifest"', html)
+        self.assertIn('id="clearD2References"', html)
+        self.assertIn('id="d2ManifestFile"', html)
+        self.assertIn('accept="application/json,.json"', html)
+        self.assertIn("egolink.d2.map_review.v1", html)
+        self.assertIn("egolink.d2.map_review.disabled.v1", html)
+        self.assertIn("egolink.d2.reference_capture.v1", html)
+        self.assertIn("D2_MANIFEST_MAX_BYTES = 262144", html)
+        self.assertIn("D2_REFERENCE_POINT_LIMIT = 16", html)
+        self.assertIn("manifest device does not match active device", html)
+        self.assertIn("browser_local_manifest", html)
+        self.assertIn("mapWithLocalReferences", html)
+        self.assertIn("d1MapTrack(points, referencePoints)", html)
+        self.assertNotIn("/api/v1/d2-reference", html)
+        self.assertNotIn("method: 'POST'", html)
+
     def test_d2_reference_capture_is_mobile_local_only_and_manifest_compatible(self) -> None:
         html = message_hub.render_d2_reference_capture()
 

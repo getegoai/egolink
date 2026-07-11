@@ -1,12 +1,13 @@
 ---
 id: MAP-001
 title: D2/D5 map evidence view
-status: active
+status: done
 priority: high
 requires_hardware: false
 serves_demo: D2-D5
 created: 2026-07-09
 last_updated: 2026-07-11
+completed: 2026-07-11
 
 context:
   - docs/product/NORTH_STAR.md
@@ -47,14 +48,14 @@ The Web UI supports two modes:
 
 # Acceptance Criteria
 
-- [ ] Dashboard clearly distinguishes no-key coordinate/trajectory mode from
+- [x] Dashboard clearly distinguishes no-key coordinate/trajectory mode from
       provider-backed map mode.
-- [ ] D2 reference points and observed points can be reviewed together without
+- [x] D2 reference points and observed points can be reviewed together without
       exposing private raw coordinates in static docs.
-- [ ] Field Test Results link D2 baseline, D1 regression, power, and data
+- [x] Field Test Results link D2 baseline, D1 regression, power, and data
       flywheel summaries in one review surface.
-- [ ] Missing provider/API key degrades gracefully and is never a D1 blocker.
-- [ ] Unit tests protect privacy redaction and no-accuracy-claim boundaries.
+- [x] Missing provider/API key degrades gracefully and is never a D1 blocker.
+- [x] Unit tests protect privacy redaction and no-accuracy-claim boundaries.
 
 # Validation Commands
 
@@ -93,18 +94,28 @@ Not required. This is Web/API/report visibility work over existing evidence.
   - Exact reference coordinates stay in browser `localStorage`; there is no
     server write API. A single phone browser fix is explicitly partial and is
     rejected by the strict FIELD-003 analyzer as an unsupported method.
+- 2026-07-11 local reference overlay:
+  - Dashboard can load a FIELD-003 manifest into browser-local storage and
+    render up to 16 D2 reference points with the current server trajectory.
+  - Import rejects oversized files, invalid coordinates, and active-device
+    mismatches. Clearing the overlay does not delete the capture-page session.
+  - No upload endpoint was added; exact reference coordinates remain in the
+    browser and authenticated runtime surface only.
 
 # Completion Evidence
 
 - Changed files: `server/message_hub.py`, `scripts/validate_d1_web_api.py`,
   `quality_tests/test_message_hub_dashboard.py`,
   `quality_tests/test_d1_web_api_validation.py`
-- Test result: focused Dashboard/Web tests PASS; `python scripts/context_lint.py`
-  PASS; `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1` PASS
-  with 530 tests
+- Test result: focused Dashboard/Message Hub tests PASS; `python
+  scripts/context_lint.py` PASS; latest `powershell -ExecutionPolicy Bypass
+  -File scripts\verify.ps1` PASS with 552 tests
 - Web result: local smoke on `127.0.0.1:8879` confirmed Dashboard HTML contains
   no-key map markers and evidence lanes, and `/api/state` returns Field Results
   structure. Provider-backed map remains future work after provider/key/privacy
   decision.
-- Remaining risks: real D2 reference-point overlay still depends on D2 baseline
-  report production and future provider selection
+- Browser result: local HTTP and JavaScript compile/behavior checks PASS. The
+  in-app browser was unavailable, so no screenshot or visual-overlap claim is
+  made.
+- Remaining risks: real reference/trajectory comparison still depends on the
+  first D2 field manifest; provider tiles remain a future privacy/key decision
