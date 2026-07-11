@@ -11,6 +11,58 @@ from server import message_hub
 
 
 class MessageHubDashboardTests(unittest.TestCase):
+    def test_progress_board_loader_allowlists_fields_and_removes_local_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "progress_board.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-07-11 15:00 UTC",
+                        "git": {"branch": "main", "head": "abc123 test"},
+                        "current_focus": "Probe QMI8658",
+                        "milestones": [
+                            {
+                                "id": "D2",
+                                "title": "Location Accuracy",
+                                "done": 8,
+                                "total": 10,
+                                "tasks": [
+                                    {
+                                        "id": "D2-001",
+                                        "label": "baseline",
+                                        "state": "in_progress",
+                                        "path": "D:/private/task.md",
+                                    }
+                                ],
+                            }
+                        ],
+                        "operator_asks": ["Connect module"],
+                        "active_tasks": [{"path": "D:/private/active.md"}],
+                        "recent_done": [{"path": "D:/private/done.md"}],
+                        "key_releases": [{"path": "D:/private/release.json"}],
+                        "secret": "must-not-pass",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            progress = message_hub.load_progress_board(path)
+
+        payload = json.dumps(progress)
+        self.assertEqual(progress["status"], "available")
+        self.assertEqual(progress["milestones"][0]["done"], 8)
+        self.assertEqual(progress["operator_asks"], ["Connect module"])
+        self.assertEqual(progress["summary"]["active_count"], 1)
+        self.assertNotIn("D:/private", payload)
+        self.assertNotIn("must-not-pass", payload)
+        self.assertFalse(progress["privacy"]["local_paths_exposed"])
+
+    def test_missing_progress_board_is_explainable(self) -> None:
+        progress = message_hub.load_progress_board(Path("missing-progress-board-unit.json"))
+
+        self.assertEqual(progress["status"], "unavailable")
+        self.assertEqual(progress["reason"], "progress_board_missing_or_invalid")
+
     def test_dashboard_links_to_local_only_d2_reference_capture(self) -> None:
         html = message_hub.render_dashboard()
 
@@ -66,6 +118,10 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Product Demo", html)
         self.assertIn("Field Test Results", html)
         self.assertIn("Data Flywheel", html)
+        self.assertIn("Project Progress", html)
+        self.assertIn('id="progressBoard"', html)
+        self.assertIn("progressBoardPanel", html)
+        self.assertIn("Waiting For Founder", html)
         self.assertIn("Training Experiments", html)
         self.assertIn("Training Run Preflight", html)
         self.assertIn("Training Feature Manifest", html)
@@ -2147,6 +2203,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         repo_root = Path(__file__).resolve().parents[1]
         script = (repo_root / "scripts" / "deploy_message_hub_vps.ps1").read_text(encoding="utf-8")
 
+        self.assertIn('Copy-RelativePath "docs\\generated\\progress_board.json"', script)
         self.assertIn("IncludeFieldReportSummaries", script)
         self.assertIn("IncludeDataFlywheelSummaries", script)
         self.assertIn("IncludeTrainingExperimentSummaries", script)

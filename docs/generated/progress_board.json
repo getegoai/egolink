@@ -1,16 +1,16 @@
 {
-  "generated_at": "2026-07-11 15:03 UTC",
+  "generated_at": "2026-07-11 15:17 UTC",
   "git": {
-    "branch": "main",
-    "head": "cb36cdf feat(imu): prepare QMI motion data gate [D2]"
+    "branch": "d2/obs005-progress-dashboard",
+    "head": "1a262c4 docs(progress): refresh QMI readiness board [D2]"
   },
   "current_focus": "QMI8658 configuration and motion-data readiness are prepared; next focus is module probe, bounded high-rate IMU windows, strict D2 reference points, and the 24h battery run.",
   "milestones": [
     {
       "id": "RELEASE",
       "title": "Engineering Alpha Release Gate",
-      "done": 3,
-      "total": 3,
+      "done": 4,
+      "total": 4,
       "tasks": [
         {
           "id": "REL-012",
@@ -25,6 +25,11 @@
         {
           "id": "ENG-008",
           "label": "progress board",
+          "state": "done"
+        },
+        {
+          "id": "OBS-005",
+          "label": "VPS progress visibility",
           "state": "done"
         }
       ]
@@ -286,13 +291,13 @@
       "path": "D:/pywork/egolink/docs/tasks/done/MAP-003_LOCAL_REFERENCE_OVERLAY.md"
     },
     {
-      "id": "FIELD-010",
-      "title": "Server field readiness observer",
+      "id": "OBS-005",
+      "title": "Founder progress board on VPS Dashboard",
       "state": "done",
       "packet_status": "done",
       "priority": "high",
-      "date": "2026-07-10",
-      "path": "D:/pywork/egolink/docs/tasks/done/FIELD-010_SERVER_FIELD_READINESS_OBSERVER.md"
+      "date": "2026-07-11",
+      "path": "D:/pywork/egolink/docs/tasks/done/OBS-005_PROGRESS_BOARD_DASHBOARD.md"
     }
   ],
   "operator_asks": [
@@ -306,6 +311,7 @@
     "REL-012": "codex",
     "ENG-007": "codex",
     "ENG-008": "codex",
+    "OBS-005": "codex",
     "D1-001": "codex + founder field tests",
     "PWR-001": "codex + founder field tests",
     "D2-001": "codex",
@@ -370,6 +376,6 @@
     "active": 6,
     "paused": 2,
     "open_total": 8,
-    "done_total": 144
+    "done_total": 145
   }
 }

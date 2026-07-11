@@ -1,15 +1,15 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-11 15:03 UTC
-- 分支: `main` @ cb36cdf feat(imu): prepare QMI motion data gate [D2]
+- 生成时间: 2026-07-11 15:17 UTC
+- 分支: `d2/obs005-progress-dashboard` @ 1a262c4 docs(progress): refresh QMI readiness board [D2]
 - 当前焦点: QMI8658 configuration and motion-data readiness are prepared; next focus is module probe, bounded high-rate IMU windows, strict D2 reference points, and the 24h battery run.
-- 已完成任务总数: 144，进行中: 6，暂停: 2
+- 已完成任务总数: 145，进行中: 6，暂停: 2
 
 ## 里程碑
 
 | 里程碑 | 进度 | 任务 |
 |---|---|---|
-| RELEASE Engineering Alpha Release Gate | 3/3 | ✅v0.1.0 alpha readiness ✅retire autonomous queue ✅progress board |
+| RELEASE Engineering Alpha Release Gate | 4/4 | ✅v0.1.0 alpha readiness ✅retire autonomous queue ✅progress board ✅VPS progress visibility |
 | D1 Link-Through Regression | 0/2 | ⏳4G link-through ⏳power baseline |
 | D2 Location Accuracy Baseline | 8/10 | ⏳location baseline tooling ⏳reference-point field run ✅no-key evidence map ✅server readiness observer ✅reference field automation ✅bounded field export ✅mobile reference capture ✅local reference overlay ✅historical VPS baseline and rule freeze ✅QMI configuration and motion readiness |
 | D5 Location Data Flywheel | 0/2 | ⏳location data flywheel 📋location model loop |
@@ -41,7 +41,7 @@
 | MAP-001 | D2/D5 map evidence view | 2026-07-11 |
 | MAP-002 | Mobile local-only D2 reference capture | 2026-07-11 |
 | MAP-003 | Browser-local D2 reference overlay | 2026-07-11 |
-| FIELD-010 | Server field readiness observer | 2026-07-10 |
+| OBS-005 | Founder progress board on VPS Dashboard | 2026-07-11 |
 
 ## 等待创始人处理
 

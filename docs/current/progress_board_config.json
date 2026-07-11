@@ -17,6 +17,10 @@
         {
           "id": "ENG-008",
           "label": "progress board"
+        },
+        {
+          "id": "OBS-005",
+          "label": "VPS progress visibility"
         }
       ]
     },
@@ -117,6 +121,7 @@
     "REL-012": "codex",
     "ENG-007": "codex",
     "ENG-008": "codex",
+    "OBS-005": "codex",
     "D1-001": "codex + founder field tests",
     "PWR-001": "codex + founder field tests",
     "D2-001": "codex",

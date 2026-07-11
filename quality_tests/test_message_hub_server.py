@@ -872,11 +872,51 @@ class MessageHubDeployScriptTests(unittest.TestCase):
         self.assertIn("function Copy-ServerSource", script)
         self.assertIn('rm -rf \'$RemoteDir/server/runtime\' \'$RemoteDir/server/__pycache__\'', script)
         self.assertIn('Copy-RelativePath "docs\\current\\key_releases"', script)
+        self.assertIn('Copy-RelativePath "docs\\generated\\progress_board.json"', script)
         self.assertIn('$remoteScript = $remoteScript.Replace("`r", "")', script)
         self.assertNotIn('Copy-RelativePath "server"', script)
 
 
 class MessageHubHttpTests(unittest.TestCase):
+    def test_progress_board_is_available_in_state_and_dedicated_route(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = message_hub.MessageHubStore(root / "hub.db")
+            progress_path = root / "progress_board.json"
+            progress_path.write_text(
+                json.dumps(
+                    {
+                        "generated_at": "2026-07-11 15:00 UTC",
+                        "git": {"branch": "main", "head": "abc123 test"},
+                        "current_focus": "QMI bring-up",
+                        "milestones": [{"id": "D2", "title": "Location", "done": 8, "total": 10}],
+                        "operator_asks": ["Connect QMI8658"],
+                        "active_tasks": [],
+                        "recent_done": [],
+                        "key_releases": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, progress_board_path=progress_path),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state = get_json(base_url, "/api/state")
+                dedicated = get_json(base_url, "/api/v1/progress/latest")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(state["progress_board"]["status"], "available")
+        self.assertEqual(state["progress_board"]["current_focus"], "QMI bring-up")
+        self.assertEqual(dedicated["progress_board"]["milestones"][0]["done"], 8)
+
     def test_http_api_supports_r0_device_command_ack_flow(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")

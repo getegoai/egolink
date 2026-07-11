@@ -486,6 +486,7 @@ try {
     New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
     Copy-ServerSource
     Copy-RelativePath "docs\current\key_releases"
+    Copy-RelativePath "docs\generated\progress_board.json"
     Copy-RelativePath "pc_simulator\__init__.py"
     Copy-RelativePath "pc_simulator\protocol.py"
     Copy-RelativePath "scripts\run_message_hub.py"

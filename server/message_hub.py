@@ -48,6 +48,7 @@ DEFAULT_D1_LABELING_INTAKE_REPORTS = REPO_ROOT / "reports" / "d1_labeling_intake
 DEFAULT_D1_LABELING_QUEUE_REPORTS = REPO_ROOT / "reports" / "d1_labeling_queue"
 DEFAULT_D1_LABELING_REVIEW_REPORTS = REPO_ROOT / "reports" / "d1_labeling_reviews"
 DEFAULT_D1_LABELING_DECISION_REPORTS = REPO_ROOT / "reports" / "d1_labeling_decisions"
+DEFAULT_PROGRESS_BOARD = REPO_ROOT / "docs" / "generated" / "progress_board.json"
 MAX_BODY_BYTES = 1_000_000
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
@@ -1044,6 +1045,7 @@ def make_handler(
     d1_labeling_queue_root: Path = DEFAULT_D1_LABELING_QUEUE_REPORTS,
     d1_labeling_review_root: Path = DEFAULT_D1_LABELING_REVIEW_REPORTS,
     d1_labeling_decision_root: Path = DEFAULT_D1_LABELING_DECISION_REPORTS,
+    progress_board_path: Path = DEFAULT_PROGRESS_BOARD,
 ) -> type[BaseHTTPRequestHandler]:
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -1107,6 +1109,7 @@ def make_handler(
                 d1_labeling_decision_template = load_latest_d1_labeling_decision_template(
                     d1_labeling_decision_root
                 )
+                progress_board = load_progress_board(progress_board_path)
                 self.respond_json(
                     {
                         "devices": devices,
@@ -1129,6 +1132,7 @@ def make_handler(
                         "d1_labeling_queue": d1_labeling_queue,
                         "d1_labeling_review_packet": d1_labeling_review_packet,
                         "d1_labeling_decision_template": d1_labeling_decision_template,
+                        "progress_board": progress_board,
                         "current_run": build_run_context(
                             messages=messages,
                             commands=commands,
@@ -1212,6 +1216,9 @@ def make_handler(
                 return
             if segments == ["api", "v1", "field-results", "latest"]:
                 self.respond_json({"field_results": load_latest_field_results(field_results_root)})
+                return
+            if segments == ["api", "v1", "progress", "latest"]:
+                self.respond_json({"progress_board": load_progress_board(progress_board_path)})
                 return
             if segments == ["api", "v1", "data-flywheel", "latest"]:
                 self.respond_json({"data_flywheel": load_latest_data_flywheel_status(data_flywheel_root)})
@@ -3656,6 +3663,63 @@ def load_json_report(path: Path) -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError):
         return None
     return data if isinstance(data, dict) else None
+
+
+def load_progress_board(path: Path = DEFAULT_PROGRESS_BOARD) -> dict[str, Any]:
+    board = load_json_report(path)
+    if board is None:
+        return {
+            "status": "unavailable",
+            "reason": "progress_board_missing_or_invalid",
+            "milestones": [],
+            "operator_asks": [],
+        }
+
+    milestones: list[dict[str, Any]] = []
+    for raw_milestone in as_list(board.get("milestones"))[:12]:
+        milestone = as_dict(raw_milestone)
+        tasks = []
+        for raw_task in as_list(milestone.get("tasks"))[:24]:
+            task = as_dict(raw_task)
+            tasks.append(
+                {
+                    "id": str(task.get("id") or "")[:64],
+                    "label": str(task.get("label") or "")[:160],
+                    "state": str(task.get("state") or "unknown")[:32],
+                }
+            )
+        milestones.append(
+            {
+                "id": str(milestone.get("id") or "")[:64],
+                "title": str(milestone.get("title") or "")[:160],
+                "done": max(0, int(milestone.get("done") or 0)),
+                "total": max(0, int(milestone.get("total") or 0)),
+                "tasks": tasks,
+            }
+        )
+
+    git = as_dict(board.get("git"))
+    return {
+        "status": "available",
+        "generated_at": str(board.get("generated_at") or "unknown")[:64],
+        "current_focus": str(board.get("current_focus") or "unknown")[:600],
+        "git": {
+            "branch": str(git.get("branch") or "unknown")[:128],
+            "head": str(git.get("head") or "unknown")[:240],
+        },
+        "milestones": milestones,
+        "operator_asks": [str(item)[:600] for item in as_list(board.get("operator_asks"))[:12]],
+        "summary": {
+            "active_count": len(as_list(board.get("active_tasks"))),
+            "recent_done_count": len(as_list(board.get("recent_done"))),
+            "key_release_count": len(as_list(board.get("key_releases"))),
+        },
+        "privacy": {
+            "local_paths_exposed": False,
+            "task_packet_contents_exposed": False,
+            "read_only": True,
+        },
+    }
 
 
 def normalized_report_status(value: Any) -> str:
@@ -7320,6 +7384,19 @@ def render_dashboard() -> str:
     .report-title { font-size: 15px; font-weight: 700; }
     .report-meta, .report-path { color: var(--ink-soft); font-size: 13px; overflow-wrap: anywhere; }
     .report-metrics { display: grid; gap: 4px; font-size: 13px; color: var(--ink-soft); }
+    .progress-layout { display: grid; grid-template-columns: minmax(260px, 0.9fr) minmax(420px, 1.4fr); gap: 18px; padding: 2px; }
+    .progress-focus { font-size: 16px; font-weight: 700; line-height: 1.45; overflow-wrap: anywhere; }
+    .progress-meta { margin-top: 8px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .progress-actions { margin-top: 14px; }
+    .progress-actions ul { margin: 7px 0 0; padding-left: 20px; color: var(--ink-soft); font-size: 13px; }
+    .progress-actions li { margin: 5px 0; overflow-wrap: anywhere; }
+    .progress-milestones { display: grid; gap: 8px; }
+    .progress-milestone { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #edf0f5; }
+    .progress-milestone:last-child { border-bottom: 0; }
+    .progress-milestone-name { font-size: 13px; font-weight: 700; overflow-wrap: anywhere; }
+    .progress-milestone-count { color: var(--muted); font-size: 12px; }
+    .progress-track { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: 999px; background: #e7ebf1; }
+    .progress-fill { height: 100%; background: var(--green); }
     .evidence-lanes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
     .evidence-lane { border: 1px solid #d8dde6; border-radius: 8px; padding: 10px; background: #fbfcfe; min-width: 0; }
     .lane-label { display: block; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; }
@@ -7339,7 +7416,7 @@ def render_dashboard() -> str:
     .map-point-reference { width: 13px; height: 13px; border-radius: 3px; background: var(--amber); box-shadow: 0 0 0 2px var(--amber); }
     .map-waiting { z-index: 1; color: var(--muted); font-size: 13px; font-weight: 600; border: 1px solid #c8d0dc; border-radius: 999px; padding: 6px 10px; background: rgba(255,255,255,0.82); }
     .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: var(--ink-soft); font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 5px 6px; }
-    @media (max-width: 980px) { .dashboard-grid, .d1-overview { grid-template-columns: 1fr; } }
+    @media (max-width: 980px) { .dashboard-grid, .d1-overview, .progress-layout { grid-template-columns: 1fr; } }
     @media (max-width: 760px) { .evidence-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } .section-head { align-items: flex-start; flex-direction: column; } .section-actions { width: 100%; justify-content: flex-start; } .map-import-status { max-width: 100%; text-align: left; } }
   </style>
@@ -7372,6 +7449,15 @@ def render_dashboard() -> str:
         </div>
       </div>
       <div id="d1Link"></div>
+    </section>
+    <section>
+      <div class="section-head">
+        <div>
+          <h2>Project Progress</h2>
+          <span class="section-kicker">Read-only founder board</span>
+        </div>
+      </div>
+      <div id="progressBoard" class="empty-panel">Loading progress...</div>
     </section>
     <div class="dashboard-grid">
       <div class="stack">
@@ -8714,6 +8800,36 @@ def render_dashboard() -> str:
         <div class="metric"><span>Last Error</span><span>${escapeHtml(error.error_code || 'none')}</span></div>
       `;
     }
+    function progressBoardPanel(board) {
+      if (!board || board.status !== 'available') {
+        return `<div class="empty-panel">Progress unavailable: ${escapeHtml(board && board.reason || 'not deployed')}</div>`;
+      }
+      const milestones = (board.milestones || []).map(item => {
+        const done = Number(item.done || 0);
+        const total = Number(item.total || 0);
+        const percent = total > 0 ? Math.max(0, Math.min(100, (done / total) * 100)) : 0;
+        return `
+          <div class="progress-milestone">
+            <span class="progress-milestone-name">${escapeHtml(item.id)} ${escapeHtml(item.title)}</span>
+            <span class="progress-milestone-count">${escapeHtml(done)} / ${escapeHtml(total)}</span>
+            <div class="progress-track"><div class="progress-fill" style="width:${percent.toFixed(1)}%"></div></div>
+          </div>`;
+      }).join('') || '<span class="empty">No milestones</span>';
+      const asks = (board.operator_asks || []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
+      return `
+        <div class="progress-layout">
+          <div>
+            <span class="card-label">Current Focus</span>
+            <div class="progress-focus">${escapeHtml(board.current_focus || 'unknown')}</div>
+            <div class="progress-meta">Generated ${escapeHtml(board.generated_at)} / ${escapeHtml((board.git || {}).head || 'unknown')}</div>
+            <div class="progress-actions">
+              <span class="card-label">Waiting For Founder</span>
+              ${asks ? `<ul>${asks}</ul>` : '<div class="progress-meta">No operator action queued</div>'}
+            </div>
+          </div>
+          <div class="progress-milestones">${milestones}</div>
+        </div>`;
+    }
     async function refresh() {
       const response = await fetch('/api/state', { headers: authHeaders() });
       if (response.status === 401) {
@@ -8729,6 +8845,8 @@ def render_dashboard() -> str:
       authStatus.textContent = 'connected';
       const data = await response.json();
       latestDashboardState = data;
+      progressBoard.className = '';
+      progressBoard.innerHTML = progressBoardPanel(data.progress_board || {});
       runContext.innerHTML = runContextPanel(data.current_run || {});
       productDemo.innerHTML = productDemoPanel(data.product_demo || {});
       fieldResults.innerHTML = fieldResultsPanel(data.field_results || {}, data.data_flywheel || {});

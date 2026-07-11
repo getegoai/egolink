@@ -6,6 +6,14 @@ verified_by: codex
 
 ## Latest Deployment Note
 
+2026-07-11: OBS-005 connects the generated founder progress board to the VPS
+Message Hub as a sanitized read-only view. Authenticated `/api/state` and
+`/api/v1/progress/latest` expose current focus, milestone counts, and founder
+action items through an explicit allowlist; local task paths and packet
+contents are removed. The Dashboard now renders this near the top as a compact
+responsive `Project Progress` section. Deployment packages always include the
+small generated JSON board and do not scan or expose task files directly.
+
 2026-07-11: D2-005 prepared the external QMI8658 path without flashing. The
 local firmware config generator now enables QMI8658 at explicit `0x6A/0x6B`,
 disables AMOLED-only AXP2101 rails, and rejects a different I2C bus from
