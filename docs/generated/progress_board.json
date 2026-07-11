@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-07-11 14:58 UTC",
+  "generated_at": "2026-07-11 15:03 UTC",
   "git": {
-    "branch": "d2/qmi-motion-readiness",
-    "head": "a62035c docs(d2): record baseline deployment [D2]"
+    "branch": "main",
+    "head": "cb36cdf feat(imu): prepare QMI motion data gate [D2]"
   },
   "current_focus": "QMI8658 configuration and motion-data readiness are prepared; next focus is module probe, bounded high-rate IMU windows, strict D2 reference points, and the 24h battery run.",
   "milestones": [

@@ -1,7 +1,7 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-11 14:58 UTC
-- 分支: `d2/qmi-motion-readiness` @ a62035c docs(d2): record baseline deployment [D2]
+- 生成时间: 2026-07-11 15:03 UTC
+- 分支: `main` @ cb36cdf feat(imu): prepare QMI motion data gate [D2]
 - 当前焦点: QMI8658 configuration and motion-data readiness are prepared; next focus is module probe, bounded high-rate IMU windows, strict D2 reference points, and the 24h battery run.
 - 已完成任务总数: 144，进行中: 6，暂停: 2
 
