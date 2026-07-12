@@ -5,6 +5,16 @@ verified_by: codex
 source_task: PROD-001
 ---
 
+## 2026-07-12 Selection Override
+
+Founder decision ADR-0005 freezes the V1 Pro production platform as
+`nRF54LM20B + Air780EGH` and freezes the named sensor, audio, storage, display,
+and power-path baseline. Statements below that say no MCU or cellular module
+has been selected, and the open candidate comparison tables, are retained as
+the pre-decision requirement record but no longer control V1 Pro procurement.
+Unresolved enclosure, antenna, battery-dimension, certification, usage-profile,
+and measured acceptance gates in this document remain active.
+
 # EgoLink V1 Mass-Production Requirements
 
 This document defines the V1 hardware requirements and the fillable selection

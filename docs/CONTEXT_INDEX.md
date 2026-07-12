@@ -37,6 +37,7 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 | Location fusion or dataset planning | `docs/development/LOCATION_ENGINE.md`, `docs/development/LOCATION_DATASET.md`, `docs/development/LOCATION_FUSION_ALGORITHM.md`, `docs/architecture/adr/ADR-0004-p0-rule-location-and-transitional-vps-memory.md`, `shared/contracts/` | `docs/development/PROTOCOL.md`, `docs/current/KEY_RELEASES.md`, `docs/tasks/done/DATA-001_LOCATION_FUSION_DATASET_BASELINE.md`, `docs/tasks/done/ALG-000_LOCATION_FUSION_ALGORITHM_DESIGN.md` |
 | Firmware change | `firmware/AGENTS.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/BOARD_MATRIX.md` | Named firmware README only |
 | Hardware validation | `firmware/AGENTS.md`, `docs/hardware/BOARD_MATRIX.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/validation/` | Named evidence report |
+| V1 Pro hardware selection or procurement | `docs/architecture/adr/ADR-0005-v1-pro-production-hardware-baseline.md`, `docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md` | `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`, `docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md` |
 | PC simulator or bridge | `pc_simulator/AGENTS.md`, `docs/architecture/SYSTEM_OVERVIEW.md`, `shared/contracts/` | Named runtime fixture |
 | Model or Safety Companion | `model_lab/AGENTS.md`, `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`, `docs/safety/SAFETY_CONTRACT.md`, `shared/contracts/` | `docs/modeling/MODEL_ARCHITECTURE.md` |
 | Quality tests | `quality_tests/AGENTS.md`, task-specific source docs | Existing related tests |
@@ -53,6 +54,8 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 - P0 development flow is authoritative in `docs/development/DEV_FLOW.md`; near-term R0-R4 sequencing is authoritative in `docs/current/ROADMAP_EGOLINK_P0.md`.
 - Location-engine planning is authoritative in `docs/development/LOCATION_ENGINE.md`; location-fusion dataset planning is authoritative in `docs/development/LOCATION_DATASET.md`; SIM7670G LTE transport planning is authoritative in `docs/development/LTE_TRANSPORT.md`.
 - Architecture changes require an ADR under `docs/architecture/adr/`.
+- V1 Pro production hardware selection is frozen by ADR-0005; procurement is
+  controlled by `docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md`.
 - V1 product sequencing is authoritative in `docs/roadmap/V1_PRODUCT_PLAN.md`;
   where it conflicts with `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`, ADR-0002
   governs.

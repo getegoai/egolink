@@ -1,8 +1,19 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-11
+last_verified: 2026-07-12
 verified_by: codex
 ---
+
+## V1 Pro Hardware Freeze
+
+2026-07-12: Founder approved performance-first development. ADR-0005 freezes
+the V1 Pro production baseline around nRF54LM20B + Air780EGH + QMI8658A +
+T5838, with a high-current BQ25895/MAX17048 power path and a low-power Memory
+LCD. The five-device EVT procurement baseline is recorded; nRF54LM20B QFN and
+development-kit authorized supply is currently the only material blocker, so
+the approved action is distributor backorder plus Nordic project sampling, not
+an untraceable broker substitution. No custom PCB or product power claim exists
+yet.
 
 ## Latest Deployment Note
 

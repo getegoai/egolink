@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-05
+last_verified: 2026-07-12
 verified_by: codex
 ---
 
@@ -15,6 +15,10 @@ improving the models after launch.
 
 Near-term engineering gates (R2.x/R3.x) remain in
 `docs/current/ROADMAP_EGOLINK_P0.md` and feed milestone V1-M1 below.
+
+Hardware update: ADR-0005 (2026-07-12) freezes V1 Pro around nRF54LM20B,
+Air780EGH, QMI8658A, and T5838. Platform comparison remains historical input;
+EVT schematic, sourcing, measured power and validation are still open work.
 
 ## 1. V1 Feature Set (in scope)
 
@@ -89,16 +93,12 @@ Exit criteria:
 
 Exit criteria:
 
-- `docs/product/MASS_PRODUCTION_REQUIREMENTS.md` approved (PROD-001): cost,
-  battery-life targets, size, certification set (SRRC/CCC/NAL), and module +
-  MCU selection criteria **including on-device AI inference budget**
-  (RAM/flash headroom, vector/NPU support, sleep-vs-inference power).
-- China Mobile 4G module evaluated against the module checklist when its
-  datasheet arrives; decision recorded vs SIM7670G baseline.
-- Channel quotes collected for ESP32-S3 / STM32U5A5 / Apollo4; MCU decision
-  recorded with an ADR, informed by the V1-M3 footprint assessment.
-- Microphone / interaction hardware decision recorded (required for the
-  companion experience; mic is currently `missing_or_unknown`).
+- ADR-0005-approved V1 Pro MCU, cellular, sensor, audio, display, storage and
+  power-path baseline; unresolved cost, size, certification and measured
+  acceptance gates remain controlled by
+  `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`.
+- Air780EGH and nRF54LM20B development hardware acquired through authorized
+  channels; T5838 and ES8311 microphone/audio paths bench-validated.
 - EVT BOM frozen.
 
 ### V1-M5 EVT -> DVT -> Certification -> Pilot Production
@@ -122,7 +122,7 @@ re-run and on-device model acceptance re-run on EVT hardware.
 | 1 | PWR-002 low-power location state-machine decision | V1-M1 | done (2026-07-03) |
 | 1 | FIELD-003 outdoor GNSS acceptance | V1-M1 | active |
 | 1 | PRIVACY-001 product demo privacy/data boundary gate | V1-M3 | done (2026-07-03) |
-| 1 | PROD-001 mass-production requirements (incl. AI compute criteria) | V1-M4 | active pending founder TBDs |
+| 1 | PROD-001 mass-production requirements (incl. AI compute criteria) | V1-M4 | platform selected by ADR-0005; mechanical/certification/measurement gates active |
 | 2 | STAB-002 LTE long-run/reconnect gate (R3.0) | V1-M1 | planned |
 | 2 | FT-1 assembly: SOS key mapping + mounting + release gate | V1-M1 | planned |
 | 2 | M1-002 on-device session recorder | V1-M3 | planned |
@@ -159,8 +159,9 @@ re-run and on-device model acceptance re-run on EVT hardware.
 
 ## 5. Operating Notes
 
-- Development platform stays ESP32-S3 + SIM7670G (dual-board split per
-  `DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md`) until PROD-001 justifies a change;
-  selection work must not block V1-M1..M3 progress.
+- Existing ESP32-S3 + SIM7670G boards remain the current evidence and data
+  vehicle while the ADR-0005 V1 Pro target is brought up. New production
+  firmware work targets nRF54LM20B + Air780EGH without invalidating prior
+  engineering evidence.
 - Every milestone exit produces a KR manifest (existing KR mechanism).
 - Task execution follows `docs/development/DIRECTOR_WORKFLOW.md`.
