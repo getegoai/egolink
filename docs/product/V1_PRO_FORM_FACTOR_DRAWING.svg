@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto-start-reverse">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#344054"/>
+    </marker>
+    <style>
+      text { font-family: Arial, sans-serif; fill: #101828; letter-spacing: 0; }
+      .title { font-size: 28px; font-weight: 700; }
+      .head { font-size: 20px; font-weight: 700; }
+      .label { font-size: 15px; }
+      .small { font-size: 13px; fill: #475467; }
+      .dim { stroke: #344054; stroke-width: 1.5; marker-start: url(#arrow); marker-end: url(#arrow); }
+      .guide { stroke: #98a2b3; stroke-width: 1; stroke-dasharray: 5 5; }
+    </style>
+  </defs>
+  <rect width="1200" height="760" fill="#f8fafc"/>
+  <text x="55" y="52" class="title">EgoLink V1 Pro Form-Factor Baseline</text>
+  <text x="55" y="78" class="small">All dimensions in millimeters. External envelope is frozen; antenna matching and internal ribs tune during EVT.</text>
+
+  <text x="105" y="130" class="head">Front</text>
+  <rect x="105" y="155" width="294" height="322" rx="56" fill="#d0d5dd" stroke="#344054" stroke-width="3"/>
+  <rect x="159" y="203" width="186" height="212" rx="8" fill="#101828"/>
+  <rect x="176" y="222" width="152" height="152" fill="#e4e7ec" stroke="#667085" stroke-width="2"/>
+  <text x="203" y="302" class="label">24 x 24</text>
+  <text x="203" y="322" class="small">visible area</text>
+  <rect x="399" y="221" width="18" height="54" rx="6" fill="#98a2b3" stroke="#344054"/>
+  <rect x="399" y="322" width="24" height="72" rx="8" fill="#f79009" stroke="#b54708" stroke-width="2"/>
+  <rect x="87" y="286" width="18" height="58" rx="6" fill="#98a2b3" stroke="#344054"/>
+  <text x="425" y="249" class="small">SAFE</text>
+  <text x="431" y="361" class="small">SOS</text>
+  <text x="118" y="452" class="small">BACK / VOICE</text>
+  <line x1="105" y1="512" x2="399" y2="512" class="dim"/>
+  <line x1="105" y1="480" x2="105" y2="528" class="guide"/>
+  <line x1="399" y1="480" x2="399" y2="528" class="guide"/>
+  <text x="229" y="506" class="label">42.0</text>
+  <line x1="70" y1="155" x2="70" y2="477" class="dim"/>
+  <line x1="80" y1="155" x2="105" y2="155" class="guide"/>
+  <line x1="80" y1="477" x2="105" y2="477" class="guide"/>
+  <text x="42" y="325" class="label" transform="rotate(-90 42 325)">46.0</text>
+
+  <text x="520" y="130" class="head">Side and Stack</text>
+  <path d="M510 230 Q510 195 545 195 H820 Q855 195 855 230 V336 Q855 371 820 371 H545 Q510 371 510 336 Z" fill="#d0d5dd" stroke="#344054" stroke-width="3"/>
+  <rect x="535" y="205" width="295" height="16" fill="#667085"/>
+  <rect x="548" y="223" width="268" height="12" fill="#eaecf0"/>
+  <rect x="548" y="238" width="268" height="54" fill="#84adff"/>
+  <rect x="548" y="294" width="268" height="16" fill="#12b76a"/>
+  <rect x="548" y="312" width="268" height="42" fill="#fdb022"/>
+  <text x="875" y="216" class="small">cover lens + seal</text>
+  <text x="875" y="234" class="small">display</text>
+  <text x="875" y="266" class="small">components, max 2.6</text>
+  <text x="875" y="306" class="small">PCB, 0.8</text>
+  <text x="875" y="338" class="small">battery bay, 7.2</text>
+  <line x1="475" y1="195" x2="475" y2="371" class="dim"/>
+  <line x1="485" y1="195" x2="510" y2="195" class="guide"/>
+  <line x1="485" y1="371" x2="510" y2="371" class="guide"/>
+  <text x="447" y="295" class="label" transform="rotate(-90 447 295)">15.2</text>
+
+  <text x="105" y="594" class="head">PCB Mechanical Contract</text>
+  <rect x="105" y="620" width="380" height="120" rx="20" fill="#d1fadf" stroke="#027a48" stroke-width="3"/>
+  <circle cx="130" cy="645" r="6" fill="#f8fafc" stroke="#027a48"/>
+  <circle cx="460" cy="645" r="6" fill="#f8fafc" stroke="#027a48"/>
+  <circle cx="130" cy="715" r="6" fill="#f8fafc" stroke="#027a48"/>
+  <circle cx="460" cy="715" r="6" fill="#f8fafc" stroke="#027a48"/>
+  <rect x="135" y="634" width="155" height="42" rx="4" fill="#b2ddff" stroke="#175cd3"/>
+  <text x="163" y="660" class="small">Air780EGH zone</text>
+  <rect x="305" y="686" width="120" height="34" rx="4" fill="#d6bbfb" stroke="#6938ef"/>
+  <text x="321" y="708" class="small">nRF + IMU</text>
+  <line x1="105" y1="748" x2="485" y2="748" class="dim"/>
+  <text x="275" y="741" class="label">38.0</text>
+  <line x1="515" y1="620" x2="515" y2="740" class="dim"/>
+  <text x="535" y="687" class="label">34.0</text>
+
+  <text x="650" y="594" class="head">Antenna / Acoustic Zones</text>
+  <rect x="650" y="618" width="470" height="122" rx="8" fill="#ffffff" stroke="#98a2b3"/>
+  <rect x="670" y="634" width="130" height="28" rx="4" fill="#fee4e2"/>
+  <text x="684" y="653" class="small">Upper lug: LTE FPC</text>
+  <rect x="670" y="680" width="150" height="28" rx="4" fill="#fef0c7"/>
+  <text x="684" y="699" class="small">Lower lug: GNSS</text>
+  <rect x="850" y="634" width="122" height="28" rx="4" fill="#d1e9ff"/>
+  <text x="863" y="653" class="small">Left: 2 mics</text>
+  <rect x="850" y="680" width="150" height="28" rx="4" fill="#eaecf0"/>
+  <text x="863" y="699" class="small">Lower: speaker</text>
+  <rect x="1015" y="634" width="82" height="74" rx="4" fill="#d1fadf"/>
+  <text x="1028" y="661" class="small">2.4G</text>
+  <text x="1025" y="681" class="small">keep-out</text>
+</svg>

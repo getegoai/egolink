@@ -19,6 +19,8 @@ Near-term engineering gates (R2.x/R3.x) remain in
 Hardware update: ADR-0005 (2026-07-12) freezes V1 Pro around nRF54LM20B,
 Air780EGH, QMI8658A, and T5838. Platform comparison remains historical input;
 EVT schematic, sourcing, measured power and validation are still open work.
+`docs/product/V1_PRO_FORM_FACTOR_BASELINE.md` additionally freezes the final
+wrist-worn envelope before schematic capture so EVT starts at product size.
 
 ## 1. V1 Feature Set (in scope)
 

@@ -38,6 +38,7 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 | Firmware change | `firmware/AGENTS.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/BOARD_MATRIX.md` | Named firmware README only |
 | Hardware validation | `firmware/AGENTS.md`, `docs/hardware/BOARD_MATRIX.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/validation/` | Named evidence report |
 | V1 Pro hardware selection or procurement | `docs/architecture/adr/ADR-0005-v1-pro-production-hardware-baseline.md`, `docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md` | `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`, `docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md` |
+| V1 Pro enclosure, PCB envelope or industrial design | `docs/product/V1_PRO_FORM_FACTOR_BASELINE.md`, `docs/product/V1_PRO_FORM_FACTOR_DRAWING.svg` | `docs/architecture/adr/ADR-0005-v1-pro-production-hardware-baseline.md`, `docs/product/MASS_PRODUCTION_REQUIREMENTS.md` |
 | PC simulator or bridge | `pc_simulator/AGENTS.md`, `docs/architecture/SYSTEM_OVERVIEW.md`, `shared/contracts/` | Named runtime fixture |
 | Model or Safety Companion | `model_lab/AGENTS.md`, `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`, `docs/safety/SAFETY_CONTRACT.md`, `shared/contracts/` | `docs/modeling/MODEL_ARCHITECTURE.md` |
 | Quality tests | `quality_tests/AGENTS.md`, task-specific source docs | Existing related tests |
@@ -56,6 +57,8 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 - Architecture changes require an ADR under `docs/architecture/adr/`.
 - V1 Pro production hardware selection is frozen by ADR-0005; procurement is
   controlled by `docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md`.
+- V1 Pro user-visible form and PCB envelope are frozen by
+  `docs/product/V1_PRO_FORM_FACTOR_BASELINE.md`.
 - V1 product sequencing is authoritative in `docs/roadmap/V1_PRODUCT_PLAN.md`;
   where it conflicts with `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`, ADR-0002
   governs.

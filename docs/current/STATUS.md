@@ -6,6 +6,14 @@ verified_by: codex
 
 ## V1 Pro Hardware Freeze
 
+2026-07-12: The founder directed EVT to start from the final product form
+rather than a loose evaluation-board assembly. The V1 Pro exterior is now
+frozen as a no-touch safety watch at 46.0 x 42.0 x 15.2 mm, with a 38.0 x
+34.0 mm four-layer PCB envelope, approximately 800 mAh battery bay, physical
+SAFE/SOS/BACK controls, magnetic charging and IP67-oriented construction.
+EVT uses the final envelope in a printed/CNC shell; injection tooling remains
+blocked until fit, RF, acoustic, drop, power and ingress tests pass.
+
 2026-07-12: Founder approved performance-first development. ADR-0005 freezes
 the V1 Pro production baseline around nRF54LM20B + Air780EGH + QMI8658A +
 T5838, with a high-current BQ25895/MAX17048 power path and a low-power Memory

@@ -15,6 +15,12 @@ the pre-decision requirement record but no longer control V1 Pro procurement.
 Unresolved enclosure, antenna, battery-dimension, certification, usage-profile,
 and measured acceptance gates in this document remain active.
 
+Founder direction on 2026-07-12 also freezes the V1 Pro wrist-worn exterior
+envelope, interaction layout, PCB maximum outline and battery bay in
+`V1_PRO_FORM_FACTOR_BASELINE.md`. Matching TBD rows below remain historical
+inputs where they conflict with that baseline; supplier-specific battery,
+antenna tuning, certification and measured gates remain unresolved.
+
 # EgoLink V1 Mass-Production Requirements
 
 This document defines the V1 hardware requirements and the fillable selection
