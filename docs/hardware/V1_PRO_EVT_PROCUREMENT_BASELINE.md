@@ -8,7 +8,10 @@ baseline: 5 EVT devices plus bring-up spares
 
 # EgoLink V1 Pro EVT Procurement Baseline
 
-This list implements ADR-0005. Buy only the `Buy now` section immediately.
+This list implements ADR-0005 and the final product envelope in
+`docs/product/V1_PRO_FORM_FACTOR_BASELINE.md`. The first custom PCB is a
+form-factor EVT board, not a loose desktop board. Buy only the reduced
+`Buy now` section immediately.
 Bare production parts are deliberately split out because the schematic,
 footprints, and JLCPCB assembly inventory must be checked before ordering.
 Prices and stock are snapshots from 2026-07-12 and must be rechecked at order
@@ -18,14 +21,8 @@ time.
 
 | Priority | Exact item | Qty | Preferred channel | Purpose / acceptance |
 |---|---|---:|---|---|
-| P0 | `NRF54LM20-DK` | 2 | Mouser/DigiKey/Nordic authorized distributor; place backorder | Two independent nRF54LM20B boards for firmware/AI and power benchmarking |
-| P0 | Air780EGH official core board or EVB | 2 | OpenLuat official Taobao channel linked from its documentation | LuatOS, LTE, GNSS, low-power, UART and recovery work |
+| P0 | `NRF54LM20-DK` | 1 | Mouser/DigiKey/Nordic authorized distributor; place backorder | Known-good NPU target and SWD/J-Link reference for the custom board |
 | P0 | Air780EGH bare module | 10 | OpenLuat official channel | Five EVT boards plus assembly and rework spares |
-| P0 | `EV_T5838-FX2` | 2 | DigiKey/Mouser | Always-on microphone and AAD/NPU experiments |
-| P0 | QMI8658A breakout board | 3 | Waveshare or another board with published schematic | Motion data, interrupt, FIFO and power validation |
-| P0 | AirAUDIO_1010 or official ES8311 audio board | 2 | OpenLuat official channel | Verify Air780EGH VoLTE/TTS codec, microphone and speaker path |
-| P0 | `BQ25895EVM-664` | 1 | TI/DigiKey/Mouser | Charger, ship mode, load transient and battery power-path tests |
-| P0 | MAX17048 evaluation/breakout board | 2 | ADI/Adafruit authorized channel | Battery-gauge comparison with the existing EgoLink driver |
 | P1 | `LS013B7DH03` display | 3 | DigiKey authorized channel | Low-power UI bring-up and readability check |
 | P1 | 1-cell protected Li-polymer, 700-900 mAh, 3-wire 10k NTC | 5 | Battery maker with datasheet and UN38.3 report | Bench runtime; do not freeze final dimensions from a marketplace photo |
 | P1 | LTE wideband FPC antenna, 50 ohm, U.FL/I-PEX | 5 | OpenLuat/module vendor | EVT radio baseline, not final enclosure antenna |
@@ -90,16 +87,14 @@ same day as checkout.
 - The screen is reflective and has no backlight. Readability in darkness uses
   a separately switched side light only if user testing requires it.
 - PPK2 is already available and is not repurchased. It is suitable for the
-  always-on domain; use the BQ25895 EVM, oscilloscope and current probe for 4G
-  transient validation.
+  always-on domain; use the custom-board shunts, oscilloscope and current probe
+  for 4G transient validation.
 
 ## 5. Estimated First Purchase Budget
 
-Allow approximately CNY 3,000-5,000 for the development/validation hardware,
-international freight and tax, excluding the later custom-PCB components.
-Do not optimize this estimate by dropping the second nRF board or second
-microphone board; independent bring-up and power measurement save more time
-than they cost.
+The reduced direct-to-form-factor route is expected to keep the initial
+off-board purchase near CNY 2,000-3,500 including international freight and
+tax, but excluding custom PCBA and enclosure fabrication.
 
 ## 6. Stock Evidence Snapshot
 
