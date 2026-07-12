@@ -12,10 +12,12 @@
 6. `POWER_AND_BATTERY_ENGINEERING_TARGETS.md`：续航和功耗验证方法。
 7. `HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md`：开发板、模组和仪器的评估计划。
 8. `EGOLINK_硬件开发采购清单_v1.xlsx`：数量、预算、到货验收参考。
+9. `V1_PRO_EVT_PROCUREMENT_BASELINE.md`：V1 Pro 已冻结平台的当前 EVT 采购清单。
 
 ## 关键纪律
 
 - 当前 P0 仍以 ESP32-S3 + SIM7670G 开发板为实现基线。
-- 产品版主控和蜂窝模组尚未冻结。
+- V1 Pro 产品版主控和蜂窝模组已由 ADR-0005 冻结；当前开发板事实仍以
+  `BOARD_MATRIX.md` 为准。
 - 候选芯片不等于 Codex 可以自行迁移平台。
 - 任何新平台移植都必须以独立任务、独立后端和可比较基准进行。
