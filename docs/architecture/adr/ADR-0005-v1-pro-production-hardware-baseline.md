@@ -11,6 +11,10 @@ owner: founder
 - Date: 2026-07-12
 - Decision owner: founder
 
+Peripheral revision: ADR-0006 supersedes the conflicting display, battery,
+sensor-population, SIM, charging, and public voice-call clauses below. The
+`nRF54LM20B + Air780EGH` platform and power-domain decision remain in force.
+
 ## Context
 
 EgoLink V1 Pro needs a production-oriented hardware target that can run small

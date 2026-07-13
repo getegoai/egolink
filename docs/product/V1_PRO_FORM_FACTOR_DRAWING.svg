@@ -14,21 +14,23 @@
     </style>
   </defs>
   <rect width="1200" height="760" fill="#f8fafc"/>
-  <text x="55" y="52" class="title">EgoLink V1 Pro Form-Factor Baseline</text>
-  <text x="55" y="78" class="small">All dimensions in millimeters. External envelope is frozen; antenna matching and internal ribs tune during EVT.</text>
+  <text x="55" y="52" class="title">EgoLink V1 Pro Form-Factor Baseline R2</text>
+  <text x="55" y="78" class="small">900 mAh target, data-first communication, sensor back, waterproof USB-C. All dimensions in millimeters.</text>
 
   <text x="105" y="130" class="head">Front</text>
   <rect x="105" y="155" width="294" height="322" rx="56" fill="#d0d5dd" stroke="#344054" stroke-width="3"/>
-  <rect x="159" y="203" width="186" height="212" rx="8" fill="#101828"/>
-  <rect x="176" y="222" width="152" height="152" fill="#e4e7ec" stroke="#667085" stroke-width="2"/>
-  <text x="203" y="302" class="label">24 x 24</text>
-  <text x="203" y="322" class="small">visible area</text>
+  <rect x="137" y="218" width="230" height="150" rx="8" fill="#101828"/>
+  <rect x="155" y="242" width="194" height="100" fill="#e4e7ec" stroke="#667085" stroke-width="2"/>
+  <text x="210" y="290" class="label">30.2 x 15.5</text>
+  <text x="211" y="313" class="small">OLED window</text>
   <rect x="399" y="221" width="18" height="54" rx="6" fill="#98a2b3" stroke="#344054"/>
   <rect x="399" y="322" width="24" height="72" rx="8" fill="#f79009" stroke="#b54708" stroke-width="2"/>
   <rect x="87" y="286" width="18" height="58" rx="6" fill="#98a2b3" stroke="#344054"/>
   <text x="425" y="249" class="small">SAFE</text>
   <text x="431" y="361" class="small">SOS</text>
   <text x="118" y="452" class="small">BACK / VOICE</text>
+  <rect x="230" y="424" width="76" height="20" rx="4" fill="#84adff" stroke="#175cd3"/>
+  <text x="235" y="439" class="small">USB-C side</text>
   <line x1="105" y1="512" x2="399" y2="512" class="dim"/>
   <line x1="105" y1="480" x2="105" y2="528" class="guide"/>
   <line x1="399" y1="480" x2="399" y2="528" class="guide"/>
@@ -49,11 +51,13 @@
   <text x="875" y="234" class="small">display</text>
   <text x="875" y="266" class="small">components, max 2.6</text>
   <text x="875" y="306" class="small">PCB, 0.8</text>
-  <text x="875" y="338" class="small">battery bay, 7.2</text>
+  <text x="875" y="338" class="small">900 mAh battery bay, 7.45</text>
   <line x1="475" y1="195" x2="475" y2="371" class="dim"/>
   <line x1="485" y1="195" x2="510" y2="195" class="guide"/>
   <line x1="485" y1="371" x2="510" y2="371" class="guide"/>
-  <text x="447" y="295" class="label" transform="rotate(-90 447 295)">15.2</text>
+  <text x="447" y="295" class="label" transform="rotate(-90 447 295)">15.8</text>
+  <rect x="640" y="353" width="90" height="12" rx="5" fill="#101828"/>
+  <text x="875" y="365" class="small">rear PPG + temperature island</text>
 
   <text x="105" y="594" class="head">PCB Mechanical Contract</text>
   <rect x="105" y="620" width="380" height="120" rx="20" fill="#d1fadf" stroke="#027a48" stroke-width="3"/>
@@ -63,8 +67,10 @@
   <circle cx="460" cy="715" r="6" fill="#f8fafc" stroke="#027a48"/>
   <rect x="135" y="634" width="155" height="42" rx="4" fill="#b2ddff" stroke="#175cd3"/>
   <text x="163" y="660" class="small">Air780EGH zone</text>
-  <rect x="305" y="686" width="120" height="34" rx="4" fill="#d6bbfb" stroke="#6938ef"/>
-  <text x="321" y="708" class="small">nRF + IMU</text>
+  <rect x="295" y="686" width="150" height="34" rx="4" fill="#d6bbfb" stroke="#6938ef"/>
+  <text x="307" y="708" class="small">nRF + IMU + sensors</text>
+  <rect x="445" y="662" width="40" height="28" rx="3" fill="#84adff" stroke="#175cd3"/>
+  <text x="449" y="680" class="small">USB</text>
   <line x1="105" y1="748" x2="485" y2="748" class="dim"/>
   <text x="275" y="741" class="label">38.0</text>
   <line x1="515" y1="620" x2="515" y2="740" class="dim"/>
@@ -83,4 +89,5 @@
   <rect x="1015" y="634" width="82" height="74" rx="4" fill="#d1fadf"/>
   <text x="1028" y="661" class="small">2.4G</text>
   <text x="1025" y="681" class="small">keep-out</text>
+  <text x="860" y="727" class="small">Pressure vent separate from speaker</text>
 </svg>
