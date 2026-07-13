@@ -1,23 +1,37 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-12
+last_verified: 2026-07-13
 verified_by: codex
 ---
 
 ## V1 Pro Hardware Freeze
 
+2026-07-13: Founder review of Fitbit and Xiaomi references produced the
+ADR-0006 product-peripheral revision before schematic capture. The core
+`nRF54LM20B + Air780EGH` platform remains frozen. V1 is now data-first rather
+than a public phone: guardian messages, location, voice messages and future
+authorized IP audio use the network, with no false instant-wake claim while
+4G is fully off. The product target is nominal 900 mAh, QMI8658A + T5838 +
+MAX30101 + MAX30208 + BMP390 multimodal sensing, 1.3-inch white COG OLED, an
+internal SIM/eUICC arrangement, waterproof USB-C and IP68 1.5 m / 30 min DVT
+target. These are unverified product requirements, not measured battery,
+medical, waterproofing or communication claims. The next gate is schematic
+partition/pin allocation plus supplier drawings for the cell, OLED, optical
+window and IPX8 connector.
+
 2026-07-12: The founder directed EVT to start from the final product form
 rather than a loose evaluation-board assembly. The V1 Pro exterior is now
-frozen as a no-touch safety watch at 46.0 x 42.0 x 15.2 mm, with a 38.0 x
-34.0 mm four-layer PCB envelope, approximately 800 mAh battery bay, physical
-SAFE/SOS/BACK controls, magnetic charging and IP67-oriented construction.
+frozen as a no-touch safety watch at 46.0 x 42.0 x 15.8 mm, with a 38.0 x
+34.0 mm four-layer PCB envelope, nominal 900 mAh battery bay, physical
+SAFE/SOS/BACK controls, waterproof USB-C and IP68-oriented construction.
 EVT uses the final envelope in a printed/CNC shell; injection tooling remains
 blocked until fit, RF, acoustic, drop, power and ingress tests pass.
 
 2026-07-12: Founder approved performance-first development. ADR-0005 freezes
 the V1 Pro production baseline around nRF54LM20B + Air780EGH + QMI8658A +
-T5838, with a high-current BQ25895/MAX17048 power path and a low-power Memory
-LCD. The five-device EVT procurement baseline is recorded; nRF54LM20B QFN and
+T5838, with a high-current BQ25895/MAX17048 power path and an initial Memory
+LCD choice later revised by ADR-0006. The five-device EVT procurement baseline
+is recorded; nRF54LM20B QFN and
 development-kit authorized supply is currently the only material blocker, so
 the approved action is distributor backorder plus Nordic project sampling, not
 an untraceable broker substitution. No custom PCB or product power claim exists

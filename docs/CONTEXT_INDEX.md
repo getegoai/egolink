@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-30
+last_verified: 2026-07-13
 verified_by: codex
 ---
 
@@ -37,8 +37,8 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 | Location fusion or dataset planning | `docs/development/LOCATION_ENGINE.md`, `docs/development/LOCATION_DATASET.md`, `docs/development/LOCATION_FUSION_ALGORITHM.md`, `docs/architecture/adr/ADR-0004-p0-rule-location-and-transitional-vps-memory.md`, `shared/contracts/` | `docs/development/PROTOCOL.md`, `docs/current/KEY_RELEASES.md`, `docs/tasks/done/DATA-001_LOCATION_FUSION_DATASET_BASELINE.md`, `docs/tasks/done/ALG-000_LOCATION_FUSION_ALGORITHM_DESIGN.md` |
 | Firmware change | `firmware/AGENTS.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/BOARD_MATRIX.md` | Named firmware README only |
 | Hardware validation | `firmware/AGENTS.md`, `docs/hardware/BOARD_MATRIX.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/validation/` | Named evidence report |
-| V1 Pro hardware selection or procurement | `docs/architecture/adr/ADR-0005-v1-pro-production-hardware-baseline.md`, `docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md` | `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`, `docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md` |
-| V1 Pro enclosure, PCB envelope or industrial design | `docs/product/V1_PRO_FORM_FACTOR_BASELINE.md`, `docs/product/V1_PRO_FORM_FACTOR_DRAWING.svg` | `docs/architecture/adr/ADR-0005-v1-pro-production-hardware-baseline.md`, `docs/product/MASS_PRODUCTION_REQUIREMENTS.md` |
+| V1 Pro hardware selection or procurement | `docs/architecture/adr/ADR-0005-v1-pro-production-hardware-baseline.md`, `docs/architecture/adr/ADR-0006-v1-pro-product-peripheral-revision.md`, `docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md` | `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`, `docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md` |
+| V1 Pro enclosure, PCB envelope or industrial design | `docs/product/V1_PRO_FORM_FACTOR_BASELINE.md`, `docs/product/V1_PRO_FORM_FACTOR_DRAWING.svg`, `docs/architecture/adr/ADR-0006-v1-pro-product-peripheral-revision.md` | `docs/architecture/adr/ADR-0005-v1-pro-production-hardware-baseline.md`, `docs/product/MASS_PRODUCTION_REQUIREMENTS.md` |
 | PC simulator or bridge | `pc_simulator/AGENTS.md`, `docs/architecture/SYSTEM_OVERVIEW.md`, `shared/contracts/` | Named runtime fixture |
 | Model or Safety Companion | `model_lab/AGENTS.md`, `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`, `docs/safety/SAFETY_CONTRACT.md`, `shared/contracts/` | `docs/modeling/MODEL_ARCHITECTURE.md` |
 | Quality tests | `quality_tests/AGENTS.md`, task-specific source docs | Existing related tests |
@@ -55,7 +55,8 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 - P0 development flow is authoritative in `docs/development/DEV_FLOW.md`; near-term R0-R4 sequencing is authoritative in `docs/current/ROADMAP_EGOLINK_P0.md`.
 - Location-engine planning is authoritative in `docs/development/LOCATION_ENGINE.md`; location-fusion dataset planning is authoritative in `docs/development/LOCATION_DATASET.md`; SIM7670G LTE transport planning is authoritative in `docs/development/LTE_TRANSPORT.md`.
 - Architecture changes require an ADR under `docs/architecture/adr/`.
-- V1 Pro production hardware selection is frozen by ADR-0005; procurement is
+- V1 Pro compute/cellular hardware is frozen by ADR-0005 and product
+  peripherals are revised by ADR-0006; procurement is
   controlled by `docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md`.
 - V1 Pro user-visible form and PCB envelope are frozen by
   `docs/product/V1_PRO_FORM_FACTOR_BASELINE.md`.

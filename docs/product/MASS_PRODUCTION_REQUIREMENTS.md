@@ -1,11 +1,11 @@
 ---
 document_status: draft_pending_founder_approval
-last_verified: 2026-07-03
+last_verified: 2026-07-13
 verified_by: codex
 source_task: PROD-001
 ---
 
-## 2026-07-12 Selection Override
+## 2026-07-13 Selection Override
 
 Founder decision ADR-0005 freezes the V1 Pro production platform as
 `nRF54LM20B + Air780EGH` and freezes the named sensor, audio, storage, display,
@@ -20,6 +20,13 @@ envelope, interaction layout, PCB maximum outline and battery bay in
 `V1_PRO_FORM_FACTOR_BASELINE.md`. Matching TBD rows below remain historical
 inputs where they conflict with that baseline; supplier-specific battery,
 antenna tuning, certification and measured gates remain unresolved.
+
+ADR-0006 (2026-07-13) supersedes the conflicting ADR-0005 peripheral clauses:
+V1 is data-first with no ordinary PSTN dialer, targets a nominal 900 mAh cell,
+adds MAX30101 optical pulse, MAX30208 skin-temperature and BMP390 pressure
+sensing, uses a 1.3-inch SH1106G monochrome COG OLED, and adopts waterproof
+USB-C with an IP68 1.5 m / 30 min DVT target. These are design requirements,
+not verified endurance, medical, ingress or communications claims.
 
 # EgoLink V1 Mass-Production Requirements
 

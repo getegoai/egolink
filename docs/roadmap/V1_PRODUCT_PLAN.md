@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-12
+last_verified: 2026-07-13
 verified_by: codex
 ---
 
@@ -21,6 +21,10 @@ Air780EGH, QMI8658A, and T5838. Platform comparison remains historical input;
 EVT schematic, sourcing, measured power and validation are still open work.
 `docs/product/V1_PRO_FORM_FACTOR_BASELINE.md` additionally freezes the final
 wrist-worn envelope before schematic capture so EVT starts at product size.
+ADR-0006 (2026-07-13) revises the product peripherals without reopening that
+platform: data-first guardian communication, nominal 900 mAh battery,
+QMI8658A/T5838/MAX30101/MAX30208/BMP390 sensing, a 1.3-inch monochrome OLED,
+and an IP68-oriented USB-C enclosure.
 
 ## 1. V1 Feature Set (in scope)
 
@@ -39,7 +43,8 @@ wrist-worn envelope before schematic capture so EVT starts at product size.
 
 - No camera-based features (privacy + power; hardware capability retained) —
   TBD(founder) if the interaction design requires it.
-- Voice calling undecided until production module selection (PROD-001).
+- No ordinary PSTN dialer or public incoming-call UI. V1 uses data messages,
+  voice messages and retains hardware for later guardian-authorized IP audio.
 - No overseas compliance; China market only.
 - No unmeasured safety claims: fall detection and proactive alerts ship
   labeled experimental until false-positive rates are measured on real data
@@ -95,8 +100,8 @@ Exit criteria:
 
 Exit criteria:
 
-- ADR-0005-approved V1 Pro MCU, cellular, sensor, audio, display, storage and
-  power-path baseline; unresolved cost, size, certification and measured
+- ADR-0005/ADR-0006-approved V1 Pro MCU, cellular, sensor, audio, display,
+  storage and power-path baseline; unresolved cost, size, certification and measured
   acceptance gates remain controlled by
   `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`.
 - Air780EGH and nRF54LM20B development hardware acquired through authorized
@@ -124,7 +129,7 @@ re-run and on-device model acceptance re-run on EVT hardware.
 | 1 | PWR-002 low-power location state-machine decision | V1-M1 | done (2026-07-03) |
 | 1 | FIELD-003 outdoor GNSS acceptance | V1-M1 | active |
 | 1 | PRIVACY-001 product demo privacy/data boundary gate | V1-M3 | done (2026-07-03) |
-| 1 | PROD-001 mass-production requirements (incl. AI compute criteria) | V1-M4 | platform selected by ADR-0005; mechanical/certification/measurement gates active |
+| 1 | PROD-001 mass-production requirements (incl. AI compute criteria) | V1-M4 | core platform selected by ADR-0005, peripherals revised by ADR-0006; schematic/supplier/measurement gates active |
 | 2 | STAB-002 LTE long-run/reconnect gate (R3.0) | V1-M1 | planned |
 | 2 | FT-1 assembly: SOS key mapping + mounting + release gate | V1-M1 | planned |
 | 2 | M1-002 on-device session recorder | V1-M3 | planned |
@@ -162,7 +167,7 @@ re-run and on-device model acceptance re-run on EVT hardware.
 ## 5. Operating Notes
 
 - Existing ESP32-S3 + SIM7670G boards remain the current evidence and data
-  vehicle while the ADR-0005 V1 Pro target is brought up. New production
+  vehicle while the ADR-0005/ADR-0006 V1 Pro target is brought up. New production
   firmware work targets nRF54LM20B + Air780EGH without invalidating prior
   engineering evidence.
 - Every milestone exit produces a KR manifest (existing KR mechanism).
