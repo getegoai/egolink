@@ -159,6 +159,12 @@ git diff --check
   `ready=false`, registration `not_registered`, and PDP `unknown`; the sole
   stationary command was never polled or executed. Observation stopped before
   five minutes, with zero samples, messages, raw frames, GNSS events, or ACKs.
+- Follow-up diagnosis: under a separate 60-second read-only authorization,
+  COM4 responded normally to `AT` but `AT+CPIN?` returned
+  `+CME ERROR: SIM not inserted`. The nine approved status queries completed in
+  6.98 seconds with no configuration write, reset, or flash. CSQ was 21, while
+  registration was `0,0`, attach was 0, and no PDP context existed. The next
+  gate is physical SIM detection after a full-power-off reseat.
 
 # Decisions
 
@@ -210,7 +216,8 @@ git diff --check
   capture plan, operator runbook, and no-action dry-run result. The ignored
   config/build are `sdkconfig.field011-gnss-imu-lte.local` and
   `build_field011_gnss_imu_lte/` under `firmware/mqtt_heartbeat/`.
-- Remaining risks: SIM/PIN/APN/registration/PDP state is not yet observed;
+- Remaining risks: SIM electrical/mechanical detection currently fails with
+  `SIM not inserted`; PIN/APN/registration/PDP cannot yet be evaluated;
   the combined image has now passed QMI startup only, not joint runtime;
   command `f011-bench-1` remains pending and must be resolved before reboot;
   GNSS and IMU are related by a device/time window rather than synchronized

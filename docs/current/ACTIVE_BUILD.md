@@ -291,10 +291,13 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 ## Current Known Limits
 
 - The current FIELD-011 image has not passed its inserted-SIM bench gate.
-  SIM7670 UART/AT was reachable, but the modem stayed unregistered with PDP
-  unknown and the only command remains pending. Do not reboot or hand off the
-  board for field use until the stale command and SIM/PIN/APN/registration
-  state are resolved under a new bounded retry plan.
+  A follow-up read-only USB AT diagnostic identified COM4 and returned
+  `+CME ERROR: SIM not inserted` for `AT+CPIN?`; the modem does not currently
+  detect the card. The unregistered/PDP-unknown state is downstream of that
+  hardware-detection failure, not evidence for an APN fault. The only command
+  remains pending. Do not reboot or hand off the board until the SIM is fully
+  power-off reseated and the pending command is intentionally reused or closed
+  under a new bounded retry plan.
 - D5-002 proves three independent bounded 100 x 50 ms real six-axis windows
   can reach the VPS over Wi-Fi in one boot and be reconstructed as
   cadence-qualified engineering evidence with one operator-confirmed

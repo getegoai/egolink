@@ -27,6 +27,10 @@ All unknown fields must remain explicit. Do not infer hardware capability from p
   precondition fail**; LTE high-rate IMU and joint GNSS+IMU operation remain
   unverified. Evidence:
   `reports/field_validation/FIELD-011-20260811-001/field011_bench_report.md`.
+- A separately authorized read-only COM4 query then returned
+  `AT+CPIN? -> +CME ERROR: SIM not inserted`. COM4 was responsive and CSQ was
+  21, so the immediate blocker is SIM electrical/mechanical detection; APN and
+  carrier registration have not yet become testable.
 
 ## Rules
 

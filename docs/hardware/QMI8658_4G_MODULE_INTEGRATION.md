@@ -157,6 +157,10 @@ ACK. The read-only API export contained zero messages and zero raw frames.
 This preserves the QMI startup evidence but does not advance LTE-window or
 joint field acceptance. Evidence:
 `reports/field_validation/FIELD-011-20260811-001/field011_bench_report.md`.
+A separately authorized read-only USB AT diagnostic subsequently selected
+COM4 and returned `+CME ERROR: SIM not inserted` for `AT+CPIN?`. The immediate
+next gate is therefore a full-power-off SIM reseat and CPIN recheck, not an APN
+change or firmware rebuild.
 
 The engineering corpus therefore contains four uploaded bounded high-cadence
 Wi-Fi windows across D2-009 and D5-002, including three operator-confirmed
