@@ -1,5 +1,5 @@
 {
-  "current_focus": "QMI8658 configuration and motion-data readiness are prepared; next focus is module probe, bounded high-rate IMU windows, strict D2 reference points, and the 24h battery run.",
+  "current_focus": "FIELD-011 台架闭环已通过：同一镜像完成一次操作员确认的静止 QMI8658 LTE 窗口和 LTE/GNSS 状态上报。下一步是在独立供电、固定携带位置下完成户外 GNSS 与三次正常步行窗口，再进入 D2 指标和 D5 标注。",
   "recent_done_limit": 8,
   "milestones": [
     {
@@ -141,10 +141,9 @@
     "PRIVACY-LOC-001": "planned"
   },
   "operator_asks": [
-    "24h 电池运行：现有 2.6Ah 18650 可用于工程基线；先确认板版本/极性，再刷 PWR-001 固件并断 USB 独立运行",
-    "QMI8658 到手后：先拍模块正反面/引脚标识并确认 0x6A 或 0x6B，再接线；不要直接使用当前 0x6B 占位固件刷机",
-    "3D 打印：4G板+电池+IMU 挂绳壳（D3 佩戴测试机）",
-    "决策：EVT-1 自制合并板启动（嘉立创打样）—— 待创始人确认后我起草 HW-EVT1-001",
-    "Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists."
+    "户外联测：把开发板和传感器固定在一个明确携带位置，使用稳定移动电源，并在开阔处等待 GNSS。",
+    "开始前记录携带位置、方向和时间；准备好后再创建三次正常步行六轴窗口，任一异常即停止。",
+    "v0.4 PCB、芯片和外壳设计继续并行迭代，不阻塞当前开发板的数据采集闭环。",
+    "在具名证据完成前，不宣称定位精度、模型效果、续航、量产或正式安全能力。"
   ]
 }

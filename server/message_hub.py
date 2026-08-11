@@ -8015,11 +8015,15 @@ def render_dashboard() -> str:
     h1 { margin: 0; font-size: 21px; letter-spacing: 0; }
     .header-actions, .auth { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .header-link { color: var(--blue); text-decoration: none; font-size: 13px; font-weight: 600; white-space: nowrap; }
-    input { width: min(360px, 56vw); padding: 8px 10px; border: 1px solid #c8d0dc; border-radius: 6px; font: inherit; }
+    input, select { padding: 8px 10px; border: 1px solid #c8d0dc; border-radius: 6px; background: #fff; color: var(--text); font: inherit; }
+    input { width: min(360px, 56vw); }
+    select { min-width: min(320px, 46vw); max-width: 100%; }
     button { padding: 8px 12px; border: 1px solid var(--blue); border-radius: 6px; background: var(--blue); color: #fff; font: inherit; cursor: pointer; }
     button.secondary { background: #fff; color: var(--blue); }
     button:disabled { cursor: not-allowed; opacity: 0.45; }
+    button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid rgba(31, 111, 235, 0.35); outline-offset: 2px; }
     #authStatus { min-width: 92px; color: var(--muted); font-size: 13px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     .dashboard-shell { max-width: 1440px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
     .dashboard-grid { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px; align-items: start; }
     .stack { display: grid; gap: 16px; }
@@ -8029,8 +8033,13 @@ def render_dashboard() -> str:
     .section-head h2 { margin: 0; }
     .section-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
     .section-actions button { min-height: 34px; padding: 6px 10px; font-size: 12px; }
+    .device-picker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .device-picker label { color: var(--muted); font-size: 12px; font-weight: 600; }
     .map-import-status { min-width: 126px; max-width: 260px; color: var(--muted); font-size: 12px; text-align: right; overflow-wrap: anywhere; }
-    .section-kicker, .refresh-note { color: var(--muted); font-size: 12px; }
+    .section-kicker, .refresh-note, .refresh-status { color: var(--muted); font-size: 12px; }
+    .refresh-status.ok { color: var(--green); }
+    .refresh-status.warn { color: var(--amber); }
+    .refresh-status.bad { color: var(--red); }
     h2 { margin: 0 0 10px; font-size: 16px; letter-spacing: 0; }
     h3 { margin: 0; font-size: 14px; letter-spacing: 0; }
     .metric { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 8px; padding: 7px 0; border-bottom: 1px solid #edf0f5; font-size: 14px; }
@@ -8040,10 +8049,31 @@ def render_dashboard() -> str:
     .warn { color: var(--amber); font-weight: 600; }
     .bad { color: var(--red); font-weight: 600; }
     .empty { color: var(--muted); }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 13px; }
     th, td { text-align: left; padding: 8px; border-bottom: 1px solid #edf0f5; vertical-align: top; }
     th { color: var(--muted); }
     .empty-panel { padding: 20px; color: var(--muted); }
+    .field-operations-grid { padding: 16px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr); gap: 12px; align-items: start; }
+    .operation-stack { display: grid; gap: 12px; }
+    .operation-card { min-width: 0; border: 1px solid #d8dde6; border-radius: 8px; padding: 12px; background: #fff; }
+    .operation-card h3 { margin-bottom: 8px; }
+    .operation-card details { margin-top: 8px; }
+    .operation-card details > summary { color: var(--blue); cursor: pointer; font-size: 13px; font-weight: 600; }
+    .field-evidence-grid { padding: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+    .evidence-panel { min-width: 0; border: 1px solid #d8dde6; border-radius: 8px; padding: 12px; background: #fff; }
+    .evidence-panel h3 { margin-bottom: 10px; }
+    .dashboard-details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .dashboard-details > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; cursor: pointer; font-size: 16px; font-weight: 700; list-style: none; }
+    .dashboard-details > summary::-webkit-details-marker { display: none; }
+    .dashboard-details > summary::after { content: 'Show'; color: var(--blue); font-size: 12px; font-weight: 600; }
+    .dashboard-details[open] > summary { border-bottom: 1px solid #edf0f5; }
+    .dashboard-details[open] > summary::after { content: 'Hide'; }
+    .details-body { padding: 16px; }
+    .details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+    .details-grid > section { min-width: 0; }
+    .details-grid .wide { grid-column: 1 / -1; }
+    .scroll-panel { max-height: 360px; overflow: auto; }
     .d1-overview { padding: 16px; display: grid; grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.1fr); gap: 16px; align-items: stretch; }
     .d1-map-pane, .d1-summary-pane { min-width: 0; }
     .d1-summary-pane { display: grid; gap: 12px; }
@@ -8054,6 +8084,10 @@ def render_dashboard() -> str:
     .status-chip.bad { background: #fff1eb; border-color: #f0b8a3; color: var(--red); }
     .d1-primary { border: 1px solid #d8dde6; border-radius: 8px; padding: 12px; display: grid; gap: 6px; background: #fbfcfe; }
     .d1-primary strong { font-size: 22px; line-height: 1.2; overflow-wrap: anywhere; }
+    .d1-details { border: 1px solid #d8dde6; border-radius: 8px; background: #fff; overflow: hidden; }
+    .d1-details > summary { padding: 11px 12px; color: var(--blue); cursor: pointer; font-size: 13px; font-weight: 700; }
+    .d1-details[open] > summary { border-bottom: 1px solid #edf0f5; }
+    .d1-details .d1-grid { padding: 12px; }
     .d1-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .d1-card { border: 1px solid #d8dde6; border-radius: 8px; padding: 12px; background: #fff; display: grid; gap: 6px; min-width: 0; }
     .card-label { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; }
@@ -8100,9 +8134,9 @@ def render_dashboard() -> str:
     .map-point-reference { width: 13px; height: 13px; border-radius: 3px; background: var(--amber); box-shadow: 0 0 0 2px var(--amber); }
     .map-waiting { z-index: 1; color: var(--muted); font-size: 13px; font-weight: 600; border: 1px solid #c8d0dc; border-radius: 999px; padding: 6px 10px; background: rgba(255,255,255,0.82); }
     .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: var(--ink-soft); font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 5px 6px; }
-    @media (max-width: 980px) { .dashboard-grid, .d1-overview, .progress-layout { grid-template-columns: 1fr; } }
+    @media (max-width: 980px) { .dashboard-grid, .d1-overview, .progress-layout, .field-operations-grid, .field-evidence-grid, .details-grid { grid-template-columns: 1fr; } .details-grid .wide { grid-column: auto; } .d1-summary-pane { order: 1; } .d1-map-pane { order: 2; } }
     @media (max-width: 760px) { .evidence-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } .section-head { align-items: flex-start; flex-direction: column; } .section-actions { width: 100%; justify-content: flex-start; } .map-import-status { max-width: 100%; text-align: left; } }
+    @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } select { width: 100%; min-width: 0; } button, select { min-height: 44px; } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } .section-head { align-items: flex-start; flex-direction: column; } .section-actions, .device-picker { width: 100%; justify-content: flex-start; } .map-import-status { max-width: 100%; text-align: left; } .dashboard-details > summary { align-items: flex-start; } }
   </style>
 </head>
 <body>
@@ -8111,9 +8145,10 @@ def render_dashboard() -> str:
     <div class="header-actions">
       <a class="header-link" href="/d2-reference-capture">D2 Reference Capture</a>
       <div class="auth">
-        <input id="tokenInput" type="password" autocomplete="off" placeholder="Bearer token" />
+        <label class="sr-only" for="tokenInput">Bearer token</label>
+        <input id="tokenInput" type="password" autocomplete="off" placeholder="Bearer token" aria-label="Bearer token" />
         <button id="saveToken" type="button">Save</button>
-        <span id="authStatus"></span>
+        <span id="authStatus" role="status" aria-live="polite"></span>
       </div>
     </div>
   </header>
@@ -8130,10 +8165,66 @@ def render_dashboard() -> str:
           <input id="d2ManifestFile" type="file" accept="application/json,.json" hidden />
           <span id="d2ManifestStatus" class="map-import-status">No local references</span>
           <span class="refresh-note">auto refresh 3s</span>
+          <span id="refreshStatus" class="refresh-status" role="status" aria-live="polite">Waiting for first refresh</span>
         </div>
       </div>
       <div id="d1Link"></div>
     </section>
+
+    <section id="fieldOperations" class="focus-panel" aria-labelledby="fieldOperationsTitle">
+      <div class="section-head">
+        <div>
+          <h2 id="fieldOperationsTitle">Field Operations</h2>
+          <span class="section-kicker">Live device, location, run, and command state</span>
+        </div>
+        <div class="device-picker">
+          <label for="deviceSelector">Active device</label>
+          <select id="deviceSelector" aria-label="Active device" disabled>
+            <option value="">Waiting for devices</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-operations-grid">
+        <div class="operation-card">
+          <h3>Latest Field State</h3>
+          <div id="fieldState"><span class="empty">Waiting for device state</span></div>
+        </div>
+        <div class="operation-stack">
+          <div class="operation-card">
+            <h3>All Devices</h3>
+            <div id="devices"><span class="empty">Waiting for devices</span></div>
+          </div>
+          <div class="operation-card">
+            <h3>Recent Commands (All Devices)</h3>
+            <div id="commands" class="scroll-panel"><span class="empty">Waiting for commands</span></div>
+          </div>
+          <div class="operation-card">
+            <h3>Run Context (Global)</h3>
+            <div id="runContext"><span class="empty">Waiting for run context</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="fieldEvidence" class="focus-panel" aria-labelledby="fieldEvidenceTitle">
+      <div class="section-head">
+        <div>
+          <h2 id="fieldEvidenceTitle">Field Evidence</h2>
+          <span class="section-kicker">D2 baseline, D1 regression, power, and D5 review</span>
+        </div>
+      </div>
+      <div class="field-evidence-grid">
+        <div class="evidence-panel">
+          <h3>Field Test Results</h3>
+          <div id="fieldResults"></div>
+        </div>
+        <div class="evidence-panel">
+          <h3>Data Flywheel</h3>
+          <div id="dataFlywheel"></div>
+        </div>
+      </div>
+    </section>
+
     <section>
       <div class="section-head">
         <div>
@@ -8143,34 +8234,15 @@ def render_dashboard() -> str:
       </div>
       <div id="progressBoard" class="empty-panel">Loading progress...</div>
     </section>
-    <div class="dashboard-grid">
-      <div class="stack">
-        <section>
-          <h2>Devices</h2>
-          <div id="devices"></div>
-        </section>
-        <section>
-          <h2>Run Context</h2>
-          <div id="runContext"></div>
-        </section>
-        <section>
-          <h2>Commands</h2>
-          <div id="commands"></div>
-        </section>
-        <section>
-          <h2>Raw Frames</h2>
-          <div id="rawFrames"></div>
-        </section>
-      </div>
-      <div class="stack">
-        <section>
-          <h2>Field Test Results</h2>
-          <div id="fieldResults"></div>
-        </section>
-        <section>
-          <h2>Data Flywheel</h2>
-          <div id="dataFlywheel"></div>
-        </section>
+
+    <section>
+      <h2>Product Demo</h2>
+      <div id="productDemo"></div>
+    </section>
+
+    <details id="modelDetails" class="dashboard-details">
+      <summary>Model and Labeling Details</summary>
+      <div class="details-body details-grid">
         <section>
           <h2>Training Experiments</h2>
           <div id="trainingExperiment"></div>
@@ -8223,20 +8295,24 @@ def render_dashboard() -> str:
           <h2>D1 Labeling Decision Template</h2>
           <div id="d1LabelingDecisionTemplate"></div>
         </section>
+      </div>
+    </details>
+
+    <details id="diagnosticsDetails" class="dashboard-details">
+      <summary>Diagnostics and Message History</summary>
+      <div class="details-body details-grid">
         <section>
-          <h2>Product Demo</h2>
-          <div id="productDemo"></div>
-        </section>
-        <section>
-          <h2>Latest Field State</h2>
-          <div id="fieldState"></div>
+          <h2>Raw Frames</h2>
+          <div id="rawFrames" class="scroll-panel"></div>
         </section>
         <section>
           <h2>Recent Messages</h2>
-          <table><thead><tr><th>Device</th><th>Type</th><th>Seq</th><th>Detail</th><th>Received</th></tr></thead><tbody id="messages"></tbody></table>
+          <div class="table-scroll" role="region" aria-label="Recent messages table" tabindex="0">
+            <table><thead><tr><th>Device</th><th>Type</th><th>Seq</th><th>Detail</th><th>Received</th></tr></thead><tbody id="messages"></tbody></table>
+          </div>
         </section>
       </div>
-    </div>
+    </details>
   </main>
   <script>
     function escapeHtml(value) {
@@ -8277,8 +8353,38 @@ def render_dashboard() -> str:
     const D2_CAPTURE_KEY = 'egolink.d2.reference_capture.v1';
     const D2_MANIFEST_MAX_BYTES = 262144;
     const D2_REFERENCE_POINT_LIMIT = 16;
-    let latestDashboardState = null;
+    const DASHBOARD_DEVICE_KEY = 'egolink.dashboard.device.v1';
+    let selectedDashboardDeviceId = localStorage.getItem(DASHBOARD_DEVICE_KEY) || '';
+    let refreshInFlight = false;
+    let lastSuccessfulDashboardState = null;
     let localD2MapReview = null;
+    function selectDashboardDevice(devices, currentRun = {}, preferredDeviceId = selectedDashboardDeviceId) {
+      const available = Array.isArray(devices)
+        ? devices.filter(device => device && device.device_id)
+        : [];
+      if (!available.length) return null;
+      const preferred = available.find(device => device.device_id === preferredDeviceId);
+      if (preferred) return preferred;
+      const runDeviceId = currentRun && currentRun.device_id ? currentRun.device_id : '';
+      const runDevice = available.find(device => device.device_id === runDeviceId);
+      if (runDevice) return runDevice;
+      return [...available].sort((left, right) => {
+        const leftSeen = Date.parse(left.last_seen_at || '') || 0;
+        const rightSeen = Date.parse(right.last_seen_at || '') || 0;
+        return rightSeen - leftSeen;
+      })[0];
+    }
+    function updateDeviceSelector(devices, currentRun = {}) {
+      const available = Array.isArray(devices) ? devices : [];
+      const selectedDevice = selectDashboardDevice(available, currentRun);
+      deviceSelector.innerHTML = available.map(device => {
+        const label = `${device.device_id} / ${onlineLabel(device.last_seen_at)}`;
+        return `<option value="${escapeHtml(device.device_id)}">${escapeHtml(label)}</option>`;
+      }).join('') || '<option value="">No devices available</option>';
+      deviceSelector.disabled = !available.length;
+      deviceSelector.value = selectedDevice ? selectedDevice.device_id : '';
+      return selectedDevice;
+    }
     function finiteCoordinate(value, min, max, field) {
       if (value === null || value === undefined || String(value).trim() === '') {
         throw new Error(`missing ${field}`);
@@ -8365,42 +8471,36 @@ def render_dashboard() -> str:
         layers: {...(map.layers || {}), reference_points: references.length > 0},
       };
     }
-    function renderD1LinkFromLatestState() {
-      if (!latestDashboardState) return;
-      const devices = latestDashboardState.devices || [];
-      updateD2ManifestStatus(devices[0] ? devices[0].device_id : '');
-      d1Link.innerHTML = d1LinkPanel(devices);
+    function renderSelectedDevicePanels() {
+      if (!lastSuccessfulDashboardState) return;
+      const devices = lastSuccessfulDashboardState.devices || [];
+      const selectedDevice = selectDashboardDevice(
+        devices,
+        lastSuccessfulDashboardState.current_run || {},
+      );
+      updateD2ManifestStatus(selectedDevice ? selectedDevice.device_id : '');
+      d1Link.innerHTML = d1LinkPanel(selectedDevice);
+      fieldState.innerHTML = latestFieldState(
+        selectedDevice,
+        lastSuccessfulDashboardState.raw_frames || [],
+      );
     }
-    function showStateMessage(message) {
-      const html = `<span class="empty">${escapeHtml(message)}</span>`;
-      devices.innerHTML = html;
-      runContext.innerHTML = html;
-      commands.innerHTML = html;
-      rawFrames.innerHTML = html;
-      productDemo.innerHTML = html;
-      fieldResults.innerHTML = html;
-      dataFlywheel.innerHTML = html;
-      trainingExperiment.innerHTML = html;
-      trainingRunPreflight.innerHTML = html;
-      trainingFeatureManifest.innerHTML = html;
-      trainingRunnerDryRun.innerHTML = html;
-      trainingBaselineEval.innerHTML = html;
-      trainingHandoffBundle.innerHTML = html;
-      trainingJobPlan.innerHTML = html;
-      syntheticTrainingChain.innerHTML = html;
-      d1TrainingReadiness.innerHTML = html;
-      d1LabelingIntake.innerHTML = html;
-      d1LabelingQueue.innerHTML = html;
-      d1LabelingReviewPacket.innerHTML = html;
-      d1LabelingDecisionTemplate.innerHTML = html;
-      d1Link.innerHTML = html;
-      fieldState.innerHTML = html;
-      messages.innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
+    function renderD1LinkFromLatestState() {
+      renderSelectedDevicePanels();
     }
     tokenInput.value = currentToken();
     saveToken.addEventListener('click', () => {
       localStorage.setItem('egolinkHubToken', tokenInput.value.trim());
       refresh();
+    });
+    deviceSelector.addEventListener('change', () => {
+      selectedDashboardDeviceId = deviceSelector.value;
+      if (selectedDashboardDeviceId) {
+        localStorage.setItem(DASHBOARD_DEVICE_KEY, selectedDashboardDeviceId);
+      } else {
+        localStorage.removeItem(DASHBOARD_DEVICE_KEY);
+      }
+      renderSelectedDevicePanels();
     });
     localD2MapReview = loadLocalD2MapReview();
     updateD2ManifestStatus();
@@ -8411,7 +8511,12 @@ def render_dashboard() -> str:
       try {
         if (file.size > D2_MANIFEST_MAX_BYTES) throw new Error('manifest exceeds 256 KiB');
         const review = compactD2MapReview(JSON.parse(await file.text()));
-        const activeDevice = latestDashboardState && (latestDashboardState.devices || [])[0];
+        const activeDevice = lastSuccessfulDashboardState
+          ? selectDashboardDevice(
+              lastSuccessfulDashboardState.devices || [],
+              lastSuccessfulDashboardState.current_run || {},
+            )
+          : null;
         if (review.device_id && activeDevice && review.device_id !== activeDevice.device_id) {
           throw new Error('manifest device does not match active device');
         }
@@ -8479,28 +8584,31 @@ def render_dashboard() -> str:
       return `
         <div class="metric"><span>Current Run</span><b>${escapeHtml(run.test_run_id || 'unknown')}</b></div>
         <div class="metric"><span>Key Release</span><span>${escapeHtml(releaseLabel(release))}</span></div>
-        <div class="metric"><span>Baseline</span><span>${escapeHtml(baseline.release_id || 'none')} ${escapeHtml(baseline.release_version || '')}</span></div>
         <div class="metric"><span>Firmware</span><span>${escapeHtml(run.fw_version || 'unknown')}</span></div>
         <div class="metric"><span>Run Device</span><span>${escapeHtml(run.device_id || 'unknown')}</span></div>
         <div class="metric"><span>Command Chain</span><span>${escapeHtml(command.cmd_id || 'none')} / ${escapeHtml(command.cmd || 'none')} / ${escapeHtml(command.status || 'unknown')} / ACK ${escapeHtml(command.ack_status || 'none')}</span></div>
-        <div class="metric"><span>Raw Evidence</span><span>${escapeHtml(rawFrame.frame_id || 'none')} / ${escapeHtml(rawFrame.frame_type || 'unknown')} / ${escapeHtml(rawFrame.parse_status || 'unknown')} / ${escapeHtml(rawFrame.derived_message_type || 'unknown')}</span></div>
-        <div class="metric"><span>Derived Location</span><span>${escapeHtml(location.event_type || 'none')} seq ${escapeHtml(location.seq ?? 'unknown')} / fix ${escapeHtml(location.fix ?? 'unknown')} / ${escapeHtml(location.gnss_state || 'unknown')}</span></div>
         <div class="metric"><span>Failure State</span><span class="${failure.state === 'ok' ? 'ok' : failure.state === 'pending' || failure.state === 'warning' ? 'warn' : 'bad'}">${escapeHtml(failure.state || 'unknown')}</span></div>
         <div class="metric"><span>Failure Reason</span><span>${escapeHtml(failure.reason || 'unknown')}</span></div>
-        <div class="metric"><span>Network Reconnect</span><span>${escapeHtml(relNetwork.reconnect_count ?? 'unknown')} / ${escapeHtml(relNetwork.last_reconnect_reason || relNetwork.state || 'unknown')}</span></div>
-        <div class="metric"><span>Network Error</span><span>${escapeHtml(relNetwork.last_error || 'none')}</span></div>
-        <div class="metric"><span>Raw POST</span><span>${escapeHtml(relNetwork.raw_post_success_count ?? 'unknown')} ok / ${escapeHtml(relNetwork.raw_post_failure_count ?? 'unknown')} fail / ${escapeHtml(relNetwork.raw_post_attempt_count ?? 'unknown')} attempts</span></div>
-        <div class="metric"><span>Cache Queue</span><span>${escapeHtml(relCache.queued_message_count ?? 'unknown')} queued / ${escapeHtml(relCache.oldest_message_age_ms ?? 'unknown')} ms oldest</span></div>
-        <div class="metric"><span>Cache Retry</span><span>${escapeHtml(relCache.retry_success_count ?? 'unknown')} ok / ${escapeHtml(relCache.retry_failure_count ?? 'unknown')} fail / ${escapeHtml(relCache.retry_attempt_count ?? 'unknown')} attempts / ${escapeHtml(relCache.retry_policy || 'none')}</span></div>
-        <div class="metric"><span>Cache Flush</span><span>${escapeHtml(relCache.flush_success_count ?? 'unknown')} ok / ${escapeHtml(relCache.flush_failure_count ?? 'unknown')} fail / ${escapeHtml(relCache.flush_attempt_count ?? 'unknown')} attempts</span></div>
-        <div class="metric"><span>Cache Drops</span><span>${escapeHtml(relCache.dropped_message_count ?? 'unknown')} / ${escapeHtml(relCache.last_drop_reason || 'none')}</span></div>
-        <div class="metric"><span>EALE-P0</span><span>${escapeHtml(ealeBelief.state || 'unknown')} / ${escapeHtml(ealeBelief.substate || 'unknown')} / ${escapeHtml(ealeBelief.confidence_bucket || 'unknown')}</span></div>
-        <div class="metric"><span>EALE Reason</span><span>${escapeHtml(ealeBelief.reason || 'unknown')}</span></div>
-        <div class="metric"><span>EALE Failure</span><span>${escapeHtml(ealeBelief.failure_reason || 'none')}</span></div>
-        <div class="metric"><span>Dataset Window</span><span>${escapeHtml(ealeDataset.sample_type || 'unknown')} / ${escapeHtml(ealeDataset.status || 'unknown')}</span></div>
-        <div class="metric"><span>Dataset Training</span><span>${escapeHtml(ealeDataset.training_allowed ?? false)} / ${escapeHtml(ealeDataset.training_reason || 'unknown')}</span></div>
-        <div class="metric"><span>Quality Flags</span><span>${escapeHtml((ealeBelief.quality_flags || []).join(', ') || 'none')}</span></div>
-        <div class="metric"><span>Evidence Counts</span><span>${escapeHtml(counts.messages ?? 0)} messages / ${escapeHtml(counts.commands ?? 0)} commands / ${escapeHtml(counts.raw_frames ?? 0)} raw_frames</span></div>
+        <details>
+          <summary>Extended run diagnostics</summary>
+          <div class="metric"><span>Baseline</span><span>${escapeHtml(baseline.release_id || 'none')} ${escapeHtml(baseline.release_version || '')}</span></div>
+          <div class="metric"><span>Raw Evidence</span><span>${escapeHtml(rawFrame.frame_id || 'none')} / ${escapeHtml(rawFrame.frame_type || 'unknown')} / ${escapeHtml(rawFrame.parse_status || 'unknown')} / ${escapeHtml(rawFrame.derived_message_type || 'unknown')}</span></div>
+          <div class="metric"><span>Derived Location</span><span>${escapeHtml(location.event_type || 'none')} seq ${escapeHtml(location.seq ?? 'unknown')} / fix ${escapeHtml(location.fix ?? 'unknown')} / ${escapeHtml(location.gnss_state || 'unknown')}</span></div>
+          <div class="metric"><span>Network Reconnect</span><span>${escapeHtml(relNetwork.reconnect_count ?? 'unknown')} / ${escapeHtml(relNetwork.last_reconnect_reason || relNetwork.state || 'unknown')}</span></div>
+          <div class="metric"><span>Network Error</span><span>${escapeHtml(relNetwork.last_error || 'none')}</span></div>
+          <div class="metric"><span>Raw POST</span><span>${escapeHtml(relNetwork.raw_post_success_count ?? 'unknown')} ok / ${escapeHtml(relNetwork.raw_post_failure_count ?? 'unknown')} fail / ${escapeHtml(relNetwork.raw_post_attempt_count ?? 'unknown')} attempts</span></div>
+          <div class="metric"><span>Cache Queue</span><span>${escapeHtml(relCache.queued_message_count ?? 'unknown')} queued / ${escapeHtml(relCache.oldest_message_age_ms ?? 'unknown')} ms oldest</span></div>
+          <div class="metric"><span>Cache Retry</span><span>${escapeHtml(relCache.retry_success_count ?? 'unknown')} ok / ${escapeHtml(relCache.retry_failure_count ?? 'unknown')} fail / ${escapeHtml(relCache.retry_attempt_count ?? 'unknown')} attempts / ${escapeHtml(relCache.retry_policy || 'none')}</span></div>
+          <div class="metric"><span>Cache Flush</span><span>${escapeHtml(relCache.flush_success_count ?? 'unknown')} ok / ${escapeHtml(relCache.flush_failure_count ?? 'unknown')} fail / ${escapeHtml(relCache.flush_attempt_count ?? 'unknown')} attempts</span></div>
+          <div class="metric"><span>Cache Drops</span><span>${escapeHtml(relCache.dropped_message_count ?? 'unknown')} / ${escapeHtml(relCache.last_drop_reason || 'none')}</span></div>
+          <div class="metric"><span>EALE-P0</span><span>${escapeHtml(ealeBelief.state || 'unknown')} / ${escapeHtml(ealeBelief.substate || 'unknown')} / ${escapeHtml(ealeBelief.confidence_bucket || 'unknown')}</span></div>
+          <div class="metric"><span>EALE Reason</span><span>${escapeHtml(ealeBelief.reason || 'unknown')}</span></div>
+          <div class="metric"><span>EALE Failure</span><span>${escapeHtml(ealeBelief.failure_reason || 'none')}</span></div>
+          <div class="metric"><span>Dataset Window</span><span>${escapeHtml(ealeDataset.sample_type || 'unknown')} / ${escapeHtml(ealeDataset.status || 'unknown')}</span></div>
+          <div class="metric"><span>Dataset Training</span><span>${escapeHtml(ealeDataset.training_allowed ?? false)} / ${escapeHtml(ealeDataset.training_reason || 'unknown')}</span></div>
+          <div class="metric"><span>Quality Flags</span><span>${escapeHtml((ealeBelief.quality_flags || []).join(', ') || 'none')}</span></div>
+          <div class="metric"><span>Evidence Counts</span><span>${escapeHtml(counts.messages ?? 0)} messages / ${escapeHtml(counts.commands ?? 0)} commands / ${escapeHtml(counts.raw_frames ?? 0)} raw_frames</span></div>
+        </details>
       `;
     }
     function statusClass(status) {
@@ -9302,9 +9410,9 @@ def render_dashboard() -> str:
         </div>
       `;
     }
-    function d1LinkPanel(devices) {
-      if (!devices.length) return '<div class="empty-panel">No device data yet</div>';
-      const d = devices[0];
+    function d1LinkPanel(selectedDevice) {
+      if (!selectedDevice) return '<div class="empty-panel">No device data yet</div>';
+      const d = selectedDevice;
       const d1 = d.d1_link || {};
       const readiness = d1.field_readiness || {};
       const acceptance = d1.acceptance_gate || {};
@@ -9372,7 +9480,9 @@ def render_dashboard() -> str:
               <span class="card-note">Estimate Source: ${escapeHtml(arrayLabel(estimate.source))}</span>
               <span class="card-note">Accuracy Claim: ${escapeHtml(estimate.accuracy_claim || 'none')}</span>
             </div>
-            <div class="d1-grid">
+            <details class="d1-details">
+              <summary>D1 evidence details</summary>
+              <div class="d1-grid">
               <div class="d1-card">
                 <span class="card-label">Uplink</span>
                 <span class="card-value">Upload Success: ${escapeHtml(uploadText)}</span>
@@ -9405,14 +9515,15 @@ def render_dashboard() -> str:
                 <span class="card-note">Privacy: ${escapeHtml(privacy.static_report_policy || 'bounded_summary_no_raw_coordinates')}</span>
                 <span class="card-note">No accuracy or battery-life claim is made from this panel.</span>
               </div>
-            </div>
+              </div>
+            </details>
           </div>
         </div>
       `;
     }
-    function latestFieldState(devices, rawFrames) {
-      if (!devices.length) return '<span class="empty">No device data yet</span>';
-      const d = devices[0];
+    function latestFieldState(selectedDevice, rawFrames) {
+      if (!selectedDevice) return '<span class="empty">No device data yet</span>';
+      const d = selectedDevice;
       const latestRaw = latestRawFrameForDevice(rawFrames, d.device_id);
       const latestRawParsed = parseResult(latestRaw);
       const latestRawFraming = framing(latestRaw);
@@ -9446,42 +9557,45 @@ def render_dashboard() -> str:
         <div class="metric"><span>Location Updated</span><span>${escapeHtml(fieldTelemetry.server_received_at || 'none')}</span></div>
         <div class="metric"><span>Field Message</span><span>${escapeHtml(fieldTelemetry.event_type || fieldTelemetry.message_type || 'unknown')}</span></div>
         <div class="metric"><span>Location State</span><span>${escapeHtml(obsBelief.state || 'unknown')}</span></div>
-        <div class="metric"><span>Belief</span><span>${escapeHtml(obsBelief.confidence ?? 'unknown')} / ${escapeHtml(obsBelief.radius_m ?? 'unknown')} m</span></div>
-        <div class="metric"><span>Belief Source</span><span>${escapeHtml((obsBelief.source || []).join(', ') || 'none')}</span></div>
-        <div class="metric"><span>Belief Reason</span><span>${escapeHtml(obsBelief.reason || 'unknown')}</span></div>
-        <div class="metric"><span>Memory State</span><span>${escapeHtml(obsMemory.state || 'unknown')}</span></div>
-        <div class="metric"><span>Memory Updated</span><span>${escapeHtml(obsMemory.belief_updated_at || obsMemory.updated_at || 'none')}</span></div>
-        <div class="metric"><span>Memory Reason</span><span>${escapeHtml(obsMemory.reason || 'unknown')}</span></div>
         <div class="metric"><span>GNSS State</span><span>${escapeHtml(gnssField(fieldTelemetry, 'gnss_state', fieldTelemetry.event_type || status.gnss_state || 'unknown'))}</span></div>
         <div class="metric"><span>Fix</span><span>${escapeHtml(gnssField(fieldTelemetry, 'fix'))}</span></div>
         <div class="metric"><span>Position</span><span>${escapeHtml(lat)}, ${escapeHtml(lon)}</span></div>
-        <div class="metric"><span>Satellites</span><span>${escapeHtml(gnssField(fieldTelemetry, 'satellites'))}</span></div>
-        <div class="metric"><span>HDOP</span><span>${escapeHtml(gnssField(fieldTelemetry, 'hdop'))}</span></div>
-        <div class="metric"><span>Source Status</span><span>${escapeHtml(gnssField(fieldTelemetry, 'source_status'))}</span></div>
         <div class="metric"><span>Transport</span><span>${escapeHtml(obsTransport.type || status.link_type || 'unknown')}</span></div>
-        <div class="metric"><span>Transport Error</span><span>${escapeHtml(obsTransport.last_error || 'none')}</span></div>
-        <div class="metric"><span>Network Reconnect</span><span>${escapeHtml(obsRelNetwork.reconnect_count ?? 'unknown')} / ${escapeHtml(obsRelNetwork.last_reconnect_reason || obsRelNetwork.state || 'unknown')}</span></div>
-        <div class="metric"><span>Network Error</span><span>${escapeHtml(obsRelNetwork.last_error || 'none')}</span></div>
-        <div class="metric"><span>Raw POST</span><span>${escapeHtml(obsRelNetwork.raw_post_success_count ?? 'unknown')} ok / ${escapeHtml(obsRelNetwork.raw_post_failure_count ?? 'unknown')} fail / ${escapeHtml(obsRelNetwork.raw_post_attempt_count ?? 'unknown')} attempts</span></div>
-        <div class="metric"><span>Cache Queue</span><span>${escapeHtml(obsRelCache.queued_message_count ?? 'unknown')} queued / ${escapeHtml(obsRelCache.oldest_message_age_ms ?? 'unknown')} ms oldest</span></div>
-        <div class="metric"><span>Cache Retry</span><span>${escapeHtml(obsRelCache.retry_success_count ?? 'unknown')} ok / ${escapeHtml(obsRelCache.retry_failure_count ?? 'unknown')} fail / ${escapeHtml(obsRelCache.retry_attempt_count ?? 'unknown')} attempts / ${escapeHtml(obsRelCache.retry_policy || 'none')}</span></div>
-        <div class="metric"><span>Cache Flush</span><span>${escapeHtml(obsRelCache.flush_success_count ?? 'unknown')} ok / ${escapeHtml(obsRelCache.flush_failure_count ?? 'unknown')} fail / ${escapeHtml(obsRelCache.flush_attempt_count ?? 'unknown')} attempts</span></div>
-        <div class="metric"><span>Cache Drops</span><span>${escapeHtml(obsRelCache.dropped_message_count ?? 'unknown')} / ${escapeHtml(obsRelCache.last_drop_reason || 'none')}</span></div>
-        <div class="metric"><span>Runtime Reset</span><span>${escapeHtml(obsRuntime.last_reset_reason || 'unknown')}</span></div>
-        <div class="metric"><span>Boot</span><span>${escapeHtml(obsRuntime.boot_id || 'unknown')}</span></div>
         <div class="metric"><span>Command</span><span>${escapeHtml(obsCommand.last_cmd_id || 'none')} / ${escapeHtml(obsCommand.last_ack_status || obsCommand.last_status || 'none')}</span></div>
-        <div class="metric"><span>Raw Frame</span><span class="${rawFrameClass(latestRaw)}">${escapeHtml(rawFrameSummary(latestRaw))}</span></div>
-        <div class="metric"><span>Raw Frame ID</span><span>${escapeHtml(latestRaw.frame_id || 'none')}</span></div>
-        <div class="metric"><span>Raw Derived</span><span>${escapeHtml(latestRawParsed.derived_message_type || 'unknown')} / ${escapeHtml(latestRawFraming.content_type || 'unknown')}</span></div>
         <div class="metric"><span>Power</span><span>${escapeHtml(obsPower.battery_mv ?? 'unknown')} mV / ${escapeHtml(obsPower.soc_pct ?? status.battery ?? 'unknown')}% / ${escapeHtml(obsPower.evidence_status || obsPower.source_status || obsPower.source || 'unknown')}</span></div>
-        <div class="metric"><span>Cell</span><span>${escapeHtml(obsCell.rat || 'unknown')} ${escapeHtml(obsCell.cell_id || '')} RSRP ${escapeHtml(obsCell.rsrp ?? 'unknown')}</span></div>
         <div class="metric"><span>LTE</span><span>${escapeHtml(obsLte.registration_state || obsCell.registration_state || 'unknown')} / PDP ${escapeHtml(obsLte.pdp_state || obsCell.pdp_state || 'unknown')} / SIM ${escapeHtml(obsLte.sim_state || obsCell.sim_state || 'unknown')}</span></div>
-        <div class="metric"><span>LTE Reason</span><span>${escapeHtml(obsLte.reason_code || obsCell.reason_code || 'unknown')}</span></div>
-        <div class="metric"><span>Wi-Fi</span><span>${escapeHtml(obsWifi.scan_enabled ?? 'unknown')} / APs ${escapeHtml(obsWifi.ap_count ?? 'unknown')} / ${escapeHtml(obsWifi.evidence_status || obsWifi.source_status || 'unknown')}</span></div>
         <div class="metric"><span>IMU</span><span>${escapeHtml(obsImu.motion || 'unknown')} ${escapeHtml(obsImu.confidence ?? '')} / ${escapeHtml(obsImu.evidence_status || obsImu.source_status || 'unknown')}</span></div>
-        <div class="metric"><span>GNSS Reason</span><span>${escapeHtml(obsGnss.reason_code || 'unknown')}</span></div>
-        <div class="metric"><span>Reason Codes</span><span>${escapeHtml((obsExplainability.reason_codes || []).join(', ') || 'none')}</span></div>
         <div class="metric"><span>Last Error</span><span>${escapeHtml(error.error_code || 'none')}</span></div>
+        <details>
+          <summary>Extended field diagnostics</summary>
+          <div class="metric"><span>Belief</span><span>${escapeHtml(obsBelief.confidence ?? 'unknown')} / ${escapeHtml(obsBelief.radius_m ?? 'unknown')} m</span></div>
+          <div class="metric"><span>Belief Source</span><span>${escapeHtml((obsBelief.source || []).join(', ') || 'none')}</span></div>
+          <div class="metric"><span>Belief Reason</span><span>${escapeHtml(obsBelief.reason || 'unknown')}</span></div>
+          <div class="metric"><span>Memory State</span><span>${escapeHtml(obsMemory.state || 'unknown')}</span></div>
+          <div class="metric"><span>Memory Updated</span><span>${escapeHtml(obsMemory.belief_updated_at || obsMemory.updated_at || 'none')}</span></div>
+          <div class="metric"><span>Memory Reason</span><span>${escapeHtml(obsMemory.reason || 'unknown')}</span></div>
+          <div class="metric"><span>Satellites</span><span>${escapeHtml(gnssField(fieldTelemetry, 'satellites'))}</span></div>
+          <div class="metric"><span>HDOP</span><span>${escapeHtml(gnssField(fieldTelemetry, 'hdop'))}</span></div>
+          <div class="metric"><span>Source Status</span><span>${escapeHtml(gnssField(fieldTelemetry, 'source_status'))}</span></div>
+          <div class="metric"><span>Transport Error</span><span>${escapeHtml(obsTransport.last_error || 'none')}</span></div>
+          <div class="metric"><span>Network Reconnect</span><span>${escapeHtml(obsRelNetwork.reconnect_count ?? 'unknown')} / ${escapeHtml(obsRelNetwork.last_reconnect_reason || obsRelNetwork.state || 'unknown')}</span></div>
+          <div class="metric"><span>Network Error</span><span>${escapeHtml(obsRelNetwork.last_error || 'none')}</span></div>
+          <div class="metric"><span>Raw POST</span><span>${escapeHtml(obsRelNetwork.raw_post_success_count ?? 'unknown')} ok / ${escapeHtml(obsRelNetwork.raw_post_failure_count ?? 'unknown')} fail / ${escapeHtml(obsRelNetwork.raw_post_attempt_count ?? 'unknown')} attempts</span></div>
+          <div class="metric"><span>Cache Queue</span><span>${escapeHtml(obsRelCache.queued_message_count ?? 'unknown')} queued / ${escapeHtml(obsRelCache.oldest_message_age_ms ?? 'unknown')} ms oldest</span></div>
+          <div class="metric"><span>Cache Retry</span><span>${escapeHtml(obsRelCache.retry_success_count ?? 'unknown')} ok / ${escapeHtml(obsRelCache.retry_failure_count ?? 'unknown')} fail / ${escapeHtml(obsRelCache.retry_attempt_count ?? 'unknown')} attempts / ${escapeHtml(obsRelCache.retry_policy || 'none')}</span></div>
+          <div class="metric"><span>Cache Flush</span><span>${escapeHtml(obsRelCache.flush_success_count ?? 'unknown')} ok / ${escapeHtml(obsRelCache.flush_failure_count ?? 'unknown')} fail / ${escapeHtml(obsRelCache.flush_attempt_count ?? 'unknown')} attempts</span></div>
+          <div class="metric"><span>Cache Drops</span><span>${escapeHtml(obsRelCache.dropped_message_count ?? 'unknown')} / ${escapeHtml(obsRelCache.last_drop_reason || 'none')}</span></div>
+          <div class="metric"><span>Runtime Reset</span><span>${escapeHtml(obsRuntime.last_reset_reason || 'unknown')}</span></div>
+          <div class="metric"><span>Boot</span><span>${escapeHtml(obsRuntime.boot_id || 'unknown')}</span></div>
+          <div class="metric"><span>Raw Frame</span><span class="${rawFrameClass(latestRaw)}">${escapeHtml(rawFrameSummary(latestRaw))}</span></div>
+          <div class="metric"><span>Raw Frame ID</span><span>${escapeHtml(latestRaw.frame_id || 'none')}</span></div>
+          <div class="metric"><span>Raw Derived</span><span>${escapeHtml(latestRawParsed.derived_message_type || 'unknown')} / ${escapeHtml(latestRawFraming.content_type || 'unknown')}</span></div>
+          <div class="metric"><span>Cell</span><span>${escapeHtml(obsCell.rat || 'unknown')} ${escapeHtml(obsCell.cell_id || '')} RSRP ${escapeHtml(obsCell.rsrp ?? 'unknown')}</span></div>
+          <div class="metric"><span>LTE Reason</span><span>${escapeHtml(obsLte.reason_code || obsCell.reason_code || 'unknown')}</span></div>
+          <div class="metric"><span>Wi-Fi</span><span>${escapeHtml(obsWifi.scan_enabled ?? 'unknown')} / APs ${escapeHtml(obsWifi.ap_count ?? 'unknown')} / ${escapeHtml(obsWifi.evidence_status || obsWifi.source_status || 'unknown')}</span></div>
+          <div class="metric"><span>GNSS Reason</span><span>${escapeHtml(obsGnss.reason_code || 'unknown')}</span></div>
+          <div class="metric"><span>Reason Codes</span><span>${escapeHtml((obsExplainability.reason_codes || []).join(', ') || 'none')}</span></div>
+        </details>
       `;
     }
     function progressBoardPanel(board) {
@@ -9514,72 +9628,97 @@ def render_dashboard() -> str:
           <div class="progress-milestones">${milestones}</div>
         </div>`;
     }
+    function setRefreshStatus(message, state = '') {
+      refreshStatus.textContent = message;
+      refreshStatus.className = `refresh-status ${state}`.trim();
+    }
+    function lastRefreshSuffix() {
+      if (!lastSuccessfulDashboardState) return '';
+      const updatedAt = lastSuccessfulDashboardState.dashboard_refreshed_at;
+      return updatedAt ? ` / showing ${updatedAt}` : ' / showing last update';
+    }
     async function refresh() {
-      const response = await fetch('/api/state', { headers: authHeaders() });
-      if (response.status === 401) {
-        authStatus.textContent = 'token required';
-        showStateMessage('API token required');
-        return;
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      refreshStatus.dataset.state = 'refreshing';
+      setRefreshStatus('Refreshing...');
+      try {
+        const response = await fetch('/api/state', { headers: authHeaders() });
+        if (response.status === 401) {
+          authStatus.textContent = 'token required';
+          setRefreshStatus(`API token required${lastRefreshSuffix()}`, 'warn');
+          return;
+        }
+        if (!response.ok) {
+          authStatus.textContent = `HTTP ${response.status}`;
+          setRefreshStatus(`API error HTTP ${response.status}${lastRefreshSuffix()}`, 'warn');
+          return;
+        }
+        const data = await response.json();
+        data.dashboard_refreshed_at = new Date().toLocaleTimeString();
+        lastSuccessfulDashboardState = data;
+        authStatus.textContent = 'connected';
+        progressBoard.className = '';
+        progressBoard.innerHTML = progressBoardPanel(data.progress_board || {});
+        runContext.innerHTML = runContextPanel(data.current_run || {});
+        productDemo.innerHTML = productDemoPanel(data.product_demo || {});
+        fieldResults.innerHTML = fieldResultsPanel(data.field_results || {}, data.data_flywheel || {});
+        dataFlywheel.innerHTML = dataFlywheelPanel(data.data_flywheel || {});
+        trainingExperiment.innerHTML = trainingExperimentPanel(data.training_experiment || {});
+        trainingRunPreflight.innerHTML = trainingRunPreflightPanel(data.training_run_preflight || {});
+        trainingFeatureManifest.innerHTML = trainingFeatureManifestPanel(data.training_feature_manifest || {});
+        trainingRunnerDryRun.innerHTML = trainingRunnerDryRunPanel(data.training_runner_dry_run || {});
+        trainingBaselineEval.innerHTML = trainingBaselineEvalPanel(data.training_baseline_eval || {});
+        trainingHandoffBundle.innerHTML = trainingHandoffBundlePanel(data.training_handoff_bundle || {});
+        trainingJobPlan.innerHTML = trainingJobPlanPanel(data.training_job_plan || {});
+        syntheticTrainingChain.innerHTML = syntheticTrainingChainPanel(data.synthetic_training_chain || {});
+        d1TrainingReadiness.innerHTML = d1TrainingReadinessPanel(data.d1_training_readiness || {});
+        d1LabelingIntake.innerHTML = d1LabelingIntakePanel(data.d1_labeling_intake || {});
+        d1LabelingQueue.innerHTML = d1LabelingQueuePanel(data.d1_labeling_queue || {});
+        d1LabelingReviewPacket.innerHTML = d1LabelingReviewPacketPanel(data.d1_labeling_review_packet || {});
+        d1LabelingDecisionTemplate.innerHTML = d1LabelingDecisionTemplatePanel(data.d1_labeling_decision_template || {});
+        updateDeviceSelector(data.devices || [], data.current_run || {});
+        renderSelectedDevicePanels();
+        devices.innerHTML = (data.devices || []).map(d => `
+          <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>
+          <div class="metric"><span>Status</span><span class="${ageClass(d.last_seen_at)}">${escapeHtml(onlineLabel(d.last_seen_at))}</span></div>
+          <div class="metric"><span>Last Seen</span><span>${escapeHtml(d.last_seen_at)}</span></div>
+          <div class="metric"><span>Last Type</span><span>${escapeHtml(d.last_message_type)}</span></div>
+          <div class="metric"><span>Seq</span><span>${escapeHtml(d.last_seq)}</span></div>
+        `).join('') || '<span class="empty">No devices yet</span>';
+        commands.innerHTML = (data.commands || []).map(c => `
+          <div class="metric"><span>${escapeHtml(c.cmd_id)}</span><span class="${c.status === 'ok' ? 'ok' : c.status === 'pending' ? 'warn' : 'bad'}">${escapeHtml(c.cmd)} / ${escapeHtml(c.status)}</span></div>
+        `).join('') || '<span class="empty">No commands yet</span>';
+        rawFrames.innerHTML = (data.raw_frames || []).map(frame => {
+          const parsed = parseResult(frame);
+          const frameMeta = framing(frame);
+          const reason = parsed.reason || parsed.error_code || 'none';
+          return `
+            <div class="metric"><span>${escapeHtml(frame.frame_id || 'raw')}</span><span class="${rawFrameClass(frame)}">${escapeHtml(rawFrameSummary(frame))}</span></div>
+            <div class="metric"><span>Received</span><span>${escapeHtml(frame.server_received_at || 'unknown')}</span></div>
+            <div class="metric"><span>Payload</span><span>${escapeHtml(frameMeta.payload_len ?? 'unknown')} bytes / ${escapeHtml(frameMeta.payload_crc32 || 'unknown')}</span></div>
+            <div class="metric"><span>Reason</span><span>${escapeHtml(reason)}</span></div>
+          `;
+        }).join('') || '<span class="empty">No raw frames yet</span>';
+        messages.innerHTML = (data.messages || []).map(m => `
+          <tr>
+            <td>${escapeHtml(m.device_id)}</td>
+            <td>${escapeHtml(m.message_type)}</td>
+            <td>${escapeHtml(m.seq)}</td>
+            <td>${escapeHtml(detail(m))}</td>
+            <td>${escapeHtml(m.server_received_at)}</td>
+          </tr>
+        `).join('') || '<tr><td colspan="5" class="empty">No messages yet</td></tr>';
+        refreshStatus.dataset.state = 'connected';
+        setRefreshStatus(`Updated ${data.dashboard_refreshed_at}`, 'ok');
+      } catch (error) {
+        const reason = error instanceof Error && error.message ? error.message : 'request failed';
+        const previousView = lastSuccessfulDashboardState ? lastRefreshSuffix() : '';
+        refreshStatus.dataset.state = 'failed';
+        setRefreshStatus(`Refresh failed: ${reason}${previousView}`, 'warn');
+      } finally {
+        refreshInFlight = false;
       }
-      if (!response.ok) {
-        authStatus.textContent = `HTTP ${response.status}`;
-        showStateMessage(`API error HTTP ${response.status}`);
-        return;
-      }
-      authStatus.textContent = 'connected';
-      const data = await response.json();
-      latestDashboardState = data;
-      progressBoard.className = '';
-      progressBoard.innerHTML = progressBoardPanel(data.progress_board || {});
-      runContext.innerHTML = runContextPanel(data.current_run || {});
-      productDemo.innerHTML = productDemoPanel(data.product_demo || {});
-      fieldResults.innerHTML = fieldResultsPanel(data.field_results || {}, data.data_flywheel || {});
-      dataFlywheel.innerHTML = dataFlywheelPanel(data.data_flywheel || {});
-      trainingExperiment.innerHTML = trainingExperimentPanel(data.training_experiment || {});
-      trainingRunPreflight.innerHTML = trainingRunPreflightPanel(data.training_run_preflight || {});
-      trainingFeatureManifest.innerHTML = trainingFeatureManifestPanel(data.training_feature_manifest || {});
-      trainingRunnerDryRun.innerHTML = trainingRunnerDryRunPanel(data.training_runner_dry_run || {});
-      trainingBaselineEval.innerHTML = trainingBaselineEvalPanel(data.training_baseline_eval || {});
-      trainingHandoffBundle.innerHTML = trainingHandoffBundlePanel(data.training_handoff_bundle || {});
-      trainingJobPlan.innerHTML = trainingJobPlanPanel(data.training_job_plan || {});
-      syntheticTrainingChain.innerHTML = syntheticTrainingChainPanel(data.synthetic_training_chain || {});
-      d1TrainingReadiness.innerHTML = d1TrainingReadinessPanel(data.d1_training_readiness || {});
-      d1LabelingIntake.innerHTML = d1LabelingIntakePanel(data.d1_labeling_intake || {});
-      d1LabelingQueue.innerHTML = d1LabelingQueuePanel(data.d1_labeling_queue || {});
-      d1LabelingReviewPacket.innerHTML = d1LabelingReviewPacketPanel(data.d1_labeling_review_packet || {});
-      d1LabelingDecisionTemplate.innerHTML = d1LabelingDecisionTemplatePanel(data.d1_labeling_decision_template || {});
-      renderD1LinkFromLatestState();
-      devices.innerHTML = data.devices.map(d => `
-        <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>
-        <div class="metric"><span>Status</span><span class="${ageClass(d.last_seen_at)}">${escapeHtml(onlineLabel(d.last_seen_at))}</span></div>
-        <div class="metric"><span>Last Seen</span><span>${escapeHtml(d.last_seen_at)}</span></div>
-        <div class="metric"><span>Last Type</span><span>${escapeHtml(d.last_message_type)}</span></div>
-        <div class="metric"><span>Seq</span><span>${escapeHtml(d.last_seq)}</span></div>
-      `).join('') || '<span>No devices yet</span>';
-      fieldState.innerHTML = latestFieldState(data.devices, data.raw_frames || []);
-      commands.innerHTML = data.commands.map(c => `
-        <div class="metric"><span>${escapeHtml(c.cmd_id)}</span><span class="${c.status === 'ok' ? 'ok' : c.status === 'pending' ? 'warn' : 'bad'}">${escapeHtml(c.cmd)} / ${escapeHtml(c.status)}</span></div>
-      `).join('') || '<span class="empty">No commands yet</span>';
-      rawFrames.innerHTML = (data.raw_frames || []).map(frame => {
-        const parsed = parseResult(frame);
-        const frameMeta = framing(frame);
-        const reason = parsed.reason || parsed.error_code || 'none';
-        return `
-          <div class="metric"><span>${escapeHtml(frame.frame_id || 'raw')}</span><span class="${rawFrameClass(frame)}">${escapeHtml(rawFrameSummary(frame))}</span></div>
-          <div class="metric"><span>Received</span><span>${escapeHtml(frame.server_received_at || 'unknown')}</span></div>
-          <div class="metric"><span>Payload</span><span>${escapeHtml(frameMeta.payload_len ?? 'unknown')} bytes / ${escapeHtml(frameMeta.payload_crc32 || 'unknown')}</span></div>
-          <div class="metric"><span>Reason</span><span>${escapeHtml(reason)}</span></div>
-        `;
-      }).join('') || '<span class="empty">No raw frames yet</span>';
-      messages.innerHTML = data.messages.map(m => `
-        <tr>
-          <td>${escapeHtml(m.device_id)}</td>
-          <td>${escapeHtml(m.message_type)}</td>
-          <td>${escapeHtml(m.seq)}</td>
-          <td>${escapeHtml(detail(m))}</td>
-          <td>${escapeHtml(m.server_received_at)}</td>
-        </tr>
-      `).join('') || '<tr><td colspan="5" class="empty">No messages yet</td></tr>';
     }
     refresh();
     setInterval(refresh, 3000);

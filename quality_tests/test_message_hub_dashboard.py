@@ -108,6 +108,167 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertNotIn("fetch(", html)
         self.assertNotIn("/api/v1/", html)
 
+    def test_dashboard_uses_field_first_information_hierarchy(self) -> None:
+        html = message_hub.render_dashboard()
+
+        ordered_markers = (
+            'id="d1Link"',
+            'id="fieldOperations"',
+            'id="fieldEvidence"',
+            'id="fieldResults"',
+            'id="dataFlywheel"',
+            'id="progressBoard"',
+            'id="modelDetails"',
+            'id="diagnosticsDetails"',
+        )
+        positions = [html.index(marker) for marker in ordered_markers]
+
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("Field live view", html)
+        self.assertIn("Field Test Results", html)
+        self.assertIn("Data Flywheel", html)
+        self.assertIn("Project Progress", html)
+
+    def test_dashboard_disclosures_default_closed_and_preserve_existing_targets(self) -> None:
+        html = message_hub.render_dashboard()
+
+        operations_pos = html.index('id="fieldOperations"')
+        operations_start = html.rfind("<section", 0, operations_pos)
+        operations_end = html.index('id="fieldResults"', operations_pos)
+        operations_body = html[operations_start:operations_end]
+        for operations_target in ("deviceSelector", "commands", "fieldState"):
+            self.assertIn(f'id="{operations_target}"', operations_body)
+
+        disclosure_bodies: dict[str, str] = {}
+        for details_id in ("modelDetails", "diagnosticsDetails"):
+            id_pos = html.index(f'id="{details_id}"')
+            tag_start = html.rfind("<details", 0, id_pos)
+            tag_end = html.index(">", id_pos)
+            close = html.index("</details>", tag_end)
+            opening_tag = html[tag_start : tag_end + 1]
+            disclosure_bodies[details_id] = html[tag_end + 1 : close]
+
+            self.assertGreaterEqual(tag_start, 0)
+            self.assertNotIn(" open", opening_tag)
+            self.assertIn("dashboard-details", opening_tag)
+            self.assertIn("<summary", disclosure_bodies[details_id])
+
+        for target_id in (
+            "d1Link",
+            "progressBoard",
+            "productDemo",
+            "fieldResults",
+            "dataFlywheel",
+            "commands",
+            "fieldState",
+            "rawFrames",
+            "messages",
+        ):
+            self.assertEqual(html.count(f'id="{target_id}"'), 1, target_id)
+
+        for model_target in (
+            "trainingExperiment",
+            "d1TrainingReadiness",
+            "d1LabelingDecisionTemplate",
+        ):
+            self.assertIn(f'id="{model_target}"', disclosure_bodies["modelDetails"])
+        for diagnostic_target in ("rawFrames", "messages"):
+            self.assertIn(f'id="{diagnostic_target}"', disclosure_bodies["diagnosticsDetails"])
+
+    def test_dashboard_device_selector_prefers_current_run_then_newest_device(self) -> None:
+        html = message_hub.render_dashboard()
+
+        selector_pos = html.index('id="deviceSelector"')
+        selector_start = html.rfind("<select", 0, selector_pos)
+        selector_end = html.index(">", selector_pos)
+        selector_tag = html[selector_start : selector_end + 1]
+        self.assertGreaterEqual(selector_start, 0)
+        self.assertIn('<label for="deviceSelector">', html)
+        self.assertIn("aria-label=", selector_tag)
+        self.assertIn("deviceSelector.addEventListener('change'", html)
+        self.assertIn("DASHBOARD_DEVICE_KEY", html)
+        self.assertIn("selectedDashboardDeviceId", html)
+        self.assertIn("localStorage.setItem(DASHBOARD_DEVICE_KEY", html)
+
+        function_start = html.index("function selectDashboardDevice")
+        function_end = html.find("\n    function ", function_start + 1)
+        selector_function = html[function_start : function_end if function_end >= 0 else None]
+        current_run_marker = "current_run" if "current_run" in selector_function else "currentRun"
+        self.assertIn(current_run_marker, selector_function)
+        self.assertIn("device_id", selector_function)
+        self.assertIn("last_seen_at", selector_function)
+        self.assertIn("Date.parse", selector_function)
+        self.assertLess(selector_function.index(current_run_marker), selector_function.index("last_seen_at"))
+        self.assertIn("if (runDevice) return runDevice", selector_function)
+        self.assertIn("return rightSeen - leftSeen", selector_function)
+
+        render_start = html.index("function renderSelectedDevicePanels")
+        render_end = html.find("\n    function ", render_start + 1)
+        selected_render = html[render_start : render_end if render_end >= 0 else None]
+        self.assertIn("selectDashboardDevice", selected_render)
+        self.assertIn("d1LinkPanel", selected_render)
+        self.assertIn("latestFieldState", selected_render)
+
+    def test_dashboard_refresh_is_non_overlapping_and_retains_last_success(self) -> None:
+        html = message_hub.render_dashboard()
+
+        self.assertIn("let refreshInFlight = false", html)
+        self.assertIn("let lastSuccessfulDashboardState = null", html)
+        refresh_start = html.index("async function refresh")
+        refresh_end = html.index("\n    refresh();", refresh_start)
+        refresh_function = html[refresh_start:refresh_end]
+
+        self.assertIn("if (refreshInFlight) return", refresh_function)
+        self.assertIn("refreshInFlight = true", refresh_function)
+        self.assertIn("try {", refresh_function)
+        self.assertIn("catch", refresh_function)
+        self.assertIn("finally", refresh_function)
+        self.assertIn("refreshInFlight = false", refresh_function)
+        self.assertIn("lastSuccessfulDashboardState = data", refresh_function)
+        self.assertIn("setRefreshStatus", refresh_function)
+        self.assertIn("refreshing", refresh_function.lower())
+        self.assertIn("connected", refresh_function.lower())
+        self.assertIn("failed", refresh_function.lower())
+        self.assertNotIn("showStateMessage", refresh_function)
+
+        status_start = html.index("function setRefreshStatus")
+        status_end = html.find("\n    function ", status_start + 1)
+        status_function = html[status_start : status_end if status_end >= 0 else None]
+        self.assertIn("refreshStatus.textContent", status_function)
+
+        catch_start = refresh_function.index("catch")
+        finally_start = refresh_function.index("finally", catch_start)
+        catch_block = refresh_function[catch_start:finally_start]
+        self.assertIn("lastSuccessfulDashboardState", catch_block)
+        self.assertIn("setInterval(refresh, 3000)", html)
+
+    def test_dashboard_table_scroll_and_live_status_are_accessible(self) -> None:
+        html = message_hub.render_dashboard()
+
+        self.assertIn(".table-scroll", html)
+        self.assertIn("overflow-x: auto", html)
+        self.assertIn('.d1-summary-pane { order: 1; }', html)
+        self.assertIn('.d1-map-pane { order: 2; }', html)
+        self.assertIn('button, select { min-height: 44px; }', html)
+        self.assertIn('<details class="d1-details">', html)
+        self.assertIn('<summary>D1 evidence details</summary>', html)
+        refresh_pos = html.index('id="refreshStatus"')
+        refresh_start = html.rfind("<", 0, refresh_pos)
+        refresh_end = html.index(">", refresh_pos)
+        refresh_tag = html[refresh_start : refresh_end + 1]
+        self.assertIn('role="status"', refresh_tag)
+        self.assertIn('aria-live="polite"', refresh_tag)
+
+        messages_pos = html.index('id="messages"')
+        wrapper_start = html.rfind('<div class="table-scroll"', 0, messages_pos)
+        wrapper_end = html.index(">", wrapper_start)
+        wrapper_tag = html[wrapper_start : wrapper_end + 1]
+        self.assertGreaterEqual(wrapper_start, 0)
+        self.assertIn('role="region"', wrapper_tag)
+        self.assertIn("aria-label=", wrapper_tag)
+        self.assertIn('tabindex="0"', wrapper_tag)
+        self.assertIn("<table", html[wrapper_end:messages_pos])
+
     def test_dashboard_exposes_field_state_and_command_panels(self) -> None:
         html = message_hub.render_dashboard()
 
