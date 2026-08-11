@@ -352,6 +352,46 @@ class ImuWindowExportTests(unittest.TestCase):
         self.assertNotIn("samples_b64", json.dumps(telemetry))
         self.assertTrue(all(frame["raw_payload"]["data_redacted"] for frame in raw_frames))
 
+    def test_export_ignores_same_run_raw_command_and_ack_frames(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "hub.db"
+            store = message_hub.MessageHubStore(db_path)
+            store.create_test_run({"test_run_id": TEST_RUN_ID})
+            create_capture_command(store)
+            _, command_record = store.poll_commands_raw(DEVICE_ID)
+            self.assertIsNotNone(command_record)
+            ingest_window(store, sample_bytes(), transport_type="wifi")
+            ack_payload = encode_kv(
+                {
+                    "cmd_id": CMD_ID,
+                    "status": "ok",
+                    "message": "bounded real IMU window chunks and manifest uploaded over Wi-Fi",
+                    "fw_version": "0.1.0-imu-unit",
+                    "test_run_id": TEST_RUN_ID,
+                    "transport_type": "wifi",
+                }
+            )
+            ack_frame = message_hub.build_raw_frame("ack", CMD_ID, ack_payload)
+            ack_record = store.ingest_raw_frame(
+                DEVICE_ID,
+                ack_frame,
+                expected_frame_type="ack",
+                expected_cmd_id=CMD_ID,
+            )
+            result = export_imu_windows.export_imu_windows(
+                db_path,
+                tmp_path / "export",
+                device_id=DEVICE_ID,
+                test_run_id=TEST_RUN_ID,
+            )
+
+        self.assertEqual(ack_record["parse_result"]["status"], "ok")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["summary"]["raw_frames_scanned"], 13)
+        self.assertEqual(result["summary"]["valid_windows"], 1)
+        self.assertEqual(result["summary"]["invalid_windows"], 0)
+
     def test_semantically_invalid_chunk_is_retained_but_not_derived(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")

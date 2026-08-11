@@ -125,9 +125,6 @@ def raw_kv_event(
         raise ValueError("raw frame record_json is invalid") from error
     stored_raw = message_hub.as_dict(stored_record.get("raw_payload"))
     stored_parse = message_hub.as_dict(stored_record.get("parse_result"))
-    stored_payload_validation = message_hub.as_dict(stored_parse.get("payload_validation"))
-    if stored_parse.get("status") != "ok" or stored_payload_validation.get("status") != "valid":
-        raise ValueError("raw frame was not authorized and accepted at ingress")
     try:
         record_raw_body = base64.b64decode(str(stored_raw.get("data") or ""), validate=True)
     except (binascii.Error, ValueError) as error:
@@ -151,6 +148,9 @@ def raw_kv_event(
     event_type = str(kv_payload.get("event-type") or "")
     if event_type not in {"imu_window_chunk", "imu_window_manifest"}:
         return None
+    stored_payload_validation = message_hub.as_dict(stored_parse.get("payload_validation"))
+    if stored_parse.get("status") != "ok" or stored_payload_validation.get("status") != "valid":
+        raise ValueError("raw frame was not authorized and accepted at ingress")
     parse_result = message_hub.as_dict(record.get("parse_result"))
     if parse_result.get("status") != "ok":
         raise ValueError(
