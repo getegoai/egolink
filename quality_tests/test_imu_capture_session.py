@@ -35,13 +35,13 @@ def valid_plan() -> dict:
     }
 
 
-def raw_window(cmd_id: str, test_run_id: str, ordinal: int) -> list[dict]:
+def raw_window(cmd_id: str, test_run_id: str, ordinal: int, *, transport_type: str = "wifi") -> list[dict]:
     common = {
         "contract_version": "egolink.imu_window.v1",
         "window_id": f"imuw-{cmd_id}-b1",
         "capture_cmd_id": cmd_id,
         "test_run_id": test_run_id,
-        "transport_type": "wifi",
+        "transport_type": transport_type,
         "source": "qmi8658_i2c",
         "source_status": "observed",
         "training_allowed": False,
@@ -96,19 +96,26 @@ class FakeHubClient:
         fail_status: str | None = None,
         duplicate: bool = False,
         in_progress_before_ok: bool = False,
+        ack_transport: str | None = None,
+        raw_transport: str | None = None,
     ) -> None:
         self.plan = plan
         self.fail_status = fail_status
         self.duplicate = duplicate
         self.in_progress_before_ok = in_progress_before_ok
+        self.expected_transport = capture.plan_transport_type(plan)
+        self.ack_transport = ack_transport
+        self.raw_transport = raw_transport
         self.events: list[str] = []
         self.current_cmd: str | None = None
         self.completed: list[str] = []
         self.ack_polls: dict[str, int] = {}
+        self.test_run_payload: dict | None = None
 
     def post(self, path: str, payload: dict) -> dict:
         if path == "/api/v1/test-runs":
             self.events.append("post:test-run")
+            self.test_run_payload = copy.deepcopy(payload)
             return {"ok": True, "test_run": dict(payload)}
         cmd_id = payload["cmd_id"]
         self.events.append(f"post:{cmd_id}")
@@ -143,7 +150,9 @@ class FakeHubClient:
                             "cmd_id": cmd_id,
                             "status": status,
                             "test_run_id": self.plan["test_run_id"],
-                            "transport": {"type": "wifi"},
+                            "transport": {
+                                "type": self.expected_transport if self.ack_transport is None else self.ack_transport
+                            },
                             "command": {"duplicate_local_execution_prevented": self.duplicate},
                         },
                     }
@@ -151,7 +160,12 @@ class FakeHubClient:
             }
         self.events.append(f"raw:{cmd_id}")
         ordinal = len(self.completed) + 1
-        frames = raw_window(cmd_id, self.plan["test_run_id"], ordinal)
+        frames = raw_window(
+            cmd_id,
+            self.plan["test_run_id"],
+            ordinal,
+            transport_type=self.expected_transport if self.raw_transport is None else self.raw_transport,
+        )
         self.completed.append(cmd_id)
         return {"raw_frames": frames}
 
@@ -172,7 +186,9 @@ class ImuCaptureSessionTests(unittest.TestCase):
 
         result = capture.run_session(valid_plan(), plan_sha256="a" * 64, client=NoCalls())
         self.assertEqual(result["status"], "dry_run_ready")
+        self.assertEqual(result["transport_type"], "wifi")
         self.assertEqual([item["state"] for item in result["results"]], ["planned"] * 3)
+        self.assertTrue(all(item["transport_type"] == "wifi" for item in result["results"]))
         self.assertFalse(result["training_allowed"])
         self.assertNotIn("activity_label", json.dumps(result))
 
@@ -194,8 +210,61 @@ class ImuCaptureSessionTests(unittest.TestCase):
         self.assertTrue(all(item["state"] == "ok" for item in result["results"]))
         self.assertTrue(all(item["window"]["training_allowed"] is False for item in result["results"]))
         self.assertTrue(result["test_run_created"])
+        self.assertEqual(client.test_run_payload["task_id"], "D5-002")
+        self.assertEqual(client.test_run_payload["goal"], "bounded three-window Wi-Fi QMI8658 pipeline seed")
         self.assertEqual(result["commands_created"], ["d5002-still", "d5002-walk", "d5002-trans"])
         self.assertEqual(len(result["external_actions"]), 4)
+
+    def test_explicit_lte_executes_three_windows_with_lte_lineage(self) -> None:
+        plan = valid_plan()
+        plan["transport_type"] = "lte"
+        client = FakeHubClient(plan)
+
+        result = capture.run_session(plan, plan_sha256="a" * 64, execute=True, client=client)
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["transport_type"], "lte")
+        self.assertEqual(result["completed_window_count"], 3)
+        self.assertEqual(client.test_run_payload["task_id"], "FIELD-011")
+        self.assertEqual(client.test_run_payload["goal"], "bounded three-window LTE QMI8658 pipeline seed")
+        self.assertEqual(
+            [event for event in client.events if event.startswith("post:")],
+            ["post:test-run", "post:d5002-still", "post:d5002-walk", "post:d5002-trans"],
+        )
+        self.assertTrue(all(item["transport_type"] == "lte" for item in result["results"]))
+        self.assertTrue(all(item["ack"]["transport_type"] == "lte" for item in result["results"]))
+        self.assertTrue(all(item["window"]["transport_type"] == "lte" for item in result["results"]))
+
+    def test_lte_plan_fails_closed_on_wrong_ack_transport(self) -> None:
+        plan = valid_plan()
+        plan["transport_type"] = "lte"
+        client = FakeHubClient(plan, ack_transport="wifi")
+
+        result = capture.run_session(plan, plan_sha256="a" * 64, execute=True, client=client)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["completed_window_count"], 0)
+        self.assertIn("ACK transport must be lte", result["results"][0]["error"])
+        self.assertEqual(
+            [event for event in client.events if event.startswith("post:")],
+            ["post:test-run", "post:d5002-still"],
+        )
+        self.assertFalse(any(event.startswith("raw:") for event in client.events))
+
+    def test_lte_plan_fails_closed_on_wrong_raw_window_transport(self) -> None:
+        plan = valid_plan()
+        plan["transport_type"] = "lte"
+        client = FakeHubClient(plan, raw_transport="wifi")
+
+        result = capture.run_session(plan, plan_sha256="a" * 64, execute=True, client=client)
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["completed_window_count"], 0)
+        self.assertIn("invalid IMU source/transport/privacy lineage", result["results"][0]["error"])
+        self.assertEqual(
+            [event for event in client.events if event.startswith("post:")],
+            ["post:test-run", "post:d5002-still"],
+        )
 
     def test_first_non_ok_ack_stops_before_next_command(self) -> None:
         plan = valid_plan()
@@ -249,6 +318,14 @@ class ImuCaptureSessionTests(unittest.TestCase):
         overridden["training_allowed"] = True
         with self.assertRaisesRegex(capture.CaptureSessionError, "unexpected"):
             capture.validate_plan(overridden)
+
+        for invalid_transport in ("usb", "WiFi", "LTE", "", None, ["lte"]):
+            plan = valid_plan()
+            plan["transport_type"] = invalid_transport
+            with self.subTest(transport_type=invalid_transport), self.assertRaisesRegex(
+                capture.CaptureSessionError, "transport_type"
+            ):
+                capture.validate_plan(plan)
 
     def test_error_record_redacts_token(self) -> None:
         secret = "do-not-write-this-token"

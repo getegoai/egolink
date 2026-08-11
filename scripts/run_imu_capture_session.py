@@ -1,4 +1,4 @@
-"""Plan and, only with --execute, run a bounded Wi-Fi IMU seed session.
+"""Plan and, only with --execute, run a bounded Wi-Fi or LTE IMU seed session.
 
 The generated execution record contains lineage metadata only.  It never
 contains the Message Hub token or raw IMU samples.
@@ -34,6 +34,7 @@ SAMPLE_COUNT = 100
 INTERVAL_MS = 50
 CHUNK_COUNT = 10
 MAX_WINDOWS = 3
+TRANSPORT_TYPES = frozenset({"wifi", "lte"})
 ID_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
 
 
@@ -80,7 +81,7 @@ def validate_plan(value: Any) -> dict[str, Any]:
     _exact_keys(
         plan,
         {"schema_version", "plan_id", "device_id", "test_run_id", "sample_count", "interval_ms", "sessions"},
-        set(),
+        {"transport_type"},
         "plan",
     )
     if plan["schema_version"] != PLAN_SCHEMA_VERSION:
@@ -92,6 +93,9 @@ def validate_plan(value: Any) -> dict[str, Any]:
         raise CaptureSessionError("plan.sample_count must be exactly 100")
     if type(plan["interval_ms"]) is not int or plan["interval_ms"] != INTERVAL_MS:
         raise CaptureSessionError("plan.interval_ms must be exactly 50")
+    transport_type = plan.get("transport_type", "wifi")
+    if not isinstance(transport_type, str) or transport_type not in TRANSPORT_TYPES:
+        raise CaptureSessionError(f"plan.transport_type must be one of {sorted(TRANSPORT_TYPES)}")
     sessions = plan["sessions"]
     if not isinstance(sessions, list) or not sessions:
         raise CaptureSessionError("plan.sessions must be a non-empty array")
@@ -131,7 +135,7 @@ def validate_plan(value: Any) -> dict[str, Any]:
                 raise CaptureSessionError(f"{window_name}.operator_instruction must contain 1-240 characters")
             window_total += 1
     if window_total != MAX_WINDOWS:
-        raise CaptureSessionError(f"this D5-002 seed requires exactly {MAX_WINDOWS} windows")
+        raise CaptureSessionError(f"this bounded seed requires exactly {MAX_WINDOWS} windows")
     return plan
 
 
@@ -148,6 +152,10 @@ def iter_planned_windows(plan: dict[str, Any]):
     for session in plan["sessions"]:
         for window in session["windows"]:
             yield session, window
+
+
+def plan_transport_type(plan: dict[str, Any]) -> str:
+    return str(plan.get("transport_type", "wifi"))
 
 
 def validate_hub_url(value: str) -> str:
@@ -181,7 +189,9 @@ def _find_command(commands: Any, cmd_id: str) -> dict[str, Any] | None:
     return None
 
 
-def _validate_ok_ack(command: dict[str, Any], *, cmd_id: str, test_run_id: str) -> dict[str, Any]:
+def _validate_ok_ack(
+    command: dict[str, Any], *, cmd_id: str, test_run_id: str, transport_type: str
+) -> dict[str, Any]:
     status = command.get("status")
     if status != "ok":
         raise CaptureSessionError(f"command {cmd_id} ended with non-ok status: {status}")
@@ -193,8 +203,8 @@ def _validate_ok_ack(command: dict[str, Any], *, cmd_id: str, test_run_id: str) 
     if ack.get("test_run_id") != test_run_id:
         raise CaptureSessionError(f"command {cmd_id} ACK test_run_id mismatch")
     transport = ack.get("transport")
-    if not isinstance(transport, dict) or transport.get("type") != "wifi":
-        raise CaptureSessionError(f"command {cmd_id} ACK transport must be wifi")
+    if not isinstance(transport, dict) or transport.get("type") != transport_type:
+        raise CaptureSessionError(f"command {cmd_id} ACK transport must be {transport_type}")
     observation = ack.get("command")
     if not isinstance(observation, dict) or observation.get("duplicate_local_execution_prevented") is not False:
         raise CaptureSessionError(f"command {cmd_id} duplicate/execution marker is not explicitly false")
@@ -216,7 +226,9 @@ def _part_metadata(frame: Any) -> tuple[str, dict[str, Any], str] | None:
     return str(message["event_type"]), imu, str(frame.get("frame_id") or "")
 
 
-def _window_evidence(raw_frames: Any, *, cmd_id: str, test_run_id: str) -> dict[str, Any] | None:
+def _window_evidence(
+    raw_frames: Any, *, cmd_id: str, test_run_id: str, transport_type: str
+) -> dict[str, Any] | None:
     if not isinstance(raw_frames, list):
         raise CaptureSessionError("Message Hub raw-frames response must contain an array")
     parts: list[tuple[str, dict[str, Any], str]] = []
@@ -239,7 +251,7 @@ def _window_evidence(raw_frames: Any, *, cmd_id: str, test_run_id: str) -> dict[
             and metadata.get("window_id") == window_id
             and metadata.get("capture_cmd_id") == cmd_id
             and metadata.get("test_run_id") == test_run_id
-            and metadata.get("transport_type") == "wifi"
+            and metadata.get("transport_type") == transport_type
             and metadata.get("source") == "qmi8658_i2c"
             and metadata.get("source_status") == "observed"
             and metadata.get("training_allowed") is False
@@ -295,7 +307,7 @@ def _window_evidence(raw_frames: Any, *, cmd_id: str, test_run_id: str) -> dict[
         },
         "source": "qmi8658_i2c",
         "source_status": "observed",
-        "transport_type": "wifi",
+        "transport_type": transport_type,
         "training_allowed": False,
     }
 
@@ -306,6 +318,7 @@ def _wait_for_ack(
     device_id: str,
     cmd_id: str,
     test_run_id: str,
+    transport_type: str,
     deadline: float,
     monotonic_fn: Callable[[], float],
     sleep_fn: Callable[[float], None],
@@ -317,7 +330,12 @@ def _wait_for_ack(
         if command is not None:
             status = command.get("status")
             if status == "ok":
-                return _validate_ok_ack(command, cmd_id=cmd_id, test_run_id=test_run_id)
+                return _validate_ok_ack(
+                    command,
+                    cmd_id=cmd_id,
+                    test_run_id=test_run_id,
+                    transport_type=transport_type,
+                )
             if status not in {None, "", "pending", "in_progress"}:
                 raise CaptureSessionError(f"command {cmd_id} ended with non-ok status: {status}")
         if monotonic_fn() >= deadline:
@@ -331,6 +349,7 @@ def _wait_for_window(
     device_id: str,
     cmd_id: str,
     test_run_id: str,
+    transport_type: str,
     deadline: float,
     monotonic_fn: Callable[[], float],
     sleep_fn: Callable[[float], None],
@@ -338,7 +357,12 @@ def _wait_for_window(
 ) -> dict[str, Any]:
     while True:
         response = client.get(f"/api/v1/devices/{device_id}/raw-frames")
-        evidence = _window_evidence(_object(response, "raw-frames response").get("raw_frames"), cmd_id=cmd_id, test_run_id=test_run_id)
+        evidence = _window_evidence(
+            _object(response, "raw-frames response").get("raw_frames"),
+            cmd_id=cmd_id,
+            test_run_id=test_run_id,
+            transport_type=transport_type,
+        )
         if evidence is not None:
             return evidence
         if monotonic_fn() >= deadline:
@@ -364,12 +388,14 @@ def run_session(
     if timeout_sec <= 0 or poll_interval_sec <= 0:
         raise CaptureSessionError("timeout and poll interval must be positive")
     flattened = list(iter_planned_windows(plan))
+    transport_type = plan_transport_type(plan)
     record: dict[str, Any] = {
         "schema_version": EXECUTION_SCHEMA_VERSION,
         "plan_id": plan["plan_id"],
         "plan_sha256": plan_sha256,
         "device_id": plan["device_id"],
         "test_run_id": plan["test_run_id"],
+        "transport_type": transport_type,
         "mode": "execute" if execute else "dry_run",
         "status": "running" if execute else "dry_run_ready",
         "started_at": now_fn(),
@@ -390,6 +416,7 @@ def run_session(
                 "split_name": session["split_name"],
                 "cmd_id": window["cmd_id"],
                 "planned_activity": window["planned_activity"],
+                "transport_type": transport_type,
                 "state": "planned",
                 "training_allowed": False,
             }
@@ -403,14 +430,20 @@ def run_session(
     test_run_action = {"action": "create_test_run", "test_run_id": plan["test_run_id"], "state": "attempted"}
     record["external_actions"].append(test_run_action)
     try:
+        task_id = "FIELD-011" if transport_type == "lte" else "D5-002"
+        goal = (
+            "bounded three-window LTE QMI8658 pipeline seed"
+            if transport_type == "lte"
+            else "bounded three-window Wi-Fi QMI8658 pipeline seed"
+        )
         response = client.post(
             "/api/v1/test-runs",
             {
                 "test_run_id": plan["test_run_id"],
-                "task_id": "D5-002",
+                "task_id": task_id,
                 "device_id": plan["device_id"],
                 "status": "active",
-                "goal": "bounded three-window Wi-Fi QMI8658 pipeline seed",
+                "goal": goal,
             },
         )
         test_run = _object(response, "test-run creation response").get("test_run")
@@ -430,6 +463,7 @@ def run_session(
             "split_name": session["split_name"],
             "cmd_id": cmd_id,
             "planned_activity": window["planned_activity"],
+            "transport_type": transport_type,
             "state": "creating",
             "created_at": now_fn(),
             "completed_at": None,
@@ -459,6 +493,7 @@ def run_session(
                 device_id=plan["device_id"],
                 cmd_id=cmd_id,
                 test_run_id=plan["test_run_id"],
+                transport_type=transport_type,
                 deadline=deadline,
                 monotonic_fn=monotonic_fn,
                 sleep_fn=sleep_fn,
@@ -469,6 +504,7 @@ def run_session(
                 device_id=plan["device_id"],
                 cmd_id=cmd_id,
                 test_run_id=plan["test_run_id"],
+                transport_type=transport_type,
                 deadline=deadline,
                 monotonic_fn=monotonic_fn,
                 sleep_fn=sleep_fn,
@@ -481,7 +517,7 @@ def run_session(
                     "ack": {
                         "status": "ok",
                         "test_run_id": ack["test_run_id"],
-                        "transport_type": "wifi",
+                        "transport_type": transport_type,
                         "duplicate_local_execution_prevented": False,
                     },
                     "window": evidence,
