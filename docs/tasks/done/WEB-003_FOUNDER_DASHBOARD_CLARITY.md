@@ -1,7 +1,7 @@
 ---
 id: WEB-003
 title: Founder Dashboard clarity and field-first hierarchy
-status: active
+status: done
 priority: high
 requires_hardware: false
 serves_demo: D2-D5
@@ -30,7 +30,7 @@ context:
   - quality_tests/test_message_hub_dashboard.py
 
 allowed_paths:
-  - docs/tasks/active/WEB-003_FOUNDER_DASHBOARD_CLARITY.md
+  - docs/tasks/done/WEB-003_FOUNDER_DASHBOARD_CLARITY.md
   - docs/current/STATUS.md
   - docs/current/progress_board_config.json
   - docs/generated/PROGRESS_BOARD.md
@@ -67,7 +67,7 @@ raw diagnostic detail until requested.
       successful view and expose an understandable refresh state.
 - [x] The sanitized generated progress board is refreshed before deployment.
 - [x] Focused tests, full verification, context lint, and diff check pass.
-- [ ] The committed build is deployed through the existing self-hosted VPS path;
+- [x] The committed build is deployed through the existing self-hosted VPS path;
       service health, auth boundary, target HTML markers, and GitLab isolation pass.
 
 # Validation Commands
@@ -108,12 +108,27 @@ git diff --check
 - Sanitized progress artifacts were regenerated at `2026-08-11 08:55 UTC`
   from implementation commit `27e5ec4`; they show the current FIELD-011
   stationary bench result and the next outdoor walking/GNSS work.
-- Pending: deploy the committed build and record the bounded live smoke.
+- Deployment source was clean committed HEAD `2c64659`; implementation source
+  `server/message_hub.py` deployed with SHA-256
+  `ec6c1cc01f7b3440b9e19f388395ccb6f612ca97795c99ee088d659b6f299ef6`.
+- Before deployment, the VPS stored an SQLite-consistent database copy plus
+  reports, code, and systemd-unit snapshots at
+  `/var/backups/egolink-message-hub/WEB-003-20260811T085834Z`; all recorded
+  hashes verified and the backup database passed `PRAGMA quick_check`.
+- One deployment/restart completed at `2026-08-11 16:59 CST`. Bounded live
+  smoke passed: `/health=200/ok`, unauthenticated `/api/state=401`, authenticated
+  `/api/state=200`, Dashboard `200`, all eight field-first hierarchy markers in
+  order, current FIELD-011 stationary focus visible, service `active/running`,
+  `NRestarts=0`, `ExecMainStatus=0`, and zero error-priority journal lines in
+  the following ten-minute window.
+- No rollback was needed. The deployment path was scoped to the Message Hub
+  package and systemd unit; GitLab, firewall, ports, token value, database
+  contents, firmware, and hardware were not changed.
 
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/WEB-003_FOUNDER_DASHBOARD_CLARITY.md in
+Read docs/tasks/done/WEB-003_FOUNDER_DASHBOARD_CLARITY.md in
 D:\pywork\egolink. Load only AGENTS.md, docs/CONTEXT_INDEX.md,
 quality_tests/AGENTS.md, this packet, and its context entries. Reorder and
 clarify only the existing built-in Dashboard. Preserve all public API/data

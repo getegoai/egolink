@@ -72,6 +72,23 @@ yet.
 
 ## Latest Deployment Note
 
+2026-08-11: WEB-003 deployed the field-first founder Dashboard to the existing
+self-hosted VPS. The live page now presents the D1 decision view, selected
+device field state, commands, and run context before project/model diagnostics;
+field results and the data flywheel remain prominent, while D1 secondary
+evidence, model/labeling panels, raw frames, and message history are collapsed
+until requested. One persistent device selector now drives D1, Latest Field
+State, and browser-local D2 reference checks. On narrow screens the readiness
+summary precedes the map, controls have larger touch targets, and tables scroll
+horizontally. Refreshes cannot overlap and transient failures retain the last
+successful view with an explicit stale/refresh status. The sanitized progress
+board now shows the operator-confirmed FIELD-011 stationary LTE window and the
+next outdoor walking/GNSS work. Live smoke passed source-hash, service,
+`/health`, `401/200` authentication, HTML hierarchy, progress-content, and
+journal gates. This changed presentation only; Message Hub API, protocol,
+storage, authentication, device firmware, GitLab, and training gates did not
+change.
+
 2026-07-11: OBS-005 connects the generated founder progress board to the VPS
 Message Hub as a sanitized read-only view. Authenticated `/api/state` and
 `/api/v1/progress/latest` expose current focus, milestone counts, and founder
