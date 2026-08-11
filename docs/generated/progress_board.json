@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-08-11 08:55 UTC",
+  "generated_at": "2026-08-11 09:03 UTC",
   "git": {
     "branch": "d2/gnss-imu-field-seed",
-    "head": "27e5ec4 feat(web): simplify founder dashboard [D2-D5]"
+    "head": "9add4ce docs(web): record live dashboard validation [D2-D5]"
   },
   "current_focus": "FIELD-011 台架闭环已通过：同一镜像完成一次操作员确认的静止 QMI8658 LTE 窗口和 LTE/GNSS 状态上报。下一步是在独立供电、固定携带位置下完成户外 GNSS 与三次正常步行窗口，再进入 D2 指标和 D5 标注。",
   "milestones": [
@@ -260,15 +260,6 @@
       "priority": "high",
       "date": "2026-07-09",
       "path": "D:/pywork/egolink/docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md"
-    },
-    {
-      "id": "WEB-003",
-      "title": "Founder Dashboard clarity and field-first hierarchy",
-      "state": "in_progress",
-      "packet_status": "active",
-      "priority": "high",
-      "date": "2026-08-11",
-      "path": "D:/pywork/egolink/docs/tasks/active/WEB-003_FOUNDER_DASHBOARD_CLARITY.md"
     }
   ],
   "recent_done": [
@@ -289,6 +280,15 @@
       "priority": "high",
       "date": "2026-08-11",
       "path": "D:/pywork/egolink/docs/tasks/done/D5-002_QMI8658_LABELED_MULTI_WINDOW_SEED.md"
+    },
+    {
+      "id": "WEB-003",
+      "title": "Founder Dashboard clarity and field-first hierarchy",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-08-11",
+      "path": "D:/pywork/egolink/docs/tasks/done/WEB-003_FOUNDER_DASHBOARD_CLARITY.md"
     },
     {
       "id": "D2-002",
@@ -334,15 +334,6 @@
       "priority": "high",
       "date": "2026-07-11",
       "path": "D:/pywork/egolink/docs/tasks/done/MAP-001_D2_D5_MAP_EVIDENCE_VIEW.md"
-    },
-    {
-      "id": "MAP-002",
-      "title": "Mobile local-only D2 reference capture",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/done/MAP-002_MOBILE_REFERENCE_CAPTURE.md"
     }
   ],
   "operator_asks": [
@@ -417,9 +408,9 @@
     }
   ],
   "counts": {
-    "active": 11,
+    "active": 10,
     "paused": 2,
-    "open_total": 13,
-    "done_total": 147
+    "open_total": 12,
+    "done_total": 148
   }
 }

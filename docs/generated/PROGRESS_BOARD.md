@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-08-11 08:55 UTC
-- 分支: `d2/gnss-imu-field-seed` @ 27e5ec4 feat(web): simplify founder dashboard [D2-D5]
+- 生成时间: 2026-08-11 09:03 UTC
+- 分支: `d2/gnss-imu-field-seed` @ 9add4ce docs(web): record live dashboard validation [D2-D5]
 - 当前焦点: FIELD-011 台架闭环已通过：同一镜像完成一次操作员确认的静止 QMI8658 LTE 窗口和 LTE/GNSS 状态上报。下一步是在独立供电、固定携带位置下完成户外 GNSS 与三次正常步行窗口，再进入 D2 指标和 D5 标注。
-- 已完成任务总数: 147，进行中: 11，暂停: 2
+- 已完成任务总数: 148，进行中: 10，暂停: 2
 
 ## 里程碑
 
@@ -33,7 +33,6 @@
 | MODEL-001 | Model footprint assessment | paused | high | - |
 | PROD-001 | Mass-production requirements definition and module/MCU selection gates | paused | high | - |
 | PWR-001 | Real power telemetry and first 24h battery baseline run | active | high | codex + founder field tests |
-| WEB-003 | Founder Dashboard clarity and field-first hierarchy | active | high | - |
 
 ## 最近完成
 
@@ -41,12 +40,12 @@
 |---|---|---|
 | D2-009 | QMI8658 bounded Wi-Fi window uplink | 2026-08-11 |
 | D5-002 | QMI8658 labelled multi-window dataset seed | 2026-08-11 |
+| WEB-003 | Founder Dashboard clarity and field-first hierarchy | 2026-08-11 |
 | D2-002 | D2 reference-point field-run automation | 2026-07-11 |
 | D2-003 | Bounded device and time-window field export | 2026-07-11 |
 | D2-004 | Historical VPS baseline and P0 location rule freeze | 2026-07-11 |
 | D2-005 | QMI8658 4G-board configuration and motion-data readiness | 2026-07-11 |
 | MAP-001 | D2/D5 map evidence view | 2026-07-11 |
-| MAP-002 | Mobile local-only D2 reference capture | 2026-07-11 |
 
 ## 等待创始人处理
 
