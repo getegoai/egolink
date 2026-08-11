@@ -71,6 +71,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertFalse(payload["sim7670_lte_status_enabled"])
         self.assertFalse(payload["sim7670_lte_http_probe_enabled"])
         self.assertFalse(payload["sim7670_lte_http_command_loop_enabled"])
+        self.assertFalse(payload["wifi_imu_window_command_enabled"])
         self.assertFalse(payload["sim7670_location_observation_enabled"])
         self.assertFalse(payload["reconnect_store_forward_test_enabled"])
         self.assertFalse(payload["max17048_power_enabled"])
@@ -86,6 +87,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED is not set", config)
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED is not set", config)
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED is not set", config)
+        self.assertIn("# CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED is not set", config)
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED is not set", config)
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST is not set", config)
         self.assertIn("CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MOCK=y", config)
@@ -450,6 +452,105 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("# CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED is not set", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_NUM=1", config)
 
+    def test_script_can_enable_dedicated_wifi_imu_window_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            firmware_dir = tmp_path / "firmware"
+            firmware_dir.mkdir()
+            source_sdkconfig = firmware_dir / "sdkconfig"
+            source_sdkconfig.write_text(
+                'CONFIG_EGOLINK_WIFI_SSID="lab-wifi"\nCONFIG_EGOLINK_WIFI_PASSWORD="lab-secret"\n',
+                encoding="utf-8",
+            )
+            token_file = tmp_path / "token.txt"
+            token_file.write_text("unit-secret-token\n", encoding="utf-8")
+            config_path = firmware_dir / "sdkconfig.d2009.local"
+
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(self.script),
+                    "-HostName",
+                    "example.invalid",
+                    "-TokenFile",
+                    str(token_file),
+                    "-FirmwareDir",
+                    str(firmware_dir),
+                    "-ConfigPath",
+                    str(config_path),
+                    "-SourceSdkconfig",
+                    str(source_sdkconfig),
+                    "-EnableWifiImuWindowCommand",
+                    "-EnableQmi8658Imu",
+                    "-Qmi8658I2CAddress",
+                    "106",
+                    "-Qmi8658I2CTimeoutMs",
+                    "20",
+                    "-Qmi8658BootSampleCount",
+                    "0",
+                    "-Json",
+                ],
+                cwd=self.repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(result.stdout)
+            config = config_path.read_text(encoding="utf-8-sig")
+
+        self.assertTrue(payload["wifi_imu_window_command_enabled"])
+        self.assertEqual(payload["wifi_imu_window_poll_max_attempts"], 120)
+        self.assertTrue(payload["qmi8658_imu_enabled"])
+        self.assertFalse(payload["sim7670_lte_status_enabled"])
+        self.assertFalse(payload["sim7670_lte_http_probe_enabled"])
+        self.assertFalse(payload["sim7670_lte_http_command_loop_enabled"])
+        self.assertIn("CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED=y", config)
+        self.assertIn("CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS=120", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658=y", config)
+        self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED is not set", config)
+        self.assertIn("# CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED is not set", config)
+        self.assertNotIn("unit-secret-token", result.stdout)
+        self.assertNotIn("lab-secret", result.stdout)
+
+    def test_script_rejects_wifi_imu_window_profile_without_qmi8658(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            firmware_dir = tmp_path / "firmware"
+            firmware_dir.mkdir()
+            token_file = tmp_path / "token.txt"
+            token_file.write_text("unit-secret-token\n", encoding="utf-8")
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(self.script),
+                    "-HostName",
+                    "example.invalid",
+                    "-TokenFile",
+                    str(token_file),
+                    "-FirmwareDir",
+                    str(firmware_dir),
+                    "-ConfigPath",
+                    str(firmware_dir / "sdkconfig.d2009.local"),
+                    "-EnableWifiImuWindowCommand",
+                    "-Json",
+                ],
+                cwd=self.repo_root,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("requires EnableQmi8658Imu", result.stderr)
+        self.assertNotIn("unit-secret-token", result.stderr)
+
     def test_script_can_enable_location_observation_and_implies_lte_command_loop(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -602,6 +703,8 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("[switch]$EnableSim7670LteStatus", script_text)
         self.assertIn("[switch]$EnableSim7670LteHttpProbe", script_text)
         self.assertIn("[switch]$EnableSim7670LteHttpCommandLoop", script_text)
+        self.assertIn("[switch]$EnableWifiImuWindowCommand", script_text)
+        self.assertIn("[int]$WifiImuWindowPollMaxAttempts = 120", script_text)
         self.assertIn("[switch]$EnableSim7670LocationObservation", script_text)
         self.assertIn("[switch]$EnableD1PeriodicLocation", script_text)
         self.assertIn("[switch]$EnableRawPostFailOnceTest", script_text)

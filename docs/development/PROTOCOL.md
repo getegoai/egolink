@@ -111,7 +111,7 @@ cmd=capture_imu_window
 cmd_id=cmd-000123
 sample_count=100
 interval_ms=50
-test_run_id=D2-007-HW-20260810-001
+test_run_id=D2-009-HW-20260811-001
 ```
 
 Version 1 accepts exactly those five keys and that fixed `100 x 50 ms` shape;
@@ -121,9 +121,10 @@ the latter is copied from the command into every part and its ACK. Firmware
 must reject a
 mock or unavailable sensor, capture into bounded RAM using an absolute
 schedule, discard ten real 50 ms warm-up samples, stop QMI8658 measurement
-with CTRL7 readback confirmation, and only then begin LTE traffic. An
-unconfirmed stop fails the command service closed without an LTE upload or
-ACK. Sampling and network upload must never run concurrently in this profile.
+with CTRL7 readback confirmation, and only then begin network traffic. An
+unconfirmed stop fails the command service closed without an upload or ACK.
+Sampling and application network upload must never run concurrently in this
+profile.
 
 The window is transported as ten deterministic `imu_window_chunk` events of
 ten samples each, followed by one `imu_window_manifest` event. Every complete
@@ -141,10 +142,15 @@ int32  gyro_mdps_y
 int32  gyro_mdps_z
 ```
 
-Required common lineage includes `priority=normal`, `transport_type=lte`, a
-persisted nonzero `boot_count`, `contract_version=egolink.imu_window.v1`,
-`window_id`, `capture_cmd_id`, and a payload `seq` exactly equal to the EGLK
-header `seq`. Firmware version is limited to 32 safe characters. IDs are:
+Required common lineage includes `priority=normal`, a lowercase
+`transport_type` of `wifi` or `lte`, a persisted nonzero `boot_count`,
+`contract_version=egolink.imu_window.v1`, `window_id`, `capture_cmd_id`, and a
+payload `seq` exactly equal to the EGLK header `seq`. The field records the
+device's actual active uplink; the server does not infer it from the HTTP
+request. All ten chunks and the manifest for one window must report the same
+transport. Capture authorization remains transport-independent, so the
+command does not add a transport selector. Firmware version is limited to 32
+safe characters. IDs are:
 
 ```text
 window_id = imuw-{capture_cmd_id}-b{boot_count}
@@ -170,10 +176,15 @@ Normal Dashboard, telemetry-history, raw-frame-list, and field-export views
 must not expose `samples_b64` or decoded arrays. They may expose validated
 metadata and hashes. Sample reconstruction is an explicit bounded local
 database export. Raw upload attempts remain stored before semantic validation;
-malformed or conflicting attempts are evidence but are not valid windows.
+malformed, unsupported-transport, mixed-transport, or otherwise conflicting
+attempts are evidence but are not valid windows.
 Recognizable invalid IMU parts return non-2xx after retention, so firmware
 cannot count them as accepted. Invalid raw ACKs likewise return non-2xx and do
 not close the command.
+
+Both Wi-Fi and LTE retain the 1200-byte raw-frame ceiling. Wi-Fi support is an
+additive bench transport for this profile, not a second larger-frame contract
+or evidence that LTE field acceptance has passed.
 
 For this first engineering profile the following values are mandatory:
 

@@ -346,7 +346,7 @@ def assemble_imu_windows(
                 "test_run_id": test_run_id,
                 "source": "qmi8658_i2c",
                 "source_status": "observed",
-                "transport_type": "lte",
+                "transport_type": manifest["transport_type"],
                 "sensor": {
                     "model": manifest["sensor_model"],
                     "i2c_address": manifest["sensor_i2c_address"],

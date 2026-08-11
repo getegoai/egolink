@@ -37,7 +37,7 @@
     "fw_version": { "type": "string", "pattern": "^[A-Za-z0-9._+:-]{1,32}$" },
     "test_run_id": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,32}$" },
     "seq": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
-    "transport_type": { "const": "lte" },
+    "transport_type": { "enum": ["lte", "wifi"] },
     "boot_count": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
     "contract_version": { "const": "egolink.imu_window.v1" },
     "window_id": {

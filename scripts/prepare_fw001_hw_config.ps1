@@ -19,6 +19,8 @@ param(
     [switch]$EnableSim7670LteStatus,
     [switch]$EnableSim7670LteHttpProbe,
     [switch]$EnableSim7670LteHttpCommandLoop,
+    [switch]$EnableWifiImuWindowCommand,
+    [int]$WifiImuWindowPollMaxAttempts = 120,
     [switch]$EnableSim7670LocationObservation,
     [switch]$EnableD1PeriodicLocation,
     [int]$D1PeriodicLocationIntervalSec = 60,
@@ -144,6 +146,15 @@ $effectiveEnableSim7670LocationObservation = [bool]($EnableSim7670LocationObserv
 $effectiveEnableSim7670LocationObservation = [bool]($effectiveEnableSim7670LocationObservation -or $EnableD1PeriodicLocation)
 $effectiveEnableSim7670LteHttpCommandLoop = [bool]($EnableSim7670LteHttpCommandLoop -or $effectiveEnableSim7670LocationObservation -or $EnableD1PeriodicLocation)
 $effectiveEnableSim7670LteStatus = [bool]($EnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop)
+if ($EnableWifiImuWindowCommand -and -not $EnableQmi8658Imu) {
+    throw "EnableWifiImuWindowCommand requires EnableQmi8658Imu."
+}
+if ($EnableWifiImuWindowCommand -and ($WifiImuWindowPollMaxAttempts -lt 1 -or $WifiImuWindowPollMaxAttempts -gt 360)) {
+    throw "WifiImuWindowPollMaxAttempts must be between 1 and 360."
+}
+if ($EnableWifiImuWindowCommand -and ($EnableSim7670Gnss -or $effectiveEnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop -or $effectiveEnableSim7670LocationObservation)) {
+    throw "EnableWifiImuWindowCommand is a dedicated Wi-Fi profile and cannot be combined with SIM7670 modes."
+}
 
 $wifiSource = "parameters"
 if (-not $WifiSsid) {
@@ -187,6 +198,14 @@ if ($effectiveEnableSim7670LteHttpCommandLoop) {
     $lines += "CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED=y"
 } else {
     $lines += "# CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED is not set"
+}
+if ($EnableWifiImuWindowCommand) {
+    $lines += @(
+        "CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED=y",
+        "CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS=$WifiImuWindowPollMaxAttempts"
+    )
+} else {
+    $lines += "# CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED is not set"
 }
 if ($effectiveEnableSim7670LocationObservation) {
     $lines += "CONFIG_EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED=y"
@@ -308,6 +327,8 @@ $result = [pscustomobject]@{
     sim7670_lte_status_enabled = [bool]$effectiveEnableSim7670LteStatus
     sim7670_lte_http_probe_enabled = [bool]$EnableSim7670LteHttpProbe
     sim7670_lte_http_command_loop_enabled = [bool]$effectiveEnableSim7670LteHttpCommandLoop
+    wifi_imu_window_command_enabled = [bool]$EnableWifiImuWindowCommand
+    wifi_imu_window_poll_max_attempts = $WifiImuWindowPollMaxAttempts
     sim7670_location_observation_enabled = [bool]$effectiveEnableSim7670LocationObservation
     d1_periodic_location_enabled = [bool]$EnableD1PeriodicLocation
     d1_periodic_location_interval_sec = $D1PeriodicLocationIntervalSec

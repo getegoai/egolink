@@ -359,7 +359,7 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertIn("config EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST", self.sim7670_kconfig)
         self.assertIn("default n", self.sim7670_kconfig)
 
-    def test_bounded_imu_window_captures_before_chunked_lte_upload(self) -> None:
+    def test_bounded_imu_window_captures_before_shared_chunked_upload(self) -> None:
         for token in [
             '#define IMU_WINDOW_SAMPLE_COUNT 100u',
             '#define IMU_WINDOW_INTERVAL_MS 50u',
@@ -399,10 +399,10 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
                 self.assertIn(token, self.app_main)
 
         capture = self.app_main.split("static bool capture_real_imu_window", 1)[1].split(
-            "static bool lte_http_publish_imu_window", 1
+            "static bool build_imu_window_manifest_frame", 1
         )[0]
-        upload = self.app_main.split("static bool lte_http_publish_imu_window", 1)[1].split(
-            "#if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED", 1
+        upload = self.app_main.split("static bool publish_imu_window", 1)[1].split(
+            "#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED", 1
         )[0]
         self.assertNotIn("sim7670_lte_http_post_raw", capture)
         self.assertNotIn("lte_raw_outbox_post_raw_with_retry", capture)
@@ -410,6 +410,66 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertLess(upload.index("capture_real_imu_window(&capture)"), upload.index("IMU_WINDOW_CHUNK_POST_DONE"))
         self.assertLess(upload.index("manifest_frame_preflight_over_1200_bytes"), upload.index("IMU_WINDOW_CHUNK_POST_DONE"))
         self.assertIn("strlen(s_imu_window_frame) > IMU_WINDOW_RAW_FRAME_MAX_BYTES", upload)
+
+    def test_wifi_imu_window_profile_reuses_raw_parser_and_shared_publisher(self) -> None:
+        for token in [
+            "config EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED",
+            "depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_PLATFORM_IMU_BACKEND_QMI8658",
+            "config EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS",
+            "default 120",
+            "CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED",
+            "message_hub_request_with_content_type",
+            "message_hub_post_raw",
+            '"text/x-egolink-frame; profile=raw-frame.p0.v1"',
+            "wifi_http_poll_imu_window_command_once",
+            "WIFI_IMU_WINDOW_POLL_NO_COMMAND",
+            "WIFI_IMU_WINDOW_POLL_PARSE_ERROR",
+            "WIFI_IMU_WINDOW_POLL_COMMAND_ATTEMPTED",
+            "CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS",
+            "WIFI_IMU_WINDOW_COMMAND_TASK_DONE",
+            "/commands/poll.raw",
+            "parse_lte_raw_command_frame(response, &command)",
+            "wifi_http_execute_and_ack_raw_command",
+            "wifi_http_ack_raw_command",
+            "/ack.raw",
+            'publish_imu_window(command->cmd_id, command->test_run_id, "wifi")',
+            'publish_imu_window(command->cmd_id, command->test_run_id, "lte")',
+            '"transport_type=%s\\n"',
+            '"transport_type=wifi\\n"',
+            "WIFI_IMU_WINDOW_DUPLICATE_RESULT_REPLAY",
+            "find_executed_command_result(command->cmd_id)",
+            "command->test_run_id",
+            "#if !CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.app_main + self.kconfig)
+
+        self.assertEqual(self.app_main.count("static bool capture_real_imu_window("), 1)
+        self.assertEqual(self.app_main.count("static bool publish_imu_window("), 1)
+        self.assertEqual(self.app_main.count("static bool parse_lte_raw_command_frame("), 1)
+        capture = self.app_main.split("static bool capture_real_imu_window", 1)[1].split(
+            "static bool build_imu_window_manifest_frame", 1
+        )[0]
+        self.assertNotIn("message_hub_post_raw", capture)
+        self.assertNotIn("message_hub_request", capture)
+        wifi_execute = self.app_main.split("static bool wifi_http_execute_and_ack_raw_command", 1)[1].split(
+            "static bool wifi_http_poll_imu_window_command_once", 1
+        )[0]
+        self.assertNotIn("capture_real_imu_window", wifi_execute)
+        command_task = self.app_main.split("static void command_poll_task", 1)[1].split(
+            "static void wifi_event_handler", 1
+        )[0]
+        self.assertIn("wifi_http_poll_imu_window_command_once", command_task)
+        self.assertIn("message_hub_poll_commands", command_task)
+        self.assertIn("for (int attempt = 1;", command_task)
+        self.assertIn("vTaskDelete(NULL)", command_task)
+        self.assertNotIn("while (true)", command_task.split("#else", 1)[0])
+        lte_ready_section = self.app_main.split("static bool wait_for_lte_ready_for_http_probe", 1)[0]
+        self.assertTrue(
+            lte_ready_section.rstrip().endswith(
+                "#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED"
+            )
+        )
 
     def test_d1_periodic_location_mode_is_opt_in_and_keeps_lte_loop_running(self) -> None:
         for token in [

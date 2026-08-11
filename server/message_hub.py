@@ -75,6 +75,7 @@ IMU_WINDOW_RAW_FRAME_MAX_BYTES = 1200
 IMU_WINDOW_CAPTURE_CMD_ID_MAX = 16
 IMU_WINDOW_FW_VERSION_MAX = 32
 IMU_WINDOW_TEST_RUN_ID_MAX = 32
+IMU_WINDOW_TRANSPORT_TYPES = frozenset({"lte", "wifi"})
 IMU_WINDOW_COMMON_KEYS = {
     "event-type",
     "priority",
@@ -733,17 +734,22 @@ class MessageHubStore:
         ):
             authorization_error = self._imu_window_authorization_error(device_id, derived_message)
             if authorization_error is not None:
+                authorization_reason = (
+                    "IMU window parts for one window must use one transport"
+                    if authorization_error == "IMU_WINDOW_MIXED_TRANSPORT"
+                    else "IMU window is not bound to an exact authorized capture command"
+                )
                 record["parse_result"].update(
                     {
                         "status": "malformed",
                         "error_code": authorization_error,
-                        "reason": "IMU window is not bound to an exact authorized capture command",
+                        "reason": authorization_reason,
                         "derived_message_type": "unknown",
                         "payload_validation": {
                             "profile": IMU_WINDOW_CONTRACT_VERSION,
                             "status": "invalid",
                             "error_code": authorization_error,
-                            "reason": "IMU window is not bound to an exact authorized capture command",
+                            "reason": authorization_reason,
                         },
                     }
                 )
@@ -816,6 +822,11 @@ class MessageHubStore:
                 "window_id"
             ):
                 return "IMU_WINDOW_COMMAND_ALREADY_BOUND"
+            if (
+                prior_imu.get("window_id") == imu_window.get("window_id")
+                and prior_imu.get("transport_type") != imu_window.get("transport_type")
+            ):
+                return "IMU_WINDOW_MIXED_TRANSPORT"
         if row["status"] == "pending":
             with self.connection() as db:
                 db.execute(
@@ -2074,10 +2085,16 @@ def validate_imu_window_common(kv_payload: dict[str, str]) -> dict[str, Any]:
         )
     priority = imu_window_required_text(kv_payload, "priority")
     transport_type = imu_window_required_text(kv_payload, "transport-type")
-    if priority != "normal" or transport_type != "lte":
+    if priority != "normal":
         raise RawPayloadValidationError(
-            "IMU_WINDOW_LTE_TRANSPORT_REQUIRED",
-            "IMU window v1 requires priority=normal and transport_type=lte",
+            "IMU_WINDOW_NORMAL_PRIORITY_REQUIRED",
+            "IMU window v1 requires priority=normal",
+            profile=contract_version,
+        )
+    if transport_type not in IMU_WINDOW_TRANSPORT_TYPES:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_TRANSPORT_REQUIRED",
+            "IMU window v1 requires lowercase transport_type=lte or transport_type=wifi",
             profile=contract_version,
         )
     seq = imu_window_required_int(kv_payload, "seq", minimum=1, maximum=2**32 - 1)

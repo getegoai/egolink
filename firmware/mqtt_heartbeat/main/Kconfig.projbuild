@@ -72,6 +72,26 @@ config EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC
     range 2 3600
     depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
 
+config EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
+    bool "Enable bounded QMI8658 window command over Wi-Fi"
+    default n
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+    help
+        Dedicated engineering profile for polling the existing EGLK/1 raw
+        capture_imu_window command over Wi-Fi. It captures exactly 100 real
+        QMI8658 samples at 50 ms, stops measurement before upload, and does
+        not start periodic heartbeat or sensor telemetry tasks.
+
+config EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS
+    int "Bounded Wi-Fi IMU command poll attempts"
+    default 120
+    range 1 360
+    depends on EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
+    help
+        Maximum raw command polls for the dedicated profile. The task exits
+        immediately after attempting one selected command, regardless of its
+        upload or ACK result.
+
 config EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
     bool "Enable request_location GNSS telemetry scaffold"
     default y

@@ -55,6 +55,7 @@ def chunk_fields(
     boot_count: int = BOOT_COUNT,
     fw_version: str = "0.1.0-imu-unit",
     test_run_id: str = TEST_RUN_ID,
+    transport_type: str = "lte",
 ) -> dict[str, object]:
     start = index * message_hub.IMU_WINDOW_SAMPLES_PER_CHUNK
     count = min(
@@ -72,7 +73,7 @@ def chunk_fields(
         "fw_version": fw_version,
         "test_run_id": test_run_id,
         "seq": index + 1,
-        "transport_type": "lte",
+        "transport_type": transport_type,
         "boot_count": boot_count,
         "contract_version": message_hub.IMU_WINDOW_CONTRACT_VERSION,
         "window_id": f"imuw-{cmd_id}-b{boot_count}",
@@ -101,6 +102,7 @@ def manifest_fields(
     boot_count: int = BOOT_COUNT,
     fw_version: str = "0.1.0-imu-unit",
     test_run_id: str = TEST_RUN_ID,
+    transport_type: str = "lte",
 ) -> dict[str, object]:
     return {
         "event_type": "imu_window_manifest",
@@ -110,7 +112,7 @@ def manifest_fields(
         "fw_version": fw_version,
         "test_run_id": test_run_id,
         "seq": message_hub.IMU_WINDOW_CHUNK_COUNT + 1,
-        "transport_type": "lte",
+        "transport_type": transport_type,
         "boot_count": boot_count,
         "contract_version": message_hub.IMU_WINDOW_CONTRACT_VERSION,
         "window_id": f"imuw-{cmd_id}-b{boot_count}",
@@ -171,11 +173,12 @@ def ingest_window(
     *,
     omit_chunk: int | None = None,
     expect_ok: bool = True,
+    transport_type: str = "lte",
 ) -> None:
     for index in range(message_hub.IMU_WINDOW_CHUNK_COUNT):
         if index == omit_chunk:
             continue
-        payload = chunk_payload(index, complete_samples)
+        payload = chunk_payload(index, complete_samples, transport_type=transport_type)
         frame = message_hub.build_raw_frame(
             "event",
             f"imu-{CMD_ID}-b{BOOT_COUNT}-c{index:02d}",
@@ -185,7 +188,7 @@ def ingest_window(
         record = store.ingest_raw_frame(DEVICE_ID, frame)
         if expect_ok and record["parse_result"]["status"] != "ok":
             raise AssertionError(record["parse_result"])
-    payload = manifest_payload(complete_samples)
+    payload = manifest_payload(complete_samples, transport_type=transport_type)
     frame = message_hub.build_raw_frame(
         "event",
         f"imu-{CMD_ID}-b{BOOT_COUNT}-manifest",
@@ -207,12 +210,27 @@ class ImuWindowExportTests(unittest.TestCase):
         self.assertEqual(chunk_schema["properties"]["total_sample_count"]["const"], 100)
         self.assertEqual(chunk_schema["properties"]["requested_interval_us"]["const"], 50_000)
         self.assertEqual(chunk_schema["properties"]["sample_record_bytes"]["const"], 28)
+        self.assertEqual(chunk_schema["properties"]["transport_type"]["enum"], ["lte", "wifi"])
+        self.assertEqual(manifest_schema["properties"]["transport_type"]["enum"], ["lte", "wifi"])
         self.assertEqual(manifest_schema["properties"]["training_allowed"]["const"], False)
         self.assertEqual(manifest_schema["properties"]["sensor_i2c_address"]["const"], 106)
         self.assertEqual(manifest_schema["properties"]["axis_mapping_status"]["const"], "unrecorded")
         complete_samples = sample_bytes()
         Draft202012Validator(chunk_schema).validate(chunk_fields(0, complete_samples))
         Draft202012Validator(manifest_schema).validate(manifest_fields(complete_samples))
+        Draft202012Validator(chunk_schema).validate(chunk_fields(0, complete_samples, transport_type="wifi"))
+        Draft202012Validator(manifest_schema).validate(manifest_fields(complete_samples, transport_type="wifi"))
+        for unsupported_transport in ("usb", "WiFi"):
+            self.assertFalse(
+                Draft202012Validator(chunk_schema).is_valid(
+                    chunk_fields(0, complete_samples, transport_type=unsupported_transport)
+                )
+            )
+            self.assertFalse(
+                Draft202012Validator(manifest_schema).is_valid(
+                    manifest_fields(complete_samples, transport_type=unsupported_transport)
+                )
+            )
 
     def test_maximum_contract_lineage_still_fits_the_1200_byte_ceiling(self) -> None:
         complete_samples = sample_bytes()
@@ -305,6 +323,35 @@ class ImuWindowExportTests(unittest.TestCase):
         self.assertNotIn('"samples":', telemetry_json)
         self.assertTrue(all(frame["raw_payload"]["data_redacted"] for frame in raw_frames))
 
+    def test_wifi_window_is_accepted_and_export_preserves_transport_and_training_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            db_path = tmp_path / "hub.db"
+            store = message_hub.MessageHubStore(db_path)
+            store.create_test_run({"test_run_id": TEST_RUN_ID})
+            create_capture_command(store)
+            ingest_window(store, sample_bytes(), transport_type="wifi")
+
+            telemetry = store.telemetry_history(DEVICE_ID)
+            raw_frames = store.list_raw_frames(DEVICE_ID)
+            result = export_imu_windows.export_imu_windows(
+                db_path,
+                tmp_path / "export",
+                device_id=DEVICE_ID,
+                test_run_id=TEST_RUN_ID,
+            )
+            exported = json.loads((tmp_path / "export" / "imu_windows.jsonl").read_text().splitlines()[0])
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["summary"]["valid_windows"], 1)
+        self.assertEqual(exported["transport_type"], "wifi")
+        self.assertFalse(exported["training_allowed"])
+        self.assertEqual(exported["consent_status"], "unreviewed_required")
+        self.assertFalse(exported["split_leakage_checked"])
+        self.assertIn("operator_training_authorization_missing", exported["training_blockers"])
+        self.assertNotIn("samples_b64", json.dumps(telemetry))
+        self.assertTrue(all(frame["raw_payload"]["data_redacted"] for frame in raw_frames))
+
     def test_semantically_invalid_chunk_is_retained_but_not_derived(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -352,6 +399,64 @@ class ImuWindowExportTests(unittest.TestCase):
         self.assertEqual(response["error"], "IMU_WINDOW_INVALID_BASE64")
         self.assertEqual(len(raw_frames), 1)
         self.assertEqual(raw_frames[0]["parse_result"]["status"], "malformed")
+
+    def test_http_mixed_transport_is_422_after_raw_retention(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            create_capture_command(store)
+            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            first_payload = chunk_payload(0, sample_bytes(), transport_type="wifi")
+            first_frame = message_hub.build_raw_frame(
+                "event",
+                f"imu-{CMD_ID}-b{BOOT_COUNT}-c00",
+                first_payload,
+                seq=1,
+            )
+            mixed_payload = chunk_payload(1, sample_bytes(), transport_type="lte")
+            mixed_frame = message_hub.build_raw_frame(
+                "event",
+                f"imu-{CMD_ID}-b{BOOT_COUNT}-c01",
+                mixed_payload,
+                seq=2,
+            )
+
+            def post(frame: bytes) -> dict[str, object]:
+                http_request = request.Request(
+                    f"http://127.0.0.1:{server.server_port}/api/v1/devices/{DEVICE_ID}/raw-ingest",
+                    data=frame,
+                    method="POST",
+                    headers={"Content-Type": "text/x-egolink-frame; profile=raw-frame.p0.v1"},
+                )
+                with closing(request.urlopen(http_request, timeout=5)) as response:
+                    return json.loads(response.read().decode("utf-8"))
+
+            try:
+                first_response = post(first_frame)
+                with self.assertRaises(error.HTTPError) as raised:
+                    post(mixed_frame)
+                with closing(raised.exception):
+                    response_status = raised.exception.code
+                    mixed_response = json.loads(raised.exception.read().decode("utf-8"))
+                raw_frames = store.list_raw_frames(DEVICE_ID)
+                telemetry = store.telemetry_history(DEVICE_ID)
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertTrue(first_response["ok"])
+        self.assertEqual(response_status, 422)
+        self.assertEqual(mixed_response["error"], "IMU_WINDOW_MIXED_TRANSPORT")
+        self.assertEqual(len(raw_frames), 2)
+        self.assertEqual(raw_frames[0]["parse_result"]["status"], "malformed")
+        self.assertEqual(raw_frames[0]["parse_result"]["error_code"], "IMU_WINDOW_MIXED_TRANSPORT")
+        self.assertTrue(all(frame["raw_payload"]["data_redacted"] for frame in raw_frames))
+        self.assertEqual(len(telemetry), 1)
+        self.assertEqual(telemetry[0]["imu_window"]["transport_type"], "wifi")
+        self.assertFalse(telemetry[0]["imu_window"]["training_allowed"])
+        self.assertNotIn("samples_b64", json.dumps(telemetry))
 
     def test_http_bad_envelope_crc_is_non_2xx_after_raw_retention(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -443,12 +548,14 @@ class ImuWindowExportTests(unittest.TestCase):
         self.assertEqual(telemetry["imu_window"]["privacy_class"], "engineering")
         self.assertNotIn("samples_b64", json.dumps(telemetry))
 
-    def test_server_rejects_non_lte_nondeterministic_or_oversized_parts(self) -> None:
+    def test_server_rejects_unsupported_transport_nondeterministic_or_oversized_parts(self) -> None:
         complete_samples = sample_bytes()
         cases: list[tuple[str, dict[str, object], str, int, str]] = []
         usb_fields = chunk_fields(0, complete_samples)
         usb_fields["transport_type"] = "usb"
-        cases.append(("usb", usb_fields, f"imu-{CMD_ID}-b{BOOT_COUNT}-c00", 1, "IMU_WINDOW_LTE_TRANSPORT_REQUIRED"))
+        cases.append(("usb", usb_fields, f"imu-{CMD_ID}-b{BOOT_COUNT}-c00", 1, "IMU_WINDOW_TRANSPORT_REQUIRED"))
+        case_fields = chunk_fields(0, complete_samples, transport_type="WiFi")
+        cases.append(("case", case_fields, f"imu-{CMD_ID}-b{BOOT_COUNT}-c00", 1, "IMU_WINDOW_TRANSPORT_REQUIRED"))
         window_fields = chunk_fields(0, complete_samples)
         window_fields["window_id"] = "arbitrary-window"
         cases.append(("window", window_fields, f"imu-{CMD_ID}-b{BOOT_COUNT}-c00", 1, "IMU_WINDOW_ID_MISMATCH"))

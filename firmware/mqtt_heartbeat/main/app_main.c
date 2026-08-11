@@ -65,14 +65,19 @@ static bool s_boot_count_persisted;
 static char s_status_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_sensor_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_lte_http_probe_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
-#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && \
+    (CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED)
 static char s_lte_command_last_cmd_id[64];
 static char s_lte_command_parse_status[64] = "not_polled";
 static char s_lte_command_diag_payload[1536];
 static int s_lte_command_last_command_count;
 static char s_lte_command_last_status[16] = "none";
 static char s_lte_command_last_message[192] = "no command executed";
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 #define LTE_EXECUTED_COMMAND_CACHE_SIZE CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS
+#else
+#define LTE_EXECUTED_COMMAND_CACHE_SIZE 4
+#endif
 typedef struct {
     bool valid;
     char cmd_id[64];
@@ -562,6 +567,9 @@ static esp_err_t message_hub_http_event_handler(esp_http_client_event_t *event)
     }
 
     http_response_buffer_t *response = (http_response_buffer_t *)event->user_data;
+    if (response->buffer == NULL || response->capacity == 0) {
+        return ESP_OK;
+    }
     if (response->length + (size_t)event->data_len >= response->capacity) {
         ESP_LOGW(TAG, "MESSAGE_HUB_RESPONSE_TRUNCATED len=%d capacity=%u", event->data_len, (unsigned)response->capacity);
         return ESP_OK;
@@ -583,10 +591,11 @@ static void build_message_hub_url(char *buffer, size_t buffer_size, const char *
     snprintf(buffer, buffer_size, "%s%s%s", base_url, separator, normalized_path);
 }
 
-static bool message_hub_request(
+static bool message_hub_request_with_content_type(
     esp_http_client_method_t method,
     const char *path,
     const char *payload,
+    const char *content_type,
     char *response_buffer,
     size_t response_size,
     int *status_code)
@@ -622,7 +631,7 @@ static bool message_hub_request(
         esp_http_client_set_header(client, "Authorization", auth_header);
     }
     if (payload != NULL) {
-        esp_http_client_set_header(client, "Content-Type", "application/json");
+        esp_http_client_set_header(client, "Content-Type", content_type ? content_type : "application/json");
         esp_http_client_set_post_field(client, payload, (int)strlen(payload));
     }
 
@@ -642,6 +651,36 @@ static bool message_hub_request(
         return false;
     }
     return true;
+}
+
+static bool message_hub_request(
+    esp_http_client_method_t method,
+    const char *path,
+    const char *payload,
+    char *response_buffer,
+    size_t response_size,
+    int *status_code)
+{
+    return message_hub_request_with_content_type(
+        method,
+        path,
+        payload,
+        "application/json",
+        response_buffer,
+        response_size,
+        status_code);
+}
+
+static bool message_hub_post_raw(const char *path, const char *frame, int *status_code)
+{
+    return message_hub_request_with_content_type(
+        HTTP_METHOD_POST,
+        path,
+        frame,
+        "text/x-egolink-frame; profile=raw-frame.p0.v1",
+        NULL,
+        0,
+        status_code);
 }
 
 static bool message_hub_post_json(const char *path, const char *payload, const char *label, uint32_t seq)
@@ -1190,7 +1229,10 @@ static void build_lte_http_probe_lte_fragment(char *buffer, size_t buffer_size)
 #endif
 }
 
-#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && (CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED)
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && \
+    (CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || \
+     CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED)
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 static bool wait_for_lte_ready_for_http_probe(void)
 {
     int waited_sec = 0;
@@ -1223,6 +1265,7 @@ static bool wait_for_lte_ready_for_http_probe(void)
         waited_sec += delay_sec;
     }
 }
+#endif
 
 #if CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
 static void build_lte_http_probe_payload(
@@ -1401,12 +1444,13 @@ static void lte_http_probe_task(void *arg)
 }
 #endif
 
-#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
 static void set_lte_command_parse_status(const char *status)
 {
     snprintf(s_lte_command_parse_status, sizeof(s_lte_command_parse_status), "%s", status ? status : "unknown");
 }
 
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 static void lte_raw_outbox_copy_text(char *buffer, size_t buffer_size, const char *value, const char *fallback)
 {
     if (buffer == NULL || buffer_size == 0) {
@@ -1591,6 +1635,7 @@ static bool lte_raw_outbox_post_raw_with_retry(
             : "lte_http_post_failed");
     return false;
 }
+#endif
 
 typedef struct {
     char cmd_id[64];
@@ -1880,6 +1925,7 @@ static bool capture_real_imu_window(imu_window_capture_result_t *result)
 static bool build_imu_window_manifest_frame(
     const char *cmd_id,
     const char *test_run_id,
+    const char *transport_type,
     const char *window_id,
     const imu_window_capture_result_t *capture,
     uint32_t samples_crc,
@@ -1902,7 +1948,7 @@ static bool build_imu_window_manifest_frame(
         "fw_version=%s\n"
         "test_run_id=%s\n"
         "seq=%" PRIu32 "\n"
-        "transport_type=lte\n"
+        "transport_type=%s\n"
         "boot_count=%" PRIu32 "\n"
         "contract_version=%s\n"
         "window_id=%s\n"
@@ -1936,6 +1982,7 @@ static bool build_imu_window_manifest_frame(
         CONFIG_EGOLINK_FW_VERSION,
         test_run_id,
         seq,
+        transport_type,
         s_boot_count,
         IMU_WINDOW_CONTRACT_VERSION,
         window_id,
@@ -1965,7 +2012,65 @@ static bool build_imu_window_manifest_frame(
            strlen(frame) <= IMU_WINDOW_RAW_FRAME_MAX_BYTES;
 }
 
-static bool lte_http_publish_imu_window(const char *cmd_id, const char *test_run_id)
+static bool imu_window_transport_valid(const char *transport_type)
+{
+    return transport_type != NULL &&
+           (strcmp(transport_type, "lte") == 0 || strcmp(transport_type, "wifi") == 0);
+}
+
+static bool imu_window_post_raw(
+    const char *transport_type,
+    const char *path,
+    const char *url,
+    const char *frame,
+    const char *label,
+    const char *cmd_id,
+    uint32_t seq,
+    char *reason,
+    size_t reason_size,
+    int *status_code)
+{
+    if (strcmp(transport_type, "wifi") == 0) {
+        int status = 0;
+        bool ok = message_hub_post_raw(path, frame, &status);
+        snprintf(reason, reason_size, "%s", ok ? "WIFI_HTTP_OK" : "WIFI_HTTP_FAILED");
+        if (status_code != NULL) {
+            *status_code = status;
+        }
+        return ok;
+    }
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    if (strcmp(transport_type, "lte") == 0) {
+        sim7670_lte_http_probe_result_t result;
+        bool ok = lte_raw_outbox_post_raw_with_retry(
+            url,
+            CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN,
+            frame,
+            "text/x-egolink-frame; profile=raw-frame.p0.v1",
+            label,
+            cmd_id,
+            seq,
+            &result);
+        snprintf(reason, reason_size, "%s", result.reason_code);
+        if (status_code != NULL) {
+            *status_code = result.status_code;
+        }
+        return ok;
+    }
+#else
+    (void)url;
+    (void)label;
+    (void)cmd_id;
+    (void)seq;
+#endif
+    snprintf(reason, reason_size, "UNSUPPORTED_TRANSPORT");
+    if (status_code != NULL) {
+        *status_code = 0;
+    }
+    return false;
+}
+
+static bool publish_imu_window(const char *cmd_id, const char *test_run_id, const char *transport_type)
 {
     if (cmd_id == NULL || cmd_id[0] == '\0') {
         imu_window_set_error("command_id_missing");
@@ -1977,6 +2082,10 @@ static bool lte_http_publish_imu_window(const char *cmd_id, const char *test_run
     }
     if (!imu_window_test_run_id_valid(test_run_id)) {
         imu_window_set_error("test_run_id_invalid");
+        return false;
+    }
+    if (!imu_window_transport_valid(transport_type)) {
+        imu_window_set_error("transport_type_invalid");
         return false;
     }
 
@@ -1995,6 +2104,7 @@ static bool lte_http_publish_imu_window(const char *cmd_id, const char *test_run
     if (!build_imu_window_manifest_frame(
             cmd_id,
             test_run_id,
+            transport_type,
             window_id,
             &capture,
             samples_crc,
@@ -2033,7 +2143,7 @@ static bool lte_http_publish_imu_window(const char *cmd_id, const char *test_run
             "fw_version=%s\n"
             "test_run_id=%s\n"
             "seq=%" PRIu32 "\n"
-            "transport_type=lte\n"
+            "transport_type=%s\n"
             "boot_count=%" PRIu32 "\n"
             "contract_version=%s\n"
             "window_id=%s\n"
@@ -2051,6 +2161,7 @@ static bool lte_http_publish_imu_window(const char *cmd_id, const char *test_run
             CONFIG_EGOLINK_FW_VERSION,
             test_run_id,
             seq,
+            transport_type,
             s_boot_count,
             IMU_WINDOW_CONTRACT_VERSION,
             window_id,
@@ -2083,16 +2194,19 @@ static bool lte_http_publish_imu_window(const char *cmd_id, const char *test_run
             return false;
         }
 
-        sim7670_lte_http_probe_result_t post_result;
-        bool posted = lte_raw_outbox_post_raw_with_retry(
+        char post_reason[SIM7670_LTE_HTTP_REASON_MAX];
+        int post_status = 0;
+        bool posted = imu_window_post_raw(
+            transport_type,
+            path,
             url,
-            CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN,
             s_imu_window_frame,
-            "text/x-egolink-frame; profile=raw-frame.p0.v1",
             "imu_window_chunk",
             cmd_id,
             seq,
-            &post_result);
+            post_reason,
+            sizeof(post_reason),
+            &post_status);
         ESP_LOGI(
             TAG,
             "IMU_WINDOW_CHUNK_POST_DONE window_id=%s chunk=%" PRIu32 "/%u bytes=%u ok=%s reason=%s status=%d",
@@ -2101,8 +2215,8 @@ static bool lte_http_publish_imu_window(const char *cmd_id, const char *test_run
             (unsigned)IMU_WINDOW_CHUNK_COUNT,
             (unsigned)strlen(s_imu_window_frame),
             posted ? "true" : "false",
-            post_result.reason_code,
-            post_result.status_code);
+            post_reason,
+            post_status);
         if (!posted) {
             snprintf(
                 s_imu_window_last_error,
@@ -2118,6 +2232,7 @@ static bool lte_http_publish_imu_window(const char *cmd_id, const char *test_run
     if (!build_imu_window_manifest_frame(
             cmd_id,
             test_run_id,
+            transport_type,
             window_id,
             &capture,
             samples_crc,
@@ -2128,28 +2243,32 @@ static bool lte_http_publish_imu_window(const char *cmd_id, const char *test_run
         return false;
     }
 
-    sim7670_lte_http_probe_result_t manifest_result;
-    bool manifest_posted = lte_raw_outbox_post_raw_with_retry(
+    char manifest_reason[SIM7670_LTE_HTTP_REASON_MAX];
+    int manifest_status = 0;
+    bool manifest_posted = imu_window_post_raw(
+        transport_type,
+        path,
         url,
-        CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN,
         s_imu_window_frame,
-        "text/x-egolink-frame; profile=raw-frame.p0.v1",
         "imu_window_manifest",
         cmd_id,
         seq,
-        &manifest_result);
+        manifest_reason,
+        sizeof(manifest_reason),
+        &manifest_status);
     ESP_LOGI(
         TAG,
         "IMU_WINDOW_MANIFEST_POST_DONE window_id=%s bytes=%u ok=%s reason=%s status=%d",
         window_id,
         (unsigned)strlen(s_imu_window_frame),
         manifest_posted ? "true" : "false",
-        manifest_result.reason_code,
-        manifest_result.status_code);
+        manifest_reason,
+        manifest_status);
     imu_window_set_error(manifest_posted ? "none" : "manifest_upload_failed");
     return manifest_posted;
 }
 
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 #if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
 static void build_lte_location_report_kv_payload(
     char *buffer,
@@ -2940,6 +3059,7 @@ static bool lte_http_post_command_diag(
         post_result.status_code);
     return ok;
 }
+#endif
 
 static char *split_lte_raw_frame_payload(char *frame)
 {
@@ -3255,6 +3375,158 @@ static void remember_executed_command_result(const char *cmd_id, const char *sta
         (s_lte_executed_command_cache_next + 1u) % LTE_EXECUTED_COMMAND_CACHE_SIZE;
 }
 
+#if CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
+static bool wifi_http_ack_raw_command(
+    const lte_raw_command_t *command,
+    const char *status,
+    const char *message,
+    bool duplicate_prevented)
+{
+    char path[192];
+    char payload[768];
+    char frame[1024];
+    uint32_t seq = next_seq();
+    snprintf(
+        payload,
+        sizeof(payload),
+        "cmd_id=%s\n"
+        "status=%s\n"
+        "message=%s\n"
+        "fw_version=%s\n"
+        "test_run_id=%s\n"
+        "seq=%" PRIu32 "\n"
+        "transport_type=wifi\n"
+        "command_last_cmd_id=%s\n"
+        "command_parse_status=%s\n"
+        "command_count=%d\n"
+        "duplicate_local_execution_prevented=%s\n",
+        command->cmd_id,
+        status,
+        message,
+        CONFIG_EGOLINK_FW_VERSION,
+        command->test_run_id,
+        seq,
+        command->cmd_id,
+        s_lte_command_parse_status,
+        s_lte_command_last_command_count,
+        json_bool(duplicate_prevented));
+    if (!build_lte_raw_frame(frame, sizeof(frame), "ack", command->cmd_id, seq, payload)) {
+        ESP_LOGE(TAG, "WIFI_IMU_WINDOW_RAW_ACK_BUILD_FAILED cmd_id=%s", command->cmd_id);
+        return false;
+    }
+    snprintf(
+        path,
+        sizeof(path),
+        "/api/v1/devices/%s/commands/%s/ack.raw",
+        CONFIG_EGOLINK_DEVICE_ID,
+        command->cmd_id);
+    int http_status = 0;
+    bool ok = message_hub_post_raw(path, frame, &http_status);
+    ESP_LOGI(
+        TAG,
+        "WIFI_IMU_WINDOW_RAW_ACK_DONE cmd_id=%s seq=%" PRIu32 " duplicate=%s ok=%s status=%d",
+        command->cmd_id,
+        seq,
+        duplicate_prevented ? "true" : "false",
+        ok ? "true" : "false",
+        http_status);
+    return ok;
+}
+
+static bool wifi_http_execute_and_ack_raw_command(const lte_raw_command_t *command)
+{
+    if (command == NULL || command->cmd_id[0] == '\0') {
+        set_lte_command_parse_status("raw_missing_cmd_id");
+        return false;
+    }
+    const lte_executed_command_result_t *cached_result = find_executed_command_result(command->cmd_id);
+    bool duplicate = cached_result != NULL;
+    const char *status = "rejected";
+    const char *message = "Wi-Fi IMU window profile accepts only capture_imu_window";
+
+    ESP_LOGI(
+        TAG,
+        "WIFI_IMU_WINDOW_RAW_RECEIVED cmd_id=%s cmd=%s duplicate=%s",
+        command->cmd_id,
+        command->cmd,
+        duplicate ? "true" : "false");
+    if (!duplicate) {
+        if (strcmp(command->cmd, "capture_imu_window") == 0) {
+            if (!imu_window_capture_cmd_id_valid(command->cmd_id)) {
+                message = "capture_imu_window cmd_id must be 1-16 safe characters";
+            } else if (!command->parameters_valid || command->sample_count != IMU_WINDOW_SAMPLE_COUNT ||
+                       command->interval_ms != IMU_WINDOW_INTERVAL_MS) {
+                message = "capture_imu_window requires exact test_run_id, sample_count=100, and interval_ms=50";
+            } else {
+                bool window_ok = publish_imu_window(command->cmd_id, command->test_run_id, "wifi");
+                status = window_ok ? "ok" : "error";
+                if (window_ok) {
+                    message = "bounded real IMU window chunks and manifest uploaded over Wi-Fi";
+                } else {
+                    snprintf(
+                        s_lte_command_last_message,
+                        sizeof(s_lte_command_last_message),
+                        "bounded IMU window failed: %s",
+                        s_imu_window_last_error);
+                    message = s_lte_command_last_message;
+                }
+            }
+        }
+        snprintf(s_lte_command_last_cmd_id, sizeof(s_lte_command_last_cmd_id), "%s", command->cmd_id);
+        snprintf(s_lte_command_last_status, sizeof(s_lte_command_last_status), "%s", status);
+        if (message != s_lte_command_last_message) {
+            snprintf(s_lte_command_last_message, sizeof(s_lte_command_last_message), "%s", message);
+        }
+        remember_executed_command_result(command->cmd_id, s_lte_command_last_status, s_lte_command_last_message);
+    } else {
+        status = cached_result->status;
+        message = cached_result->message;
+        ESP_LOGI(TAG, "WIFI_IMU_WINDOW_DUPLICATE_RESULT_REPLAY cmd_id=%s status=%s", command->cmd_id, status);
+    }
+
+    if (s_imu_window_service_failed_closed) {
+        ESP_LOGE(TAG, "IMU_WINDOW_ACK_SUPPRESSED stop_not_confirmed=true");
+        return false;
+    }
+    return wifi_http_ack_raw_command(command, status, message, duplicate);
+}
+
+typedef enum {
+    WIFI_IMU_WINDOW_POLL_NO_COMMAND = 0,
+    WIFI_IMU_WINDOW_POLL_PARSE_ERROR,
+    WIFI_IMU_WINDOW_POLL_COMMAND_ATTEMPTED,
+} wifi_imu_window_poll_result_t;
+
+static wifi_imu_window_poll_result_t wifi_http_poll_imu_window_command_once(void)
+{
+    char path[160];
+    char response[2048];
+    lte_raw_command_t command;
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/commands/poll.raw", CONFIG_EGOLINK_DEVICE_ID);
+    int http_status = 0;
+    bool poll_ok = message_hub_request(HTTP_METHOD_GET, path, NULL, response, sizeof(response), &http_status);
+    s_lte_command_last_command_count = 0;
+    set_lte_command_parse_status(poll_ok ? "raw_http_ok_body_received" : "http_poll_failed");
+    ESP_LOGI(
+        TAG,
+        "WIFI_IMU_WINDOW_RAW_POLL_DONE ok=%s status=%d bytes=%u",
+        poll_ok ? "true" : "false",
+        http_status,
+        (unsigned)strlen(response));
+    if (!poll_ok) {
+        return WIFI_IMU_WINDOW_POLL_PARSE_ERROR;
+    }
+    if (!parse_lte_raw_command_frame(response, &command)) {
+        return strcmp(s_lte_command_parse_status, "raw_no_command") == 0
+                   ? WIFI_IMU_WINDOW_POLL_NO_COMMAND
+                   : WIFI_IMU_WINDOW_POLL_PARSE_ERROR;
+    }
+    (void)wifi_http_execute_and_ack_raw_command(&command);
+    return WIFI_IMU_WINDOW_POLL_COMMAND_ATTEMPTED;
+}
+#endif
+
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
 static bool lte_http_execute_and_ack_raw_command(
     const lte_raw_command_t *command,
     const sim7670_lte_http_probe_result_t *poll_result)
@@ -3303,7 +3575,7 @@ static bool lte_http_execute_and_ack_raw_command(
                 status = "rejected";
                 message = "capture_imu_window requires exact test_run_id, sample_count=100, and interval_ms=50";
             } else {
-                bool window_ok = lte_http_publish_imu_window(command->cmd_id, command->test_run_id);
+                bool window_ok = publish_imu_window(command->cmd_id, command->test_run_id, "lte");
                 status = window_ok ? "ok" : "error";
                 if (window_ok) {
                     message = "bounded real IMU window chunks and manifest uploaded";
@@ -3456,6 +3728,7 @@ static void lte_http_command_task(void *arg)
     vTaskDelete(NULL);
 #endif
 }
+#endif
 #endif
 #endif
 
@@ -3779,6 +4052,36 @@ static void sensor_task(void *arg)
 static void command_poll_task(void *arg)
 {
     (void)arg;
+#if CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
+    for (int attempt = 1; attempt <= CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS; ++attempt) {
+        EventBits_t bits = xEventGroupWaitBits(
+            s_event_group,
+            WIFI_CONNECTED_BIT,
+            pdFALSE,
+            pdTRUE,
+            portMAX_DELAY);
+        wifi_imu_window_poll_result_t result = WIFI_IMU_WINDOW_POLL_PARSE_ERROR;
+        if (bits & WIFI_CONNECTED_BIT) {
+            result = wifi_http_poll_imu_window_command_once();
+        }
+        ESP_LOGI(
+            TAG,
+            "WIFI_IMU_WINDOW_POLL_ROUND_DONE attempt=%d max_attempts=%d result=%s",
+            attempt,
+            CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS,
+            result == WIFI_IMU_WINDOW_POLL_COMMAND_ATTEMPTED
+                ? "selected_command"
+                : (result == WIFI_IMU_WINDOW_POLL_NO_COMMAND ? "no_command" : "parse_or_http_error"));
+        if (result == WIFI_IMU_WINDOW_POLL_COMMAND_ATTEMPTED || s_imu_window_service_failed_closed) {
+            break;
+        }
+        if (attempt < CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS) {
+            vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC * 1000));
+        }
+    }
+    ESP_LOGI(TAG, "WIFI_IMU_WINDOW_COMMAND_TASK_DONE");
+    vTaskDelete(NULL);
+#else
     while (true) {
         EventBits_t bits = xEventGroupWaitBits(
             s_event_group,
@@ -3791,6 +4094,7 @@ static void command_poll_task(void *arg)
         }
         vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC * 1000));
     }
+#endif
 }
 #endif
 
@@ -3917,7 +4221,8 @@ void app_main(void)
     ESP_ERROR_CHECK(platform_power_init() ? ESP_OK : ESP_FAIL);
     ESP_ERROR_CHECK(platform_imu_init() ? ESP_OK : ESP_FAIL);
     run_platform_imu_boot_capture();
-#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED && \
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && \
+    (CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED) && \
     CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
     platform_imu_snapshot_t idle_imu;
     platform_imu_get_snapshot(&idle_imu);
@@ -3934,11 +4239,15 @@ void app_main(void)
     ESP_ERROR_CHECK(safety_model_init() ? ESP_OK : ESP_FAIL);
     ESP_LOGI(TAG, "SAFETY_MODEL_INIT_OK version=%s mock=true", safety_model_version());
 
-#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && \
+    (CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED || CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED)
     if (s_imu_window_service_failed_closed) {
         ESP_LOGE(TAG, "IMU_WINDOW_COMMAND_SERVICE_NOT_STARTED stop_not_confirmed=true");
         return;
     }
+#endif
+
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
     BaseType_t lte_command_task_created =
         xTaskCreate(lte_http_command_task, "lte_http_command_task", LTE_HTTP_COMMAND_TASK_STACK_SIZE, NULL, 5, NULL);
     ESP_ERROR_CHECK(lte_command_task_created == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
@@ -3958,8 +4267,10 @@ void app_main(void)
     platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "mqtt_smoke_ready");
     start_mqtt();
 #endif
+#if !CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
     xTaskCreate(heartbeat_task, "heartbeat_task", HEARTBEAT_TASK_STACK_SIZE, NULL, 5, NULL);
     xTaskCreate(sensor_task, "sensor_task", SENSOR_TASK_STACK_SIZE, NULL, 5, NULL);
+#endif
 #endif
     xTaskCreate(safety_cli_task, "safety_cli_task", 4096, NULL, 3, NULL);
 }
