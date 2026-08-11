@@ -113,8 +113,10 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   one valid cadence-qualified window and zero invalid windows with
   `training_allowed=false`. Periodic location then reported `LTE_READY`, home
   registration, active PDP, assigned IP, RAT `LTE`, and indoor GNSS
-  `fix=false` / `no_fix`. The captured motion is stationary-like but has no
-  operator-confirmed label. Evidence:
+  `fix=false` / `no_fix`. The operator subsequently confirmed that the board
+  remained stationary throughout the complete window, so its activity label
+  is operator-confirmed `stationary`; pose/orientation remains unrecorded.
+  Evidence:
   `reports/field_validation/FIELD-011-20260811-001/field011_bench_report.md`.
 - Camera smoke capture on the SIM7670G board has produced bounded JPEG evidence.
 - R1 connectivity-node firmware `0.1.0-fw001-hw-r1` has passed USB-Free
@@ -311,10 +313,11 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   flat-on-table stationary label session. It does not prove fixed axis
   mapping, calibration, other activities or poses, training suitability,
   continuous operation, or product accuracy. FIELD-011 separately proves one
-  LTE-transported window, but it has no operator-confirmed activity label. The
-  D5-002 labelled seed is explicitly training-blocked, and its dedicated
-  command task exits after three successes. FIELD-011 likewise uses bounded
-  command captures; neither run proves continuous sampling or uploading.
+  operator-confirmed stationary LTE window, but its pose/orientation remains
+  unrecorded. The D5-002 labelled seed is explicitly training-blocked, and its
+  dedicated command task exits after three successes. FIELD-011 likewise uses
+  bounded command captures; neither run proves continuous sampling or
+  uploading.
 - The historical D2-007 combined image identified and stopped the external
   QMI8658A at startup, but that run did not reach capture because LTE was not
   ready. FIELD-011 now supersedes that negative integration result with one

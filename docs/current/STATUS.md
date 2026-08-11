@@ -14,11 +14,13 @@ or command creation. The retained evidence contains 100 real samples, ten
 chunks, one manifest, one matching LTE `ok` ACK, zero read/mock/deadline
 failures, and one valid cadence-qualified explicit export. The same image also
 reported `LTE_READY`, home registration, active PDP and indoor GNSS
-`fix=false` / `no_fix`. This is a joint bench-integration pass only: the
-window has no operator-confirmed activity label, and outdoor GNSS fix, fixed
-carry orientation, independent power, calibration, walking data, retention,
-model training, and product acceptance remain pending. All training gates
-remain false.
+`fix=false` / `no_fix`. The operator subsequently confirmed that the board
+remained stationary throughout the complete capture window, so its activity
+label is operator-confirmed `stationary`. This is still a joint bench-
+integration pass only: pose/orientation, outdoor GNSS fix, fixed carry
+orientation, independent power, calibration, walking data, retention, model
+training, and product acceptance remain pending. All training gates remain
+false.
 
 For the currently flashed image and bench state, this latest section together
 with `ACTIVE_BUILD.md` and `BOARD_MATRIX.md` supersedes older dated uses of

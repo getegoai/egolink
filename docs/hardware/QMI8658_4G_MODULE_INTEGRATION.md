@@ -18,9 +18,10 @@ verified_by: codex
 > retention, and product acceptance remain pending. FIELD-011 later passed the
 > joint image's QMI identity/idle-stop startup gate and, after a full power
 > cycle cleared an initial SIM-detection failure, uploaded and explicitly
-> reconstructed one real 100 x 50 ms QMI8658 window over LTE. Outdoor GNSS,
-> walking data, independent field power, and a confirmed activity label for
-> that LTE window remain pending.
+> reconstructed one real 100 x 50 ms QMI8658 window over LTE. The operator
+> subsequently confirmed that the board stayed stationary throughout that
+> window. Outdoor GNSS, walking data, independent field power, pose/orientation,
+> mounting and calibration remain pending.
 
 ## Purpose
 
@@ -173,9 +174,9 @@ Evidence:
 
 The engineering corpus therefore contains four uploaded bounded high-cadence
 Wi-Fi windows across D2-009 and D5-002 plus one LTE window from FIELD-011. The
-three D5-002 windows are operator-confirmed stationary; the FIELD-011 window
-is only stationary-like until the operator confirms its actual state. Next
-data work must freeze axes/calibration
+three D5-002 windows and the FIELD-011 window are operator-confirmed stationary;
+only D5-002 records the flat-on-table pose, while FIELD-011 pose/orientation is
+unrecorded. Training remains disabled. Next data work must freeze axes/calibration
 and add independent stationary, walking, and vehicle sessions while training
 remains disabled until consent, retention, quality, data-volume, and split
 gates are explicitly satisfied. Do not turn this bench profile into a

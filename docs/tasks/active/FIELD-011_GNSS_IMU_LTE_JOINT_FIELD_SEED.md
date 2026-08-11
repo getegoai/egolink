@@ -178,6 +178,11 @@ git diff --check
   and no truncation. Periodic location from the same image reported
   `LTE_READY`, home registration, active PDP, assigned IP, RAT `LTE`, and the
   explainable indoor GNSS state `fix=false` / `no_fix`.
+- Operator label confirmation: the operator subsequently confirmed that the
+  board remained stationary throughout the complete `f011-bench-1` window.
+  Its activity label is therefore operator-confirmed `stationary`; pose,
+  orientation, mounting, calibration, and all training gates remain unverified
+  or false.
 
 # Decisions
 
@@ -189,6 +194,9 @@ git diff --check
   The operator then performed the full power cycle directly; the firmware
   reused the single existing command, so no second command, flash, or capture
   request was created.
+- 2026-08-11: the operator confirmed that the board remained stationary for
+  the complete recovered `f011-bench-1` capture window. This confirms only the
+  activity label; pose/orientation and training permission remain unresolved.
 - This is the first joint field seed, not strict FIELD-003 accuracy acceptance
   and not a long-run reliability or battery test. Reference coordinates may be
   added by the existing D2 field kit, but their absence does not erase useful
@@ -234,8 +242,10 @@ git diff --check
   JSONL SHA-256 is
   `33B64819897C862329F35551604DA425A162E516976C25044703B999C57029B8`.
   Periodic location reported LTE ready/registered/PDP active and indoor GNSS
-  no-fix. The window remains activity-label `unknown` because no post-run
-  operator confirmation has been recorded.
+  no-fix. The operator subsequently confirmed that the board remained
+  stationary throughout the complete window, so its activity label is
+  operator-confirmed `stationary`; pose/orientation remains unrecorded and all
+  training gates remain false.
 - Outdoor result: not started; the bench gate now permits a controlled field
   handoff, but does not itself prove USB-free independent power, outdoor GNSS
   fix, fixed carry orientation, or walking capture.
