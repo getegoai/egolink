@@ -16,6 +16,9 @@ verified_by: codex
 > bound them to one operator-confirmed flat-on-table stationary session. Axis
 > mapping, calibration, labels for other activities or poses, mechanical
 > retention, LTE window transport, and product acceptance remain pending.
+> FIELD-011 later passed the joint image's QMI identity/idle-stop startup gate,
+> but its inserted-SIM attempt still stopped before capture because LTE
+> registration and PDP readiness were not established.
 
 ## Purpose
 
@@ -141,6 +144,19 @@ observation one-to-one to the three window/sample hashes; the resulting
 one-session labelled seed remains split `unassigned`,
 `training_allowed=false`, and `training_ready=false`. Evidence:
 `reports/board_validation/20260811-d5002-imu-seed/d5_002_hardware_report.md`.
+
+The 2026-08-11 FIELD-011 joint image then enabled QMI8658, SIM7670G LTE raw
+commands, GNSS, location observation, and 60-second periodic location in one
+existing-code profile. Its one COM3 flash and 20-second startup gate passed
+QMI identity (`WHO_AM_I=0x05`, revision `0x7c`, reset result `0x80`) and
+readback-confirmed idle stop. With a SIM inserted, the AT channel was
+reachable, but the readiness loop ended with registration `not_registered`,
+PDP `unknown`, and `ready=false`. Command `f011-bench-1` remained pending;
+there was no capture start, sample, chunk, manifest, GNSS event, LTE upload, or
+ACK. The read-only API export contained zero messages and zero raw frames.
+This preserves the QMI startup evidence but does not advance LTE-window or
+joint field acceptance. Evidence:
+`reports/field_validation/FIELD-011-20260811-001/field011_bench_report.md`.
 
 The engineering corpus therefore contains four uploaded bounded high-cadence
 Wi-Fi windows across D2-009 and D5-002, including three operator-confirmed

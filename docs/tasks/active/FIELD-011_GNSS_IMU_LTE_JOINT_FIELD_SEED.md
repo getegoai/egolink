@@ -142,7 +142,7 @@ git diff --check
 - Board: Waveshare ESP32-S3-SIM7670G-4G connectivity node, CH343 `COM3` for
   flash/debug only; external fixed ATK-NB018/QMI8658A at `0x6A`, GPIO15/16,
   3.3 V, INT disconnected.
-- Preflight: power off before inserting SIM; LTE main and GNSS antennas
+- Required preflight: power off before inserting SIM; LTE main and GNSS antennas
   attached; SIM data service/APN/PIN state checked; exposed board and sensor
   protected in an insulating container with strain relief; stable independent
   power used for the field runtime.
@@ -153,9 +153,19 @@ git diff --check
 - Evidence: `reports/field_validation/FIELD-011-<date>/` with image hashes,
   bounded startup/bench logs, field time window, command/ACK summaries,
   redacted location export, IMU export, annotations, and remaining risks.
+- Attempt on 2026-08-11: one actual COM3 flash completed with all three write
+  hashes verified and NVS preserved. The 20-second startup capture passed QMI
+  identity and idle-stop gates. The inserted-SIM readiness loop then ended at
+  `ready=false`, registration `not_registered`, and PDP `unknown`; the sole
+  stationary command was never polled or executed. Observation stopped before
+  five minutes, with zero samples, messages, raw frames, GNSS events, or ACKs.
 
 # Decisions
 
+- 2026-08-11: the operator explicitly authorized one COM3 flash, one
+  20-second startup capture, up to five minutes of bench observation, one
+  stationary 100 x 50 ms capture command, and one read-only export. No second
+  flash, reset, modem diagnostic, or capture retry is authorized by that turn.
 - This is the first joint field seed, not strict FIELD-003 accuracy acceptance
   and not a long-run reliability or battery test. Reference coordinates may be
   added by the existing D2 field kit, but their absence does not erase useful
@@ -188,17 +198,25 @@ git diff --check
   `7F00B6C042A89B15B0CAC534F82ED988CAF29278FF5700B0C511EB1B5BB7C820`;
   application 605,776 bytes SHA-256
   `388FFEAA96A15D1CAE185B82592EC406320C556C45656629AB292ACFE2E7D0AB`.
-- Bench result:
-- Outdoor result:
+- Bench result: **PARTIAL / FAIL (LTE registration precondition)**. Flash and
+  QMI startup/idle-stop passed. SIM7670 UART/AT was reachable, but LTE stayed
+  `not_registered` with PDP unknown until
+  `LTE_HTTP_COMMAND_READY_RESULT ready=false`. Test run
+  `F011-BENCH-20260811-001` contains one pending command `f011-bench-1`, zero
+  messages, and zero raw frames. No physical capture occurred.
+- Outdoor result: not started; the board is not ready for handoff.
 - Evidence paths: ignored local directory
   `reports/field_validation/FIELD-011-20260811-001/` contains the three-window
   capture plan, operator runbook, and no-action dry-run result. The ignored
   config/build are `sdkconfig.field011-gnss-imu-lte.local` and
   `build_field011_gnss_imu_lte/` under `firmware/mqtt_heartbeat/`.
 - Remaining risks: SIM/PIN/APN/registration/PDP state is not yet observed;
-  the combined image has not run on hardware; GNSS and IMU are related by a
-  device/time window rather than synchronized sample timestamps; durable
-  offline delivery and field power life remain unverified.
+  the combined image has now passed QMI startup only, not joint runtime;
+  command `f011-bench-1` remains pending and must be resolved before reboot;
+  GNSS and IMU are related by a device/time window rather than synchronized
+  sample timestamps; durable offline delivery and field power life remain
+  unverified. Detailed evidence:
+  `reports/field_validation/FIELD-011-20260811-001/field011_bench_report.md`.
 
 # Builder Prompt
 
