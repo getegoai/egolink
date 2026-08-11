@@ -61,6 +61,7 @@ static portMUX_TYPE s_seq_mux = portMUX_INITIALIZER_UNLOCKED;
 static int s_last_rssi = -127;
 static const char *s_reset_reason = "unknown";
 static uint32_t s_boot_count;
+static bool s_boot_count_persisted;
 static char s_status_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_sensor_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_lte_http_probe_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
@@ -68,8 +69,57 @@ static char s_lte_http_probe_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_lte_command_last_cmd_id[64];
 static char s_lte_command_parse_status[64] = "not_polled";
 static char s_lte_command_diag_payload[1536];
-static bool s_lte_command_last_executed;
 static int s_lte_command_last_command_count;
+static char s_lte_command_last_status[16] = "none";
+static char s_lte_command_last_message[192] = "no command executed";
+#define LTE_EXECUTED_COMMAND_CACHE_SIZE CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS
+typedef struct {
+    bool valid;
+    char cmd_id[64];
+    char status[16];
+    char message[192];
+} lte_executed_command_result_t;
+static lte_executed_command_result_t s_lte_executed_command_cache[LTE_EXECUTED_COMMAND_CACHE_SIZE];
+static size_t s_lte_executed_command_cache_next;
+
+#define IMU_WINDOW_CONTRACT_VERSION "egolink.imu_window.v1"
+#define IMU_WINDOW_SAMPLE_COUNT 100u
+#define IMU_WINDOW_INTERVAL_MS 50u
+#define IMU_WINDOW_INTERVAL_US (IMU_WINDOW_INTERVAL_MS * 1000u)
+#define IMU_WINDOW_WARMUP_SAMPLE_COUNT 10u
+#define IMU_WINDOW_WARMUP_INTERVAL_MS 50u
+#define IMU_WINDOW_RECORD_BYTES 28u
+#define IMU_WINDOW_SAMPLES_PER_CHUNK 10u
+#define IMU_WINDOW_CHUNK_COUNT \
+    ((IMU_WINDOW_SAMPLE_COUNT + IMU_WINDOW_SAMPLES_PER_CHUNK - 1u) / IMU_WINDOW_SAMPLES_PER_CHUNK)
+#define IMU_WINDOW_RAW_FRAME_MAX_BYTES 1200u
+#define IMU_WINDOW_CAPTURE_CMD_ID_MAX 16u
+#define IMU_WINDOW_CHUNK_BINARY_MAX (IMU_WINDOW_RECORD_BYTES * IMU_WINDOW_SAMPLES_PER_CHUNK)
+#define IMU_WINDOW_CHUNK_BASE64_MAX ((((IMU_WINDOW_CHUNK_BINARY_MAX + 2u) / 3u) * 4u) + 1u)
+
+typedef struct {
+    uint32_t captured_samples;
+    uint32_t read_failure_count;
+    uint32_t mock_sample_count;
+    uint32_t deadline_miss_count;
+    uint32_t min_interval_us;
+    uint32_t max_interval_us;
+    uint32_t mean_interval_us;
+    uint32_t warmup_sample_count;
+    int first_read_error;
+    char first_read_status[64];
+    uint64_t capture_start_uptime_us;
+    uint64_t capture_end_uptime_us;
+    bool measurement_stop_ok;
+} imu_window_capture_result_t;
+
+static uint8_t s_imu_window_binary[IMU_WINDOW_SAMPLE_COUNT * IMU_WINDOW_RECORD_BYTES];
+static char s_imu_window_chunk_base64[IMU_WINDOW_CHUNK_BASE64_MAX];
+static char s_imu_window_payload[1100];
+static char s_imu_window_frame[IMU_WINDOW_RAW_FRAME_MAX_BYTES + 1u];
+static char s_imu_window_last_error[96] = "not_started";
+static bool s_imu_window_service_failed_closed;
+static bool imu_window_test_run_id_valid(const char *test_run_id);
 typedef struct {
     uint32_t post_attempt_count;
     uint32_t post_success_count;
@@ -175,6 +225,8 @@ static const char *reset_reason_name(esp_reset_reason_t reason)
 
 static void init_boot_diagnostics(void)
 {
+    s_boot_count = 0u;
+    s_boot_count_persisted = false;
     s_reset_reason = reset_reason_name(esp_reset_reason());
     nvs_handle_t handle;
     esp_err_t err = nvs_open("egolink", NVS_READWRITE, &handle);
@@ -186,12 +238,19 @@ static void init_boot_diagnostics(void)
     err = nvs_get_u32(handle, "boot_count", &boot_count);
     if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
         ESP_LOGW(TAG, "BOOT_DIAGNOSTICS_NVS_READ_FAIL err=%s", esp_err_to_name(err));
+        nvs_close(handle);
+        return;
+    }
+    if (boot_count == UINT32_MAX) {
+        ESP_LOGE(TAG, "BOOT_DIAGNOSTICS_NVS_COUNTER_EXHAUSTED");
+        nvs_close(handle);
+        return;
     }
     boot_count += 1;
     if (nvs_set_u32(handle, "boot_count", boot_count) == ESP_OK && nvs_commit(handle) == ESP_OK) {
         s_boot_count = boot_count;
+        s_boot_count_persisted = true;
     } else {
-        s_boot_count = boot_count;
         ESP_LOGW(TAG, "BOOT_DIAGNOSTICS_NVS_WRITE_FAIL");
     }
     nvs_close(handle);
@@ -1536,6 +1595,13 @@ static bool lte_raw_outbox_post_raw_with_retry(
 typedef struct {
     char cmd_id[64];
     char cmd[48];
+    char test_run_id[33];
+    uint32_t sample_count;
+    uint32_t interval_ms;
+    bool sample_count_present;
+    bool interval_ms_present;
+    bool test_run_id_present;
+    bool parameters_valid;
 } lte_raw_command_t;
 
 static uint32_t egolink_crc32(const uint8_t *data, size_t length)
@@ -1577,6 +1643,511 @@ static bool build_lte_raw_frame(
         crc,
         payload);
     return written > 0 && (size_t)written < buffer_size;
+}
+
+static void imu_window_set_error(const char *reason)
+{
+    snprintf(s_imu_window_last_error, sizeof(s_imu_window_last_error), "%s", reason ? reason : "unknown");
+}
+
+static void imu_window_write_u32_le(uint8_t *output, uint32_t value)
+{
+    output[0] = (uint8_t)(value & 0xFFu);
+    output[1] = (uint8_t)((value >> 8) & 0xFFu);
+    output[2] = (uint8_t)((value >> 16) & 0xFFu);
+    output[3] = (uint8_t)((value >> 24) & 0xFFu);
+}
+
+static bool imu_window_base64_encode(
+    const uint8_t *input,
+    size_t input_len,
+    char *output,
+    size_t output_size)
+{
+    static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    if (input == NULL || output == NULL) {
+        return false;
+    }
+    size_t required = ((input_len + 2u) / 3u) * 4u;
+    if (output_size <= required) {
+        return false;
+    }
+
+    size_t out = 0;
+    for (size_t index = 0; index < input_len; index += 3u) {
+        size_t remaining = input_len - index;
+        uint32_t triple = (uint32_t)input[index] << 16;
+        if (remaining > 1u) {
+            triple |= (uint32_t)input[index + 1u] << 8;
+        }
+        if (remaining > 2u) {
+            triple |= input[index + 2u];
+        }
+        output[out++] = alphabet[(triple >> 18) & 0x3Fu];
+        output[out++] = alphabet[(triple >> 12) & 0x3Fu];
+        output[out++] = remaining > 1u ? alphabet[(triple >> 6) & 0x3Fu] : '=';
+        output[out++] = remaining > 2u ? alphabet[triple & 0x3Fu] : '=';
+    }
+    output[out] = '\0';
+    return true;
+}
+
+static void imu_window_pack_sample(uint32_t index, uint32_t offset_us, const platform_imu_sample_t *sample)
+{
+    uint8_t *record = &s_imu_window_binary[index * IMU_WINDOW_RECORD_BYTES];
+    const int32_t values[6] = {
+        sample->accel_mg_x,
+        sample->accel_mg_y,
+        sample->accel_mg_z,
+        sample->gyro_mdps_x,
+        sample->gyro_mdps_y,
+        sample->gyro_mdps_z,
+    };
+    imu_window_write_u32_le(record, offset_us);
+    for (size_t axis = 0; axis < 6u; ++axis) {
+        imu_window_write_u32_le(&record[4u + (axis * 4u)], (uint32_t)values[axis]);
+    }
+}
+
+static void imu_window_record_read_failure(imu_window_capture_result_t *result, const char *fallback_status)
+{
+    if (result == NULL || result->first_read_status[0] != '\0') {
+        return;
+    }
+    platform_imu_snapshot_t snapshot;
+    platform_imu_get_snapshot(&snapshot);
+    result->first_read_error = snapshot.last_error;
+    snprintf(
+        result->first_read_status,
+        sizeof(result->first_read_status),
+        "%s",
+        snapshot.backend_status != NULL ? snapshot.backend_status : fallback_status);
+}
+
+static bool capture_real_imu_window(imu_window_capture_result_t *result)
+{
+    if (result == NULL) {
+        imu_window_set_error("capture_result_missing");
+        return false;
+    }
+    memset(result, 0, sizeof(*result));
+    memset(s_imu_window_binary, 0, sizeof(s_imu_window_binary));
+    result->min_interval_us = UINT32_MAX;
+
+    platform_imu_snapshot_t snapshot;
+    platform_imu_get_snapshot(&snapshot);
+    if (snapshot.backend != PLATFORM_IMU_BACKEND_QMI8658 || !snapshot.hardware_present || !snapshot.driver_enabled) {
+        imu_window_set_error("real_qmi8658_unavailable");
+        result->min_interval_us = 0;
+        return false;
+    }
+    if (!platform_imu_capture_begin()) {
+        result->measurement_stop_ok = platform_imu_capture_end();
+        if (!result->measurement_stop_ok) {
+            s_imu_window_service_failed_closed = true;
+        }
+        imu_window_set_error("capture_begin_failed");
+        result->min_interval_us = 0;
+        return false;
+    }
+
+    ESP_LOGI(
+        TAG,
+        "IMU_WINDOW_CAPTURE_START samples=%u interval_ms=%u warmup_samples=%u",
+        (unsigned)IMU_WINDOW_SAMPLE_COUNT,
+        (unsigned)IMU_WINDOW_INTERVAL_MS,
+        (unsigned)IMU_WINDOW_WARMUP_SAMPLE_COUNT);
+    bool warmup_ok = true;
+    TickType_t warmup_wake = xTaskGetTickCount();
+    for (uint32_t index = 0; index < IMU_WINDOW_WARMUP_SAMPLE_COUNT; ++index) {
+        vTaskDelayUntil(&warmup_wake, pdMS_TO_TICKS(IMU_WINDOW_WARMUP_INTERVAL_MS));
+        platform_imu_sample_t warmup_sample;
+        if (!platform_imu_sample_real(&warmup_sample) || warmup_sample.sample_is_mock ||
+            strcmp(warmup_sample.source, "qmi8658_i2c") != 0) {
+            result->read_failure_count += 1u;
+            imu_window_record_read_failure(result, "warmup_sample_rejected");
+            imu_window_set_error("real_warmup_sample_failed");
+            warmup_ok = false;
+            break;
+        }
+        result->warmup_sample_count += 1u;
+    }
+
+    TickType_t last_wake = xTaskGetTickCount();
+    if (warmup_ok) {
+        vTaskDelayUntil(&last_wake, 1u);
+    }
+    uint64_t interval_sum_us = 0;
+    uint32_t interval_count = 0;
+    uint32_t previous_offset_us = 0;
+    int64_t start_us = esp_timer_get_time();
+    result->capture_start_uptime_us = (uint64_t)start_us;
+
+    for (uint32_t index = 0; warmup_ok && index < IMU_WINDOW_SAMPLE_COUNT; ++index) {
+        if (index > 0u) {
+            vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(IMU_WINDOW_INTERVAL_MS));
+        }
+        int64_t before_read_us = esp_timer_get_time();
+        int64_t scheduled_us = start_us + ((int64_t)index * IMU_WINDOW_INTERVAL_US);
+        if (before_read_us > scheduled_us + 5000) {
+            result->deadline_miss_count += 1u;
+        }
+
+        platform_imu_sample_t sample;
+        if (!platform_imu_sample_real(&sample)) {
+            result->read_failure_count += 1u;
+            imu_window_record_read_failure(result, "real_sample_read_failed");
+            imu_window_set_error("real_sample_read_failed");
+            break;
+        }
+        if (sample.sample_is_mock || strcmp(sample.source, "qmi8658_i2c") != 0) {
+            result->mock_sample_count += 1u;
+            imu_window_record_read_failure(result, "mock_or_unexpected_source_rejected");
+            imu_window_set_error("mock_or_unexpected_source_rejected");
+            break;
+        }
+
+        int64_t captured_us = esp_timer_get_time();
+        int64_t offset_value = captured_us - start_us;
+        if (offset_value < 0 || offset_value > UINT32_MAX) {
+            imu_window_set_error("sample_offset_out_of_range");
+            break;
+        }
+        uint32_t offset_us = (uint32_t)offset_value;
+        if (index > 0u) {
+            uint32_t interval_us = offset_us - previous_offset_us;
+            if (interval_us < result->min_interval_us) {
+                result->min_interval_us = interval_us;
+            }
+            if (interval_us > result->max_interval_us) {
+                result->max_interval_us = interval_us;
+            }
+            interval_sum_us += interval_us;
+            interval_count += 1u;
+        }
+        previous_offset_us = offset_us;
+        imu_window_pack_sample(index, offset_us, &sample);
+        result->captured_samples += 1u;
+    }
+
+    result->capture_end_uptime_us = (uint64_t)esp_timer_get_time();
+    result->measurement_stop_ok = platform_imu_capture_end();
+    if (!result->measurement_stop_ok) {
+        s_imu_window_service_failed_closed = true;
+    }
+    if (interval_count > 0u) {
+        result->mean_interval_us = (uint32_t)(interval_sum_us / interval_count);
+    } else {
+        result->min_interval_us = 0;
+    }
+    if (!result->measurement_stop_ok) {
+        imu_window_set_error("capture_end_failed");
+    } else if (result->first_read_status[0] != '\0') {
+        snprintf(
+            s_imu_window_last_error,
+            sizeof(s_imu_window_last_error),
+            "sample_failed:%s:%d",
+            result->first_read_status,
+            result->first_read_error);
+    }
+
+    bool ok = result->warmup_sample_count == IMU_WINDOW_WARMUP_SAMPLE_COUNT &&
+              result->captured_samples == IMU_WINDOW_SAMPLE_COUNT && result->read_failure_count == 0u &&
+              result->mock_sample_count == 0u && result->measurement_stop_ok;
+    if (ok) {
+        imu_window_set_error("none");
+    }
+    ESP_LOGI(
+        TAG,
+        "IMU_WINDOW_CAPTURE_DONE ok=%s warmup_samples=%" PRIu32 " samples=%" PRIu32 " read_failures=%" PRIu32
+        " mock=%" PRIu32 " deadline_miss=%" PRIu32 " interval_us_min=%" PRIu32
+        " interval_us_mean=%" PRIu32 " interval_us_max=%" PRIu32 " stopped=%s first_read_status=%s first_read_error=%d",
+        ok ? "true" : "false",
+        result->warmup_sample_count,
+        result->captured_samples,
+        result->read_failure_count,
+        result->mock_sample_count,
+        result->deadline_miss_count,
+        result->min_interval_us,
+        result->mean_interval_us,
+        result->max_interval_us,
+        result->measurement_stop_ok ? "true" : "false",
+        result->first_read_status[0] != '\0' ? result->first_read_status : "none",
+        result->first_read_error);
+    return ok;
+}
+
+static bool build_imu_window_manifest_frame(
+    const char *cmd_id,
+    const char *test_run_id,
+    const char *window_id,
+    const imu_window_capture_result_t *capture,
+    uint32_t samples_crc,
+    uint32_t seq,
+    char *frame,
+    size_t frame_size)
+{
+#if CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+    int sensor_i2c_address = CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_I2C_ADDR;
+#else
+    int sensor_i2c_address = -1;
+#endif
+    int manifest_written = snprintf(
+        s_imu_window_payload,
+        sizeof(s_imu_window_payload),
+        "event_type=imu_window_manifest\n"
+        "priority=normal\n"
+        "source=qmi8658_i2c\n"
+        "source_status=observed\n"
+        "fw_version=%s\n"
+        "test_run_id=%s\n"
+        "seq=%" PRIu32 "\n"
+        "transport_type=lte\n"
+        "boot_count=%" PRIu32 "\n"
+        "contract_version=%s\n"
+        "window_id=%s\n"
+        "capture_cmd_id=%s\n"
+        "sample_count=%" PRIu32 "\n"
+        "requested_interval_us=%u\n"
+        "capture_start_uptime_us=%" PRIu64 "\n"
+        "capture_end_uptime_us=%" PRIu64 "\n"
+        "min_interval_us=%" PRIu32 "\n"
+        "mean_interval_us=%" PRIu32 "\n"
+        "max_interval_us=%" PRIu32 "\n"
+        "deadline_miss_count=%" PRIu32 "\n"
+        "read_failure_count=%" PRIu32 "\n"
+        "mock_sample_count=%" PRIu32 "\n"
+        "warmup_sample_count=%" PRIu32 "\n"
+        "warmup_interval_us=%u\n"
+        "chunk_count=%u\n"
+        "uploaded_chunk_count=%u\n"
+        "samples_crc32=%08" PRIX32 "\n"
+        "sensor_model=QMI8658A\n"
+        "sensor_i2c_address=%d\n"
+        "accel_unit=mg\n"
+        "gyro_unit=mdps\n"
+        "activity_label=unknown\n"
+        "label_source=none\n"
+        "collection_authorization=operator_command\n"
+        "training_allowed=false\n"
+        "mounting_profile_id=unrecorded\n"
+        "axis_mapping_status=unrecorded\n"
+        "calibration_profile_id=unrecorded\n",
+        CONFIG_EGOLINK_FW_VERSION,
+        test_run_id,
+        seq,
+        s_boot_count,
+        IMU_WINDOW_CONTRACT_VERSION,
+        window_id,
+        cmd_id,
+        capture->captured_samples,
+        (unsigned)IMU_WINDOW_INTERVAL_US,
+        capture->capture_start_uptime_us,
+        capture->capture_end_uptime_us,
+        capture->min_interval_us,
+        capture->mean_interval_us,
+        capture->max_interval_us,
+        capture->deadline_miss_count,
+        capture->read_failure_count,
+        capture->mock_sample_count,
+        capture->warmup_sample_count,
+        (unsigned)(IMU_WINDOW_WARMUP_INTERVAL_MS * 1000u),
+        (unsigned)IMU_WINDOW_CHUNK_COUNT,
+        (unsigned)IMU_WINDOW_CHUNK_COUNT,
+        samples_crc,
+        sensor_i2c_address);
+    if (manifest_written <= 0 || (size_t)manifest_written >= sizeof(s_imu_window_payload)) {
+        return false;
+    }
+    char manifest_id[96];
+    snprintf(manifest_id, sizeof(manifest_id), "imu-%s-b%" PRIu32 "-manifest", cmd_id, s_boot_count);
+    return build_lte_raw_frame(frame, frame_size, "event", manifest_id, seq, s_imu_window_payload) &&
+           strlen(frame) <= IMU_WINDOW_RAW_FRAME_MAX_BYTES;
+}
+
+static bool lte_http_publish_imu_window(const char *cmd_id, const char *test_run_id)
+{
+    if (cmd_id == NULL || cmd_id[0] == '\0') {
+        imu_window_set_error("command_id_missing");
+        return false;
+    }
+    if (!s_boot_count_persisted || s_boot_count == 0u) {
+        imu_window_set_error("persistent_boot_count_unavailable");
+        return false;
+    }
+    if (!imu_window_test_run_id_valid(test_run_id)) {
+        imu_window_set_error("test_run_id_invalid");
+        return false;
+    }
+
+    imu_window_capture_result_t capture;
+    if (!capture_real_imu_window(&capture)) {
+        return false;
+    }
+
+    char path[160];
+    char url[256];
+    char window_id[80];
+    snprintf(path, sizeof(path), "/api/v1/devices/%s/raw-ingest", CONFIG_EGOLINK_DEVICE_ID);
+    build_message_hub_url(url, sizeof(url), path);
+    snprintf(window_id, sizeof(window_id), "imuw-%s-b%" PRIu32, cmd_id, s_boot_count);
+    uint32_t samples_crc = egolink_crc32(s_imu_window_binary, sizeof(s_imu_window_binary));
+    if (!build_imu_window_manifest_frame(
+            cmd_id,
+            test_run_id,
+            window_id,
+            &capture,
+            samples_crc,
+            UINT32_MAX,
+            s_imu_window_frame,
+            sizeof(s_imu_window_frame))) {
+        imu_window_set_error("manifest_frame_preflight_over_1200_bytes");
+        return false;
+    }
+
+    uint32_t uploaded_chunks = 0;
+    for (uint32_t chunk_index = 0; chunk_index < IMU_WINDOW_CHUNK_COUNT; ++chunk_index) {
+        uint32_t sample_start = chunk_index * IMU_WINDOW_SAMPLES_PER_CHUNK;
+        uint32_t remaining = IMU_WINDOW_SAMPLE_COUNT - sample_start;
+        uint32_t chunk_samples = remaining < IMU_WINDOW_SAMPLES_PER_CHUNK ? remaining : IMU_WINDOW_SAMPLES_PER_CHUNK;
+        size_t chunk_bytes = (size_t)chunk_samples * IMU_WINDOW_RECORD_BYTES;
+        const uint8_t *chunk_data = &s_imu_window_binary[sample_start * IMU_WINDOW_RECORD_BYTES];
+        if (!imu_window_base64_encode(
+                chunk_data,
+                chunk_bytes,
+                s_imu_window_chunk_base64,
+                sizeof(s_imu_window_chunk_base64))) {
+            imu_window_set_error("chunk_base64_failed");
+            return false;
+        }
+
+        uint32_t seq = next_seq();
+        uint32_t chunk_crc = egolink_crc32(chunk_data, chunk_bytes);
+        int payload_written = snprintf(
+            s_imu_window_payload,
+            sizeof(s_imu_window_payload),
+            "event_type=imu_window_chunk\n"
+            "priority=normal\n"
+            "source=qmi8658_i2c\n"
+            "source_status=observed\n"
+            "fw_version=%s\n"
+            "test_run_id=%s\n"
+            "seq=%" PRIu32 "\n"
+            "transport_type=lte\n"
+            "boot_count=%" PRIu32 "\n"
+            "contract_version=%s\n"
+            "window_id=%s\n"
+            "capture_cmd_id=%s\n"
+            "chunk_index=%" PRIu32 "\n"
+            "chunk_count=%u\n"
+            "sample_start_index=%" PRIu32 "\n"
+            "sample_count=%" PRIu32 "\n"
+            "total_sample_count=%u\n"
+            "requested_interval_us=%u\n"
+            "sample_record_bytes=%u\n"
+            "sample_encoding=offset_us+six_i32le+base64-v1\n"
+            "chunk_crc32=%08" PRIX32 "\n"
+            "samples_b64=%s\n",
+            CONFIG_EGOLINK_FW_VERSION,
+            test_run_id,
+            seq,
+            s_boot_count,
+            IMU_WINDOW_CONTRACT_VERSION,
+            window_id,
+            cmd_id,
+            chunk_index,
+            (unsigned)IMU_WINDOW_CHUNK_COUNT,
+            sample_start,
+            chunk_samples,
+            (unsigned)IMU_WINDOW_SAMPLE_COUNT,
+            (unsigned)IMU_WINDOW_INTERVAL_US,
+            (unsigned)IMU_WINDOW_RECORD_BYTES,
+            chunk_crc,
+            s_imu_window_chunk_base64);
+        if (payload_written <= 0 || (size_t)payload_written >= sizeof(s_imu_window_payload)) {
+            imu_window_set_error("chunk_payload_too_large");
+            return false;
+        }
+
+        char frame_id[96];
+        snprintf(frame_id, sizeof(frame_id), "imu-%s-b%" PRIu32 "-c%02" PRIu32, cmd_id, s_boot_count, chunk_index);
+        if (!build_lte_raw_frame(
+                s_imu_window_frame,
+                sizeof(s_imu_window_frame),
+                "event",
+                frame_id,
+                seq,
+                s_imu_window_payload) ||
+            strlen(s_imu_window_frame) > IMU_WINDOW_RAW_FRAME_MAX_BYTES) {
+            imu_window_set_error("chunk_frame_over_1200_bytes");
+            return false;
+        }
+
+        sim7670_lte_http_probe_result_t post_result;
+        bool posted = lte_raw_outbox_post_raw_with_retry(
+            url,
+            CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN,
+            s_imu_window_frame,
+            "text/x-egolink-frame; profile=raw-frame.p0.v1",
+            "imu_window_chunk",
+            cmd_id,
+            seq,
+            &post_result);
+        ESP_LOGI(
+            TAG,
+            "IMU_WINDOW_CHUNK_POST_DONE window_id=%s chunk=%" PRIu32 "/%u bytes=%u ok=%s reason=%s status=%d",
+            window_id,
+            chunk_index,
+            (unsigned)IMU_WINDOW_CHUNK_COUNT,
+            (unsigned)strlen(s_imu_window_frame),
+            posted ? "true" : "false",
+            post_result.reason_code,
+            post_result.status_code);
+        if (!posted) {
+            snprintf(
+                s_imu_window_last_error,
+                sizeof(s_imu_window_last_error),
+                "chunk_%" PRIu32 "_upload_failed",
+                chunk_index);
+            return false;
+        }
+        uploaded_chunks += 1u;
+    }
+
+    uint32_t seq = next_seq();
+    if (!build_imu_window_manifest_frame(
+            cmd_id,
+            test_run_id,
+            window_id,
+            &capture,
+            samples_crc,
+            seq,
+            s_imu_window_frame,
+            sizeof(s_imu_window_frame))) {
+        imu_window_set_error("manifest_frame_over_1200_bytes");
+        return false;
+    }
+
+    sim7670_lte_http_probe_result_t manifest_result;
+    bool manifest_posted = lte_raw_outbox_post_raw_with_retry(
+        url,
+        CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN,
+        s_imu_window_frame,
+        "text/x-egolink-frame; profile=raw-frame.p0.v1",
+        "imu_window_manifest",
+        cmd_id,
+        seq,
+        &manifest_result);
+    ESP_LOGI(
+        TAG,
+        "IMU_WINDOW_MANIFEST_POST_DONE window_id=%s bytes=%u ok=%s reason=%s status=%d",
+        window_id,
+        (unsigned)strlen(s_imu_window_frame),
+        manifest_posted ? "true" : "false",
+        manifest_result.reason_code,
+        manifest_result.status_code);
+    imu_window_set_error(manifest_posted ? "none" : "manifest_upload_failed");
+    return manifest_posted;
 }
 
 #if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
@@ -2054,6 +2625,7 @@ static void build_lte_command_ack_payload(
     size_t buffer_size,
     uint32_t seq,
     const char *cmd_id,
+    const char *test_run_id,
     const char *status,
     const char *message,
     const sim7670_lte_http_probe_result_t *poll_result,
@@ -2124,7 +2696,7 @@ static void build_lte_command_ack_payload(
         status,
         message,
         CONFIG_EGOLINK_FW_VERSION,
-        CONFIG_EGOLINK_TEST_RUN_ID,
+        test_run_id,
         seq,
         sim7670_lte_http_backend_name(),
         poll_result->reason_code,
@@ -2157,6 +2729,7 @@ static void build_lte_command_ack_payload(
 
 static bool lte_http_ack_command(
     const char *cmd_id,
+    const char *test_run_id,
     const char *status,
     const char *message,
     const sim7670_lte_http_probe_result_t *poll_result,
@@ -2181,6 +2754,7 @@ static bool lte_http_ack_command(
         sizeof(payload),
         seq,
         cmd_id,
+        test_run_id,
         status,
         message,
         poll_result,
@@ -2401,7 +2975,7 @@ static bool copy_lte_raw_token_value(const char *text, const char *key, char *bu
             }
             size_t length = (size_t)(value_end - value_start);
             if (length >= buffer_size) {
-                length = buffer_size - 1;
+                return false;
             }
             memcpy(buffer, value_start, length);
             buffer[length] = '\0';
@@ -2426,7 +3000,7 @@ static bool copy_lte_raw_kv_value(const char *payload, const char *key, char *bu
             const char *value_start = cursor + key_len + 1;
             size_t value_len = line_len - key_len - 1;
             if (value_len >= buffer_size) {
-                value_len = buffer_size - 1;
+                return false;
             }
             memcpy(buffer, value_start, value_len);
             buffer[value_len] = '\0';
@@ -2457,6 +3031,99 @@ static bool parse_lte_raw_u32(const char *text, uint32_t *value, int base)
     return true;
 }
 
+static bool imu_window_capture_cmd_id_valid(const char *cmd_id)
+{
+    if (cmd_id == NULL) {
+        return false;
+    }
+    size_t length = strlen(cmd_id);
+    if (length == 0u || length > IMU_WINDOW_CAPTURE_CMD_ID_MAX) {
+        return false;
+    }
+    for (size_t index = 0; index < length; ++index) {
+        char value = cmd_id[index];
+        bool allowed = (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z') ||
+                       (value >= '0' && value <= '9') || value == '.' || value == '_' || value == ':' ||
+                       value == '-';
+        if (!allowed) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool imu_window_test_run_id_valid(const char *test_run_id)
+{
+    if (test_run_id == NULL) {
+        return false;
+    }
+    size_t length = strlen(test_run_id);
+    if (length == 0u || length > 32u) {
+        return false;
+    }
+    for (size_t index = 0; index < length; ++index) {
+        char value = test_run_id[index];
+        bool allowed = (value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z') ||
+                       (value >= '0' && value <= '9') || value == '.' || value == '_' || value == ':' ||
+                       value == '-';
+        if (!allowed) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool capture_command_payload_shape_valid(const char *payload)
+{
+    const char *allowed[] = {"cmd", "cmd_id", "cmd-id", "sample_count", "sample-count",
+                             "interval_ms", "interval-ms", "test_run_id", "test-run-id"};
+    int cmd_count = 0;
+    int cmd_id_count = 0;
+    int sample_count = 0;
+    int interval_count = 0;
+    int test_run_count = 0;
+    const char *cursor = payload;
+    while (cursor != NULL && *cursor != '\0') {
+        const char *line_end = strpbrk(cursor, "\r\n");
+        size_t line_len = line_end != NULL ? (size_t)(line_end - cursor) : strlen(cursor);
+        const char *separator = memchr(cursor, '=', line_len);
+        if (line_len == 0u || separator == NULL) {
+            return false;
+        }
+        size_t key_len = (size_t)(separator - cursor);
+        int matched = -1;
+        for (size_t index = 0; index < sizeof(allowed) / sizeof(allowed[0]); ++index) {
+            if (strlen(allowed[index]) == key_len && strncmp(cursor, allowed[index], key_len) == 0) {
+                matched = (int)index;
+                break;
+            }
+        }
+        if (matched < 0) {
+            return false;
+        }
+        if (matched == 0) {
+            cmd_count += 1;
+        } else if (matched == 1 || matched == 2) {
+            cmd_id_count += 1;
+        } else if (matched == 3 || matched == 4) {
+            sample_count += 1;
+        } else if (matched == 5 || matched == 6) {
+            interval_count += 1;
+        } else {
+            test_run_count += 1;
+        }
+        if (line_end == NULL) {
+            break;
+        }
+        cursor = line_end;
+        while (*cursor == '\r' || *cursor == '\n') {
+            cursor++;
+        }
+    }
+    return cmd_count == 1 && cmd_id_count == 1 && sample_count == 1 && interval_count == 1 &&
+           test_run_count == 1;
+}
+
 static bool parse_lte_raw_command_frame(char *frame, lte_raw_command_t *command)
 {
     if (frame == NULL || command == NULL) {
@@ -2464,6 +3131,9 @@ static bool parse_lte_raw_command_frame(char *frame, lte_raw_command_t *command)
         return false;
     }
     memset(command, 0, sizeof(*command));
+    command->sample_count = IMU_WINDOW_SAMPLE_COUNT;
+    command->interval_ms = IMU_WINDOW_INTERVAL_MS;
+    command->parameters_valid = true;
     s_lte_command_last_command_count = 0;
     if (strncmp(frame, "EGLK/1", 6) != 0) {
         set_lte_command_parse_status("raw_unsupported_magic");
@@ -2534,9 +3204,55 @@ static bool parse_lte_raw_command_frame(char *frame, lte_raw_command_t *command)
         return false;
     }
 
+    char sample_count_text[16] = "";
+    char interval_ms_text[16] = "";
+    command->sample_count_present =
+        copy_lte_raw_kv_value(payload, "sample_count", sample_count_text, sizeof(sample_count_text)) ||
+        copy_lte_raw_kv_value(payload, "sample-count", sample_count_text, sizeof(sample_count_text));
+    if (command->sample_count_present && !parse_lte_raw_u32(sample_count_text, &command->sample_count, 10)) {
+        command->parameters_valid = false;
+    }
+    command->interval_ms_present =
+        copy_lte_raw_kv_value(payload, "interval_ms", interval_ms_text, sizeof(interval_ms_text)) ||
+        copy_lte_raw_kv_value(payload, "interval-ms", interval_ms_text, sizeof(interval_ms_text));
+    if (command->interval_ms_present && !parse_lte_raw_u32(interval_ms_text, &command->interval_ms, 10)) {
+        command->parameters_valid = false;
+    }
+    command->test_run_id_present =
+        copy_lte_raw_kv_value(payload, "test_run_id", command->test_run_id, sizeof(command->test_run_id)) ||
+        copy_lte_raw_kv_value(payload, "test-run-id", command->test_run_id, sizeof(command->test_run_id));
+    if (strcmp(command->cmd, "capture_imu_window") == 0 &&
+        (!command->sample_count_present || !command->interval_ms_present || !command->test_run_id_present ||
+         !capture_command_payload_shape_valid(payload) || !imu_window_test_run_id_valid(command->test_run_id))) {
+        command->parameters_valid = false;
+    }
+
     s_lte_command_last_command_count = 1;
     set_lte_command_parse_status("raw_command_selected");
     return true;
+}
+
+static const lte_executed_command_result_t *find_executed_command_result(const char *cmd_id)
+{
+    for (size_t index = 0; index < LTE_EXECUTED_COMMAND_CACHE_SIZE; ++index) {
+        if (s_lte_executed_command_cache[index].valid &&
+            strcmp(s_lte_executed_command_cache[index].cmd_id, cmd_id) == 0) {
+            return &s_lte_executed_command_cache[index];
+        }
+    }
+    return NULL;
+}
+
+static void remember_executed_command_result(const char *cmd_id, const char *status, const char *message)
+{
+    lte_executed_command_result_t *entry = &s_lte_executed_command_cache[s_lte_executed_command_cache_next];
+    memset(entry, 0, sizeof(*entry));
+    snprintf(entry->cmd_id, sizeof(entry->cmd_id), "%s", cmd_id);
+    snprintf(entry->status, sizeof(entry->status), "%s", status);
+    snprintf(entry->message, sizeof(entry->message), "%s", message);
+    entry->valid = true;
+    s_lte_executed_command_cache_next =
+        (s_lte_executed_command_cache_next + 1u) % LTE_EXECUTED_COMMAND_CACHE_SIZE;
 }
 
 static bool lte_http_execute_and_ack_raw_command(
@@ -2547,7 +3263,8 @@ static bool lte_http_execute_and_ack_raw_command(
         set_lte_command_parse_status("raw_missing_cmd_id");
         return false;
     }
-    bool duplicate = s_lte_command_last_executed && strcmp(s_lte_command_last_cmd_id, command->cmd_id) == 0;
+    const lte_executed_command_result_t *cached_result = find_executed_command_result(command->cmd_id);
+    bool duplicate = cached_result != NULL;
     const char *status = "ok";
     const char *message = "lte raw command loop acknowledged set_report_interval";
 
@@ -2560,7 +3277,6 @@ static bool lte_http_execute_and_ack_raw_command(
 
     if (!duplicate) {
         snprintf(s_lte_command_last_cmd_id, sizeof(s_lte_command_last_cmd_id), "%s", command->cmd_id);
-        s_lte_command_last_executed = true;
         if (strcmp(command->cmd, "set_report_interval") == 0) {
             status = "ok";
             message = "lte raw command loop acknowledged set_report_interval";
@@ -2578,15 +3294,58 @@ static bool lte_http_execute_and_ack_raw_command(
             message = location_ok ? message_hub_location_ack_message() : "lte raw location_report upload failed";
 #endif
 #endif
+        } else if (strcmp(command->cmd, "capture_imu_window") == 0) {
+            if (!imu_window_capture_cmd_id_valid(command->cmd_id)) {
+                status = "rejected";
+                message = "capture_imu_window cmd_id must be 1-16 safe characters";
+            } else if (!command->parameters_valid || command->sample_count != IMU_WINDOW_SAMPLE_COUNT ||
+                command->interval_ms != IMU_WINDOW_INTERVAL_MS) {
+                status = "rejected";
+                message = "capture_imu_window requires exact test_run_id, sample_count=100, and interval_ms=50";
+            } else {
+                bool window_ok = lte_http_publish_imu_window(command->cmd_id, command->test_run_id);
+                status = window_ok ? "ok" : "error";
+                if (window_ok) {
+                    message = "bounded real IMU window chunks and manifest uploaded";
+                } else {
+                    snprintf(
+                        s_lte_command_last_message,
+                        sizeof(s_lte_command_last_message),
+                        "bounded IMU window failed: %s",
+                        s_imu_window_last_error);
+                    message = s_lte_command_last_message;
+                }
+            }
         } else {
             status = "rejected";
-            message = "lte raw command loop only accepts set_report_interval or request_location";
+            message = "lte raw command loop accepts set_report_interval, request_location, or capture_imu_window";
         }
+        snprintf(s_lte_command_last_status, sizeof(s_lte_command_last_status), "%s", status);
+        if (message != s_lte_command_last_message) {
+            snprintf(s_lte_command_last_message, sizeof(s_lte_command_last_message), "%s", message);
+        }
+        remember_executed_command_result(command->cmd_id, s_lte_command_last_status, s_lte_command_last_message);
     } else {
-        message = "lte raw command duplicate ignored after local execution";
+        status = cached_result->status;
+        message = cached_result->message;
+        snprintf(s_lte_command_last_cmd_id, sizeof(s_lte_command_last_cmd_id), "%s", command->cmd_id);
+        snprintf(s_lte_command_last_status, sizeof(s_lte_command_last_status), "%s", status);
+        snprintf(s_lte_command_last_message, sizeof(s_lte_command_last_message), "%s", message);
+        ESP_LOGI(
+            TAG,
+            "LTE_HTTP_COMMAND_DUPLICATE_RESULT_REPLAY cmd_id=%s status=%s",
+            command->cmd_id,
+            status);
     }
 
-    return lte_http_ack_command(command->cmd_id, status, message, poll_result, duplicate);
+    if (s_imu_window_service_failed_closed) {
+        ESP_LOGE(TAG, "IMU_WINDOW_ACK_SUPPRESSED stop_not_confirmed=true");
+        return false;
+    }
+
+    const char *ack_test_run_id =
+        command->test_run_id_present ? command->test_run_id : CONFIG_EGOLINK_TEST_RUN_ID;
+    return lte_http_ack_command(command->cmd_id, ack_test_run_id, status, message, poll_result, duplicate);
 }
 
 static bool lte_http_poll_commands_once(sim7670_lte_http_probe_result_t *poll_result)
@@ -2657,6 +3416,10 @@ static void lte_http_command_task(void *arg)
             attempt,
             round_acked ? "true" : "false",
             acked ? "true" : "false");
+        if (s_imu_window_service_failed_closed) {
+            ESP_LOGE(TAG, "IMU_WINDOW_SERVICE_FAIL_CLOSED stop_not_confirmed=true");
+            break;
+        }
 
         int64_t now_ms = uptime_ms();
         if (now_ms >= next_periodic_location_ms) {
@@ -2674,6 +3437,10 @@ static void lte_http_command_task(void *arg)
         acked = lte_http_poll_commands_once(&poll_result);
         (void)lte_http_post_command_diag(acked ? "command_ack_observed" : "poll_no_ack", &poll_result, true, acked);
         ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_ROUND_DONE attempt=%d acked=%s", attempt, acked ? "true" : "false");
+        if (s_imu_window_service_failed_closed) {
+            ESP_LOGE(TAG, "IMU_WINDOW_SERVICE_FAIL_CLOSED stop_not_confirmed=true");
+            break;
+        }
         if (acked) {
             break;
         }
@@ -3150,11 +3917,28 @@ void app_main(void)
     ESP_ERROR_CHECK(platform_power_init() ? ESP_OK : ESP_FAIL);
     ESP_ERROR_CHECK(platform_imu_init() ? ESP_OK : ESP_FAIL);
     run_platform_imu_boot_capture();
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED && \
+    CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+    platform_imu_snapshot_t idle_imu;
+    platform_imu_get_snapshot(&idle_imu);
+    if (idle_imu.backend != PLATFORM_IMU_BACKEND_QMI8658 || !idle_imu.hardware_present || !idle_imu.driver_enabled) {
+        ESP_LOGW(TAG, "IMU_WINDOW_IDLE_REAL_IMU_UNAVAILABLE command_will_reject_capture=true");
+    } else if (platform_imu_capture_end()) {
+        ESP_LOGI(TAG, "IMU_WINDOW_IDLE_MEASUREMENT_STOPPED");
+    } else {
+        s_imu_window_service_failed_closed = true;
+        ESP_LOGE(TAG, "IMU_WINDOW_IDLE_MEASUREMENT_STOP_FAILED service_failed_closed=true");
+    }
+#endif
     platform_power_enter_state(PLATFORM_POWER_STATE_BOOT, "app_main");
     ESP_ERROR_CHECK(safety_model_init() ? ESP_OK : ESP_FAIL);
     ESP_LOGI(TAG, "SAFETY_MODEL_INIT_OK version=%s mock=true", safety_model_version());
 
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED && CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    if (s_imu_window_service_failed_closed) {
+        ESP_LOGE(TAG, "IMU_WINDOW_COMMAND_SERVICE_NOT_STARTED stop_not_confirmed=true");
+        return;
+    }
     BaseType_t lte_command_task_created =
         xTaskCreate(lte_http_command_task, "lte_http_command_task", LTE_HTTP_COMMAND_TASK_STACK_SIZE, NULL, 5, NULL);
     ESP_ERROR_CHECK(lte_command_task_created == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);

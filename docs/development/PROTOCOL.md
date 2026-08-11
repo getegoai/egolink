@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-29
+last_verified: 2026-08-10
 verified_by: codex
 ---
 
@@ -15,6 +15,8 @@ path. Machine-readable schemas live in `../../shared/contracts/`:
 - `message_hub_ack.schema.json`
 - `message_hub_error.schema.json`
 - `message_hub_raw_frame_record.schema.json`
+- `imu_window_chunk.schema.json`
+- `imu_window_manifest.schema.json`
 
 Model-facing schemas remain in the same directory and are separate from the
 message-hub transport contract.
@@ -97,6 +99,110 @@ Raw-frame ingest may derive existing Message Hub objects:
 Failed parse is not data loss. A frame with `parse_result.status=partial`,
 `checksum_failed`, `unsupported`, or `malformed` must still be queryable in
 test-run evidence by frame ID, timestamp, device ID, and byte/hash metadata.
+
+### PROTO-003 Bounded IMU Window Profile
+
+The first connectivity-node motion window reuses `EGLK/1` and
+`text/x-egolink-kv`; it does not introduce a new transport version. The
+operator-triggered command is:
+
+```text
+cmd=capture_imu_window
+cmd_id=cmd-000123
+sample_count=100
+interval_ms=50
+test_run_id=D2-007-HW-20260810-001
+```
+
+Version 1 accepts exactly those five keys and that fixed `100 x 50 ms` shape;
+unknown, duplicate, missing, or unsupported command parameters are rejected.
+The capture `cmd_id` is 1-16 safe ASCII characters and `test_run_id` is 1-32;
+the latter is copied from the command into every part and its ACK. Firmware
+must reject a
+mock or unavailable sensor, capture into bounded RAM using an absolute
+schedule, discard ten real 50 ms warm-up samples, stop QMI8658 measurement
+with CTRL7 readback confirmation, and only then begin LTE traffic. An
+unconfirmed stop fails the command service closed without an LTE upload or
+ACK. Sampling and network upload must never run concurrently in this profile.
+
+The window is transported as ten deterministic `imu_window_chunk` events of
+ten samples each, followed by one `imu_window_manifest` event. Every complete
+raw frame must be at most 1200 bytes; the manifest is size-preflighted before
+the first chunk is sent. Chunk sample data uses strict Base64 over 28-byte
+little-endian records:
+
+```text
+uint32 offset_us
+int32  accel_mg_x
+int32  accel_mg_y
+int32  accel_mg_z
+int32  gyro_mdps_x
+int32  gyro_mdps_y
+int32  gyro_mdps_z
+```
+
+Required common lineage includes `priority=normal`, `transport_type=lte`, a
+persisted nonzero `boot_count`, `contract_version=egolink.imu_window.v1`,
+`window_id`, `capture_cmd_id`, and a payload `seq` exactly equal to the EGLK
+header `seq`. Firmware version is limited to 32 safe characters. IDs are:
+
+```text
+window_id = imuw-{capture_cmd_id}-b{boot_count}
+chunk frame id = imu-{capture_cmd_id}-b{boot_count}-c{00..09}
+manifest frame id = imu-{capture_cmd_id}-b{boot_count}-manifest
+```
+
+Chunk-specific lineage includes `chunk_index`, `chunk_count`,
+`sample_start_index`, counts, requested interval, encoding, decoded-byte
+CRC32, firmware version, test-run ID, and real QMI source fields. The manifest
+binds the complete-sample CRC32, device monotonic capture bounds, observed
+interval statistics, deadline/read/mock counters, warm-up count/period, sensor
+identity, unit, mounting/axis/calibration status, and privacy/label gates.
+
+The command must exist for the same device and test run with the exact fixed
+parameters. Its first accepted part changes command state from `pending` to
+`in_progress`, binds that command to one boot-scoped window, and prevents a
+reboot from polling and physically re-running an already-started capture. New
+parts are rejected after the command closes. A bounded current-boot result
+cache covers interleaved `A -> B -> A` polls up to the configured poll limit.
+
+Normal Dashboard, telemetry-history, raw-frame-list, and field-export views
+must not expose `samples_b64` or decoded arrays. They may expose validated
+metadata and hashes. Sample reconstruction is an explicit bounded local
+database export. Raw upload attempts remain stored before semantic validation;
+malformed or conflicting attempts are evidence but are not valid windows.
+Recognizable invalid IMU parts return non-2xx after retention, so firmware
+cannot count them as accepted. Invalid raw ACKs likewise return non-2xx and do
+not close the command.
+
+For this first engineering profile the following values are mandatory:
+
+```text
+source=qmi8658_i2c
+source_status=observed
+sensor_model=QMI8658A
+sensor_i2c_address=106
+activity_label=unknown
+label_source=none
+collection_authorization=operator_command
+training_allowed=false
+mounting_profile_id=unrecorded
+axis_mapping_status=unrecorded
+calibration_profile_id=unrecorded
+```
+
+An ACK is `ok` only after all chunks and the manifest have been accepted. A
+capture, chunk, or manifest failure must ACK `error`; an unsupported shape must
+ACK `rejected`. A duplicate command may replay its previously stored result but
+must not repeat the physical capture within the same boot.
+
+The explicit JSONL output is an engineering-evidence artifact, not a stable
+training-input contract. Export `ok` means integrity-complete and authorized;
+it does not mean cadence- or training-qualified. The current engineering
+cadence label is `qualified` only when min/max intervals are within 40-60 ms,
+mean is within 45-55 ms, and deadline misses are at most five. This label never
+overrides `training_allowed=false`, consent review, mounting/calibration,
+retention, or dataset-split gates.
 
 ## Common Envelope
 
@@ -748,6 +854,7 @@ Known P0 Message Hub commands:
 |---|---|
 | `set_report_interval` | Adjust or acknowledge the requested reporting interval without changing safety-critical behavior. |
 | `request_location` | Upload one `location_report` event and then ACK the command. A scaffold implementation must report `fix=false`, `source_status=unverified`, and a clear `gnss_state` such as `driver_not_integrated`; a real GNSS implementation must report `fix=false` while searching and `fix=true` with coordinates when fixed. |
+| `capture_imu_window` | With exact `cmd_id`, `test_run_id`, `sample_count=100`, and `interval_ms=50`, capture one bounded real-QMI window after ten warm-up reads, readback-confirm stop, upload ten chunks and one manifest, then ACK under the same test run. Mock substitution and automatic training permission are forbidden. |
 
 ### ACK
 

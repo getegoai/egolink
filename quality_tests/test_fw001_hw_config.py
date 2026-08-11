@@ -222,6 +222,8 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
                     "-EnableQmi8658Imu",
                     "-Qmi8658I2CAddress",
                     "106",
+                    "-Qmi8658I2CTimeoutMs",
+                    "20",
                     "-Qmi8658BootSampleCount",
                     "100",
                     "-Json",
@@ -238,6 +240,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertTrue(payload["max17048_power_enabled"])
         self.assertTrue(payload["qmi8658_imu_enabled"])
         self.assertEqual(payload["qmi8658_i2c_address"], 106)
+        self.assertEqual(payload["qmi8658_i2c_timeout_ms"], 20)
         self.assertEqual(payload["qmi8658_boot_sample_count"], 100)
         self.assertFalse(payload["qmi8658_axp2101_rails_enabled"])
         self.assertIn("# CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_MOCK is not set", config)
@@ -245,6 +248,7 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SDA_GPIO=15", config)
         self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SCL_GPIO=16", config)
         self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_I2C_ADDR=106", config)
+        self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_I2C_TIMEOUT_MS=20", config)
         self.assertIn("# CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS is not set", config)
         self.assertIn("CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT=100", config)
         self.assertNotIn("unit-secret-token", result.stdout)

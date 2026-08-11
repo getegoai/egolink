@@ -62,6 +62,73 @@ D1_COORDINATE_MESSAGE_SCAN_LIMIT = 5000
 FIELD_EXPORT_DEFAULT_MAX_RECORDS = 5000
 FIELD_EXPORT_HARD_MAX_RECORDS = 10000
 FIELD_EXPORT_MAX_DURATION_S = 48 * 60 * 60
+IMU_WINDOW_CONTRACT_VERSION = "egolink.imu_window.v1"
+IMU_WINDOW_SAMPLE_COUNT = 100
+IMU_WINDOW_INTERVAL_US = 50_000
+IMU_WINDOW_WARMUP_SAMPLE_COUNT = 10
+IMU_WINDOW_WARMUP_INTERVAL_US = 50_000
+IMU_WINDOW_RECORD_BYTES = 28
+IMU_WINDOW_SAMPLES_PER_CHUNK = 10
+IMU_WINDOW_CHUNK_COUNT = 10
+IMU_WINDOW_SAMPLE_ENCODING = "offset_us+six_i32le+base64-v1"
+IMU_WINDOW_RAW_FRAME_MAX_BYTES = 1200
+IMU_WINDOW_CAPTURE_CMD_ID_MAX = 16
+IMU_WINDOW_FW_VERSION_MAX = 32
+IMU_WINDOW_TEST_RUN_ID_MAX = 32
+IMU_WINDOW_COMMON_KEYS = {
+    "event-type",
+    "priority",
+    "source",
+    "source-status",
+    "fw-version",
+    "test-run-id",
+    "seq",
+    "transport-type",
+    "boot-count",
+    "contract-version",
+    "window-id",
+    "capture-cmd-id",
+}
+IMU_WINDOW_CHUNK_KEYS = IMU_WINDOW_COMMON_KEYS | {
+    "chunk-index",
+    "chunk-count",
+    "sample-start-index",
+    "sample-count",
+    "total-sample-count",
+    "requested-interval-us",
+    "sample-record-bytes",
+    "sample-encoding",
+    "chunk-crc32",
+    "samples-b64",
+}
+IMU_WINDOW_MANIFEST_KEYS = IMU_WINDOW_COMMON_KEYS | {
+    "sample-count",
+    "requested-interval-us",
+    "capture-start-uptime-us",
+    "capture-end-uptime-us",
+    "min-interval-us",
+    "mean-interval-us",
+    "max-interval-us",
+    "deadline-miss-count",
+    "read-failure-count",
+    "mock-sample-count",
+    "warmup-sample-count",
+    "warmup-interval-us",
+    "chunk-count",
+    "uploaded-chunk-count",
+    "samples-crc32",
+    "sensor-model",
+    "sensor-i2c-address",
+    "accel-unit",
+    "gyro-unit",
+    "activity-label",
+    "label-source",
+    "collection-authorization",
+    "training-allowed",
+    "mounting-profile-id",
+    "axis-mapping-status",
+    "calibration-profile-id",
+}
 
 
 def utc_now() -> str:
@@ -73,6 +140,13 @@ class MessageHubError(Exception):
         super().__init__(message)
         self.code = code
         self.status = status
+
+
+class RawPayloadValidationError(ValueError):
+    def __init__(self, code: str, message: str, *, profile: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.profile = profile
 
 
 class MessageHubStore:
@@ -313,6 +387,22 @@ class MessageHubStore:
     ) -> None:
         cmd_id = require_text(message, "cmd_id")
         status = require_text(message, "status")
+        command_row_value = db.execute(
+            "SELECT payload_json FROM commands WHERE device_id = ? AND cmd_id = ?",
+            (device_id, cmd_id),
+        ).fetchone()
+        if command_row_value is not None:
+            try:
+                command = json.loads(str(command_row_value["payload_json"]))
+            except (TypeError, ValueError, json.JSONDecodeError) as error:
+                raise MessageHubError("command_record_invalid", "command record is invalid") from error
+            if command.get("cmd") == "capture_imu_window" and message.get("test_run_id") != command.get(
+                "test_run_id"
+            ):
+                raise MessageHubError(
+                    "imu_ack_test_run_mismatch",
+                    "capture_imu_window ACK test_run_id does not match its command",
+                )
         db.execute(
             """
             UPDATE commands
@@ -403,6 +493,32 @@ class MessageHubStore:
         with self.connection() as db:
             next_id = int(db.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM commands").fetchone()["next_id"])
         cmd_id = str(payload.get("cmd_id") or f"cmd-{next_id:06d}")
+        if cmd == "capture_imu_window":
+            test_run_id = str(payload.get("test_run_id") or "")
+            parameters = payload.get("payload")
+            if not re.fullmatch(
+                rf"[A-Za-z0-9._:-]{{1,{IMU_WINDOW_CAPTURE_CMD_ID_MAX}}}", cmd_id
+            ):
+                raise MessageHubError(
+                    "invalid_imu_capture_cmd_id",
+                    "capture_imu_window cmd_id must contain 1-16 safe characters",
+                )
+            if not re.fullmatch(
+                rf"[A-Za-z0-9._:-]{{1,{IMU_WINDOW_TEST_RUN_ID_MAX}}}", test_run_id
+            ):
+                raise MessageHubError(
+                    "invalid_imu_capture_test_run",
+                    "capture_imu_window requires a bounded test_run_id",
+                )
+            if not isinstance(parameters, dict) or set(parameters) != {"sample_count", "interval_ms"} or type(
+                parameters.get("sample_count")
+            ) is not int or type(parameters.get("interval_ms")) is not int or parameters.get(
+                "sample_count"
+            ) != IMU_WINDOW_SAMPLE_COUNT or parameters.get("interval_ms") != IMU_WINDOW_INTERVAL_US // 1000:
+                raise MessageHubError(
+                    "invalid_imu_capture_parameters",
+                    "capture_imu_window requires sample_count=100 and interval_ms=50",
+                )
         command = dict(payload)
         command.update(
             {
@@ -411,7 +527,7 @@ class MessageHubStore:
                 "device_id": device_id,
                 "cmd_id": cmd_id,
                 "cmd": cmd,
-                "created_at": str(payload.get("created_at") or now),
+                "created_at": now if cmd == "capture_imu_window" else str(payload.get("created_at") or now),
             }
         )
         command_json = dumps(command)
@@ -611,6 +727,28 @@ class MessageHubStore:
             expected_cmd_id=expected_cmd_id,
         )
         derived_message = as_dict(record["parse_result"].get("derived_message"))
+        if (
+            record["parse_result"].get("status") == "ok"
+            and derived_message.get("event_type") in {"imu_window_chunk", "imu_window_manifest"}
+        ):
+            authorization_error = self._imu_window_authorization_error(device_id, derived_message)
+            if authorization_error is not None:
+                record["parse_result"].update(
+                    {
+                        "status": "malformed",
+                        "error_code": authorization_error,
+                        "reason": "IMU window is not bound to an exact authorized capture command",
+                        "derived_message_type": "unknown",
+                        "payload_validation": {
+                            "profile": IMU_WINDOW_CONTRACT_VERSION,
+                            "status": "invalid",
+                            "error_code": authorization_error,
+                            "reason": "IMU window is not bound to an exact authorized capture command",
+                        },
+                    }
+                )
+                record["parse_result"].pop("derived_message", None)
+                derived_message = {}
         endpoint = derived_endpoint(derived_message.get("message_type"))
         if record["parse_result"]["status"] == "ok" and endpoint:
             try:
@@ -625,6 +763,70 @@ class MessageHubStore:
                 )
         self._update_raw_frame(raw_id, record)
         return record
+
+    def _imu_window_authorization_error(
+        self,
+        device_id: str,
+        derived_message: dict[str, Any],
+    ) -> str | None:
+        imu_window = as_dict(derived_message.get("imu_window"))
+        cmd_id = str(imu_window.get("capture_cmd_id") or "")
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT status, payload_json FROM commands WHERE device_id = ? AND cmd_id = ?",
+                (device_id, cmd_id),
+            ).fetchone()
+            prior_rows = db.execute(
+                """
+                SELECT derived_message_json
+                FROM raw_frames
+                WHERE device_id = ? AND parse_status = 'ok' AND derived_message_json IS NOT NULL
+                ORDER BY id
+                """,
+                (device_id,),
+            ).fetchall()
+        if row is None:
+            return "IMU_WINDOW_COMMAND_NOT_FOUND"
+        if row["status"] not in {"pending", "in_progress"}:
+            return "IMU_WINDOW_COMMAND_NOT_PENDING"
+        try:
+            command = json.loads(str(row["payload_json"]))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return "IMU_WINDOW_COMMAND_INVALID"
+        parameters = command.get("payload")
+        if (
+            command.get("cmd") != "capture_imu_window"
+            or command.get("device_id") != device_id
+            or command.get("test_run_id") != imu_window.get("test_run_id")
+            or not isinstance(parameters, dict)
+            or set(parameters) != {"sample_count", "interval_ms"}
+            or type(parameters.get("sample_count")) is not int
+            or type(parameters.get("interval_ms")) is not int
+            or parameters.get("sample_count") != IMU_WINDOW_SAMPLE_COUNT
+            or parameters.get("interval_ms") != IMU_WINDOW_INTERVAL_US // 1000
+        ):
+            return "IMU_WINDOW_COMMAND_MISMATCH"
+        for prior_row in prior_rows:
+            try:
+                prior_message = json.loads(str(prior_row["derived_message_json"]))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            prior_imu = as_dict(prior_message.get("imu_window"))
+            if prior_imu.get("capture_cmd_id") == cmd_id and prior_imu.get("window_id") != imu_window.get(
+                "window_id"
+            ):
+                return "IMU_WINDOW_COMMAND_ALREADY_BOUND"
+        if row["status"] == "pending":
+            with self.connection() as db:
+                db.execute(
+                    """
+                    UPDATE commands
+                    SET status = 'in_progress', updated_at = ?
+                    WHERE device_id = ? AND cmd_id = ? AND status = 'pending'
+                    """,
+                    (utc_now(), device_id, cmd_id),
+                )
+        return None
 
     def claim_raw_post_fail_once(self, device_id: str, raw_body: bytes) -> dict[str, Any] | None:
         probe = parse_raw_frame_probe(device_id, raw_body)
@@ -1305,6 +1507,26 @@ def make_handler(
                     )
                     return
                 record = store.ingest_raw_frame(device_id, raw_body)
+                parse_result = as_dict(record.get("parse_result"))
+                payload_validation = as_dict(parse_result.get("payload_validation"))
+                recognizable_imu_part = b"event_type=imu_window_" in raw_body or b"event-type=imu_window_" in raw_body
+                if parse_result.get("status") != "ok" and (
+                    payload_validation.get("status") == "invalid" or recognizable_imu_part
+                ):
+                    self.respond_json(
+                        {
+                            "ok": False,
+                            "error": payload_validation.get("error_code")
+                            or parse_result.get("error_code")
+                            or "raw_frame_invalid",
+                            "detail": payload_validation.get("reason")
+                            or parse_result.get("reason")
+                            or "raw frame validation failed",
+                            "raw_frame": redact_raw_frame_record(record),
+                        },
+                        status=422,
+                    )
+                    return
                 self.respond_json({"ok": True, "raw_frame": redact_raw_frame_record(record)})
                 return
             if (
@@ -1320,6 +1542,18 @@ def make_handler(
                     expected_frame_type="ack",
                     expected_cmd_id=segments[5],
                 )
+                parse_result = as_dict(record.get("parse_result"))
+                if parse_result.get("status") != "ok":
+                    self.respond_json(
+                        {
+                            "ok": False,
+                            "error": parse_result.get("error_code") or "raw_ack_invalid",
+                            "detail": parse_result.get("reason") or "raw ACK validation failed",
+                            "raw_frame": redact_raw_frame_record(record),
+                        },
+                        status=422,
+                    )
+                    return
                 self.respond_json({"ok": True, "raw_frame": redact_raw_frame_record(record)})
                 return
             body = self.read_json_body()
@@ -1539,6 +1773,41 @@ def parse_raw_frame_record(
         expected_frame_type=expected_frame_type,
     )
     if parse_result["status"] == "ok":
+        event_type = first_known(kv_payload.get("event-type"), kv_payload.get("event_type"))
+        if frame_type == "event" and event_type in {"imu_window_chunk", "imu_window_manifest"}:
+            try:
+                kv_payload = parse_imu_window_kv_payload(payload)
+                event_type = str(kv_payload.get("event-type") or "")
+                validate_imu_window_wire(
+                    event_type,
+                    kv_payload,
+                    raw_body=raw_body,
+                    frame_id=str(frame_id),
+                    frame_seq=seq,
+                )
+                parse_result["payload_validation"] = {
+                    "profile": IMU_WINDOW_CONTRACT_VERSION,
+                    "status": "valid",
+                }
+            except RawPayloadValidationError as error:
+                parse_result.update(
+                    {
+                        "transport_status": "ok",
+                        "status": "malformed",
+                        "error_code": error.code,
+                        "reason": str(error),
+                        "derived_message_type": "unknown",
+                        "payload_validation": {
+                            "profile": error.profile,
+                            "status": "invalid",
+                            "error_code": error.code,
+                            "reason": str(error),
+                        },
+                    }
+                )
+        if parse_result["status"] != "ok":
+            record["parse_result"] = parse_result
+            return record
         derived = derive_raw_frame_message(record, kv_payload, expected_cmd_id=expected_cmd_id)
         parse_result.update(
             {
@@ -1727,6 +1996,391 @@ def parse_kv_payload(payload: bytes) -> dict[str, str]:
         key, value = line.split("=", 1)
         result[normalize_key(key)] = value.strip()
     return result
+
+
+def parse_imu_window_kv_payload(payload: bytes) -> dict[str, str]:
+    try:
+        text = payload.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_INVALID_UTF8",
+            "IMU window payload must be valid UTF-8",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        ) from error
+    result: dict[str, str] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            raise RawPayloadValidationError(
+                "IMU_WINDOW_INVALID_KV_STRUCTURE",
+                "IMU window payload must contain only non-empty key=value lines",
+                profile=IMU_WINDOW_CONTRACT_VERSION,
+            )
+        key, value = line.split("=", 1)
+        normalized = normalize_key(key)
+        if not normalized or normalized in result:
+            raise RawPayloadValidationError(
+                "IMU_WINDOW_DUPLICATE_OR_EMPTY_KEY",
+                "IMU window payload contains a duplicate or empty key",
+                profile=IMU_WINDOW_CONTRACT_VERSION,
+            )
+        result[normalized] = value.strip()
+    return result
+
+
+def imu_window_required_text(kv_payload: dict[str, str], key: str) -> str:
+    value = str(kv_payload.get(key) or "").strip()
+    if not value:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_MISSING_FIELD",
+            f"IMU window payload is missing {key}",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    return value
+
+
+def imu_window_required_int(
+    kv_payload: dict[str, str],
+    key: str,
+    *,
+    minimum: int = 0,
+    maximum: int = 2**63 - 1,
+) -> int:
+    value = parse_optional_int(kv_payload.get(key))
+    if value is None or value < minimum or value > maximum:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_INVALID_INTEGER",
+            f"IMU window field {key} must be an integer in [{minimum}, {maximum}]",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    return value
+
+
+def validate_imu_window_common(kv_payload: dict[str, str]) -> dict[str, Any]:
+    contract_version = imu_window_required_text(kv_payload, "contract-version")
+    if contract_version != IMU_WINDOW_CONTRACT_VERSION:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_UNSUPPORTED_CONTRACT",
+            "unsupported IMU window contract version",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    source = imu_window_required_text(kv_payload, "source")
+    source_status = imu_window_required_text(kv_payload, "source-status")
+    if source != "qmi8658_i2c" or source_status != "observed":
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_REAL_SOURCE_REQUIRED",
+            "IMU window requires source=qmi8658_i2c and source_status=observed",
+            profile=contract_version,
+        )
+    priority = imu_window_required_text(kv_payload, "priority")
+    transport_type = imu_window_required_text(kv_payload, "transport-type")
+    if priority != "normal" or transport_type != "lte":
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_LTE_TRANSPORT_REQUIRED",
+            "IMU window v1 requires priority=normal and transport_type=lte",
+            profile=contract_version,
+        )
+    seq = imu_window_required_int(kv_payload, "seq", minimum=1, maximum=2**32 - 1)
+    boot_count = imu_window_required_int(kv_payload, "boot-count", minimum=1, maximum=2**32 - 1)
+    capture_cmd_id = imu_window_required_text(kv_payload, "capture-cmd-id")
+    fw_version = imu_window_required_text(kv_payload, "fw-version")
+    test_run_id = imu_window_required_text(kv_payload, "test-run-id")
+    if not re.fullmatch(rf"[A-Za-z0-9._:-]{{1,{IMU_WINDOW_CAPTURE_CMD_ID_MAX}}}", capture_cmd_id) or not re.fullmatch(
+        rf"[A-Za-z0-9._+:-]{{1,{IMU_WINDOW_FW_VERSION_MAX}}}", fw_version
+    ) or not re.fullmatch(rf"[A-Za-z0-9._:-]{{1,{IMU_WINDOW_TEST_RUN_ID_MAX}}}", test_run_id):
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_INVALID_ID",
+            "IMU window lineage contains an invalid identifier",
+            profile=contract_version,
+        )
+    window_id = imu_window_required_text(kv_payload, "window-id")
+    expected_window_id = f"imuw-{capture_cmd_id}-b{boot_count}"
+    if window_id != expected_window_id:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_ID_MISMATCH",
+            "IMU window ID does not match capture command and boot count",
+            profile=contract_version,
+        )
+    return {
+        "contract_version": contract_version,
+        "window_id": window_id,
+        "capture_cmd_id": capture_cmd_id,
+        "boot_count": boot_count,
+        "seq": seq,
+        "priority": priority,
+        "transport_type": transport_type,
+        "source": source,
+        "source_status": source_status,
+        "fw_version": fw_version,
+        "test_run_id": test_run_id,
+        "training_allowed": False,
+        "activity_label": "unknown",
+        "privacy_class": "engineering",
+    }
+
+
+def validate_imu_window_chunk(kv_payload: dict[str, str]) -> dict[str, Any]:
+    result = validate_imu_window_common(kv_payload)
+    chunk_index = imu_window_required_int(kv_payload, "chunk-index", maximum=IMU_WINDOW_CHUNK_COUNT - 1)
+    chunk_count = imu_window_required_int(kv_payload, "chunk-count", minimum=1, maximum=32)
+    sample_start_index = imu_window_required_int(
+        kv_payload, "sample-start-index", maximum=IMU_WINDOW_SAMPLE_COUNT - 1
+    )
+    sample_count = imu_window_required_int(
+        kv_payload, "sample-count", minimum=1, maximum=IMU_WINDOW_SAMPLES_PER_CHUNK
+    )
+    total_sample_count = imu_window_required_int(
+        kv_payload, "total-sample-count", minimum=1, maximum=IMU_WINDOW_SAMPLE_COUNT
+    )
+    requested_interval_us = imu_window_required_int(
+        kv_payload, "requested-interval-us", minimum=1, maximum=1_000_000
+    )
+    sample_record_bytes = imu_window_required_int(kv_payload, "sample-record-bytes", minimum=1, maximum=128)
+    sample_encoding = imu_window_required_text(kv_payload, "sample-encoding")
+    expected_start = chunk_index * IMU_WINDOW_SAMPLES_PER_CHUNK
+    expected_count = min(IMU_WINDOW_SAMPLES_PER_CHUNK, IMU_WINDOW_SAMPLE_COUNT - expected_start)
+    if (
+        chunk_count != IMU_WINDOW_CHUNK_COUNT
+        or total_sample_count != IMU_WINDOW_SAMPLE_COUNT
+        or requested_interval_us != IMU_WINDOW_INTERVAL_US
+        or sample_record_bytes != IMU_WINDOW_RECORD_BYTES
+        or sample_encoding != IMU_WINDOW_SAMPLE_ENCODING
+        or sample_start_index != expected_start
+        or sample_count != expected_count
+    ):
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_CHUNK_SHAPE_MISMATCH",
+            "IMU window chunk does not match the fixed v1 100x50ms layout",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+
+    encoded = imu_window_required_text(kv_payload, "samples-b64")
+    try:
+        sample_bytes = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_INVALID_BASE64",
+            "IMU window samples_b64 is not strict Base64",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        ) from error
+    if len(sample_bytes) != sample_count * IMU_WINDOW_RECORD_BYTES:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_SAMPLE_BYTES_MISMATCH",
+            "decoded IMU sample bytes do not match sample_count * sample_record_bytes",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    declared_crc = normalize_crc32(imu_window_required_text(kv_payload, "chunk-crc32"))
+    if declared_crc != crc32_hex(sample_bytes):
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_CHUNK_CRC_MISMATCH",
+            "decoded IMU sample bytes do not match chunk_crc32",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+
+    offsets: list[int] = []
+    for sample_index in range(sample_count):
+        record = sample_bytes[
+            sample_index * IMU_WINDOW_RECORD_BYTES : (sample_index + 1) * IMU_WINDOW_RECORD_BYTES
+        ]
+        offset_us = int.from_bytes(record[0:4], "little", signed=False)
+        values = [int.from_bytes(record[pos : pos + 4], "little", signed=True) for pos in range(4, 28, 4)]
+        if offsets and offset_us <= offsets[-1]:
+            raise RawPayloadValidationError(
+                "IMU_WINDOW_NON_MONOTONIC_OFFSET",
+                "sample offsets must be strictly increasing within each chunk",
+                profile=IMU_WINDOW_CONTRACT_VERSION,
+            )
+        if any(abs(value) > 5_000 for value in values[:3]) or any(abs(value) > 600_000 for value in values[3:]):
+            raise RawPayloadValidationError(
+                "IMU_WINDOW_SAMPLE_OUT_OF_RANGE",
+                "sample value exceeds the declared QMI8658A engineering range",
+                profile=IMU_WINDOW_CONTRACT_VERSION,
+            )
+        offsets.append(offset_us)
+
+    result.update(
+        {
+            "chunk_index": chunk_index,
+            "chunk_count": chunk_count,
+            "sample_start_index": sample_start_index,
+            "sample_count": sample_count,
+            "total_sample_count": total_sample_count,
+            "requested_interval_us": requested_interval_us,
+            "sample_record_bytes": sample_record_bytes,
+            "sample_encoding": sample_encoding,
+            "chunk_crc32": declared_crc,
+            "sample_payload_sha256": sha256_hex(sample_bytes),
+            "first_offset_us": offsets[0],
+            "last_offset_us": offsets[-1],
+        }
+    )
+    return result
+
+
+def validate_imu_window_manifest(kv_payload: dict[str, str]) -> dict[str, Any]:
+    result = validate_imu_window_common(kv_payload)
+    sample_count = imu_window_required_int(kv_payload, "sample-count", minimum=1, maximum=IMU_WINDOW_SAMPLE_COUNT)
+    requested_interval_us = imu_window_required_int(
+        kv_payload, "requested-interval-us", minimum=1, maximum=1_000_000
+    )
+    capture_start = imu_window_required_int(kv_payload, "capture-start-uptime-us")
+    capture_end = imu_window_required_int(kv_payload, "capture-end-uptime-us")
+    min_interval = imu_window_required_int(kv_payload, "min-interval-us", minimum=1, maximum=1_000_000)
+    mean_interval = imu_window_required_int(kv_payload, "mean-interval-us", minimum=1, maximum=1_000_000)
+    max_interval = imu_window_required_int(kv_payload, "max-interval-us", minimum=1, maximum=1_000_000)
+    deadline_miss_count = imu_window_required_int(kv_payload, "deadline-miss-count", maximum=sample_count)
+    read_failure_count = imu_window_required_int(kv_payload, "read-failure-count", maximum=sample_count)
+    mock_sample_count = imu_window_required_int(kv_payload, "mock-sample-count", maximum=sample_count)
+    warmup_sample_count = imu_window_required_int(
+        kv_payload, "warmup-sample-count", maximum=IMU_WINDOW_WARMUP_SAMPLE_COUNT
+    )
+    warmup_interval_us = imu_window_required_int(
+        kv_payload, "warmup-interval-us", minimum=1, maximum=1_000_000
+    )
+    chunk_count = imu_window_required_int(kv_payload, "chunk-count", minimum=1, maximum=32)
+    uploaded_chunk_count = imu_window_required_int(kv_payload, "uploaded-chunk-count", maximum=32)
+    samples_crc32 = normalize_crc32(imu_window_required_text(kv_payload, "samples-crc32"))
+    training_allowed = parse_bool_or_text(kv_payload.get("training-allowed"))
+    if (
+        sample_count != IMU_WINDOW_SAMPLE_COUNT
+        or requested_interval_us != IMU_WINDOW_INTERVAL_US
+        or chunk_count != IMU_WINDOW_CHUNK_COUNT
+        or uploaded_chunk_count != chunk_count
+        or read_failure_count != 0
+        or mock_sample_count != 0
+        or warmup_sample_count != IMU_WINDOW_WARMUP_SAMPLE_COUNT
+        or warmup_interval_us != IMU_WINDOW_WARMUP_INTERVAL_US
+        or capture_end <= capture_start
+        or not (min_interval <= mean_interval <= max_interval)
+        or not re.fullmatch(r"[0-9A-F]{8}", str(samples_crc32 or ""))
+        or training_allowed is not False
+    ):
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_MANIFEST_INCOMPLETE",
+            "IMU window manifest is incomplete or violates the fixed v1 safety boundary",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    required_values = {
+        "sensor_model": "QMI8658A",
+        "activity_label": "unknown",
+        "label_source": "none",
+        "collection_authorization": "operator_command",
+        "mounting_profile_id": "unrecorded",
+        "axis_mapping_status": "unrecorded",
+        "calibration_profile_id": "unrecorded",
+    }
+    for key, expected in required_values.items():
+        if imu_window_required_text(kv_payload, key.replace("_", "-")) != expected:
+            raise RawPayloadValidationError(
+                "IMU_WINDOW_UNSAFE_METADATA",
+                f"IMU window field {key} must remain {expected} in v1",
+                profile=IMU_WINDOW_CONTRACT_VERSION,
+            )
+    sensor_i2c_address = imu_window_required_int(kv_payload, "sensor-i2c-address", maximum=127)
+    if sensor_i2c_address != 106:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_SENSOR_IDENTITY_MISMATCH",
+            "this verified connectivity-node profile requires QMI8658A at address 106 (0x6A)",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    result.update(
+        {
+            "sample_count": sample_count,
+            "requested_interval_us": requested_interval_us,
+            "capture_start_uptime_us": capture_start,
+            "capture_end_uptime_us": capture_end,
+            "min_interval_us": min_interval,
+            "mean_interval_us": mean_interval,
+            "max_interval_us": max_interval,
+            "deadline_miss_count": deadline_miss_count,
+            "read_failure_count": read_failure_count,
+            "mock_sample_count": mock_sample_count,
+            "warmup_sample_count": warmup_sample_count,
+            "warmup_interval_us": warmup_interval_us,
+            "chunk_count": chunk_count,
+            "uploaded_chunk_count": uploaded_chunk_count,
+            "samples_crc32": samples_crc32,
+            "sensor_model": "QMI8658A",
+            "sensor_i2c_address": sensor_i2c_address,
+            "accel_unit": imu_window_required_text(kv_payload, "accel-unit"),
+            "gyro_unit": imu_window_required_text(kv_payload, "gyro-unit"),
+            "activity_label": "unknown",
+            "label_source": "none",
+            "collection_authorization": "operator_command",
+            "training_allowed": False,
+            "mounting_profile_id": "unrecorded",
+            "axis_mapping_status": "unrecorded",
+            "calibration_profile_id": "unrecorded",
+        }
+    )
+    if result["accel_unit"] != "mg" or result["gyro_unit"] != "mdps":
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_UNIT_MISMATCH",
+            "IMU window v1 requires accel_unit=mg and gyro_unit=mdps",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    return result
+
+
+def validated_imu_window_payload(event_type: str, kv_payload: dict[str, str]) -> dict[str, Any]:
+    if event_type == "imu_window_chunk":
+        return validate_imu_window_chunk(kv_payload)
+    if event_type == "imu_window_manifest":
+        return validate_imu_window_manifest(kv_payload)
+    raise RawPayloadValidationError(
+        "IMU_WINDOW_UNSUPPORTED_EVENT",
+        f"unsupported IMU window event type: {event_type}",
+        profile=IMU_WINDOW_CONTRACT_VERSION,
+    )
+
+
+def validate_imu_window_wire(
+    event_type: str,
+    kv_payload: dict[str, str],
+    *,
+    raw_body: bytes,
+    frame_id: str,
+    frame_seq: int | None,
+) -> dict[str, Any]:
+    if len(raw_body) > IMU_WINDOW_RAW_FRAME_MAX_BYTES:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_FRAME_TOO_LARGE",
+            "IMU window raw frame exceeds the 1200-byte v1 ceiling",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    expected_keys = IMU_WINDOW_CHUNK_KEYS if event_type == "imu_window_chunk" else IMU_WINDOW_MANIFEST_KEYS
+    if set(kv_payload) - expected_keys:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_UNKNOWN_FIELD",
+            "IMU window payload contains a field outside the fixed v1 contract",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    if kv_payload.get("event-type") != event_type:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_EVENT_TYPE_MISMATCH",
+            "IMU window event_type does not match the selected wire profile",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    metadata = validated_imu_window_payload(event_type, kv_payload)
+    if frame_seq != metadata["seq"]:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_SEQUENCE_MISMATCH",
+            "IMU window EGLK header seq does not match payload seq",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    if event_type == "imu_window_chunk":
+        expected_frame_id = (
+            f"imu-{metadata['capture_cmd_id']}-b{metadata['boot_count']}-c{metadata['chunk_index']:02d}"
+        )
+    else:
+        expected_frame_id = f"imu-{metadata['capture_cmd_id']}-b{metadata['boot_count']}-manifest"
+    if frame_id != expected_frame_id:
+        raise RawPayloadValidationError(
+            "IMU_WINDOW_FRAME_ID_MISMATCH",
+            "IMU window frame ID does not match its command, boot, and part",
+            profile=IMU_WINDOW_CONTRACT_VERSION,
+        )
+    return metadata
 
 
 def raw_cell_from_kv(kv_payload: dict[str, str]) -> dict[str, Any]:
@@ -1995,6 +2649,19 @@ def derive_raw_frame_message(
                 "reliability": reliability or None,
             }
         )
+        if event_type in {"imu_window_chunk", "imu_window_manifest"}:
+            imu_window = validated_imu_window_payload(event_type, kv_payload)
+            event.update(
+                compact_dict(
+                    {
+                        "capture_cmd_id": imu_window.get("capture_cmd_id"),
+                        "imu_window": imu_window,
+                        "transport": compact_dict({"type": kv_payload.get("transport-type")})
+                        if kv_payload.get("transport-type")
+                        else None,
+                    }
+                )
+            )
         if event_type == "location_report":
             event.update(
                 compact_dict(

@@ -359,6 +359,58 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertIn("config EGOLINK_SIM7670_LTE_HTTP_RAW_POST_FAIL_ONCE_TEST", self.sim7670_kconfig)
         self.assertIn("default n", self.sim7670_kconfig)
 
+    def test_bounded_imu_window_captures_before_chunked_lte_upload(self) -> None:
+        for token in [
+            '#define IMU_WINDOW_SAMPLE_COUNT 100u',
+            '#define IMU_WINDOW_INTERVAL_MS 50u',
+            '#define IMU_WINDOW_WARMUP_SAMPLE_COUNT 10u',
+            '#define IMU_WINDOW_RECORD_BYTES 28u',
+            '#define IMU_WINDOW_SAMPLES_PER_CHUNK 10u',
+            '#define IMU_WINDOW_RAW_FRAME_MAX_BYTES 1200u',
+            '#define IMU_WINDOW_CAPTURE_CMD_ID_MAX 16u',
+            'static uint8_t s_imu_window_binary[',
+            'platform_imu_capture_begin()',
+            'platform_imu_sample_real(&sample)',
+            'vTaskDelayUntil(',
+            'platform_imu_capture_end()',
+            'event_type=imu_window_chunk',
+            'event_type=imu_window_manifest',
+            'samples_b64=%s',
+            'training_allowed=false',
+            'activity_label=unknown',
+            'axis_mapping_status=unrecorded',
+            'boot_count=%',
+            'warmup_sample_count=%',
+            'strcmp(command->cmd, "capture_imu_window")',
+            'command->test_run_id',
+            'capture_command_payload_shape_valid(payload)',
+            'command->sample_count != IMU_WINDOW_SAMPLE_COUNT',
+            'command->interval_ms != IMU_WINDOW_INTERVAL_MS',
+            'IMU_WINDOW_CHUNK_POST_DONE',
+            'IMU_WINDOW_MANIFEST_POST_DONE',
+            'LTE_HTTP_COMMAND_DUPLICATE_RESULT_REPLAY',
+            'LTE_EXECUTED_COMMAND_CACHE_SIZE CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS',
+            'find_executed_command_result(command->cmd_id)',
+            'manifest_frame_preflight_over_1200_bytes',
+            's_boot_count_persisted',
+            'IMU_WINDOW_ACK_SUPPRESSED stop_not_confirmed=true',
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.app_main)
+
+        capture = self.app_main.split("static bool capture_real_imu_window", 1)[1].split(
+            "static bool lte_http_publish_imu_window", 1
+        )[0]
+        upload = self.app_main.split("static bool lte_http_publish_imu_window", 1)[1].split(
+            "#if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED", 1
+        )[0]
+        self.assertNotIn("sim7670_lte_http_post_raw", capture)
+        self.assertNotIn("lte_raw_outbox_post_raw_with_retry", capture)
+        self.assertIn("capture_real_imu_window(&capture)", upload)
+        self.assertLess(upload.index("capture_real_imu_window(&capture)"), upload.index("IMU_WINDOW_CHUNK_POST_DONE"))
+        self.assertLess(upload.index("manifest_frame_preflight_over_1200_bytes"), upload.index("IMU_WINDOW_CHUNK_POST_DONE"))
+        self.assertIn("strlen(s_imu_window_frame) > IMU_WINDOW_RAW_FRAME_MAX_BYTES", upload)
+
     def test_d1_periodic_location_mode_is_opt_in_and_keeps_lte_loop_running(self) -> None:
         for token in [
             "config EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED",

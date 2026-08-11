@@ -17,6 +17,8 @@
 | `message_hub_error.schema.json` | P0 message hub diagnosable error envelope |
 | `message_hub_raw_frame_record.schema.json` | P0 raw-frame storage and parse-result record; the device wire payload is not JSON |
 | `location_fusion_sample.schema.json` | DATA-001 JSONL dataset sample contract for location fusion exports |
+| `imu_window_chunk.schema.json` | Normalized complete KV wire object for one bounded real-QMI IMU chunk; sample bytes remain Base64 and training-disabled. |
+| `imu_window_manifest.schema.json` | Normalized complete KV wire object for a bounded real-QMI IMU window manifest and its privacy/quality gates. |
 
 ## 变更规则
 

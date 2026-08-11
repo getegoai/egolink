@@ -37,6 +37,7 @@ param(
     [int]$Qmi8658SdaGpio = 15,
     [int]$Qmi8658SclGpio = 16,
     [int]$Qmi8658I2CAddress = 107,
+    [int]$Qmi8658I2CTimeoutMs = 1000,
     [int]$Qmi8658SampleIntervalMs = 50,
     [int]$Qmi8658BootSampleCount = 0,
     [switch]$Build,
@@ -123,6 +124,9 @@ if ($EnableQmi8658Imu -and $Qmi8658I2CAddress -notin @(106, 107)) {
 }
 if ($EnableQmi8658Imu -and ($Qmi8658SampleIntervalMs -lt 1 -or $Qmi8658SampleIntervalMs -gt 1000)) {
     throw "Qmi8658SampleIntervalMs must be between 1 and 1000."
+}
+if ($EnableQmi8658Imu -and ($Qmi8658I2CTimeoutMs -lt 10 -or $Qmi8658I2CTimeoutMs -gt 5000)) {
+    throw "Qmi8658I2CTimeoutMs must be between 10 and 5000."
 }
 if ($EnableQmi8658Imu -and ($Qmi8658BootSampleCount -lt 0 -or $Qmi8658BootSampleCount -gt 1000)) {
     throw "Qmi8658BootSampleCount must be between 0 and 1000."
@@ -229,6 +233,7 @@ if ($EnableQmi8658Imu) {
         "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SDA_GPIO=$Qmi8658SdaGpio",
         "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SCL_GPIO=$Qmi8658SclGpio",
         "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_I2C_ADDR=$Qmi8658I2CAddress",
+        "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_I2C_TIMEOUT_MS=$Qmi8658I2CTimeoutMs",
         "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_WHOAMI_EXPECTED=5",
         "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SAMPLE_INTERVAL_MS=$Qmi8658SampleIntervalMs",
         "# CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS is not set",
@@ -317,6 +322,7 @@ $result = [pscustomobject]@{
     qmi8658_sda_gpio = $Qmi8658SdaGpio
     qmi8658_scl_gpio = $Qmi8658SclGpio
     qmi8658_i2c_address = $Qmi8658I2CAddress
+    qmi8658_i2c_timeout_ms = $Qmi8658I2CTimeoutMs
     qmi8658_sample_interval_ms = $Qmi8658SampleIntervalMs
     qmi8658_boot_sample_count = $Qmi8658BootSampleCount
     qmi8658_axp2101_rails_enabled = $false

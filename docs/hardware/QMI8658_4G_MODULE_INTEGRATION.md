@@ -1,12 +1,17 @@
 ---
 document_status: operator_guide
-last_verified: 2026-07-11
+last_verified: 2026-08-11
 verified_by: codex
 ---
 
 # QMI8658 Module On The 4G Board
 
-> Status: integration plan. This is not live hardware evidence.
+> Status: module identity and bounded real sampling are observed on the 4G
+> board. D2-007 also passed startup identity and idle-stop checks, but its first
+> LTE-window attempt stopped before capture because the SIM was not ready.
+> D2-008 then observed a low-rate real six-axis Wi-Fi uplink. The operator
+> reports the module is fixed; axis mapping, calibration, mechanical retention,
+> high-rate window uplink, and product acceptance remain pending.
 
 ## Purpose
 
@@ -36,7 +41,9 @@ module schematic remains authoritative.
 
 - Confirm the physical 4G board revision before choosing I2C pins. Current
   Waveshare documentation lists MAX17048 pins as V2 SDA GPIO15/SCL GPIO16 and
-  V1 SDA GPIO3/SCL GPIO2.
+  V1 SDA GPIO3/SCL GPIO2. The active board has no visible `VER2.0` silkscreen,
+  so its revision remains unknown; D2-006 nevertheless observed this external
+  module operating on GPIO15/GPIO16.
 - Put QMI8658 and MAX17048 on the same I2C bus only when both firmware backends
   use the same port, SDA, SCL, and bus frequency. Their addresses do not
   conflict: MAX17048 is `0x36`; QMI8658 is normally `0x6A` or `0x6B`.
@@ -45,8 +52,10 @@ module schematic remains authoritative.
   and pins explicitly.
 - Disable `CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS`; that switch is
   only for the AMOLED-board power path.
-- Acceptance requires QMI8658 WHOAMI `0x05`, real non-mock samples, source
-  status `observed`, fixed mounting orientation, and a named evidence path.
+- Identity/data-path acceptance requires QMI8658 WHOAMI `0x05`, real non-mock
+  samples, and a named evidence path. Dataset use additionally requires source
+  status `observed`, fixed mounting orientation, calibration review, and a
+  bounded capture contract.
 
 Do not flash until the module is physically connected, polarity and voltage
 are checked, the board revision is recorded, and the operator explicitly
@@ -60,7 +69,8 @@ bounded boot sample count. When MAX17048 and QMI8658 are enabled together the
 generator rejects different I2C port/SDA/SCL settings. It always disables
 `EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS` for this external-module path.
 
-Example for the documented V2 pin map and a module confirmed at `0x6B`:
+Example for the GPIO15/GPIO16 path and the installed module confirmed at
+`0x6A` by D2-006:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
@@ -70,23 +80,48 @@ powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
   -TestRunId QMI-4G-YYYYMMDD-001 `
   -EnableSim7670Gnss -EnableSim7670LocationObservation `
   -EnableD1PeriodicLocation -EnableMax17048Power -EnableQmi8658Imu `
-  -Qmi8658I2CAddress 107 -Qmi8658BootSampleCount 100 -Build -Json
+  -Qmi8658I2CAddress 106 -Qmi8658BootSampleCount 100 -Build -Json
 ```
 
-Change the address to decimal `106` only after confirming `0x6A`. Use GPIO3/2
-only after recording a V1 board. A 2026-07-11 no-flash profile compiled with
-QMI8658, MAX17048, GNSS, LTE, and periodic location enabled; this is static
-evidence only and does not prove the external module or shared bus works.
+Use GPIO3/2 only after recording a V1 board. A 2026-07-11 no-flash profile
+compiled with QMI8658, MAX17048, GNSS, LTE, and periodic location enabled;
+this remains static evidence only and does not prove the shared bus works.
 
-The current LTE field corpus contains IMU source metadata but no uploaded
-six-axis windows. The existing 30-second sensor-status cadence is not a model
-training cadence. After module probe, use the readiness report to decide the
-smallest bounded high-rate capture mode instead of enabling a permanent
-always-on stream.
+The 2026-08-10 D2-006 bench probe tested both candidate addresses. `0x6B`
+failed at reset and fell back to mock. `0x6A` returned WHOAMI `0x05`, reset
+result `0x80`, and 100/100 real non-mock samples with no sample failure. The
+observed boot-record interval was 70 ms, not the configured 50 ms delay, so
+this path is not yet a 20 Hz sampling claim. Evidence:
+`reports/board_validation/20260810-qmi8658-probe/qmi8658_probe_report.md`.
+
+The 2026-08-10 D2-007 combined image was then deployed and flashed once. Its
+20-second startup log again observed `WHO_AM_I=0x05` and readback-confirmed
+that the measurement engine was stopped. The single bounded command was never
+polled or executed because SIM7670 reported `LTE_SIM_NOT_READY`, registration
+`not_registered`, and PDP `unknown` through the 120-second readiness gate. The
+server received zero raw frames, the exporter produced zero windows, and the
+command was safely timed out without a device ACK. This is not an uplink or
+20 Hz cadence pass. Evidence:
+`reports/board_validation/20260810-d2007-imu-lte/d2_007_hardware_report.md`.
+
+The 2026-08-11 D2-008 smoke reused the existing Wi-Fi JSON telemetry path with
+no firmware-source, server, schema, or protocol change. Its test run retained
+26/26 real non-mock QMI8658 `sensor_sample` messages and 26 distinct six-axis
+tuples. The nominal event period was five seconds, and the app was then stopped
+in ROM download mode. This proves the first real sensor-to-VPS data slice, not
+a high-rate window or training dataset. Evidence:
+`reports/board_validation/20260811-d2008-wifi-imu/d2_008_wifi_imu_report.md`.
+
+The current field corpus therefore has individual real six-axis points over
+Wi-Fi but still no uploaded bounded high-rate window. Resolve the transport
+choice, then repeat the smallest authorized 100 x 50 ms window; do not enable
+a permanent always-on stream.
 
 ## Pilot Readiness Sequence
 
-1. Bench probe and sample the external module on the 4G board.
+1. Bench probe and sample the external module on the 4G board. D2-006 passed
+   this identity/data-path step at address `0x6A`; formal mounting and
+   calibration remain pending.
 2. Freeze mounting axes and collect static plus walking/vehicle labelled runs.
 3. Run LTE/GNSS/QMI/MAX17048 together and check bus, reset, and upload health.
 4. Run the 24-hour battery baseline with the final sensor cadence.

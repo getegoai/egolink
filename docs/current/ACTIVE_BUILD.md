@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-04
+last_verified: 2026-08-11
 verified_by: codex
 ---
 
@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | UI-001 field-friendly D1 status sidecar is currently flashed: cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt, QMI8658 engineering sampler. Bounded smoke `ui001-amoled-friendly-smoke-20260704` observed `cmd=display_status` plus `status_rendered`. |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console recently `COM4`, SIM7670G USB AT ports recently `COM5`/`COM6`/`COM7`/`COM8` | MODEL-DEVICE-006 Tiny Safety D1 firmware `0.1.0-model-device-006-tiny-safety-hw` / test run `MODEL-DEVICE-006-hw-20260707-d1` is currently flashed on `COM4` after explicit operator confirmation. Flash targeted ESP32-S3 MAC `02:00:00:00:00:03`; reset log observed app commit `cf5b4a6`, LTE ready, HTTP 200 command diagnostics, and D1 periodic location/report observation posts. Short Web/API observer passed after reset with fresh LTE uploads, max freshness 67 s, raw POST `+2 ok / +0 fail`, and MAX17048 power visible. GNSS accuracy, battery life, long LTE stability, real SMS/call, and product readiness remain unverified. |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-11 | D2-008 Wi-Fi/QMI8658 smoke image `0.1.0-d2008-wifi-imu-smoke` (`v0.1.0-22-ge7e7e85-dirty`) is currently flashed on ESP32-S3 MAC `02:00:00:00:00:03`. It uploaded 26/26 real non-mock six-axis `sensor_sample` messages over Wi-Fi with QMI8658 at `0x6A` on GPIO15/GPIO16; SIM7670/GNSS/LTE were disabled. The ESP32 is intentionally left in ROM download mode, so the smoke uploader is stopped until reset or power cycle. D2-007, D2-006, and MODEL-DEVICE-006 remain historical evidence. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -42,15 +42,39 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 - UI-001 field-friendly AMOLED screen is flashed on `COM9`: `display_status`
   renders `D1 FIELD` with `LINK`, `LOC`, `PWR`, and `POST` rows and passed
   smoke `ui001-amoled-friendly-smoke-20260704`.
-- MODEL-DEVICE-006 Tiny Safety D1 firmware is flashed on the 4G connectivity
-  node and has passed the bounded hardware short loop: serial
+- MODEL-DEVICE-006 Tiny Safety D1 firmware historically passed the bounded
+  hardware short loop on the 4G connectivity node: serial
   `safety tiny status/selftest/demo ...` validation on `COM4`, reset-log LTE
   HTTP POST observation, and a read-only D1 Web/API observer pass with fresh
-  `MODEL-DEVICE-006-hw-20260707-d1` uploads.
+  `MODEL-DEVICE-006-hw-20260707-d1` uploads. D2-006 replaced that image on
+  2026-08-10, D2-007 subsequently replaced D2-006, and D2-008 replaced D2-007
+  with the current Wi-Fi/QMI8658 smoke image on 2026-08-11.
 - AMOLED `ask_user` command path rendered and returned `user_confirmation=safe` in Demo v0.2 evidence.
 - Demo v0.3 generated a complete safety record using Demo v0.2 real AMOLED confirmation evidence plus live SIM7670G GNSS AT probe.
 - SIM7670G GNSS AT probe was reachable indoors, selected `COM6`, and produced `fix=false`.
 - QMI8658 live data has been captured from the AMOLED board in an engineering fixture context.
+- D2-006 captured the external ATK-NB018 V1.0 QMI8658A candidate directly on
+  the 4G connectivity node: address `0x6A`, `WHO_AM_I=0x05`, reset result
+  `0x80`, and 100/100 real non-mock six-axis samples. The 100-sample window
+  used 70 ms observed intervals despite a configured 50 ms delay; mounting,
+  calibration, accuracy, shared-bus operation, and LTE upload remain
+  unverified. Evidence:
+  `reports/board_validation/20260810-qmi8658-probe/qmi8658_probe_report.md`.
+- D2-007 flashed the bounded QMI8658/LTE image once and passed its 20-second
+  startup identity and idle-stop safety gates. Its only capture command was not
+  executed because the SIM7670 path stayed `LTE_SIM_NOT_READY` through the
+  120-second readiness gate. The bounded observation produced zero raw frames,
+  zero messages, no ACK, and an empty explicit export; this is a safe failed
+  run, not an LTE IMU-window capability. Evidence:
+  `reports/board_validation/20260810-d2007-imu-lte/d2_007_hardware_report.md`.
+- D2-008 reused the existing Wi-Fi JSON telemetry path with no source/server/
+  protocol changes. Test run `D2-008-WIFI-IMU-20260811-001` retained 26/26
+  real non-mock QMI8658 `sensor_sample` messages and 26 distinct six-axis
+  tuples; serial also observed QMI identity, Wi-Fi connection, registration,
+  and successful telemetry POSTs. The app was then stopped in ROM download
+  mode. This passes a low-rate data-path smoke only, not the 100 x 50 ms window
+  or dataset gate. Evidence:
+  `reports/board_validation/20260811-d2008-wifi-imu/d2_008_wifi_imu_report.md`.
 - Camera smoke capture on the SIM7670G board has produced bounded JPEG evidence.
 - R1 connectivity-node firmware `0.1.0-fw001-hw-r1` has passed USB-Free
   Message Hub validation on independent power with USB disconnected:
@@ -232,6 +256,17 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 
 ## Current Known Limits
 
+- D2-008 proves real six-axis values can reach the VPS over Wi-Fi at a nominal
+  5-second event cadence. It does not prove a high-rate window, fixed axis
+  mapping, calibration, labels, training suitability, LTE transport, or
+  always-on operation. The ESP32 is currently paused in ROM download mode to
+  prevent continued smoke uploads.
+- The historical D2-007 combined image identified and stopped the external
+  QMI8658A at startup, but its LTE/IMU run did not reach the capture path:
+  SIM7670 reported `LTE_SIM_NOT_READY` / `not_registered`, with PDP unknown,
+  through the 120-second readiness gate. No 20 Hz window or LTE IMU upload is
+  verified; the exact SIM/readiness cause still requires a separate bounded
+  diagnostic.
 - GNSS indoor no-fix is expected and is not a P0 failure by itself.
 - SIM7670G GNSS refresh has PC-side USB AT no-fix evidence and FW-002B
   firmware-side UART/AT no-fix evidence through the USB-Free Message Hub loop.

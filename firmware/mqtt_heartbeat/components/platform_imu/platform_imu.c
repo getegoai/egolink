@@ -35,6 +35,9 @@ static size_t s_count;
 static uint32_t s_next_seq;
 static uint32_t s_dropped_samples;
 static platform_imu_sample_t s_latest;
+#if CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+static bool s_measurement_enabled;
+#endif
 
 static int64_t uptime_ms(void)
 {
@@ -58,6 +61,9 @@ static void platform_imu_set_mock_backend(const char *status)
     s_sensor_model = PLATFORM_IMU_SENSOR_MODEL_NONE;
     s_sample_interval_ms = 0;
     s_last_error = 0;
+#if CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+    s_measurement_enabled = false;
+#endif
 }
 
 static platform_imu_sample_t platform_imu_stationary_sample(void)
@@ -249,6 +255,57 @@ static esp_err_t qmi8658_wait_reset(uint8_t *reset_result)
     return last;
 }
 
+static esp_err_t qmi8658_configure_measurement(void)
+{
+    esp_err_t err = qmi8658_i2c_write_u8(QMI8658_REG_CTRL8, QMI8658_CTRL8_CTRL9_HANDSHAKE_STATUS_INT);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = qmi8658_i2c_write_u8(QMI8658_REG_CTRL2, QMI8658_CTRL2_ACCEL_4G_1000HZ);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = qmi8658_i2c_write_u8(QMI8658_REG_CTRL3, QMI8658_CTRL3_GYRO_512DPS_224HZ);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = qmi8658_i2c_write_u8(QMI8658_REG_CTRL5, QMI8658_CTRL5_ACCEL_GYRO_LPF_MODE0);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = qmi8658_i2c_write_u8(QMI8658_REG_CTRL7, QMI8658_CTRL7_ENABLE_ACCEL_GYRO);
+    if (err != ESP_OK) {
+        return err;
+    }
+    for (int retry = 0; retry < 3; ++retry) {
+        uint8_t ctrl7 = 0;
+        err = qmi8658_i2c_read_u8(QMI8658_REG_CTRL7, &ctrl7);
+        if (err == ESP_OK &&
+            (ctrl7 & QMI8658_CTRL7_ENABLE_ACCEL_GYRO) == QMI8658_CTRL7_ENABLE_ACCEL_GYRO) {
+            return ESP_OK;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    return err == ESP_OK ? ESP_ERR_INVALID_RESPONSE : err;
+}
+
+static esp_err_t qmi8658_stop_measurement(void)
+{
+    esp_err_t err = qmi8658_i2c_write_u8(QMI8658_REG_CTRL7, 0x00);
+    if (err != ESP_OK) {
+        return err;
+    }
+    for (int retry = 0; retry < 3; ++retry) {
+        uint8_t ctrl7 = QMI8658_CTRL7_ENABLE_ACCEL_GYRO;
+        err = qmi8658_i2c_read_u8(QMI8658_REG_CTRL7, &ctrl7);
+        if (err == ESP_OK && (ctrl7 & QMI8658_CTRL7_ENABLE_ACCEL_GYRO) == 0u) {
+            return ESP_OK;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    return err == ESP_OK ? ESP_ERR_INVALID_RESPONSE : err;
+}
+
 static bool platform_imu_init_qmi8658(void)
 {
     uint8_t whoami = 0;
@@ -287,10 +344,15 @@ static bool platform_imu_init_qmi8658(void)
         return false;
     }
 
-    (void)qmi8658_i2c_update_bits(
+    err = qmi8658_i2c_update_bits(
         QMI8658_REG_CTRL1,
         QMI8658_CTRL1_ADDR_AUTO_INCREMENT,
         QMI8658_CTRL1_ADDR_AUTO_INCREMENT);
+    if (err != ESP_OK) {
+        s_last_error = (int)err;
+        s_backend_status = "qmi8658_ctrl1_failed";
+        return false;
+    }
 
     err = qmi8658_i2c_read_u8(QMI8658_REG_WHOAMI, &whoami);
     if (err != ESP_OK) {
@@ -305,11 +367,24 @@ static bool platform_imu_init_qmi8658(void)
     }
 
     (void)qmi8658_i2c_read_u8(QMI8658_REG_REVISION, &revision);
-    (void)qmi8658_i2c_write_u8(QMI8658_REG_CTRL8, QMI8658_CTRL8_CTRL9_HANDSHAKE_STATUS_INT);
-    (void)qmi8658_i2c_write_u8(QMI8658_REG_CTRL2, QMI8658_CTRL2_ACCEL_4G_1000HZ);
-    (void)qmi8658_i2c_write_u8(QMI8658_REG_CTRL3, QMI8658_CTRL3_GYRO_512DPS_224HZ);
-    (void)qmi8658_i2c_write_u8(QMI8658_REG_CTRL5, QMI8658_CTRL5_ACCEL_GYRO_LPF_MODE0);
-    (void)qmi8658_i2c_write_u8(QMI8658_REG_CTRL7, QMI8658_CTRL7_ENABLE_ACCEL_GYRO);
+    err = qmi8658_configure_measurement();
+    if (err != ESP_OK) {
+        s_last_error = (int)err;
+        s_backend_status = "qmi8658_configure_failed";
+        esp_err_t stop_err = qmi8658_stop_measurement();
+        if (stop_err != ESP_OK) {
+            s_backend = PLATFORM_IMU_BACKEND_QMI8658;
+            s_hardware_present = true;
+            s_driver_enabled = true;
+            s_source = PLATFORM_IMU_SOURCE_QMI8658;
+            s_backend_name = PLATFORM_IMU_BACKEND_NAME_QMI8658;
+            s_sensor_model = PLATFORM_IMU_SENSOR_MODEL_QMI8658;
+            s_measurement_enabled = true;
+            s_last_error = (int)stop_err;
+            s_backend_status = "qmi8658_init_configure_stop_failed";
+        }
+        return false;
+    }
     vTaskDelay(pdMS_TO_TICKS(50));
 
     s_backend = PLATFORM_IMU_BACKEND_QMI8658;
@@ -322,6 +397,7 @@ static bool platform_imu_init_qmi8658(void)
     s_sensor_model = PLATFORM_IMU_SENSOR_MODEL_QMI8658;
     s_sample_interval_ms = QMI8658_SAMPLE_INTERVAL_MS;
     s_last_error = 0;
+    s_measurement_enabled = true;
 
     ESP_LOGI(
         TAG,
@@ -348,14 +424,16 @@ static int qmi8658_gyro_raw_to_mdps(int16_t raw)
     return (int)((int64_t)raw * 512000 / 32768);
 }
 
-static bool platform_imu_sample_qmi8658(void)
+static bool platform_imu_read_qmi8658(platform_imu_sample_t *sample)
 {
+    if (sample == NULL) {
+        return false;
+    }
     uint8_t raw[14] = {0};
     esp_err_t err = qmi8658_i2c_read(QMI8658_REG_TEMPERATURE_L, raw, sizeof(raw));
     if (err != ESP_OK) {
         s_last_error = (int)err;
         s_backend_status = "qmi8658_read_failed";
-        ESP_LOGW(TAG, "PLATFORM_IMU_QMI8658_SAMPLE_FAIL err=%s", esp_err_to_name(err));
         return false;
     }
 
@@ -366,7 +444,7 @@ static bool platform_imu_sample_qmi8658(void)
     int16_t gy = qmi8658_le16(&raw[10]);
     int16_t gz = qmi8658_le16(&raw[12]);
 
-    platform_imu_sample_t sample = {
+    *sample = (platform_imu_sample_t){
         .seq = 0,
         .uptime_ms = uptime_ms(),
         .accel_mg_x = qmi8658_accel_raw_to_mg(ax),
@@ -378,6 +456,16 @@ static bool platform_imu_sample_qmi8658(void)
         .sample_is_mock = false,
         .source = PLATFORM_IMU_SOURCE_QMI8658,
     };
+    return true;
+}
+
+static bool platform_imu_sample_qmi8658(void)
+{
+    platform_imu_sample_t sample;
+    if (!platform_imu_read_qmi8658(&sample)) {
+        ESP_LOGW(TAG, "PLATFORM_IMU_QMI8658_SAMPLE_FAIL err=%s", esp_err_to_name((esp_err_t)s_last_error));
+        return false;
+    }
     bool pushed = platform_imu_push_sample(&sample);
     if (pushed) {
         s_data_is_mock = false;
@@ -406,7 +494,11 @@ bool platform_imu_init(void)
                 "PLATFORM_IMU_QMI8658_PROBE_UNAVAILABLE status=%s last_error=%d; falling back to mock",
                 s_backend_status,
                 s_last_error);
-            platform_imu_set_mock_backend("qmi8658_unavailable_mock_fallback");
+            if (s_backend != PLATFORM_IMU_BACKEND_QMI8658 || !s_measurement_enabled) {
+                platform_imu_set_mock_backend("qmi8658_unavailable_mock_fallback");
+            } else {
+                ESP_LOGE(TAG, "PLATFORM_IMU_QMI8658_UNCONFIRMED_STOP; hardware service must fail closed");
+            }
         }
 #endif
 
@@ -510,7 +602,38 @@ bool platform_imu_sample(void)
 
 #if CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
     if (s_backend == PLATFORM_IMU_BACKEND_QMI8658 && s_driver_enabled) {
-        if (platform_imu_sample_qmi8658()) {
+        bool one_shot = !s_measurement_enabled;
+        if (one_shot && !platform_imu_capture_begin()) {
+            if (s_measurement_enabled) {
+                return false;
+            }
+            s_backend_status = "qmi8658_one_shot_begin_failed_mock_fallback";
+            return platform_imu_sample_mock();
+        }
+        if (one_shot) {
+            bool warmup_ok = true;
+            for (int index = 0; index < 10; ++index) {
+                vTaskDelay(pdMS_TO_TICKS(50));
+                platform_imu_sample_t discarded;
+                if (!platform_imu_read_qmi8658(&discarded)) {
+                    warmup_ok = false;
+                    break;
+                }
+            }
+            if (!warmup_ok) {
+                bool stopped = platform_imu_capture_end();
+                s_backend_status = stopped ? "qmi8658_one_shot_warmup_failed_mock_fallback"
+                                           : "qmi8658_one_shot_warmup_stop_failed";
+                return stopped ? platform_imu_sample_mock() : false;
+            }
+        }
+        bool sampled = platform_imu_sample_qmi8658();
+        bool stopped = !one_shot || platform_imu_capture_end();
+        if (!stopped) {
+            ESP_LOGW(TAG, "PLATFORM_IMU_QMI8658_ONE_SHOT_STOP_FAIL err=%s", esp_err_to_name((esp_err_t)s_last_error));
+            return false;
+        }
+        if (sampled) {
             return true;
         }
         s_backend_status = "qmi8658_read_failed_mock_fallback";
@@ -518,6 +641,96 @@ bool platform_imu_sample(void)
 #endif
 
     return platform_imu_sample_mock();
+}
+
+bool platform_imu_capture_begin(void)
+{
+    if (!s_initialized) {
+        platform_imu_init();
+    }
+
+#if CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+    if (s_backend != PLATFORM_IMU_BACKEND_QMI8658 || !s_hardware_present || !s_driver_enabled) {
+        return false;
+    }
+    esp_err_t err = qmi8658_configure_measurement();
+    if (err != ESP_OK) {
+        s_last_error = (int)err;
+        s_backend_status = "qmi8658_capture_begin_failed";
+        esp_err_t stop_err = qmi8658_stop_measurement();
+        if (stop_err == ESP_OK) {
+            s_measurement_enabled = false;
+        } else {
+            s_measurement_enabled = true;
+            s_last_error = (int)stop_err;
+            s_backend_status = "qmi8658_capture_begin_stop_failed";
+        }
+        return false;
+    }
+    vTaskDelay(pdMS_TO_TICKS(10));
+    s_measurement_enabled = true;
+    s_backend_status = "qmi8658_capture_ready";
+    s_last_error = 0;
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool platform_imu_sample_real(platform_imu_sample_t *sample)
+{
+    if (sample == NULL) {
+        return false;
+    }
+    if (!s_initialized) {
+        platform_imu_init();
+    }
+
+#if CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+    if (s_backend != PLATFORM_IMU_BACKEND_QMI8658 || !s_hardware_present || !s_driver_enabled ||
+        !s_measurement_enabled) {
+        return false;
+    }
+    platform_imu_sample_t captured;
+    if (!platform_imu_read_qmi8658(&captured)) {
+        return false;
+    }
+    captured.seq = ++s_next_seq;
+    *sample = captured;
+    s_latest = captured;
+    s_data_is_mock = false;
+    s_source = PLATFORM_IMU_SOURCE_QMI8658;
+    s_backend_status = "qmi8658_capture_sample_ok";
+    s_last_error = 0;
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool platform_imu_capture_end(void)
+{
+    if (!s_initialized) {
+        platform_imu_init();
+    }
+
+#if CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
+    if (s_backend != PLATFORM_IMU_BACKEND_QMI8658 || !s_hardware_present || !s_driver_enabled) {
+        return false;
+    }
+    esp_err_t err = qmi8658_stop_measurement();
+    if (err != ESP_OK) {
+        s_last_error = (int)err;
+        s_backend_status = "qmi8658_capture_end_failed";
+        return false;
+    }
+    s_measurement_enabled = false;
+    s_backend_status = "qmi8658_measurement_stopped";
+    s_last_error = 0;
+    return true;
+#else
+    return false;
+#endif
 }
 
 void platform_imu_get_snapshot(platform_imu_snapshot_t *snapshot)

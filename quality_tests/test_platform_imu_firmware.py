@@ -36,6 +36,9 @@ class PlatformImuFirmwareTests(unittest.TestCase):
             "platform_imu_snapshot_t",
             "platform_imu_init",
             "platform_imu_sample",
+            "platform_imu_capture_begin",
+            "platform_imu_sample_real",
+            "platform_imu_capture_end",
             "platform_imu_sample_mock",
             "platform_imu_push_sample",
             "platform_imu_get_snapshot",
@@ -58,6 +61,39 @@ class PlatformImuFirmwareTests(unittest.TestCase):
         ]:
             with self.subTest(token=token):
                 self.assertIn(token, self.source)
+
+    def test_real_capture_path_never_substitutes_mock_and_can_stop_measurement(self) -> None:
+        real_capture = self.source.split("bool platform_imu_sample_real", 1)[1].split(
+            "bool platform_imu_capture_end", 1
+        )[0]
+        capture_end = self.source.split("bool platform_imu_capture_end", 1)[1].split(
+            "void platform_imu_get_snapshot", 1
+        )[0]
+        for token in [
+            "platform_imu_read_qmi8658",
+            "s_measurement_enabled",
+            "PLATFORM_IMU_BACKEND_QMI8658",
+            "sample_is_mock = false",
+            "qmi8658_configure_measurement",
+            "QMI8658_REG_CTRL7, 0x00",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.source)
+        self.assertNotIn("platform_imu_sample_mock", real_capture)
+        self.assertIn("s_measurement_enabled = false", capture_end)
+        self.assertIn("qmi8658_stop_measurement", capture_end)
+        self.assertIn("qmi8658_i2c_read_u8(QMI8658_REG_CTRL7", self.source)
+        self.assertIn("vTaskDelay(pdMS_TO_TICKS(10))", self.source)
+        self.assertIn("qmi8658_init_configure_stop_failed", self.source)
+
+    def test_stopped_one_shot_discards_startup_samples_and_fails_closed_on_stop_error(self) -> None:
+        ordinary_sample = self.source.split("bool platform_imu_sample(void)", 1)[1].split(
+            "bool platform_imu_capture_begin", 1
+        )[0]
+        self.assertIn("for (int index = 0; index < 10; ++index)", ordinary_sample)
+        self.assertIn("platform_imu_read_qmi8658(&discarded)", ordinary_sample)
+        self.assertIn("if (!stopped)", ordinary_sample)
+        self.assertIn("return false;", ordinary_sample.split("if (!stopped)", 1)[1].split("if (sampled)", 1)[0])
 
     def test_mock_boundary_is_explicit(self) -> None:
         for token in [

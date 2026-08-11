@@ -49,6 +49,9 @@ typedef struct {
 
 bool platform_imu_init(void);
 bool platform_imu_sample(void);
+bool platform_imu_capture_begin(void);
+bool platform_imu_sample_real(platform_imu_sample_t *sample);
+bool platform_imu_capture_end(void);
 bool platform_imu_sample_mock(void);
 bool platform_imu_push_sample(const platform_imu_sample_t *sample);
 void platform_imu_get_snapshot(platform_imu_snapshot_t *snapshot);
