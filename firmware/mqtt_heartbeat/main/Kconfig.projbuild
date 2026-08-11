@@ -88,9 +88,21 @@ config EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS
     range 1 360
     depends on EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
     help
-        Maximum raw command polls for the dedicated profile. The task exits
-        immediately after attempting one selected command, regardless of its
-        upload or ACK result.
+        Maximum raw command polls for the dedicated profile. This remains
+        independent of the successful-command limit. A no-command response
+        may continue within this bound; the first poll, command, upload, stop,
+        or ACK error ends the task.
+
+config EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS
+    int "Successful Wi-Fi IMU commands per boot"
+    default 1
+    range 1 4
+    depends on EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
+    help
+        Maximum independent capture_imu_window commands completed in one
+        boot. A command counts only after capture, confirmed IMU stop, all
+        chunks, manifest, and an ok ACK succeed. The first rejected, failed,
+        duplicate, or unacknowledged command ends the task.
 
 config EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
     bool "Enable request_location GNSS telemetry scaffold"

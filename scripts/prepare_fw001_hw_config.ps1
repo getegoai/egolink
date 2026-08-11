@@ -21,6 +21,7 @@ param(
     [switch]$EnableSim7670LteHttpCommandLoop,
     [switch]$EnableWifiImuWindowCommand,
     [int]$WifiImuWindowPollMaxAttempts = 120,
+    [int]$WifiImuWindowMaxSuccessfulCommands = 1,
     [switch]$EnableSim7670LocationObservation,
     [switch]$EnableD1PeriodicLocation,
     [int]$D1PeriodicLocationIntervalSec = 60,
@@ -152,6 +153,9 @@ if ($EnableWifiImuWindowCommand -and -not $EnableQmi8658Imu) {
 if ($EnableWifiImuWindowCommand -and ($WifiImuWindowPollMaxAttempts -lt 1 -or $WifiImuWindowPollMaxAttempts -gt 360)) {
     throw "WifiImuWindowPollMaxAttempts must be between 1 and 360."
 }
+if ($EnableWifiImuWindowCommand -and ($WifiImuWindowMaxSuccessfulCommands -lt 1 -or $WifiImuWindowMaxSuccessfulCommands -gt 4)) {
+    throw "WifiImuWindowMaxSuccessfulCommands must be between 1 and 4."
+}
 if ($EnableWifiImuWindowCommand -and ($EnableSim7670Gnss -or $effectiveEnableSim7670LteStatus -or $EnableSim7670LteHttpProbe -or $effectiveEnableSim7670LteHttpCommandLoop -or $effectiveEnableSim7670LocationObservation)) {
     throw "EnableWifiImuWindowCommand is a dedicated Wi-Fi profile and cannot be combined with SIM7670 modes."
 }
@@ -202,7 +206,8 @@ if ($effectiveEnableSim7670LteHttpCommandLoop) {
 if ($EnableWifiImuWindowCommand) {
     $lines += @(
         "CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED=y",
-        "CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS=$WifiImuWindowPollMaxAttempts"
+        "CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS=$WifiImuWindowPollMaxAttempts",
+        "CONFIG_EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS=$WifiImuWindowMaxSuccessfulCommands"
     )
 } else {
     $lines += "# CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED is not set"
@@ -329,6 +334,7 @@ $result = [pscustomobject]@{
     sim7670_lte_http_command_loop_enabled = [bool]$effectiveEnableSim7670LteHttpCommandLoop
     wifi_imu_window_command_enabled = [bool]$EnableWifiImuWindowCommand
     wifi_imu_window_poll_max_attempts = $WifiImuWindowPollMaxAttempts
+    wifi_imu_window_max_successful_commands = $WifiImuWindowMaxSuccessfulCommands
     sim7670_location_observation_enabled = [bool]$effectiveEnableSim7670LocationObservation
     d1_periodic_location_enabled = [bool]$EnableD1PeriodicLocation
     d1_periodic_location_interval_sec = $D1PeriodicLocationIntervalSec

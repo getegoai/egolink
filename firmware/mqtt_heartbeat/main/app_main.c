@@ -77,6 +77,9 @@ static char s_lte_command_last_message[192] = "no command executed";
 #define LTE_EXECUTED_COMMAND_CACHE_SIZE CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_POLL_MAX_ATTEMPTS
 #else
 #define LTE_EXECUTED_COMMAND_CACHE_SIZE 4
+_Static_assert(
+    CONFIG_EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS <= LTE_EXECUTED_COMMAND_CACHE_SIZE,
+    "Wi-Fi IMU executed-command cache must cover the configured successful-command limit");
 #endif
 typedef struct {
     bool valid;
@@ -3433,11 +3436,18 @@ static bool wifi_http_ack_raw_command(
     return ok;
 }
 
-static bool wifi_http_execute_and_ack_raw_command(const lte_raw_command_t *command)
+typedef enum {
+    WIFI_IMU_WINDOW_COMMAND_FAILED = 0,
+    WIFI_IMU_WINDOW_COMMAND_OK,
+    WIFI_IMU_WINDOW_COMMAND_DUPLICATE,
+} wifi_imu_window_command_result_t;
+
+static wifi_imu_window_command_result_t wifi_http_execute_and_ack_raw_command(
+    const lte_raw_command_t *command)
 {
     if (command == NULL || command->cmd_id[0] == '\0') {
         set_lte_command_parse_status("raw_missing_cmd_id");
-        return false;
+        return WIFI_IMU_WINDOW_COMMAND_FAILED;
     }
     const lte_executed_command_result_t *cached_result = find_executed_command_result(command->cmd_id);
     bool duplicate = cached_result != NULL;
@@ -3481,21 +3491,51 @@ static bool wifi_http_execute_and_ack_raw_command(const lte_raw_command_t *comma
     } else {
         status = cached_result->status;
         message = cached_result->message;
+        snprintf(s_lte_command_last_cmd_id, sizeof(s_lte_command_last_cmd_id), "%s", command->cmd_id);
+        snprintf(s_lte_command_last_status, sizeof(s_lte_command_last_status), "%s", status);
+        snprintf(s_lte_command_last_message, sizeof(s_lte_command_last_message), "%s", message);
         ESP_LOGI(TAG, "WIFI_IMU_WINDOW_DUPLICATE_RESULT_REPLAY cmd_id=%s status=%s", command->cmd_id, status);
     }
 
     if (s_imu_window_service_failed_closed) {
         ESP_LOGE(TAG, "IMU_WINDOW_ACK_SUPPRESSED stop_not_confirmed=true");
-        return false;
+        return WIFI_IMU_WINDOW_COMMAND_FAILED;
     }
-    return wifi_http_ack_raw_command(command, status, message, duplicate);
+    bool ack_ok = wifi_http_ack_raw_command(command, status, message, duplicate);
+    if (duplicate) {
+        return WIFI_IMU_WINDOW_COMMAND_DUPLICATE;
+    }
+    if (!ack_ok || strcmp(status, "ok") != 0) {
+        return WIFI_IMU_WINDOW_COMMAND_FAILED;
+    }
+    return WIFI_IMU_WINDOW_COMMAND_OK;
 }
 
 typedef enum {
     WIFI_IMU_WINDOW_POLL_NO_COMMAND = 0,
     WIFI_IMU_WINDOW_POLL_PARSE_ERROR,
-    WIFI_IMU_WINDOW_POLL_COMMAND_ATTEMPTED,
+    WIFI_IMU_WINDOW_POLL_COMMAND_OK,
+    WIFI_IMU_WINDOW_POLL_COMMAND_FAILED,
+    WIFI_IMU_WINDOW_POLL_COMMAND_DUPLICATE,
 } wifi_imu_window_poll_result_t;
+
+static const char *wifi_imu_window_poll_result_name(wifi_imu_window_poll_result_t result)
+{
+    switch (result) {
+        case WIFI_IMU_WINDOW_POLL_NO_COMMAND:
+            return "no_command";
+        case WIFI_IMU_WINDOW_POLL_PARSE_ERROR:
+            return "parse_or_http_error";
+        case WIFI_IMU_WINDOW_POLL_COMMAND_OK:
+            return "command_ok";
+        case WIFI_IMU_WINDOW_POLL_COMMAND_FAILED:
+            return "command_failed";
+        case WIFI_IMU_WINDOW_POLL_COMMAND_DUPLICATE:
+            return "command_duplicate";
+        default:
+            return "unknown";
+    }
+}
 
 static wifi_imu_window_poll_result_t wifi_http_poll_imu_window_command_once(void)
 {
@@ -3521,8 +3561,14 @@ static wifi_imu_window_poll_result_t wifi_http_poll_imu_window_command_once(void
                    ? WIFI_IMU_WINDOW_POLL_NO_COMMAND
                    : WIFI_IMU_WINDOW_POLL_PARSE_ERROR;
     }
-    (void)wifi_http_execute_and_ack_raw_command(&command);
-    return WIFI_IMU_WINDOW_POLL_COMMAND_ATTEMPTED;
+    wifi_imu_window_command_result_t command_result = wifi_http_execute_and_ack_raw_command(&command);
+    if (command_result == WIFI_IMU_WINDOW_COMMAND_OK) {
+        return WIFI_IMU_WINDOW_POLL_COMMAND_OK;
+    }
+    if (command_result == WIFI_IMU_WINDOW_COMMAND_DUPLICATE) {
+        return WIFI_IMU_WINDOW_POLL_COMMAND_DUPLICATE;
+    }
+    return WIFI_IMU_WINDOW_POLL_COMMAND_FAILED;
 }
 #endif
 
@@ -4053,6 +4099,7 @@ static void command_poll_task(void *arg)
 {
     (void)arg;
 #if CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
+    int successful_commands = 0;
     for (int attempt = 1; attempt <= CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS; ++attempt) {
         EventBits_t bits = xEventGroupWaitBits(
             s_event_group,
@@ -4064,22 +4111,32 @@ static void command_poll_task(void *arg)
         if (bits & WIFI_CONNECTED_BIT) {
             result = wifi_http_poll_imu_window_command_once();
         }
+        if (result == WIFI_IMU_WINDOW_POLL_COMMAND_OK) {
+            ++successful_commands;
+        }
         ESP_LOGI(
             TAG,
-            "WIFI_IMU_WINDOW_POLL_ROUND_DONE attempt=%d max_attempts=%d result=%s",
+            "WIFI_IMU_WINDOW_POLL_ROUND_DONE attempt=%d max_attempts=%d successful_commands=%d max_successful_commands=%d result=%s",
             attempt,
             CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS,
-            result == WIFI_IMU_WINDOW_POLL_COMMAND_ATTEMPTED
-                ? "selected_command"
-                : (result == WIFI_IMU_WINDOW_POLL_NO_COMMAND ? "no_command" : "parse_or_http_error"));
-        if (result == WIFI_IMU_WINDOW_POLL_COMMAND_ATTEMPTED || s_imu_window_service_failed_closed) {
+            successful_commands,
+            CONFIG_EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS,
+            wifi_imu_window_poll_result_name(result));
+        bool terminal_result = result != WIFI_IMU_WINDOW_POLL_NO_COMMAND &&
+                               result != WIFI_IMU_WINDOW_POLL_COMMAND_OK;
+        if (terminal_result || s_imu_window_service_failed_closed ||
+            successful_commands >= CONFIG_EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS) {
             break;
         }
         if (attempt < CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS) {
             vTaskDelay(pdMS_TO_TICKS(CONFIG_EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC * 1000));
         }
     }
-    ESP_LOGI(TAG, "WIFI_IMU_WINDOW_COMMAND_TASK_DONE");
+    ESP_LOGI(
+        TAG,
+        "WIFI_IMU_WINDOW_COMMAND_TASK_DONE successful_commands=%d max_successful_commands=%d",
+        successful_commands,
+        CONFIG_EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS);
     vTaskDelete(NULL);
 #else
     while (true) {

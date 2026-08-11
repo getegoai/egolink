@@ -417,6 +417,9 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_PLATFORM_IMU_BACKEND_QMI8658",
             "config EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS",
             "default 120",
+            "config EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS",
+            "default 1",
+            "range 1 4",
             "CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED",
             "message_hub_request_with_content_type",
             "message_hub_post_raw",
@@ -424,8 +427,11 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             "wifi_http_poll_imu_window_command_once",
             "WIFI_IMU_WINDOW_POLL_NO_COMMAND",
             "WIFI_IMU_WINDOW_POLL_PARSE_ERROR",
-            "WIFI_IMU_WINDOW_POLL_COMMAND_ATTEMPTED",
+            "WIFI_IMU_WINDOW_POLL_COMMAND_OK",
+            "WIFI_IMU_WINDOW_POLL_COMMAND_FAILED",
+            "WIFI_IMU_WINDOW_POLL_COMMAND_DUPLICATE",
             "CONFIG_EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS",
+            "CONFIG_EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS",
             "WIFI_IMU_WINDOW_COMMAND_TASK_DONE",
             "/commands/poll.raw",
             "parse_lte_raw_command_frame(response, &command)",
@@ -437,7 +443,9 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
             '"transport_type=%s\\n"',
             '"transport_type=wifi\\n"',
             "WIFI_IMU_WINDOW_DUPLICATE_RESULT_REPLAY",
+            "WIFI_IMU_WINDOW_COMMAND_DUPLICATE",
             "find_executed_command_result(command->cmd_id)",
+            "Wi-Fi IMU executed-command cache must cover the configured successful-command limit",
             "command->test_run_id",
             "#if !CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED",
         ]:
@@ -452,16 +460,35 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         )[0]
         self.assertNotIn("message_hub_post_raw", capture)
         self.assertNotIn("message_hub_request", capture)
-        wifi_execute = self.app_main.split("static bool wifi_http_execute_and_ack_raw_command", 1)[1].split(
+        wifi_execute = self.app_main.split(
+            "static wifi_imu_window_command_result_t wifi_http_execute_and_ack_raw_command", 1
+        )[1].split(
             "static bool wifi_http_poll_imu_window_command_once", 1
         )[0]
         self.assertNotIn("capture_real_imu_window", wifi_execute)
+        self.assertLess(
+            wifi_execute.index('publish_imu_window(command->cmd_id, command->test_run_id, "wifi")'),
+            wifi_execute.index("wifi_http_ack_raw_command(command, status, message, duplicate)"),
+        )
+        self.assertLess(
+            wifi_execute.index("wifi_http_ack_raw_command(command, status, message, duplicate)"),
+            wifi_execute.index("return WIFI_IMU_WINDOW_COMMAND_OK"),
+        )
+        self.assertIn('if (!ack_ok || strcmp(status, "ok") != 0)', wifi_execute)
+        self.assertIn("return WIFI_IMU_WINDOW_COMMAND_DUPLICATE", wifi_execute)
         command_task = self.app_main.split("static void command_poll_task", 1)[1].split(
             "static void wifi_event_handler", 1
         )[0]
         self.assertIn("wifi_http_poll_imu_window_command_once", command_task)
         self.assertIn("message_hub_poll_commands", command_task)
         self.assertIn("for (int attempt = 1;", command_task)
+        self.assertIn("++successful_commands", command_task)
+        self.assertIn("result != WIFI_IMU_WINDOW_POLL_NO_COMMAND", command_task)
+        self.assertIn("result != WIFI_IMU_WINDOW_POLL_COMMAND_OK", command_task)
+        self.assertIn(
+            "successful_commands >= CONFIG_EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS",
+            command_task,
+        )
         self.assertIn("vTaskDelete(NULL)", command_task)
         self.assertNotIn("while (true)", command_task.split("#else", 1)[0])
         lte_ready_section = self.app_main.split("static bool wait_for_lte_ready_for_http_probe", 1)[0]
