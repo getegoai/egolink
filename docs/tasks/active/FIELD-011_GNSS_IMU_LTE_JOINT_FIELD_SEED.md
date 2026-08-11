@@ -91,10 +91,10 @@ through the existing LTE raw-frame path.
       SIM-only field run.
 - [x] Session-runner tests cover unchanged default Wi-Fi behavior and an LTE
       three-window success path, plus wrong-transport fail-closed behavior.
-- [ ] ESP-IDF 5.4.2 builds the exact combined profile with GNSS, LTE periodic
+- [x] ESP-IDF 5.4.2 builds the exact combined profile with GNSS, LTE periodic
       location, LTE raw commands, QMI8658 `0x6A`, 50 ms IMU cadence, no Wi-Fi
       window mode, no boot sample burst, and mock-labelled power.
-- [ ] Static validation and the build/image hash are committed before any
+- [x] Static validation and the build/image hash are committed before any
       flash, preserving the separate implementation/evidence commit cadence.
 - [ ] After the SIM is inserted, a bounded bench gate observes SIM ready,
       registration/PDP ready, explainable GNSS state, QMI identity, confirmed
@@ -110,6 +110,27 @@ through the existing LTE raw-frame path.
 # Validation Commands
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
+  -HostName 203.0.113.10 -Port 8790 -Scheme http `
+  -DeviceId ego-link-r1-connectivity-001 `
+  -FwVersion 0.1.0-field011-gnss-imu `
+  -TestRunId F011-FW-20260811-001 `
+  -TokenFile server\runtime\vps_message_hub_token.txt `
+  -ConfigPath firmware\mqtt_heartbeat\sdkconfig.field011-gnss-imu-lte.local `
+  -SourceSdkconfig firmware\mqtt_heartbeat\sdkconfig.vps.local `
+  -BuildDir build_field011_gnss_imu_lte `
+  -IdfExport C:\Espressif\tools\Microsoft.v5.4.2.PowerShell_profile.ps1 `
+  -EnableSim7670Gnss -EnableD1PeriodicLocation `
+  -D1PeriodicLocationIntervalSec 60 `
+  -EnableQmi8658Imu -Qmi8658I2CPort 0 `
+  -Qmi8658SdaGpio 15 -Qmi8658SclGpio 16 `
+  -Qmi8658I2CAddress 106 -Qmi8658I2CTimeoutMs 20 `
+  -Qmi8658SampleIntervalMs 50 -Qmi8658BootSampleCount 0 `
+  -Build -Json
+python scripts\run_imu_capture_session.py `
+  --plan reports\field_validation\FIELD-011-20260811-001\capture_plan.json `
+  --output reports\field_validation\FIELD-011-20260811-001\capture_dry_run.json `
+  --json
 python -m unittest quality_tests.test_imu_capture_session quality_tests.test_fw001_hw_config quality_tests.test_mqtt_heartbeat_firmware quality_tests.test_imu_window_export -v
 powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
 python scripts\context_lint.py
@@ -151,18 +172,33 @@ git diff --check
 
 # Completion Evidence
 
-- Changed files: this task packet, `scripts/run_imu_capture_session.py`, and
-  `quality_tests/test_imu_capture_session.py`.
+- Implementation commit: `3f97cf7` (`feat(field): prepare LTE GNSS IMU joint
+  seed [D2-D5]`), containing this task packet,
+  `scripts/run_imu_capture_session.py`, and
+  `quality_tests/test_imu_capture_session.py` only.
 - Static validation: focused FIELD-011 suite 65/65 PASS; repository verification
   610/610 PASS; context lint and diff check PASS. The capture plan dry-run is
   `dry_run_ready` for exactly three LTE windows with no external actions.
-- Build: the combined profile completed an exploratory build-only pass; a clean
-  post-implementation-commit rebuild and authoritative image hashes remain
-  pending before flash.
+- Build: clean ESP-IDF 5.4.2 build-only PASS at implementation commit
+  `3f97cf7`; project version `v0.1.0-30-g3f97cf7`, ESP32-S3 target, app size
+  605,776 bytes with 42% of the 1 MiB app partition free. `flash_intentionally_not_run=true`.
+- Image hashes: bootloader 20,928 bytes SHA-256
+  `4DC71F42042DF0B81FE3C3C4B5AC2AC97CA5E029AC5C1EC0ABD7B052E2B295E1`;
+  partition table 3,072 bytes SHA-256
+  `7F00B6C042A89B15B0CAC534F82ED988CAF29278FF5700B0C511EB1B5BB7C820`;
+  application 605,776 bytes SHA-256
+  `388FFEAA96A15D1CAE185B82592EC406320C556C45656629AB292ACFE2E7D0AB`.
 - Bench result:
 - Outdoor result:
-- Evidence paths:
-- Remaining risks:
+- Evidence paths: ignored local directory
+  `reports/field_validation/FIELD-011-20260811-001/` contains the three-window
+  capture plan, operator runbook, and no-action dry-run result. The ignored
+  config/build are `sdkconfig.field011-gnss-imu-lte.local` and
+  `build_field011_gnss_imu_lte/` under `firmware/mqtt_heartbeat/`.
+- Remaining risks: SIM/PIN/APN/registration/PDP state is not yet observed;
+  the combined image has not run on hardware; GNSS and IMU are related by a
+  device/time window rather than synchronized sample timestamps; durable
+  offline delivery and field power life remain unverified.
 
 # Builder Prompt
 
