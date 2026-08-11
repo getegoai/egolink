@@ -6,6 +6,24 @@ verified_by: codex
 
 ## Latest Development Evidence
 
+2026-08-11: FIELD-011 completed the first real high-rate QMI8658 window over
+SIM7670G LTE in the joint LTE/GNSS/IMU image. The first readiness attempt
+failed because the modem reported `SIM not inserted`; after the operator's
+full power cycle, the already-pending command completed without another flash
+or command creation. The retained evidence contains 100 real samples, ten
+chunks, one manifest, one matching LTE `ok` ACK, zero read/mock/deadline
+failures, and one valid cadence-qualified explicit export. The same image also
+reported `LTE_READY`, home registration, active PDP and indoor GNSS
+`fix=false` / `no_fix`. This is a joint bench-integration pass only: the
+window has no operator-confirmed activity label, and outdoor GNSS fix, fixed
+carry orientation, independent power, calibration, walking data, retention,
+model training, and product acceptance remain pending. All training gates
+remain false.
+
+For the currently flashed image and bench state, this latest section together
+with `ACTIVE_BUILD.md` and `BOARD_MATRIX.md` supersedes older dated uses of
+"current" in the chronological evidence log below.
+
 2026-08-11: D5-002 completed the first real operator-confirmed, session-grouped
 IMU pipeline seed on the current 4G development board. One Wi-Fi run produced
 three independently commanded QMI8658 stationary windows, 300 real samples,

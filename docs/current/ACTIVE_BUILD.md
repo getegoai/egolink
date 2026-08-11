@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | UI-001 field-friendly D1 status sidecar is currently flashed: cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt, QMI8658 engineering sampler. Bounded smoke `ui001-amoled-friendly-smoke-20260704` observed `cmd=display_status` plus `status_rendered`. |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-11 | FIELD-011 joint LTE/GNSS/QMI8658 image `0.1.0-field011-gnss-imu` (`v0.1.0-30-g3f97cf7`, app SHA-256 `388FFEAA...E7D0AB`) is currently flashed on ESP32-S3 MAC `02:00:00:00:00:03`. Its bounded startup passed QMI8658 `WHO_AM_I=0x05` and confirmed idle measurement stop. The inserted-SIM bench gate then ended at `LTE_HTTP_COMMAND_READY_RESULT ready=false`: registration stayed `not_registered`, PDP was unknown, command `f011-bench-1` remained pending, and no IMU capture, GNSS event, raw frame, or ACK occurred. D5-002 remains the latest successful high-rate IMU evidence. |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-11 | FIELD-011 joint LTE/GNSS/QMI8658 image `0.1.0-field011-gnss-imu` (`v0.1.0-30-g3f97cf7`, app SHA-256 `388FFEAA...E7D0AB`) is currently flashed on ESP32-S3 MAC `02:00:00:00:00:03`. Startup passed QMI8658 `WHO_AM_I=0x05` and confirmed idle measurement stop. After an initial `SIM not inserted` failure, a full power cycle let the existing command complete over LTE: 100 real samples, ten chunks, one manifest, one matching `ok` ACK, and one valid cadence-qualified export. Periodic location also reported LTE ready/registered/PDP active and indoor GNSS no-fix. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -100,14 +100,21 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   sidecar hashes; it remains split `unassigned`, `training_allowed=false`,
   and `training_ready=false`.
 - FIELD-011 flashed the clean joint LTE/GNSS/QMI8658 image once on 2026-08-11.
-  The 20-second startup gate again observed `WHO_AM_I=0x05`, revision `0x7c`,
-  reset result `0x80`, real hardware present, and confirmed idle measurement
-  stop. With a SIM inserted, the AT channel was reachable, but registration
-  remained `not_registered` and PDP remained unknown through the readiness
-  limit. The only stationary command was never polled or executed; the
-  read-only API export contained one pending command, zero messages, and zero
-  raw frames. This is a combined-image startup pass and LTE precondition fail,
-  not a GNSS or LTE IMU-window pass. Evidence:
+  The 20-second startup gate observed `WHO_AM_I=0x05`, revision `0x7c`, reset
+  result `0x80`, real hardware present, and confirmed idle measurement stop.
+  The first LTE readiness attempt failed with `SIM not inserted`; after the
+  operator's full power cycle, the already-pending command `f011-bench-1`
+  completed without another flash or command creation. The explicit exporter
+  scanned 13 matching retained frames and reconstructed ten QMI8658 chunks plus
+  one manifest; the command has one matching LTE `ok` ACK. The window contains
+  100 real samples after ten
+  warm-ups, with zero read/mock/deadline failures and observed cadence
+  49,985/49,999/50,000 us minimum/mean/maximum. One explicit export returned
+  one valid cadence-qualified window and zero invalid windows with
+  `training_allowed=false`. Periodic location then reported `LTE_READY`, home
+  registration, active PDP, assigned IP, RAT `LTE`, and indoor GNSS
+  `fix=false` / `no_fix`. The captured motion is stationary-like but has no
+  operator-confirmed label. Evidence:
   `reports/field_validation/FIELD-011-20260811-001/field011_bench_report.md`.
 - Camera smoke capture on the SIM7670G board has produced bounded JPEG evidence.
 - R1 connectivity-node firmware `0.1.0-fw001-hw-r1` has passed USB-Free
@@ -290,29 +297,29 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 
 ## Current Known Limits
 
-- The current FIELD-011 image has not passed its inserted-SIM bench gate.
-  A follow-up read-only USB AT diagnostic identified COM4 and returned
-  `+CME ERROR: SIM not inserted` for `AT+CPIN?`; the modem does not currently
-  detect the card. The unregistered/PDP-unknown state is downstream of that
-  hardware-detection failure, not evidence for an APN fault. The only command
-  remains pending. Do not reboot or hand off the board until the SIM is fully
-  power-off reseated and the pending command is intentionally reused or closed
-  under a new bounded retry plan.
+- The current FIELD-011 image has passed its inserted-SIM joint bench gate only
+  after a full power cycle cleared the initial `SIM not inserted` condition.
+  The single authorized command is complete, not pending. One real QMI8658
+  window reached the VPS over LTE and reconstructed cleanly, while periodic
+  LTE location reached the VPS with an explainable indoor no-fix result. This
+  does not yet prove outdoor GNSS fix, USB-free independent-power operation,
+  fixed carry orientation, walking windows, reconnect behavior, or long-run
+  stability.
 - D5-002 proves three independent bounded 100 x 50 ms real six-axis windows
   can reach the VPS over Wi-Fi in one boot and be reconstructed as
   cadence-qualified engineering evidence with one operator-confirmed
   flat-on-table stationary label session. It does not prove fixed axis
-  mapping, calibration, other activities or poses, training suitability, LTE
-  transport, continuous operation, or product accuracy. The labelled seed is
-  explicitly training-blocked, and the dedicated command task exits after
-  three successes, so the current image is not continuously sampling or
-  uploading.
+  mapping, calibration, other activities or poses, training suitability,
+  continuous operation, or product accuracy. FIELD-011 separately proves one
+  LTE-transported window, but it has no operator-confirmed activity label. The
+  D5-002 labelled seed is explicitly training-blocked, and its dedicated
+  command task exits after three successes. FIELD-011 likewise uses bounded
+  command captures; neither run proves continuous sampling or uploading.
 - The historical D2-007 combined image identified and stopped the external
-  QMI8658A at startup, but its LTE/IMU run did not reach the capture path:
-  SIM7670 reported `LTE_SIM_NOT_READY` / `not_registered`, with PDP unknown,
-  through the 120-second readiness gate. No 20 Hz window or LTE IMU upload is
-  verified; the exact SIM/readiness cause still requires a separate bounded
-  diagnostic.
+  QMI8658A at startup, but that run did not reach capture because LTE was not
+  ready. FIELD-011 now supersedes that negative integration result with one
+  successful 100 x 50 ms LTE window; it does not retroactively make D2-007 a
+  passing run.
 - GNSS indoor no-fix is expected and is not a P0 failure by itself.
 - SIM7670G GNSS refresh has PC-side USB AT no-fix evidence and FW-002B
   firmware-side UART/AT no-fix evidence through the USB-Free Message Hub loop.

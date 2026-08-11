@@ -15,10 +15,12 @@ verified_by: codex
 > three independently commanded windows in one boot, exported all three, and
 > bound them to one operator-confirmed flat-on-table stationary session. Axis
 > mapping, calibration, labels for other activities or poses, mechanical
-> retention, LTE window transport, and product acceptance remain pending.
-> FIELD-011 later passed the joint image's QMI identity/idle-stop startup gate,
-> but its inserted-SIM attempt still stopped before capture because LTE
-> registration and PDP readiness were not established.
+> retention, and product acceptance remain pending. FIELD-011 later passed the
+> joint image's QMI identity/idle-stop startup gate and, after a full power
+> cycle cleared an initial SIM-detection failure, uploaded and explicitly
+> reconstructed one real 100 x 50 ms QMI8658 window over LTE. Outdoor GNSS,
+> walking data, independent field power, and a confirmed activity label for
+> that LTE window remain pending.
 
 ## Purpose
 
@@ -149,22 +151,31 @@ The 2026-08-11 FIELD-011 joint image then enabled QMI8658, SIM7670G LTE raw
 commands, GNSS, location observation, and 60-second periodic location in one
 existing-code profile. Its one COM3 flash and 20-second startup gate passed
 QMI identity (`WHO_AM_I=0x05`, revision `0x7c`, reset result `0x80`) and
-readback-confirmed idle stop. With a SIM inserted, the AT channel was
-reachable, but the readiness loop ended with registration `not_registered`,
-PDP `unknown`, and `ready=false`. Command `f011-bench-1` remained pending;
-there was no capture start, sample, chunk, manifest, GNSS event, LTE upload, or
-ACK. The read-only API export contained zero messages and zero raw frames.
-This preserves the QMI startup evidence but does not advance LTE-window or
-joint field acceptance. Evidence:
+readback-confirmed idle stop. The first inserted-SIM readiness attempt ended
+with registration `not_registered`, PDP `unknown`, and `ready=false`. A
+separately authorized read-only COM4 diagnostic then returned
+`+CME ERROR: SIM not inserted` for `AT+CPIN?`.
+
+After the operator's full power cycle, with no second flash or new command,
+the existing `f011-bench-1` command completed over LTE. The explicit exporter
+scanned 13 matching retained frames and reconstructed ten chunks plus one
+manifest; the command has one matching `ok` ACK. The reconstructed window
+contains 100 real samples
+after ten warm-ups, zero read failures, mock samples, or deadline misses, and
+observed cadence 49,985/49,999/50,000 us minimum/mean/maximum. The explicit
+export returned one valid cadence-qualified window, zero invalid windows, and
+`training_allowed=false`. Periodic location also reported `LTE_READY`, home
+registration, active PDP, assigned IP and RAT `LTE`; indoor GNSS remained
+`fix=false` / `no_fix`. This is the first passing LTE high-rate QMI8658 bench
+window in the joint image, but not outdoor GNSS or product acceptance.
+Evidence:
 `reports/field_validation/FIELD-011-20260811-001/field011_bench_report.md`.
-A separately authorized read-only USB AT diagnostic subsequently selected
-COM4 and returned `+CME ERROR: SIM not inserted` for `AT+CPIN?`. The immediate
-next gate is therefore a full-power-off SIM reseat and CPIN recheck, not an APN
-change or firmware rebuild.
 
 The engineering corpus therefore contains four uploaded bounded high-cadence
-Wi-Fi windows across D2-009 and D5-002, including three operator-confirmed
-stationary windows in one session. Next data work must freeze axes/calibration
+Wi-Fi windows across D2-009 and D5-002 plus one LTE window from FIELD-011. The
+three D5-002 windows are operator-confirmed stationary; the FIELD-011 window
+is only stationary-like until the operator confirms its actual state. Next
+data work must freeze axes/calibration
 and add independent stationary, walking, and vehicle sessions while training
 remains disabled until consent, retention, quality, data-volume, and split
 gates are explicitly satisfied. Do not turn this bench profile into a

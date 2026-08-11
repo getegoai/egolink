@@ -96,7 +96,7 @@ through the existing LTE raw-frame path.
       window mode, no boot sample burst, and mock-labelled power.
 - [x] Static validation and the build/image hash are committed before any
       flash, preserving the separate implementation/evidence commit cadence.
-- [ ] After the SIM is inserted, a bounded bench gate observes SIM ready,
+- [x] After the SIM is inserted, a bounded bench gate observes SIM ready,
       registration/PDP ready, explainable GNSS state, QMI identity, confirmed
       idle stop, and fresh VPS location evidence before handoff.
 - [ ] The field run uses independent power and no USB runtime path, records the
@@ -164,7 +164,20 @@ git diff --check
   `+CME ERROR: SIM not inserted`. The nine approved status queries completed in
   6.98 seconds with no configuration write, reset, or flash. CSQ was 21, while
   registration was `0,0`, attach was 0, and no PDP context existed. The next
-  gate is physical SIM detection after a full-power-off reseat.
+  gate was physical SIM detection after a full-power-off reseat.
+- Full-power-cycle recovery: the operator power-cycled the board. No second
+  flash or new command was issued. After boot count advanced to 26935, the
+  already-pending `f011-bench-1` command completed at
+  `2026-08-11T06:26:14.025651Z` with one matching LTE `ok` ACK. Window
+  `imuw-f011-bench-1-b26935` retained 100 real QMI8658 samples after ten
+  warm-ups, ten chunks, one manifest, and zero read/mock/deadline failures.
+  The explicit exporter scanned 13 matching retained frames and reconstructed
+  all ten chunks plus the manifest; observed cadence was
+  49,985/49,999/50,000 us minimum/mean/maximum. The single explicit export
+  returned `ok=true`, one valid cadence-qualified window, zero invalid windows,
+  and no truncation. Periodic location from the same image reported
+  `LTE_READY`, home registration, active PDP, assigned IP, RAT `LTE`, and the
+  explainable indoor GNSS state `fix=false` / `no_fix`.
 
 # Decisions
 
@@ -172,6 +185,10 @@ git diff --check
   20-second startup capture, up to five minutes of bench observation, one
   stationary 100 x 50 ms capture command, and one read-only export. No second
   flash, reset, modem diagnostic, or capture retry is authorized by that turn.
+- A later turn separately authorized the bounded read-only USB AT diagnostic.
+  The operator then performed the full power cycle directly; the firmware
+  reused the single existing command, so no second command, flash, or capture
+  request was created.
 - This is the first joint field seed, not strict FIELD-003 accuracy acceptance
   and not a long-run reliability or battery test. Reference coordinates may be
   added by the existing D2 field kit, but their absence does not erase useful
@@ -204,25 +221,37 @@ git diff --check
   `7F00B6C042A89B15B0CAC534F82ED988CAF29278FF5700B0C511EB1B5BB7C820`;
   application 605,776 bytes SHA-256
   `388FFEAA96A15D1CAE185B82592EC406320C556C45656629AB292ACFE2E7D0AB`.
-- Bench result: **PARTIAL / FAIL (LTE registration precondition)**. Flash and
-  QMI startup/idle-stop passed. SIM7670 UART/AT was reachable, but LTE stayed
-  `not_registered` with PDP unknown until
-  `LTE_HTTP_COMMAND_READY_RESULT ready=false`. Test run
-  `F011-BENCH-20260811-001` contains one pending command `f011-bench-1`, zero
-  messages, and zero raw frames. No physical capture occurred.
-- Outdoor result: not started; the board is not ready for handoff.
+- Bench result: **PASS after full power cycle; initial SIM-detection attempt
+  failed**. Flash and QMI startup/idle-stop passed. The first readiness loop
+  stopped at `LTE_HTTP_COMMAND_READY_RESULT ready=false`, and a bounded COM4
+  diagnostic identified `SIM not inserted`. After the operator's full power
+  cycle, with no second flash or new command, test run
+  `F011-BENCH-20260811-001` completed its sole command `f011-bench-1` with an
+  LTE `ok` ACK. The resulting window contains 100 real samples, ten chunks,
+  one manifest, zero read/mock/deadline failures, and cadence
+  49,985/49,999/50,000 us minimum/mean/maximum. One explicit export returned
+  one valid cadence-qualified window, zero invalid windows, and no truncation;
+  JSONL SHA-256 is
+  `33B64819897C862329F35551604DA425A162E516976C25044703B999C57029B8`.
+  Periodic location reported LTE ready/registered/PDP active and indoor GNSS
+  no-fix. The window remains activity-label `unknown` because no post-run
+  operator confirmation has been recorded.
+- Outdoor result: not started; the bench gate now permits a controlled field
+  handoff, but does not itself prove USB-free independent power, outdoor GNSS
+  fix, fixed carry orientation, or walking capture.
 - Evidence paths: ignored local directory
   `reports/field_validation/FIELD-011-20260811-001/` contains the three-window
-  capture plan, operator runbook, and no-action dry-run result. The ignored
-  config/build are `sdkconfig.field011-gnss-imu-lte.local` and
+  capture plan, operator runbook, no-action dry-run, flash/startup/initial bench
+  evidence, read-only AT diagnosis, final bench report, and the single explicit
+  export under `imu-export-after-reseat/`. The ignored config/build are
+  `sdkconfig.field011-gnss-imu-lte.local` and
   `build_field011_gnss_imu_lte/` under `firmware/mqtt_heartbeat/`.
-- Remaining risks: SIM electrical/mechanical detection currently fails with
-  `SIM not inserted`; PIN/APN/registration/PDP cannot yet be evaluated;
-  the combined image has now passed QMI startup only, not joint runtime;
-  command `f011-bench-1` remains pending and must be resolved before reboot;
-  GNSS and IMU are related by a device/time window rather than synchronized
-  sample timestamps; durable offline delivery and field power life remain
-  unverified. Detailed evidence:
+- Remaining risks: the successful recovery has not yet been reproduced across
+  additional SIM cold starts; GNSS and IMU are related by a device/time window
+  rather than synchronized sample timestamps; outdoor fix/TTFF/fix-rate,
+  fixed carry orientation, three confirmed walking windows, USB-free field
+  power, calibration, reconnect/store-forward, privacy/retention, and field
+  power life remain unverified. Detailed evidence:
   `reports/field_validation/FIELD-011-20260811-001/field011_bench_report.md`.
 
 # Builder Prompt
