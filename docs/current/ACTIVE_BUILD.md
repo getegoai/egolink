@@ -93,6 +93,11 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   cadence-qualified windows, zero invalid windows, and
   `training_allowed=false`. Evidence:
   `reports/board_validation/20260811-d5002-imu-seed/d5_002_hardware_report.md`.
+  The operator subsequently confirmed that the board stayed flat and
+  stationary on the table throughout all three windows. A one-session
+  labelled seed now binds the three windows and 300 samples through explicit
+  sidecar hashes; it remains split `unassigned`, `training_allowed=false`,
+  and `training_ready=false`.
 - Camera smoke capture on the SIM7670G board has produced bounded JPEG evidence.
 - R1 connectivity-node firmware `0.1.0-fw001-hw-r1` has passed USB-Free
   Message Hub validation on independent power with USB disconnected:
@@ -276,11 +281,13 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 
 - D5-002 proves three independent bounded 100 x 50 ms real six-axis windows
   can reach the VPS over Wi-Fi in one boot and be reconstructed as
-  cadence-qualified engineering evidence. It does not prove fixed axis
-  mapping, calibration, confirmed labels, training suitability, LTE
-  transport, continuous operation, or product accuracy. The dedicated command
-  task exits after three successes, so the current image is not continuously
-  sampling or uploading.
+  cadence-qualified engineering evidence with one operator-confirmed
+  flat-on-table stationary label session. It does not prove fixed axis
+  mapping, calibration, other activities or poses, training suitability, LTE
+  transport, continuous operation, or product accuracy. The labelled seed is
+  explicitly training-blocked, and the dedicated command task exits after
+  three successes, so the current image is not continuously sampling or
+  uploading.
 - The historical D2-007 combined image identified and stopped the external
   QMI8658A at startup, but its LTE/IMU run did not reach the capture path:
   SIM7670 reported `LTE_SIM_NOT_READY` / `not_registered`, with PDP unknown,

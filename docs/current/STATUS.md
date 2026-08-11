@@ -1,8 +1,21 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-13
+last_verified: 2026-08-11
 verified_by: codex
 ---
+
+## Latest Development Evidence
+
+2026-08-11: D5-002 completed the first real operator-confirmed, session-grouped
+IMU pipeline seed on the current 4G development board. One Wi-Fi run produced
+three independently commanded QMI8658 stationary windows, 300 real samples,
+three cadence-qualified exports, and a one-session labelled artifact whose
+source, plan, execution, annotation, and sample hashes are bound end to end.
+The operator confirmed the board stayed flat and stationary on the table for
+all three windows. This proves the capture-to-label plumbing only: every row
+remains split `unassigned`, `training_allowed=false`, and
+`training_ready=false`; calibration, activity diversity, consent, sufficient
+data volume, model training, and product acceptance remain pending.
 
 ## V1 Pro Hardware Freeze
 

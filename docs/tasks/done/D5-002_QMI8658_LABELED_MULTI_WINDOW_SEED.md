@@ -1,7 +1,7 @@
 ---
 id: D5-002
 title: QMI8658 labelled multi-window dataset seed
-status: active
+status: done
 priority: high
 requires_hardware: true
 serves_demo: D5
@@ -41,7 +41,7 @@ context:
   - quality_tests/test_labeled_imu_dataset.py
 
 allowed_paths:
-  - docs/tasks/active/D5-002_QMI8658_LABELED_MULTI_WINDOW_SEED.md
+  - docs/tasks/done/D5-002_QMI8658_LABELED_MULTI_WINDOW_SEED.md
   - docs/current/ACTIVE_BUILD.md
   - docs/current/STATUS.md
   - docs/hardware/BOARD_MATRIX.md
@@ -161,8 +161,10 @@ powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
 - The operator authorized one COM3 flash, one 20-second startup capture, three
   100 x 50 ms Wi-Fi windows, at most five minutes of observation, and one
   read-only export. The run used one unassigned session with three planned
-  stationary windows. Hardware capture/export passed; post-capture observed
-  label confirmation remains pending.
+  stationary windows. Hardware capture/export passed. The operator then
+  confirmed that the board remained flat and stationary on the table for the
+  full run; three sidecar rows bind that observation one-to-one to the three
+  exported windows.
 
 # Decisions
 
@@ -205,17 +207,28 @@ powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
   exporter invocation returned three valid cadence-qualified windows, zero
   invalid windows, and no truncation. Evidence:
   `reports/board_validation/20260811-d5002-imu-seed/d5_002_hardware_report.md`.
-  The planned stationary action has not yet been promoted to an observed
-  label, so the label sidecar and labelled dataset artifact remain pending.
+  The operator confirmed all three windows as flat-on-table stationary. The
+  sidecar at `operator_annotations.json` contains three `operator_confirmed`
+  rows (SHA-256
+  `4A70F23280C47F03D3D68AC164AE47B2D8FC32F1AC67DF6090139D2849F4F2C8`).
+  The builder produced one session with three stationary target windows and
+  300 samples; its labelled JSONL SHA-256 is
+  `8E16EEA0F58F0704F23959D304300CD497F92C7BB983FC5CB2A9F0110432BE42`
+  and manifest SHA-256 is
+  `43A6BE5ED86F5A8363B2B5C62946E739E1DD2B77D00465C3D6DE9D94F73225E4`.
+  The immutable source JSONL remains
+  `53541B8633C7384E646DA1EB34CB875FB115BC547CDC615F449D735D496A142D`.
+  The dataset reports `pipeline_seed_ready=true`, while all three rows remain
+  split `unassigned`, `training_allowed=false`, and `training_ready=false`.
 - Remaining risks: concurrent external capture commands must be absent during
-  the bounded run; the executed-command cache is RAM-only; activity labels,
+  a bounded run; the executed-command cache is RAM-only; activity diversity,
   axis calibration, data sufficiency, consent, and training remain unverified
-  or explicitly blocked.
+  or explicitly blocked. This stationary seed is not a trainable corpus.
 
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/D5-002_QMI8658_LABELED_MULTI_WINDOW_SEED.md in
+Read docs/tasks/done/D5-002_QMI8658_LABELED_MULTI_WINDOW_SEED.md in
 D:\pywork\egolink. Load only AGENTS.md, docs/CONTEXT_INDEX.md, firmware/AGENTS.md,
 quality_tests/AGENTS.md, this packet, and its context entries. Implement the
 smallest three-command Wi-Fi IMU sequence plus dry-run-first session/labelled

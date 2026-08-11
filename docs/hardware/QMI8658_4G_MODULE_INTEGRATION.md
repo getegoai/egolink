@@ -12,9 +12,10 @@ verified_by: codex
 > D2-008 then observed a low-rate real six-axis Wi-Fi uplink. The operator
 > reports the module is fixed. D2-009 then passed one bounded 100 x 50 ms
 > real-QMI window and explicit export over Wi-Fi. D5-002 subsequently passed
-> three independently commanded windows in one boot and exported all three.
-> Axis mapping, calibration, operator-confirmed labels, mechanical retention,
-> LTE window transport, and product acceptance remain pending.
+> three independently commanded windows in one boot, exported all three, and
+> bound them to one operator-confirmed flat-on-table stationary session. Axis
+> mapping, calibration, labels for other activities or poses, mechanical
+> retention, LTE window transport, and product acceptance remain pending.
 
 ## Purpose
 
@@ -134,13 +135,18 @@ bounded contract with a three-success command limit. Commands `d5002-s1` to
 matching `ok` ACKs with zero read failures, mock substitutions, or deadline
 misses. A single read-only export reconstructed three valid cadence-qualified
 windows and zero invalid windows. The planned bench action was stationary,
-but no observed activity label has yet been promoted. Evidence:
+and the operator subsequently confirmed that the board remained flat and
+stationary on the table for all three windows. A separate sidecar binds that
+observation one-to-one to the three window/sample hashes; the resulting
+one-session labelled seed remains split `unassigned`,
+`training_allowed=false`, and `training_ready=false`. Evidence:
 `reports/board_validation/20260811-d5002-imu-seed/d5_002_hardware_report.md`.
 
 The engineering corpus therefore contains four uploaded bounded high-cadence
-Wi-Fi windows across D2-009 and D5-002. Next data work must confirm the D5-002
-labels, freeze axes/calibration, and add independent walking/vehicle sessions
-while training remains disabled until consent, retention, quality, and split
+Wi-Fi windows across D2-009 and D5-002, including three operator-confirmed
+stationary windows in one session. Next data work must freeze axes/calibration
+and add independent stationary, walking, and vehicle sessions while training
+remains disabled until consent, retention, quality, data-volume, and split
 gates are explicitly satisfied. Do not turn this bench profile into a
 permanent always-on stream.
 
@@ -149,7 +155,8 @@ permanent always-on stream.
 1. Bench probe and sample the external module on the 4G board. D2-006 passed
    this identity/data-path step at address `0x6A`; formal mounting and
    calibration remain pending.
-2. Freeze mounting axes and collect static plus walking/vehicle labelled runs.
+2. Freeze mounting axes and expand independent stationary, walking, and
+   vehicle labelled runs.
 3. Run LTE/GNSS/QMI/MAX17048 together and check bus, reset, and upload health.
 4. Run the 24-hour battery baseline with the final sensor cadence.
 5. Print an enclosure that prevents battery movement, antenna obstruction,
