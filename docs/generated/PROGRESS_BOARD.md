@@ -1,9 +1,9 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-07-11 15:21 UTC
-- 分支: `main` @ 5c64bb0 feat(obs): show progress board on dashboard [D2]
-- 当前焦点: QMI8658 configuration and motion-data readiness are prepared; next focus is module probe, bounded high-rate IMU windows, strict D2 reference points, and the 24h battery run.
-- 已完成任务总数: 145，进行中: 6，暂停: 2
+- 生成时间: 2026-08-11 08:55 UTC
+- 分支: `d2/gnss-imu-field-seed` @ 27e5ec4 feat(web): simplify founder dashboard [D2-D5]
+- 当前焦点: FIELD-011 台架闭环已通过：同一镜像完成一次操作员确认的静止 QMI8658 LTE 窗口和 LTE/GNSS 状态上报。下一步是在独立供电、固定携带位置下完成户外 GNSS 与三次正常步行窗口，再进入 D2 指标和 D5 标注。
+- 已完成任务总数: 147，进行中: 11，暂停: 2
 
 ## 里程碑
 
@@ -23,33 +23,37 @@
 |---|---|---|---|---|
 | D1-001 | D1 link-through baseline | accepted_for_transition | high | codex + founder field tests |
 | D2-001 | D2 location accuracy baseline and metric gate | active | high | codex |
+| D2-006 | QMI8658 external-module hardware identity probe | active | high | - |
+| D2-007 | QMI8658 bounded window capture and LTE uplink | active | high | - |
+| D2-008 | Wi-Fi QMI8658 sensor telemetry smoke | active | high | - |
 | D5-001 | D5 location data flywheel mainline | active | high | codex |
 | FIELD-003 | Outdoor GNSS acceptance protocol and first measured run | active | high | founder outdoor run + codex postrun |
 | FIELD-004 | D1 outdoor multi-hour field run | continuous_regression | high | - |
+| FIELD-011 | GNSS plus IMU LTE joint outdoor seed | active | high | - |
 | MODEL-001 | Model footprint assessment | paused | high | - |
 | PROD-001 | Mass-production requirements definition and module/MCU selection gates | paused | high | - |
 | PWR-001 | Real power telemetry and first 24h battery baseline run | active | high | codex + founder field tests |
+| WEB-003 | Founder Dashboard clarity and field-first hierarchy | active | high | - |
 
 ## 最近完成
 
 | 任务 | 标题 | 日期 |
 |---|---|---|
+| D2-009 | QMI8658 bounded Wi-Fi window uplink | 2026-08-11 |
+| D5-002 | QMI8658 labelled multi-window dataset seed | 2026-08-11 |
 | D2-002 | D2 reference-point field-run automation | 2026-07-11 |
 | D2-003 | Bounded device and time-window field export | 2026-07-11 |
 | D2-004 | Historical VPS baseline and P0 location rule freeze | 2026-07-11 |
 | D2-005 | QMI8658 4G-board configuration and motion-data readiness | 2026-07-11 |
 | MAP-001 | D2/D5 map evidence view | 2026-07-11 |
 | MAP-002 | Mobile local-only D2 reference capture | 2026-07-11 |
-| MAP-003 | Browser-local D2 reference overlay | 2026-07-11 |
-| OBS-005 | Founder progress board on VPS Dashboard | 2026-07-11 |
 
 ## 等待创始人处理
 
-- [ ] 24h 电池运行：现有 2.6Ah 18650 可用于工程基线；先确认板版本/极性，再刷 PWR-001 固件并断 USB 独立运行
-- [ ] QMI8658 到手后：先拍模块正反面/引脚标识并确认 0x6A 或 0x6B，再接线；不要直接使用当前 0x6B 占位固件刷机
-- [ ] 3D 打印：4G板+电池+IMU 挂绳壳（D3 佩戴测试机）
-- [ ] 决策：EVT-1 自制合并板启动（嘉立创打样）—— 待创始人确认后我起草 HW-EVT1-001
-- [ ] Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists.
+- [ ] 户外联测：把开发板和传感器固定在一个明确携带位置，使用稳定移动电源，并在开阔处等待 GNSS。
+- [ ] 开始前记录携带位置、方向和时间；准备好后再创建三次正常步行六轴窗口，任一异常即停止。
+- [ ] v0.4 PCB、芯片和外壳设计继续并行迭代，不阻塞当前开发板的数据采集闭环。
+- [ ] 在具名证据完成前，不宣称定位精度、模型效果、续航、量产或正式安全能力。
 
 ## 关键版本 (KR)
 

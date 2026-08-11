@@ -65,7 +65,7 @@ raw diagnostic detail until requested.
       preserved, and tables remain usable on narrow screens.
 - [x] Refresh requests do not overlap; transient failures preserve the last
       successful view and expose an understandable refresh state.
-- [ ] The sanitized generated progress board is refreshed before deployment.
+- [x] The sanitized generated progress board is refreshed before deployment.
 - [x] Focused tests, full verification, context lint, and diff check pass.
 - [ ] The committed build is deployed through the existing self-hosted VPS path;
       service health, auth boundary, target HTML markers, and GitLab isolation pass.
@@ -105,8 +105,10 @@ git diff --check
 - Validation: Dashboard `42/42` PASS, Message Hub server `39/39` PASS,
   repository verification `615/615` PASS, `py_compile`, `context_lint`, and
   `git diff --check` PASS.
-- Pending: regenerate the sanitized progress board from the committed source,
-  deploy the committed build, and record the bounded live smoke.
+- Sanitized progress artifacts were regenerated at `2026-08-11 08:55 UTC`
+  from implementation commit `27e5ec4`; they show the current FIELD-011
+  stationary bench result and the next outdoor walking/GNSS work.
+- Pending: deploy the committed build and record the bounded live smoke.
 
 # Builder Prompt
 

@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-07-11 15:21 UTC",
+  "generated_at": "2026-08-11 08:55 UTC",
   "git": {
-    "branch": "main",
-    "head": "5c64bb0 feat(obs): show progress board on dashboard [D2]"
+    "branch": "d2/gnss-imu-field-seed",
+    "head": "27e5ec4 feat(web): simplify founder dashboard [D2-D5]"
   },
-  "current_focus": "QMI8658 configuration and motion-data readiness are prepared; next focus is module probe, bounded high-rate IMU windows, strict D2 reference points, and the 24h battery run.",
+  "current_focus": "FIELD-011 台架闭环已通过：同一镜像完成一次操作员确认的静止 QMI8658 LTE 窗口和 LTE/GNSS 状态上报。下一步是在独立供电、固定携带位置下完成户外 GNSS 与三次正常步行窗口，再进入 D2 指标和 D5 标注。",
   "milestones": [
     {
       "id": "RELEASE",
@@ -172,6 +172,33 @@
       "path": "D:/pywork/egolink/docs/tasks/active/D2-001_LOCATION_ACCURACY_BASELINE.md"
     },
     {
+      "id": "D2-006",
+      "title": "QMI8658 external-module hardware identity probe",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-10",
+      "path": "D:/pywork/egolink/docs/tasks/active/D2-006_QMI8658_HARDWARE_IDENTITY_PROBE.md"
+    },
+    {
+      "id": "D2-007",
+      "title": "QMI8658 bounded window capture and LTE uplink",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-10",
+      "path": "D:/pywork/egolink/docs/tasks/active/D2-007_QMI8658_BOUNDED_LTE_WINDOW_UPLINK.md"
+    },
+    {
+      "id": "D2-008",
+      "title": "Wi-Fi QMI8658 sensor telemetry smoke",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-11",
+      "path": "D:/pywork/egolink/docs/tasks/active/D2-008_WIFI_QMI8658_SENSOR_SMOKE.md"
+    },
+    {
       "id": "D5-001",
       "title": "D5 location data flywheel mainline",
       "state": "in_progress",
@@ -199,6 +226,15 @@
       "path": "D:/pywork/egolink/docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md"
     },
     {
+      "id": "FIELD-011",
+      "title": "GNSS plus IMU LTE joint outdoor seed",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-11",
+      "path": "D:/pywork/egolink/docs/tasks/active/FIELD-011_GNSS_IMU_LTE_JOINT_FIELD_SEED.md"
+    },
+    {
       "id": "MODEL-001",
       "title": "Model footprint assessment",
       "state": "paused",
@@ -224,9 +260,36 @@
       "priority": "high",
       "date": "2026-07-09",
       "path": "D:/pywork/egolink/docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md"
+    },
+    {
+      "id": "WEB-003",
+      "title": "Founder Dashboard clarity and field-first hierarchy",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-11",
+      "path": "D:/pywork/egolink/docs/tasks/active/WEB-003_FOUNDER_DASHBOARD_CLARITY.md"
     }
   ],
   "recent_done": [
+    {
+      "id": "D2-009",
+      "title": "QMI8658 bounded Wi-Fi window uplink",
+      "state": "done",
+      "packet_status": "completed",
+      "priority": "high",
+      "date": "2026-08-11",
+      "path": "D:/pywork/egolink/docs/tasks/done/D2-009_QMI8658_BOUNDED_WIFI_WINDOW_UPLINK.md"
+    },
+    {
+      "id": "D5-002",
+      "title": "QMI8658 labelled multi-window dataset seed",
+      "state": "done",
+      "packet_status": "done",
+      "priority": "high",
+      "date": "2026-08-11",
+      "path": "D:/pywork/egolink/docs/tasks/done/D5-002_QMI8658_LABELED_MULTI_WINDOW_SEED.md"
+    },
     {
       "id": "D2-002",
       "title": "D2 reference-point field-run automation",
@@ -280,32 +343,13 @@
       "priority": "high",
       "date": "2026-07-11",
       "path": "D:/pywork/egolink/docs/tasks/done/MAP-002_MOBILE_REFERENCE_CAPTURE.md"
-    },
-    {
-      "id": "MAP-003",
-      "title": "Browser-local D2 reference overlay",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/done/MAP-003_LOCAL_REFERENCE_OVERLAY.md"
-    },
-    {
-      "id": "OBS-005",
-      "title": "Founder progress board on VPS Dashboard",
-      "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/done/OBS-005_PROGRESS_BOARD_DASHBOARD.md"
     }
   ],
   "operator_asks": [
-    "24h 电池运行：现有 2.6Ah 18650 可用于工程基线；先确认板版本/极性，再刷 PWR-001 固件并断 USB 独立运行",
-    "QMI8658 到手后：先拍模块正反面/引脚标识并确认 0x6A 或 0x6B，再接线；不要直接使用当前 0x6B 占位固件刷机",
-    "3D 打印：4G板+电池+IMU 挂绳壳（D3 佩戴测试机）",
-    "决策：EVT-1 自制合并板启动（嘉立创打样）—— 待创始人确认后我起草 HW-EVT1-001",
-    "Do not claim call/SMS, product location accuracy, model performance, or battery life until named evidence exists."
+    "户外联测：把开发板和传感器固定在一个明确携带位置，使用稳定移动电源，并在开阔处等待 GNSS。",
+    "开始前记录携带位置、方向和时间；准备好后再创建三次正常步行六轴窗口，任一异常即停止。",
+    "v0.4 PCB、芯片和外壳设计继续并行迭代，不阻塞当前开发板的数据采集闭环。",
+    "在具名证据完成前，不宣称定位精度、模型效果、续航、量产或正式安全能力。"
   ],
   "assignees": {
     "REL-012": "codex",
@@ -373,9 +417,9 @@
     }
   ],
   "counts": {
-    "active": 6,
+    "active": 11,
     "paused": 2,
-    "open_total": 8,
-    "done_total": 145
+    "open_total": 13,
+    "done_total": 147
   }
 }
