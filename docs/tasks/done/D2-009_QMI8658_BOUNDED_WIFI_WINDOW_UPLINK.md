@@ -1,12 +1,13 @@
 ---
 id: D2-009
 title: QMI8658 bounded Wi-Fi window uplink
-status: active
+status: completed
 priority: high
 requires_hardware: true
 serves_demo: D2-D5
 created: 2026-08-11
 last_updated: 2026-08-11
+completed: 2026-08-11
 
 context:
   - docs/AGENTS.md
@@ -39,7 +40,7 @@ context:
   - quality_tests/test_imu_window_export.py
 
 allowed_paths:
-  - docs/tasks/active/D2-009_QMI8658_BOUNDED_WIFI_WINDOW_UPLINK.md
+  - docs/tasks/done/D2-009_QMI8658_BOUNDED_WIFI_WINDOW_UPLINK.md
   - docs/development/PROTOCOL.md
   - docs/current/ACTIVE_BUILD.md
   - docs/hardware/BOARD_MATRIX.md
@@ -88,22 +89,22 @@ overlap.
 
 # Acceptance Criteria
 
-- [ ] A dedicated opt-in Wi-Fi window profile reuses the raw command parser;
+- [x] A dedicated opt-in Wi-Fi window profile reuses the raw command parser;
       normal Wi-Fi telemetry and LTE profiles retain their existing behavior.
-- [ ] The capture implementation and chunk/manifest builder remain one shared
+- [x] The capture implementation and chunk/manifest builder remain one shared
       code path with an explicit `lte` or `wifi` transport, not two copies.
-- [ ] Sampling completes and the QMI8658 stop is readback-confirmed before the
+- [x] Sampling completes and the QMI8658 stop is readback-confirmed before the
       first Wi-Fi upload or ACK; mock/unavailable input fails closed.
-- [ ] Message Hub accepts only `lte` or `wifi`, rejects mixed-transport parts,
+- [x] Message Hub accepts only `lte` or `wifi`, rejects mixed-transport parts,
       retains raw evidence first, and does not expose sample bytes in normal APIs.
-- [ ] One command yields exactly 100 real samples, ten chunks, one manifest,
+- [x] One command yields exactly 100 real samples, ten chunks, one manifest,
       one matching ACK, and one structurally valid offline-export window.
-- [ ] The exported record preserves `transport_type=wifi`, reports cadence
+- [x] The exported record preserves `transport_type=wifi`, reports cadence
       separately from completeness, and keeps `training_allowed=false` plus
       the existing privacy/consent/mounting/split blockers.
-- [ ] Focused tests, full verification, context lint, diff check, and an
+- [x] Focused tests, full verification, context lint, diff check, and an
       ESP-IDF 5.4.2 build pass before hardware execution.
-- [ ] Implementation/static validation and hardware evidence are separate Git
+- [x] Implementation/static validation and hardware evidence are separate Git
       commits; v0.4 product-design assets and all secrets remain uncommitted.
 
 # Validation Commands
@@ -149,6 +150,11 @@ powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
   stop confirmation, ten chunks plus manifest and matching ACK over Wi-Fi, and
   one valid export record. Cadence qualification is reported but is not a
   product-accuracy or training-readiness claim.
+- Hardware result: **PASS**. Test run `D2-009-HW-20260811-001` and command
+  `wifi-imu-001` produced 100 real samples, ten chunks, one manifest, and one
+  `ok` ACK over Wi-Fi. The final export contains one complete cadence-qualified
+  window, zero invalid windows, and `training_allowed=false`. Evidence:
+  `reports/board_validation/20260811-d2009-wifi-imu-window/d2_009_wifi_imu_window_report.md`.
 
 # Decisions
 
@@ -182,9 +188,29 @@ powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
 - ESP-IDF v5.4.2 LTE/QMI regression build also passed: 592032-byte application,
   SHA-256 `1C2606089D384D80EBF1AEADE7C9764DFF27393AC4E6841AE075E567C6864321`.
 - Both build-only images identify source `b4a11de-dirty`; neither is the final
-  hardware image. The exact clean committed Wi-Fi image will be rebuilt and
-  hashed before the one authorized COM3 flash.
-- The single hardware run and offline export remain pending.
+  hardware image. The exact clean committed Wi-Fi image was subsequently
+  rebuilt and hashed before the one authorized COM3 flash.
+- Implementation was committed as `56edaf8`; the exact hardware image reports
+  `v0.1.0-24-g56edaf8`, is 926960 bytes, and has SHA-256
+  `16C839CAD20C527C772ED84B69C649F7D092F716FD3F57174D0DCBDBEE95F685`.
+  Message Hub was backed up, deployed, health-checked, and matched the local
+  server source hash before the one physical COM3 flash. NVS was not erased.
+- The command closed `ok` with 13 raw run frames: one command, ten chunks, one
+  manifest, and one ACK. All eleven IMU parts parsed successfully and remained
+  redacted through normal APIs. Raw-frame count stayed stable after completion.
+- Final export: one valid window, zero invalid windows, 100 samples, 98 distinct
+  six-axis tuples, zero read failures/mock substitutions/deadline misses,
+  intervals 49749/49999/50292 us minimum/mean/maximum, cadence `qualified`, and
+  `training_allowed=false`.
+- The first exporter attempt exposed a tooling bug: the same-run raw command
+  and ACK were counted as invalid IMU frames despite one valid window. Commit
+  `ae2a4c4` makes the exporter ignore non-IMU frames; its focused 23-test and
+  full 593-test validations passed. The final read-only export returned
+  `ok=true` without any reflash or recapture.
+- The single serial observation started after the short device command had
+  already completed and captured zero bytes. It did not reset the board.
+  Server/raw/export evidence is authoritative for this run; this limitation is
+  retained in the hardware report rather than represented as startup-log proof.
 
 # Builder Prompt
 

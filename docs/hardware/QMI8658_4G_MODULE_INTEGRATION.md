@@ -10,8 +10,10 @@ verified_by: codex
 > board. D2-007 also passed startup identity and idle-stop checks, but its first
 > LTE-window attempt stopped before capture because the SIM was not ready.
 > D2-008 then observed a low-rate real six-axis Wi-Fi uplink. The operator
-> reports the module is fixed; axis mapping, calibration, mechanical retention,
-> high-rate window uplink, and product acceptance remain pending.
+> reports the module is fixed. D2-009 then passed one bounded 100 x 50 ms
+> real-QMI window and explicit export over Wi-Fi. Axis mapping, calibration,
+> mechanical retention, LTE window transport, and product acceptance remain
+> pending.
 
 ## Purpose
 
@@ -68,6 +70,9 @@ starts the hardware task.
 bounded boot sample count. When MAX17048 and QMI8658 are enabled together the
 generator rejects different I2C port/SDA/SCL settings. It always disables
 `EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS` for this external-module path.
+`-EnableWifiImuWindowCommand` selects the dedicated bounded raw-command
+profile, rejects simultaneous SIM7670 modes, and does not start periodic
+heartbeat or single-sample telemetry tasks.
 
 Example for the GPIO15/GPIO16 path and the installed module confirmed at
 `0x6A` by D2-006:
@@ -112,10 +117,21 @@ in ROM download mode. This proves the first real sensor-to-VPS data slice, not
 a high-rate window or training dataset. Evidence:
 `reports/board_validation/20260811-d2008-wifi-imu/d2_008_wifi_imu_report.md`.
 
-The current field corpus therefore has individual real six-axis points over
-Wi-Fi but still no uploaded bounded high-rate window. Resolve the transport
-choice, then repeat the smallest authorized 100 x 50 ms window; do not enable
-a permanent always-on stream.
+The 2026-08-11 D2-009 run reused the D2-007 bounded window contract through a
+dedicated Wi-Fi raw-command profile. Command `wifi-imu-001` captured 100/100
+real samples after ten warm-ups, reported zero read failures, mock samples, or
+deadline misses, stopped measurement before upload, and retained ten chunks,
+one manifest, and one matching ACK. The explicit export reconstructed one
+complete window with observed intervals 49749/49999/50292 us
+minimum/mean/maximum and engineering cadence `qualified`; training remains
+disabled. Evidence:
+`reports/board_validation/20260811-d2009-wifi-imu-window/d2_009_wifi_imu_window_report.md`.
+
+The current corpus therefore contains one uploaded bounded high-cadence Wi-Fi
+window. Next data work must freeze axes/calibration, add operator-reviewed
+labels and capture sessions, and keep training disabled until consent,
+retention, quality, and split gates are explicitly satisfied. Do not turn this
+bench profile into a permanent always-on stream.
 
 ## Pilot Readiness Sequence
 

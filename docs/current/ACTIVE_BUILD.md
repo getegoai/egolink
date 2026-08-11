@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | UI-001 field-friendly D1 status sidecar is currently flashed: cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt, QMI8658 engineering sampler. Bounded smoke `ui001-amoled-friendly-smoke-20260704` observed `cmd=display_status` plus `status_rendered`. |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-11 | D2-008 Wi-Fi/QMI8658 smoke image `0.1.0-d2008-wifi-imu-smoke` (`v0.1.0-22-ge7e7e85-dirty`) is currently flashed on ESP32-S3 MAC `02:00:00:00:00:03`. It uploaded 26/26 real non-mock six-axis `sensor_sample` messages over Wi-Fi with QMI8658 at `0x6A` on GPIO15/GPIO16; SIM7670/GNSS/LTE were disabled. The ESP32 is intentionally left in ROM download mode, so the smoke uploader is stopped until reset or power cycle. D2-007, D2-006, and MODEL-DEVICE-006 remain historical evidence. |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-11 | D2-009 bounded Wi-Fi/QMI8658 image `0.1.0-d2009-wifi-imu-window` (`v0.1.0-24-g56edaf8`) is currently flashed on ESP32-S3 MAC `02:00:00:00:00:03`. It captured 100/100 real non-mock samples at a qualified 50 ms engineering cadence, uploaded ten chunks plus one manifest over Wi-Fi, and ACKed the one command `ok`; the dedicated command task then stopped polling/uploading. QMI8658 remains at `0x6A` on GPIO15/GPIO16; SIM7670/GNSS/LTE were disabled. D2-008, D2-007, D2-006, and MODEL-DEVICE-006 remain historical evidence. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -47,8 +47,9 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `safety tiny status/selftest/demo ...` validation on `COM4`, reset-log LTE
   HTTP POST observation, and a read-only D1 Web/API observer pass with fresh
   `MODEL-DEVICE-006-hw-20260707-d1` uploads. D2-006 replaced that image on
-  2026-08-10, D2-007 subsequently replaced D2-006, and D2-008 replaced D2-007
-  with the current Wi-Fi/QMI8658 smoke image on 2026-08-11.
+  2026-08-10, D2-007 subsequently replaced D2-006, D2-008 replaced D2-007,
+  and D2-009 replaced D2-008 with the current bounded Wi-Fi/QMI8658 image on
+  2026-08-11.
 - AMOLED `ask_user` command path rendered and returned `user_confirmation=safe` in Demo v0.2 evidence.
 - Demo v0.3 generated a complete safety record using Demo v0.2 real AMOLED confirmation evidence plus live SIM7670G GNSS AT probe.
 - SIM7670G GNSS AT probe was reachable indoors, selected `COM6`, and produced `fix=false`.
@@ -75,6 +76,14 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   mode. This passes a low-rate data-path smoke only, not the 100 x 50 ms window
   or dataset gate. Evidence:
   `reports/board_validation/20260811-d2008-wifi-imu/d2_008_wifi_imu_report.md`.
+- D2-009 reused the D2-007 bounded capture contract over the already-proven
+  Wi-Fi path. Test run `D2-009-HW-20260811-001` completed command
+  `wifi-imu-001` with 100/100 real samples, ten chunks, one manifest, zero read
+  failures/mock substitutions/deadline misses, and observed intervals
+  49749/49999/50292 us minimum/mean/maximum. The explicit export returned one
+  valid cadence-qualified window, zero invalid windows, and
+  `training_allowed=false`. Evidence:
+  `reports/board_validation/20260811-d2009-wifi-imu-window/d2_009_wifi_imu_window_report.md`.
 - Camera smoke capture on the SIM7670G board has produced bounded JPEG evidence.
 - R1 connectivity-node firmware `0.1.0-fw001-hw-r1` has passed USB-Free
   Message Hub validation on independent power with USB disconnected:
@@ -256,11 +265,12 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 
 ## Current Known Limits
 
-- D2-008 proves real six-axis values can reach the VPS over Wi-Fi at a nominal
-  5-second event cadence. It does not prove a high-rate window, fixed axis
-  mapping, calibration, labels, training suitability, LTE transport, or
-  always-on operation. The ESP32 is currently paused in ROM download mode to
-  prevent continued smoke uploads.
+- D2-009 proves one bounded 100 x 50 ms real six-axis window can reach the VPS
+  over Wi-Fi and be reconstructed as cadence-qualified engineering evidence.
+  It does not prove fixed axis mapping, calibration, labels, training
+  suitability, LTE transport, continuous operation, or product accuracy. The
+  dedicated command task has exited, so the current image is not continuously
+  sampling or uploading.
 - The historical D2-007 combined image identified and stopped the external
   QMI8658A at startup, but its LTE/IMU run did not reach the capture path:
   SIM7670 reported `LTE_SIM_NOT_READY` / `not_registered`, with PDP unknown,
