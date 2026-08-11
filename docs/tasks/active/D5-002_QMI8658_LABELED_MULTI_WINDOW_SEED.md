@@ -112,7 +112,7 @@ that remains explicitly blocked from training.
       session crossing splits.
 - [x] Focused tests, full verification, context lint, diff check, and an
       ESP-IDF 5.4.2 build pass before any hardware action.
-- [ ] Implementation/static evidence and hardware/data evidence use separate
+- [x] Implementation/static evidence and hardware/data evidence use separate
       Git commits; all product-design archives and secrets stay uncommitted.
 
 # Validation Commands
@@ -158,8 +158,11 @@ powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
   ACKs, 300 real samples, confirmed stop after every window, three valid
   exporter windows, a label sidecar, and a dataset manifest with
   `training_allowed=false`.
-- Hardware execution remains pending a post-build operator confirmation of
-  the exact three-session positioning sequence.
+- The operator authorized one COM3 flash, one 20-second startup capture, three
+  100 x 50 ms Wi-Fi windows, at most five minutes of observation, and one
+  read-only export. The run used one unassigned session with three planned
+  stationary windows. Hardware capture/export passed; post-capture observed
+  label confirmation remains pending.
 
 # Decisions
 
@@ -192,9 +195,18 @@ powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
   ESP-IDF 5.4.2 build-only passes for the three-command profile (927,312-byte
   app; pre-commit SHA-256
   `2331878B9674B4118E1C877DD3FE67E9730BAF678B132EB77A4D6DD6E4ED170B`)
-  and for the existing ordinary Wi-Fi IMU profile.
-- Hardware/data result: pending. No D5-002 flash, command, capture, label, or
-  export has been performed.
+  and for the existing ordinary Wi-Fi IMU profile. The clean post-commit app
+  is `v0.1.0-27-gab218af`, 927,312 bytes, SHA-256
+  `930A4C4F21C34A738FA19F31A42B323D88BD6B650C15B8CED5BFE617483C815A`.
+- Hardware/data result: PASS for capture/export. The one flash and 20-second
+  startup gate passed. Test run `D5-002-SEED-20260811-001` completed three
+  commands in 47 seconds with 300 real samples, 30 chunks, three manifests,
+  three `ok` ACKs, and zero read/mock/deadline failures. The one read-only
+  exporter invocation returned three valid cadence-qualified windows, zero
+  invalid windows, and no truncation. Evidence:
+  `reports/board_validation/20260811-d5002-imu-seed/d5_002_hardware_report.md`.
+  The planned stationary action has not yet been promoted to an observed
+  label, so the label sidecar and labelled dataset artifact remain pending.
 - Remaining risks: concurrent external capture commands must be absent during
   the bounded run; the executed-command cache is RAM-only; activity labels,
   axis calibration, data sufficiency, consent, and training remain unverified

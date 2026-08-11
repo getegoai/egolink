@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | UI-001 field-friendly D1 status sidecar is currently flashed: cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt, QMI8658 engineering sampler. Bounded smoke `ui001-amoled-friendly-smoke-20260704` observed `cmd=display_status` plus `status_rendered`. |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-11 | D2-009 bounded Wi-Fi/QMI8658 image `0.1.0-d2009-wifi-imu-window` (`v0.1.0-24-g56edaf8`) is currently flashed on ESP32-S3 MAC `02:00:00:00:00:03`. It captured 100/100 real non-mock samples at a qualified 50 ms engineering cadence, uploaded ten chunks plus one manifest over Wi-Fi, and ACKed the one command `ok`; the dedicated command task then stopped polling/uploading. QMI8658 remains at `0x6A` on GPIO15/GPIO16; SIM7670/GNSS/LTE were disabled. D2-008, D2-007, D2-006, and MODEL-DEVICE-006 remain historical evidence. |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-11 | D5-002 three-command Wi-Fi/QMI8658 seed image `0.1.0-d5002-wifi-seed` (`v0.1.0-27-gab218af`, app SHA-256 `930A4C4F...483C815A`) is currently flashed on ESP32-S3 MAC `02:00:00:00:00:03`. Test run `D5-002-SEED-20260811-001` captured three independent 100-sample real non-mock windows: 300 samples, 30 chunks, three manifests, three `ok` ACKs, zero read/mock/deadline failures, and three cadence-qualified explicit exports. The command task then stopped after its configured three-success limit. QMI8658 remains at `0x6A` on GPIO15/GPIO16; SIM7670/GNSS/LTE were disabled. D2-009 and earlier images remain historical evidence. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -48,8 +48,8 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   HTTP POST observation, and a read-only D1 Web/API observer pass with fresh
   `MODEL-DEVICE-006-hw-20260707-d1` uploads. D2-006 replaced that image on
   2026-08-10, D2-007 subsequently replaced D2-006, D2-008 replaced D2-007,
-  and D2-009 replaced D2-008 with the current bounded Wi-Fi/QMI8658 image on
-  2026-08-11.
+  D2-009 replaced D2-008, and D5-002 replaced D2-009 with the current bounded
+  three-command Wi-Fi/QMI8658 seed image on 2026-08-11.
 - AMOLED `ask_user` command path rendered and returned `user_confirmation=safe` in Demo v0.2 evidence.
 - Demo v0.3 generated a complete safety record using Demo v0.2 real AMOLED confirmation evidence plus live SIM7670G GNSS AT probe.
 - SIM7670G GNSS AT probe was reachable indoors, selected `COM6`, and produced `fix=false`.
@@ -84,6 +84,15 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   valid cadence-qualified window, zero invalid windows, and
   `training_allowed=false`. Evidence:
   `reports/board_validation/20260811-d2009-wifi-imu-window/d2_009_wifi_imu_window_report.md`.
+- D5-002 extended the dedicated Wi-Fi profile to stop after three successful
+  commands in one boot while retaining the D2-009 one-command default. Test
+  run `D5-002-SEED-20260811-001` completed `d5002-s1` through `d5002-s3` in
+  47 seconds with 300/300 real QMI8658 samples, 30 chunks, three manifests,
+  three `ok` ACKs, zero read/mock/deadline failures, and mean cadence exactly
+  50,000 us in every window. One read-only export returned three valid
+  cadence-qualified windows, zero invalid windows, and
+  `training_allowed=false`. Evidence:
+  `reports/board_validation/20260811-d5002-imu-seed/d5_002_hardware_report.md`.
 - Camera smoke capture on the SIM7670G board has produced bounded JPEG evidence.
 - R1 connectivity-node firmware `0.1.0-fw001-hw-r1` has passed USB-Free
   Message Hub validation on independent power with USB disconnected:
@@ -265,11 +274,12 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 
 ## Current Known Limits
 
-- D2-009 proves one bounded 100 x 50 ms real six-axis window can reach the VPS
-  over Wi-Fi and be reconstructed as cadence-qualified engineering evidence.
-  It does not prove fixed axis mapping, calibration, labels, training
-  suitability, LTE transport, continuous operation, or product accuracy. The
-  dedicated command task has exited, so the current image is not continuously
+- D5-002 proves three independent bounded 100 x 50 ms real six-axis windows
+  can reach the VPS over Wi-Fi in one boot and be reconstructed as
+  cadence-qualified engineering evidence. It does not prove fixed axis
+  mapping, calibration, confirmed labels, training suitability, LTE
+  transport, continuous operation, or product accuracy. The dedicated command
+  task exits after three successes, so the current image is not continuously
   sampling or uploading.
 - The historical D2-007 combined image identified and stopped the external
   QMI8658A at startup, but its LTE/IMU run did not reach the capture path:

@@ -11,9 +11,10 @@ verified_by: codex
 > LTE-window attempt stopped before capture because the SIM was not ready.
 > D2-008 then observed a low-rate real six-axis Wi-Fi uplink. The operator
 > reports the module is fixed. D2-009 then passed one bounded 100 x 50 ms
-> real-QMI window and explicit export over Wi-Fi. Axis mapping, calibration,
-> mechanical retention, LTE window transport, and product acceptance remain
-> pending.
+> real-QMI window and explicit export over Wi-Fi. D5-002 subsequently passed
+> three independently commanded windows in one boot and exported all three.
+> Axis mapping, calibration, operator-confirmed labels, mechanical retention,
+> LTE window transport, and product acceptance remain pending.
 
 ## Purpose
 
@@ -127,11 +128,21 @@ minimum/mean/maximum and engineering cadence `qualified`; training remains
 disabled. Evidence:
 `reports/board_validation/20260811-d2009-wifi-imu-window/d2_009_wifi_imu_window_report.md`.
 
-The current corpus therefore contains one uploaded bounded high-cadence Wi-Fi
-window. Next data work must freeze axes/calibration, add operator-reviewed
-labels and capture sessions, and keep training disabled until consent,
-retention, quality, and split gates are explicitly satisfied. Do not turn this
-bench profile into a permanent always-on stream.
+The 2026-08-11 D5-002 run flashed `v0.1.0-27-gab218af` and used the same
+bounded contract with a three-success command limit. Commands `d5002-s1` to
+`d5002-s3` produced 300 real samples, 30 chunks, three manifests, and three
+matching `ok` ACKs with zero read failures, mock substitutions, or deadline
+misses. A single read-only export reconstructed three valid cadence-qualified
+windows and zero invalid windows. The planned bench action was stationary,
+but no observed activity label has yet been promoted. Evidence:
+`reports/board_validation/20260811-d5002-imu-seed/d5_002_hardware_report.md`.
+
+The engineering corpus therefore contains four uploaded bounded high-cadence
+Wi-Fi windows across D2-009 and D5-002. Next data work must confirm the D5-002
+labels, freeze axes/calibration, and add independent walking/vehicle sessions
+while training remains disabled until consent, retention, quality, and split
+gates are explicitly satisfied. Do not turn this bench profile into a
+permanent always-on stream.
 
 ## Pilot Readiness Sequence
 
