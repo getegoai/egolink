@@ -7,6 +7,7 @@ import tempfile
 import threading
 from http.server import ThreadingHTTPServer
 import unittest
+from unittest import mock
 from urllib import error, request
 
 from pc_simulator import protocol
@@ -876,8 +877,403 @@ class MessageHubDeployScriptTests(unittest.TestCase):
         self.assertIn('$remoteScript = $remoteScript.Replace("`r", "")', script)
         self.assertNotIn('Copy-RelativePath "server"', script)
 
+    def test_runtime_secret_files_are_ignored_but_example_is_tracked(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        ignore_file = (repo_root / ".gitignore").read_text(encoding="utf-8")
+        example = (repo_root / "server" / ".env.example").read_text(encoding="utf-8")
+
+        self.assertIn("**/.env", ignore_file)
+        self.assertIn("**/.env.*", ignore_file)
+        self.assertIn("!**/.env.example", ignore_file)
+        self.assertIn("EGOLINK_AMAP_JS_API_KEY=replace-with-amap-js-api-key", example)
+        self.assertIn("EGOLINK_AMAP_SECURITY_JS_CODE=replace-with-amap-security-js-code", example)
+
+    def test_deploy_runtime_environment_uses_fixed_atomic_upsert(self) -> None:
+        script = (Path(__file__).resolve().parents[1] / "scripts" / "deploy_message_hub_vps.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('"EGOLINK_MESSAGE_HUB_TOKEN"', script)
+        self.assertIn('"EGOLINK_AMAP_JS_API_KEY"', script)
+        self.assertIn('"EGOLINK_AMAP_SECURITY_JS_CODE"', script)
+        self.assertIn("must be a single-line runtime value", script)
+        self.assertIn("mktemp /etc/egolink-message-hub.env.XXXXXX", script)
+        self.assertIn("grep -Ev '^(__UPSERT_NAMES__)='", script)
+        self.assertIn('mv -f "$env_tmp" /etc/egolink-message-hub.env', script)
+        self.assertIn("chmod 600", script)
+        self.assertNotIn(">/etc/egolink-message-hub.env", script)
+
+
+class MessageHubAmapCoordinateTrustTests(unittest.TestCase):
+    def test_location_memory_without_lineage_is_never_amap_eligible(self) -> None:
+        surface = message_hub.build_d1_map_surface(
+            messages=[],
+            latest_location={},
+            location_memory={
+                "updated_at": "2026-08-12T10:00:00+00:00",
+                "last_known_location": {
+                    "lat": 22.5431,
+                    "lon": 114.0579,
+                    "updated_at": "2026-08-12T09:00:00+00:00",
+                },
+            },
+            map_mode="memory_coordinate",
+            map_lat=22.5431,
+            map_lon=114.0579,
+            coordinate_source="location_memory",
+            visible=True,
+        )
+
+        self.assertEqual(surface["amap_eligible_point_count"], 0)
+        self.assertEqual(surface["amap_hidden_point_count"], 1)
+        self.assertFalse(surface["points"][0]["amap_eligible"])
+        self.assertEqual(surface["points"][0]["fw_version"], "unknown")
+        self.assertEqual(
+            surface["points"][0]["amap_exclusion_reason"],
+            "location_memory_has_no_coordinate_provenance",
+        )
+
+    def test_only_allowlisted_fixed_location_report_is_wgs84_eligible(self) -> None:
+        base = {
+            "message_type": "event",
+            "event_type": "location_report",
+            "fix": True,
+            "lat": 22.5431,
+            "lon": 114.0579,
+            "server_received_at": "2026-08-12T10:00:00+00:00",
+        }
+        trusted = message_hub.d1_location_point(
+            {**base, "fw_version": "0.1.0-fw005-gnss-correctness"},
+            source="unit",
+        )
+        old = message_hub.d1_location_point(
+            {**base, "fw_version": "0.1.0-field011-gnss-imu"},
+            source="unit",
+        )
+        unknown = message_hub.d1_location_point(base, source="unit")
+        no_fix = message_hub.d1_location_point(
+            {**base, "fw_version": "0.1.0-fw005-gnss-correctness", "fix": False},
+            source="unit",
+        )
+        observation = message_hub.d1_location_point(
+            {
+                **base,
+                "event_type": "location_observation",
+                "fw_version": "0.1.0-fw005-gnss-correctness",
+            },
+            source="unit",
+        )
+
+        self.assertIsNotNone(trusted)
+        self.assertTrue(trusted["amap_eligible"])
+        self.assertEqual(trusted["coordinate_contract"], "wgs84")
+        for point in (old, unknown, no_fix, observation):
+            self.assertIsNotNone(point)
+            self.assertFalse(point["amap_eligible"])
+            self.assertEqual(point["coordinate_contract"], "unknown")
+
+    def test_out_of_range_location_is_rejected_before_amap_provenance(self) -> None:
+        point = message_hub.d1_location_point(
+            {
+                "message_type": "event",
+                "event_type": "location_report",
+                "fw_version": "0.1.0-fw005-gnss-correctness",
+                "fix": True,
+                "lat": 91,
+                "lon": 181,
+            },
+            source="unit",
+        )
+
+        self.assertIsNone(point)
+
 
 class MessageHubHttpTests(unittest.TestCase):
+    def test_amap_proxy_target_is_fixed_and_overrides_client_jscode(self) -> None:
+        host, target = message_hub.amap_proxy_target(
+            "/_AMapService/v3/assistant/coordinate/convert",
+            "locations=116.3,39.9&coordsys=gps&key=attacker&KEY=attacker2&jscode=attacker&JSCODE=attacker2",
+            "public_JS_key_1234",
+            "server_security_1234",
+        )
+        style_host, style_target = message_hub.amap_proxy_target(
+            "/_AMapService/v4/map/styles",
+            "styleid=unit",
+            "public_JS_key_1234",
+            "server_security_1234",
+        )
+
+        self.assertEqual(host, "restapi.amap.com")
+        self.assertEqual(style_host, "webapi.amap.com")
+        self.assertNotIn("attacker", target)
+        self.assertEqual(target.count("key="), 1)
+        self.assertEqual(target.count("jscode="), 1)
+        self.assertIn("key=public_JS_key_1234", target)
+        self.assertIn("jscode=server_security_1234", target)
+        self.assertIn("key=public_JS_key_1234", style_target)
+        self.assertIn("jscode=server_security_1234", style_target)
+        with self.assertRaises(message_hub.MessageHubError):
+            message_hub.amap_proxy_target(
+                "/_AMapService/v3/config/district",
+                "",
+                "public_JS_key_1234",
+                "server_security_1234",
+            )
+
+    def test_amap_cookie_is_short_lived_signed_and_path_scoped(self) -> None:
+        secret = message_hub.amap_proxy_cookie_secret("hub-token", "server_security_1234")
+        set_cookie = message_hub.issue_amap_proxy_cookie(secret, now=1_000)
+        cookie_pair = set_cookie.split(";", 1)[0]
+
+        self.assertIn("HttpOnly", set_cookie)
+        self.assertIn("SameSite=Strict", set_cookie)
+        self.assertIn("Path=/_AMapService", set_cookie)
+        self.assertTrue(message_hub.amap_proxy_cookie_valid(cookie_pair, secret, now=1_001))
+        self.assertFalse(message_hub.amap_proxy_cookie_valid(cookie_pair, secret, now=1_301))
+        self.assertFalse(message_hub.amap_proxy_cookie_valid(cookie_pair + "tampered", secret, now=1_001))
+        self.assertNotIn("server_security_1234", set_cookie)
+        self.assertNotIn("hub-token", set_cookie)
+
+    def test_amap_proxy_requires_signed_cookie_even_with_forged_origin_headers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            hub_token = "unit-hub-token"
+            environment = {
+                message_hub.AMAP_JS_API_KEY_ENV: "public_JS_key_1234",
+                message_hub.AMAP_SECURITY_JS_CODE_ENV: "server_security_1234",
+            }
+            with mock.patch.dict("os.environ", environment, clear=False):
+                server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store, token=hub_token))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                with self.assertRaises(error.HTTPError) as forged_headers:
+                    req = request.Request(
+                        base_url + "/_AMapService/v3/assistant/coordinate/convert?locations=116.3,39.9&coordsys=gps",
+                        headers={
+                            "Host": f"127.0.0.1:{server.server_port}",
+                            "Origin": base_url,
+                            "Referer": base_url + "/",
+                            "Sec-Fetch-Site": "same-origin",
+                        },
+                    )
+                    request.urlopen(req, timeout=5)
+                forged_headers.exception.close()
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(forged_headers.exception.code, 403)
+
+    def test_authenticated_state_issues_amap_cookie_without_exposing_secret(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            environment = {
+                message_hub.AMAP_JS_API_KEY_ENV: "public_JS_key_1234",
+                message_hub.AMAP_SECURITY_JS_CODE_ENV: "server_security_1234",
+            }
+            with mock.patch.dict("os.environ", environment, clear=False):
+                server = ThreadingHTTPServer(
+                    ("127.0.0.1", 0),
+                    message_hub.make_handler(store, token="secret"),
+                )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                req = request.Request(
+                    base_url + "/api/state",
+                    headers={"Authorization": "Bearer secret"},
+                )
+                with request.urlopen(req, timeout=5) as response:
+                    payload = response.read()
+                    set_cookie = response.headers.get("Set-Cookie") or ""
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertIn(f"{message_hub.AMAP_PROXY_COOKIE_NAME}=", set_cookie)
+        self.assertIn("HttpOnly", set_cookie)
+        self.assertIn("SameSite=Strict", set_cookie)
+        self.assertNotIn("server_security_1234", set_cookie)
+        self.assertNotIn(b"server_security_1234", payload)
+
+    def test_amap_proxy_response_is_bounded_no_store_and_nosniff(self) -> None:
+        class FakeResponse:
+            status = 200
+
+            def __init__(self) -> None:
+                self.chunks = [b'{"locations":["116.3,39.9"]}', b""]
+
+            def getheader(self, name: str) -> str | None:
+                return {
+                    "Content-Length": "31",
+                    "Content-Type": "application/json; charset=utf-8",
+                }.get(name)
+
+            def read(self, _size: int) -> bytes:
+                return self.chunks.pop(0)
+
+        class FakeConnection:
+            instances: list["FakeConnection"] = []
+
+            def __init__(self, host: str, timeout: float) -> None:
+                self.host = host
+                self.timeout = timeout
+                self.target = ""
+                self.sock = None
+                self.__class__.instances.append(self)
+
+            def request(self, method: str, target: str, headers: dict[str, str]) -> None:
+                self.target = target
+
+            def getresponse(self) -> FakeResponse:
+                return FakeResponse()
+
+            def close(self) -> None:
+                return
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            environment = {
+                message_hub.AMAP_JS_API_KEY_ENV: "public_JS_key_1234",
+                message_hub.AMAP_SECURITY_JS_CODE_ENV: "server_security_1234",
+            }
+            with mock.patch.dict("os.environ", environment, clear=False):
+                handler = message_hub.make_handler(store, token="secret")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state_request = request.Request(
+                    base_url + "/api/state",
+                    headers={"Authorization": "Bearer secret"},
+                )
+                with request.urlopen(state_request, timeout=5) as response:
+                    cookie = (response.headers.get("Set-Cookie") or "").split(";", 1)[0]
+                proxy_request = request.Request(
+                    base_url + "/_AMapService/v3/assistant/coordinate/convert?locations=116.3,39.9&coordsys=gps&key=attacker",
+                    headers={
+                        "Cookie": cookie,
+                        "Origin": base_url,
+                        "Sec-Fetch-Site": "same-origin",
+                    },
+                )
+                with mock.patch.object(message_hub.http.client, "HTTPSConnection", FakeConnection):
+                    with request.urlopen(proxy_request, timeout=5) as response:
+                        response.read()
+                        cache_control = response.headers.get("Cache-Control")
+                        content_type = response.headers.get("Content-Type")
+                        nosniff = response.headers.get("X-Content-Type-Options")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(cache_control, "no-store")
+        self.assertEqual(content_type, "application/json")
+        self.assertEqual(nosniff, "nosniff")
+        self.assertEqual(FakeConnection.instances[-1].host, "restapi.amap.com")
+        self.assertNotIn("attacker", FakeConnection.instances[-1].target)
+        self.assertEqual(FakeConnection.instances[-1].target.count("key="), 1)
+        self.assertEqual(FakeConnection.instances[-1].target.count("jscode="), 1)
+
+    def test_amap_response_content_type_and_size_are_fail_closed(self) -> None:
+        self.assertEqual(message_hub.safe_amap_content_type("text/html; charset=utf-8"), "application/octet-stream")
+        self.assertEqual(message_hub.safe_amap_content_type("application/json; charset=utf-8"), "application/json")
+
+        class OversizeResponse:
+            status = 200
+
+            def getheader(self, name: str) -> str | None:
+                if name == "Content-Length":
+                    return str(message_hub.AMAP_PROXY_MAX_RESPONSE_BYTES + 1)
+                return "application/json" if name == "Content-Type" else None
+
+            def read(self, _size: int) -> bytes:
+                raise AssertionError("oversized declared response must not be read")
+
+        class OversizeConnection:
+            def __init__(self, _host: str, timeout: float) -> None:
+                self.timeout = timeout
+                self.sock = None
+
+            def request(self, _method: str, _target: str, headers: dict[str, str]) -> None:
+                return
+
+            def getresponse(self) -> OversizeResponse:
+                return OversizeResponse()
+
+            def close(self) -> None:
+                return
+
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            environment = {
+                message_hub.AMAP_JS_API_KEY_ENV: "public_JS_key_1234",
+                message_hub.AMAP_SECURITY_JS_CODE_ENV: "server_security_1234",
+            }
+            with mock.patch.dict("os.environ", environment, clear=False):
+                handler = message_hub.make_handler(store, token="secret")
+            server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                state_request = request.Request(
+                    base_url + "/api/state",
+                    headers={"Authorization": "Bearer secret"},
+                )
+                with request.urlopen(state_request, timeout=5) as response:
+                    cookie = (response.headers.get("Set-Cookie") or "").split(";", 1)[0]
+                proxy_request = request.Request(
+                    base_url + "/_AMapService/v3/assistant/coordinate/convert?locations=116.3,39.9&coordsys=gps",
+                    headers={
+                        "Cookie": cookie,
+                        "Origin": base_url,
+                        "Sec-Fetch-Site": "same-origin",
+                    },
+                )
+                with mock.patch.object(message_hub.http.client, "HTTPSConnection", OversizeConnection):
+                    with self.assertRaises(error.HTTPError) as oversized:
+                        request.urlopen(proxy_request, timeout=5)
+                    oversized.exception.close()
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(oversized.exception.code, 502)
+
+    def test_amap_security_code_never_enters_dashboard_or_state_api(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            security_code = "server_security_1234"
+            environment = {
+                message_hub.AMAP_JS_API_KEY_ENV: "public_JS_key_1234",
+                message_hub.AMAP_SECURITY_JS_CODE_ENV: security_code,
+            }
+            with mock.patch.dict("os.environ", environment, clear=False):
+                server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store, token="secret"))
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            try:
+                dashboard, _ = get_bytes(base_url, "/")
+                state = get_json(base_url, "/api/state", headers={"Authorization": "Bearer secret"})
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertIn(b"public_JS_key_1234", dashboard)
+        self.assertNotIn(security_code.encode(), dashboard)
+        self.assertNotIn(security_code, json.dumps(state))
+
     def test_progress_board_is_available_in_state_and_dedicated_route(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -59,6 +59,44 @@ carriage returns cannot become part of remote service names or paths. Prefer a
 dedicated ED25519 key through `-SshKey`; never place VPS passwords or private
 key contents in repository files or command arguments.
 
+### AMap Dashboard Runtime Configuration
+
+The Dashboard's AMap JS API 2.0 application is registered under the key name
+`test`. The real values are runtime configuration, not repository
+documentation. This follows the
+[AMap JS API security-key guide](https://lbs.amap.com/api/javascript-api-v2/guide/abc/jscode),
+which recommends keeping the security code behind a server-side proxy:
+
+- `EGOLINK_AMAP_JS_API_KEY` is the browser-visible JavaScript API key. The
+  Dashboard may place it in the AMap script URL, so it is not treated as a
+  server secret. Restrict it to the production Dashboard origin in the AMap
+  console and enable quota/abuse monitoring.
+- `EGOLINK_AMAP_SECURITY_JS_CODE` is server-only. It must never appear in
+  Dashboard HTML, JavaScript, public configuration APIs, logs, reports, test
+  fixtures, or Git history. The Message Hub uses it only when forwarding the
+  fixed same-origin `/_AMapService` path to the AMap service.
+
+For deployment, set both values in the local process environment and run the
+normal deployment script. The script accepts only its fixed runtime-variable
+allowlist, rejects multiline values, and atomically upserts values that were
+actually supplied. It preserves existing variables when their local value is
+absent. On the VPS the values live in `/etc/egolink-message-hub.env`, owned by
+root with mode `0600`, and are loaded through the existing systemd
+`EnvironmentFile` boundary. Local `.env` and `.env.*` files are ignored; only
+redacted `.env.example` templates may be committed.
+
+The browser boundary is the JS API key plus a relative `/_AMapService` service
+host. The security code stays behind that same-origin proxy. Missing AMap
+configuration must leave the local coordinate fallback usable. SIM7670 GNSS
+evidence remains WGS-84 in storage and APIs; the browser converts a copy from
+`gps` to GCJ-02 with AMap's coordinate-conversion API before drawing it and
+must not overwrite the source evidence.
+
+To rotate either value, update the matching local process environment value,
+deploy and restart the Message Hub, verify the provider and fallback paths,
+then revoke the old credential in the AMap console. Never record credential
+values, partial values, hashes, or fingerprints in task packets or evidence.
+
 ## Transport Options
 
 P0 may start with either HTTP polling or MQTT, but the implementation must keep

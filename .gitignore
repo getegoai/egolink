@@ -12,6 +12,14 @@ htmlcov/
 .codex/
 .claude/
 
+# Local runtime secrets (keep only redacted templates in Git)
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
 # Runtime data
 pc_simulator/runtime/
 server/runtime/

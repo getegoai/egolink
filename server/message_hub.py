@@ -12,6 +12,9 @@ import binascii
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
+import hmac
+import http.client
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -20,8 +23,9 @@ import re
 import sqlite3
 import sys
 import threading
+import time
 from typing import Any, Mapping
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, parse_qsl, unquote, urlencode, urlparse
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -50,6 +54,37 @@ DEFAULT_D1_LABELING_REVIEW_REPORTS = REPO_ROOT / "reports" / "d1_labeling_review
 DEFAULT_D1_LABELING_DECISION_REPORTS = REPO_ROOT / "reports" / "d1_labeling_decisions"
 DEFAULT_PROGRESS_BOARD = REPO_ROOT / "docs" / "generated" / "progress_board.json"
 MAX_BODY_BYTES = 1_000_000
+AMAP_JS_API_KEY_ENV = "EGOLINK_AMAP_JS_API_KEY"
+AMAP_SECURITY_JS_CODE_ENV = "EGOLINK_AMAP_SECURITY_JS_CODE"
+AMAP_PROXY_PREFIX = "/_AMapService"
+AMAP_PROXY_TIMEOUT_S = 5.0
+AMAP_PROXY_TOTAL_DEADLINE_S = 8.0
+AMAP_PROXY_MAX_RESPONSE_BYTES = 4_000_000
+AMAP_PROXY_MAX_QUERY_BYTES = 8192
+AMAP_PROXY_READ_CHUNK_BYTES = 64 * 1024
+AMAP_PROXY_MAX_CONCURRENCY = 4
+AMAP_PROXY_ALLOWED_HOSTS = frozenset({"restapi.amap.com", "webapi.amap.com"})
+AMAP_PROXY_ALLOWED_PATH = re.compile(
+    r"^(?:/v3/assistant/coordinate/convert|/v4/map/styles)$"
+)
+AMAP_PROXY_ALLOWED_CONTENT_TYPES = frozenset(
+    {
+        "application/json",
+        "application/javascript",
+        "application/octet-stream",
+        "image/jpeg",
+        "image/png",
+        "image/svg+xml",
+        "image/webp",
+        "text/css",
+        "text/javascript",
+        "text/plain",
+    }
+)
+AMAP_PROXY_COOKIE_NAME = "egolink_amap_proxy"
+AMAP_PROXY_COOKIE_TTL_S = 5 * 60
+AMAP_PROXY_MAX_COOKIE_HEADER_BYTES = 8192
+AMAP_CREDENTIAL_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,128}$")
 RAW_FRAME_PROFILE = "raw-frame.p0.v1"
 EALE_P0_GENERATOR_NAME = "EALE-P0"
 EALE_P0_GENERATOR_VERSION = "0.1.0-alg001"
@@ -59,6 +94,7 @@ D1_LOCATION_EVENT_TYPES = {"location_report", "location_observation"}
 D1_SUMMARY_MESSAGE_LIMIT = 300
 D1_COORDINATE_HISTORY_LIMIT = 48
 D1_COORDINATE_MESSAGE_SCAN_LIMIT = 5000
+D1_AMAP_WGS84_FW_ALLOWLIST = frozenset({"0.1.0-fw005-gnss-correctness"})
 FIELD_EXPORT_DEFAULT_MAX_RECORDS = 5000
 FIELD_EXPORT_HARD_MAX_RECORDS = 10000
 FIELD_EXPORT_MAX_DURATION_S = 48 * 60 * 60
@@ -148,6 +184,113 @@ class RawPayloadValidationError(ValueError):
         super().__init__(message)
         self.code = code
         self.profile = profile
+
+
+def amap_runtime_config() -> tuple[str | None, str | None]:
+    api_key = (os.environ.get(AMAP_JS_API_KEY_ENV) or "").strip()
+    security_code = (os.environ.get(AMAP_SECURITY_JS_CODE_ENV) or "").strip()
+    if not AMAP_CREDENTIAL_PATTERN.fullmatch(api_key):
+        api_key = ""
+    if not AMAP_CREDENTIAL_PATTERN.fullmatch(security_code):
+        security_code = ""
+    if not api_key or not security_code:
+        return None, None
+    return api_key, security_code
+
+
+def amap_proxy_target(path: str, raw_query: str, api_key: str, security_code: str) -> tuple[str, str]:
+    if not api_key or not AMAP_CREDENTIAL_PATTERN.fullmatch(api_key):
+        raise MessageHubError("amap_not_configured", "map provider is not configured", status=503)
+    if not security_code or not AMAP_CREDENTIAL_PATTERN.fullmatch(security_code):
+        raise MessageHubError("amap_not_configured", "map provider is not configured", status=503)
+    if len(raw_query.encode("utf-8")) > AMAP_PROXY_MAX_QUERY_BYTES:
+        raise MessageHubError("amap_query_too_large", "map provider query is too large", status=414)
+    if not path.startswith(AMAP_PROXY_PREFIX + "/"):
+        raise MessageHubError("not_found", "route not found", status=404)
+
+    upstream_path = path[len(AMAP_PROXY_PREFIX) :]
+    decoded_segments = [unquote(segment) for segment in upstream_path.split("/") if segment]
+    if not decoded_segments or any(
+        segment in {".", ".."} or not re.fullmatch(r"[A-Za-z0-9._~-]+", segment)
+        for segment in decoded_segments
+    ):
+        raise MessageHubError("invalid_amap_path", "invalid map provider path", status=400)
+    normalized_path = "/" + "/".join(decoded_segments)
+    if not AMAP_PROXY_ALLOWED_PATH.match(normalized_path):
+        raise MessageHubError("invalid_amap_path", "unsupported map provider path", status=404)
+    if normalized_path.startswith("/v4/map/styles/") or normalized_path == "/v4/map/styles":
+        upstream_host = "webapi.amap.com"
+    else:
+        upstream_host = "restapi.amap.com"
+    if upstream_host not in AMAP_PROXY_ALLOWED_HOSTS:
+        raise MessageHubError("invalid_amap_upstream", "invalid map provider upstream", status=400)
+
+    query_items = [
+        (key, value)
+        for key, value in parse_qsl(raw_query, keep_blank_values=True)
+        if key.lower() not in {"key", "jscode"}
+    ]
+    query_items.append(("key", api_key))
+    query_items.append(("jscode", security_code))
+    query_string = urlencode(query_items, doseq=True)
+    return upstream_host, normalized_path + ("?" + query_string if query_string else "")
+
+
+def amap_proxy_cookie_secret(token: str | None, security_code: str) -> bytes:
+    token_bytes = (token or "amap-no-bearer-token").encode("utf-8")
+    return hmac.new(security_code.encode("utf-8"), token_bytes, hashlib.sha256).digest()
+
+
+def issue_amap_proxy_cookie(secret: bytes, *, now: int | None = None) -> str:
+    expires_at = int(time.time() if now is None else now) + AMAP_PROXY_COOKIE_TTL_S
+    payload = str(expires_at)
+    signature = hmac.new(secret, payload.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{AMAP_PROXY_COOKIE_NAME}={payload}.{signature}; Max-Age={AMAP_PROXY_COOKIE_TTL_S}; Path={AMAP_PROXY_PREFIX}; HttpOnly; SameSite=Strict"
+
+
+def amap_proxy_cookie_valid(cookie_header: str | None, secret: bytes, *, now: int | None = None) -> bool:
+    if not cookie_header or len(cookie_header.encode("utf-8")) > AMAP_PROXY_MAX_COOKIE_HEADER_BYTES:
+        return False
+    cookies = SimpleCookie()
+    try:
+        cookies.load(cookie_header)
+    except CookieError:
+        return False
+    morsel = cookies.get(AMAP_PROXY_COOKIE_NAME)
+    if morsel is None:
+        return False
+    try:
+        expires_text, signature = morsel.value.split(".", 1)
+        expires_at = int(expires_text)
+    except (ValueError, TypeError):
+        return False
+    current_time = int(time.time() if now is None else now)
+    if expires_at < current_time or expires_at > current_time + AMAP_PROXY_COOKIE_TTL_S:
+        return False
+    expected = hmac.new(secret, expires_text.encode("ascii"), hashlib.sha256).hexdigest()
+    return hmac.compare_digest(signature, expected)
+
+
+def safe_amap_content_type(value: str | None) -> str:
+    media_type = str(value or "application/octet-stream").split(";", 1)[0].strip().lower()
+    return media_type if media_type in AMAP_PROXY_ALLOWED_CONTENT_TYPES else "application/octet-stream"
+
+
+def amap_request_is_same_origin(headers: Mapping[str, str]) -> bool:
+    fetch_site = str(headers.get("Sec-Fetch-Site") or "").strip().lower()
+    if fetch_site:
+        return fetch_site == "same-origin"
+    request_host = str(headers.get("Host") or "").strip().lower()
+    if not request_host:
+        return False
+    for header_name in ("Origin", "Referer"):
+        source = str(headers.get(header_name) or "").strip()
+        if not source:
+            continue
+        parsed = urlparse(source)
+        if parsed.scheme in {"http", "https"} and parsed.netloc.lower() == request_host:
+            return True
+    return False
 
 
 class MessageHubStore:
@@ -1260,6 +1403,14 @@ def make_handler(
     d1_labeling_decision_root: Path = DEFAULT_D1_LABELING_DECISION_REPORTS,
     progress_board_path: Path = DEFAULT_PROGRESS_BOARD,
 ) -> type[BaseHTTPRequestHandler]:
+    amap_api_key, amap_security_code = amap_runtime_config()
+    amap_cookie_secret = (
+        amap_proxy_cookie_secret(token, amap_security_code)
+        if token is not None and amap_api_key is not None and amap_security_code is not None
+        else None
+    )
+    amap_proxy_slots = threading.BoundedSemaphore(AMAP_PROXY_MAX_CONCURRENCY)
+
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
 
@@ -1289,13 +1440,22 @@ def make_handler(
             query = parse_qs(parsed_url.query, keep_blank_values=True)
             segments = split_path(path)
             if path == "/":
-                self.respond_html(render_dashboard())
+                self.respond_html(render_dashboard(amap_js_api_key=amap_api_key))
                 return
             if path == "/d2-reference-capture":
                 self.respond_html(render_d2_reference_capture())
                 return
             if path == "/health":
                 self.respond_json({"ok": True, "service": "egolink-message-hub", "time": utc_now()})
+                return
+            if path.startswith(AMAP_PROXY_PREFIX + "/"):
+                if amap_api_key is None or amap_security_code is None or amap_cookie_secret is None:
+                    raise MessageHubError("amap_not_configured", "map provider is not configured", status=503)
+                if not amap_proxy_cookie_valid(self.headers.get("Cookie"), amap_cookie_secret):
+                    raise MessageHubError("amap_proxy_unauthorized", "map provider session required", status=403)
+                if not amap_request_is_same_origin(self.headers):
+                    raise MessageHubError("amap_same_origin_required", "same-origin map request required", status=403)
+                self.proxy_amap(path, parsed_url.query, amap_api_key, amap_security_code)
                 return
             if segments and segments[0] == "api" and not authorized(self.headers.get("Authorization"), token):
                 raise MessageHubError("unauthorized", "missing or invalid bearer token", status=401)
@@ -1323,6 +1483,11 @@ def make_handler(
                     d1_labeling_decision_root
                 )
                 progress_board = load_progress_board(progress_board_path)
+                response_headers = (
+                    {"Set-Cookie": issue_amap_proxy_cookie(amap_cookie_secret)}
+                    if amap_cookie_secret is not None
+                    else None
+                )
                 self.respond_json(
                     {
                         "devices": devices,
@@ -1353,7 +1518,8 @@ def make_handler(
                             devices=devices,
                             test_runs=store.list_test_runs(),
                         ),
-                    }
+                    },
+                    headers=response_headers,
                 )
                 return
             if segments == ["api", "v1", "devices"]:
@@ -1614,11 +1780,19 @@ def make_handler(
                 raise MessageHubError("body_too_large", "request body is too large", status=413)
             return self.rfile.read(length)
 
-        def respond_json(self, payload: dict[str, Any], status: int = 200) -> None:
+        def respond_json(
+            self,
+            payload: dict[str, Any],
+            status: int = 200,
+            *,
+            headers: dict[str, str] | None = None,
+        ) -> None:
             body = dumps(payload, indent=2).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
             self.end_headers()
             self.wfile.write(body)
 
@@ -1648,6 +1822,78 @@ def make_handler(
 
         def respond_error(self, error: MessageHubError) -> None:
             self.respond_json({"ok": False, "error": error.code, "detail": str(error)}, status=error.status)
+
+        def proxy_amap(self, path: str, raw_query: str, api_key: str, security_code: str) -> None:
+            upstream_host, upstream_target = amap_proxy_target(path, raw_query, api_key, security_code)
+            if not amap_proxy_slots.acquire(blocking=False):
+                raise MessageHubError("amap_proxy_busy", "map provider proxy is busy", status=503)
+            deadline = time.monotonic() + AMAP_PROXY_TOTAL_DEADLINE_S
+            connection: http.client.HTTPSConnection | None = None
+            try:
+                connection = http.client.HTTPSConnection(
+                    upstream_host,
+                    timeout=min(AMAP_PROXY_TIMEOUT_S, AMAP_PROXY_TOTAL_DEADLINE_S),
+                )
+                connection.request(
+                    "GET",
+                    upstream_target,
+                    headers={"Accept": self.headers.get("Accept", "*/*"), "User-Agent": "EgoLinkAMapProxy/1"},
+                )
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise MessageHubError("amap_upstream_timeout", "map provider request timed out", status=504)
+                if connection.sock is not None:
+                    connection.sock.settimeout(max(0.001, min(AMAP_PROXY_TIMEOUT_S, remaining)))
+                response = connection.getresponse()
+                if time.monotonic() > deadline:
+                    raise MessageHubError("amap_upstream_timeout", "map provider request timed out", status=504)
+                declared_length = response.getheader("Content-Length")
+                if declared_length:
+                    try:
+                        parsed_length = int(declared_length)
+                    except ValueError as exc:
+                        raise MessageHubError("amap_invalid_response", "map provider response is invalid", status=502) from exc
+                    if parsed_length < 0 or parsed_length > AMAP_PROXY_MAX_RESPONSE_BYTES:
+                        raise MessageHubError("amap_response_too_large", "map provider response is too large", status=502)
+                chunks: list[bytes] = []
+                total = 0
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise MessageHubError("amap_upstream_timeout", "map provider request timed out", status=504)
+                    if connection.sock is not None:
+                        connection.sock.settimeout(max(0.001, min(AMAP_PROXY_TIMEOUT_S, remaining)))
+                    chunk = response.read(min(AMAP_PROXY_READ_CHUNK_BYTES, AMAP_PROXY_MAX_RESPONSE_BYTES - total + 1))
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > AMAP_PROXY_MAX_RESPONSE_BYTES:
+                        raise MessageHubError("amap_response_too_large", "map provider response is too large", status=502)
+                    chunks.append(chunk)
+                body = b"".join(chunks)
+                content_type = safe_amap_content_type(response.getheader("Content-Type"))
+                cache_control = (
+                    "no-store"
+                    if path == "/_AMapService/v3/assistant/coordinate/convert"
+                    else "private, max-age=60"
+                )
+                self.respond_bytes(
+                    body,
+                    content_type=content_type,
+                    status=response.status,
+                    headers={
+                        "Cache-Control": cache_control,
+                        "X-Content-Type-Options": "nosniff",
+                    },
+                )
+            except MessageHubError:
+                raise
+            except (OSError, http.client.HTTPException, ValueError) as exc:
+                raise MessageHubError("amap_upstream_error", "map provider request failed", status=502) from exc
+            finally:
+                if connection is not None:
+                    connection.close()
+                amap_proxy_slots.release()
 
         def log_message(self, format: str, *args: Any) -> None:
             return
@@ -3417,8 +3663,31 @@ def d1_location_point(message: dict[str, Any], *, source: str) -> dict[str, Any]
     position = location_position(message)
     lat = as_number(position.get("lat"))
     lon = as_number(position.get("lon"))
-    if lat is None or lon is None:
+    if lat is None or lon is None or not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
         return None
+    fw_version = str(message.get("fw_version") or "unknown")
+    fix = first_known(message.get("fix"), dict_value(message, "gnss", "fix"))
+    amap_eligible = (
+        message.get("event_type") == "location_report"
+        and fix is True
+        and fw_version in D1_AMAP_WGS84_FW_ALLOWLIST
+    )
+    if amap_eligible:
+        coordinate_contract = "wgs84"
+        coordinate_trust = "verified_parser_fw_allowlist"
+        amap_exclusion_reason = None
+    elif message.get("event_type") != "location_report":
+        coordinate_contract = "unknown"
+        coordinate_trust = "unverified"
+        amap_exclusion_reason = "not_gnss_location_report"
+    elif fix is not True:
+        coordinate_contract = "unknown"
+        coordinate_trust = "unverified"
+        amap_exclusion_reason = "gnss_fix_not_true"
+    else:
+        coordinate_contract = "unknown"
+        coordinate_trust = "pre_correction_or_unknown"
+        amap_exclusion_reason = "firmware_parser_not_allowlisted"
     return compact_dict(
         {
             "lat": lat,
@@ -3427,7 +3696,13 @@ def d1_location_point(message: dict[str, Any], *, source: str) -> dict[str, Any]
             "seq": message.get("seq"),
             "event_type": message.get("event_type"),
             "source": source,
-            "fix": first_known(message.get("fix"), dict_value(message, "gnss", "fix")),
+            "fix": fix,
+            "fw_version": fw_version,
+            "coordinate_contract": coordinate_contract,
+            "coordinate_trust": coordinate_trust,
+            "amap_eligible": amap_eligible,
+            "amap_exclusion_reason": amap_exclusion_reason,
+            "raw_frame_id": dict_value(message, "raw_frame", "frame_id"),
         }
     )
 
@@ -3512,6 +3787,14 @@ def build_d1_map_surface(
         for point in points
     ):
         points.append(latest_point)
+    if latest_point and latest_point.get("amap_eligible") is True:
+        for point in reversed(points):
+            if (
+                point.get("server_received_at") == latest_point.get("server_received_at")
+                and point.get("seq") == latest_point.get("seq")
+            ):
+                point["amap_current"] = True
+                break
     if not points and map_lat is not None and map_lon is not None:
         fallback_lat = as_number(map_lat)
         fallback_lon = as_number(map_lon)
@@ -3529,10 +3812,17 @@ def build_d1_map_surface(
                         "seq": latest_location.get("seq"),
                         "event_type": latest_location.get("event_type"),
                         "source": coordinate_source or "map_surface",
+                        "fw_version": "unknown",
+                        "coordinate_contract": "unknown",
+                        "coordinate_trust": "unverified_location_memory",
+                        "amap_eligible": False,
+                        "amap_exclusion_reason": "location_memory_has_no_coordinate_provenance",
                     }
                 )
             )
     visible_points = points[-24:]
+    amap_eligible_points = [point for point in visible_points if point.get("amap_eligible") is True]
+    amap_eligible_point_count = len(amap_eligible_points)
     coordinate_diagnostics = d1_coordinate_diagnostics(messages, points)
     return {
         "visible": visible,
@@ -3549,12 +3839,14 @@ def build_d1_map_surface(
             "next_step": "select_provider_key_privacy_before_tile_mode",
         },
         "layers": {
-            "current_point": bool(visible_points),
-            "trajectory": len(visible_points) >= 2,
+            "current_point": any(point.get("amap_current") is True for point in amap_eligible_points),
+            "trajectory": amap_eligible_point_count >= 2,
             "reference_points": False,
             "provider_tiles": False,
         },
         "points": visible_points,
+        "amap_eligible_point_count": amap_eligible_point_count,
+        "amap_hidden_point_count": len(visible_points) - amap_eligible_point_count,
         "reference_points": [],
         "coordinate_diagnostics": coordinate_diagnostics,
         "privacy": {
@@ -3568,6 +3860,12 @@ def build_d1_map_surface(
             "visible": len(visible_points) >= 2,
             "source": "recent_location_events",
             "non_claim": "trajectory_is_visual_evidence_not_accuracy",
+        },
+        "amap_trajectory": {
+            "point_count": amap_eligible_point_count,
+            "hidden_point_count": len(visible_points) - amap_eligible_point_count,
+            "visible": amap_eligible_point_count >= 2,
+            "source": "verified_parser_location_events",
         },
     }
 
@@ -7989,8 +8287,15 @@ def render_d2_reference_capture() -> str:
 </html>"""
 
 
-def render_dashboard() -> str:
-    return """<!doctype html>
+def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
+    safe_amap_key = amap_js_api_key if amap_js_api_key and AMAP_CREDENTIAL_PATTERN.fullmatch(amap_js_api_key) else ""
+    amap_bootstrap = (
+        "<script>window._AMapSecurityConfig={serviceHost:window.location.origin+'/_AMapService'};</script>\n"
+        f'<script src="https://webapi.amap.com/loader.js" data-egolink-amap-loader="v2" data-egolink-amap-key="{safe_amap_key}"></script>'
+        if safe_amap_key
+        else '<meta name="egolink-amap-status" content="not-configured" />'
+    )
+    html = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -8121,6 +8426,15 @@ def render_dashboard() -> str:
     .lane-value { display: block; margin-top: 4px; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
     .lane-note { display: block; margin-top: 4px; color: var(--ink-soft); font-size: 12px; overflow-wrap: anywhere; }
     .map-surface { min-height: 260px; border: 1px solid #c8d0dc; border-radius: 8px; background: #eef2f6; position: relative; display: grid; place-items: center; overflow: hidden; }
+    .amap-live-shell { position: relative; min-height: 0; }
+    #amapLiveMap { position: relative; z-index: 1; min-height: 360px; display: none; background: #eef2f6; border: 1px solid #c8d0dc; border-radius: 8px; overflow: hidden; }
+    #amapLiveMap[data-state="ready"] { visibility: visible; }
+    #amapLiveStatus { position: absolute; left: 10px; top: 8px; z-index: 5; max-width: calc(100% - 20px); color: var(--ink-soft); font-size: 12px; background: rgba(255,255,255,0.94); border: 1px solid #d8dde6; border-radius: 6px; padding: 6px 8px; pointer-events: none; }
+    #amapLiveStatus.ok { color: var(--green); }
+    #amapLiveStatus.warn { color: var(--amber); }
+    .amap-current-marker, .amap-memory-marker { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px var(--blue); background: var(--blue); }
+    .amap-memory-marker { background: var(--amber); box-shadow: 0 0 0 2px var(--amber); }
+    .amap-stale-marker { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; background: var(--red); box-shadow: 0 0 0 2px var(--red); }
     .map-grid { position: absolute; inset: 0; background-image: linear-gradient(#d9e0ea 1px, transparent 1px), linear-gradient(90deg, #d9e0ea 1px, transparent 1px); background-size: 28px 28px; }
     .map-track { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
     .map-provider-banner { position: absolute; left: 10px; right: 10px; top: 8px; z-index: 3; display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; color: var(--ink-soft); font-size: 12px; background: rgba(255, 255, 255, 0.9); border: 1px solid #d8dde6; border-radius: 6px; padding: 6px 8px; }
@@ -8138,6 +8452,7 @@ def render_dashboard() -> str:
     @media (max-width: 760px) { .evidence-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } select { width: 100%; min-width: 0; } button, select { min-height: 44px; } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } .section-head { align-items: flex-start; flex-direction: column; } .section-actions, .device-picker { width: 100%; justify-content: flex-start; } .map-import-status { max-width: 100%; text-align: left; } .dashboard-details > summary { align-items: flex-start; } }
   </style>
+  __AMAP_BOOTSTRAP__
 </head>
 <body>
   <header>
@@ -8169,6 +8484,10 @@ def render_dashboard() -> str:
         </div>
       </div>
       <div id="d1Link"></div>
+      <div id="amapLiveShell" class="amap-live-shell" data-provider-state="waiting">
+        <div id="amapLiveMap" data-state="waiting" aria-label="Selected device location on AMap"></div>
+        <div id="amapLiveStatus" class="warn" role="status" aria-live="polite">Map waiting for authenticated device state</div>
+      </div>
     </section>
 
     <section id="fieldOperations" class="focus-panel" aria-labelledby="fieldOperationsTitle">
@@ -8354,10 +8673,16 @@ def render_dashboard() -> str:
     const D2_MANIFEST_MAX_BYTES = 262144;
     const D2_REFERENCE_POINT_LIMIT = 16;
     const DASHBOARD_DEVICE_KEY = 'egolink.dashboard.device.v1';
+    const AMAP_JS_API_KEY = '__AMAP_JS_API_KEY__';
     let selectedDashboardDeviceId = localStorage.getItem(DASHBOARD_DEVICE_KEY) || '';
     let refreshInFlight = false;
     let lastSuccessfulDashboardState = null;
     let localD2MapReview = null;
+    let amapNamespace = null;
+    let amapInstance = null;
+    let amapOverlays = [];
+    let amapLoadPromise = null;
+    let amapRenderGeneration = 0;
     function selectDashboardDevice(devices, currentRun = {}, preferredDeviceId = selectedDashboardDeviceId) {
       const available = Array.isArray(devices)
         ? devices.filter(device => device && device.device_id)
@@ -8484,6 +8809,7 @@ def render_dashboard() -> str:
         selectedDevice,
         lastSuccessfulDashboardState.raw_frames || [],
       );
+      renderAmapForSelectedDevice(selectedDevice);
     }
     function renderD1LinkFromLatestState() {
       renderSelectedDevicePanels();
@@ -9359,7 +9685,7 @@ def render_dashboard() -> str:
         ? `<svg class="map-track" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${observed.map(point => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}" fill="none" stroke="#1f6feb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/></svg>`
         : '';
       const markers = observed.map((point, index) => {
-        const current = index === observed.length - 1;
+        const current = point.display_semantics === 'current_fix' && point.fix === true;
         const label = `${point.event_type || 'location'} seq ${point.seq ?? 'unknown'} ${coordinateLabel(point.lat, point.lon)}`;
         return `<span class="map-point ${current ? 'map-point-current' : ''}" title="${escapeHtml(label)}" style="left:${point.x.toFixed(2)}%; top:${point.y.toFixed(2)}%;"></span>`;
       }).join('');
@@ -9371,7 +9697,8 @@ def render_dashboard() -> str:
     }
     function d1MapSurface(map, estimate) {
       const mode = map.mode || 'waiting_for_location_upload';
-      const points = Array.isArray(map.points) ? map.points : [];
+      let points = Array.isArray(map.points) ? map.points : [];
+      const trustedPoints = points.filter(point => point && point.amap_eligible === true && point.coordinate_contract === 'wgs84');
       const referencePoints = Array.isArray(map.reference_points) ? map.reference_points : [];
       const provider = map.provider || {};
       const privacy = map.privacy || {};
@@ -9386,14 +9713,24 @@ def render_dashboard() -> str:
       const reviewMode = map.review_mode || 'local_no_key';
       const providerLabel = providerMode === 'none' ? 'No-key Local Map' : `Provider Map ${providerMode}`;
       const surfaceVisible = map.visible || referencePoints.length > 0;
+      const latestTrustedPoint = trustedPoints.length ? trustedPoints[trustedPoints.length - 1] : null;
+      const hiddenPreCorrection = points.length > 0 && !trustedPoints.length;
       const caption = surfaceVisible
-        ? `${mode} / ${estimate.state || 'unknown'} / ${coordinateLabel(map.lat, map.lon)} / ${pointCount} track points / ${coordCount}/${eventCount} coordinate uploads`
+        ? hiddenPreCorrection
+          ? 'Pre-correction location hidden until new verified GNSS fix'
+          : `${mode} / ${estimate.state || 'unknown'} / ${latestTrustedPoint ? coordinateLabel(latestTrustedPoint.lat, latestTrustedPoint.lon) : 'no trusted coordinate'} / ${trustedPoints.length} verified track points / ${coordCount}/${eventCount} coordinate uploads`
         : 'waiting for location upload';
+      points = trustedPoints.map((point, index) => ({
+        ...point,
+        display_semantics: point.amap_current === true && point.fix === true
+          ? 'current_fix'
+          : 'history',
+      }));
       const marker = surfaceVisible
-        ? d1MapTrack(points, referencePoints) || '<div class="map-waiting">no coordinate points</div>'
+        ? d1MapTrack(points, referencePoints) || `<div class="map-waiting">${hiddenPreCorrection ? 'Pre-correction location hidden until new verified GNSS fix' : 'no verified coordinate points'}</div>`
         : '<div class="map-waiting">waiting for location</div>';
       return `
-        <div class="map-surface" data-d1-map-mode="${escapeHtml(mode)}" data-map-review-mode="${escapeHtml(reviewMode)}" data-map-provider-mode="${escapeHtml(providerMode)}">
+        <div id="localMapSurface" class="map-surface" data-d1-map-mode="${escapeHtml(mode)}" data-map-review-mode="${escapeHtml(reviewMode)}" data-map-provider-mode="${escapeHtml(providerMode)}">
           <div class="map-grid"></div>
           <div class="map-provider-banner">
             <span>${escapeHtml(providerLabel)}</span>
@@ -9401,7 +9738,7 @@ def render_dashboard() -> str:
           </div>
           <div class="map-legend">
             <span class="map-legend-item"><span class="map-legend-dot map-legend-current"></span>Current</span>
-            <span class="map-legend-item"><span class="map-legend-dot"></span>Track ${escapeHtml(pointCount)}</span>
+            <span class="map-legend-item"><span class="map-legend-dot"></span>Verified Track ${escapeHtml(trustedPoints.length)}</span>
             <span class="map-legend-item"><span class="map-legend-dot map-legend-reference"></span>D2 Reference ${escapeHtml(referencePoints.length)}</span>
             <span class="map-legend-item">Tiles ${escapeHtml(layers.provider_tiles ? 'provider' : 'off')}</span>
           </div>
@@ -9409,6 +9746,152 @@ def render_dashboard() -> str:
           <div class="map-caption">${escapeHtml(caption)} / privacy ${escapeHtml(privacy.coordinate_visibility || 'bounded')} / accuracy claim ${escapeHtml(map.accuracy_claim || 'none')}</div>
         </div>
       `;
+    }
+    function setAmapStatus(message, state = 'warn') {
+      amapLiveStatus.textContent = message;
+      amapLiveStatus.className = state;
+      amapLiveShell.dataset.providerState = state;
+    }
+    function setLocalMapVisibility(visible) {
+      const localMap = document.getElementById('localMapSurface');
+      if (localMap) localMap.style.display = visible ? '' : 'none';
+    }
+    function validMapPoint(point) {
+      try {
+        return {
+          ...point,
+          lat: finiteCoordinate(point && point.lat, -90, 90, 'latitude'),
+          lon: finiteCoordinate(point && point.lon, -180, 180, 'longitude'),
+        };
+      } catch (_error) {
+        return null;
+      }
+    }
+    function loadAmap() {
+      if (!AMAP_JS_API_KEY) return Promise.reject(new Error('provider not configured'));
+      if (amapNamespace) return Promise.resolve(amapNamespace);
+      if (amapLoadPromise) return amapLoadPromise;
+      if (!window.AMapLoader || typeof window.AMapLoader.load !== 'function') {
+        return Promise.reject(new Error('provider loader unavailable'));
+      }
+      amapLoadPromise = window.AMapLoader.load({key: AMAP_JS_API_KEY, version: '2.0'})
+        .then(AMap => {
+          amapNamespace = AMap;
+          amapInstance = new AMap.Map('amapLiveMap', {viewMode: '2D', zoom: 15, mapStyle: 'amap://styles/whitesmoke'});
+          return AMap;
+        })
+        .catch(error => {
+          amapLoadPromise = null;
+          throw error;
+        });
+      return amapLoadPromise;
+    }
+    function convertWgs84Points(AMap, points) {
+      const valid = (Array.isArray(points) ? points : []).map(validMapPoint).filter(Boolean).slice(-40);
+      if (!valid.length) return Promise.resolve([]);
+      return new Promise((resolve, reject) => {
+        AMap.convertFrom(valid.map(point => [point.lon, point.lat]), 'gps', (status, result) => {
+          if (status !== 'complete' || !result || result.info !== 'ok' || !Array.isArray(result.locations)) {
+            reject(new Error('WGS84 conversion failed'));
+            return;
+          }
+          resolve(valid.map((point, index) => ({...point, lnglat: result.locations[index]})).filter(point => point.lnglat));
+        });
+      });
+    }
+    function amapPositionSemantics(map, estimate, readiness = {}) {
+      const sourcePoints = Array.isArray(map.points) ? map.points : [];
+      const points = sourcePoints
+        .filter(point => point && point.amap_eligible === true && point.coordinate_contract === 'wgs84')
+        .map(validMapPoint)
+        .filter(Boolean);
+      const mode = map.mode || 'waiting_for_location_upload';
+      const lastPoint = points.length ? points[points.length - 1] : null;
+      const isCurrentFix = lastPoint && lastPoint.amap_current === true && lastPoint.fix === true;
+      if (!lastPoint) {
+        const hiddenPreCorrection = sourcePoints.some(point => point && point.amap_eligible !== true);
+        if (hiddenPreCorrection) {
+          return {kind: 'pre-correction-hidden', label: 'Pre-correction location hidden until new verified GNSS fix', points: []};
+        }
+        return {kind: 'no-fix', label: 'No current location fix', points: []};
+      }
+      const updatedAt = lastPoint.server_received_at || estimate.updated_at || '';
+      const ageMs = Date.parse(updatedAt);
+      const ageSeconds = Number.isFinite(ageMs) ? Math.max(0, Math.round((Date.now() - ageMs) / 1000)) : null;
+      const age = ageSeconds === null ? 'age unknown' : `${ageSeconds}s old`;
+      const freshnessThreshold = Number(readiness.freshness_threshold_s ?? 180);
+      const stale = isCurrentFix && ageSeconds !== null && Number.isFinite(freshnessThreshold) && ageSeconds > freshnessThreshold;
+      if (isCurrentFix && !stale) {
+        return {kind: 'current', label: `Current GNSS fix / ${age}`, points, current: lastPoint};
+      }
+      if (stale) {
+        return {kind: 'stale', label: `Stale GNSS fix / ${age}`, points, current: lastPoint};
+      }
+      return {kind: 'last-known', label: `Last known position / ${age}`, points, current: lastPoint};
+    }
+    async function renderAmapForSelectedDevice(selectedDevice) {
+      const generation = ++amapRenderGeneration;
+      const d1 = selectedDevice && selectedDevice.d1_link ? selectedDevice.d1_link : {};
+      const estimate = d1.location_estimate || {};
+      const readiness = d1.field_readiness || {};
+      const map = mapWithLocalReferences(d1.map_surface || {}, selectedDevice ? selectedDevice.device_id : '');
+      const semantics = amapPositionSemantics(map, estimate, readiness);
+      if (!selectedDevice || semantics.kind === 'no-fix' || semantics.kind === 'pre-correction-hidden') {
+        if (amapInstance) amapInstance.clearMap();
+        amapLiveMap.dataset.state = 'waiting';
+        amapLiveMap.style.display = 'none';
+        setLocalMapVisibility(true);
+        setAmapStatus(semantics.label, 'warn');
+        return;
+      }
+      if (!AMAP_JS_API_KEY) {
+        amapLiveMap.dataset.state = 'not-configured';
+        amapLiveMap.style.display = 'none';
+        setLocalMapVisibility(true);
+        setAmapStatus(`${semantics.label} / local map fallback`, 'warn');
+        return;
+      }
+      try {
+        setAmapStatus('Loading AMap and converting WGS84 coordinates...', 'warn');
+        amapLiveMap.style.display = 'block';
+        amapLiveMap.style.visibility = 'hidden';
+        const AMap = await loadAmap();
+        const converted = await convertWgs84Points(AMap, semantics.points);
+        if (generation !== amapRenderGeneration) return;
+        if (!converted.length) throw new Error('no valid converted coordinates');
+        amapInstance.clearMap();
+        amapOverlays = [];
+        const path = converted.map(point => point.lnglat);
+        if (path.length >= 2) {
+          amapOverlays.push(new AMap.Polyline({path, strokeColor: '#1f6feb', strokeWeight: 4, strokeOpacity: 0.75}));
+        }
+        const latest = converted[converted.length - 1];
+        const markerClass = semantics.kind === 'current'
+          ? 'amap-current-marker'
+          : semantics.kind === 'stale'
+            ? 'amap-stale-marker'
+            : 'amap-memory-marker';
+        const markerTitle = `${semantics.label} / ${coordinateLabel(latest.lat, latest.lon)}`;
+        amapOverlays.push(new AMap.Marker({
+          position: latest.lnglat,
+          title: markerTitle,
+          content: `<div class="${markerClass}" aria-label="${escapeHtml(markerTitle)}"></div>`,
+          anchor: 'center',
+        }));
+        amapInstance.add(amapOverlays);
+        amapInstance.setFitView(amapOverlays, false, [44, 44, 44, 44], 17);
+        amapLiveMap.dataset.state = 'ready';
+        amapLiveMap.style.display = 'block';
+        amapLiveMap.style.visibility = 'visible';
+        setLocalMapVisibility(false);
+        setAmapStatus(`${semantics.label} / WGS84 converted to GCJ-02 / ${converted.length} point(s)`, 'ok');
+      } catch (_error) {
+        if (generation !== amapRenderGeneration) return;
+        amapLiveMap.dataset.state = 'failed';
+        amapLiveMap.style.display = 'none';
+        setLocalMapVisibility(true);
+        setAmapStatus(`${semantics.label} / AMap unavailable, showing local fallback`, 'warn');
+      }
     }
     function d1LinkPanel(selectedDevice) {
       if (!selectedDevice) return '<div class="empty-panel">No device data yet</div>';
@@ -9435,6 +9918,12 @@ def render_dashboard() -> str:
       const reviewMode = map.review_mode || 'local_no_key';
       const trajectory = map.trajectory || {};
       const referencePoints = Array.isArray(map.reference_points) ? map.reference_points : [];
+      const trustedPoints = (Array.isArray(map.points) ? map.points : [])
+        .filter(point => point && point.amap_eligible === true && point.coordinate_contract === 'wgs84');
+      const latestTrustedPoint = trustedPoints.length ? trustedPoints[trustedPoints.length - 1] : null;
+      const fieldCoordinateText = latestTrustedPoint
+        ? coordinateLabel(latestTrustedPoint.lat, latestTrustedPoint.lon)
+        : 'Pre-correction location hidden until new verified GNSS fix';
       const locationText = `${valueOrUnknown(estimate.state)} / ${valueOrUnknown(estimate.confidence)} / ${valueOrUnknown(estimate.radius_m)} m`;
       const uploadText = `${valueOrUnknown(uplink.raw_post_success_count)} ok / ${valueOrUnknown(uplink.raw_post_failure_count)} fail / ${valueOrUnknown(uplink.raw_post_attempt_count)} attempts / rate ${valueOrUnknown(uplink.raw_post_success_rate)}`;
       const powerText = `${valueOrUnknown(powerCurve.sample_count, 0)} samples / ${valueOrUnknown(powerCurve.window_s)} s`;
@@ -9506,10 +9995,10 @@ def render_dashboard() -> str:
               </div>
               <div class="d1-card">
                 <span class="card-label">Field Notes</span>
-                <span class="card-value">${escapeHtml(coordinateLabel(map.lat, map.lon))}</span>
+                <span class="card-value">${escapeHtml(fieldCoordinateText)}</span>
                 <span class="card-note">Map mode: ${escapeHtml(mapMode)} / ${escapeHtml(reviewMode)}</span>
                 <span class="card-note">Provider: ${escapeHtml(valueOrUnknown(provider.status, 'not_configured'))}; D1 blocker ${escapeHtml(provider.blocking_d1 ?? false)}</span>
-                <span class="card-note">Track points: ${escapeHtml(trajectory.point_count ?? 0)} / ${escapeHtml(trajectory.source || 'recent_location_events')}</span>
+                <span class="card-note">Verified map points: ${escapeHtml(map.amap_eligible_point_count ?? 0)} / evidence track points ${escapeHtml(trajectory.point_count ?? 0)}</span>
                 <span class="card-note">D2 reference points: ${escapeHtml(referencePoints.length)}</span>
                 <span class="card-note">Coordinate uploads: ${escapeHtml(coord.coordinate_event_count ?? 0)} / ${escapeHtml(coord.location_event_count ?? 0)}; hint ${escapeHtml(valueOrUnknown(coord.operator_hint))}</span>
                 <span class="card-note">Privacy: ${escapeHtml(privacy.static_report_policy || 'bounded_summary_no_raw_coordinates')}</span>
@@ -9725,6 +10214,7 @@ def render_dashboard() -> str:
   </script>
 </body>
 </html>"""
+    return html.replace("__AMAP_BOOTSTRAP__", amap_bootstrap).replace("__AMAP_JS_API_KEY__", safe_amap_key)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

@@ -38,6 +38,23 @@ if ($ListenHost -eq "0.0.0.0" -and -not $env:EGOLINK_MESSAGE_HUB_TOKEN) {
     throw "Public listen requires EGOLINK_MESSAGE_HUB_TOKEN in the local environment. Do not commit this token."
 }
 
+$managedRuntimeEnvironmentNames = @(
+    "EGOLINK_MESSAGE_HUB_TOKEN",
+    "EGOLINK_AMAP_JS_API_KEY",
+    "EGOLINK_AMAP_SECURITY_JS_CODE"
+)
+$runtimeEnvironmentUpdates = [ordered]@{}
+foreach ($name in $managedRuntimeEnvironmentNames) {
+    $value = [Environment]::GetEnvironmentVariable($name)
+    if ([string]::IsNullOrEmpty($value)) {
+        continue
+    }
+    if ($value.Contains("`r") -or $value.Contains("`n") -or $value.IndexOf([char]0) -ge 0) {
+        throw "$name must be a single-line runtime value."
+    }
+    $runtimeEnvironmentUpdates[$name] = $value
+}
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $packageRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("egolink-message-hub-package-" + [System.Guid]::NewGuid().ToString("N"))
 $archive = Join-Path ([System.IO.Path]::GetTempPath()) ("egolink-message-hub-" + [System.Guid]::NewGuid().ToString("N") + ".tar.gz")
@@ -552,14 +569,36 @@ try {
     }
 
     $startCommand = if ($NoStart) { "true" } else { "systemctl daemon-reload && systemctl enable egolink-message-hub.service && systemctl restart egolink-message-hub.service" }
-    $envCommand = @"
+    $envCommand = @'
 if [ ! -f /etc/egolink-message-hub.env ]; then
-  install -m 600 /dev/null /etc/egolink-message-hub.env
+  install -o root -g root -m 600 /dev/null /etc/egolink-message-hub.env
+else
+  chown root:root /etc/egolink-message-hub.env
+  chmod 600 /etc/egolink-message-hub.env
 fi
-"@
-    if ($env:EGOLINK_MESSAGE_HUB_TOKEN) {
-        $envLine = "EGOLINK_MESSAGE_HUB_TOKEN=$($env:EGOLINK_MESSAGE_HUB_TOKEN)"
-        $envCommand = "printf '%s\n' $(ShellQuote $envLine) >/etc/egolink-message-hub.env`nchmod 600 /etc/egolink-message-hub.env"
+'@
+    if ($runtimeEnvironmentUpdates.Count -gt 0) {
+        $upsertNamePattern = ($runtimeEnvironmentUpdates.Keys | ForEach-Object { [regex]::Escape($_) }) -join "|"
+        $envAppendCommands = ($runtimeEnvironmentUpdates.GetEnumerator() | ForEach-Object {
+            $envLine = "$($_.Key)=$($_.Value)"
+            "printf '%s\n' $(ShellQuote $envLine) >>`$env_tmp"
+        }) -join "`n"
+        $envCommandTemplate = @'
+env_tmp=$(mktemp /etc/egolink-message-hub.env.XXXXXX)
+trap 'rm -f "$env_tmp"' EXIT
+if [ -f /etc/egolink-message-hub.env ]; then
+  grep -Ev '^(__UPSERT_NAMES__)=' /etc/egolink-message-hub.env >"$env_tmp" || [ "$?" -eq 1 ]
+fi
+__APPEND_COMMANDS__
+chown root:root "$env_tmp"
+chmod 600 "$env_tmp"
+mv -f "$env_tmp" /etc/egolink-message-hub.env
+trap - EXIT
+'@
+        $envCommand = $envCommandTemplate.Replace("__UPSERT_NAMES__", $upsertNamePattern).Replace(
+            "__APPEND_COMMANDS__",
+            $envAppendCommands
+        )
     }
     $remoteScript = @"
 set -eu

@@ -665,6 +665,99 @@ class MessageHubDashboardTests(unittest.TestCase):
             "move_outdoors_until_two_coordinate_uploads_are_seen",
         )
 
+    def test_d1_amap_fail_closed_filters_old_unknown_and_no_fix_coordinates(self) -> None:
+        now = message_hub.utc_now()
+        messages = [
+            {
+                "message_type": "event",
+                "event_type": "location_report",
+                "seq": 1,
+                "server_received_at": now,
+                "fw_version": "0.1.0-field011-gnss-imu",
+                "fix": True,
+                "lat": 22.5431,
+                "lon": 114.0579,
+            },
+            {
+                "message_type": "event",
+                "event_type": "location_report",
+                "seq": 2,
+                "server_received_at": now,
+                "fix": True,
+                "lat": 22.5432,
+                "lon": 114.0580,
+            },
+            {
+                "message_type": "event",
+                "event_type": "location_report",
+                "seq": 3,
+                "server_received_at": now,
+                "fw_version": "0.1.0-fw005-gnss-correctness",
+                "fix": False,
+                "lat": 22.5433,
+                "lon": 114.0581,
+            },
+        ]
+        device = {
+            "device_id": "ego-link-r1-connectivity-001",
+            "latest_location": messages[-1],
+            "last_seen_at": now,
+            "observability": {"location_belief": {"state": "Predicted", "updated_at": now}},
+        }
+
+        surface = message_hub.build_d1_link_summary(device, list(reversed(messages)))["map_surface"]
+
+        self.assertEqual(surface["amap_eligible_point_count"], 0)
+        self.assertEqual(surface["amap_hidden_point_count"], 3)
+        self.assertFalse(surface["layers"]["current_point"])
+        self.assertFalse(surface["layers"]["trajectory"])
+        self.assertEqual(surface["amap_trajectory"]["point_count"], 0)
+        self.assertEqual(surface["amap_trajectory"]["hidden_point_count"], 3)
+        self.assertEqual(
+            [point["amap_exclusion_reason"] for point in surface["points"]],
+            ["firmware_parser_not_allowlisted", "firmware_parser_not_allowlisted", "gnss_fix_not_true"],
+        )
+        self.assertTrue(all(point["coordinate_contract"] == "unknown" for point in surface["points"]))
+
+    def test_d1_amap_mixed_history_only_allows_corrected_firmware_fix(self) -> None:
+        now = message_hub.utc_now()
+        old = {
+            "message_type": "event",
+            "event_type": "location_report",
+            "seq": 10,
+            "server_received_at": now,
+            "fw_version": "0.1.0-field011-gnss-imu",
+            "fix": True,
+            "lat": 22.5431,
+            "lon": 114.0579,
+        }
+        corrected = {
+            **old,
+            "seq": 11,
+            "fw_version": "0.1.0-fw005-gnss-correctness",
+            "lat": 22.5432,
+            "lon": 114.0580,
+        }
+        device = {
+            "device_id": "ego-link-r1-connectivity-001",
+            "latest_location": corrected,
+            "last_seen_at": now,
+            "observability": {"location_belief": {"state": "Fine", "updated_at": now}},
+        }
+
+        surface = message_hub.build_d1_link_summary(device, [corrected, old])["map_surface"]
+
+        self.assertEqual(surface["amap_eligible_point_count"], 1)
+        self.assertEqual(surface["amap_hidden_point_count"], 1)
+        self.assertTrue(surface["layers"]["current_point"])
+        self.assertFalse(surface["layers"]["trajectory"])
+        self.assertEqual(surface["amap_trajectory"]["point_count"], 1)
+        self.assertEqual(surface["amap_trajectory"]["hidden_point_count"], 1)
+        self.assertFalse(surface["points"][0]["amap_eligible"])
+        self.assertTrue(surface["points"][1]["amap_eligible"])
+        self.assertEqual(surface["points"][1]["coordinate_contract"], "wgs84")
+        self.assertEqual(surface["points"][1]["fw_version"], "0.1.0-fw005-gnss-correctness")
+
     def test_d1_link_summary_waits_without_periodic_location_upload(self) -> None:
         now = datetime.now(timezone.utc).isoformat()
         device = {
@@ -2507,6 +2600,57 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertEqual(raw_frames[0]["parse_result"]["derived_message_type"], "event")
         self.assertTrue(raw_frames[0]["raw_payload"]["data_redacted"])
         self.assertNotIn("data", raw_frames[0]["raw_payload"])
+
+    def test_amap_missing_config_falls_back_without_loader(self) -> None:
+        html = message_hub.render_dashboard()
+
+        self.assertIn('name="egolink-amap-status" content="not-configured"', html)
+        self.assertNotIn('src="https://webapi.amap.com/loader.js"', html)
+        self.assertIn("No-key Local Map", html)
+        self.assertIn("local map fallback", html)
+
+    def test_amap_dashboard_injects_only_public_js_key(self) -> None:
+        public_key = "public_JS_key_1234"
+        security_code = "server_only_security_1234"
+        previous = os.environ.get(message_hub.AMAP_SECURITY_JS_CODE_ENV)
+        os.environ[message_hub.AMAP_SECURITY_JS_CODE_ENV] = security_code
+        try:
+            html = message_hub.render_dashboard(amap_js_api_key=public_key)
+        finally:
+            if previous is None:
+                os.environ.pop(message_hub.AMAP_SECURITY_JS_CODE_ENV, None)
+            else:
+                os.environ[message_hub.AMAP_SECURITY_JS_CODE_ENV] = previous
+
+        self.assertIn(public_key, html)
+        self.assertIn("window._AMapSecurityConfig", html)
+        self.assertIn("window.location.origin+'/_AMapService'", html)
+        self.assertNotIn(security_code, html)
+        self.assertNotIn(message_hub.AMAP_SECURITY_JS_CODE_ENV, html)
+
+    def test_amap_dashboard_preserves_instance_and_rejects_stale_async_render(self) -> None:
+        html = message_hub.render_dashboard(amap_js_api_key="public_JS_key_1234")
+
+        self.assertIn("let amapInstance = null", html)
+        self.assertIn("let amapLoadPromise = null", html)
+        self.assertIn("let amapRenderGeneration = 0", html)
+        self.assertIn("if (generation !== amapRenderGeneration) return", html)
+        self.assertIn("AMap.convertFrom(valid.map(point => [point.lon, point.lat]), 'gps'", html)
+        self.assertIn(".filter(Boolean).slice(-40)", html)
+        self.assertIn("kind: 'current'", html)
+        self.assertIn("kind: 'last-known'", html)
+        self.assertIn("kind: 'no-fix'", html)
+        self.assertIn("kind: 'stale'", html)
+        self.assertIn("kind: 'pre-correction-hidden'", html)
+        self.assertIn("readiness.freshness_threshold_s ?? 180", html)
+        self.assertIn("amap-stale-marker", html)
+        self.assertIn("point.amap_eligible === true && point.coordinate_contract === 'wgs84'", html)
+        self.assertIn("Pre-correction location hidden until new verified GNSS fix", html)
+        self.assertIn("const fieldCoordinateText = latestTrustedPoint", html)
+        self.assertNotIn("coordinateLabel(map.lat, map.lon)", html)
+        self.assertIn("point.display_semantics === 'current_fix'", html)
+        self.assertIn('id="amapLiveMap"', html)
+        self.assertIn('id="d1Link"', html)
 
 
 if __name__ == "__main__":
