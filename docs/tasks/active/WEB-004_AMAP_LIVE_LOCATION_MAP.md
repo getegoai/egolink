@@ -96,18 +96,18 @@ git diff --check
   `scripts/deploy_message_hub_vps.ps1`, `docs/development/VPS_MESSAGE_HUB.md`,
   and the two focused Message Hub test modules. Commits `f19ee1d` and
   `aaed7d6` keep the main implementation and release-smoke hardening separate.
-- Test result: focused Dashboard/server regression passed `98/98`; the full
-  repository verification passed `649/649`; `py_compile`, context lint, and
+- Test result: the final HTTPS/Dashboard/server regression passed `103/103`;
+  full repository verification passed `654/654`; `py_compile`, context lint, and
   diff checks passed. The live Chrome review confirmed the field-first layout,
   stable selected device, authenticated refresh, collapsed diagnostics, and
   explicit pre-correction-coordinate warning.
 - Deployment result: a pre-release SQLite-consistent database backup plus
   reports/code/unit/environment snapshots passed hash and archive checks at
   `/var/backups/egolink/web004-20260812-211402`. The Message Hub was restarted
-  with the committed map implementation. Two bounded corrective restarts then
-  applied the smoke-derived canonical-path/conversion-cache fix and the visual-
-  review fix that reflects runtime provider configuration in the Dashboard
-  badges. Final source hash matched the local committed file; service state was active/running with zero
+  with the committed map implementation. Bounded corrective deployments are
+  recorded by `b7e721c`, `2e91387`, `40d9556`, and `15f4dd8`, including the
+  observed SDK-init path and JSONP response-type fixes. Final source hash
+  matched the local committed file; service state was active/running with zero
   restarts or error-journal entries; health was HTTP 200, unauthenticated state
   was 401, authenticated state was 200, and the signed same-origin coordinate
   proxy returned provider `OK` with `no-store` and `nosniff`.
@@ -115,11 +115,12 @@ git diff --check
   verified GNSS fix. The deployed view therefore hides all pre-correction and
   lineage-less coordinates instead of drawing a misleading marker; the first
   real AMap point and bounded trajectory still require a new FW-006 fix. The
-  existing VPS is HTTP-only, so this remains a controlled P0 surface rather
-  than a production security claim. AMap is a third-party script and receives
-  only verified coordinates used for the provider view; production must add
-  HTTPS, origin isolation, consent enforcement, and provider-console quota/
-  origin restrictions.
+  human-facing Dashboard is now available at `https://ego.example.invalid/`; the
+  public port 8790 remains an HTTP firmware-compatibility endpoint, so this is
+  still not a production security claim. AMap is a third-party script and
+  receives only eligible coordinates used for the provider view; production
+  still needs ingress migration/origin isolation, consent enforcement, and
+  provider-console quota/origin restrictions.
 
 # Builder Prompt
 

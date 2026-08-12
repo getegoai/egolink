@@ -52,7 +52,7 @@ devices post to it continuously; treat every change as a production change.
      `/health` and Dashboard.
 - Off-host copies: backups currently live on the same disk. For disaster
   recovery, periodically `scp` the latest archive to the dev PC (operator
-  action; consider automating in OPS-002).
+  action; consider automating in a future operations task).
 
 ## 4. Liveness Monitoring
 
@@ -65,7 +65,7 @@ devices post to it continuously; treat every change as a production change.
 - Interpretation: systemd already restarts crashes; repeated FAIL lines with
   an `active` service mean a hang or port problem — restart the service and
   inspect `journalctl -u egolink-message-hub`.
-- Escalation to push/SMS notification is future work (OPS-002 candidate).
+- Escalation to push/SMS notification is a future operations task.
 
 ## 5. Logs and Disk Bounds
 

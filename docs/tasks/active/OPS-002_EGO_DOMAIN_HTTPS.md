@@ -57,25 +57,25 @@ no new trusted GNSS fix, without drawing an old or unverified marker.
 
 # Acceptance Criteria
 
-- [ ] Public DNS for `ego.example.invalid` resolves to the intended VPS without a
+- [x] Public DNS for `ego.example.invalid` resolves to the intended VPS without a
       conflicting address; ports 80 and 443 reach the existing Nginx instance.
-- [ ] A narrowly scoped Nginx virtual host redirects HTTP to HTTPS and proxies
+- [x] A narrowly scoped Nginx virtual host redirects HTTP to HTTPS and proxies
       HTTPS to `127.0.0.1:8790`, preserving host, client-address, scheme, and
       upgrade headers without modifying unrelated virtual hosts.
-- [ ] A publicly trusted certificate for exactly `ego.example.invalid` is installed;
+- [x] A publicly trusted certificate for exactly `ego.example.invalid` is installed;
       renewal scheduling, the tracked deploy hook, and a renewal dry run are
       verified.
-- [ ] The Dashboard's AMap cookie is HTTPS-only, and the AMap base canvas loads
+- [x] The Dashboard's AMap cookie is HTTPS-only, and the AMap base canvas loads
       when configured even if no verified point exists; that state contains no
       location marker and retains the explicit no-fix/pre-correction warning.
-- [ ] HTTP redirect, TLS hostname/expiry, `/health`, unauthenticated/authenticated
+- [x] HTTP redirect, TLS hostname/expiry, `/health`, unauthenticated/authenticated
       API boundaries, AMap proxy, service state, and Nginx error log smoke checks
       pass at the domain.
-- [ ] An authenticated browser review at `https://ego.example.invalid/` visibly
+- [x] An authenticated browser review at `https://ego.example.invalid/` visibly
       confirms the provider canvas and honest no-location state.
-- [ ] Nginx/app snapshots and an exact rollback path exist before deployment;
+- [x] Nginx/app snapshots and an exact rollback path exist before deployment;
       failure does not restore or mutate the live SQLite database.
-- [ ] Focused tests, full verification, context lint, and diff checks pass.
+- [x] Focused tests, full verification, context lint, and diff checks pass.
 
 # Validation Commands
 
@@ -101,9 +101,40 @@ git diff --check
 
 # Completion Evidence
 
-- Changed files:
-- Validation result:
-- Deployment result:
-- Browser result:
-- Snapshot/rollback path:
-- Remaining risks:
+- Changed files: this packet, the tracked Nginx bootstrap/final virtual hosts,
+  the Certbot deploy hook, VPS development/runbook documentation,
+  `server/message_hub.py`, and focused HTTPS/Dashboard/server tests. The release
+  sequence is `50a3bb1`, `96300a5`, `40d9556`, and `15f4dd8`.
+- Validation result: the final focused HTTPS/Dashboard/server suite passed
+  `103/103`; full repository verification passed `654/654`; `py_compile`,
+  context lint, and diff checks passed.
+- Deployment result: `ego.example.invalid` resolves through `example.invalid` to
+  `203.0.113.10`; HTTP redirects to HTTPS and ports 80/443 terminate at the
+  existing Nginx. The ECDSA Let's Encrypt certificate has exact SAN
+  `ego.example.invalid`, valid from 2026-08-12 13:12:47Z to 2026-11-10 13:12:46Z.
+  The Certbot timer is enabled/active, its next schedule was inspected, and a
+  renewal dry run succeeded for all existing certificates. The Message Hub
+  and Nginx remained active, existing GitLab/book/icec HTTPS sites remained
+  HTTP 200, and no new EgoLink-vhost/application error was observed.
+- Domain smoke: `/health` returned HTTP 200, unauthenticated `/api/state`
+  returned 401, authenticated state returned 200 and issued the bounded
+  `Secure; HttpOnly; SameSite=Strict` map cookie. Remote source SHA-256 matched
+  the final local source. The fixed same-origin AMap init endpoint returned
+  HTTP 200 as `application/javascript` with `no-store`; coordinate conversion
+  remained bounded and returned provider `OK` in the earlier smoke.
+- Browser result: authenticated Chrome requested the fixed AMap SDK init path
+  successfully after the final deployment. The view keeps pre-correction
+  coordinates hidden, initializes the neutral AMap canvas without a marker,
+  and retains the explicit no-verified-fix warning. Browser-control screenshot
+  capture was intermittently unavailable, so the browser request plus focused
+  DOM/behavior tests are the retained evidence rather than a committed image.
+- Snapshot/rollback path: `/var/backups/egolink/ops002-20260812T140941Z` holds
+  the pre-change Nginx/source/unit/environment metadata and hashes. Rollback is
+  limited to the EgoLink virtual host and Message Hub code/unit; it does not
+  restore or mutate the live SQLite database.
+- Remaining risks: firmware still posts to the public HTTP compatibility port
+  8790; production must migrate device ingress or isolate it. No corrected-
+  firmware GNSS fix has yet reached the map, so a real marker/trajectory remains
+  unverified. The current browser loads third-party AMap code and supplies only
+  eligible display coordinates to it; production still needs explicit consent,
+  provider-console origin/quota controls, and tighter third-party isolation.
