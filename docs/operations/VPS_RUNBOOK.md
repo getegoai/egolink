@@ -178,6 +178,8 @@ test "$(curl -sS -o /dev/null -w '%{http_code}' \
 openssl s_client -connect ego.example.invalid:443 -servername ego.example.invalid \
   </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
 systemctl is-active nginx egolink-message-hub
+systemctl is-enabled certbot-renew.timer
+systemctl list-timers certbot-renew.timer --no-pager
 certbot renew --dry-run
 journalctl -u nginx --since '-10 minutes' --no-pager
 tail -n 50 /var/log/nginx/error.log
