@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-11
+last_verified: 2026-08-12
 verified_by: codex
 ---
 
@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | UI-001 field-friendly D1 status sidecar is currently flashed: cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt, QMI8658 engineering sampler. Bounded smoke `ui001-amoled-friendly-smoke-20260704` observed `cmd=display_status` plus `status_rendered`. |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-11 | FIELD-011 joint LTE/GNSS/QMI8658 image `0.1.0-field011-gnss-imu` (`v0.1.0-30-g3f97cf7`, app SHA-256 `388FFEAA...E7D0AB`) is currently flashed on ESP32-S3 MAC `02:00:00:00:00:03`. Startup passed QMI8658 `WHO_AM_I=0x05` and confirmed idle measurement stop. After an initial `SIM not inserted` failure, a full power cycle let the existing command complete over LTE: 100 real samples, ten chunks, one manifest, one matching `ok` ACK, and one valid cadence-qualified export. Periodic location also reported LTE ready/registered/PDP active and indoor GNSS no-fix. |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-12 | FW-006 GNSS-correctness image `0.1.0-fw005-gnss-correctness` (`v0.1.0-45-g6ba36c2`, app SHA-256 `D52CA340...BEBEB827`) is currently flashed on ESP32-S3 MAC `02:00:00:00:00:03`. One COM3 three-region flash passed hash verification without writing NVS. Its sole 20-second USB-attached startup capture observed QMI8658 `WHO_AM_I=0x05`, one real `mock=false` sample, confirmed idle stop, SIM7670 UART ready, `LTE_READY`, and successful periodic location/observation posts without panic, brownout, or reset loop. No fixed GNSS response was observed, so corrected-coordinate parsing remains hardware-unverified. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -49,8 +49,8 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   `MODEL-DEVICE-006-hw-20260707-d1` uploads. D2-006 replaced that image on
   2026-08-10, D2-007 subsequently replaced D2-006, D2-008 replaced D2-007,
   D2-009 replaced D2-008, D5-002 replaced D2-009, and FIELD-011 replaced
-  D5-002 with the current joint LTE/GNSS/QMI8658 field-seed image on
-  2026-08-11.
+  D5-002 with the joint LTE/GNSS/QMI8658 field-seed image on 2026-08-11;
+  FW-006 replaced FIELD-011 on 2026-08-12.
 - AMOLED `ask_user` command path rendered and returned `user_confirmation=safe` in Demo v0.2 evidence.
 - Demo v0.3 generated a complete safety record using Demo v0.2 real AMOLED confirmation evidence plus live SIM7670G GNSS AT probe.
 - SIM7670G GNSS AT probe was reachable indoors, selected `COM6`, and produced `fix=false`.
@@ -118,6 +118,15 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   is operator-confirmed `stationary`; pose/orientation remains unrecorded.
   Evidence:
   `reports/field_validation/FIELD-011-20260811-001/field011_bench_report.md`.
+- FW-006 replaced FIELD-011 once on 2026-08-12 with the clean
+  GNSS-correctness image. All three normal flash regions were hash-verified
+  without an NVS write. Its sole 20-second USB-attached startup capture
+  observed the expected app identity, QMI8658 identity, one real `mock=false`
+  sample, confirmed idle stop, SIM7670 UART readiness, `LTE_READY`, and
+  successful periodic location/observation posts, with no fatal or reset-loop
+  marker. It did not observe a real GNSS fix/fixed-coordinate response, so the
+  corrected coordinate parser is not yet hardware-verified. Evidence:
+  `reports/firmware_validation/FW-006-20260812-001/`.
 - Camera smoke capture on the SIM7670G board has produced bounded JPEG evidence.
 - R1 connectivity-node firmware `0.1.0-fw001-hw-r1` has passed USB-Free
   Message Hub validation on independent power with USB disconnected:
@@ -299,7 +308,7 @@ Port numbers are observations, not stable configuration. Tooling must identify d
 
 ## Current Known Limits
 
-- The current FIELD-011 image has passed its inserted-SIM joint bench gate only
+- The prior FIELD-011 image passed its inserted-SIM joint bench gate only
   after a full power cycle cleared the initial `SIM not inserted` condition.
   The single authorized command is complete, not pending. One real QMI8658
   window reached the VPS over LTE and reconstructed cleanly, while periodic
