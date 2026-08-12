@@ -104,9 +104,10 @@ git diff --check
 - Deployment result: a pre-release SQLite-consistent database backup plus
   reports/code/unit/environment snapshots passed hash and archive checks at
   `/var/backups/egolink/web004-20260812-211402`. The Message Hub was restarted
-  with the committed map implementation, then restarted once more to apply the
-  smoke-derived canonical-path and conversion-cache fix. Final source hash
-  matched the local committed file; service state was active/running with zero
+  with the committed map implementation. Two bounded corrective restarts then
+  applied the smoke-derived canonical-path/conversion-cache fix and the visual-
+  review fix that reflects runtime provider configuration in the Dashboard
+  badges. Final source hash matched the local committed file; service state was active/running with zero
   restarts or error-journal entries; health was HTTP 200, unauthenticated state
   was 401, authenticated state was 200, and the signed same-origin coordinate
   proxy returned provider `OK` with `no-store` and `nosniff`.
