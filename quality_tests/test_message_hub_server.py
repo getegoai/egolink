@@ -1210,6 +1210,20 @@ class MessageHubHttpTests(unittest.TestCase):
     def test_amap_response_content_type_and_size_are_fail_closed(self) -> None:
         self.assertEqual(message_hub.safe_amap_content_type("text/html; charset=utf-8"), "application/octet-stream")
         self.assertEqual(message_hub.safe_amap_content_type("application/json; charset=utf-8"), "application/json")
+        self.assertEqual(
+            message_hub.amap_proxy_content_type(
+                "/v3/log/init?callback=safe_callback",
+                "application/octet-stream",
+            ),
+            "application/javascript",
+        )
+        self.assertEqual(
+            message_hub.amap_proxy_content_type(
+                "/v3/assistant/coordinate/convert?locations=116.3,39.9",
+                "text/html; charset=utf-8",
+            ),
+            "application/octet-stream",
+        )
 
         class OversizeResponse:
             status = 200

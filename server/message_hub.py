@@ -278,6 +278,15 @@ def safe_amap_content_type(value: str | None) -> str:
     return media_type if media_type in AMAP_PROXY_ALLOWED_CONTENT_TYPES else "application/octet-stream"
 
 
+def amap_proxy_content_type(upstream_target: str, value: str | None) -> str:
+    """Keep provider types bounded while preserving the JS SDK's JSONP init."""
+
+    upstream_path = upstream_target.partition("?")[0]
+    if upstream_path == "/v3/log/init":
+        return "application/javascript"
+    return safe_amap_content_type(value)
+
+
 def amap_request_is_same_origin(headers: Mapping[str, str]) -> bool:
     fetch_site = str(headers.get("Sec-Fetch-Site") or "").strip().lower()
     if fetch_site:
@@ -1873,7 +1882,7 @@ def make_handler(
                         raise MessageHubError("amap_response_too_large", "map provider response is too large", status=502)
                     chunks.append(chunk)
                 body = b"".join(chunks)
-                content_type = safe_amap_content_type(response.getheader("Content-Type"))
+                content_type = amap_proxy_content_type(upstream_target, response.getheader("Content-Type"))
                 upstream_path = upstream_target.partition("?")[0]
                 cache_control = "no-store" if upstream_path in {
                     "/v3/assistant/coordinate/convert",
