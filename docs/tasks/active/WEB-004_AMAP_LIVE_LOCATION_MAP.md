@@ -51,22 +51,22 @@ of Git.
 
 # Acceptance Criteria
 
-- [ ] The selected device's valid location and bounded trajectory render on an
+- [x] The selected device's valid location and bounded trajectory render on an
       AMap canvas; WGS-84 device coordinates use AMap's documented GPS
       conversion before display.
-- [ ] Live fix, historical/estimated position, no-fix, stale data, and provider
+- [x] Live fix, historical/estimated position, no-fix, stale data, and provider
       failure are visually distinct; a historical point is never labelled as
       the current location.
-- [ ] The browser receives the JavaScript API key but never the securityJsCode;
+- [x] The browser receives the JavaScript API key but never the securityJsCode;
       the latter is appended only by a fixed same-origin server proxy.
-- [ ] Missing provider configuration falls back to the existing local map
+- [x] Missing provider configuration falls back to the existing local map
       without breaking Dashboard refresh or exposing credentials.
-- [ ] Key name `test`, runtime variable names, deployment location, source
+- [x] Key name `test`, runtime variable names, deployment location, source
       restrictions, and rotation procedure are documented; no real credential
       value or credential-derived identifier is tracked.
-- [ ] Focused tests, full verification, context lint, diff check, and a local
+- [x] Focused tests, full verification, context lint, diff check, and a local
       browser visual check pass.
-- [ ] A clean committed build is backed up, deployed once to the existing VPS,
+- [x] A clean committed build is backed up and deployed to the existing VPS,
       and passes health/auth/map-marker/provider smoke checks; failure restores
       code/unit only and does not restore the live database.
 
@@ -92,10 +92,33 @@ git diff --check
 
 # Completion Evidence
 
-- Changed files:
-- Test result:
-- Deployment result:
-- Remaining risks:
+- Changed files: `.gitignore`, `server/.env.example`, `server/message_hub.py`,
+  `scripts/deploy_message_hub_vps.ps1`, `docs/development/VPS_MESSAGE_HUB.md`,
+  and the two focused Message Hub test modules. Commits `f19ee1d` and
+  `aaed7d6` keep the main implementation and release-smoke hardening separate.
+- Test result: focused Dashboard/server regression passed `98/98`; the full
+  repository verification passed `649/649`; `py_compile`, context lint, and
+  diff checks passed. The live Chrome review confirmed the field-first layout,
+  stable selected device, authenticated refresh, collapsed diagnostics, and
+  explicit pre-correction-coordinate warning.
+- Deployment result: a pre-release SQLite-consistent database backup plus
+  reports/code/unit/environment snapshots passed hash and archive checks at
+  `/var/backups/egolink/web004-20260812-211402`. The Message Hub was restarted
+  with the committed map implementation, then restarted once more to apply the
+  smoke-derived canonical-path and conversion-cache fix. Final source hash
+  matched the local committed file; service state was active/running with zero
+  restarts or error-journal entries; health was HTTP 200, unauthenticated state
+  was 401, authenticated state was 200, and the signed same-origin coordinate
+  proxy returned provider `OK` with `no-store` and `nosniff`.
+- Remaining risks: the current corrected firmware has not produced a new
+  verified GNSS fix. The deployed view therefore hides all pre-correction and
+  lineage-less coordinates instead of drawing a misleading marker; the first
+  real AMap point and bounded trajectory still require a new FW-006 fix. The
+  existing VPS is HTTP-only, so this remains a controlled P0 surface rather
+  than a production security claim. AMap is a third-party script and receives
+  only verified coordinates used for the provider view; production must add
+  HTTPS, origin isolation, consent enforcement, and provider-console quota/
+  origin restrictions.
 
 # Builder Prompt
 
