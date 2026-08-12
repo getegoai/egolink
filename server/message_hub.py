@@ -8785,16 +8785,30 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       );
     }
     function mapWithLocalReferences(map, deviceId) {
-      if (!localD2MapReview) return map;
+      let runtimeMap = map || {};
+      if (AMAP_JS_API_KEY) {
+        runtimeMap = {
+          ...runtimeMap,
+          review_mode: 'amap_live_with_local_fallback',
+          provider: {
+            ...(runtimeMap.provider || {}),
+            mode: 'amap_js_api_v2',
+            status: 'configured',
+            blocking_d1: false,
+          },
+          layers: {...(runtimeMap.layers || {}), provider_tiles: true},
+        };
+      }
+      if (!localD2MapReview) return runtimeMap;
       if (localD2MapReview.device_id && deviceId && localD2MapReview.device_id !== deviceId) {
-        return map;
+        return runtimeMap;
       }
       const references = localD2MapReview.reference_points || [];
       return {
-        ...map,
+        ...runtimeMap,
         reference_points: references,
         reference_source: 'browser_local_manifest',
-        layers: {...(map.layers || {}), reference_points: references.length > 0},
+        layers: {...(runtimeMap.layers || {}), reference_points: references.length > 0},
       };
     }
     function renderSelectedDevicePanels() {
