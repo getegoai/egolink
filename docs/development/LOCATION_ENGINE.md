@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-11
+last_verified: 2026-08-12
 verified_by: codex
 ---
 
@@ -29,6 +29,39 @@ low-power observation
 - Cell, Wi-Fi, IMU, power, and transport context are product data assets.
 - Personal location memory is built from observed field evidence, not from
   unlabelled assumptions.
+
+## GNSS-Denied Product Strategy
+
+Proposed ADR-0007 defines a product extension of EALE for founder review
+without changing the EALE-P0 public states or the ADR-0004 rule-first boundary:
+
+```text
+quality-gated GNSS anchor; optional bounded-place/BLE coarse anchors
+-> personal place nodes and route segments
+-> cell/BLE/motion/barometer/time evidence
+-> bounded Top-K hypotheses
+-> Fine | Coarse | Predicted | Unknown
+-> uncertainty-driven bounded sensing
+```
+
+Top-K hypotheses preserve ambiguity internally; they do not authorize several
+precise map dots or a guessed coordinate. A known-place or route hypothesis
+may produce `Coarse` or `Predicted` only with an area/radius, freshness,
+reason, and evidence references. Stale or conflicting hypotheses become
+`Unknown`.
+
+P0 implements this path with lookup, clustering, transition statistics,
+thresholds, and conservative decay. ADR-0004 still approves only IMU motion
+state as a learned candidate. Source-reliability, GNSS-acquisition, or
+sensing-value models are post-P0 research ideas requiring a later
+founder-reviewed ADR/task before they may affect policy or belief; no model
+directly regresses latitude/longitude.
+
+Current ESP32-S3 Wi-Fi may support engineering experiments. V1 Pro has no
+third Wi-Fi radio under ADR-0006, and Air780EGH Wi-Fi scan capability and
+product behavior remain `unverified`. The V1 baseline therefore uses cellular
+memory and optional future authenticated, fresh, proximity-bounded BLE anchors
+without requiring Wi-Fi; any Wi-Fi evidence is optional and source-labelled.
 
 ## Power Scheduler Boundary
 
@@ -159,6 +192,14 @@ assignment, and generator versions.
    gates can explain failures.
 9. `LTE-005`: add reconnect, retry, cache, stale-command, and duplicate
    handling gates before long field tests.
+10. `LOC-006`: freeze the GNSS-denied anchor, personal place/route-memory,
+    bounded-hypothesis, privacy, radio, and evaluation strategy.
+11. `LOC-007` (planned after LOC-006 review): implement the smallest
+    privacy-reviewed personal place/route memory plus GNSS-masked replay and a
+    known-place false-positive gate.
+12. `PWR-003` keeps its ADR-0003 meaning: additive scheduler-state telemetry
+    and initial measured rule budgets. Any post-P0 reliability or adaptive
+    sensing model needs a later founder-reviewed ADR/task and labelled corpus.
 
 ## LOC-002 Baseline
 

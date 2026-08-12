@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-13
+last_verified: 2026-08-12
 verified_by: codex
 owner: founder
 ---
@@ -169,12 +169,27 @@ Allowed EVT tuning without changing product form:
 - buttons operable with the device worn by a child-sized wrist;
 - speaker intelligibility and both microphones free of structural feedback;
 - LTE/GNSS/BLE antenna tuning in the worn and unworn states;
+- GNSS acquisition, fix retention, loss, and recovery measured with the same
+  hardware/firmware in at least these configurations: unworn open sky; worn
+  with antenna face up and down; under a sleeve; pocket; bag top layer; bag
+  middle; and close to the body, battery, or representative carried metal;
+- separate cold acquisition while occluded, stable open-sky fix followed by
+  occlusion, and occlusion removal/recovery sequences; record TTFF, fix rate,
+  loss/recovery time, quality, orientation, power mode, and evidence path;
+- LTE/GNSS/BLE coexistence and representative display, CPU, audio, vibration,
+  charging, and DC-DC noise states included in EVT RF comparison;
+- raw fix/no-fix, quality, acquisition, loss, and recovery evidence remains
+  intact; RF failure must not be hidden by an inferred precise coordinate;
 - 1 m drop sequence, sweat exposure and charging-temperature test;
 - USB-C insertion, wet-port lockout, sweat/corrosion and cable-strain tests;
 - IP68 pre-compliance at 1.5 m / 30 min on at least three DVT enclosures;
 - PPG, skin-temperature and barometer signal-quality tests in worn use;
 - measured 48-hour guard profile or an explicit product decision before any
   endurance claim.
+
+Hybrid `Coarse`/`Predicted`/`Unknown` output, GNSS-masked replay, and
+false-confidence gates are V1-M5/product acceptance work. They do not block
+mechanical tooling once the antenna/enclosure RF evidence above passes.
 
 ## Reference Drawing
 

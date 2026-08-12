@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-13
+last_verified: 2026-08-12
 verified_by: codex
 ---
 
@@ -30,7 +30,7 @@ and an IP68-oriented USB-C enclosure.
 
 | # | Feature | Base already built | Remaining work |
 |---|---|---|---|
-| 1 | Real-time location: GNSS primary; cell as area-level assist (never cell-only coordinates); Wi-Fi known-place labels | EALE-P0 design, `location_observation` contract, KR-003/KR-004 | Outdoor GNSS acceptance (FIELD-003), belief rendering for guardians |
+| 1 | Resilient location: GNSS as trusted calibrator; personal place/route memory, cell-area evidence, optional verified BLE coarse anchors, motion and barometer context during GNSS denial; never cell-only or model-guessed coordinates | EALE-P0, proposed ADR-0007, `location_observation`, KR-003/KR-004 | Outdoor/occlusion GNSS acceptance, LOC-006 strategy review, LOC-007 memory/replay implementation, belief rendering for guardians |
 | 2 | SOS: button -> event -> VPS -> guardian notification | Event loop, command ACK, store-forward (KR-007) | Notification channel (push/SMS decision), guardian UI |
 | 3 | History track + geofence enter/exit alerts | Location memory table (LOC-003) | Track storage/query API, geofence engine on VPS, alert rules |
 | 4 | Device health: battery %, low-battery / power-off / removal alerts, heartbeat | Heartbeat + observability envelope (OBS-001..004) | Real power telemetry (PWR-001), alert thresholds |
@@ -74,6 +74,8 @@ Exit criteria:
 
 - Guardian web view: live location + confidence, history track, geofence
   alerts, SOS notification end-to-end (WEB-003 wave).
+- GNSS-denied views distinguish known-place/area, route prediction, stale
+  last-known, and `Unknown`, including source, age, and uncertainty range.
 - A non-developer family member completes setup->daily use->SOS drill without
   developer help.
 
@@ -111,7 +113,8 @@ Exit criteria:
 ### V1-M5 EVT -> DVT -> Certification -> Pilot Production
 
 Defined after V1-M4 freeze; includes enclosure/mounting GNSS gate (R3.2)
-re-run and on-device model acceptance re-run on EVT hardware.
+re-run, worn/bag occlusion acquisition and recovery tests, hybrid-location
+replay gates, and on-device model acceptance re-run on EVT hardware.
 
 ### Post-Launch Track
 
@@ -128,6 +131,7 @@ re-run and on-device model acceptance re-run on EVT hardware.
 | 1 | PWR-001 power telemetry + 24h battery baseline | V1-M1 | active |
 | 1 | PWR-002 low-power location state-machine decision | V1-M1 | done (2026-07-03) |
 | 1 | FIELD-003 outdoor GNSS acceptance | V1-M1 | active |
+| 1 | LOC-006 GNSS-denied hybrid-location strategy and evaluation freeze | V1-M1/V1-M2 | active |
 | 1 | PRIVACY-001 product demo privacy/data boundary gate | V1-M3 | done (2026-07-03) |
 | 1 | PROD-001 mass-production requirements (incl. AI compute criteria) | V1-M4 | core platform selected by ADR-0005, peripherals revised by ADR-0006; schematic/supplier/measurement gates active |
 | 2 | STAB-002 LTE long-run/reconnect gate (R3.0) | V1-M1 | planned |
@@ -163,6 +167,9 @@ re-run and on-device model acceptance re-run on EVT hardware.
 | 3 | MotionNet v0.1 training + on-device PoC | V1-M3 | planned |
 | 3 | FW-004 firmware capability truth source in `hello` | V1-M3 | planned |
 | 3 | SRV-00x geofence engine + notification channel | V1-M2 | planned |
+| 3 | LOC-007 personal place/route memory | V1-M2 | planned after LOC-006 evidence |
+| 3 | Post-P0 source-reliability research | V1-M3+ | requires labelled real sessions and a later founder-reviewed ADR/task |
+| 3 | PWR-003 additive scheduler telemetry and measured rule budgets | V1-M1 | planned after PWR-001/FIELD-003 evidence, per ADR-0003 |
 
 ## 5. Operating Notes
 
@@ -170,5 +177,10 @@ re-run and on-device model acceptance re-run on EVT hardware.
   vehicle while the ADR-0005/ADR-0006 V1 Pro target is brought up. New production
   firmware work targets nRF54LM20B + Air780EGH without invalidating prior
   engineering evidence.
+- ESP32-S3 Wi-Fi remains an engineering evidence path. ADR-0006 does not add a
+  third Wi-Fi radio to V1 Pro, and Air780EGH Wi-Fi scanning is `unverified` in
+  the product topology. V1 location acceptance therefore cannot depend on
+  Wi-Fi unless a later capability task verifies it and an approved decision
+  adds it to the release profile.
 - Every milestone exit produces a KR manifest (existing KR mechanism).
 - Task execution follows `docs/development/DIRECTOR_WORKFLOW.md`.
