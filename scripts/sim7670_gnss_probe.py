@@ -6,6 +6,7 @@ import argparse
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import json
+import math
 from pathlib import Path
 import platform
 import re
@@ -29,7 +30,9 @@ from scripts.egolink_board_probe import (
 DEFAULT_OUTPUT_DIR = Path("reports") / "gnss_validation"
 DEFAULT_EVENT_LOG = Path(__file__).resolve().parents[1] / "pc_simulator" / "runtime" / "events.jsonl"
 GNSS_QUERY_COMMANDS = ("AT+CGNSSINFO", "AT+CGPSINFO")
+GNSS_RESPONSE_PREFIXES = ("+CGNSSINFO:", "+CGPSINFO:")
 KNOT_TO_MPS = 0.514444
+DECIMAL_NUMBER_PATTERN = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
 
 
 @dataclass(frozen=True)
@@ -289,7 +292,14 @@ def parse_gnss_responses(responses: Iterable[dict[str, Any]]) -> GnssFix:
     for item in responses:
         command = str(item.get("command") or "")
         response = str(item.get("response") or "")
-        for line in response.splitlines():
+        for line in complete_response_lines(response):
+            stripped = line.strip()
+            expected_prefix = next(
+                (prefix for prefix in GNSS_RESPONSE_PREFIXES if stripped.startswith(prefix)),
+                None,
+            )
+            if expected_prefix is not None and not at_response_complete(response, expected_prefix):
+                continue
             parsed_fix = parse_gnss_line(line, command)
             if parsed_fix is not None:
                 parsed.append(parsed_fix)
@@ -307,8 +317,15 @@ def parse_gnss_line(line: str, command: str) -> GnssFix | None:
 
 def parse_cgpsinfo(line: str, command: str = "AT+CGPSINFO") -> GnssFix:
     fields = split_at_payload(line, "+CGPSINFO:")
-    lat = parse_coordinate(get_field(fields, 0), get_field(fields, 1), kind="lat")
-    lon = parse_coordinate(get_field(fields, 2), get_field(fields, 3), kind="lon")
+    if len(fields) < 9:
+        return GnssFix(False, command, line)
+    lat, lon = parse_coordinate_pair(
+        get_field(fields, 0),
+        get_field(fields, 1),
+        get_field(fields, 2),
+        get_field(fields, 3),
+        coordinate_format="ddmm",
+    )
     speed_knots = parse_float(get_field(fields, 7))
     return GnssFix(
         fix=lat is not None and lon is not None,
@@ -326,33 +343,55 @@ def parse_cgpsinfo(line: str, command: str = "AT+CGPSINFO") -> GnssFix:
 
 def parse_cgnssinfo(line: str, command: str = "AT+CGNSSINFO") -> GnssFix:
     fields = split_at_payload(line, "+CGNSSINFO:")
+    mode = parse_int(get_field(fields, 0))
+    if mode not in {2, 3}:
+        return GnssFix(False, command, line)
+
     lat_index, ns_index, lon_index, ew_index = choose_cgnss_coordinate_fields(fields)
-    lat = parse_coordinate(get_field(fields, lat_index), get_field(fields, ns_index), kind="lat")
-    lon = parse_coordinate(get_field(fields, lon_index), get_field(fields, ew_index), kind="lon")
-    speed_knots = parse_float(get_field(fields, 12))
+    if None in {lat_index, ns_index, lon_index, ew_index}:
+        return GnssFix(False, command, line)
+
+    lat, lon = parse_coordinate_pair(
+        get_field(fields, lat_index),
+        get_field(fields, ns_index),
+        get_field(fields, lon_index),
+        get_field(fields, ew_index),
+        coordinate_format="cgnss_auto",
+    )
+    if lat is None or lon is None:
+        return GnssFix(False, command, line)
+    tail_index = ew_index + 1
+    if len(fields) < tail_index + 9:
+        return GnssFix(False, command, line)
+    speed_knots = parse_float(get_field(fields, tail_index + 3))
+    satellites = parse_int(get_field(fields, tail_index + 8))
+    if satellites is not None and satellites < 0:
+        satellites = None
     return GnssFix(
         fix=lat is not None and lon is not None,
         source_command=command,
         raw_line=line,
         lat=lat,
         lon=lon,
-        altitude_m=parse_float(get_field(fields, 11)),
+        altitude_m=parse_float(get_field(fields, tail_index + 2)),
         speed_mps=round(speed_knots * KNOT_TO_MPS, 3) if speed_knots is not None else None,
-        course_deg=parse_float(get_field(fields, 13)),
-        pdop=parse_float(get_field(fields, 14)),
-        hdop=parse_float(get_field(fields, 15)),
-        vdop=parse_float(get_field(fields, 16)),
-        satellites=parse_int(get_field(fields, 17)),
-        utc_date=empty_to_none(get_field(fields, 9)),
-        utc_time=empty_to_none(get_field(fields, 10)),
+        course_deg=parse_float(get_field(fields, tail_index + 4)),
+        pdop=parse_float(get_field(fields, tail_index + 5)),
+        hdop=parse_float(get_field(fields, tail_index + 6)),
+        vdop=parse_float(get_field(fields, tail_index + 7)),
+        satellites=satellites,
+        utc_date=empty_to_none(get_field(fields, tail_index)),
+        utc_time=empty_to_none(get_field(fields, tail_index + 1)),
     )
 
 
-def choose_cgnss_coordinate_fields(fields: list[str]) -> tuple[int, int | None, int, int | None]:
+def choose_cgnss_coordinate_fields(
+    fields: list[str],
+) -> tuple[int | None, int | None, int | None, int | None]:
     for candidate in ((5, 6, 7, 8), (4, 5, 6, 7)):
         if get_field(fields, candidate[1]).upper() in {"N", "S"} and get_field(fields, candidate[3]).upper() in {"E", "W"}:
             return candidate
-    return (3, None, 4, None)
+    return (None, None, None, None)
 
 
 def split_at_payload(line: str, prefix: str) -> list[str]:
@@ -471,31 +510,100 @@ def next_seq_from_event_log(path: Path) -> int:
     return max_seq + 1
 
 
-def parse_coordinate(value: str | None, hemisphere: str | None = None, *, kind: str) -> float | None:
-    if value is None or not value.strip():
-        return None
-    try:
-        number = float(value)
-    except ValueError:
-        return None
+def at_response_complete(response: str, expected: str) -> bool:
+    """Return whether an AT transcript contains a complete, successful response.
 
-    abs_number = abs(number)
-    max_decimal = 90 if kind == "lat" else 180
-    if abs_number > max_decimal:
-        degrees = int(abs_number // 100)
-        minutes = abs_number - degrees * 100
-        coordinate = degrees + minutes / 60
-        if number < 0:
-            coordinate = -coordinate
+    Result tokens must be independent, terminated lines. For asynchronous commands,
+    `OK` may appear before or after the expected result line.
+    """
+
+    lines = complete_response_lines(response)
+    if any(
+        line == "ERROR" or line.startswith(("+CME ERROR:", "+CMS ERROR:"))
+        for line in lines
+    ):
+        return False
+    saw_ok = "OK" in lines
+    if expected == "OK":
+        return saw_ok
+    return saw_ok and any(line.startswith(expected) for line in lines)
+
+
+def complete_response_lines(response: str) -> list[str]:
+    return [
+        raw_line.strip()
+        for raw_line in response.splitlines(keepends=True)
+        if raw_line.endswith(("\r", "\n")) and raw_line.strip()
+    ]
+
+
+def parse_coordinate_pair(
+    latitude: str | None,
+    north_south: str | None,
+    longitude: str | None,
+    east_west: str | None,
+    *,
+    coordinate_format: str,
+) -> tuple[float | None, float | None]:
+    raw_lat = parse_float(latitude)
+    raw_lon = parse_float(longitude)
+    if raw_lat is None or raw_lon is None:
+        return (None, None)
+
+    if coordinate_format == "ddmm":
+        parser = parse_ddmm_coordinate
+    elif coordinate_format == "cgnss_auto":
+        parser = (
+            parse_decimal_coordinate
+            if abs(raw_lat) <= 90 and abs(raw_lon) <= 180
+            else parse_ddmm_coordinate
+        )
     else:
-        coordinate = number
+        raise ValueError(f"unsupported coordinate format: {coordinate_format}")
 
-    hemi = (hemisphere or "").upper()
+    lat = parser(raw_lat, north_south, kind="lat")
+    lon = parser(raw_lon, east_west, kind="lon")
+    if lat is None or lon is None:
+        return (None, None)
+    return (lat, lon)
+
+
+def parse_decimal_coordinate(number: float, hemisphere: str | None, *, kind: str) -> float | None:
+    if number < 0 or number > coordinate_limit(kind):
+        return None
+    return apply_hemisphere(number, hemisphere, kind=kind)
+
+
+def parse_ddmm_coordinate(number: float, hemisphere: str | None, *, kind: str) -> float | None:
+    if number < 0:
+        return None
+    degrees = int(number // 100)
+    minutes = number - degrees * 100
+    limit = coordinate_limit(kind)
+    if minutes < 0 or minutes >= 60 or degrees > limit:
+        return None
+    coordinate = degrees + minutes / 60
+    if coordinate > limit:
+        return None
+    return apply_hemisphere(coordinate, hemisphere, kind=kind)
+
+
+def apply_hemisphere(coordinate: float, hemisphere: str | None, *, kind: str) -> float | None:
+    hemi = (hemisphere or "").strip().upper()
+    valid = {"N", "S"} if kind == "lat" else {"E", "W"}
+    if hemi not in valid:
+        return None
     if hemi in {"S", "W"}:
-        coordinate = -abs(coordinate)
-    elif hemi in {"N", "E"}:
-        coordinate = abs(coordinate)
+        coordinate = -coordinate
     return round(coordinate, 6)
+
+
+def coordinate_limit(kind: str) -> int:
+    if kind == "lat":
+        return 90
+    if kind == "lon":
+        return 180
+    raise ValueError(f"unsupported coordinate kind: {kind}")
 
 
 def run_powershell(script: str, timeout_seconds: int) -> str:
@@ -534,19 +642,24 @@ def empty_to_none(value: str | None) -> str | None:
 def parse_float(value: str | None) -> float | None:
     if value is None or not value.strip():
         return None
+    stripped = value.strip()
+    if DECIMAL_NUMBER_PATTERN.fullmatch(stripped) is None:
+        return None
     try:
-        return float(value)
+        parsed = float(stripped)
     except ValueError:
         return None
+    return parsed if math.isfinite(parsed) else None
 
 
 def parse_int(value: str | None) -> int | None:
     if value is None or not value.strip():
         return None
-    try:
-        return int(float(value))
-    except ValueError:
+    stripped = value.strip()
+    if re.fullmatch(r"[+-]?\d+", stripped) is None:
         return None
+    parsed = int(stripped)
+    return parsed if -(2**31) <= parsed <= (2**31 - 1) else None
 
 
 def match_text(pattern: str, text: str) -> str | None:

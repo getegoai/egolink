@@ -138,7 +138,8 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
             "AT+CGPSINFO",
             "+CGNSSINFO:",
             "+CGPSINFO:",
-            "parse_coordinate",
+            "parse_decimal_coordinate",
+            "parse_ddmm_coordinate",
             "KNOT_TO_MPS",
             "at_unreachable",
             "uart_init_failed",
@@ -147,6 +148,47 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
         ]:
             with self.subTest(token=token):
                 self.assertIn(token, combined)
+
+    def test_gnss_parser_separates_decimal_and_degree_minute_formats(self) -> None:
+        for token in [
+            "parse_decimal_coordinate",
+            "parse_ddmm_coordinate",
+            "bool decimal_pair = raw_lat >= 0.0 && raw_lat <= 90.0 && raw_lon >= 0.0 && raw_lon <= 180.0",
+            "minutes >= 60.0",
+            "mode != 2 && mode != 3",
+            "*end != '\\0'",
+            "!isfinite(parsed)",
+            "tail_index = ew_index + 1",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.source)
+
+    def test_gnss_at_reader_requires_complete_lines_without_changing_generic_reader(self) -> None:
+        for token in [
+            "response_has_complete_line",
+            "response_has_terminal_error",
+            "response_is_complete",
+            "sim7670_send_at_complete",
+            'response_has_complete_line(response, "OK", false)',
+            'response_has_complete_line(response, "+CME ERROR:", true)',
+            'response_has_complete_line(response, "+CMS ERROR:", true)',
+            "return response_has_complete_line(response, expect, true)",
+            "buffer_full = true",
+            "? matched && !saw_error && !buffer_full",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.source)
+        reader = self.source.split("static bool sim7670_send_at_labeled_internal(", 1)[1].split(
+            "static bool sim7670_send_at_labeled(", 1
+        )[0]
+        self.assertIn("require_complete_response", reader)
+        self.assertIn("contains_token(response, expect)", reader)
+        self.assertIn("require_complete_response\n        ?", reader)
+        gnss_request = self.source.split("bool sim7670_gnss_request_location(", 1)[1].split(
+            "bool sim7670_lte_query_status(", 1
+        )[0]
+        self.assertIn("sim7670_send_at_complete(", gnss_request)
+        self.assertNotIn('sim7670_send_at("AT+CGNSSINFO"', gnss_request)
 
     def test_request_location_uses_sim7670_backend_without_changing_envelope(self) -> None:
         combined = self.app_main + self.main_cmake

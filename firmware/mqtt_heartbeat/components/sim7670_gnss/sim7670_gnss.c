@@ -1,6 +1,8 @@
 #include "sim7670_gnss.h"
 
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -218,14 +220,34 @@ static const char *field_at(const char *line, const char *prefix, int index, cha
     }
 }
 
+static int prefixed_field_count(const char *line, const char *prefix)
+{
+    if (line == NULL || prefix == NULL) {
+        return 0;
+    }
+    const char *payload = strstr(line, prefix);
+    if (payload == NULL) {
+        return 0;
+    }
+    payload += strlen(prefix);
+    int count = 1;
+    for (const char *cursor = payload; *cursor != '\0' && *cursor != '\r' && *cursor != '\n'; ++cursor) {
+        if (*cursor == ',') {
+            count++;
+        }
+    }
+    return count;
+}
+
 static bool parse_double_field(const char *text, double *value)
 {
     if (text == NULL || text[0] == '\0' || value == NULL) {
         return false;
     }
     char *end = NULL;
+    errno = 0;
     double parsed = strtod(text, &end);
-    if (end == text) {
+    if (end == text || *end != '\0' || errno == ERANGE || !isfinite(parsed)) {
         return false;
     }
     *value = parsed;
@@ -238,31 +260,59 @@ static bool parse_int_field(const char *text, int *value)
         return false;
     }
     char *end = NULL;
+    errno = 0;
     long parsed = strtol(text, &end, 10);
-    if (end == text) {
+    if (end == text || *end != '\0' || errno == ERANGE || parsed < INT_MIN || parsed > INT_MAX) {
         return false;
     }
     *value = (int)parsed;
     return true;
 }
 
-static bool parse_coordinate(const char *raw, const char *hemisphere, bool is_lat, double *out)
+static bool apply_coordinate_hemisphere(double coordinate, const char *hemisphere, bool is_lat, double *out)
+{
+    if (hemisphere == NULL || hemisphere[0] == '\0' || hemisphere[1] != '\0' || out == NULL) {
+        return false;
+    }
+    char direction = (char)toupper((unsigned char)hemisphere[0]);
+    if ((is_lat && direction != 'N' && direction != 'S') ||
+        (!is_lat && direction != 'E' && direction != 'W')) {
+        return false;
+    }
+    if (coordinate < 0.0 || !isfinite(coordinate)) {
+        return false;
+    }
+    *out = (direction == 'S' || direction == 'W') ? -coordinate : coordinate;
+    return true;
+}
+
+static bool parse_decimal_coordinate(const char *raw, const char *hemisphere, bool is_lat, double *out)
+{
+    double coordinate = 0.0;
+    double maximum = is_lat ? 90.0 : 180.0;
+    if (!parse_double_field(raw, &coordinate) || coordinate < 0.0 || coordinate > maximum) {
+        return false;
+    }
+    return apply_coordinate_hemisphere(coordinate, hemisphere, is_lat, out);
+}
+
+static bool parse_ddmm_coordinate(const char *raw, const char *hemisphere, bool is_lat, double *out)
 {
     double ddmm = 0.0;
-    if (!parse_double_field(raw, &ddmm) || out == NULL) {
+    double maximum = is_lat ? 90.0 : 180.0;
+    if (!parse_double_field(raw, &ddmm) || ddmm < 0.0 || ddmm >= (maximum + 1.0) * 100.0) {
         return false;
     }
     int degrees = (int)(ddmm / 100.0);
     double minutes = ddmm - ((double)degrees * 100.0);
-    double decimal = (double)degrees + minutes / 60.0;
-    if (hemisphere != NULL && (hemisphere[0] == 'S' || hemisphere[0] == 'W')) {
-        decimal = -decimal;
-    }
-    if ((is_lat && fabs(decimal) > 90.0) || (!is_lat && fabs(decimal) > 180.0)) {
+    if (minutes < 0.0 || minutes >= 60.0 || degrees < 0 || (double)degrees > maximum) {
         return false;
     }
-    *out = decimal;
-    return true;
+    double coordinate = (double)degrees + minutes / 60.0;
+    if (coordinate > maximum) {
+        return false;
+    }
+    return apply_coordinate_hemisphere(coordinate, hemisphere, is_lat, out);
 }
 
 static void copy_truncated(char *target, size_t target_size, const char *source)
@@ -278,15 +328,75 @@ static bool contains_token(const char *text, const char *token)
     return text != NULL && token != NULL && strstr(text, token) != NULL;
 }
 
+static bool response_has_complete_line(const char *response, const char *token, bool prefix_match)
+{
+    if (response == NULL || token == NULL || token[0] == '\0') {
+        return false;
+    }
+    size_t token_length = strlen(token);
+    const char *cursor = response;
+    while (*cursor != '\0') {
+        while (*cursor == '\r' || *cursor == '\n') {
+            cursor++;
+        }
+        const char *line_start = cursor;
+        while (*cursor != '\0' && *cursor != '\r' && *cursor != '\n') {
+            cursor++;
+        }
+        if (*cursor == '\0') {
+            return false;
+        }
+        const char *line_end = cursor;
+        while (line_end > line_start && isspace((unsigned char)line_end[-1])) {
+            line_end--;
+        }
+        size_t line_length = (size_t)(line_end - line_start);
+        bool matches = prefix_match
+            ? line_length >= token_length && memcmp(line_start, token, token_length) == 0
+            : line_length == token_length && memcmp(line_start, token, token_length) == 0;
+        if (matches) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool response_has_terminal_error(const char *response)
+{
+    return response_has_complete_line(response, "ERROR", false) ||
+           response_has_complete_line(response, "+CME ERROR:", true) ||
+           response_has_complete_line(response, "+CMS ERROR:", true);
+}
+
+static bool response_is_complete(const char *response, const char *expect, bool *saw_error)
+{
+    bool error = response_has_terminal_error(response);
+    if (saw_error != NULL) {
+        *saw_error = error;
+    }
+    if (error) {
+        return true;
+    }
+    bool saw_ok = response_has_complete_line(response, "OK", false);
+    if (!saw_ok) {
+        return false;
+    }
+    if (expect == NULL || expect[0] == '\0' || strcmp(expect, "OK") == 0) {
+        return true;
+    }
+    return response_has_complete_line(response, expect, true);
+}
+
 static const char *find_line(const char *response, const char *prefix);
 
-static bool sim7670_send_at_labeled(
+static bool sim7670_send_at_labeled_internal(
     const char *command,
     const char *log_label,
     const char *expect,
     uint32_t timeout_ms,
     char *response,
-    size_t response_size)
+    size_t response_size,
+    bool require_complete_response)
 {
     if (command == NULL || response == NULL || response_size == 0) {
         return false;
@@ -308,6 +418,7 @@ static bool sim7670_send_at_labeled(
     size_t length = 0;
     bool matched = false;
     bool saw_error = false;
+    bool buffer_full = false;
     int64_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
     while ((int64_t)xTaskGetTickCount() < deadline) {
         int read = uart_read_bytes(uart_num, chunk, sizeof(chunk), pdMS_TO_TICKS(100));
@@ -319,16 +430,47 @@ static bool sim7670_send_at_labeled(
                 length += copy;
                 response[length] = '\0';
             }
+            if (require_complete_response && (size_t)read > available) {
+                buffer_full = true;
+                break;
+            }
             saw_error = contains_token(response, "ERROR");
-            if ((expect != NULL && expect[0] != '\0' && contains_token(response, expect)) || saw_error) {
+            bool complete = require_complete_response
+                ? response_is_complete(response, expect, &saw_error)
+                : ((expect != NULL && expect[0] != '\0' && contains_token(response, expect)) || saw_error);
+            if (complete) {
                 matched = true;
+                break;
+            }
+            if (require_complete_response && length == response_size - 1) {
+                buffer_full = true;
                 break;
             }
         }
     }
     xSemaphoreGive(s_uart_mutex);
-    ESP_LOGI(TAG, "SIM7670_AT command=%s matched=%s", log_label ? log_label : command, matched ? "true" : "false");
-    return !saw_error && (matched || (expect == NULL || expect[0] == '\0'));
+    ESP_LOGI(
+        TAG,
+        "SIM7670_AT command=%s matched=%s terminal_error=%s buffer_full=%s",
+        log_label ? log_label : command,
+        matched ? "true" : "false",
+        saw_error ? "true" : "false",
+        buffer_full ? "true" : "false");
+    return require_complete_response
+        ? matched && !saw_error && !buffer_full
+        : !saw_error && (matched || (expect == NULL || expect[0] == '\0'));
+}
+
+static bool sim7670_send_at_labeled(
+    const char *command,
+    const char *log_label,
+    const char *expect,
+    uint32_t timeout_ms,
+    char *response,
+    size_t response_size)
+{
+    return sim7670_send_at_labeled_internal(
+        command, log_label, expect, timeout_ms, response, response_size, false);
 }
 
 static bool sim7670_send_at(
@@ -339,6 +481,17 @@ static bool sim7670_send_at(
     size_t response_size)
 {
     return sim7670_send_at_labeled(command, command, expect, timeout_ms, response, response_size);
+}
+
+static bool sim7670_send_at_complete(
+    const char *command,
+    const char *expect,
+    uint32_t timeout_ms,
+    char *response,
+    size_t response_size)
+{
+    return sim7670_send_at_labeled_internal(
+        command, command, expect, timeout_ms, response, response_size, true);
 }
 
 static void append_at_response(char *response, size_t response_size, size_t *length, const uint8_t *chunk, size_t chunk_len)
@@ -805,8 +958,19 @@ static bool parse_cgpsinfo(const char *line, sim7670_gnss_report_t *report)
     char ew[4];
     char field[24];
     double value = 0.0;
-    bool lat_ok = parse_coordinate(field_at(line, "+CGPSINFO:", 0, lat_raw, sizeof(lat_raw)), field_at(line, "+CGPSINFO:", 1, ns, sizeof(ns)), true, &report->lat);
-    bool lon_ok = parse_coordinate(field_at(line, "+CGPSINFO:", 2, lon_raw, sizeof(lon_raw)), field_at(line, "+CGPSINFO:", 3, ew, sizeof(ew)), false, &report->lon);
+    if (prefixed_field_count(line, "+CGPSINFO:") < 9) {
+        return false;
+    }
+    bool lat_ok = parse_ddmm_coordinate(
+        field_at(line, "+CGPSINFO:", 0, lat_raw, sizeof(lat_raw)),
+        field_at(line, "+CGPSINFO:", 1, ns, sizeof(ns)),
+        true,
+        &report->lat);
+    bool lon_ok = parse_ddmm_coordinate(
+        field_at(line, "+CGPSINFO:", 2, lon_raw, sizeof(lon_raw)),
+        field_at(line, "+CGPSINFO:", 3, ew, sizeof(ew)),
+        false,
+        &report->lon);
     report->lat_valid = lat_ok;
     report->lon_valid = lon_ok;
     if (parse_double_field(field_at(line, "+CGPSINFO:", 6, field, sizeof(field)), &value)) {
@@ -833,14 +997,33 @@ static bool cgnss_coordinate_candidate(
     int lon_index,
     int ew_index,
     double *lat,
-    double *lon)
+    double *lon,
+    int *tail_index)
 {
     char lat_raw[24];
     char ns[4];
     char lon_raw[24];
     char ew[4];
-    return parse_coordinate(field_at(line, "+CGNSSINFO:", lat_index, lat_raw, sizeof(lat_raw)), field_at(line, "+CGNSSINFO:", ns_index, ns, sizeof(ns)), true, lat) &&
-           parse_coordinate(field_at(line, "+CGNSSINFO:", lon_index, lon_raw, sizeof(lon_raw)), field_at(line, "+CGNSSINFO:", ew_index, ew, sizeof(ew)), false, lon);
+    const char *lat_text = field_at(line, "+CGNSSINFO:", lat_index, lat_raw, sizeof(lat_raw));
+    const char *ns_text = field_at(line, "+CGNSSINFO:", ns_index, ns, sizeof(ns));
+    const char *lon_text = field_at(line, "+CGNSSINFO:", lon_index, lon_raw, sizeof(lon_raw));
+    const char *ew_text = field_at(line, "+CGNSSINFO:", ew_index, ew, sizeof(ew));
+    double raw_lat = 0.0;
+    double raw_lon = 0.0;
+    if (!parse_double_field(lat_text, &raw_lat) || !parse_double_field(lon_text, &raw_lon)) {
+        return false;
+    }
+
+    bool decimal_pair = raw_lat >= 0.0 && raw_lat <= 90.0 && raw_lon >= 0.0 && raw_lon <= 180.0;
+    bool parsed = decimal_pair
+        ? parse_decimal_coordinate(lat_text, ns_text, true, lat) &&
+              parse_decimal_coordinate(lon_text, ew_text, false, lon)
+        : parse_ddmm_coordinate(lat_text, ns_text, true, lat) &&
+              parse_ddmm_coordinate(lon_text, ew_text, false, lon);
+    if (parsed && tail_index != NULL) {
+        *tail_index = ew_index + 1;
+    }
+    return parsed;
 }
 
 static bool parse_cgnssinfo(const char *line, sim7670_gnss_report_t *report)
@@ -848,46 +1031,60 @@ static bool parse_cgnssinfo(const char *line, sim7670_gnss_report_t *report)
     char field[24];
     double value = 0.0;
     int int_value = 0;
+    int mode = 0;
+    int tail_index = 0;
     double lat = 0.0;
     double lon = 0.0;
-    bool fix = cgnss_coordinate_candidate(line, 5, 6, 7, 8, &lat, &lon) ||
-               cgnss_coordinate_candidate(line, 4, 5, 6, 7, &lat, &lon);
-    if (fix) {
-        report->lat = lat;
-        report->lon = lon;
-        report->lat_valid = true;
-        report->lon_valid = true;
+    if (!parse_int_field(field_at(line, "+CGNSSINFO:", 0, field, sizeof(field)), &mode) ||
+        (mode != 2 && mode != 3)) {
+        return false;
     }
-    if (parse_double_field(field_at(line, "+CGNSSINFO:", 11, field, sizeof(field)), &value)) {
+    bool fix = cgnss_coordinate_candidate(line, 5, 6, 7, 8, &lat, &lon, &tail_index) ||
+               cgnss_coordinate_candidate(line, 4, 5, 6, 7, &lat, &lon, &tail_index);
+    if (!fix || prefixed_field_count(line, "+CGNSSINFO:") < tail_index + 9) {
+        return false;
+    }
+    report->lat = lat;
+    report->lon = lon;
+    report->lat_valid = true;
+    report->lon_valid = true;
+    if (parse_double_field(field_at(line, "+CGNSSINFO:", tail_index + 2, field, sizeof(field)), &value)) {
         report->altitude_m = value;
         report->altitude_valid = true;
     }
-    if (parse_double_field(field_at(line, "+CGNSSINFO:", 12, field, sizeof(field)), &value)) {
+    if (parse_double_field(field_at(line, "+CGNSSINFO:", tail_index + 3, field, sizeof(field)), &value)) {
         report->speed_mps = value * KNOT_TO_MPS;
         report->speed_valid = true;
     }
-    if (parse_double_field(field_at(line, "+CGNSSINFO:", 13, field, sizeof(field)), &value)) {
+    if (parse_double_field(field_at(line, "+CGNSSINFO:", tail_index + 4, field, sizeof(field)), &value)) {
         report->course_deg = value;
         report->course_valid = true;
     }
-    if (parse_double_field(field_at(line, "+CGNSSINFO:", 14, field, sizeof(field)), &value)) {
+    if (parse_double_field(field_at(line, "+CGNSSINFO:", tail_index + 5, field, sizeof(field)), &value)) {
         report->pdop = value;
         report->pdop_valid = true;
     }
-    if (parse_double_field(field_at(line, "+CGNSSINFO:", 15, field, sizeof(field)), &value)) {
+    if (parse_double_field(field_at(line, "+CGNSSINFO:", tail_index + 6, field, sizeof(field)), &value)) {
         report->hdop = value;
         report->hdop_valid = true;
     }
-    if (parse_double_field(field_at(line, "+CGNSSINFO:", 16, field, sizeof(field)), &value)) {
+    if (parse_double_field(field_at(line, "+CGNSSINFO:", tail_index + 7, field, sizeof(field)), &value)) {
         report->vdop = value;
         report->vdop_valid = true;
     }
-    if (parse_int_field(field_at(line, "+CGNSSINFO:", 17, field, sizeof(field)), &int_value)) {
+    if (parse_int_field(field_at(line, "+CGNSSINFO:", tail_index + 8, field, sizeof(field)), &int_value) &&
+        int_value >= 0) {
         report->satellites = int_value;
         report->satellites_valid = true;
     }
-    copy_truncated(report->utc_date, sizeof(report->utc_date), field_at(line, "+CGNSSINFO:", 9, field, sizeof(field)));
-    copy_truncated(report->utc_time, sizeof(report->utc_time), field_at(line, "+CGNSSINFO:", 10, field, sizeof(field)));
+    copy_truncated(
+        report->utc_date,
+        sizeof(report->utc_date),
+        field_at(line, "+CGNSSINFO:", tail_index, field, sizeof(field)));
+    copy_truncated(
+        report->utc_time,
+        sizeof(report->utc_time),
+        field_at(line, "+CGNSSINFO:", tail_index + 1, field, sizeof(field)));
     return fix;
 }
 
@@ -1256,13 +1453,23 @@ bool sim7670_gnss_request_location(sim7670_gnss_report_t *report)
     (void)sim7670_send_at("AT+CGNSSPWR=1", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
 #endif
 
-    bool got_gnss_line = sim7670_send_at("AT+CGNSSINFO", "+CGNSSINFO:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
+    bool got_gnss_line = sim7670_send_at_complete(
+        "AT+CGNSSINFO",
+        "+CGNSSINFO:",
+        CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS,
+        response,
+        sizeof(response));
     bool fix = false;
     if (got_gnss_line) {
         fix = parse_best_fix("AT+CGNSSINFO", response, report);
     }
     if (!fix) {
-        bool got_gps_line = sim7670_send_at("AT+CGPSINFO", "+CGPSINFO:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
+        bool got_gps_line = sim7670_send_at_complete(
+            "AT+CGPSINFO",
+            "+CGPSINFO:",
+            CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS,
+            response,
+            sizeof(response));
         if (got_gps_line) {
             bool gps_fix = parse_best_fix("AT+CGPSINFO", response, report);
             fix = gps_fix;
