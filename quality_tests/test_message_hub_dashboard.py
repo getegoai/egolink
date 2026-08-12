@@ -2652,6 +2652,33 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("amap-stale-marker", html)
         self.assertIn("point.amap_eligible === true && point.coordinate_contract === 'wgs84'", html)
         self.assertIn("Pre-correction location hidden until new verified GNSS fix", html)
+        self.assertIn("const AMAP_EMPTY_VIEW_CENTER = Object.freeze([104, 35])", html)
+        self.assertIn("center: AMAP_EMPTY_VIEW_CENTER", html)
+        self.assertIn("amapInstance.setZoomAndCenter(4, AMAP_EMPTY_VIEW_CENTER)", html)
+        self.assertIn("AMap base map ready / no location marker", html)
+        self.assertIn("if (!hasTrustedPoint)", html)
+        self.assertNotIn(
+            "if (!selectedDevice || semantics.kind === 'no-fix' || semantics.kind === 'pre-correction-hidden')",
+            html,
+        )
+        render_state = html[
+            html.index("async function renderAmapForSelectedDevice") : html.index(
+                "function d1LinkPanel"
+            )
+        ]
+        self.assertLess(
+            render_state.index("const AMap = await loadAmap()"),
+            render_state.index("if (!hasTrustedPoint)"),
+        )
+        self.assertIn("showAmapEmptyState(semantics)", render_state)
+        empty_state = html[
+            html.index("function showAmapEmptyState") : html.index(
+                "async function renderAmapForSelectedDevice"
+            )
+        ]
+        self.assertIn("amapInstance.clearMap()", empty_state)
+        self.assertIn("amapOverlays = []", empty_state)
+        self.assertNotIn("new AMap.Marker", empty_state)
         self.assertIn("const fieldCoordinateText = latestTrustedPoint", html)
         self.assertNotIn("coordinateLabel(map.lat, map.lon)", html)
         self.assertIn("point.display_semantics === 'current_fix'", html)

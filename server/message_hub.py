@@ -247,7 +247,7 @@ def issue_amap_proxy_cookie(secret: bytes, *, now: int | None = None) -> str:
     expires_at = int(time.time() if now is None else now) + AMAP_PROXY_COOKIE_TTL_S
     payload = str(expires_at)
     signature = hmac.new(secret, payload.encode("ascii"), hashlib.sha256).hexdigest()
-    return f"{AMAP_PROXY_COOKIE_NAME}={payload}.{signature}; Max-Age={AMAP_PROXY_COOKIE_TTL_S}; Path={AMAP_PROXY_PREFIX}; HttpOnly; SameSite=Strict"
+    return f"{AMAP_PROXY_COOKIE_NAME}={payload}.{signature}; Max-Age={AMAP_PROXY_COOKIE_TTL_S}; Path={AMAP_PROXY_PREFIX}; Secure; HttpOnly; SameSite=Strict"
 
 
 def amap_proxy_cookie_valid(cookie_header: str | None, secret: bytes, *, now: int | None = None) -> bool:
@@ -8673,6 +8673,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     const D2_REFERENCE_POINT_LIMIT = 16;
     const DASHBOARD_DEVICE_KEY = 'egolink.dashboard.device.v1';
     const AMAP_JS_API_KEY = '__AMAP_JS_API_KEY__';
+    const AMAP_EMPTY_VIEW_CENTER = Object.freeze([104, 35]);
     let selectedDashboardDeviceId = localStorage.getItem(DASHBOARD_DEVICE_KEY) || '';
     let refreshInFlight = false;
     let lastSuccessfulDashboardState = null;
@@ -9792,7 +9793,12 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       amapLoadPromise = window.AMapLoader.load({key: AMAP_JS_API_KEY, version: '2.0'})
         .then(AMap => {
           amapNamespace = AMap;
-          amapInstance = new AMap.Map('amapLiveMap', {viewMode: '2D', zoom: 15, mapStyle: 'amap://styles/whitesmoke'});
+          amapInstance = new AMap.Map('amapLiveMap', {
+            viewMode: '2D',
+            zoom: 4,
+            center: AMAP_EMPTY_VIEW_CENTER,
+            mapStyle: 'amap://styles/whitesmoke',
+          });
           return AMap;
         })
         .catch(error => {
@@ -9853,6 +9859,18 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       }
       return {kind: 'last-known', label: `Last known position / ${age}`, points, current: lastPoint};
     }
+    function showAmapEmptyState(semantics) {
+      amapInstance.clearMap();
+      amapOverlays = [];
+      if (typeof amapInstance.setZoomAndCenter === 'function') {
+        amapInstance.setZoomAndCenter(4, AMAP_EMPTY_VIEW_CENTER);
+      }
+      amapLiveMap.dataset.state = 'ready-empty';
+      amapLiveMap.style.display = 'block';
+      amapLiveMap.style.visibility = 'visible';
+      setLocalMapVisibility(false);
+      setAmapStatus(`${semantics.label} / AMap base map ready / no location marker`, 'warn');
+    }
     async function renderAmapForSelectedDevice(selectedDevice) {
       const generation = ++amapRenderGeneration;
       const d1 = selectedDevice && selectedDevice.d1_link ? selectedDevice.d1_link : {};
@@ -9860,7 +9878,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const readiness = d1.field_readiness || {};
       const map = mapWithLocalReferences(d1.map_surface || {}, selectedDevice ? selectedDevice.device_id : '');
       const semantics = amapPositionSemantics(map, estimate, readiness);
-      if (!selectedDevice || semantics.kind === 'no-fix' || semantics.kind === 'pre-correction-hidden') {
+      if (!selectedDevice) {
         if (amapInstance) amapInstance.clearMap();
         amapLiveMap.dataset.state = 'waiting';
         amapLiveMap.style.display = 'none';
@@ -9876,10 +9894,19 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         return;
       }
       try {
-        setAmapStatus('Loading AMap and converting WGS84 coordinates...', 'warn');
+        const hasTrustedPoint = semantics.kind !== 'no-fix' && semantics.kind !== 'pre-correction-hidden';
+        setAmapStatus(
+          hasTrustedPoint ? 'Loading AMap and converting WGS84 coordinates...' : `${semantics.label} / loading AMap base map`,
+          'warn',
+        );
         amapLiveMap.style.display = 'block';
         amapLiveMap.style.visibility = 'hidden';
         const AMap = await loadAmap();
+        if (generation !== amapRenderGeneration) return;
+        if (!hasTrustedPoint) {
+          showAmapEmptyState(semantics);
+          return;
+        }
         const converted = await convertWgs84Points(AMap, semantics.points);
         if (generation !== amapRenderGeneration) return;
         if (!converted.length) throw new Error('no valid converted coordinates');

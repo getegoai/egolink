@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-11
+last_verified: 2026-08-12
 verified_by: codex
 ---
 
@@ -59,6 +59,24 @@ carriage returns cannot become part of remote service names or paths. Prefer a
 dedicated ED25519 key through `-SshKey`; never place VPS passwords or private
 key contents in repository files or command arguments.
 
+### Public Dashboard Entry
+
+The official human-facing entry is `https://ego.example.invalid/`. Nginx terminates
+TLS and proxies the complete same-origin Dashboard/API surface to the Message
+Hub on loopback port `8790`. HTTP on the domain redirects to HTTPS. Port `8790`
+remains the P0 compatibility endpoint for existing device firmware and is not
+the preferred browser entry.
+
+The reproducible virtual-host sources are:
+
+- `scripts/ops/nginx/ego.example.invalid.bootstrap.conf` for the first ACME
+  webroot challenge;
+- `scripts/ops/nginx/ego.example.invalid.conf` for the final HTTPS proxy.
+
+Certificate files and private keys remain under `/etc/letsencrypt` on the VPS
+and must never be copied into the repository. Deployment, smoke, renewal, and
+rollback commands are maintained in `docs/operations/VPS_RUNBOOK.md`.
+
 ### AMap Dashboard Runtime Configuration
 
 The Dashboard's AMap JS API 2.0 application is registered under the key name
@@ -69,8 +87,9 @@ which recommends keeping the security code behind a server-side proxy:
 
 - `EGOLINK_AMAP_JS_API_KEY` is the browser-visible JavaScript API key. The
   Dashboard may place it in the AMap script URL, so it is not treated as a
-  server secret. Restrict it to the production Dashboard origin in the AMap
-  console and enable quota/abuse monitoring.
+  server secret. Restrict it to the HTTPS production Dashboard origin
+  `https://ego.example.invalid` in the AMap console and enable quota/abuse
+  monitoring.
 - `EGOLINK_AMAP_SECURITY_JS_CODE` is server-only. It must never appear in
   Dashboard HTML, JavaScript, public configuration APIs, logs, reports, test
   fixtures, or Git history. The Message Hub uses it only when forwarding the

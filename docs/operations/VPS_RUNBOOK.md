@@ -1,8 +1,8 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-03
-verified_by: claude
-source_task: OPS-001
+last_verified: 2026-08-12
+verified_by: codex
+source_task: OPS-002
 ---
 
 # VPS Message Hub Operations Runbook
@@ -94,10 +94,122 @@ devices post to it continuously; treat every change as a production change.
 - After deploy: check `/health`, Dashboard render, and one authenticated
   `/api/state` call.
 
-## 8. Known Gaps (tracked, not hidden)
+## 8. Domain And HTTPS
 
-- No off-host backup copy yet (operator/OPS-002).
+The official browser entry is `https://ego.example.invalid/`. Nginx owns ports 80
+and 443 and proxies only this virtual host to `127.0.0.1:8790`; direct port
+`8790` remains available for current device compatibility. Certificate private
+keys stay under `/etc/letsencrypt` and are never copied into Git or evidence.
+
+### Preflight And Snapshot
+
+Before changing the VPS, confirm public DNS points only to the intended host,
+Nginx owns the public ports, and no existing virtual host claims the name:
+
+```bash
+getent ahostsv4 ego.example.invalid
+ss -lntp | grep -E ':(80|443|8790)[[:space:]]'
+nginx -T 2>&1 | grep -n 'ego.example.invalid\|listen 80\|listen 443'
+systemctl is-active nginx egolink-message-hub
+```
+
+Create a change-local snapshot without copying secrets into terminal output:
+
+```bash
+stamp=$(date -u +%Y%m%dT%H%M%SZ)
+snapshot=/var/backups/egolink/ops002-$stamp
+install -d -m 700 "$snapshot"
+nginx -T >"$snapshot/nginx.rendered.conf" 2>"$snapshot/nginx.test.stderr"
+if test -e /etc/nginx/conf.d/ego.example.invalid.conf; then
+  cp -a /etc/nginx/conf.d/ego.example.invalid.conf "$snapshot/"
+  touch "$snapshot/had-existing-vhost"
+fi
+cp -a /opt/egolink-message-hub/server/message_hub.py "$snapshot/"
+cp -a /etc/systemd/system/egolink-message-hub.service "$snapshot/"
+systemctl show egolink-message-hub nginx \
+  -p ActiveState -p SubState -p MainPID -p NRestarts >"$snapshot/service-state.txt"
+printf '%s\n' "$snapshot"
+```
+
+### First Certificate And Virtual Host
+
+Copy only the tracked bootstrap file, validate, and reload. Then issue one
+certificate through the bounded webroot and replace the bootstrap with the
+tracked HTTPS file:
+
+```bash
+install -d -o root -g root -m 755 /var/www/letsencrypt/.well-known/acme-challenge
+install -o root -g root -m 644 \
+  /tmp/ego.example.invalid.bootstrap.conf \
+  /etc/nginx/conf.d/ego.example.invalid.conf
+nginx -t
+systemctl reload nginx
+certbot certonly --webroot -w /var/www/letsencrypt \
+  --cert-name ego.example.invalid -d ego.example.invalid \
+  --key-type ecdsa --non-interactive --agree-tos
+install -o root -g root -m 644 \
+  /tmp/ego.example.invalid.conf \
+  /etc/nginx/conf.d/ego.example.invalid.conf
+install -o root -g root -m 755 \
+  /tmp/10-egolink-nginx-reload.sh \
+  /etc/letsencrypt/renewal-hooks/deploy/10-egolink-nginx-reload.sh
+nginx -t
+systemctl reload nginx
+```
+
+This host reuses its existing Certbot account; never place the account contact
+address or account files in the repository. The tracked final virtual host references the
+standard `/etc/letsencrypt/live/ego.example.invalid/` symlinks, so renewals do not
+require a config rewrite. The tracked deploy hook validates Nginx before every
+post-renewal reload.
+
+### Acceptance And Renewal
+
+Run these after the reload. Supply the bearer token only through the shell
+environment and do not echo it:
+
+```bash
+curl -fsSI http://ego.example.invalid/ | grep -i '^location: https://ego.example.invalid/'
+curl -fsS https://ego.example.invalid/health
+test "$(curl -sS -o /dev/null -w '%{http_code}' https://ego.example.invalid/api/state)" = 401
+test "$(curl -sS -o /dev/null -w '%{http_code}' \
+  -H "Authorization: Bearer $EGOLINK_MESSAGE_HUB_TOKEN" \
+  https://ego.example.invalid/api/state)" = 200
+openssl s_client -connect ego.example.invalid:443 -servername ego.example.invalid \
+  </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+systemctl is-active nginx egolink-message-hub
+certbot renew --dry-run
+journalctl -u nginx --since '-10 minutes' --no-pager
+tail -n 50 /var/log/nginx/error.log
+```
+
+Also use an authenticated browser session to confirm the AMap canvas visibly
+loads from the HTTPS origin. With no trusted GNSS fix, the canvas must contain
+no device marker and must keep the no-fix or pre-correction warning.
+
+### Rollback
+
+If Nginx validation or a post-change gate fails, restore only the EgoLink
+virtual host from the snapshot. Do not restore or modify the live SQLite DB:
+
+```bash
+if test -e "$snapshot/had-existing-vhost"; then
+  cp -a "$snapshot/ego.example.invalid.conf" /etc/nginx/conf.d/ego.example.invalid.conf
+else
+  rm -f /etc/nginx/conf.d/ego.example.invalid.conf
+fi
+nginx -t
+systemctl reload nginx
+```
+
+If the application deployment also needs rollback, restore only
+`message_hub.py` and its unit snapshot, run `systemctl daemon-reload`, and
+restart `egolink-message-hub`. An issued certificate may remain safely in
+place for later reuse; deleting it is not part of routine rollback.
+
+## 9. Known Gaps (tracked, not hidden)
+
+- No off-host backup copy yet.
 - No outbound alerting (log-file detection only).
-- HTTP without TLS; bearer token is the only gate. TLS termination decision
-  is deferred (certbot already renews certs on this host for other use —
-  reuse candidate for OPS-002).
+- The device compatibility endpoint on public port `8790` remains HTTP until
+  firmware migration to the HTTPS domain is explicitly planned and validated.

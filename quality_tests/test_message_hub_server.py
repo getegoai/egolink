@@ -1041,6 +1041,7 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertIn("HttpOnly", set_cookie)
         self.assertIn("SameSite=Strict", set_cookie)
         self.assertIn("Path=/_AMapService", set_cookie)
+        self.assertIn("Secure", set_cookie)
         self.assertTrue(message_hub.amap_proxy_cookie_valid(cookie_pair, secret, now=1_001))
         self.assertFalse(message_hub.amap_proxy_cookie_valid(cookie_pair, secret, now=1_301))
         self.assertFalse(message_hub.amap_proxy_cookie_valid(cookie_pair + "tampered", secret, now=1_001))
@@ -1111,6 +1112,7 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertIn(f"{message_hub.AMAP_PROXY_COOKIE_NAME}=", set_cookie)
         self.assertIn("HttpOnly", set_cookie)
         self.assertIn("SameSite=Strict", set_cookie)
+        self.assertIn("Secure", set_cookie)
         self.assertNotIn("server_security_1234", set_cookie)
         self.assertNotIn(b"server_security_1234", payload)
 
