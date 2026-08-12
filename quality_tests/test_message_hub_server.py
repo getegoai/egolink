@@ -1019,6 +1019,19 @@ class MessageHubHttpTests(unittest.TestCase):
                 "public_JS_key_1234",
                 "server_security_1234",
             )
+        for noncanonical_path in (
+            "/_AMapService/v3//assistant/coordinate/convert",
+            "/_AMapService/v3/assistant/coordinate/convert/",
+            "/_AMapService/v4//map/styles",
+            "/_AMapService/v4/map/styles/",
+        ):
+            with self.assertRaises(message_hub.MessageHubError):
+                message_hub.amap_proxy_target(
+                    noncanonical_path,
+                    "",
+                    "public_JS_key_1234",
+                    "server_security_1234",
+                )
 
     def test_amap_cookie_is_short_lived_signed_and_path_scoped(self) -> None:
         secret = message_hub.amap_proxy_cookie_secret("hub-token", "server_security_1234")

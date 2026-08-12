@@ -92,6 +92,13 @@ evidence remains WGS-84 in storage and APIs; the browser converts a copy from
 `gps` to GCJ-02 with AMap's coordinate-conversion API before drawing it and
 must not overwrite the source evidence.
 
+AMap is third-party JavaScript running in the authenticated Dashboard page.
+When a verified point is rendered, AMap receives the bounded coordinates used
+for conversion and viewport display. This is an explicit P0 privacy and supply-
+chain boundary, not a confidentiality boundary. Do not use the provider view
+for users or sessions whose location-sharing consent is absent, and move the
+map into a separately isolated origin before a production privacy claim.
+
 To rotate either value, update the matching local process environment value,
 deploy and restart the Message Hub, verify the provider and fallback paths,
 then revoke the old credential in the AMap console. Never record credential

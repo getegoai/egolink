@@ -2634,6 +2634,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("let amapInstance = null", html)
         self.assertIn("let amapLoadPromise = null", html)
         self.assertIn("let amapRenderGeneration = 0", html)
+        self.assertIn("let amapConversionCacheKey = ''", html)
+        self.assertIn("cacheKey === amapConversionCacheKey", html)
         self.assertIn("if (generation !== amapRenderGeneration) return", html)
         self.assertIn("AMap.convertFrom(valid.map(point => [point.lon, point.lat]), 'gps'", html)
         self.assertIn(".filter(Boolean).slice(-40)", html)

@@ -216,6 +216,8 @@ def amap_proxy_target(path: str, raw_query: str, api_key: str, security_code: st
     ):
         raise MessageHubError("invalid_amap_path", "invalid map provider path", status=400)
     normalized_path = "/" + "/".join(decoded_segments)
+    if upstream_path != normalized_path:
+        raise MessageHubError("invalid_amap_path", "non-canonical map provider path", status=404)
     if not AMAP_PROXY_ALLOWED_PATH.match(normalized_path):
         raise MessageHubError("invalid_amap_path", "unsupported map provider path", status=404)
     if normalized_path.startswith("/v4/map/styles/") or normalized_path == "/v4/map/styles":
@@ -1872,11 +1874,8 @@ def make_handler(
                     chunks.append(chunk)
                 body = b"".join(chunks)
                 content_type = safe_amap_content_type(response.getheader("Content-Type"))
-                cache_control = (
-                    "no-store"
-                    if path == "/_AMapService/v3/assistant/coordinate/convert"
-                    else "private, max-age=60"
-                )
+                upstream_path = upstream_target.partition("?")[0]
+                cache_control = "no-store" if upstream_path == "/v3/assistant/coordinate/convert" else "private, max-age=60"
                 self.respond_bytes(
                     body,
                     content_type=content_type,
@@ -8683,6 +8682,8 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     let amapOverlays = [];
     let amapLoadPromise = null;
     let amapRenderGeneration = 0;
+    let amapConversionCacheKey = '';
+    let amapConversionCacheValue = [];
     function selectDashboardDevice(devices, currentRun = {}, preferredDeviceId = selectedDashboardDeviceId) {
       const available = Array.isArray(devices)
         ? devices.filter(device => device && device.device_id)
@@ -9789,13 +9790,22 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     function convertWgs84Points(AMap, points) {
       const valid = (Array.isArray(points) ? points : []).map(validMapPoint).filter(Boolean).slice(-40);
       if (!valid.length) return Promise.resolve([]);
+      const cacheKey = JSON.stringify(valid.map(point => [point.seq ?? null, point.server_received_at || '', point.lon, point.lat]));
+      if (cacheKey === amapConversionCacheKey && amapConversionCacheValue.length === valid.length) {
+        return Promise.resolve(valid.map((point, index) => ({...point, lnglat: amapConversionCacheValue[index]})));
+      }
       return new Promise((resolve, reject) => {
         AMap.convertFrom(valid.map(point => [point.lon, point.lat]), 'gps', (status, result) => {
           if (status !== 'complete' || !result || result.info !== 'ok' || !Array.isArray(result.locations)) {
             reject(new Error('WGS84 conversion failed'));
             return;
           }
-          resolve(valid.map((point, index) => ({...point, lnglat: result.locations[index]})).filter(point => point.lnglat));
+          const converted = valid.map((point, index) => ({...point, lnglat: result.locations[index]})).filter(point => point.lnglat);
+          if (converted.length === valid.length) {
+            amapConversionCacheKey = cacheKey;
+            amapConversionCacheValue = converted.map(point => point.lnglat);
+          }
+          resolve(converted);
         });
       });
     }
