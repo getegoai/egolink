@@ -65,7 +65,7 @@ AMAP_PROXY_READ_CHUNK_BYTES = 64 * 1024
 AMAP_PROXY_MAX_CONCURRENCY = 4
 AMAP_PROXY_ALLOWED_HOSTS = frozenset({"restapi.amap.com", "webapi.amap.com"})
 AMAP_PROXY_ALLOWED_PATH = re.compile(
-    r"^(?:/v3/assistant/coordinate/convert|/v4/map/styles)$"
+    r"^(?:/v3/assistant/coordinate/convert|/v3/log/init|/v4/map/styles)$"
 )
 AMAP_PROXY_ALLOWED_CONTENT_TYPES = frozenset(
     {
@@ -1875,7 +1875,10 @@ def make_handler(
                 body = b"".join(chunks)
                 content_type = safe_amap_content_type(response.getheader("Content-Type"))
                 upstream_path = upstream_target.partition("?")[0]
-                cache_control = "no-store" if upstream_path == "/v3/assistant/coordinate/convert" else "private, max-age=60"
+                cache_control = "no-store" if upstream_path in {
+                    "/v3/assistant/coordinate/convert",
+                    "/v3/log/init",
+                } else "private, max-age=60"
                 self.respond_bytes(
                     body,
                     content_type=content_type,
