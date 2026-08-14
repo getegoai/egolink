@@ -1008,32 +1008,50 @@ class MessageHubHttpTests(unittest.TestCase):
             "public_JS_key_1234",
             "server_security_1234",
         )
+        tile_host, tile_target = message_hub.amap_proxy_target(
+            "/_AMapService/v3/vectormap",
+            "x=1&y=2&z=17&key=attacker",
+            "public_JS_key_1234",
+            "server_security_1234",
+        )
 
         self.assertEqual(host, "restapi.amap.com")
         self.assertEqual(style_host, "webapi.amap.com")
         self.assertEqual(log_host, "restapi.amap.com")
+        self.assertEqual(tile_host, "restapi.amap.com")
         self.assertIn("/v3/log/init?", log_target)
         self.assertIn("eventId=resource.load", log_target)
         self.assertNotIn("attacker", log_target)
         self.assertNotIn("attacker", target)
+        self.assertNotIn("attacker", tile_target)
+        self.assertIn("/v3/vectormap?", tile_target)
+        self.assertEqual(tile_target.count("key="), 1)
+        self.assertEqual(tile_target.count("jscode="), 1)
         self.assertEqual(target.count("key="), 1)
         self.assertEqual(target.count("jscode="), 1)
         self.assertIn("key=public_JS_key_1234", target)
         self.assertIn("jscode=server_security_1234", target)
         self.assertIn("key=public_JS_key_1234", style_target)
         self.assertIn("jscode=server_security_1234", style_target)
-        with self.assertRaises(message_hub.MessageHubError):
-            message_hub.amap_proxy_target(
-                "/_AMapService/v3/config/district",
-                "",
-                "public_JS_key_1234",
-                "server_security_1234",
-            )
+        for unsupported_path in (
+            "/_AMapService/v3/config/district",
+            "/_AMapService/v3/indoor/indoormaps",
+            "/_AMapService/v4/map/styles2",
+        ):
+            with self.assertRaises(message_hub.MessageHubError):
+                message_hub.amap_proxy_target(
+                    unsupported_path,
+                    "",
+                    "public_JS_key_1234",
+                    "server_security_1234",
+                )
         for noncanonical_path in (
             "/_AMapService/v3//assistant/coordinate/convert",
             "/_AMapService/v3/assistant/coordinate/convert/",
             "/_AMapService/v4//map/styles",
             "/_AMapService/v4/map/styles/",
+            "/_AMapService/v3//vectormap",
+            "/_AMapService/v3/vectormap/",
         ):
             with self.assertRaises(message_hub.MessageHubError):
                 message_hub.amap_proxy_target(

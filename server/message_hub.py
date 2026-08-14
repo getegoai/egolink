@@ -63,9 +63,11 @@ AMAP_PROXY_MAX_RESPONSE_BYTES = 4_000_000
 AMAP_PROXY_MAX_QUERY_BYTES = 8192
 AMAP_PROXY_READ_CHUNK_BYTES = 64 * 1024
 AMAP_PROXY_MAX_CONCURRENCY = 4
+AMAP_PROXY_TILE_MAX_CONCURRENCY = 16
+AMAP_PROXY_TILE_PATH = "/v3/vectormap"
 AMAP_PROXY_ALLOWED_HOSTS = frozenset({"restapi.amap.com", "webapi.amap.com"})
 AMAP_PROXY_ALLOWED_PATH = re.compile(
-    r"^(?:/v3/assistant/coordinate/convert|/v3/log/init|/v4/map/styles)$"
+    r"^(?:/v3/assistant/coordinate/convert|/v3/log/init|/v3/vectormap|/v4/map/styles)$"
 )
 AMAP_PROXY_JSONP_PATHS = frozenset(
     {"/v3/assistant/coordinate/convert", "/v3/log/init"}
@@ -1445,6 +1447,7 @@ def make_handler(
         else None
     )
     amap_proxy_slots = threading.BoundedSemaphore(AMAP_PROXY_MAX_CONCURRENCY)
+    amap_proxy_tile_slots = threading.BoundedSemaphore(AMAP_PROXY_TILE_MAX_CONCURRENCY)
 
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -1860,7 +1863,9 @@ def make_handler(
 
         def proxy_amap(self, path: str, raw_query: str, api_key: str, security_code: str) -> None:
             upstream_host, upstream_target = amap_proxy_target(path, raw_query, api_key, security_code)
-            if not amap_proxy_slots.acquire(blocking=False):
+            upstream_path = upstream_target.partition("?")[0]
+            proxy_slots = amap_proxy_tile_slots if upstream_path == AMAP_PROXY_TILE_PATH else amap_proxy_slots
+            if not proxy_slots.acquire(blocking=False):
                 raise MessageHubError("amap_proxy_busy", "map provider proxy is busy", status=503)
             deadline = time.monotonic() + AMAP_PROXY_TOTAL_DEADLINE_S
             connection: http.client.HTTPSConnection | None = None
@@ -1907,7 +1912,6 @@ def make_handler(
                     chunks.append(chunk)
                 body = b"".join(chunks)
                 content_type = amap_proxy_content_type(upstream_target, response.getheader("Content-Type"))
-                upstream_path = upstream_target.partition("?")[0]
                 cache_control = "no-store" if upstream_path in {
                     "/v3/assistant/coordinate/convert",
                     "/v3/log/init",
@@ -1928,7 +1932,7 @@ def make_handler(
             finally:
                 if connection is not None:
                     connection.close()
-                amap_proxy_slots.release()
+                proxy_slots.release()
 
         def log_message(self, format: str, *args: Any) -> None:
             return
@@ -8519,7 +8523,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         </div>
       </div>
       <div id="d1Link"></div>
-      <div id="amapLiveShell" class="amap-live-shell" data-provider-state="waiting">
+      <div id="amapLiveShell" class="amap-live-shell" data-provider-state="waiting" data-lifecycle="idle">
         <div id="amapLiveMap" data-state="waiting" aria-label="Selected device location on AMap"></div>
         <div id="amapLiveStatus" class="warn" role="status" aria-live="polite">Map waiting for authenticated device state</div>
       </div>
@@ -8710,6 +8714,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     const DASHBOARD_DEVICE_KEY = 'egolink.dashboard.device.v1';
     const AMAP_JS_API_KEY = '__AMAP_JS_API_KEY__';
     const AMAP_EMPTY_VIEW_CENTER = Object.freeze([104, 35]);
+    const AMAP_MAP_READY_TIMEOUT_MS = 30000;
     let selectedDashboardDeviceId = localStorage.getItem(DASHBOARD_DEVICE_KEY) || '';
     let refreshInFlight = false;
     let lastSuccessfulDashboardState = null;
@@ -8718,12 +8723,14 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     let amapInstance = null;
     let amapOverlays = [];
     let amapLoadPromise = null;
+    let amapMapReady = false;
     let amapRenderGeneration = 0;
     let amapConversionCacheKey = '';
     let amapConversionCacheValue = [];
     let amapConversionInFlightKey = '';
     let amapConversionInFlightPromise = null;
     let amapOverlayCacheKey = '';
+    let amapOverlayFailureKey = '';
     function selectDashboardDevice(devices, currentRun = {}, preferredDeviceId = selectedDashboardDeviceId) {
       const available = Array.isArray(devices)
         ? devices.filter(device => device && device.device_id)
@@ -9822,39 +9829,72 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         return null;
       }
     }
-    function resetAmapLoadState() {
-      if (amapInstance && typeof amapInstance.destroy === 'function') {
-        try { amapInstance.destroy(); } catch (_destroyError) {}
-      }
-      amapNamespace = null;
-      amapInstance = null;
-      amapOverlays = [];
-      amapLoadPromise = null;
-      amapOverlayCacheKey = '';
-      amapLiveMap.replaceChildren();
-    }
     function loadAmap() {
       if (!AMAP_JS_API_KEY) return Promise.reject(new Error('provider not configured'));
-      if (amapNamespace && amapInstance) return Promise.resolve(amapNamespace);
-      if (amapNamespace || amapInstance) resetAmapLoadState();
       if (amapLoadPromise) return amapLoadPromise;
+      if (amapMapReady && amapNamespace && amapInstance) return Promise.resolve(amapNamespace);
       if (!window.AMapLoader || typeof window.AMapLoader.load !== 'function') {
-        return Promise.reject(new Error('provider loader unavailable'));
+        amapLiveShell.dataset.lifecycle = 'failed';
+        amapLoadPromise = Promise.reject(new Error('provider loader unavailable'));
+        return amapLoadPromise;
       }
+      amapLiveShell.dataset.lifecycle = 'sdk-loading';
       amapLoadPromise = window.AMapLoader.load({key: AMAP_JS_API_KEY, version: '2.0'})
-        .then(AMap => {
-          const instance = new AMap.Map('amapLiveMap', {
-            viewMode: '2D',
-            zoom: 4,
-            center: AMAP_EMPTY_VIEW_CENTER,
-            mapStyle: 'amap://styles/whitesmoke',
-          });
-          amapNamespace = AMap;
-          amapInstance = instance;
-          return AMap;
-        })
+        .then(AMap => new Promise((resolve, reject) => {
+          let instance = null;
+          let readyTimeout = null;
+          let settled = false;
+          const cleanup = () => {
+            if (readyTimeout !== null) window.clearTimeout(readyTimeout);
+            if (instance && typeof instance.off === 'function') {
+              try { instance.off('complete', handleComplete); } catch (_cleanupError) {}
+            }
+          };
+          const handleComplete = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            amapMapReady = true;
+            amapLiveShell.dataset.lifecycle = 'ready';
+            resolve(AMap);
+          };
+          const failBeforeReady = error => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            amapMapReady = false;
+            amapLiveShell.dataset.lifecycle = 'failed';
+            reject(error);
+          };
+          try {
+            amapLiveShell.dataset.lifecycle = 'map-loading';
+            instance = new AMap.Map('amapLiveMap', {
+              viewMode: '2D',
+              zoom: 4,
+              center: AMAP_EMPTY_VIEW_CENTER,
+              mapStyle: 'amap://styles/whitesmoke',
+            });
+            if (!instance || typeof instance.on !== 'function') {
+              failBeforeReady(new Error('AMap map lifecycle unavailable'));
+              return;
+            }
+            amapNamespace = AMap;
+            amapInstance = instance;
+            instance.on('complete', handleComplete);
+            readyTimeout = window.setTimeout(
+              () => failBeforeReady(new Error('AMap map ready timeout')),
+              AMAP_MAP_READY_TIMEOUT_MS,
+            );
+          } catch (error) {
+            failBeforeReady(error);
+          }
+        }))
         .catch(error => {
-          resetAmapLoadState();
+          // Keep the rejected promise sticky for this page lifetime. Repeated
+          // three-second refreshes must not destroy and recreate a map while
+          // the provider still has asynchronous renderer work in flight.
+          amapMapReady = false;
+          amapLiveShell.dataset.lifecycle = 'failed';
           throw error;
         });
       return amapLoadPromise;
@@ -9985,6 +10025,13 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         );
         return;
       }
+      if (overlayKey === amapOverlayFailureKey) {
+        amapLiveMap.dataset.state = 'failed';
+        amapLiveMap.style.display = 'none';
+        setLocalMapVisibility(true);
+        setAmapStatus(`${semantics.label} / AMap retry paused for unchanged data; reload or wait for a new location`, 'warn');
+        return;
+      }
       try {
         setAmapStatus(
           hasTrustedPoint ? 'Loading AMap and converting WGS84 coordinates...' : `${semantics.label} / loading AMap base map`,
@@ -9998,6 +10045,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         if (!hasTrustedPoint) {
           showAmapEmptyState(semantics);
           amapOverlayCacheKey = overlayKey;
+          amapOverlayFailureKey = '';
           return;
         }
         const converted = await convertWgs84Points(AMap, semantics.points);
@@ -10025,6 +10073,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         amapInstance.add(amapOverlays);
         amapInstance.setFitView(amapOverlays, false, [44, 44, 44, 44], 17);
         amapOverlayCacheKey = overlayKey;
+        amapOverlayFailureKey = '';
         amapLiveMap.dataset.state = 'ready';
         amapLiveMap.style.display = 'block';
         amapLiveMap.style.visibility = 'visible';
@@ -10033,6 +10082,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       } catch (_error) {
         if (generation !== amapRenderGeneration) return;
         amapOverlayCacheKey = '';
+        amapOverlayFailureKey = overlayKey;
         amapLiveMap.dataset.state = 'failed';
         amapLiveMap.style.display = 'none';
         setLocalMapVisibility(true);

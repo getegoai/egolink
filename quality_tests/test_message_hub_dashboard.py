@@ -2637,13 +2637,16 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertLess(d1_link_end, amap_shell_start)
         self.assertIn("let amapInstance = null", html)
         self.assertIn("let amapLoadPromise = null", html)
+        self.assertIn("let amapMapReady = false", html)
         self.assertIn("let amapRenderGeneration = 0", html)
         self.assertIn("let amapConversionCacheKey = ''", html)
         self.assertIn("let amapConversionInFlightPromise = null", html)
         self.assertIn("let amapOverlayCacheKey = ''", html)
+        self.assertIn("let amapOverlayFailureKey = ''", html)
         self.assertIn("cacheKey === amapConversionCacheKey", html)
         self.assertIn("cacheKey === amapConversionInFlightKey", html)
         self.assertIn("overlayKey === amapOverlayCacheKey", html)
+        self.assertIn("overlayKey === amapOverlayFailureKey", html)
         self.assertIn("review_mode: 'amap_live_with_local_fallback'", html)
         self.assertIn("mode: 'amap_js_api_v2'", html)
         self.assertIn("status: 'configured'", html)
@@ -2663,26 +2666,57 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("point.amap_eligible === true && point.coordinate_contract === 'wgs84'", html)
         self.assertIn("Pre-correction location hidden until new verified GNSS fix", html)
         self.assertIn("const AMAP_EMPTY_VIEW_CENTER = Object.freeze([104, 35])", html)
+        self.assertIn("const AMAP_MAP_READY_TIMEOUT_MS = 30000", html)
         self.assertIn("center: AMAP_EMPTY_VIEW_CENTER", html)
         self.assertIn("amapInstance.setZoomAndCenter(4, AMAP_EMPTY_VIEW_CENTER)", html)
         self.assertIn("AMap base map ready / no location marker", html)
-        self.assertIn("function resetAmapLoadState()", html)
         self.assertIn("new AMap.Map('amapLiveMap'", html)
-        self.assertIn("amapNamespace = null", html)
-        self.assertIn("amapInstance = null", html)
-        self.assertIn("amapLoadPromise = null", html)
-        self.assertIn("amapLiveMap.replaceChildren()", html)
-        self.assertIn("if (amapNamespace && amapInstance)", html)
-        self.assertIn("if (!hasTrustedPoint)", html)
-        self.assertNotIn(
-            "if (!selectedDevice || semantics.kind === 'no-fix' || semantics.kind === 'pre-correction-hidden')",
-            html,
+        self.assertIn("instance.on('complete', handleComplete)", html)
+        self.assertIn("instance.off('complete', handleComplete)", html)
+        self.assertIn("catch (_cleanupError) {}", html)
+        self.assertIn("amapMapReady = true", html)
+        self.assertIn("amapLiveShell.dataset.lifecycle = 'sdk-loading'", html)
+        self.assertIn("amapLiveShell.dataset.lifecycle = 'map-loading'", html)
+        self.assertIn("amapLiveShell.dataset.lifecycle = 'ready'", html)
+        self.assertIn("amapLiveShell.dataset.lifecycle = 'failed'", html)
+        self.assertIn("AMap map ready timeout", html)
+        self.assertIn("if (amapMapReady && amapNamespace && amapInstance)", html)
+        self.assertIn("amapLoadPromise = Promise.reject(new Error('provider loader unavailable'))", html)
+        self.assertNotIn("function resetAmapLoadState()", html)
+        self.assertNotIn("amapInstance.destroy()", html)
+        load_state = html[
+            html.index("function loadAmap()") : html.index(
+                "function convertWgs84Points"
+            )
+        ]
+        self.assertLess(
+            load_state.index("if (amapLoadPromise) return amapLoadPromise"),
+            load_state.index("if (amapMapReady && amapNamespace && amapInstance)"),
         )
+        complete_handler = load_state[
+            load_state.index("const handleComplete = () =>") : load_state.index(
+                "const failBeforeReady = error =>"
+            )
+        ]
+        self.assertIn("amapMapReady = true", complete_handler)
+        self.assertLess(
+            complete_handler.index("amapMapReady = true"),
+            complete_handler.index("resolve(AMap)"),
+        )
+        self.assertNotIn("amapLoadPromise = null", load_state)
         render_state = html[
             html.index("async function renderAmapForSelectedDevice") : html.index(
                 "function d1LinkPanel"
             )
         ]
+        self.assertIn("amapOverlayFailureKey = overlayKey", render_state)
+        self.assertIn("AMap retry paused for unchanged data", render_state)
+        self.assertIn("amapOverlayFailureKey = ''", render_state)
+        self.assertIn("if (!hasTrustedPoint)", html)
+        self.assertNotIn(
+            "if (!selectedDevice || semantics.kind === 'no-fix' || semantics.kind === 'pre-correction-hidden')",
+            html,
+        )
         self.assertLess(
             render_state.index("const AMap = await loadAmap()"),
             render_state.index("if (!hasTrustedPoint)"),
