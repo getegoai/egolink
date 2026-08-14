@@ -6,12 +6,17 @@ priority: high
 requires_hardware: false
 serves_demo: post-D1
 created: 2026-07-03
-last_updated: 2026-07-04
+last_updated: 2026-08-14
 
 context:
+  - AGENTS.md
+  - docs/AGENTS.md
+  - docs/CONTEXT_INDEX.md
+  - docs/product/EGO_MASTER_CONTEXT.md
   - docs/product/PRODUCT_CHARTER.md
   - docs/roadmap/V1_PRODUCT_PLAN.md
   - docs/architecture/adr/ADR-0002-v1-ondevice-ai-companion-core.md
+  - docs/architecture/adr/ADR-0008-egolink-core-product-direction-reset.md
   - docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md
   - docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md
   - docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md
@@ -38,10 +43,12 @@ datasheets and quotes cannot be evaluated consistently.
 
 # Expected Result
 
-`docs/product/MASS_PRODUCTION_REQUIREMENTS.md`: the authoritative V1 hardware
-requirements definition, plus two fillable evaluation checklists (cellular
-module, MCU) ready to be applied the moment the China Mobile module data and
-MCU quotes arrive.
+`docs/product/MASS_PRODUCTION_REQUIREMENTS.md`: the subordinate, fillable
+engineering and business gate set for the product direction fixed by
+`EGO_MASTER_CONTEXT.md` and ADR-0008, plus two evaluation checklists (cellular
+module, MCU). It must not reopen the screenless form, native VoLTE or event
+camera product requirements, and becomes actionable only when exact candidate
+documentation, samples and channel evidence arrive.
 
 # Acceptance Criteria
 
@@ -52,10 +59,12 @@ MCU quotes arrive.
       temperature); certification set for China market (SRRC, CCC if
       applicable, network access license / 进网许可, carrier IoT requirements);
       data privacy baseline for a minor/elder wearable.
-- [ ] Cellular module evaluation checklist: RAT/bands (China Mobile focus),
+- [ ] Cellular module evaluation checklist: RAT/bands and exact-SKU evidence for
+      China Mobile, China Unicom and China Telecom,
       GNSS (integrated vs external, constellations, cold/warm TTFF spec),
       power states (PSM/eDRX or equivalent, sleep currents), AT/SDK maturity,
-      voice capability (decision input for V1 voice question), module cost,
+      native bidirectional VoLTE capability and controlled-contact policy
+      implementation (the product voice requirement is already accepted), module cost,
       MOQ, lead time, certification status carried by the module, FAE
       support. Includes a row pre-filled with SIM7670G's known values as the
       comparison baseline.
@@ -87,8 +96,10 @@ python scripts/context_lint.py
 
 - Requirements are owned by the founder; the builder drafts, the founder
   fills business-sensitive numbers (cost ceiling, MOQ tolerance) and approves.
-- 2026-07-04: Paused by NORTH_STAR alignment until D1 link-through is back on
-  the main execution path or founder/business inputs arrive.
+- 2026-08-14: Rebased under `EGO_MASTER_CONTEXT.md` and ADR-0008. Product
+  direction work proceeds in parallel with D2/D5; this packet remains paused
+  only because exact candidate supplier documentation, samples, non-confidential
+  quotes and unresolved founder/business parameters are still missing.
 
 # Completion Evidence
 

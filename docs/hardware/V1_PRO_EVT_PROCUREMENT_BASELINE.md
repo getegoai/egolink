@@ -1,12 +1,18 @@
 ---
-document_status: authoritative
-last_verified: 2026-07-13
+document_status: superseded
+last_verified: 2026-08-14
 verified_by: codex
 owner: founder
 baseline: 5 EVT devices plus bring-up spares
 ---
 
 # EgoLink V1 Pro EVT Procurement Baseline
+
+> **Superseded 2026-08-14:** ADR-0008 replaces the V1 Pro watch/BOM route.
+> Stop new purchases from this list. Existing items, if already acquired, are
+> evaluation assets only. The current EgoLink Core A0 candidate list requires
+> new official-document, schematic, sourcing, and founder gates before a new
+> procurement baseline may be issued.
 
 This list implements ADR-0005, the ADR-0006 peripheral revision, and the final
 product envelope in

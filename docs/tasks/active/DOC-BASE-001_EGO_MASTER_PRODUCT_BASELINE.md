@@ -11,35 +11,48 @@ context:
   - AGENTS.md
   - docs/AGENTS.md
   - docs/CONTEXT_INDEX.md
-  - docs/EGO_MASTER_CONTEXT.md
+  - docs/product/EGO_MASTER_CONTEXT.md
   - docs/product/NORTH_STAR.md
   - docs/product/PRODUCT_CHARTER.md
   - docs/product/P0_SCOPE.md
   - docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md
   - docs/product/MASS_PRODUCTION_REQUIREMENTS.md
+  - docs/product/MASS_PRODUCTION_FOUNDER_DECISION_SHEET.md
   - docs/product/V1_PRO_FORM_FACTOR_BASELINE.md
   - docs/architecture/adr/ADR-0002-v1-ondevice-ai-companion-core.md
   - docs/architecture/adr/ADR-0005-v1-pro-production-hardware-baseline.md
   - docs/architecture/adr/ADR-0006-v1-pro-product-peripheral-revision.md
   - docs/architecture/adr/ADR-0007-gnss-denied-personal-location-memory.md
+  - docs/architecture/adr/ADR-0008-egolink-core-product-direction-reset.md
+  - docs/development/LOCATION_ENGINE.md
+  - docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md
+  - docs/tasks/active/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md
   - docs/roadmap/V1_PRODUCT_PLAN.md
   - docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md
+  - docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md
+  - docs/hardware/README.md
   - docs/current/STATUS.md
   - docs/development/DEV_FLOW.md
   - docs/development/DIRECTOR_WORKFLOW.md
 
 allowed_paths:
   - AGENTS.md
-  - docs/EGO_MASTER_CONTEXT.md
+  - docs/product/EGO_MASTER_CONTEXT.md
   - docs/CONTEXT_INDEX.md
   - docs/product/NORTH_STAR.md
   - docs/product/PRODUCT_CHARTER.md
   - docs/product/P0_SCOPE.md
   - docs/product/MASS_PRODUCTION_REQUIREMENTS.md
+  - docs/product/MASS_PRODUCTION_FOUNDER_DECISION_SHEET.md
   - docs/product/V1_PRO_FORM_FACTOR_BASELINE.md
   - docs/architecture/adr/ADR-0005-v1-pro-production-hardware-baseline.md
   - docs/architecture/adr/ADR-0006-v1-pro-product-peripheral-revision.md
   - docs/architecture/adr/ADR-0008-egolink-core-product-direction-reset.md
+  - docs/architecture/adr/ADR-0002-v1-ondevice-ai-companion-core.md
+  - docs/architecture/adr/ADR-0007-gnss-denied-personal-location-memory.md
+  - docs/development/LOCATION_ENGINE.md
+  - docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md
+  - docs/tasks/active/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md
   - docs/roadmap/V1_PRODUCT_PLAN.md
   - docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md
   - docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md
@@ -57,7 +70,7 @@ out_of_scope:
 
 # Problem
 
-The founder supplied a newer `EGO_MASTER_CONTEXT.md` and directed that it
+The founder supplied a newer `docs/EGO_MASTER_CONTEXT.md` and directed that it
 become the baseline for the current sales-product path. The draft contains the
 intended screenless modular EgoCore direction, but it also claims universal
 authority, treats several unverified component candidates as an A0 baseline,
@@ -86,21 +99,21 @@ must continue in parallel and must not inherit unverified product claims.
 
 # Acceptance Criteria
 
-- [ ] `EGO_MASTER_CONTEXT.md` has authoritative frontmatter, an authority
+- [x] `docs/product/EGO_MASTER_CONTEXT.md` has authoritative frontmatter, an authority
   boundary, corrected evidence claims, and no missing companion-file claim.
-- [ ] ADR-0008 records the founder decision and exact supersession boundary.
-- [ ] `AGENTS.md` and `CONTEXT_INDEX.md` route product-direction work through
+- [x] ADR-0008 records the founder decision and exact supersession boundary.
+- [x] `AGENTS.md` and `CONTEXT_INDEX.md` route product-direction work through
   the master while retaining separate physical, P0, protocol, and ADR
   authorities.
-- [ ] ADR-0005/0006 and the conflicting V1 Pro form/procurement/roadmap text are
+- [x] ADR-0005/0006 and the conflicting V1 Pro form/procurement/roadmap text are
   retained as history but cannot control new design or purchasing.
-- [ ] The master does not claim unverified component capability, durable
+- [x] The master does not claim unverified component capability, durable
   store-forward, product reconnect recovery, current corrected GNSS hardware
   validation, a missing engineering file, or an unsupported v0.5 baseline.
-- [ ] Current development-board execution is explicitly parallel and unchanged.
-- [ ] Only the task's allowed paths are changed; user design packs remain
+- [x] Current development-board execution is explicitly parallel and unchanged.
+- [x] Only the task's allowed paths are changed; user design packs remain
   untracked and uncommitted.
-- [ ] Context lint, full repository verification, and diff checks pass.
+- [x] Context lint, full repository verification, and diff checks pass.
 
 # Validation Commands
 
@@ -131,9 +144,19 @@ git status --short
 
 # Completion Evidence
 
-- Changed files: pending implementation
-- Test result: pending
+- Changed files: 23 task-allowed documentation/governance paths. The main
+  artifacts are `docs/product/EGO_MASTER_CONTEXT.md`, accepted ADR-0008, the
+  ADR-0002 amendment/history record, authority routing, superseded V1 Pro
+  authorities, rebased product/production/procurement plans, and synchronized
+  active planning/status documents.
+- Test result: `python scripts/context_lint.py` PASS;
+  `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify.ps1`
+  PASS with 654/654 tests; worktree and staged diff checks PASS.
 - Hardware result: not applicable
-- Remaining risks: candidate component documentation, schematic/BOM, RF,
+- Scope result: all 23 project changes are covered by `allowed_paths`; the three
+  founder-supplied v0.2/v0.3/v0.4 design packs remain untracked and uncommitted.
+- Remaining risks: candidate component documentation, schematic/BOM/AVL, RF,
   acoustics, enclosure, endurance, certification, privacy UX, and product
-  hardware validation remain open after this governance baseline.
+  hardware validation remain open after this governance baseline. Wi-Fi/BLE
+  production inclusion, final modem/MCU/IMU/camera/power parts, battery and
+  ingress target remain explicitly unfrozen.

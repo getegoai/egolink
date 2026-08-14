@@ -1,19 +1,25 @@
 ---
-document_status: authoritative
-last_verified: 2026-07-12
+document_status: superseded
+last_verified: 2026-08-14
 verified_by: codex
 owner: founder
 ---
 
 # ADR-0005: Freeze the EgoLink V1 Pro Hardware Baseline
 
-- Status: accepted
+- Status: superseded by ADR-0008
 - Date: 2026-07-12
 - Decision owner: founder
 
-Peripheral revision: ADR-0006 supersedes the conflicting display, battery,
+2026-08-14 product-direction update: ADR-0008 supersedes this hardware freeze
+for the current sales-product route. The component selections below are kept
+as historical V1 Pro decisions and evaluation assets only; they must not drive
+new schematic, tooling, procurement, or product claims.
+
+Historical peripheral revision: ADR-0006 superseded the conflicting display, battery,
 sensor-population, SIM, charging, and public voice-call clauses below. The
-`nRF54LM20B + Air780EGH` platform and power-domain decision remain in force.
+`nRF54LM20B + Air780EGH` platform and power-domain decision remained in force
+for that superseded route until ADR-0008.
 
 ## Context
 

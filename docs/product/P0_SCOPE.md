@@ -1,10 +1,18 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-26
+last_verified: 2026-08-14
 verified_by: codex
 ---
 
 # P0 Scope
+
+## Authority Boundary
+
+This document remains authoritative for the current development-board P0
+validation scope. It is intentionally parallel to, and not replaced by, the
+sales-product direction in [EGO_MASTER_CONTEXT.md](EGO_MASTER_CONTEXT.md) and
+ADR-0008. P0 hardware capabilities and evidence must never be promoted into
+the product BOM or release claims without separate product validation.
 
 ## Current Architecture Form
 

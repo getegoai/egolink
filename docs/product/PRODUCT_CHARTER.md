@@ -1,10 +1,19 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-26
+last_verified: 2026-08-14
 verified_by: codex
 ---
 
 # Product Charter
+
+## Authority Boundary
+
+This charter owns the current P0 development promise and non-claims. The
+current sales-product direction, screenless modular EgoCore requirements, and
+product release gates are defined in [EGO_MASTER_CONTEXT.md](EGO_MASTER_CONTEXT.md)
+and ADR-0008. P0 remains an evidence vehicle and does not freeze or prove the
+sales-product PCB, enclosure, component slate, VoLTE, camera, ingress, or
+endurance behavior.
 
 Ego Link is the wearable/mobile companion node for Project EGO.
 

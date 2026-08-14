@@ -1,6 +1,6 @@
 ---
 document_status: proposed
-last_verified: 2026-08-12
+last_verified: 2026-08-14
 verified_by: codex
 owner: founder
 ---
@@ -25,11 +25,14 @@ proposed ADR combines those decisions into a GNSS-denied product strategy
 without changing their contracts; founder review is required before it becomes
 an accepted architecture decision.
 
-V1 Pro has cellular/GNSS through Air780EGH and BLE through nRF54LM20B, but
-ADR-0006 deliberately does not populate a third Wi-Fi radio. ESP32-S3 Wi-Fi is
-useful in the current engineering vehicle. Air780EGH Wi-Fi scan availability,
-power, coexistence, and product-topology behavior are `unverified`; production
-location behavior must not silently depend on it.
+ADR-0008 supersedes the prior Air780EGH/nRF54LM20B/no-third-radio V1 Pro
+topology and reopens the screenless EgoLink Core A0/A1 radio decision.
+ESP32-S3 Wi-Fi remains useful in the current engineering vehicle, but
+production Wi-Fi/BLE parts, antenna topology, power, coexistence, privacy, and
+behavior are `unverified`; production location behavior must not silently
+depend on either one. The proposed memory strategy must work with GNSS,
+cellular evidence, motion/time context, and explicit uncertainty even when no
+optional proximity anchor is available.
 
 ## Proposed Decision
 
@@ -142,6 +145,6 @@ trusted anchors
 - `../../development/LOCATION_ENGINE.md`
 - `ADR-0003-low-power-location-state-machine.md`
 - `ADR-0004-p0-rule-location-and-transitional-vps-memory.md`
-- `ADR-0006-v1-pro-product-peripheral-revision.md`
+- `ADR-0008-egolink-core-product-direction-reset.md`
 - `../../roadmap/V1_PRODUCT_PLAN.md`
-- `../../product/V1_PRO_FORM_FACTOR_BASELINE.md`
+- `../../product/EGO_MASTER_CONTEXT.md`

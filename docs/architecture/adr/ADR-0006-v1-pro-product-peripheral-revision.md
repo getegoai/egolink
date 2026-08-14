@@ -1,17 +1,24 @@
 ---
-document_status: authoritative
-last_verified: 2026-07-13
+document_status: superseded
+last_verified: 2026-08-14
 verified_by: codex
 owner: founder
 ---
 
 # ADR-0006: Revise V1 Pro Product Peripherals and Interaction
 
-- Status: accepted
+- Status: superseded by ADR-0008
 - Date: 2026-07-13
 - Decision owner: founder
 
 ## Context
+
+2026-08-14 product-direction update: ADR-0008 supersedes this V1 Pro product
+and peripheral route. The screenless modular EgoLink Core now owns the current
+sales-product direction. The historical OLED, data-first/no ordinary call,
+no-camera, sensor population, battery, SIM, and form-factor decisions below
+must not drive new design or procurement. Honest reachability, privacy/data
+minimization, and measured power/ingress principles remain reusable gates.
 
 ADR-0005 selected the V1 Pro compute and cellular platform before the final
 industrial design. Product comparison against Fitbit and Xiaomi devices then

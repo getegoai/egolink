@@ -57,11 +57,14 @@ sensing-value models are post-P0 research ideas requiring a later
 founder-reviewed ADR/task before they may affect policy or belief; no model
 directly regresses latitude/longitude.
 
-Current ESP32-S3 Wi-Fi may support engineering experiments. V1 Pro has no
-third Wi-Fi radio under ADR-0006, and Air780EGH Wi-Fi scan capability and
-product behavior remain `unverified`. The V1 baseline therefore uses cellular
-memory and optional future authenticated, fresh, proximity-bounded BLE anchors
-without requiring Wi-Fi; any Wi-Fi evidence is optional and source-labelled.
+Current ESP32-S3 Wi-Fi may support engineering experiments. ADR-0008
+supersedes the prior ADR-0006 production-radio topology and reopens the
+screenless EgoLink Core A0/A1 2.4 GHz decision. Production Wi-Fi scan, BLE,
+antenna, power, coexistence, privacy, and exact-part behavior all remain
+`unverified`; the location baseline therefore cannot require Wi-Fi. Cellular
+memory and any future authenticated, fresh, proximity-bounded BLE/Wi-Fi anchor
+remain optional, source-labelled evidence until a later accepted hardware and
+privacy decision enables them.
 
 ## Power Scheduler Boundary
 

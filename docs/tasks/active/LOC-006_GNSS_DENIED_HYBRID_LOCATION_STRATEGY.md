@@ -6,12 +6,13 @@ priority: high
 requires_hardware: false
 serves_demo: D2
 created: 2026-08-12
-last_updated: 2026-08-12
+last_updated: 2026-08-14
 
 context:
   - docs/AGENTS.md
   - docs/CONTEXT_INDEX.md
   - docs/product/NORTH_STAR.md
+  - docs/product/EGO_MASTER_CONTEXT.md
   - docs/product/PRODUCT_CHARTER.md
   - docs/product/P0_SCOPE.md
   - docs/current/STATUS.md
@@ -27,6 +28,7 @@ context:
   - docs/architecture/adr/ADR-0005-v1-pro-production-hardware-baseline.md
   - docs/architecture/adr/ADR-0006-v1-pro-product-peripheral-revision.md
   - docs/architecture/adr/ADR-0007-gnss-denied-personal-location-memory.md
+  - docs/architecture/adr/ADR-0008-egolink-core-product-direction-reset.md
   - docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md
   - docs/roadmap/V1_PRODUCT_PLAN.md
   - docs/product/V1_PRO_FORM_FACTOR_BASELINE.md
@@ -50,7 +52,8 @@ out_of_scope:
 
 Freeze the smallest product and architecture strategy for useful, honest
 location beliefs when GNSS is denied, while preserving EALE-P0 rule-first
-behavior and the V1 Pro hardware baseline.
+behavior and remaining independent of the production radio/BOM choice. The
+prior V1 Pro hardware topology is historical after ADR-0008.
 
 # Expected Result
 
@@ -65,10 +68,11 @@ matrix without silently depending on production Wi-Fi.
       that only the existing IMU motion candidate is approved under ADR-0004.
 - [x] `LOCATION_ENGINE.md` routes the strategy into staged implementation.
 - [x] `V1_PRODUCT_PLAN.md` distinguishes the ESP32 Wi-Fi engineering path from
-      unverified Air780EGH Wi-Fi scan capability and the no-third-radio V1 BOM.
-- [x] `V1_PRO_FORM_FACTOR_BASELINE.md` includes body/bag occlusion and
-      acquisition/recovery RF test conditions before tooling without making
-      hybrid-location software a tooling prerequisite.
+      the unverified production Wi-Fi/BLE/radio topology reopened by ADR-0008.
+- [x] The superseded `V1_PRO_FORM_FACTOR_BASELINE.md` retains its historical
+      body/bag RF matrix, while the current Master Context carries forward
+      acquisition/recovery, honesty, and A0/A1 RF gates without inheriting its
+      watch/OLED/PCB envelope.
 - [x] No exact private location, raw Wi-Fi identifier, model-performance
       claim, or unverified hardware capability is introduced.
 
@@ -93,9 +97,10 @@ path for every RF test.
   decay. ADR-0004 still approves only IMU motion as a learned candidate.
   Reliability or sensing-value models remain post-P0 research ideas requiring
   a later founder-reviewed ADR/task; no model directly produces coordinates.
-- Production Wi-Fi is not assumed. ADR-0006 has no third Wi-Fi radio, and
-  Air780EGH Wi-Fi scanning remains `unverified` until product-topology evidence
-  proves otherwise.
+- Production Wi-Fi is not assumed. ADR-0008 supersedes the prior no-third-radio
+  V1 Pro topology and reopens A0/A1 2.4 GHz decisions; Wi-Fi/BLE parts,
+  antennas, coexistence, privacy and behavior remain `unverified` until a
+  later accepted hardware decision and evidence prove otherwise.
 
 # Completion Evidence
 

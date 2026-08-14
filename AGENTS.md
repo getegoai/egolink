@@ -4,8 +4,10 @@
 
 - North star and development guiding principles (read first, every session;
   check its date to sense goal changes): `docs/product/NORTH_STAR.md`
+- Current sales-product and system-product baseline:
+  `docs/product/EGO_MASTER_CONTEXT.md`
 - Context router: `docs/CONTEXT_INDEX.md`
-- Product definition: `docs/product/PRODUCT_CHARTER.md`
+- P0 development product definition: `docs/product/PRODUCT_CHARTER.md`
 - P0 scope and non-goals: `docs/product/P0_SCOPE.md`
 - Product migration roadmap: `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`
 - Current status: `docs/current/STATUS.md`
@@ -20,7 +22,8 @@
 
 ## Context Loading Rules
 
-1. Start by reading `docs/CONTEXT_INDEX.md`.
+1. Start by reading `docs/CONTEXT_INDEX.md`; its default context includes the
+   North Star and current master product context.
 2. If an active task packet is provided, read only its `context` entries before editing.
 3. Before modifying a module, read that module's local `AGENTS.md`.
 4. Do not recursively scan `reports/`, `model_artifacts/`, `docs/archive/`, or runtime logs unless the task explicitly requires a named file.

@@ -1,11 +1,18 @@
 ---
-document_status: authoritative
-last_verified: 2026-08-12
+document_status: superseded
+last_verified: 2026-08-14
 verified_by: codex
 owner: founder
 ---
 
 # EgoLink V1 Pro Final Form-Factor Baseline
+
+> **Superseded 2026-08-14:** ADR-0008 and
+> [EGO_MASTER_CONTEXT.md](EGO_MASTER_CONTEXT.md) replace this watch/OLED/form-
+> factor route with the screenless modular EgoLink Core product direction.
+> This document and its SVG remain historical design evidence only. Do not use
+> their dimensions, PCB outline, display, battery bay, camera exclusion, or
+> component zones for new schematic capture, tooling, or procurement.
 
 This document freezes the user-visible V1 Pro product envelope before the
 custom PCB is drawn. The first custom board is a form-factor EVT board inside

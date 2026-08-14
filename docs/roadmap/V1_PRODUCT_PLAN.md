@@ -1,10 +1,24 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-12
+last_verified: 2026-08-14
 verified_by: codex
 ---
 
 # EgoLink V1 Product Plan
+
+## 2026-08-14 Product Baseline Rebase
+
+ADR-0008 and `docs/product/EGO_MASTER_CONTEXT.md` replace the V1 Pro
+watch/OLED/no-camera/data-only hardware and form assumptions with the
+screenless modular EgoLink Core direction. ADR-0005/0006, the old form-factor
+baseline, and the old EVT procurement list are historical only. No new
+production BOM is frozen; named A0 components remain engineering candidates
+except for ESP32-S3-PICO as the A0 starting point.
+
+The sequencing below remains useful for reliable location, guardian UX,
+on-device AI, privacy/data flywheel, and evidence gates. References to the old
+V1 Pro hardware freeze or ordinary-call/camera non-goals are superseded and
+must be re-planned under the Master Context and ADR-0008 before M4/M5 exit.
 
 Authoritative V1 sequencing per ADR-0002
 (`docs/architecture/adr/ADR-0002-v1-ondevice-ai-companion-core.md`). V1 ships
@@ -16,35 +30,32 @@ improving the models after launch.
 Near-term engineering gates (R2.x/R3.x) remain in
 `docs/current/ROADMAP_EGOLINK_P0.md` and feed milestone V1-M1 below.
 
-Hardware update: ADR-0005 (2026-07-12) freezes V1 Pro around nRF54LM20B,
-Air780EGH, QMI8658A, and T5838. Platform comparison remains historical input;
-EVT schematic, sourcing, measured power and validation are still open work.
-`docs/product/V1_PRO_FORM_FACTOR_BASELINE.md` additionally freezes the final
-wrist-worn envelope before schematic capture so EVT starts at product size.
-ADR-0006 (2026-07-13) revises the product peripherals without reopening that
-platform: data-first guardian communication, nominal 900 mAh battery,
-QMI8658A/T5838/MAX30101/MAX30208/BMP390 sensing, a 1.3-inch monochrome OLED,
-and an IP68-oriented USB-C enclosure.
+Hardware update: ADR-0008 (2026-08-14) accepts the screenless modular EgoLink
+Core product direction and a debuggable A0 before A1 product compression.
+Specific modem, production MCU, IMU, audio, camera, storage, power, battery,
+antenna, and enclosure decisions remain gated candidates or unknown.
 
 ## 1. V1 Feature Set (in scope)
 
 | # | Feature | Base already built | Remaining work |
 |---|---|---|---|
 | 1 | Resilient location: GNSS as trusted calibrator; personal place/route memory, cell-area evidence, optional verified BLE coarse anchors, motion and barometer context during GNSS denial; never cell-only or model-guessed coordinates | EALE-P0, proposed ADR-0007, `location_observation`, KR-003/KR-004 | Outdoor/occlusion GNSS acceptance, LOC-006 strategy review, LOC-007 memory/replay implementation, belief rendering for guardians |
-| 2 | SOS: button -> event -> VPS -> guardian notification | Event loop, command ACK, store-forward (KR-007) | Notification channel (push/SMS decision), guardian UI |
-| 3 | History track + geofence enter/exit alerts | Location memory table (LOC-003) | Track storage/query API, geofence engine on VPS, alert rules |
+| 2 | SOS: button -> event -> VPS -> guardian notification | Event loop, command ACK, bounded retry and KR-007 evidence-shape gates; durable store-forward remains unverified | Durable priority queue/overflow evidence, notification channel (push/SMS decision), guardian UI |
+| 3 | History track + geofence enter/exit alerts | Bounded P0 VPS `location_memory` transition table (LOC-003), not a long-term product store | Device/EgoBase private-tier track storage, retention/deletion controls and geofence engine; VPS limited to authorized bounded transport/transition support |
 | 4 | Device health: battery %, low-battery / power-off / removal alerts, heartbeat | Heartbeat + observability envelope (OBS-001..004) | Real power telemetry (PWR-001), alert thresholds |
-| 5 | **On-device AI companion (core differentiator)**: motion anomaly candidate detection on the wearable (MotionNet), real-time confirmation/interaction loop (display/touch/audio), proactive check-in behavior; degrades gracefully without LTE | M0 contracts + RuleRouter baseline, DEMO-001 AMOLED/IMU confirmation loop, IMU capture chain (TIMU-009 series) | M1 data foundation (M1-002/005/006), formal IMU acceptance, MotionNet v0.1, model footprint assessment, interaction loop hardening, mic decision |
-| 6 | Cloud AI services over LTE: heavier reasoning, language-level companion functions, fleet learning | VPS Message Hub in production, raw-frame ingest (SERVER-002) | Companion service design (V1-M3), model registry/update path |
+| 5 | **On-device AI companion (core differentiator)**: motion anomaly candidate detection, screenless confirmation/interaction through buttons/audio/haptics/status light, proactive check-in behavior; degrades gracefully without LTE | M0 contracts + RuleRouter baseline, historical DEMO-001 interaction evidence, IMU capture chain (TIMU-009 series) | M1 data foundation (M1-002/005/006), formal IMU acceptance, MotionNet v0.1, model footprint assessment, screenless interaction loop hardening, mic decision |
+| 6 | Private-tier AI services: EgoBase is the intended user-controlled home for heavier reasoning, long-term personal memory, consented training and signed model delivery; the VPS remains a bounded transport/temporary-service tier | VPS Message Hub transport and raw-frame ingest (SERVER-002); no EgoBase implementation yet | EgoBase architecture and implementation, explicit temporary VPS enhancement boundary, private model registry/signing/update path |
 | 7 | Explainable location confidence shown to guardians ("why we believe TA is here") | EALE-P0 confidence buckets + evidence refs | Human-readable rendering (WEB-003) |
-| 8 | Data flywheel: consent + privacy classes, session ingest, confirmation-derived labels, retrain-and-ship loop (server update + device OTA) | M0 contracts, DATA-001 export, DATA-002 pipeline spec, DATA-003 candidate store, DATA-004 control-plane visibility, DATA-005 review queue, TRAIN-001 handoff manifest, DATA-006 post-run pipeline runner, TRAIN-002 experiment registry, DATA-007 experiment visibility, DATA-009 synthetic dry-run, TRAIN-003 runner preflight, DATA-010 runner-preflight visibility, TRAIN-004 feature manifest export, DATA-011 feature-manifest visibility, TRAIN-005 runner dry-run, DATA-012 runner dry-run visibility, TRAIN-006 synthetic baseline eval, DATA-013 baseline-eval visibility, DATA-014 post-run training-chain collector, TRAIN-007 training handoff bundle, DATA-015 handoff visibility, DATA-016 post-run handoff collector, TRAIN-008 training job plan, DATA-017 job visibility, DATA-018 post-run job-plan collector | M1 recorder/labeling/collection implementation, real training runner integration, model registry, OTA model path |
+| 8 | Data flywheel: consent + privacy classes, session ingest, confirmation-derived labels, retrain-and-ship loop through the user-controlled private tier and signed device OTA | M0 contracts, DATA-001 export, DATA-002 pipeline spec, DATA-003 candidate store, DATA-004 control-plane visibility, DATA-005 review queue, TRAIN-001 handoff manifest, DATA-006 post-run pipeline runner, TRAIN-002 experiment registry, DATA-007 experiment visibility, DATA-009 synthetic dry-run, TRAIN-003 runner preflight, DATA-010 runner-preflight visibility, TRAIN-004 feature manifest export, DATA-011 feature-manifest visibility, TRAIN-005 runner dry-run, DATA-012 runner dry-run visibility, TRAIN-006 synthetic baseline eval, DATA-013 baseline-eval visibility, DATA-014 post-run training-chain collector, TRAIN-007 training handoff bundle, DATA-015 handoff visibility, DATA-016 post-run handoff collector, TRAIN-008 training job plan, DATA-017 job visibility, DATA-018 post-run job-plan collector | M1 recorder/labeling/collection implementation, EgoBase/private runner integration, model registry/signing, OTA model path |
 
 ## 2. V1 Non-Goals
 
-- No camera-based features (privacy + power; hardware capability retained) —
-  TBD(founder) if the interaction design requires it.
-- No ordinary PSTN dialer or public incoming-call UI. V1 uses data messages,
-  voice messages and retains hardware for later guardian-authorized IP audio.
+- No continuous camera recording or default raw-image retention. Event-triggered
+  camera evidence is a first-generation requirement but remains unverified and
+  privacy-gated.
+- No screen or touch UI. Native bidirectional VoLTE with controlled contacts is
+  a first-generation requirement, not a verified capability or unrestricted
+  public phone experience.
 - No overseas compliance; China market only.
 - No unmeasured safety claims: fall detection and proactive alerts ship
   labeled experimental until false-positive rates are measured on real data
@@ -102,13 +113,13 @@ Exit criteria:
 
 Exit criteria:
 
-- ADR-0005/ADR-0006-approved V1 Pro MCU, cellular, sensor, audio, display,
-  storage and power-path baseline; unresolved cost, size, certification and measured
-  acceptance gates remain controlled by
-  `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`.
-- Air780EGH and nRF54LM20B development hardware acquired through authorized
-  channels; T5838 and ES8311 microphone/audio paths bench-validated.
-- EVT BOM frozen.
+- A0 architecture schematic/BOM/AVL issued from official candidate evidence,
+  with each baseline/candidate/unknown status explicit and no inherited V1 Pro
+  purchasing.
+- G0-VOICE candidates, ESP32-S3-PICO A0, motion/audio/camera/storage/power/RF
+  paths bench-validated against product requirements.
+- A0 BOM frozen only after official documents, footprints, sourcing, model,
+  power, RF, acoustic and privacy gates pass.
 
 ### V1-M5 EVT -> DVT -> Certification -> Pilot Production
 
@@ -118,7 +129,8 @@ replay gates, and on-device model acceptance re-run on EVT hardware.
 
 ### Post-Launch Track
 
-- Flywheel retraining cadence; model updates via server + device OTA.
+- Flywheel retraining cadence; signed model updates from the user-controlled
+  private tier through the bounded transport service to device OTA.
 - Companion capability expansion (richer proactive services) on measured
   false-positive/latency budgets.
 
@@ -133,7 +145,7 @@ replay gates, and on-device model acceptance re-run on EVT hardware.
 | 1 | FIELD-003 outdoor GNSS acceptance | V1-M1 | active |
 | 1 | LOC-006 GNSS-denied hybrid-location strategy and evaluation freeze | V1-M1/V1-M2 | active |
 | 1 | PRIVACY-001 product demo privacy/data boundary gate | V1-M3 | done (2026-07-03) |
-| 1 | PROD-001 mass-production requirements (incl. AI compute criteria) | V1-M4 | core platform selected by ADR-0005, peripherals revised by ADR-0006; schematic/supplier/measurement gates active |
+| 1 | PROD-001 mass-production requirements (incl. AI compute criteria) | V1-M4 | rebased by ADR-0008; general gates active, new A0/production BOM not frozen |
 | 2 | STAB-002 LTE long-run/reconnect gate (R3.0) | V1-M1 | planned |
 | 2 | FT-1 assembly: SOS key mapping + mounting + release gate | V1-M1 | planned |
 | 2 | M1-002 on-device session recorder | V1-M3 | planned |
@@ -174,13 +186,12 @@ replay gates, and on-device model acceptance re-run on EVT hardware.
 ## 5. Operating Notes
 
 - Existing ESP32-S3 + SIM7670G boards remain the current evidence and data
-  vehicle while the ADR-0005/ADR-0006 V1 Pro target is brought up. New production
-  firmware work targets nRF54LM20B + Air780EGH without invalidating prior
-  engineering evidence.
-- ESP32-S3 Wi-Fi remains an engineering evidence path. ADR-0006 does not add a
-  third Wi-Fi radio to V1 Pro, and Air780EGH Wi-Fi scanning is `unverified` in
-  the product topology. V1 location acceptance therefore cannot depend on
-  Wi-Fi unless a later capability task verifies it and an approved decision
-  adds it to the release profile.
+  vehicle while the ADR-0008 EgoLink Core product path is designed. New product
+  firmware starts with the ESP32-S3-PICO A0 engineering baseline without
+  invalidating prior evidence; the final MCU and modem remain open gates.
+- ESP32-S3 Wi-Fi remains an engineering evidence path. Production 2.4 GHz and
+  Wi-Fi/BLE topology must be frozen with the A0/A1 RF architecture rather than
+  inherited from the superseded V1 Pro route. Product location acceptance
+  cannot depend on Wi-Fi until a capability task and accepted decision add it.
 - Every milestone exit produces a KR manifest (existing KR mechanism).
 - Task execution follows `docs/development/DIRECTOR_WORKFLOW.md`.

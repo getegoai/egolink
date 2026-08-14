@@ -1,9 +1,24 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-09
+last_verified: 2026-08-14
 verified_by: codex
 owner: founder
 ---
+
+## 2026-08-14 Founder Product-Baseline Update
+
+The current sales-product direction is now the screenless modular EgoLink Core
+defined in [EGO_MASTER_CONTEXT.md](EGO_MASTER_CONTEXT.md) and accepted by
+[ADR-0008](../architecture/adr/ADR-0008-egolink-core-product-direction-reset.md).
+This North Star continues to own the highest-level purpose, evidence honesty,
+48-hour measured guard target, Demo-first iteration, and D2/D5 execution
+principles. The master owns current product requirements and system roles;
+specialized facts remain with the authorities routed by `CONTEXT_INDEX.md`.
+
+The new product PCB/enclosure/BOM path and the current ESP32-S3/SIM7670G
+development path run in parallel. A product candidate must not overwrite
+current-board evidence, and development boards must not be mistaken for the
+sales product.
 
 ## 2026-07-09 Founder Direction Update
 
@@ -30,8 +45,10 @@ Current execution focus moves to the D2 -> D5 mainline:
 
 # EgoLink 北极星与开发指导原则（NORTH STAR）
 
-本文件是全项目最高层指导。任何执行者（Codex、Claude、其他 AI 或人）在开始
-任何任务前必须先读本文件。当本文件与其他文档冲突时，以本文件为准；本文件
+本文件是全项目最高层指导原则。任何执行者（Codex、Claude、其他 AI 或人）在开始
+任何任务前必须先读本文件；当前销售产品要求和系统角色同时以
+`EGO_MASTER_CONTEXT.md` 为准。当专项事实冲突时按 `CONTEXT_INDEX.md` 的
+authority 分工处理，不得用本文件覆盖实机证据、协议或 accepted ADR。本文件
 只能由创始人决策修改（由 Director 代笔），每次修改必须更新日期并在
 `## 变更记录` 留一行。**执行者每次开工必须核对本文件日期，感知目标是否已
 变化，并据此调整手头工作——这是防止路线漂移的强制机制。**
@@ -39,12 +56,15 @@ Current execution focus moves to the D2 -> D5 mainline:
 ## 1. 最终产品（不可漂移的目标）
 
 随身 AI 主动守护定位器（中国市场）：
-1. **核心功能一：定位**。多源（GNSS/基站/Wi-Fi/IMU）+ AI 持续逼近的定位，
-   配省电策略——传感器按需/占空比工作，绝不常开。
+1. **核心功能一：定位**。至少以 GNSS、基站和 IMU 形成诚实降级的多源定位，
+   配省电策略——传感器按需/占空比工作，绝不持续全速常开。Wi-Fi/BLE 是否
+   进入量产产品由 Master Context 与独立 2.4 GHz/RF 门禁决定，基础安全链路
+   不得预先依赖它。
 2. **核心功能二：AI 主动安全**。设备采集环境数据，AI 分析预测风险并主动
    执行动作（如给联系人发信息/打电话）。
-3. 量产目标：定制 PCB（4G 板 + 手表板功能合并）、48h 守护续航硬指标、
-   量产定义见 `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`。
+3. 量产目标：按 ADR-0008 形成独立定制的模块化 EgoCore PCB，而不是简单相加
+   两块开发板能力；48h 守护续航是硬指标，量产定义见
+   `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`。
 
 ## 2. 迭代哲学：Demo 阶梯，先通后好
 
@@ -106,17 +126,20 @@ Current execution focus moves to the D2 -> D5 mainline:
 
 ## 6. 汇报与看板
 
-- 看板 `docs/generated/PROGRESS_BOARD.md` 是唯一进度真相，任务开/关/阻塞
-  都要刷新（`python scripts/build_progress_board.py`）；下一步把它接上 VPS
-  Dashboard，创始人手机随时看（OBS-005）。
+- 看板 `docs/generated/PROGRESS_BOARD.md` 是面向创始人的脱敏派生视图，不是
+  authority。任务开/关/阻塞以 active/done task packet、`STATUS.md` 和
+  `CONTEXT_INDEX.md` 的专项事实源为准；派生看板必须由脚本刷新，不能手改。
 - 上报给创始人的三类事：Demo 验收就绪、阻塞（含缺硬件/缺决策/缺资料）、
   目标疑似冲突（发现两个权威文档打架时停下来问，不自行裁决）。
 
 ## 7. 硬件与省电策略
 
-- **主开发板 = 4G 板（ESP32-S3-SIM7670G）**，单板打通 D1-D5 全部主线
-  （它没有屏幕，其余功能都有）。手表板（AMOLED）作为副线单独接电脑开发
-  屏幕/交互，不阻塞主线；最终定制 PCB 合并两者（量产阶段）。
+- **当前主开发板 = 4G 板（ESP32-S3-SIM7670G）**，继续作为 D1-D5
+  软件、通信、定位和数据证据车；它没有产品屏幕，其他能力只能按
+  `ACTIVE_BUILD.md` 和 `BOARD_MATRIX.md` 的逐项 verified/observed/unknown
+  状态描述，禁止笼统声称“其余功能都有”。AMOLED 板保留为并行交互与数据
+  采集资产，不阻塞主线；最终销售产品走 ADR-0008 的独立定制 PCB 路径，
+  不能把两块开发板能力直接相加当作量产证据。
 - **省电是定位功能的一部分，不是后补优化**：采用 PWR-002 决策的 L0-L4
   状态机——传感器占空比采样、GNSS 按需脉冲（移动/事件才开）、LTE 批量
   上报。任何新增传感器接入必须同时说明它的占空比策略，"常开"默认禁止。
@@ -124,11 +147,14 @@ Current execution focus moves to the D2 -> D5 mainline:
 
 ## 8. 文档层级（谁服从谁）
 
-NORTH_STAR（本文件，方向）→ `docs/roadmap/V1_PRODUCT_PLAN.md`（里程碑）→
-任务包（执行）。看板反映现状。其余文档是参考资料，不得反向约束方向。
+NORTH_STAR（原则）→ `EGO_MASTER_CONTEXT.md`（当前销售产品方向）→ accepted
+ADR / 专项 authority（实现边界）→ roadmap / task packet（执行）。STATUS、
+ACTIVE_BUILD 和 BOARD_MATRIX 反映现状；machine-readable contracts 控制协议。
 
 ## 变更记录
 
+- 2026-08-14 创始人确认新版 Master Context 为当前销售产品方向基线；ADR-0008
+  记录无屏模块化 EgoCore 路线，并保留开发板 D2/D5 主线并行推进。
 - 2026-07-09 创始人更新：D1 连续外场测试改为持续回归，不再作为无限期转入卡点；
   启动 D2 定位精度基线与 D5 定位数据飞轮，地图视图进入 D2/D5 证据可视化。
 - 2026-07-04 创始人定调：Demo 阶梯 + 敏捷轻流程 + 4G 板为主板 + 省电定位

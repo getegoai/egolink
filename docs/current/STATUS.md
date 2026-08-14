@@ -1,10 +1,20 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-11
+last_verified: 2026-08-14
 verified_by: codex
 ---
 
 ## Latest Development Evidence
+
+2026-08-14: The founder supplied and approved the revised Project Ego Master
+Context as the current sales-product direction. ADR-0008 records the pivot from
+the superseded V1 Pro watch/OLED/data-only route to a screenless modular
+EgoCore with people-first safety, native VoLTE and event-camera product
+requirements. This is a product/governance baseline, not hardware evidence:
+ESP32-S3-PICO is only the A0 engineering starting point; the modem, production
+MCU, IMU, audio, camera, power, RF, battery, enclosure and production BOM remain
+candidate or unknown. Existing ESP32-S3 + SIM7670G D2/D5/FIELD work continues
+in parallel unchanged.
 
 2026-08-11: FIELD-011 completed the first real high-rate QMI8658 window over
 SIM7670G LTE in the joint LTE/GNSS/IMU image. The first readiness attempt
@@ -37,38 +47,33 @@ remains split `unassigned`, `training_allowed=false`, and
 `training_ready=false`; calibration, activity diversity, consent, sufficient
 data volume, model training, and product acceptance remain pending.
 
-## V1 Pro Hardware Freeze
+## Historical V1 Pro Hardware Freeze (superseded 2026-08-14)
 
-2026-07-13: Founder review of Fitbit and Xiaomi references produced the
-ADR-0006 product-peripheral revision before schematic capture. The core
-`nRF54LM20B + Air780EGH` platform remains frozen. V1 is now data-first rather
-than a public phone: guardian messages, location, voice messages and future
-authorized IP audio use the network, with no false instant-wake claim while
-4G is fully off. The product target is nominal 900 mAh, QMI8658A + T5838 +
-MAX30101 + MAX30208 + BMP390 multimodal sensing, 1.3-inch white COG OLED, an
-internal SIM/eUICC arrangement, waterproof USB-C and IP68 1.5 m / 30 min DVT
-target. These are unverified product requirements, not measured battery,
-medical, waterproofing or communication claims. The next gate is schematic
-partition/pin allocation plus supplier drawings for the cell, OLED, optical
-window and IPX8 connector.
+The dated decisions below are retained for traceability. ADR-0008 supersedes
+their hardware, OLED/watch, camera, ordinary-call, form-factor, and procurement
+authority for the current sales product; they must not be read as current
+design or purchasing instructions.
 
-2026-07-12: The founder directed EVT to start from the final product form
-rather than a loose evaluation-board assembly. The V1 Pro exterior is now
-frozen as a no-touch safety watch at 46.0 x 42.0 x 15.8 mm, with a 38.0 x
-34.0 mm four-layer PCB envelope, nominal 900 mAh battery bay, physical
-SAFE/SOS/BACK controls, waterproof USB-C and IP68-oriented construction.
-EVT uses the final envelope in a printed/CNC shell; injection tooling remains
-blocked until fit, RF, acoustic, drop, power and ingress tests pass.
+2026-07-13 historical decision: Founder review of Fitbit and Xiaomi references
+produced the ADR-0006 product-peripheral revision before schematic capture. At
+that time the `nRF54LM20B + Air780EGH` platform remained frozen and the route
+was data-first rather than a public phone. It targeted nominal 900 mAh,
+QMI8658A/T5838/MAX30101/MAX30208/BMP390 sensing, a 1.3-inch OLED, internal
+SIM/eUICC, waterproof USB-C and an IP68-oriented DVT. Those were unverified
+requirements, not measured claims, and are now superseded product selections.
 
-2026-07-12: Founder approved performance-first development. ADR-0005 freezes
-the V1 Pro production baseline around nRF54LM20B + Air780EGH + QMI8658A +
-T5838, with a high-current BQ25895/MAX17048 power path and an initial Memory
-LCD choice later revised by ADR-0006. The five-device EVT procurement baseline
-is recorded; nRF54LM20B QFN and
-development-kit authorized supply is currently the only material blocker, so
-the approved action is distributor backorder plus Nordic project sampling, not
-an untraceable broker substitution. No custom PCB or product power claim exists
-yet.
+2026-07-12 historical decision: The founder directed EVT to start from the
+then-final product form rather than a loose evaluation-board assembly. That V1
+Pro exterior was frozen as a no-touch safety watch at 46.0 x 42.0 x 15.8 mm,
+with a 38.0 x 34.0 mm four-layer PCB, nominal 900 mAh bay, physical controls,
+waterproof USB-C and IP68-oriented construction. It no longer controls current
+mechanical or tooling work.
+
+2026-07-12 historical decision: Founder approved performance-first development
+and ADR-0005 froze nRF54LM20B/Air780EGH/QMI8658A/T5838 with a
+BQ25895/MAX17048 path and display later revised by ADR-0006. The five-device
+EVT procurement list and authorized-channel rule are retained as history; its
+former supply blocker and purchase action are no longer current instructions.
 
 ## Latest Deployment Note
 
