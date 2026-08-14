@@ -2632,6 +2632,36 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertNotIn(security_code, html)
         self.assertNotIn(message_hub.AMAP_SECURITY_JS_CODE_ENV, html)
 
+    def test_amap_failure_diagnostics_only_sink_fixed_codes(self) -> None:
+        html = message_hub.render_dashboard(amap_js_api_key="public_JS_key_1234")
+        diagnostics = html[
+            html.index("function amapFailureStage(stage)") : html.index(
+                "function loadAmap()"
+            )
+        ]
+        record_failure = diagnostics[
+            diagnostics.index("function recordAmapFailure") : diagnostics.index(
+                "function clearAmapFailure"
+            )
+        ]
+
+        self.assertIn("const safeStage = amapFailureStage(stage)", record_failure)
+        self.assertIn(
+            "const safeReason = amapFailureReasonCode(amapFailureReason(error))",
+            record_failure,
+        )
+        self.assertNotIn("error.name", diagnostics)
+        self.assertNotIn("error.stack", diagnostics)
+        self.assertNotIn("return message", diagnostics)
+        self.assertNotIn("dataset.failureStage = stage", diagnostics)
+        self.assertNotIn("dataset.failureReason = message", diagnostics)
+        self.assertNotIn("script.src", diagnostics)
+        self.assertNotIn("AMAP_JS_API_KEY", diagnostics)
+        self.assertNotIn("https://", diagnostics)
+        self.assertNotIn("key=", diagnostics)
+        self.assertNotIn("fakeSecretErrorName", html)
+        self.assertNotIn("fake.example/maps?key=private", html)
+
     def test_amap_dashboard_preserves_instance_and_rejects_stale_async_render(self) -> None:
         html = message_hub.render_dashboard(amap_js_api_key="public_JS_key_1234")
 
@@ -2639,6 +2669,10 @@ class MessageHubDashboardTests(unittest.TestCase):
         d1_link_end = html.index("</div>", d1_link_start)
         amap_shell_start = html.index('<div id="amapLiveShell"')
         self.assertLess(d1_link_end, amap_shell_start)
+        self.assertIn('data-failure-stage="none"', html)
+        self.assertIn('data-failure-reason="none"', html)
+        self.assertIn('data-failure-elapsed-ms="0"', html)
+        self.assertIn('data-callback-seen="false"', html)
         self.assertIn("let amapInstance = null", html)
         self.assertIn("let amapLoadPromise = null", html)
         self.assertIn("let amapMapReady = false", html)
@@ -2671,13 +2705,31 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Pre-correction location hidden until new verified GNSS fix", html)
         self.assertIn("const AMAP_JS_API_CALLBACK = '__egolinkAmapJsApiReady'", html)
         self.assertIn("const AMAP_JS_API_SCRIPT_ID = 'egolink-amap-js-api'", html)
-        self.assertIn("const AMAP_EMPTY_VIEW_CENTER = Object.freeze([104, 35])", html)
+        for failure_stage in (
+            "sdk-script-error",
+            "sdk-callback-error",
+            "sdk-timeout",
+            "sdk-global-missing",
+            "sdk-load-conflict",
+            "map-constructor",
+            "map-ready-timeout",
+            "overlay",
+        ):
+            self.assertIn(f"'{failure_stage}'", html)
+        self.assertIn("function amapEmptyViewCenter()", html)
+        self.assertIn("return [104, 35]", html)
         self.assertIn("const AMAP_SDK_LOAD_TIMEOUT_MS = 30000", html)
         self.assertIn("const AMAP_MAP_READY_TIMEOUT_MS = 30000", html)
-        self.assertIn("center: AMAP_EMPTY_VIEW_CENTER", html)
-        self.assertIn("amapInstance.setZoomAndCenter(4, AMAP_EMPTY_VIEW_CENTER)", html)
+        self.assertIn("center: amapEmptyViewCenter()", html)
+        self.assertIn("amapInstance.setZoomAndCenter(4, amapEmptyViewCenter())", html)
+        self.assertEqual(html.count("amapEmptyViewCenter()"), 3)
+        self.assertNotIn("Object.freeze([104, 35])", html)
+        self.assertNotIn("viewMode: '2D'", html)
+        self.assertNotIn("mapStyle: 'amap://styles/whitesmoke'", html)
         self.assertIn("AMap base map ready / no location marker", html)
-        self.assertIn("new AMap.Map('amapLiveMap'", html)
+        self.assertIn("const mapContainer = document.getElementById('amapLiveMap')", html)
+        self.assertIn("new AMap.Map(mapContainer", html)
+        self.assertIn("map-container-missing", html)
         self.assertIn("instance.on('complete', handleComplete)", html)
         self.assertIn("instance.off('complete', handleComplete)", html)
         self.assertIn("catch (_cleanupError) {}", html)
@@ -2698,6 +2750,36 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("AMap JS API load timeout", html)
         self.assertIn("document.head.appendChild(script)", html)
         self.assertIn("window[AMAP_JS_API_CALLBACK] = () => {}", html)
+        self.assertIn("recordAmapPreloadDiagnostics()", html)
+        self.assertIn("Object.isExtensible(window)", html)
+        self.assertIn("const exportsType = typeof exports", html)
+        self.assertIn("const moduleType = typeof module", html)
+        self.assertIn("const defineType = typeof define", html)
+        self.assertIn("Boolean(define.amd)", html)
+        self.assertIn("amapLiveShell.dataset.callbackSeen = 'false'", html)
+        self.assertIn("amapLiveShell.dataset.callbackSeen = 'true'", html)
+        self.assertIn("amapLiveShell.dataset.preloadWindowExtensible", html)
+        self.assertIn("amapLiveShell.dataset.preloadExportsType", html)
+        self.assertIn("amapLiveShell.dataset.preloadModuleType", html)
+        self.assertIn("amapLiveShell.dataset.preloadDefineType", html)
+        self.assertIn("amapLiveShell.dataset.preloadDefineAmd", html)
+        self.assertIn("amapLiveShell.dataset.failureElapsedMs", html)
+        self.assertIn("Math.max(0, Math.min(60000, Math.round(elapsed)))", html)
+        self.assertIn("amapLiveShell.dataset.failureReason = safeReason", html)
+        self.assertIn("error.message.slice(0, 256)", html)
+        self.assertIn("function amapFailureStage(stage)", html)
+        self.assertIn("function amapFailureReasonCode(reason)", html)
+        self.assertIn("switch (stage)", html)
+        self.assertIn("switch (reason)", html)
+        self.assertIn("switch (true)", html)
+        self.assertNotIn("Object.freeze(new Set", html)
+        self.assertNotIn("AMAP_FAILURE_REASON_RULES", html)
+        self.assertNotIn("failureErrorName", html)
+        self.assertNotIn("dataset.failureMessage", html)
+        self.assertNotIn("dataset.failureStack", html)
+        self.assertNotIn("dataset.failureUrl", html)
+        self.assertNotIn("dataset.failureQuery", html)
+        self.assertNotIn("dataset.failureKey", html)
         self.assertIn("amapInstance.setFitView(amapOverlays, false, [44, 44, 44, 44], 16)", html)
         self.assertNotIn("AMapLoader", html)
         self.assertNotIn("loader.js", html)
@@ -2723,9 +2805,42 @@ class MessageHubDashboardTests(unittest.TestCase):
             load_state.index("document.head.appendChild(script)"),
         )
         self.assertIn("document.getElementById(AMAP_JS_API_SCRIPT_ID)", load_state)
+        self.assertLess(
+            load_state.index("recordAmapPreloadDiagnostics()"),
+            load_state.index("document.head.appendChild(script)"),
+        )
+        self.assertIn(
+            "script.onerror = () => failSdkLoad('sdk-script-error'",
+            load_state,
+        )
+        self.assertIn(
+            "() => failSdkLoad('sdk-timeout'",
+            load_state,
+        )
+        self.assertIn(
+            "failSdkLoad('sdk-global-missing'",
+            load_state,
+        )
+        self.assertIn(
+            "failSdkLoad('sdk-load-conflict'",
+            load_state,
+        )
+        self.assertIn(
+            "failSdkLoad('sdk-callback-error', new Error('AMap provider callback error'))",
+            load_state,
+        )
+        self.assertIn("failSdkLoad('sdk-script-error', error)", load_state)
+        self.assertIn(
+            "failBeforeReady('map-constructor'",
+            load_state,
+        )
+        self.assertIn(
+            "failBeforeReady('map-ready-timeout'",
+            load_state,
+        )
         complete_handler = load_state[
             load_state.index("const handleComplete = () =>") : load_state.index(
-                "const failBeforeReady = error =>"
+                "const failBeforeReady = (stage, error) =>"
             )
         ]
         self.assertIn("amapMapReady = true", complete_handler)
@@ -2752,8 +2867,16 @@ class MessageHubDashboardTests(unittest.TestCase):
             )
         ]
         self.assertIn("amapOverlayFailureKey = overlayKey", render_state)
-        self.assertIn("AMap retry paused for unchanged data", render_state)
+        self.assertIn("AMap ${failureStage} / retry paused for unchanged data", render_state)
         self.assertIn("amapOverlayFailureKey = ''", render_state)
+        self.assertIn("recordAmapFailure('overlay', error, overlayStartedAt)", render_state)
+        self.assertIn("AMap ${failureStage} / ${failureReason} / local fallback", render_state)
+        render_catch = render_state[render_state.rindex("} catch (error) {") :]
+        self.assertNotIn("error.name", render_catch)
+        self.assertNotIn("error.message", render_catch)
+        self.assertNotIn("error.stack", render_catch)
+        self.assertNotIn("script.src", render_catch)
+        self.assertNotIn("AMAP_JS_API_KEY", render_catch)
         self.assertIn("if (!hasTrustedPoint)", html)
         self.assertNotIn(
             "if (!selectedDevice || semantics.kind === 'no-fix' || semantics.kind === 'pre-correction-hidden')",

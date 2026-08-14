@@ -8518,7 +8518,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         </div>
       </div>
       <div id="d1Link"></div>
-      <div id="amapLiveShell" class="amap-live-shell" data-provider-state="waiting" data-lifecycle="idle">
+      <div id="amapLiveShell" class="amap-live-shell" data-provider-state="waiting" data-lifecycle="idle" data-failure-stage="none" data-failure-reason="none" data-failure-elapsed-ms="0" data-callback-seen="false">
         <div id="amapLiveMap" data-state="waiting" aria-label="Selected device location on AMap"></div>
         <div id="amapLiveStatus" class="warn" role="status" aria-live="polite">Map waiting for authenticated device state</div>
       </div>
@@ -8710,7 +8710,6 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     const AMAP_JS_API_KEY = '__AMAP_JS_API_KEY__';
     const AMAP_JS_API_CALLBACK = '__egolinkAmapJsApiReady';
     const AMAP_JS_API_SCRIPT_ID = 'egolink-amap-js-api';
-    const AMAP_EMPTY_VIEW_CENTER = Object.freeze([104, 35]);
     const AMAP_SDK_LOAD_TIMEOUT_MS = 30000;
     const AMAP_MAP_READY_TIMEOUT_MS = 30000;
     let selectedDashboardDeviceId = localStorage.getItem(DASHBOARD_DEVICE_KEY) || '';
@@ -9827,11 +9826,103 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         return null;
       }
     }
+    function amapEmptyViewCenter() {
+      return [104, 35];
+    }
+    function amapDiagnosticNowMs() {
+      return Date.now();
+    }
+    function amapDiagnosticElapsedMs(startedAt) {
+      const elapsed = amapDiagnosticNowMs() - Number(startedAt || 0);
+      return String(Number.isFinite(elapsed) ? Math.max(0, Math.min(60000, Math.round(elapsed))) : 0);
+    }
+    function amapFailureStage(stage) {
+      switch (stage) {
+        case 'sdk-script-error': return 'sdk-script-error';
+        case 'sdk-callback-error': return 'sdk-callback-error';
+        case 'sdk-timeout': return 'sdk-timeout';
+        case 'sdk-global-missing': return 'sdk-global-missing';
+        case 'sdk-load-conflict': return 'sdk-load-conflict';
+        case 'map-constructor': return 'map-constructor';
+        case 'map-ready-timeout': return 'map-ready-timeout';
+        case 'overlay': return 'overlay';
+        default: return 'overlay';
+      }
+    }
+    function amapFailureReasonCode(reason) {
+      switch (reason) {
+        case 'timeout': return 'timeout';
+        case 'load-state-conflict': return 'load-state-conflict';
+        case 'script-request-failed': return 'script-request-failed';
+        case 'provider-callback-error': return 'provider-callback-error';
+        case 'sdk-global-missing': return 'sdk-global-missing';
+        case 'map-container-missing': return 'map-container-missing';
+        case 'map-lifecycle-unavailable': return 'map-lifecycle-unavailable';
+        case 'coordinate-conversion-failed': return 'coordinate-conversion-failed';
+        case 'provider-state-undefined': return 'provider-state-undefined';
+        default: return 'unclassified';
+      }
+    }
+    function amapFailureReason(error) {
+      let message = '';
+      try {
+        message = error && typeof error.message === 'string' ? error.message.slice(0, 256) : '';
+      } catch (_messageError) {
+        return 'unclassified';
+      }
+      switch (true) {
+        case /timeout/i.test(message): return 'timeout';
+        case /load state conflict/i.test(message): return 'load-state-conflict';
+        case /request failed/i.test(message): return 'script-request-failed';
+        case /provider callback error/i.test(message): return 'provider-callback-error';
+        case /JS API unavailable/i.test(message): return 'sdk-global-missing';
+        case /map container unavailable/i.test(message): return 'map-container-missing';
+        case /map lifecycle unavailable/i.test(message): return 'map-lifecycle-unavailable';
+        case /coordinate conversion failed|no valid converted coordinates/i.test(message): return 'coordinate-conversion-failed';
+        case /Cannot read properties of undefined/i.test(message): return 'provider-state-undefined';
+        default: return 'unclassified';
+      }
+    }
+    function recordAmapPreloadDiagnostics() {
+      let windowExtensible = false;
+      let defineAmd = false;
+      const exportsType = typeof exports;
+      const moduleType = typeof module;
+      const defineType = typeof define;
+      try { windowExtensible = Object.isExtensible(window); } catch (_windowError) {}
+      try {
+        defineAmd = defineType === 'function' && Boolean(define.amd);
+      } catch (_defineError) {}
+      amapLiveShell.dataset.preloadWindowExtensible = String(windowExtensible);
+      amapLiveShell.dataset.preloadExportsType = exportsType;
+      amapLiveShell.dataset.preloadModuleType = moduleType;
+      amapLiveShell.dataset.preloadDefineType = defineType;
+      amapLiveShell.dataset.preloadDefineAmd = String(defineAmd);
+      amapLiveShell.dataset.callbackSeen = 'false';
+      amapLiveShell.dataset.failureStage = 'none';
+      amapLiveShell.dataset.failureReason = 'none';
+      amapLiveShell.dataset.failureElapsedMs = '0';
+    }
+    function recordAmapFailure(stage, error, startedAt) {
+      const safeStage = amapFailureStage(stage);
+      const safeReason = amapFailureReasonCode(amapFailureReason(error));
+      amapLiveShell.dataset.failureStage = safeStage;
+      amapLiveShell.dataset.failureReason = safeReason;
+      amapLiveShell.dataset.failureElapsedMs = amapDiagnosticElapsedMs(startedAt);
+      return {stage: safeStage, reason: safeReason};
+    }
+    function clearAmapFailure() {
+      amapLiveShell.dataset.failureStage = 'none';
+      amapLiveShell.dataset.failureReason = 'none';
+      amapLiveShell.dataset.failureElapsedMs = '0';
+    }
     function loadAmap() {
       if (!AMAP_JS_API_KEY) return Promise.reject(new Error('provider not configured'));
       if (amapLoadPromise) return amapLoadPromise;
       if (amapMapReady && amapNamespace && amapInstance) return Promise.resolve(amapNamespace);
       amapLiveShell.dataset.lifecycle = 'sdk-loading';
+      recordAmapPreloadDiagnostics();
+      const sdkStartedAt = amapDiagnosticNowMs();
       amapLoadPromise = new Promise((resolve, reject) => {
         let sdkTimeout = null;
         let script = null;
@@ -9840,10 +9931,11 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           if (sdkTimeout !== null) window.clearTimeout(sdkTimeout);
           if (script) script.onerror = null;
         };
-        const failSdkLoad = error => {
+        const failSdkLoad = (stage, error) => {
           if (settled) return;
           settled = true;
           cleanup();
+          recordAmapFailure(stage, error, sdkStartedAt);
           // A late provider response may still call the declared callback.
           // Keep a harmless terminal callback instead of causing a new global
           // TypeError after this page has already fallen back to the local map.
@@ -9852,8 +9944,13 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         };
         window[AMAP_JS_API_CALLBACK] = providerError => {
           if (settled) return;
-          if (providerError || !window.AMap || typeof window.AMap.Map !== 'function') {
-            failSdkLoad(new Error('AMap JS API unavailable'));
+          amapLiveShell.dataset.callbackSeen = 'true';
+          if (providerError) {
+            failSdkLoad('sdk-callback-error', new Error('AMap provider callback error'));
+            return;
+          }
+          if (!window.AMap || typeof window.AMap.Map !== 'function') {
+            failSdkLoad('sdk-global-missing', new Error('AMap JS API unavailable'));
             return;
           }
           settled = true;
@@ -9865,23 +9962,28 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           resolve(AMap);
         };
         if (window.AMap || document.getElementById(AMAP_JS_API_SCRIPT_ID)) {
-          failSdkLoad(new Error('AMap JS API load state conflict'));
+          failSdkLoad('sdk-load-conflict', new Error('AMap JS API load state conflict'));
           return;
         }
-        script = document.createElement('script');
-        script.id = AMAP_JS_API_SCRIPT_ID;
-        script.async = true;
-        script.charset = 'utf-8';
-        script.dataset.egolinkAmapJsapi = 'v2';
-        script.onerror = () => failSdkLoad(new Error('AMap JS API request failed'));
-        script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(AMAP_JS_API_KEY)}&callback=${encodeURIComponent(AMAP_JS_API_CALLBACK)}`;
-        sdkTimeout = window.setTimeout(
-          () => failSdkLoad(new Error('AMap JS API load timeout')),
-          AMAP_SDK_LOAD_TIMEOUT_MS,
-        );
-        document.head.appendChild(script);
+        try {
+          script = document.createElement('script');
+          script.id = AMAP_JS_API_SCRIPT_ID;
+          script.async = true;
+          script.charset = 'utf-8';
+          script.dataset.egolinkAmapJsapi = 'v2';
+          script.onerror = () => failSdkLoad('sdk-script-error', new Error('AMap JS API request failed'));
+          script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(AMAP_JS_API_KEY)}&callback=${encodeURIComponent(AMAP_JS_API_CALLBACK)}`;
+          sdkTimeout = window.setTimeout(
+            () => failSdkLoad('sdk-timeout', new Error('AMap JS API load timeout')),
+            AMAP_SDK_LOAD_TIMEOUT_MS,
+          );
+          document.head.appendChild(script);
+        } catch (error) {
+          failSdkLoad('sdk-script-error', error);
+        }
       })
         .then(AMap => new Promise((resolve, reject) => {
+          const mapStartedAt = amapDiagnosticNowMs();
           let instance = null;
           let readyTimeout = null;
           let settled = false;
@@ -9897,37 +9999,42 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
             cleanup();
             amapMapReady = true;
             amapLiveShell.dataset.lifecycle = 'ready';
+            clearAmapFailure();
             resolve(AMap);
           };
-          const failBeforeReady = error => {
+          const failBeforeReady = (stage, error) => {
             if (settled) return;
             settled = true;
             cleanup();
             amapMapReady = false;
             amapLiveShell.dataset.lifecycle = 'failed';
+            recordAmapFailure(stage, error, mapStartedAt);
             reject(error);
           };
           try {
             amapLiveShell.dataset.lifecycle = 'map-loading';
-            instance = new AMap.Map('amapLiveMap', {
-              viewMode: '2D',
+            const mapContainer = document.getElementById('amapLiveMap');
+            if (!mapContainer) {
+              failBeforeReady('map-constructor', new Error('AMap map container unavailable'));
+              return;
+            }
+            instance = new AMap.Map(mapContainer, {
               zoom: 4,
-              center: AMAP_EMPTY_VIEW_CENTER,
-              mapStyle: 'amap://styles/whitesmoke',
+              center: amapEmptyViewCenter(),
             });
             if (!instance || typeof instance.on !== 'function') {
-              failBeforeReady(new Error('AMap map lifecycle unavailable'));
+              failBeforeReady('map-constructor', new Error('AMap map lifecycle unavailable'));
               return;
             }
             amapNamespace = AMap;
             amapInstance = instance;
             instance.on('complete', handleComplete);
             readyTimeout = window.setTimeout(
-              () => failBeforeReady(new Error('AMap map ready timeout')),
+              () => failBeforeReady('map-ready-timeout', new Error('AMap map ready timeout')),
               AMAP_MAP_READY_TIMEOUT_MS,
             );
           } catch (error) {
-            failBeforeReady(error);
+            failBeforeReady('map-constructor', error);
           }
         }))
         .catch(error => {
@@ -10024,7 +10131,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       amapInstance.clearMap();
       amapOverlays = [];
       if (typeof amapInstance.setZoomAndCenter === 'function') {
-        amapInstance.setZoomAndCenter(4, AMAP_EMPTY_VIEW_CENTER);
+        amapInstance.setZoomAndCenter(4, amapEmptyViewCenter());
       }
       amapLiveMap.dataset.state = 'ready-empty';
       amapLiveMap.style.display = 'block';
@@ -10034,6 +10141,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     }
     async function renderAmapForSelectedDevice(selectedDevice) {
       const generation = ++amapRenderGeneration;
+      const overlayStartedAt = amapDiagnosticNowMs();
       const d1 = selectedDevice && selectedDevice.d1_link ? selectedDevice.d1_link : {};
       const estimate = d1.location_estimate || {};
       const readiness = d1.field_readiness || {};
@@ -10070,7 +10178,8 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         amapLiveMap.dataset.state = 'failed';
         amapLiveMap.style.display = 'none';
         setLocalMapVisibility(true);
-        setAmapStatus(`${semantics.label} / AMap retry paused for unchanged data; reload or wait for a new location`, 'warn');
+        const failureStage = amapFailureStage(amapLiveShell.dataset.failureStage);
+        setAmapStatus(`${semantics.label} / AMap ${failureStage} / retry paused for unchanged data`, 'warn');
         return;
       }
       try {
@@ -10115,19 +10224,28 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         amapInstance.setFitView(amapOverlays, false, [44, 44, 44, 44], 16);
         amapOverlayCacheKey = overlayKey;
         amapOverlayFailureKey = '';
+        clearAmapFailure();
         amapLiveMap.dataset.state = 'ready';
         amapLiveMap.style.display = 'block';
         amapLiveMap.style.visibility = 'visible';
         setLocalMapVisibility(false);
         setAmapStatus(`${semantics.label} / WGS84 converted to GCJ-02 / ${converted.length} point(s)`, 'ok');
-      } catch (_error) {
+      } catch (error) {
         if (generation !== amapRenderGeneration) return;
+        if (!amapLiveShell.dataset.failureStage || amapLiveShell.dataset.failureStage === 'none') {
+          recordAmapFailure('overlay', error, overlayStartedAt);
+        }
         amapOverlayCacheKey = '';
         amapOverlayFailureKey = overlayKey;
         amapLiveMap.dataset.state = 'failed';
         amapLiveMap.style.display = 'none';
         setLocalMapVisibility(true);
-        setAmapStatus(`${semantics.label} / AMap unavailable, showing local fallback`, 'warn');
+        const failureStage = amapFailureStage(amapLiveShell.dataset.failureStage);
+        const failureReason = amapFailureReasonCode(amapLiveShell.dataset.failureReason);
+        setAmapStatus(
+          `${semantics.label} / AMap ${failureStage} / ${failureReason} / local fallback`,
+          'warn',
+        );
       }
     }
     function d1LinkPanel(selectedDevice) {
