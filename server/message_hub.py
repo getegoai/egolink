@@ -67,6 +67,15 @@ AMAP_PROXY_ALLOWED_HOSTS = frozenset({"restapi.amap.com", "webapi.amap.com"})
 AMAP_PROXY_ALLOWED_PATH = re.compile(
     r"^(?:/v3/assistant/coordinate/convert|/v3/log/init|/v4/map/styles)$"
 )
+AMAP_PROXY_JSONP_PATHS = frozenset(
+    {"/v3/assistant/coordinate/convert", "/v3/log/init"}
+)
+AMAP_PROXY_JSONP_SOURCE_TYPES = frozenset(
+    {"application/json", "application/javascript", "application/octet-stream", "text/javascript"}
+)
+AMAP_PROXY_CALLBACK_PATTERN = re.compile(
+    r"^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$"
+)
 AMAP_PROXY_ALLOWED_CONTENT_TYPES = frozenset(
     {
         "application/json",
@@ -279,10 +288,25 @@ def safe_amap_content_type(value: str | None) -> str:
 
 
 def amap_proxy_content_type(upstream_target: str, value: str | None) -> str:
-    """Keep provider types bounded while preserving the JS SDK's JSONP init."""
+    """Keep provider types bounded while preserving canonical SDK JSONP calls."""
 
-    upstream_path = upstream_target.partition("?")[0]
-    if upstream_path == "/v3/log/init":
+    upstream_path, separator, raw_query = upstream_target.partition("?")
+    callbacks = [
+        callback.strip()
+        for key, callback in parse_qsl(raw_query, keep_blank_values=True)
+        if key.lower() == "callback"
+    ] if separator else []
+    upstream_media_type = str(value or "application/octet-stream").split(";", 1)[0].strip().lower()
+    has_safe_callback = (
+        len(callbacks) == 1
+        and len(callbacks[0]) <= 128
+        and AMAP_PROXY_CALLBACK_PATTERN.fullmatch(callbacks[0]) is not None
+    )
+    if (
+        upstream_path in AMAP_PROXY_JSONP_PATHS
+        and has_safe_callback
+        and upstream_media_type in AMAP_PROXY_JSONP_SOURCE_TYPES
+    ):
         return "application/javascript"
     return safe_amap_content_type(value)
 
@@ -8697,6 +8721,9 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     let amapRenderGeneration = 0;
     let amapConversionCacheKey = '';
     let amapConversionCacheValue = [];
+    let amapConversionInFlightKey = '';
+    let amapConversionInFlightPromise = null;
+    let amapOverlayCacheKey = '';
     function selectDashboardDevice(devices, currentRun = {}, preferredDeviceId = selectedDashboardDeviceId) {
       const available = Array.isArray(devices)
         ? devices.filter(device => device && device.device_id)
@@ -9795,26 +9822,39 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         return null;
       }
     }
+    function resetAmapLoadState() {
+      if (amapInstance && typeof amapInstance.destroy === 'function') {
+        try { amapInstance.destroy(); } catch (_destroyError) {}
+      }
+      amapNamespace = null;
+      amapInstance = null;
+      amapOverlays = [];
+      amapLoadPromise = null;
+      amapOverlayCacheKey = '';
+      amapLiveMap.replaceChildren();
+    }
     function loadAmap() {
       if (!AMAP_JS_API_KEY) return Promise.reject(new Error('provider not configured'));
-      if (amapNamespace) return Promise.resolve(amapNamespace);
+      if (amapNamespace && amapInstance) return Promise.resolve(amapNamespace);
+      if (amapNamespace || amapInstance) resetAmapLoadState();
       if (amapLoadPromise) return amapLoadPromise;
       if (!window.AMapLoader || typeof window.AMapLoader.load !== 'function') {
         return Promise.reject(new Error('provider loader unavailable'));
       }
       amapLoadPromise = window.AMapLoader.load({key: AMAP_JS_API_KEY, version: '2.0'})
         .then(AMap => {
-          amapNamespace = AMap;
-          amapInstance = new AMap.Map('amapLiveMap', {
+          const instance = new AMap.Map('amapLiveMap', {
             viewMode: '2D',
             zoom: 4,
             center: AMAP_EMPTY_VIEW_CENTER,
             mapStyle: 'amap://styles/whitesmoke',
           });
+          amapNamespace = AMap;
+          amapInstance = instance;
           return AMap;
         })
         .catch(error => {
-          amapLoadPromise = null;
+          resetAmapLoadState();
           throw error;
         });
       return amapLoadPromise;
@@ -9826,10 +9866,13 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       if (cacheKey === amapConversionCacheKey && amapConversionCacheValue.length === valid.length) {
         return Promise.resolve(valid.map((point, index) => ({...point, lnglat: amapConversionCacheValue[index]})));
       }
-      return new Promise((resolve, reject) => {
+      if (cacheKey === amapConversionInFlightKey && amapConversionInFlightPromise) {
+        return amapConversionInFlightPromise;
+      }
+      const conversionPromise = new Promise((resolve, reject) => {
         AMap.convertFrom(valid.map(point => [point.lon, point.lat]), 'gps', (status, result) => {
           if (status !== 'complete' || !result || result.info !== 'ok' || !Array.isArray(result.locations)) {
-            reject(new Error('WGS84 conversion failed'));
+            reject(new Error('AMap coordinate conversion failed'));
             return;
           }
           const converted = valid.map((point, index) => ({...point, lnglat: result.locations[index]})).filter(point => point.lnglat);
@@ -9840,6 +9883,14 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           resolve(converted);
         });
       });
+      amapConversionInFlightKey = cacheKey;
+      amapConversionInFlightPromise = conversionPromise;
+      return conversionPromise.finally(() => {
+        if (amapConversionInFlightPromise === conversionPromise) {
+          amapConversionInFlightKey = '';
+          amapConversionInFlightPromise = null;
+        }
+      });
     }
     function amapPositionSemantics(map, estimate, readiness = {}) {
       const sourcePoints = Array.isArray(map.points) ? map.points : [];
@@ -9849,7 +9900,13 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         .filter(Boolean);
       const mode = map.mode || 'waiting_for_location_upload';
       const lastPoint = points.length ? points[points.length - 1] : null;
-      const isCurrentFix = lastPoint && lastPoint.amap_current === true && lastPoint.fix === true;
+      const predicted = String(estimate.state || '').trim().toLowerCase() === 'predicted';
+      const latestFix = map.coordinate_diagnostics && map.coordinate_diagnostics.latest_fix;
+      const currentObservationHasNoFix = predicted || latestFix === false;
+      const isCurrentFix = lastPoint
+        && lastPoint.amap_current === true
+        && lastPoint.fix === true
+        && !currentObservationHasNoFix;
       if (!lastPoint) {
         const hiddenPreCorrection = sourcePoints.some(point => point && point.amap_eligible !== true);
         if (hiddenPreCorrection) {
@@ -9869,7 +9926,18 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       if (stale) {
         return {kind: 'stale', label: `Stale GNSS fix / ${age}`, points, current: lastPoint};
       }
-      return {kind: 'last-known', label: `Last known position / ${age}`, points, current: lastPoint};
+      const lastKnownLabel = currentObservationHasNoFix
+        ? `Predicted / Last known position / ${age}`
+        : `Last known position / ${age}`;
+      return {kind: 'last-known', label: lastKnownLabel, points, current: lastPoint};
+    }
+    function amapOverlayKey(deviceId, semantics) {
+      const points = Array.isArray(semantics.points) ? semantics.points : [];
+      return JSON.stringify({
+        device_id: deviceId || '',
+        kind: semantics.kind,
+        points: points.map(point => [point.seq ?? null, point.server_received_at || '', point.lon, point.lat]),
+      });
     }
     function showAmapEmptyState(semantics) {
       amapInstance.clearMap();
@@ -9891,7 +9959,8 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const map = mapWithLocalReferences(d1.map_surface || {}, selectedDevice ? selectedDevice.device_id : '');
       const semantics = amapPositionSemantics(map, estimate, readiness);
       if (!selectedDevice) {
-        if (amapInstance) amapInstance.clearMap();
+        if (amapInstance && amapOverlayCacheKey) amapInstance.clearMap();
+        amapOverlayCacheKey = '';
         amapLiveMap.dataset.state = 'waiting';
         amapLiveMap.style.display = 'none';
         setLocalMapVisibility(true);
@@ -9905,18 +9974,30 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         setAmapStatus(`${semantics.label} / local map fallback`, 'warn');
         return;
       }
+      const hasTrustedPoint = semantics.kind !== 'no-fix' && semantics.kind !== 'pre-correction-hidden';
+      const overlayKey = amapOverlayKey(selectedDevice.device_id, semantics);
+      if (amapInstance && overlayKey === amapOverlayCacheKey) {
+        setAmapStatus(
+          hasTrustedPoint
+            ? `${semantics.label} / WGS84 converted to GCJ-02 / ${semantics.points.length} point(s)`
+            : `${semantics.label} / AMap base map ready / no location marker`,
+          hasTrustedPoint ? 'ok' : 'warn',
+        );
+        return;
+      }
       try {
-        const hasTrustedPoint = semantics.kind !== 'no-fix' && semantics.kind !== 'pre-correction-hidden';
         setAmapStatus(
           hasTrustedPoint ? 'Loading AMap and converting WGS84 coordinates...' : `${semantics.label} / loading AMap base map`,
           'warn',
         );
         amapLiveMap.style.display = 'block';
-        amapLiveMap.style.visibility = 'hidden';
+        amapLiveMap.style.visibility = 'visible';
         const AMap = await loadAmap();
         if (generation !== amapRenderGeneration) return;
+        setLocalMapVisibility(false);
         if (!hasTrustedPoint) {
           showAmapEmptyState(semantics);
+          amapOverlayCacheKey = overlayKey;
           return;
         }
         const converted = await convertWgs84Points(AMap, semantics.points);
@@ -9943,6 +10024,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         }));
         amapInstance.add(amapOverlays);
         amapInstance.setFitView(amapOverlays, false, [44, 44, 44, 44], 17);
+        amapOverlayCacheKey = overlayKey;
         amapLiveMap.dataset.state = 'ready';
         amapLiveMap.style.display = 'block';
         amapLiveMap.style.visibility = 'visible';
@@ -9950,6 +10032,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         setAmapStatus(`${semantics.label} / WGS84 converted to GCJ-02 / ${converted.length} point(s)`, 'ok');
       } catch (_error) {
         if (generation !== amapRenderGeneration) return;
+        amapOverlayCacheKey = '';
         amapLiveMap.dataset.state = 'failed';
         amapLiveMap.style.display = 'none';
         setLocalMapVisibility(true);

@@ -1131,7 +1131,7 @@ class MessageHubHttpTests(unittest.TestCase):
             status = 200
 
             def __init__(self) -> None:
-                self.chunks = [b'{"locations":["116.3,39.9"]}', b""]
+                self.chunks = [b'safe_callback({"locations":["116.3,39.9"]})', b""]
 
             def getheader(self, name: str) -> str | None:
                 return {
@@ -1181,7 +1181,7 @@ class MessageHubHttpTests(unittest.TestCase):
                 with request.urlopen(state_request, timeout=5) as response:
                     cookie = (response.headers.get("Set-Cookie") or "").split(";", 1)[0]
                 proxy_request = request.Request(
-                    base_url + "/_AMapService/v3/assistant/coordinate/convert?locations=116.3,39.9&coordsys=gps&key=attacker",
+                    base_url + "/_AMapService/v3/assistant/coordinate/convert?locations=116.3,39.9&coordsys=gps&callback=safe_callback&key=attacker",
                     headers={
                         "Cookie": cookie,
                         "Origin": base_url,
@@ -1200,12 +1200,13 @@ class MessageHubHttpTests(unittest.TestCase):
                 server.server_close()
 
         self.assertEqual(cache_control, "no-store")
-        self.assertEqual(content_type, "application/json")
+        self.assertEqual(content_type, "application/javascript")
         self.assertEqual(nosniff, "nosniff")
         self.assertEqual(FakeConnection.instances[-1].host, "restapi.amap.com")
         self.assertNotIn("attacker", FakeConnection.instances[-1].target)
         self.assertEqual(FakeConnection.instances[-1].target.count("key="), 1)
         self.assertEqual(FakeConnection.instances[-1].target.count("jscode="), 1)
+        self.assertIn("callback=safe_callback", FakeConnection.instances[-1].target)
 
     def test_amap_response_content_type_and_size_are_fail_closed(self) -> None:
         self.assertEqual(message_hub.safe_amap_content_type("text/html; charset=utf-8"), "application/octet-stream")
@@ -1219,7 +1220,42 @@ class MessageHubHttpTests(unittest.TestCase):
         )
         self.assertEqual(
             message_hub.amap_proxy_content_type(
+                "/v3/assistant/coordinate/convert?locations=116.3,39.9&callback=safe_callback",
+                "application/json; charset=utf-8",
+            ),
+            "application/javascript",
+        )
+        self.assertEqual(
+            message_hub.amap_proxy_content_type(
                 "/v3/assistant/coordinate/convert?locations=116.3,39.9",
+                "application/json; charset=utf-8",
+            ),
+            "application/json",
+        )
+        self.assertEqual(
+            message_hub.amap_proxy_content_type(
+                "/v3/assistant/coordinate/convert?locations=116.3,39.9&callback=alert(1)",
+                "application/json; charset=utf-8",
+            ),
+            "application/json",
+        )
+        self.assertEqual(
+            message_hub.amap_proxy_content_type(
+                "/v3/assistant/coordinate/convert?callback=safe_callback.",
+                "application/json; charset=utf-8",
+            ),
+            "application/json",
+        )
+        self.assertEqual(
+            message_hub.amap_proxy_content_type(
+                "/v3/assistant/coordinate/convert?callback=first&callback=second",
+                "application/json; charset=utf-8",
+            ),
+            "application/json",
+        )
+        self.assertEqual(
+            message_hub.amap_proxy_content_type(
+                "/v3/assistant/coordinate/convert?locations=116.3,39.9&callback=safe_callback",
                 "text/html; charset=utf-8",
             ),
             "application/octet-stream",
