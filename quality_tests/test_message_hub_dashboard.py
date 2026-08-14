@@ -2866,6 +2866,20 @@ class MessageHubDashboardTests(unittest.TestCase):
                 "function d1LinkPanel"
             )
         ]
+        cache_hit_state = render_state[
+            render_state.index("if (amapInstance && overlayKey === amapOverlayCacheKey)") : render_state.index(
+                "if (overlayKey === amapOverlayFailureKey)"
+            )
+        ]
+        self.assertIn("amapLiveMap.dataset.state = hasTrustedPoint ? 'ready' : 'ready-empty'", cache_hit_state)
+        self.assertIn("amapLiveMap.style.display = 'block'", cache_hit_state)
+        self.assertIn("amapLiveMap.style.visibility = 'visible'", cache_hit_state)
+        self.assertIn("setLocalMapVisibility(false)", cache_hit_state)
+        self.assertIn("setAmapStatus(", cache_hit_state)
+        self.assertNotIn("convertWgs84Points", cache_hit_state)
+        self.assertNotIn("clearMap", cache_hit_state)
+        self.assertNotIn("amapInstance.add", cache_hit_state)
+        self.assertNotIn("setFitView", cache_hit_state)
         self.assertIn("amapOverlayFailureKey = overlayKey", render_state)
         self.assertIn("AMap ${failureStage} / retry paused for unchanged data", render_state)
         self.assertIn("amapOverlayFailureKey = ''", render_state)

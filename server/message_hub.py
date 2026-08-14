@@ -10166,6 +10166,10 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const hasTrustedPoint = semantics.kind !== 'no-fix' && semantics.kind !== 'pre-correction-hidden';
       const overlayKey = amapOverlayKey(selectedDevice.device_id, semantics);
       if (amapInstance && overlayKey === amapOverlayCacheKey) {
+        amapLiveMap.dataset.state = hasTrustedPoint ? 'ready' : 'ready-empty';
+        amapLiveMap.style.display = 'block';
+        amapLiveMap.style.visibility = 'visible';
+        setLocalMapVisibility(false);
         setAmapStatus(
           hasTrustedPoint
             ? `${semantics.label} / WGS84 converted to GCJ-02 / ${semantics.points.length} point(s)`
