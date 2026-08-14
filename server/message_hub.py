@@ -63,11 +63,9 @@ AMAP_PROXY_MAX_RESPONSE_BYTES = 4_000_000
 AMAP_PROXY_MAX_QUERY_BYTES = 8192
 AMAP_PROXY_READ_CHUNK_BYTES = 64 * 1024
 AMAP_PROXY_MAX_CONCURRENCY = 4
-AMAP_PROXY_TILE_MAX_CONCURRENCY = 16
-AMAP_PROXY_TILE_PATH = "/v3/vectormap"
 AMAP_PROXY_ALLOWED_HOSTS = frozenset({"restapi.amap.com", "webapi.amap.com"})
 AMAP_PROXY_ALLOWED_PATH = re.compile(
-    r"^(?:/v3/assistant/coordinate/convert|/v3/log/init|/v3/vectormap|/v4/map/styles)$"
+    r"^(?:/v3/assistant/coordinate/convert|/v3/log/init|/v4/map/styles)$"
 )
 AMAP_PROXY_JSONP_PATHS = frozenset(
     {"/v3/assistant/coordinate/convert", "/v3/log/init"}
@@ -1447,7 +1445,6 @@ def make_handler(
         else None
     )
     amap_proxy_slots = threading.BoundedSemaphore(AMAP_PROXY_MAX_CONCURRENCY)
-    amap_proxy_tile_slots = threading.BoundedSemaphore(AMAP_PROXY_TILE_MAX_CONCURRENCY)
 
     class MessageHubHandler(BaseHTTPRequestHandler):
         server_version = "EgoLinkMessageHub/0.1"
@@ -1864,8 +1861,7 @@ def make_handler(
         def proxy_amap(self, path: str, raw_query: str, api_key: str, security_code: str) -> None:
             upstream_host, upstream_target = amap_proxy_target(path, raw_query, api_key, security_code)
             upstream_path = upstream_target.partition("?")[0]
-            proxy_slots = amap_proxy_tile_slots if upstream_path == AMAP_PROXY_TILE_PATH else amap_proxy_slots
-            if not proxy_slots.acquire(blocking=False):
+            if not amap_proxy_slots.acquire(blocking=False):
                 raise MessageHubError("amap_proxy_busy", "map provider proxy is busy", status=503)
             deadline = time.monotonic() + AMAP_PROXY_TOTAL_DEADLINE_S
             connection: http.client.HTTPSConnection | None = None
@@ -1932,7 +1928,7 @@ def make_handler(
             finally:
                 if connection is not None:
                     connection.close()
-                proxy_slots.release()
+                amap_proxy_slots.release()
 
         def log_message(self, format: str, *args: Any) -> None:
             return
@@ -8329,8 +8325,7 @@ def render_d2_reference_capture() -> str:
 def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     safe_amap_key = amap_js_api_key if amap_js_api_key and AMAP_CREDENTIAL_PATTERN.fullmatch(amap_js_api_key) else ""
     amap_bootstrap = (
-        "<script>window._AMapSecurityConfig={serviceHost:window.location.origin+'/_AMapService'};</script>\n"
-        f'<script src="https://webapi.amap.com/loader.js" data-egolink-amap-loader="v2" data-egolink-amap-key="{safe_amap_key}"></script>'
+        "<script>window._AMapSecurityConfig={serviceHost:window.location.origin+'/_AMapService'};</script>"
         if safe_amap_key
         else '<meta name="egolink-amap-status" content="not-configured" />'
     )
@@ -8713,7 +8708,10 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     const D2_REFERENCE_POINT_LIMIT = 16;
     const DASHBOARD_DEVICE_KEY = 'egolink.dashboard.device.v1';
     const AMAP_JS_API_KEY = '__AMAP_JS_API_KEY__';
+    const AMAP_JS_API_CALLBACK = '__egolinkAmapJsApiReady';
+    const AMAP_JS_API_SCRIPT_ID = 'egolink-amap-js-api';
     const AMAP_EMPTY_VIEW_CENTER = Object.freeze([104, 35]);
+    const AMAP_SDK_LOAD_TIMEOUT_MS = 30000;
     const AMAP_MAP_READY_TIMEOUT_MS = 30000;
     let selectedDashboardDeviceId = localStorage.getItem(DASHBOARD_DEVICE_KEY) || '';
     let refreshInFlight = false;
@@ -9833,13 +9831,56 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       if (!AMAP_JS_API_KEY) return Promise.reject(new Error('provider not configured'));
       if (amapLoadPromise) return amapLoadPromise;
       if (amapMapReady && amapNamespace && amapInstance) return Promise.resolve(amapNamespace);
-      if (!window.AMapLoader || typeof window.AMapLoader.load !== 'function') {
-        amapLiveShell.dataset.lifecycle = 'failed';
-        amapLoadPromise = Promise.reject(new Error('provider loader unavailable'));
-        return amapLoadPromise;
-      }
       amapLiveShell.dataset.lifecycle = 'sdk-loading';
-      amapLoadPromise = window.AMapLoader.load({key: AMAP_JS_API_KEY, version: '2.0'})
+      amapLoadPromise = new Promise((resolve, reject) => {
+        let sdkTimeout = null;
+        let script = null;
+        let settled = false;
+        const cleanup = () => {
+          if (sdkTimeout !== null) window.clearTimeout(sdkTimeout);
+          if (script) script.onerror = null;
+        };
+        const failSdkLoad = error => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          // A late provider response may still call the declared callback.
+          // Keep a harmless terminal callback instead of causing a new global
+          // TypeError after this page has already fallen back to the local map.
+          window[AMAP_JS_API_CALLBACK] = () => {};
+          reject(error);
+        };
+        window[AMAP_JS_API_CALLBACK] = providerError => {
+          if (settled) return;
+          if (providerError || !window.AMap || typeof window.AMap.Map !== 'function') {
+            failSdkLoad(new Error('AMap JS API unavailable'));
+            return;
+          }
+          settled = true;
+          cleanup();
+          const AMap = window.AMap;
+          try { delete window[AMAP_JS_API_CALLBACK]; } catch (_cleanupError) {
+            window[AMAP_JS_API_CALLBACK] = undefined;
+          }
+          resolve(AMap);
+        };
+        if (window.AMap || document.getElementById(AMAP_JS_API_SCRIPT_ID)) {
+          failSdkLoad(new Error('AMap JS API load state conflict'));
+          return;
+        }
+        script = document.createElement('script');
+        script.id = AMAP_JS_API_SCRIPT_ID;
+        script.async = true;
+        script.charset = 'utf-8';
+        script.dataset.egolinkAmapJsapi = 'v2';
+        script.onerror = () => failSdkLoad(new Error('AMap JS API request failed'));
+        script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(AMAP_JS_API_KEY)}&callback=${encodeURIComponent(AMAP_JS_API_CALLBACK)}`;
+        sdkTimeout = window.setTimeout(
+          () => failSdkLoad(new Error('AMap JS API load timeout')),
+          AMAP_SDK_LOAD_TIMEOUT_MS,
+        );
+        document.head.appendChild(script);
+      })
         .then(AMap => new Promise((resolve, reject) => {
           let instance = null;
           let readyTimeout = null;
@@ -10071,7 +10112,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           anchor: 'center',
         }));
         amapInstance.add(amapOverlays);
-        amapInstance.setFitView(amapOverlays, false, [44, 44, 44, 44], 17);
+        amapInstance.setFitView(amapOverlays, false, [44, 44, 44, 44], 16);
         amapOverlayCacheKey = overlayKey;
         amapOverlayFailureKey = '';
         amapLiveMap.dataset.state = 'ready';

@@ -2623,8 +2623,12 @@ class MessageHubDashboardTests(unittest.TestCase):
                 os.environ[message_hub.AMAP_SECURITY_JS_CODE_ENV] = previous
 
         self.assertIn(public_key, html)
+        self.assertEqual(html.count(public_key), 1)
         self.assertIn("window._AMapSecurityConfig", html)
         self.assertIn("window.location.origin+'/_AMapService'", html)
+        self.assertNotIn("https://webapi.amap.com/loader.js", html)
+        self.assertNotIn("AMapLoader", html)
+        self.assertNotIn('<script src="https://webapi.amap.com/maps', html)
         self.assertNotIn(security_code, html)
         self.assertNotIn(message_hub.AMAP_SECURITY_JS_CODE_ENV, html)
 
@@ -2665,7 +2669,10 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("amap-stale-marker", html)
         self.assertIn("point.amap_eligible === true && point.coordinate_contract === 'wgs84'", html)
         self.assertIn("Pre-correction location hidden until new verified GNSS fix", html)
+        self.assertIn("const AMAP_JS_API_CALLBACK = '__egolinkAmapJsApiReady'", html)
+        self.assertIn("const AMAP_JS_API_SCRIPT_ID = 'egolink-amap-js-api'", html)
         self.assertIn("const AMAP_EMPTY_VIEW_CENTER = Object.freeze([104, 35])", html)
+        self.assertIn("const AMAP_SDK_LOAD_TIMEOUT_MS = 30000", html)
         self.assertIn("const AMAP_MAP_READY_TIMEOUT_MS = 30000", html)
         self.assertIn("center: AMAP_EMPTY_VIEW_CENTER", html)
         self.assertIn("amapInstance.setZoomAndCenter(4, AMAP_EMPTY_VIEW_CENTER)", html)
@@ -2681,7 +2688,20 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("amapLiveShell.dataset.lifecycle = 'failed'", html)
         self.assertIn("AMap map ready timeout", html)
         self.assertIn("if (amapMapReady && amapNamespace && amapInstance)", html)
-        self.assertIn("amapLoadPromise = Promise.reject(new Error('provider loader unavailable'))", html)
+        self.assertIn("window[AMAP_JS_API_CALLBACK] = providerError =>", html)
+        self.assertIn("script = document.createElement('script')", html)
+        self.assertIn("script.id = AMAP_JS_API_SCRIPT_ID", html)
+        self.assertIn("script.async = true", html)
+        self.assertIn("script.dataset.egolinkAmapJsapi = 'v2'", html)
+        self.assertIn("script.onerror = () => failSdkLoad", html)
+        self.assertIn("https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(AMAP_JS_API_KEY)}&callback=${encodeURIComponent(AMAP_JS_API_CALLBACK)}", html)
+        self.assertIn("AMap JS API load timeout", html)
+        self.assertIn("document.head.appendChild(script)", html)
+        self.assertIn("window[AMAP_JS_API_CALLBACK] = () => {}", html)
+        self.assertIn("amapInstance.setFitView(amapOverlays, false, [44, 44, 44, 44], 16)", html)
+        self.assertNotIn("AMapLoader", html)
+        self.assertNotIn("loader.js", html)
+        self.assertNotIn("/_AMapService/v3/vectormap", html)
         self.assertNotIn("function resetAmapLoadState()", html)
         self.assertNotIn("amapInstance.destroy()", html)
         load_state = html[
@@ -2693,6 +2713,16 @@ class MessageHubDashboardTests(unittest.TestCase):
             load_state.index("if (amapLoadPromise) return amapLoadPromise"),
             load_state.index("if (amapMapReady && amapNamespace && amapInstance)"),
         )
+        self.assertEqual(load_state.count("document.head.appendChild(script)"), 1)
+        self.assertLess(
+            load_state.index("window[AMAP_JS_API_CALLBACK] = providerError =>"),
+            load_state.index("script = document.createElement('script')"),
+        )
+        self.assertLess(
+            load_state.index("window[AMAP_JS_API_CALLBACK] = providerError =>"),
+            load_state.index("document.head.appendChild(script)"),
+        )
+        self.assertIn("document.getElementById(AMAP_JS_API_SCRIPT_ID)", load_state)
         complete_handler = load_state[
             load_state.index("const handleComplete = () =>") : load_state.index(
                 "const failBeforeReady = error =>"
@@ -2704,6 +2734,18 @@ class MessageHubDashboardTests(unittest.TestCase):
             complete_handler.index("resolve(AMap)"),
         )
         self.assertNotIn("amapLoadPromise = null", load_state)
+        refresh_start = html.index("async function refresh()")
+        refresh_state = html[
+            refresh_start : html.index("    setInterval(refresh, 3000)", refresh_start)
+        ]
+        self.assertLess(
+            refresh_state.index("await fetch('/api/state'"),
+            refresh_state.index("lastSuccessfulDashboardState = data"),
+        )
+        self.assertLess(
+            refresh_state.index("lastSuccessfulDashboardState = data"),
+            refresh_state.index("renderSelectedDevicePanels()"),
+        )
         render_state = html[
             html.index("async function renderAmapForSelectedDevice") : html.index(
                 "function d1LinkPanel"
