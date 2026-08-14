@@ -6,7 +6,7 @@ priority: high
 requires_hardware: false
 serves_demo: D2-D5
 created: 2026-08-12
-last_updated: 2026-08-12
+last_updated: 2026-08-14
 
 context:
   - docs/AGENTS.md
@@ -69,6 +69,9 @@ of Git.
 - [x] A clean committed build is backed up and deployed to the existing VPS,
       and passes health/auth/map-marker/provider smoke checks; failure restores
       code/unit only and does not restore the live database.
+- [ ] A post-`f46b052` authenticated browser session visibly renders provider
+      tiles and the correct current/last-known marker semantics across at least
+      two refresh cycles without a new console error.
 
 # Validation Commands
 
@@ -101,6 +104,34 @@ git diff --check
   diff checks passed. The live Chrome review confirmed the field-first layout,
   stable selected device, authenticated refresh, collapsed diagnostics, and
   explicit pre-correction-coordinate warning.
+- Follow-up repair: commit `f46b052` corrected the deployed proxy response for
+  AMap coordinate-conversion JSONP. The provider returned executable
+  `callback(...)` content, but the proxy had labelled it `application/json`
+  while also sending `X-Content-Type-Options: nosniff`; browsers therefore
+  rejected the conversion script and repeatedly exposed the local fallback.
+  The repair upgrades only canonical AMap JSONP responses with one bounded,
+  syntactically valid callback and a safe upstream media type to
+  `application/javascript`. JSON without a callback remains JSON, HTML and
+  malformed callbacks fail closed, and `no-store`, `nosniff`, signed proxy
+  cookies, fixed upstream hosts, and exact path allowlists remain unchanged.
+  It also makes half-initialized maps retryable and de-duplicates identical
+  conversion and overlay work across the three-second Dashboard refresh.
+- Follow-up validation: Dashboard/server tests passed `98/98`; full repository
+  verification passed `654/654`; `py_compile`, context lint, and diff checks
+  passed. The committed source was backed up and deployed once from
+  `/var/backups/egolink/web004-mapfix-20260814T092722Z`; local and deployed
+  `server/message_hub.py` both had SHA-256
+  `599c504a4c0c5957858e80edf650315d868de7f7995efde4b5eecc0cd88d38a1`.
+  The root-only snapshot passed its SHA-256 manifest check and its SQLite copy
+  passed read-only `PRAGMA quick_check=ok`.
+  The service remained active/running with zero restarts, health returned 200,
+  and the state API retained its 401/200 unauthenticated/authenticated boundary.
+  A 2026-08-14 17:43 CST read-only smoke replayed actual post-deploy SDK
+  requests: five initialization requests and one coordinate-conversion request
+  returned HTTP 200, `application/javascript`, `nosniff`, `no-store`, valid
+  callback JSONP, and provider success (`status=1`, `infocode=10000`). Message
+  Hub and Nginx remained active, `nginx -t` passed, and no application- or
+  Nginx-related warning/error appeared in the bounded 15-minute review.
 - Deployment result: a pre-release SQLite-consistent database backup plus
   reports/code/unit/environment snapshots passed hash and archive checks at
   `/var/backups/egolink/web004-20260812-211402`. The Message Hub was restarted
@@ -111,16 +142,19 @@ git diff --check
   restarts or error-journal entries; health was HTTP 200, unauthenticated state
   was 401, authenticated state was 200, and the signed same-origin coordinate
   proxy returned provider `OK` with `no-store` and `nosniff`.
-- Remaining risks: the current corrected firmware has not produced a new
-  verified GNSS fix. The deployed view therefore hides all pre-correction and
-  lineage-less coordinates instead of drawing a misleading marker; the first
-  real AMap point and bounded trajectory still require a new FW-006 fix. The
-  human-facing Dashboard is now available at `https://ego.example.invalid/`; the
-  public port 8790 remains an HTTP firmware-compatibility endpoint, so this is
-  still not a production security claim. AMap is a third-party script and
-  receives only eligible coordinates used for the provider view; production
-  still needs ingress migration/origin isolation, consent enforcement, and
-  provider-console quota/origin restrictions.
+- Field evidence after the original deployment: corrected firmware
+  `0.1.0-fw005-gnss-correctness` produced 120 eligible fixed reports during a
+  bounded 2026-08-14 field export. The map may therefore render a bounded
+  verified trajectory (at most 24 points). When the newest report is `no_fix`,
+  the most recent trusted point is explicitly `Predicted / Last known`, never a
+  current GNSS fix. No private coordinate value is copied into this packet.
+- Remaining risks: final operator-side visual confirmation should use a hard
+  refresh of `https://ego.example.invalid/`; an already-open tab can retain the
+  pre-repair page. The public port 8790 remains an HTTP firmware-compatibility
+  endpoint, so this is still not a production security claim. AMap is a
+  third-party script and receives only eligible coordinates used for the
+  provider view; production still needs ingress migration/origin isolation,
+  consent enforcement, and provider-console quota/origin restrictions.
 
 # Builder Prompt
 

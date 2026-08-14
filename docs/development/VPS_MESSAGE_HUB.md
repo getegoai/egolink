@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-12
+last_verified: 2026-08-14
 verified_by: codex
 ---
 
@@ -110,6 +110,15 @@ configuration must leave the local coordinate fallback usable. SIM7670 GNSS
 evidence remains WGS-84 in storage and APIs; the browser converts a copy from
 `gps` to GCJ-02 with AMap's coordinate-conversion API before drawing it and
 must not overwrite the source evidence.
+
+AMap coordinate conversion and initialization use JSONP. The proxy labels a
+response as `application/javascript` only for a canonical allowlisted endpoint
+with exactly one bounded, syntactically valid callback and a safe upstream
+media type. A request without a callback remains JSON; malformed or repeated
+callbacks and unexpected HTML fail closed. Keep the
+`X-Content-Type-Options: nosniff` and `Cache-Control: no-store` response headers
+on coordinate responses so a future MIME regression cannot be hidden by
+permissive browser sniffing or cached location data.
 
 AMap is third-party JavaScript running in the authenticated Dashboard page.
 When a verified point is rendered, AMap receives the bounded coordinates used
