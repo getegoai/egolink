@@ -14,12 +14,17 @@ from pc_simulator import protocol
 from server import message_hub
 
 
-def post_json(base_url: str, path: str, payload: dict[str, object]) -> dict:
+def post_json(
+    base_url: str,
+    path: str,
+    payload: dict[str, object],
+    headers: dict[str, str] | None = None,
+) -> dict:
     body = json.dumps(payload).encode("utf-8")
     req = request.Request(
         base_url + path,
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", **(headers or {})},
         method="POST",
     )
     with request.urlopen(req, timeout=5) as response:
@@ -49,7 +54,352 @@ def get_bytes(base_url: str, path: str) -> tuple[bytes, str]:
         return response.read(), response.headers.get("Content-Type", "")
 
 
+def insert_stored_location(
+    store: message_hub.MessageHubStore,
+    *,
+    device_id: str = "ego-link-history",
+    seq: int,
+    received_at: str,
+    event_type: str = "location_report",
+    fw_version: str = "0.1.0-fw005-gnss-correctness",
+    fix: bool = True,
+    lat: float | None = 22.5,
+    lon: float | None = 114.0,
+    extra: dict[str, object] | None = None,
+) -> int:
+    payload: dict[str, object] = {
+        "message_type": "event",
+        "event_type": event_type,
+        "device_id": device_id,
+        "fw_version": fw_version,
+        "seq": seq,
+        "ts": received_at,
+        "server_received_at": received_at,
+        "fix": fix,
+    }
+    if lat is not None:
+        payload["lat"] = lat
+    if lon is not None:
+        payload["lon"] = lon
+    payload.update(extra or {})
+    with store.connection() as db:
+        cursor = db.execute(
+            """
+            INSERT INTO messages (
+                device_id, message_type, event_type, seq, ts,
+                server_received_at, payload_json
+            )
+            VALUES (?, 'event', ?, ?, ?, ?, ?)
+            """,
+            (
+                device_id,
+                event_type,
+                seq,
+                received_at,
+                received_at,
+                json.dumps(payload, ensure_ascii=False),
+            ),
+        )
+        return int(cursor.lastrowid)
+
+
 class MessageHubStoreTests(unittest.TestCase):
+    def test_location_history_lists_all_records_but_only_exact_trusted_firmware_is_selectable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.register_device({"device_id": "ego-link-history", "fw_version": "unit"})
+            insert_stored_location(
+                store,
+                seq=1,
+                received_at="2026-08-15T00:00:01+00:00",
+                fw_version="0.1.0-fw005-gnss-correctness",
+            )
+            insert_stored_location(
+                store,
+                seq=2,
+                received_at="2026-08-15T00:00:02+00:00",
+                fw_version="0.1.0-fw007-lte-wifi-failover",
+            )
+            insert_stored_location(
+                store,
+                seq=3,
+                received_at="2026-08-15T00:00:03+00:00",
+                fw_version="0.1.0-fw007-lte-wifi-failover-extra",
+                extra={"private_marker": "must-not-leak"},
+            )
+            insert_stored_location(
+                store,
+                seq=4,
+                received_at="2026-08-15T00:00:04+00:00",
+                fw_version="0.1.0-fw007-lte-wifi-failover",
+                fix=False,
+            )
+            insert_stored_location(
+                store,
+                seq=5,
+                received_at="2026-08-15T00:00:05+00:00",
+                event_type="location_observation",
+                fw_version="0.1.0-fw007-lte-wifi-failover",
+            )
+
+            result = store.search_location_history("ego-link-history", {"page_size": 10})
+
+        self.assertEqual([record["seq"] for record in result["locations"]], [5, 4, 3, 2, 1])
+        by_seq = {record["seq"]: record for record in result["locations"]}
+        self.assertTrue(by_seq[1]["selectable"])
+        self.assertTrue(by_seq[2]["selectable"])
+        self.assertFalse(by_seq[3]["selectable"])
+        self.assertFalse(by_seq[4]["selectable"])
+        self.assertFalse(by_seq[5]["selectable"])
+        self.assertEqual(by_seq[3]["trust_reason"], "firmware_parser_not_allowlisted")
+        for seq in (3, 4, 5):
+            self.assertNotIn("lat", by_seq[seq])
+            self.assertNotIn("lon", by_seq[seq])
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("private_marker", serialized)
+        self.assertNotIn("must-not-leak", serialized)
+        self.assertNotIn("payload_json", serialized)
+        self.assertTrue(result["page"]["snapshot_frozen"])
+        self.assertTrue(result["page"]["exhausted"])
+
+    def test_location_history_snapshot_cursor_is_stable_across_new_ingest_and_previous_page(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.register_device({"device_id": "ego-link-history", "fw_version": "unit"})
+            original_ids = [
+                insert_stored_location(
+                    store,
+                    seq=seq,
+                    received_at="2026-08-15T00:00:00+00:00",
+                )
+                for seq in range(1, 6)
+            ]
+            first = store.search_location_history("ego-link-history", {"page_size": 2})
+            inserted_after_snapshot = insert_stored_location(
+                store,
+                seq=99,
+                received_at="2026-08-15T00:00:00+00:00",
+            )
+            second = store.search_location_history(
+                "ego-link-history",
+                {"page_size": 2, "cursor": first["page"]["next_cursor"]},
+            )
+            third = store.search_location_history(
+                "ego-link-history",
+                {"page_size": 2, "cursor": second["page"]["next_cursor"]},
+            )
+            previous = store.search_location_history(
+                "ego-link-history",
+                {"page_size": 2, "cursor": first["page"]["current_cursor"]},
+            )
+
+        visited_ids = [
+            int(record["record_id"].removeprefix("location-"))
+            for page in (first, second, third)
+            for record in page["locations"]
+        ]
+        self.assertEqual(visited_ids, list(reversed(original_ids)))
+        self.assertEqual(len(visited_ids), len(set(visited_ids)))
+        self.assertNotIn(inserted_after_snapshot, visited_ids)
+        self.assertEqual(previous["locations"], first["locations"])
+        self.assertTrue(third["page"]["exhausted"])
+        self.assertEqual([record["seq"] for record in first["locations"]], [5, 4])
+
+    def test_location_history_sparse_search_advances_after_bounded_location_row_scan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.register_device({"device_id": "ego-link-history", "fw_version": "unit"})
+            insert_stored_location(
+                store,
+                seq=1,
+                received_at="2026-08-15T00:00:01+00:00",
+                event_type="location_report",
+            )
+            rows = []
+            for seq in range(2, message_hub.LOCATION_HISTORY_SCAN_LIMIT + 4):
+                received_at = f"2026-08-15T00:{(seq // 60) % 60:02d}:{seq % 60:02d}+00:00"
+                payload = {
+                    "message_type": "event",
+                    "event_type": "location_observation",
+                    "device_id": "ego-link-history",
+                    "fw_version": "unit",
+                    "seq": seq,
+                    "ts": received_at,
+                    "server_received_at": received_at,
+                    "fix": False,
+                }
+                rows.append(
+                    (
+                        "ego-link-history",
+                        "location_observation",
+                        seq,
+                        received_at,
+                        received_at,
+                        json.dumps(payload),
+                    )
+                )
+            with store.connection() as db:
+                db.executemany(
+                    """
+                    INSERT INTO messages (
+                        device_id, message_type, event_type, seq, ts,
+                        server_received_at, payload_json
+                    ) VALUES (?, 'event', ?, ?, ?, ?, ?)
+                    """,
+                    rows,
+                )
+            first = store.search_location_history(
+                "ego-link-history",
+                {"page_size": 10, "event_type": "location_report"},
+            )
+            second = store.search_location_history(
+                "ego-link-history",
+                {
+                    "page_size": 10,
+                    "event_type": "location_report",
+                    "cursor": first["page"]["next_cursor"],
+                },
+            )
+
+        self.assertEqual(first["locations"], [])
+        self.assertEqual(first["page"]["inspected_count"], message_hub.LOCATION_HISTORY_SCAN_LIMIT)
+        self.assertFalse(first["page"]["exhausted"])
+        self.assertIsNotNone(first["page"]["next_cursor"])
+        self.assertEqual([record["seq"] for record in second["locations"]], [1])
+        self.assertTrue(second["page"]["exhausted"])
+
+    def test_location_history_rejects_unbounded_or_mismatched_search_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.register_device({"device_id": "ego-link-history", "fw_version": "unit"})
+            insert_stored_location(store, seq=1, received_at="2026-08-15T00:00:01+00:00")
+            first = store.search_location_history("ego-link-history", {"page_size": 1})
+            normalized = message_hub.normalize_location_history_search({"page_size": 1})
+            digest = message_hub.location_history_filter_digest("ego-link-history", normalized)
+            oversized_integer_cursor = message_hub.encode_location_history_cursor(
+                10**80,
+                10**80,
+                digest,
+            )
+
+            invalid_payloads = (
+                {"page_size": 0},
+                {"page_size": 101},
+                {"page_size": 1.5},
+                {"seq": 1.5},
+                {"seq": ""},
+                {"event_type": "arbitrary"},
+                {"event_type": False},
+                {"trust": "maybe"},
+                {"trust": 0},
+                {"lat": 22.5},
+                {"received_from": "not-a-time"},
+                {"received_from": ""},
+                {"cursor": ""},
+                {"page_size": 1, "cursor": oversized_integer_cursor},
+                {
+                    "page_size": 1,
+                    "event_type": "location_report",
+                    "cursor": first["page"]["current_cursor"],
+                },
+            )
+            errors = []
+            for payload in invalid_payloads:
+                with self.assertRaises(message_hub.MessageHubError) as raised:
+                    store.search_location_history("ego-link-history", payload)
+                errors.append(raised.exception.code)
+
+        self.assertIn("invalid_location_history_page_size", errors)
+        self.assertIn("invalid_location_history_seq", errors)
+        self.assertIn("location_history_unknown_field", errors)
+        self.assertIn("invalid_location_history_cursor", errors)
+
+    def test_location_history_bounds_payload_metadata_and_skips_oversized_payload_content(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.register_device({"device_id": "ego-link-history", "fw_version": "unit"})
+            insert_stored_location(
+                store,
+                seq=1,
+                received_at="2026-08-15T00:00:01+00:00",
+                fw_version="<script>unsafe()</script>" + "x" * 500,
+                lat=None,
+                lon=None,
+                extra={"location_reason": "private-" + "y" * 5000},
+            )
+            insert_stored_location(
+                store,
+                seq=2,
+                received_at="2026-08-15T00:00:02+00:00",
+                extra={"oversized_private_blob": "must-not-leak-" + "z" * 70_000},
+            )
+
+            result = store.search_location_history("ego-link-history", {"page_size": 10})
+
+        by_seq = {record["seq"]: record for record in result["locations"]}
+        self.assertEqual(by_seq[2]["trust_reason"], "stored_payload_too_large")
+        self.assertFalse(by_seq[2]["selectable"])
+        self.assertEqual(by_seq[1]["trust_reason"], "coordinate_fields_missing")
+        self.assertLessEqual(len(by_seq[1]["fw_version"]), 96)
+        self.assertLessEqual(len(by_seq[1]["device_ts"]), 64)
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("must-not-leak", serialized)
+        self.assertNotIn("oversized_private_blob", serialized)
+        self.assertNotIn("private-yyyy", serialized)
+        self.assertLess(len(serialized.encode("utf-8")), 20_000)
+
+    def test_location_history_lists_invalid_stored_receive_time_without_time_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.register_device({"device_id": "ego-link-history", "fw_version": "unit"})
+            insert_stored_location(
+                store,
+                seq=1,
+                received_at="invalid-migrated-time",
+            )
+
+            unfiltered = store.search_location_history(
+                "ego-link-history",
+                {"page_size": 10},
+            )
+            time_filtered = store.search_location_history(
+                "ego-link-history",
+                {
+                    "page_size": 10,
+                    "received_from": "2026-08-15T00:00:00+00:00",
+                },
+            )
+
+        self.assertEqual([record["seq"] for record in unfiltered["locations"]], [1])
+        self.assertEqual(
+            unfiltered["locations"][0]["server_received_at"],
+            "invalid-migrated-time",
+        )
+        self.assertEqual(time_filtered["locations"], [])
+        self.assertTrue(time_filtered["page"]["exhausted"])
+
+    def test_location_history_does_not_echo_unbounded_dynamic_sqlite_seq(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.register_device({"device_id": "ego-link-history", "fw_version": "unit"})
+            long_seq = "private-seq-" + "x" * 100_000
+            insert_stored_location(
+                store,
+                seq=long_seq,  # type: ignore[arg-type]
+                received_at="2026-08-15T00:00:01+00:00",
+                extra={"seq": long_seq},
+            )
+
+            result = store.search_location_history(
+                "ego-link-history",
+                {"page_size": 10},
+            )
+
+        self.assertEqual(result["locations"][0]["seq"], None)
+        serialized = json.dumps(result, ensure_ascii=False)
+        self.assertNotIn("private-seq", serialized)
+        self.assertLess(len(serialized.encode("utf-8")), 20_000)
+
     def test_store_runs_register_telemetry_command_ack_loop(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
@@ -3629,6 +3979,79 @@ class MessageHubHttpTests(unittest.TestCase):
         self.assertEqual(state["training_job_plan"]["reason"], "no_training_job_plan")
         self.assertIn("synthetic_training_chain", state)
         self.assertEqual(state["synthetic_training_chain"]["reason"], "no_synthetic_training_chain")
+
+    def test_location_history_post_requires_auth_rejects_query_strings_and_never_caches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            store.register_device({"device_id": "ego-link-history", "fw_version": "unit"})
+            insert_stored_location(store, seq=1, received_at="2026-08-15T00:00:01+00:00")
+            server = ThreadingHTTPServer(
+                ("127.0.0.1", 0),
+                message_hub.make_handler(store, token="secret"),
+            )
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_port}"
+            path = "/api/v1/devices/ego-link-history/locations/search"
+            body = json.dumps({"page_size": 10}).encode("utf-8")
+            try:
+                with self.assertRaises(error.HTTPError) as unauthorized:
+                    request.urlopen(
+                        request.Request(
+                            base_url + path,
+                            data=body,
+                            headers={"Content-Type": "application/json"},
+                            method="POST",
+                        ),
+                        timeout=5,
+                    )
+                unauthorized_body = json.loads(unauthorized.exception.read().decode("utf-8"))
+                unauthorized_cache = unauthorized.exception.headers.get("Cache-Control")
+                unauthorized.exception.close()
+
+                with self.assertRaises(error.HTTPError) as query_string:
+                    request.urlopen(
+                        request.Request(
+                            base_url + path + "?lat=private-coordinate",
+                            data=body,
+                            headers={
+                                "Authorization": "Bearer secret",
+                                "Content-Type": "application/json",
+                            },
+                            method="POST",
+                        ),
+                        timeout=5,
+                    )
+                query_body = json.loads(query_string.exception.read().decode("utf-8"))
+                query_cache = query_string.exception.headers.get("Cache-Control")
+                query_string.exception.close()
+
+                success_request = request.Request(
+                    base_url + path,
+                    data=body,
+                    headers={
+                        "Authorization": "Bearer secret",
+                        "Content-Type": "application/json",
+                    },
+                    method="POST",
+                )
+                with request.urlopen(success_request, timeout=5) as response:
+                    success_body = json.loads(response.read().decode("utf-8"))
+                    success_cache = response.headers.get("Cache-Control")
+            finally:
+                server.shutdown()
+                thread.join(timeout=5)
+                server.server_close()
+
+        self.assertEqual(unauthorized.exception.code, 401)
+        self.assertEqual(unauthorized_body["error"], "unauthorized")
+        self.assertEqual(unauthorized_cache, "no-store")
+        self.assertEqual(query_string.exception.code, 400)
+        self.assertEqual(query_body["error"], "location_history_query_string_forbidden")
+        self.assertNotIn("private-coordinate", json.dumps(query_body))
+        self.assertEqual(query_cache, "no-store")
+        self.assertTrue(success_body["ok"])
+        self.assertEqual(success_cache, "no-store")
 
     def test_http_raw_command_poll_and_ack_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

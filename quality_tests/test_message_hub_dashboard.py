@@ -86,7 +86,9 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("mapWithLocalReferences", html)
         self.assertIn("d1MapTrack(points, referencePoints, positionPoint, positionSemantics.kind)", html)
         self.assertNotIn("/api/v1/d2-reference", html)
-        self.assertNotIn("method: 'POST'", html)
+        manifest_start = html.index("d2ManifestFile.addEventListener")
+        manifest_end = html.index("clearD2References.addEventListener", manifest_start)
+        self.assertNotIn("method: 'POST'", html[manifest_start:manifest_end])
 
     def test_d2_reference_capture_is_mobile_local_only_and_manifest_compatible(self) -> None:
         html = message_hub.render_d2_reference_capture()
@@ -350,6 +352,159 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("const convertedSelected = converted.filter", render_function)
         self.assertIn("const convertedPosition = converted.find", render_function)
         self.assertNotIn("localStorage", render_function)
+
+    def test_dashboard_exposes_bounded_all_location_history_search_and_snapshot_paging(self) -> None:
+        html = message_hub.render_dashboard(amap_js_api_key="public_JS_key_1234")
+
+        for marker in (
+            'id="locationHistoryBrowser"',
+            'id="locationHistoryForm"',
+            'id="historyReceivedFrom"',
+            'id="historyReceivedTo"',
+            'id="historySeq"',
+            'id="historyEventType"',
+            'id="historyTrust"',
+            'id="historyPageSize"',
+            'id="previousLocationHistory"',
+            'id="nextLocationHistory"',
+            'id="locationHistoryRows"',
+            "全部定位历史",
+            "未定位或坐标合同未验证的记录也会列出，但不能勾选",
+        ):
+            self.assertIn(marker, html)
+        self.assertIn("const locationHistoryByDevice = new Map()", html)
+        self.assertIn("selectedRecords: new Map()", html)
+        self.assertIn("requestGeneration: 0", html)
+        self.assertNotIn("locationHistoryRequestGeneration", html)
+        self.assertIn("page.current_cursor", html)
+        self.assertIn("cursorStack: [...state.cursorStack, state.cursor]", html)
+        self.assertIn("state.cursorStack[state.cursorStack.length - 1]", html)
+        self.assertIn("locationHistorySelectedPoints(selectedDevice.device_id)", html)
+        self.assertIn("boundedTrajectorySelection(\n        quickSelectedPoints,\n        historySelectedRecords", html)
+        self.assertIn("history_record_id: record.record_id", html)
+
+        request_start = html.index("async function loadLocationHistory")
+        request_end = html.index("function renderSelectedDevicePanels", request_start)
+        request_function = html[request_start:request_end]
+        self.assertIn("/locations/search`", request_function)
+        self.assertIn("method: 'POST'", request_function)
+        self.assertIn("body: JSON.stringify(locationHistoryRequestBody", request_function)
+        self.assertIn("cache: 'no-store'", request_function)
+        self.assertIn("generation !== state.requestGeneration", request_function)
+        self.assertNotIn("if (state.loading) return", request_function)
+        self.assertLess(
+            request_function.index("const generation = ++state.requestGeneration"),
+            request_function.index("state.loading = true"),
+        )
+        self.assertNotIn("?lat", request_function)
+        self.assertNotIn("localStorage", request_function)
+
+        body_start = html.index("function locationHistoryRequestBody")
+        body_end = html.index("function locationHistoryPoint", body_start)
+        body_function = html[body_start:body_end]
+        self.assertNotIn("lat", body_function)
+        self.assertNotIn("lon", body_function)
+        self.assertNotIn("query", body_function)
+
+    def test_dashboard_history_selection_is_record_stable_escaped_and_render_bounded(self) -> None:
+        html = message_hub.render_dashboard(amap_js_api_key="public_JS_key_1234")
+
+        render_start = html.index("function renderLocationHistory")
+        render_end = html.index("async function loadLocationHistory", render_start)
+        history_render = html[render_start:render_end]
+        self.assertIn("state.selectedRecords.has(record.record_id)", history_render)
+        self.assertIn("state.selectedRecords.set(record.record_id, point)", history_render)
+        self.assertIn("state.selectedRecords.delete(record.record_id)", history_render)
+        self.assertIn("data-history-record-id=", history_render)
+        self.assertIn("escapeHtml(record.record_id)", history_render)
+        self.assertIn("escapeHtml(locationHistoryEventLabel(record.event_type))", history_render)
+        self.assertIn("escapeHtml(record.seq ?? '未知')", history_render)
+        self.assertIn("escapeHtml(trustLabel)", history_render)
+        self.assertIn("escapeHtml(record.fw_version || 'unknown')", history_render)
+        self.assertIn("const disabled = point ? '' : ' disabled'", history_render)
+        self.assertIn("projectedHistory.set(record.record_id, point)", history_render)
+        self.assertIn("projectedHistory.size > TRAJECTORY_RENDER_POINT_LIMIT", history_render)
+
+        ordering_start = html.index("function chronologicalTrajectoryPoints")
+        ordering_end = html.index("function trajectorySelectionForPoints", ordering_start)
+        ordering = html[ordering_start:ordering_end]
+        self.assertIn("left.history_record_id", ordering)
+        self.assertIn("return leftRecordOrder - rightRecordOrder", ordering)
+        self.assertIn("trajectoryEvidenceKey(left).localeCompare", ordering)
+
+        self.assertIn("const TRAJECTORY_RENDER_POINT_LIMIT = 200", html)
+        self.assertIn("const AMAP_CONVERT_BATCH_LIMIT = 40", html)
+        self.assertIn("offset += AMAP_CONVERT_BATCH_LIMIT", html)
+        self.assertIn("地图一次最多显示", html)
+        self.assertIn("高德坐标每批最多转换", html)
+        self.assertNotIn("setInterval(refresh", html)
+
+        amap_start = html.index("async function renderAmapForSelectedDevice")
+        amap_end = html.index("function d1LinkPanel", amap_start)
+        amap_render = html[amap_start:amap_end]
+        self.assertIn("const hasSelectedTrustedPoint = semantics.points.length > 0", amap_render)
+        self.assertIn("const hasTrustedPoint = hasSelectedTrustedPoint || hasTrustedPositionPoint", amap_render)
+        self.assertNotIn(
+            "(semantics.points.length > 0 || Boolean(semantics.positionPoint))",
+            amap_render,
+        )
+
+    def test_dashboard_follow_growth_keeps_history_priority_and_map_limit(self) -> None:
+        html = message_hub.render_dashboard(amap_js_api_key="public_JS_key_1234")
+
+        bounded_start = html.index("function boundedTrajectorySelection")
+        bounded_end = html.index("function chronologicalTrajectoryPoints", bounded_start)
+        bounded = html[bounded_start:bounded_end]
+        self.assertIn(
+            "const historyPoints = uniqueHistoryPoints.slice(0, TRAJECTORY_RENDER_POINT_LIMIT)",
+            bounded,
+        )
+        self.assertIn(
+            "TRAJECTORY_RENDER_POINT_LIMIT - historyPoints.length",
+            bounded,
+        )
+        self.assertIn("uniqueQuickCandidates.slice(-quickCapacity)", bounded)
+        self.assertIn("mergeTrajectoryEvidencePoints(historyPoints, quickPoints)", bounded)
+        self.assertIn("quickSuppressedCount", bounded)
+
+        context_start = html.index("function trajectorySelectionContext")
+        context_end = html.index("function trajectorySegments", context_start)
+        context = html[context_start:context_end]
+        self.assertIn("const boundedSelection = boundedTrajectorySelection", context)
+        self.assertIn("selectedPoints = boundedSelection.selectedPoints", context)
+        self.assertIn("quickSuppressedCount: boundedSelection.quickSuppressedCount", context)
+
+        history_start = html.index("function renderLocationHistory")
+        history_end = html.index("async function loadLocationHistory", history_start)
+        history = html[history_start:history_end]
+        self.assertIn("projectedHistory.size > TRAJECTORY_RENDER_POINT_LIMIT", history)
+        self.assertIn("state.selectedRecords.set(record.record_id, point)", history)
+
+        panel_start = html.index("function recentTrajectoryPanel")
+        panel_end = html.index("function updateTrajectoryMaps", panel_start)
+        panel = html[panel_start:panel_end]
+        self.assertIn("优先保留显式历史选择", panel)
+        self.assertIn("context.quickSuppressedCount", panel)
+        self.assertIn("context.historySuppressedCount", panel)
+        self.assertIn("条超限历史选择未显示", panel)
+        self.assertIn(
+            "!points.length && selectedPoints.length",
+            panel,
+        )
+        self.assertIn(
+            "当前无可信实时定位；正在显示 ${selectedPoints.length} 个已选历史可信点",
+            panel,
+        )
+
+        amap_start = html.index("async function renderAmapForSelectedDevice")
+        amap_end = html.index("function d1LinkPanel", amap_start)
+        amap_render = html[amap_start:amap_end]
+        self.assertIn("baseSemantics.kind === 'no-fix'", amap_render)
+        self.assertIn("baseSemantics.kind === 'pre-correction-hidden'", amap_render)
+        self.assertIn(
+            "当前无可信实时定位；正在显示 ${selectionView.selectedPoints.length} 个已选历史可信点",
+            amap_render,
+        )
 
     def test_dashboard_table_scroll_and_live_status_are_accessible(self) -> None:
         html = message_hub.render_dashboard()
@@ -2865,8 +3020,9 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("status: 'configured'", html)
         self.assertIn("provider_tiles: true", html)
         self.assertIn("if (generation !== amapRenderGeneration) return", html)
-        self.assertIn("AMap.convertFrom(valid.map(point => [point.lon, point.lat]), 'gps'", html)
-        self.assertIn(".filter(Boolean).slice(-40)", html)
+        self.assertIn("AMap.convertFrom(batch.map(point => [point.lon, point.lat]), 'gps'", html)
+        self.assertIn("offset += AMAP_CONVERT_BATCH_LIMIT", html)
+        self.assertNotIn(".filter(Boolean).slice(-40)", html)
         self.assertIn("kind: 'current'", html)
         self.assertIn("kind: 'last-known'", html)
         self.assertIn("kind: 'no-fix'", html)

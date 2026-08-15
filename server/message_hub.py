@@ -103,7 +103,21 @@ D1_LOCATION_EVENT_TYPES = {"location_report", "location_observation"}
 D1_SUMMARY_MESSAGE_LIMIT = 300
 D1_COORDINATE_HISTORY_LIMIT = 48
 D1_COORDINATE_MESSAGE_SCAN_LIMIT = 5000
-D1_AMAP_WGS84_FW_ALLOWLIST = frozenset({"0.1.0-fw005-gnss-correctness"})
+D1_AMAP_WGS84_FW_ALLOWLIST = frozenset(
+    {
+        "0.1.0-fw005-gnss-correctness",
+        "0.1.0-fw007-lte-wifi-failover",
+    }
+)
+LOCATION_HISTORY_DEFAULT_PAGE_SIZE = 50
+LOCATION_HISTORY_MAX_PAGE_SIZE = 100
+LOCATION_HISTORY_SCAN_LIMIT = 2000
+LOCATION_HISTORY_SCAN_BYTE_LIMIT = 8_000_000
+LOCATION_HISTORY_MAX_INSPECT_PAYLOAD_BYTES = 65_536
+SQLITE_SIGNED_INT64_MAX = 9_223_372_036_854_775_807
+LOCATION_HISTORY_CURSOR_PREFIX = "lh1"
+LOCATION_HISTORY_EVENT_TYPES = frozenset({"all", "location_report", "location_observation"})
+LOCATION_HISTORY_TRUST_FILTERS = frozenset({"all", "selectable", "unselectable"})
 FIELD_EXPORT_DEFAULT_MAX_RECORDS = 5000
 FIELD_EXPORT_HARD_MAX_RECORDS = 10000
 FIELD_EXPORT_MAX_DURATION_S = 48 * 60 * 60
@@ -877,6 +891,136 @@ class MessageHubStore:
                 (device_id, limit),
             ).fetchall()
         return [json.loads(row["payload_json"]) for row in rows]
+
+    def search_location_history(self, device_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        search = normalize_location_history_search(payload)
+        filter_digest = location_history_filter_digest(device_id, search)
+        with self.connection() as db:
+            device = db.execute(
+                "SELECT device_id FROM devices WHERE device_id = ?",
+                (device_id,),
+            ).fetchone()
+            if device is None:
+                raise MessageHubError("device_not_found", f"unknown device: {device_id}", status=404)
+
+            if search["cursor"] is None:
+                snapshot_row = db.execute(
+                    "SELECT COALESCE(MAX(id), 0) AS snapshot_id FROM messages WHERE device_id = ?",
+                    (device_id,),
+                ).fetchone()
+                snapshot_id = int(snapshot_row["snapshot_id"])
+                through_id = snapshot_id
+            else:
+                snapshot_id, through_id = decode_location_history_cursor(
+                    search["cursor"],
+                    filter_digest,
+                )
+
+            row_cursor = db.execute(
+                """
+                SELECT id, event_type,
+                       CASE WHEN typeof(seq) = 'integer' THEN seq ELSE NULL END AS seq,
+                       substr(CAST(ts AS TEXT), 1, 64) AS ts,
+                       substr(CAST(server_received_at AS TEXT), 1, 64) AS server_received_at,
+                       CASE
+                           WHEN length(CAST(payload_json AS BLOB)) <= ? THEN payload_json
+                           ELSE NULL
+                       END AS payload_json,
+                       length(CAST(payload_json AS BLOB)) AS payload_size,
+                       length(CAST(payload_json AS BLOB)) > ? AS payload_oversized
+                FROM messages
+                WHERE device_id = ?
+                  AND message_type = 'event'
+                  AND event_type IN ('location_report', 'location_observation')
+                  AND id <= ?
+                  AND id <= ?
+                ORDER BY id DESC
+                """,
+                (
+                    LOCATION_HISTORY_MAX_INSPECT_PAYLOAD_BYTES,
+                    LOCATION_HISTORY_MAX_INSPECT_PAYLOAD_BYTES,
+                    device_id,
+                    snapshot_id,
+                    through_id,
+                ),
+            )
+
+            records: list[dict[str, Any]] = []
+            inspected_count = 0
+            inspected_bytes = 0
+            last_inspected_id: int | None = None
+            exhausted = False
+            received_from = parse_iso_timestamp(search["received_from"])
+            received_to = parse_iso_timestamp(search["received_to"])
+            while inspected_count < LOCATION_HISTORY_SCAN_LIMIT:
+                row = row_cursor.fetchone()
+                if row is None:
+                    exhausted = True
+                    break
+                row_bytes = max(0, int(row["payload_size"] or 0))
+                if inspected_count > 0 and inspected_bytes + row_bytes > LOCATION_HISTORY_SCAN_BYTE_LIMIT:
+                    break
+                inspected_count += 1
+                inspected_bytes += row_bytes
+                last_inspected_id = int(row["id"])
+                if search["event_type"] != "all" and row["event_type"] != search["event_type"]:
+                    continue
+                if search["seq"] is not None and row["seq"] != search["seq"]:
+                    continue
+                received_at = parse_iso_timestamp(row["server_received_at"])
+                if received_from is not None and (
+                    received_at is None or received_at < received_from
+                ):
+                    continue
+                if received_to is not None and (
+                    received_at is None or received_at > received_to
+                ):
+                    continue
+
+                record = location_history_record(row)
+                if search["trust"] == "selectable" and record["selectable"] is not True:
+                    continue
+                if search["trust"] == "unselectable" and record["selectable"] is True:
+                    continue
+                records.append(record)
+                if len(records) >= search["page_size"]:
+                    break
+
+        next_cursor = (
+            None
+            if exhausted or last_inspected_id is None
+            else encode_location_history_cursor(snapshot_id, max(0, last_inspected_id - 1), filter_digest)
+        )
+        return {
+            "ok": True,
+            "device_id": device_id,
+            "locations": records,
+            "page": {
+                "page_size": search["page_size"],
+                "returned_count": len(records),
+                "selectable_count": sum(1 for record in records if record["selectable"] is True),
+                "inspected_count": inspected_count,
+                "inspected_bytes": inspected_bytes,
+                "scan_limit": LOCATION_HISTORY_SCAN_LIMIT,
+                "scan_byte_limit": LOCATION_HISTORY_SCAN_BYTE_LIMIT,
+                "snapshot_frozen": True,
+                "exhausted": exhausted,
+                "current_cursor": encode_location_history_cursor(snapshot_id, through_id, filter_digest),
+                "next_cursor": next_cursor,
+            },
+            "filters": {
+                "received_from": search["received_from"],
+                "received_to": search["received_to"],
+                "seq": search["seq"],
+                "event_type": search["event_type"],
+                "trust": search["trust"],
+            },
+            "privacy": {
+                "coordinates_for_selectable_records_only": True,
+                "query_body_only": True,
+                "selection_storage": "browser_memory_only",
+            },
+        }
 
     def recent_messages(self, limit: int = 50) -> list[dict[str, Any]]:
         with self.connection() as db:
@@ -1701,7 +1845,18 @@ def make_handler(
             raise MessageHubError("not_found", "route not found", status=404)
 
         def route_post(self) -> None:
-            segments = split_path(urlparse(self.path).path)
+            parsed_url = urlparse(self.path)
+            segments = split_path(parsed_url.path)
+            is_location_history_search = (
+                len(segments) == 6
+                and segments[:3] == ["api", "v1", "devices"]
+                and segments[4:] == ["locations", "search"]
+            )
+            if is_location_history_search and parsed_url.query:
+                raise MessageHubError(
+                    "location_history_query_string_forbidden",
+                    "location history search accepts JSON body fields only",
+                )
             if len(segments) == 5 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "raw-ingest":
                 device_id = segments[3]
                 raw_body = self.read_raw_body()
@@ -1771,6 +1926,12 @@ def make_handler(
             body = self.read_json_body()
             if segments == ["api", "v1", "devices", "register"]:
                 self.respond_json({"ok": True, "device": store.register_device(body)})
+                return
+            if is_location_history_search:
+                self.respond_json(
+                    store.search_location_history(segments[3], body),
+                    headers={"Cache-Control": "no-store"},
+                )
                 return
             if len(segments) == 5 and segments[:3] == ["api", "v1", "devices"]:
                 device_id = segments[3]
@@ -1856,7 +2017,16 @@ def make_handler(
             self.wfile.write(body)
 
         def respond_error(self, error: MessageHubError) -> None:
-            self.respond_json({"ok": False, "error": error.code, "detail": str(error)}, status=error.status)
+            headers = (
+                {"Cache-Control": "no-store"}
+                if urlparse(self.path).path.endswith("/locations/search")
+                else None
+            )
+            self.respond_json(
+                {"ok": False, "error": error.code, "detail": str(error)},
+                status=error.status,
+                headers=headers,
+            )
 
         def proxy_amap(self, path: str, raw_query: str, api_key: str, security_code: str) -> None:
             upstream_host, upstream_target = amap_proxy_target(path, raw_query, api_key, security_code)
@@ -1944,6 +2114,154 @@ def authorized(header: str | None, token: str | None) -> bool:
     if not token:
         return True
     return header == f"Bearer {token}"
+
+
+def normalize_location_history_search(payload: dict[str, Any]) -> dict[str, Any]:
+    allowed_fields = {
+        "page_size",
+        "cursor",
+        "received_from",
+        "received_to",
+        "seq",
+        "event_type",
+        "trust",
+    }
+    unknown_fields = sorted(set(payload) - allowed_fields)
+    if unknown_fields:
+        raise MessageHubError(
+            "location_history_unknown_field",
+            "location history request contains an unsupported field",
+        )
+
+    page_size_value = payload.get("page_size", LOCATION_HISTORY_DEFAULT_PAGE_SIZE)
+    if isinstance(page_size_value, bool) or not isinstance(page_size_value, int):
+        raise MessageHubError("invalid_location_history_page_size", "page_size must be an integer")
+    page_size = page_size_value
+    if page_size < 1 or page_size > LOCATION_HISTORY_MAX_PAGE_SIZE:
+        raise MessageHubError(
+            "invalid_location_history_page_size",
+            f"page_size must be between 1 and {LOCATION_HISTORY_MAX_PAGE_SIZE}",
+        )
+
+    cursor_value = payload.get("cursor")
+    if cursor_value is None:
+        cursor = None
+    elif not isinstance(cursor_value, str) or len(cursor_value) > 512:
+        raise MessageHubError("invalid_location_history_cursor", "cursor is invalid")
+    else:
+        cursor = cursor_value
+
+    normalized_times: dict[str, str | None] = {}
+    for field in ("received_from", "received_to"):
+        value = payload.get(field)
+        if value is None:
+            normalized_times[field] = None
+            continue
+        if not isinstance(value, str) or len(value) > 64:
+            raise MessageHubError("invalid_location_history_time", f"{field} must be an ISO-8601 timestamp")
+        parsed = parse_iso_timestamp(value)
+        if parsed is None:
+            raise MessageHubError("invalid_location_history_time", f"{field} must be an ISO-8601 timestamp")
+        normalized_times[field] = parsed.astimezone(timezone.utc).isoformat()
+    received_from = normalized_times["received_from"]
+    received_to = normalized_times["received_to"]
+    if received_from and received_to:
+        from_dt = parse_iso_timestamp(received_from)
+        to_dt = parse_iso_timestamp(received_to)
+        if from_dt is None or to_dt is None or from_dt > to_dt:
+            raise MessageHubError(
+                "invalid_location_history_time_window",
+                "received_from must be before or equal to received_to",
+            )
+
+    seq_value = payload.get("seq")
+    if seq_value is None:
+        seq = None
+    elif isinstance(seq_value, bool) or not isinstance(seq_value, int):
+        raise MessageHubError("invalid_location_history_seq", "seq must be a non-negative integer")
+    else:
+        seq = seq_value
+        if seq < 0 or seq > SQLITE_SIGNED_INT64_MAX:
+            raise MessageHubError("invalid_location_history_seq", "seq must be a non-negative integer")
+
+    event_type_value = payload.get("event_type", "all")
+    if not isinstance(event_type_value, str) or event_type_value not in LOCATION_HISTORY_EVENT_TYPES:
+        raise MessageHubError(
+            "invalid_location_history_event_type",
+            "event_type must be all, location_report, or location_observation",
+        )
+    event_type = event_type_value
+    trust_value = payload.get("trust", "all")
+    if not isinstance(trust_value, str) or trust_value not in LOCATION_HISTORY_TRUST_FILTERS:
+        raise MessageHubError(
+            "invalid_location_history_trust",
+            "trust must be all, selectable, or unselectable",
+        )
+    trust = trust_value
+    return {
+        "page_size": page_size,
+        "cursor": cursor,
+        "received_from": received_from,
+        "received_to": received_to,
+        "seq": seq,
+        "event_type": event_type,
+        "trust": trust,
+    }
+
+
+def location_history_filter_digest(device_id: str, search: dict[str, Any]) -> str:
+    canonical = dumps(
+        {
+            "device_id": device_id,
+            "received_from": search.get("received_from"),
+            "received_to": search.get("received_to"),
+            "seq": search.get("seq"),
+            "event_type": search.get("event_type"),
+            "trust": search.get("trust"),
+        }
+    ).encode("utf-8")
+    return sha256_hex(canonical)[:24]
+
+
+def encode_location_history_cursor(snapshot_id: int, through_id: int, filter_digest: str) -> str:
+    cursor_payload = dumps(
+        {"snapshot_id": snapshot_id, "through_id": through_id, "filter": filter_digest}
+    ).encode("utf-8")
+    encoded = base64.urlsafe_b64encode(cursor_payload).decode("ascii").rstrip("=")
+    return f"{LOCATION_HISTORY_CURSOR_PREFIX}.{encoded}"
+
+
+def decode_location_history_cursor(cursor: str, expected_filter_digest: str) -> tuple[int, int]:
+    parts = cursor.split(".")
+    if len(parts) != 2 or parts[0] != LOCATION_HISTORY_CURSOR_PREFIX:
+        raise MessageHubError("invalid_location_history_cursor", "cursor is invalid")
+    encoded = parts[1]
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,384}", encoded):
+        raise MessageHubError("invalid_location_history_cursor", "cursor is invalid")
+    try:
+        padded = encoded + "=" * (-len(encoded) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii"))
+        value = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError, binascii.Error) as exc:
+        raise MessageHubError("invalid_location_history_cursor", "cursor is invalid") from exc
+    if not isinstance(value, dict) or set(value) != {"snapshot_id", "through_id", "filter"}:
+        raise MessageHubError("invalid_location_history_cursor", "cursor is invalid")
+    snapshot_id = value.get("snapshot_id")
+    through_id = value.get("through_id")
+    if (
+        isinstance(snapshot_id, bool)
+        or isinstance(through_id, bool)
+        or not isinstance(snapshot_id, int)
+        or not isinstance(through_id, int)
+        or snapshot_id < 0
+        or snapshot_id > SQLITE_SIGNED_INT64_MAX
+        or through_id < 0
+        or through_id > SQLITE_SIGNED_INT64_MAX
+        or through_id > snapshot_id
+        or value.get("filter") != expected_filter_digest
+    ):
+        raise MessageHubError("invalid_location_history_cursor", "cursor does not match this search")
+    return snapshot_id, through_id
 
 
 def require_text(payload: dict[str, Any], field: str) -> str:
@@ -3754,6 +4072,74 @@ def d1_coordinate_missing_reason(message: dict[str, Any]) -> str:
     if message.get("event_type") == "location_observation":
         return "observation_without_position_fix"
     return "coordinate_fields_missing"
+
+
+def bounded_location_history_text(value: Any, limit: int) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value)[:limit]
+
+
+def bounded_location_history_seq(value: Any) -> int | None:
+    if type(value) is not int:
+        return None
+    if value < 0 or value > SQLITE_SIGNED_INT64_MAX:
+        return None
+    return value
+
+
+def location_history_record(row: Mapping[str, Any]) -> dict[str, Any]:
+    if bool(row["payload_oversized"]):
+        message = {}
+        point = None
+        trust_reason = "stored_payload_too_large"
+    else:
+        try:
+            message = json.loads(str(row["payload_json"]))
+            if not isinstance(message, dict):
+                raise ValueError("location payload is not an object")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            message = {}
+            point = None
+            trust_reason = "stored_payload_invalid"
+        else:
+            point = d1_location_point(message, source="location_history")
+            candidate_reason = (
+                "verified_wgs84_fix"
+                if point and point.get("amap_eligible") is True
+                else str(point.get("amap_exclusion_reason"))
+                if point
+                else d1_coordinate_missing_reason(message)
+            )
+            allowed_reasons = {
+                "verified_wgs84_fix",
+                "not_gnss_location_report",
+                "gnss_fix_not_true",
+                "firmware_parser_not_allowlisted",
+                "gnss_no_fix",
+                "observation_without_position_fix",
+                "coordinate_fields_missing",
+            }
+            trust_reason = candidate_reason if candidate_reason in allowed_reasons else "coordinate_fields_missing"
+    selectable = bool(point and point.get("amap_eligible") is True)
+    fix_value = first_known(message.get("fix"), dict_value(message, "gnss", "fix"))
+    record: dict[str, Any] = {
+        "record_id": f"location-{int(row['id'])}",
+        "event_type": str(row["event_type"] or "unknown"),
+        "seq": bounded_location_history_seq(row["seq"]),
+        "device_ts": bounded_location_history_text(row["ts"], 64),
+        "server_received_at": bounded_location_history_text(row["server_received_at"], 64),
+        "fix": fix_value if isinstance(fix_value, bool) else None,
+        "fw_version": bounded_location_history_text(message.get("fw_version") or "unknown", 96),
+        "selectable": selectable,
+        "coordinate_contract": point.get("coordinate_contract") if point else "unknown",
+        "coordinate_trust": point.get("coordinate_trust") if point else "unverified",
+        "trust_reason": trust_reason,
+    }
+    if selectable and point is not None:
+        record["lat"] = point["lat"]
+        record["lon"] = point["lon"]
+    return record
 
 
 def d1_coordinate_diagnostics(messages: list[dict[str, Any]], points: list[dict[str, Any]]) -> dict[str, Any]:
@@ -8505,6 +8891,28 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     .trajectory-list input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--blue); }
     .trajectory-time { color: var(--ink-soft); font-weight: 700; }
     .trajectory-event { color: var(--muted); overflow-wrap: anywhere; }
+    .location-history-browser { margin: 0 18px 18px; border: 1px solid #d8dde6; border-radius: 12px; background: #fbfcfe; overflow: hidden; }
+    .history-browser-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px; border-bottom: 1px solid #e3e7ee; flex-wrap: wrap; }
+    .history-browser-head h3 { font-size: 16px; }
+    .history-browser-note { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .history-filter-grid { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 10px; padding: 14px; border-bottom: 1px solid #e3e7ee; }
+    .history-filter { display: grid; gap: 5px; min-width: 0; }
+    .history-filter label { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .history-filter input, .history-filter select { width: 100%; min-width: 0; }
+    .history-filter-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .history-filter-actions button { min-height: 36px; }
+    .history-status { color: var(--ink-soft); font-size: 12px; font-weight: 600; }
+    .history-status.warn { color: var(--amber); }
+    .history-status.bad { color: var(--red); }
+    .history-table-wrap { overflow: auto; max-height: 520px; background: #fff; }
+    .history-table { min-width: 920px; }
+    .history-table input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--blue); }
+    .history-record-unselectable { color: var(--muted); background: #fafafa; }
+    .history-trust-ok { color: var(--green); font-weight: 700; }
+    .history-trust-warn { color: var(--amber); font-weight: 700; }
+    .history-pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-top: 1px solid #e3e7ee; flex-wrap: wrap; }
+    .history-pagination-actions { display: flex; align-items: center; gap: 8px; }
+    .history-page-label, .history-selection-label { color: var(--ink-soft); font-size: 12px; font-weight: 700; }
     .map-grid { position: absolute; inset: 0; background-image: linear-gradient(#d9e0ea 1px, transparent 1px), linear-gradient(90deg, #d9e0ea 1px, transparent 1px); background-size: 28px 28px; }
     .map-track { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
     .map-provider-banner { position: absolute; left: 10px; right: 10px; top: 8px; z-index: 3; display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; color: var(--ink-soft); font-size: 12px; background: rgba(255, 255, 255, 0.9); border: 1px solid #d8dde6; border-radius: 6px; padding: 6px 8px; }
@@ -8523,9 +8931,9 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     .map-waiting { z-index: 1; color: var(--muted); font-size: 13px; font-weight: 600; border: 1px solid #c8d0dc; border-radius: 999px; padding: 6px 10px; background: rgba(255,255,255,0.82); }
     .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: var(--ink-soft); font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 5px 6px; }
     @media (max-width: 1080px) { .location-map-grid { grid-template-columns: 1fr; } .trajectory-panel { min-height: 0; } }
-    @media (max-width: 980px) { .dashboard-grid, .d1-overview, .progress-layout, .field-operations-grid, .field-evidence-grid, .details-grid { grid-template-columns: 1fr; } .details-grid .wide { grid-column: auto; } .d1-summary-pane { order: 1; } .d1-map-pane { order: 2; } .d1-primary-row { grid-template-columns: 1fr; } }
+    @media (max-width: 980px) { .dashboard-grid, .d1-overview, .progress-layout, .field-operations-grid, .field-evidence-grid, .details-grid { grid-template-columns: 1fr; } .details-grid .wide { grid-column: auto; } .d1-summary-pane { order: 1; } .d1-map-pane { order: 2; } .d1-primary-row { grid-template-columns: 1fr; } .history-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 760px) { .evidence-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 560px) { header { position: static; } .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes, .trajectory-summary-grid { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } select { width: 100%; min-width: 0; } button, select { min-height: 44px; } #amapLiveMap { min-height: 360px; } .location-map-grid { padding: 10px; } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } .section-head { align-items: flex-start; flex-direction: column; } .section-actions, .device-picker { width: 100%; justify-content: flex-start; } .map-import-status { max-width: 100%; text-align: left; } .dashboard-details > summary { align-items: flex-start; } }
+    @media (max-width: 560px) { header { position: static; } .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes, .trajectory-summary-grid, .history-filter-grid { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } select { width: 100%; min-width: 0; } button, select { min-height: 44px; } #amapLiveMap { min-height: 360px; } .location-map-grid { padding: 10px; } .location-history-browser { margin: 0 10px 10px; } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } .section-head { align-items: flex-start; flex-direction: column; } .section-actions, .device-picker { width: 100%; justify-content: flex-start; } .map-import-status { max-width: 100%; text-align: left; } .dashboard-details > summary { align-items: flex-start; } }
   </style>
   __AMAP_BOOTSTRAP__
 </head>
@@ -8581,6 +8989,72 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           <div class="empty">正在等待定位数据</div>
         </aside>
       </div>
+      <section id="locationHistoryBrowser" class="location-history-browser" aria-labelledby="locationHistoryTitle">
+        <div class="history-browser-head">
+          <div>
+            <h3 id="locationHistoryTitle">全部定位历史</h3>
+            <div class="history-browser-note">按当前设备查询数据库快照；未定位或坐标合同未验证的记录也会列出，但不能勾选。查询条件和选择只保存在当前页面内存中。</div>
+          </div>
+          <span id="historySelectionLabel" class="history-selection-label">地图已选 0 / 最多 200 点</span>
+        </div>
+        <form id="locationHistoryForm" class="history-filter-grid">
+          <div class="history-filter">
+            <label for="historyReceivedFrom">接收时间从</label>
+            <input id="historyReceivedFrom" type="datetime-local" step="1" />
+          </div>
+          <div class="history-filter">
+            <label for="historyReceivedTo">接收时间到</label>
+            <input id="historyReceivedTo" type="datetime-local" step="1" />
+          </div>
+          <div class="history-filter">
+            <label for="historySeq">精确序号</label>
+            <input id="historySeq" type="number" min="0" step="1" inputmode="numeric" placeholder="全部" />
+          </div>
+          <div class="history-filter">
+            <label for="historyEventType">记录类型</label>
+            <select id="historyEventType">
+              <option value="all">全部定位记录</option>
+              <option value="location_report">GNSS 定位上报</option>
+              <option value="location_observation">定位观测</option>
+            </select>
+          </div>
+          <div class="history-filter">
+            <label for="historyTrust">可选择状态</label>
+            <select id="historyTrust">
+              <option value="all">全部</option>
+              <option value="selectable">仅可信可选</option>
+              <option value="unselectable">仅不可选</option>
+            </select>
+          </div>
+          <div class="history-filter">
+            <label for="historyPageSize">每页记录</label>
+            <select id="historyPageSize">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <div class="history-filter-actions">
+            <button id="searchLocationHistory" type="submit">搜索历史</button>
+            <button id="resetLocationHistory" class="secondary" type="button">重置条件</button>
+            <button id="clearHistorySelection" class="secondary" type="button">清空地图选择</button>
+            <span id="locationHistoryStatus" class="history-status" role="status" aria-live="polite">选择设备后加载全部定位历史</span>
+          </div>
+        </form>
+        <div class="history-table-wrap" role="region" aria-label="全部定位历史记录" tabindex="0">
+          <table class="history-table">
+            <thead><tr><th>选择</th><th>服务端接收时间</th><th>类型</th><th>序号</th><th>定位状态</th><th>坐标可信度</th><th>固件</th></tr></thead>
+            <tbody id="locationHistoryRows"><tr><td colspan="7" class="empty">尚未加载历史记录</td></tr></tbody>
+          </table>
+        </div>
+        <div class="history-pagination">
+          <span id="locationHistoryPageLabel" class="history-page-label">第 1 页</span>
+          <div class="history-pagination-actions">
+            <button id="previousLocationHistory" class="secondary" type="button" disabled>上一页</button>
+            <button id="nextLocationHistory" class="secondary" type="button" disabled>下一页</button>
+          </div>
+        </div>
+      </section>
       <div id="d1Link"></div>
     </section>
 
@@ -8807,6 +9281,8 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     const AMAP_JS_API_SCRIPT_ID = 'egolink-amap-js-api';
     const AMAP_SDK_LOAD_TIMEOUT_MS = 30000;
     const AMAP_MAP_READY_TIMEOUT_MS = 30000;
+    const TRAJECTORY_RENDER_POINT_LIMIT = 200;
+    const AMAP_CONVERT_BATCH_LIMIT = 40;
     let selectedDashboardDeviceId = localStorage.getItem(DASHBOARD_DEVICE_KEY) || '';
     let refreshInFlight = false;
     let lastSuccessfulDashboardState = null;
@@ -8824,6 +9300,8 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     let amapOverlayCacheKey = '';
     let amapOverlayFailureKey = '';
     const trajectorySelectionByDevice = new Map();
+    const locationHistoryByDevice = new Map();
+    let locationHistoryActiveDeviceId = '';
     function selectDashboardDevice(devices, currentRun = {}, preferredDeviceId = selectedDashboardDeviceId) {
       const available = Array.isArray(devices)
         ? devices.filter(device => device && device.device_id)
@@ -8951,6 +9429,314 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         layers: {...(runtimeMap.layers || {}), reference_points: references.length > 0},
       };
     }
+    function defaultLocationHistoryFilters() {
+      return {
+        received_from: null,
+        received_to: null,
+        seq: null,
+        event_type: 'all',
+        trust: 'all',
+        page_size: 50,
+      };
+    }
+    function newLocationHistoryState() {
+      return {
+        filters: defaultLocationHistoryFilters(),
+        cursor: null,
+        cursorStack: [],
+        pageNumber: 1,
+        records: [],
+        nextCursor: null,
+        exhausted: false,
+        inspectedCount: 0,
+        loaded: false,
+        loading: false,
+        error: '',
+        selectedRecords: new Map(),
+        requestGeneration: 0,
+      };
+    }
+    function locationHistoryStateForDevice(deviceId) {
+      let state = locationHistoryByDevice.get(deviceId);
+      if (!state) {
+        state = newLocationHistoryState();
+        locationHistoryByDevice.set(deviceId, state);
+      }
+      return state;
+    }
+    function locationHistorySelectedPoints(deviceId) {
+      const state = locationHistoryByDevice.get(deviceId);
+      return state && state.selectedRecords instanceof Map
+        ? [...state.selectedRecords.values()]
+        : [];
+    }
+    function clearLocationHistorySelectionForDevice(deviceId) {
+      const state = locationHistoryByDevice.get(deviceId);
+      if (state) state.selectedRecords = new Map();
+    }
+    function selectedDashboardDevice() {
+      if (!lastSuccessfulDashboardState) return null;
+      return selectDashboardDevice(
+        lastSuccessfulDashboardState.devices || [],
+        lastSuccessfulDashboardState.current_run || {},
+      );
+    }
+    function localDateTimeValue(isoValue) {
+      const parsed = new Date(isoValue || '');
+      if (!Number.isFinite(parsed.getTime())) return '';
+      const local = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 19);
+    }
+    function syncLocationHistoryControls(filters) {
+      document.getElementById('historyReceivedFrom').value = localDateTimeValue(filters.received_from);
+      document.getElementById('historyReceivedTo').value = localDateTimeValue(filters.received_to);
+      document.getElementById('historySeq').value = filters.seq === null ? '' : String(filters.seq);
+      document.getElementById('historyEventType').value = filters.event_type;
+      document.getElementById('historyTrust').value = filters.trust;
+      document.getElementById('historyPageSize').value = String(filters.page_size);
+    }
+    function isoFromHistoryControl(controlId) {
+      const raw = document.getElementById(controlId).value;
+      if (!raw) return null;
+      const parsed = new Date(raw);
+      if (!Number.isFinite(parsed.getTime())) throw new Error('时间格式无效');
+      return parsed.toISOString();
+    }
+    function locationHistoryFiltersFromControls() {
+      const seqText = document.getElementById('historySeq').value.trim();
+      if (seqText && !/^[0-9]+$/.test(seqText)) throw new Error('序号必须是非负整数');
+      const seq = seqText ? Number(seqText) : null;
+      if (seq !== null && !Number.isSafeInteger(seq)) throw new Error('序号超出浏览器安全整数范围');
+      const receivedFrom = isoFromHistoryControl('historyReceivedFrom');
+      const receivedTo = isoFromHistoryControl('historyReceivedTo');
+      if (receivedFrom && receivedTo && Date.parse(receivedFrom) > Date.parse(receivedTo)) {
+        throw new Error('开始时间不能晚于结束时间');
+      }
+      return {
+        received_from: receivedFrom,
+        received_to: receivedTo,
+        seq,
+        event_type: document.getElementById('historyEventType').value,
+        trust: document.getElementById('historyTrust').value,
+        page_size: Number(document.getElementById('historyPageSize').value),
+      };
+    }
+    function locationHistoryRequestBody(filters, cursor) {
+      const body = {
+        page_size: filters.page_size,
+        event_type: filters.event_type,
+        trust: filters.trust,
+      };
+      if (filters.received_from) body.received_from = filters.received_from;
+      if (filters.received_to) body.received_to = filters.received_to;
+      if (filters.seq !== null) body.seq = filters.seq;
+      if (cursor) body.cursor = cursor;
+      return body;
+    }
+    function locationHistoryPoint(record) {
+      if (!record || record.selectable !== true) return null;
+      try {
+        return {
+          lat: finiteCoordinate(record.lat, -90, 90, 'latitude'),
+          lon: finiteCoordinate(record.lon, -180, 180, 'longitude'),
+          server_received_at: record.server_received_at || '',
+          seq: record.seq,
+          event_type: record.event_type || '',
+          source: 'location_history',
+          fix: true,
+          fw_version: record.fw_version || 'unknown',
+          coordinate_contract: 'wgs84',
+          coordinate_trust: 'verified_parser_fw_allowlist',
+          amap_eligible: true,
+          history_record_id: record.record_id,
+        };
+      } catch (_error) {
+        return null;
+      }
+    }
+    function locationHistoryTrustLabel(record) {
+      if (record && record.selectable === true) return '可信 WGS-84，可选择';
+      const labels = {
+        gnss_fix_not_true: 'GNSS 未定位，不可选择',
+        not_gnss_location_report: '定位观测，无可信 WGS-84 坐标',
+        firmware_parser_not_allowlisted: '固件坐标解析器未列入白名单',
+        coordinate_fields_missing: '没有有效坐标',
+        gnss_no_fix: 'GNSS 未定位',
+        observation_without_position_fix: '定位观测没有精确坐标',
+        stored_payload_invalid: '存储记录无法解析',
+        stored_payload_too_large: '存储记录过大，仅显示安全元数据',
+      };
+      return labels[String(record && record.trust_reason || '')] || '坐标合同未验证，不可选择';
+    }
+    function locationHistoryEventLabel(eventType) {
+      if (eventType === 'location_report') return 'GNSS 定位上报';
+      if (eventType === 'location_observation') return '定位观测';
+      return eventType || '未知';
+    }
+    function setLocationHistoryStatus(message, state = '') {
+      const status = document.getElementById('locationHistoryStatus');
+      status.textContent = message;
+      status.className = `history-status ${state}`.trim();
+    }
+    function renderLocationHistory(selectedDevice) {
+      const rowsElement = document.getElementById('locationHistoryRows');
+      const previousButton = document.getElementById('previousLocationHistory');
+      const nextButton = document.getElementById('nextLocationHistory');
+      const pageLabel = document.getElementById('locationHistoryPageLabel');
+      const selectionLabel = document.getElementById('historySelectionLabel');
+      if (!selectedDevice) {
+        locationHistoryActiveDeviceId = '';
+        rowsElement.innerHTML = '<tr><td colspan="7" class="empty">请先选择设备</td></tr>';
+        previousButton.disabled = true;
+        nextButton.disabled = true;
+        pageLabel.textContent = '第 1 页';
+        selectionLabel.textContent = `地图已选 0 / 最多 ${TRAJECTORY_RENDER_POINT_LIMIT} 点`;
+        setLocationHistoryStatus('选择设备后加载全部定位历史');
+        return;
+      }
+      const state = locationHistoryStateForDevice(selectedDevice.device_id);
+      if (locationHistoryActiveDeviceId !== selectedDevice.device_id) {
+        locationHistoryActiveDeviceId = selectedDevice.device_id;
+        syncLocationHistoryControls(state.filters);
+      }
+      const context = trajectorySelectionContext(selectedDevice);
+      selectionLabel.textContent = `地图已选 ${context.selectedPoints.length} / 最多 ${TRAJECTORY_RENDER_POINT_LIMIT} 点 · 历史勾选 ${state.selectedRecords.size} 条`;
+      const rowHtml = state.records.map(record => {
+        const point = locationHistoryPoint(record);
+        const checked = state.selectedRecords.has(record.record_id) ? ' checked' : '';
+        const disabled = point ? '' : ' disabled';
+        const rowClass = point ? '' : ' class="history-record-unselectable"';
+        const checkboxLabel = point
+          ? `选择定位记录 ${record.record_id}，${formatDashboardDateTime(record.server_received_at)}`
+          : `定位记录 ${record.record_id} 不满足可信坐标规则，不能选择`;
+        const fixLabel = record.fix === true ? '已定位' : record.fix === false ? '未定位' : '未知';
+        const trustLabel = locationHistoryTrustLabel(record);
+        return `<tr${rowClass}>
+          <td><input type="checkbox" data-history-record-id="${escapeHtml(record.record_id)}" aria-label="${escapeHtml(checkboxLabel)}"${checked}${disabled}></td>
+          <td>${escapeHtml(formatDashboardDateTime(record.server_received_at))}</td>
+          <td>${escapeHtml(locationHistoryEventLabel(record.event_type))}</td>
+          <td>${escapeHtml(record.seq ?? '未知')}</td>
+          <td>${escapeHtml(fixLabel)}</td>
+          <td class="${point ? 'history-trust-ok' : 'history-trust-warn'}">${escapeHtml(trustLabel)}</td>
+          <td>${escapeHtml(record.fw_version || 'unknown')}</td>
+        </tr>`;
+      }).join('');
+      rowsElement.innerHTML = rowHtml || '<tr><td colspan="7" class="empty">本页没有匹配记录</td></tr>';
+      previousButton.disabled = state.loading || state.cursorStack.length === 0;
+      nextButton.disabled = state.loading || !state.nextCursor;
+      pageLabel.textContent = `第 ${state.pageNumber} 页 · 本页 ${state.records.length} 条 · 已检查 ${state.inspectedCount} 条定位记录${state.exhausted ? ' · 已到末页' : ' · 快照继续可翻页'}`;
+      if (state.loading) {
+        setLocationHistoryStatus('正在读取数据库历史快照…');
+      } else if (state.error) {
+        const errorLabels = {
+          unauthorized: '访问令牌无效，请重新保存连接',
+          device_not_found: '所选设备不存在',
+          invalid_location_history_cursor: '历史快照游标失效，请重新搜索',
+          request_failed: '历史记录请求失败，请稍后重试',
+        };
+        setLocationHistoryStatus(errorLabels[state.error] || '历史查询条件无效，请检查后重试', 'bad');
+      } else if (!state.loaded) {
+        setLocationHistoryStatus('正在准备全部定位历史');
+      } else if (!state.records.length && state.nextCursor) {
+        setLocationHistoryStatus('本页没有匹配记录，但快照尚未结束，可继续下一页', 'warn');
+      } else if (!state.records.length) {
+        setLocationHistoryStatus('当前快照中没有匹配的定位记录', 'warn');
+      } else {
+        const selectableCount = state.records.filter(record => record.selectable === true).length;
+        setLocationHistoryStatus(`本页 ${state.records.length} 条，其中 ${selectableCount} 条可信可选；新上传数据不会插入当前翻页快照。`);
+      }
+      rowsElement.querySelectorAll('[data-history-record-id]').forEach(input => {
+        input.addEventListener('change', () => {
+          const record = state.records.find(item => item.record_id === input.dataset.historyRecordId);
+          const point = locationHistoryPoint(record);
+          if (!record || !point) {
+            input.checked = false;
+            return;
+          }
+          if (input.checked) {
+            const projectedHistory = new Map(state.selectedRecords);
+            projectedHistory.set(record.record_id, point);
+            if (projectedHistory.size > TRAJECTORY_RENDER_POINT_LIMIT) {
+              input.checked = false;
+              setLocationHistoryStatus(`最多选择 ${TRAJECTORY_RENDER_POINT_LIMIT} 条唯一历史记录，请先取消部分记录。`, 'warn');
+              return;
+            }
+            state.selectedRecords.set(record.record_id, point);
+          } else {
+            state.selectedRecords.delete(record.record_id);
+          }
+          rerenderTrajectorySelection(selectedDevice);
+          renderLocationHistory(selectedDevice);
+        });
+      });
+    }
+    async function loadLocationHistory(
+      selectedDevice,
+      {filters, cursor = null, cursorStack = [], pageNumber = 1} = {},
+    ) {
+      if (!selectedDevice) return;
+      const state = locationHistoryStateForDevice(selectedDevice.device_id);
+      const requestedFilters = filters || state.filters;
+      const generation = ++state.requestGeneration;
+      state.loading = true;
+      state.error = '';
+      renderLocationHistory(selectedDevice);
+      try {
+        const response = await fetch(
+          `/api/v1/devices/${encodeURIComponent(selectedDevice.device_id)}/locations/search`,
+          {
+            method: 'POST',
+            headers: {...authHeaders(), 'Content-Type': 'application/json'},
+            body: JSON.stringify(locationHistoryRequestBody(requestedFilters, cursor)),
+            cache: 'no-store',
+          },
+        );
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (_error) {
+          data = {};
+        }
+        if (!response.ok) {
+          const requestError = new Error('history request failed');
+          requestError.code = String(data.error || (response.status === 401 ? 'unauthorized' : 'request_failed'));
+          throw requestError;
+        }
+        const activeDevice = selectedDashboardDevice();
+        if (
+          generation !== state.requestGeneration
+          || !activeDevice
+          || activeDevice.device_id !== selectedDevice.device_id
+          || data.device_id !== selectedDevice.device_id
+          || !Array.isArray(data.locations)
+        ) return;
+        const page = data.page && typeof data.page === 'object' ? data.page : {};
+        state.filters = requestedFilters;
+        state.cursor = typeof page.current_cursor === 'string' && page.current_cursor
+          ? page.current_cursor
+          : cursor;
+        state.cursorStack = [...cursorStack];
+        state.pageNumber = pageNumber;
+        state.records = data.locations;
+        state.nextCursor = typeof page.next_cursor === 'string' && page.next_cursor ? page.next_cursor : null;
+        state.exhausted = page.exhausted === true;
+        state.inspectedCount = Number(page.inspected_count) || 0;
+        state.loaded = true;
+        state.error = '';
+      } catch (error) {
+        if (generation === state.requestGeneration) {
+          state.error = String(error && error.code || 'request_failed');
+        }
+      } finally {
+        if (generation === state.requestGeneration) {
+          state.loading = false;
+          const activeDevice = selectedDashboardDevice();
+          if (activeDevice && activeDevice.device_id === selectedDevice.device_id) {
+            renderLocationHistory(selectedDevice);
+          }
+        }
+      }
+    }
     function renderSelectedDevicePanels() {
       if (!lastSuccessfulDashboardState) return;
       const devices = lastSuccessfulDashboardState.devices || [];
@@ -8962,11 +9748,18 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       d1Link.innerHTML = d1LinkPanel(selectedDevice);
       trajectoryPanel.innerHTML = recentTrajectoryPanel(selectedDevice);
       bindTrajectoryPanelEvents(selectedDevice);
+      renderLocationHistory(selectedDevice);
       fieldState.innerHTML = latestFieldState(
         selectedDevice,
         lastSuccessfulDashboardState.raw_frames || [],
       );
       renderAmapForSelectedDevice(selectedDevice);
+      if (selectedDevice) {
+        const historyState = locationHistoryStateForDevice(selectedDevice.device_id);
+        if (!historyState.loaded && !historyState.loading) {
+          void loadLocationHistory(selectedDevice, {filters: historyState.filters});
+        }
+      }
     }
     function renderD1LinkFromLatestState() {
       renderSelectedDevicePanels();
@@ -8985,6 +9778,75 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         localStorage.removeItem(DASHBOARD_DEVICE_KEY);
       }
       renderSelectedDevicePanels();
+    });
+    document.getElementById('locationHistoryForm').addEventListener('submit', event => {
+      event.preventDefault();
+      const selectedDevice = selectedDashboardDevice();
+      if (!selectedDevice) {
+        setLocationHistoryStatus('请先选择设备', 'warn');
+        return;
+      }
+      try {
+        const filters = locationHistoryFiltersFromControls();
+        void loadLocationHistory(selectedDevice, {
+          filters,
+          cursor: null,
+          cursorStack: [],
+          pageNumber: 1,
+        });
+      } catch (error) {
+        setLocationHistoryStatus(error instanceof Error ? error.message : '查询条件无效', 'bad');
+      }
+    });
+    document.getElementById('resetLocationHistory').addEventListener('click', () => {
+      const selectedDevice = selectedDashboardDevice();
+      const filters = defaultLocationHistoryFilters();
+      syncLocationHistoryControls(filters);
+      if (selectedDevice) {
+        void loadLocationHistory(selectedDevice, {
+          filters,
+          cursor: null,
+          cursorStack: [],
+          pageNumber: 1,
+        });
+      }
+    });
+    document.getElementById('previousLocationHistory').addEventListener('click', () => {
+      const selectedDevice = selectedDashboardDevice();
+      if (!selectedDevice) return;
+      const state = locationHistoryStateForDevice(selectedDevice.device_id);
+      if (state.loading || !state.cursorStack.length) return;
+      const cursorStack = state.cursorStack.slice(0, -1);
+      const cursor = state.cursorStack[state.cursorStack.length - 1] || null;
+      void loadLocationHistory(selectedDevice, {
+        filters: state.filters,
+        cursor,
+        cursorStack,
+        pageNumber: Math.max(1, state.pageNumber - 1),
+      });
+    });
+    document.getElementById('nextLocationHistory').addEventListener('click', () => {
+      const selectedDevice = selectedDashboardDevice();
+      if (!selectedDevice) return;
+      const state = locationHistoryStateForDevice(selectedDevice.device_id);
+      if (state.loading || !state.nextCursor) return;
+      void loadLocationHistory(selectedDevice, {
+        filters: state.filters,
+        cursor: state.nextCursor,
+        cursorStack: [...state.cursorStack, state.cursor],
+        pageNumber: state.pageNumber + 1,
+      });
+    });
+    document.getElementById('clearHistorySelection').addEventListener('click', () => {
+      const selectedDevice = selectedDashboardDevice();
+      if (!selectedDevice) return;
+      clearLocationHistorySelectionForDevice(selectedDevice.device_id);
+      trajectorySelectionByDevice.set(
+        selectedDevice.device_id,
+        {mode: 'manual', selectedKeys: new Set()},
+      );
+      rerenderTrajectorySelection(selectedDevice);
+      renderLocationHistory(selectedDevice);
     });
     localD2MapReview = loadLocalD2MapReview();
     updateD2ManifestStatus();
@@ -9882,7 +10744,10 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       let points = Array.isArray(map.points) ? map.points : [];
       const allTrustedPoints = points.filter(point => point && point.amap_eligible === true && point.coordinate_contract === 'wgs84');
       const selectionView = trajectorySelectionForPoints(deviceId || 'local-map', allTrustedPoints);
-      const trustedPoints = selectionView.selectedPoints;
+      const trustedPoints = boundedTrajectorySelection(
+        selectionView.selectedPoints,
+        locationHistorySelectedPoints(deviceId || 'local-map'),
+      ).selectedPoints;
       const positionSemantics = amapPositionSemantics(map, estimate, readiness);
       const positionPoint = positionSemantics.current || null;
       const referencePoints = Array.isArray(map.reference_points) ? map.reference_points : [];
@@ -10201,8 +11066,11 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       return amapLoadPromise;
     }
     function convertWgs84Points(AMap, points) {
-      const valid = (Array.isArray(points) ? points : []).map(validMapPoint).filter(Boolean).slice(-40);
+      const valid = (Array.isArray(points) ? points : []).map(validMapPoint).filter(Boolean);
       if (!valid.length) return Promise.resolve([]);
+      if (valid.length > TRAJECTORY_RENDER_POINT_LIMIT + 1) {
+        return Promise.reject(new Error('trajectory render point limit exceeded'));
+      }
       const cacheKey = JSON.stringify(valid.map(point => [point.seq ?? null, point.server_received_at || '', point.lon, point.lat]));
       if (cacheKey === amapConversionCacheKey && amapConversionCacheValue.length === valid.length) {
         return Promise.resolve(valid.map((point, index) => ({...point, lnglat: amapConversionCacheValue[index]})));
@@ -10216,20 +11084,30 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           valid.map((point, index) => ({...point, lnglat: locations[index]})).filter(point => point.lnglat)
         ));
       }
-      const conversionPromise = new Promise((resolve, reject) => {
-        AMap.convertFrom(valid.map(point => [point.lon, point.lat]), 'gps', (status, result) => {
+      const convertBatch = batch => new Promise((resolve, reject) => {
+        AMap.convertFrom(batch.map(point => [point.lon, point.lat]), 'gps', (status, result) => {
           if (status !== 'complete' || !result || result.info !== 'ok' || !Array.isArray(result.locations)) {
             reject(new Error('AMap coordinate conversion failed'));
             return;
           }
-          const locations = result.locations.slice(0, valid.length);
-          if (locations.length === valid.length && locations.every(Boolean)) {
-            amapConversionCacheKey = cacheKey;
-            amapConversionCacheValue = locations;
+          const locations = result.locations.slice(0, batch.length);
+          if (locations.length !== batch.length || !locations.every(Boolean)) {
+            reject(new Error('AMap coordinate conversion returned an incomplete batch'));
+            return;
           }
           resolve(locations);
         });
       });
+      const conversionPromise = (async () => {
+        const locations = [];
+        for (let offset = 0; offset < valid.length; offset += AMAP_CONVERT_BATCH_LIMIT) {
+          const batch = valid.slice(offset, offset + AMAP_CONVERT_BATCH_LIMIT);
+          locations.push(...await convertBatch(batch));
+        }
+        amapConversionCacheKey = cacheKey;
+        amapConversionCacheValue = locations;
+        return locations;
+      })();
       amapConversionInFlightKey = cacheKey;
       amapConversionInFlightPromise = conversionPromise;
       const remappedPromise = conversionPromise.then(locations => (
@@ -10294,7 +11172,44 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         point && point.raw_frame_id || '',
       ]);
     }
-    function chronologicalTrajectoryPoints(points) {
+    function trajectoryEvidenceKey(point) {
+      return JSON.stringify([
+        point && point.server_received_at || '',
+        point && point.seq !== undefined ? point.seq : null,
+        point && point.event_type || '',
+        point && point.lat !== undefined ? point.lat : null,
+        point && point.lon !== undefined ? point.lon : null,
+      ]);
+    }
+    function mergeTrajectoryEvidencePoints(...pointGroups) {
+      const mergedByEvidence = new Map();
+      pointGroups.flat().filter(Boolean).forEach(point => {
+        const evidenceKey = trajectoryEvidenceKey(point);
+        if (!mergedByEvidence.has(evidenceKey)) mergedByEvidence.set(evidenceKey, point);
+      });
+      return [...mergedByEvidence.values()];
+    }
+    function boundedTrajectorySelection(quickSelectedPoints, historySelectedRecords) {
+      const uniqueHistoryPoints = mergeTrajectoryEvidencePoints(historySelectedRecords);
+      const historyPoints = uniqueHistoryPoints.slice(0, TRAJECTORY_RENDER_POINT_LIMIT);
+      const historyEvidenceKeys = new Set(historyPoints.map(trajectoryEvidenceKey));
+      const uniqueQuickCandidates = mergeTrajectoryEvidencePoints(quickSelectedPoints)
+        .filter(point => !historyEvidenceKeys.has(trajectoryEvidenceKey(point)));
+      const quickCapacity = Math.max(0, TRAJECTORY_RENDER_POINT_LIMIT - historyPoints.length);
+      const quickPoints = quickCapacity > 0
+        ? uniqueQuickCandidates.slice(-quickCapacity)
+        : [];
+      return {
+        selectedPoints: chronologicalTrajectoryPoints(
+          mergeTrajectoryEvidencePoints(historyPoints, quickPoints),
+          false,
+        ),
+        quickSelectedPoints: quickPoints,
+        quickSuppressedCount: Math.max(0, uniqueQuickCandidates.length - quickPoints.length),
+        historySuppressedCount: Math.max(0, uniqueHistoryPoints.length - historyPoints.length),
+      };
+    }
+    function chronologicalTrajectoryPoints(points, assignSourceIndex = true) {
       return (Array.isArray(points) ? points : [])
         .map((point, sourceOrder) => ({...point, trajectory_source_order: sourceOrder}))
         .sort((left, right) => {
@@ -10306,13 +11221,35 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           if (Number.isFinite(leftTime) !== Number.isFinite(rightTime)) {
             return Number.isFinite(leftTime) ? -1 : 1;
           }
+          const leftRecordOrder = Number(String(left.history_record_id || '').replace(/^location-/, ''));
+          const rightRecordOrder = Number(String(right.history_record_id || '').replace(/^location-/, ''));
+          if (
+            Number.isFinite(leftRecordOrder)
+            && Number.isFinite(rightRecordOrder)
+            && leftRecordOrder !== rightRecordOrder
+          ) {
+            return leftRecordOrder - rightRecordOrder;
+          }
+          const leftSeq = Number(left.seq);
+          const rightSeq = Number(right.seq);
+          if (Number.isFinite(leftSeq) && Number.isFinite(rightSeq) && leftSeq !== rightSeq) {
+            return leftSeq - rightSeq;
+          }
+          const stableComparison = trajectoryEvidenceKey(left).localeCompare(trajectoryEvidenceKey(right));
+          if (stableComparison) return stableComparison;
           return left.trajectory_source_order - right.trajectory_source_order;
         })
-        .map((point, trajectorySourceIndex) => ({
-          ...point,
-          trajectory_source_index: trajectorySourceIndex,
-          trajectory_point_key: trajectoryPointKey(point),
-        }));
+        .map((point, trajectorySourceIndex) => {
+          const normalized = {
+            ...point,
+            trajectory_point_key: trajectoryPointKey(point),
+          };
+          delete normalized.trajectory_source_order;
+          if (assignSourceIndex && !Number.isFinite(Number(point.trajectory_source_index))) {
+            normalized.trajectory_source_index = trajectorySourceIndex;
+          }
+          return normalized;
+        });
     }
     function trajectorySelectionForPoints(deviceId, points) {
       const allPoints = chronologicalTrajectoryPoints(points);
@@ -10346,15 +11283,26 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const d1 = selectedDevice.d1_link || {};
       const map = mapWithLocalReferences(d1.map_surface || {}, selectedDevice.device_id);
       const baseSemantics = amapPositionSemantics(map, d1.location_estimate || {}, d1.field_readiness || {});
-      const {allPoints, selectedPoints, selection} = trajectorySelectionForPoints(
+      const {allPoints, selectedPoints: quickSelectedPoints, selection} = trajectorySelectionForPoints(
         selectedDevice.device_id,
         baseSemantics.points,
       );
+      const historySelectedRecords = locationHistorySelectedPoints(selectedDevice.device_id);
+      const boundedSelection = boundedTrajectorySelection(
+        quickSelectedPoints,
+        historySelectedRecords,
+      );
+      const selectedPoints = boundedSelection.selectedPoints;
       return {
         semantics: {...baseSemantics, points: selectedPoints},
         baseSemantics,
         allPoints,
         selectedPoints,
+        quickSelectedPoints: boundedSelection.quickSelectedPoints,
+        requestedQuickSelectedPoints: quickSelectedPoints,
+        quickSuppressedCount: boundedSelection.quickSuppressedCount,
+        historySuppressedCount: boundedSelection.historySuppressedCount,
+        historySelectedRecordCount: historySelectedRecords.length,
         selection,
       };
     }
@@ -10389,17 +11337,21 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const semantics = context.baseSemantics;
       const points = context.allPoints;
       const selectedPoints = context.selectedPoints;
+      const recentRequestedCount = points.filter(point => context.selection.selectedKeys.has(point.trajectory_point_key)).length;
+      const recentDisplayedCount = context.quickSelectedPoints.length;
       const start = selectedPoints.length ? selectedPoints[0] : null;
       const end = selectedPoints.length ? selectedPoints[selectedPoints.length - 1] : null;
       const segmentCount = trajectorySegments(selectedPoints).filter(segment => segment.length >= 2).length;
       const stateClass = semantics.kind === 'current' ? '' : ' warn';
-      const stateNote = !points.length
-        ? semantics.label
-        : !selectedPoints.length
-          ? `${semantics.label}；当前未选择定位记录`
-          : selectedPoints.length === 1
-            ? `${semantics.label}；已选择 1 个可信点，暂时不能形成轨迹`
-            : `${semantics.label}；已选择 ${selectedPoints.length} / ${points.length} 个可信 GNSS 点`;
+      const stateNote = !points.length && selectedPoints.length
+        ? `当前无可信实时定位；正在显示 ${selectedPoints.length} 个已选历史可信点`
+        : !points.length
+          ? semantics.label
+          : !selectedPoints.length
+            ? `${semantics.label}；当前未选择定位记录`
+            : selectedPoints.length === 1
+              ? `${semantics.label}；已选择 1 个可信点，暂时不能形成轨迹`
+              : `${semantics.label}；地图已选择 ${selectedPoints.length} 个可信 GNSS 点（最近窗口显示 ${recentDisplayedCount} / 勾选 ${recentRequestedCount}）`;
       const pointItems = [...points].reverse().map((point, reverseIndex) => {
         const absoluteIndex = points.length - reverseIndex;
         const checked = context.selection.selectedKeys.has(point.trajectory_point_key) ? ' checked' : '';
@@ -10408,25 +11360,32 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         return `<li><input type="checkbox" data-trajectory-point-key="${escapeHtml(point.trajectory_point_key)}" aria-label="${escapeHtml(checkboxLabel)}"${checked}/><span class="trajectory-time">${escapeHtml(formatDashboardDateTime(point.server_received_at))}</span><span class="trajectory-event">${escapeHtml(role)} · 第 ${escapeHtml(absoluteIndex)} 点 · seq ${escapeHtml(point.seq ?? '未知')}</span></li>`;
       }).join('');
       const selectionMode = context.selection.mode === 'follow' ? '跟随最新' : '手动选择';
+      const historyCapacityNotice = context.historySuppressedCount
+        ? `另有 ${escapeHtml(context.historySuppressedCount)} 条超限历史选择未显示。`
+        : '';
+      const capacityNotice = context.quickSuppressedCount || context.historySuppressedCount
+        ? `<div class="trajectory-note warn">地图达到 ${escapeHtml(TRAJECTORY_RENDER_POINT_LIMIT)} 点上限：优先保留显式历史选择，本次有 ${escapeHtml(context.quickSuppressedCount)} 个最近窗口点未显示。${historyCapacityNotice}历史选择自身最多 ${escapeHtml(TRAJECTORY_RENDER_POINT_LIMIT)} 条。</div>`
+        : '';
       return `
         <h3>最近可信轨迹</h3>
         <div class="trajectory-state${stateClass}">${escapeHtml(stateNote)}</div>
+        ${capacityNotice}
         <div class="trajectory-controls" role="group" aria-label="轨迹记录选择">
           <button type="button" class="secondary" data-trajectory-action="all">全选</button>
           <button type="button" class="secondary" data-trajectory-action="clear">清空</button>
-          <button type="button" class="secondary" data-trajectory-action="follow">恢复跟随最新</button>
-          <span class="trajectory-selection-status">${escapeHtml(selectionMode)} · 已选 ${escapeHtml(selectedPoints.length)} / ${escapeHtml(points.length)}</span>
+          <button type="button" class="secondary" data-trajectory-action="follow">恢复跟随最新（清除历史选择）</button>
+          <span class="trajectory-selection-status">${escapeHtml(selectionMode)} · 最近窗口显示 ${escapeHtml(recentDisplayedCount)} / 勾选 ${escapeHtml(recentRequestedCount)} · 地图共 ${escapeHtml(selectedPoints.length)} / ${escapeHtml(TRAJECTORY_RENDER_POINT_LIMIT)}</span>
         </div>
         <div class="trajectory-summary-grid">
           <div class="trajectory-stat"><span>可信点</span><strong>${escapeHtml(points.length)} / 最多 24</strong></div>
-          <div class="trajectory-stat"><span>已选点</span><strong>${escapeHtml(selectedPoints.length)} 个</strong></div>
+          <div class="trajectory-stat"><span>地图已选点</span><strong>${escapeHtml(selectedPoints.length)} / 最多 ${escapeHtml(TRAJECTORY_RENDER_POINT_LIMIT)}</strong></div>
           <div class="trajectory-stat"><span>可见轨迹段</span><strong>${escapeHtml(segmentCount)} 段</strong></div>
           <div class="trajectory-stat"><span>所选起点</span><strong>${escapeHtml(start ? formatDashboardDateTime(start.server_received_at) : '暂无')}</strong></div>
           <div class="trajectory-stat"><span>所选终点</span><strong>${escapeHtml(end ? formatDashboardDateTime(end.server_received_at) : '暂无')}</strong></div>
           <div class="trajectory-stat"><span>所选时间跨度</span><strong>${escapeHtml(start && end ? formatDashboardDuration(start.server_received_at, end.server_received_at) : '未知')}</strong></div>
         </div>
         ${pointItems ? `<div class="trajectory-details"><div class="trajectory-note">选择要比较的可信定位记录</div><ol class="trajectory-list">${pointItems}</ol></div>` : ''}
-        <div class="trajectory-note">地图只按定位时间顺序直线连接所选采样点，不代表实际行走路线。取消中间记录、时间异常或间隔超过 10 分钟都会断开线段；选择仅保存在当前页面内存中。此处不作定位精度声明。</div>
+        <div class="trajectory-note">地图只按定位时间顺序直线连接所选采样点，不代表实际行走路线。最近窗口取消中间记录、时间异常或间隔超过 10 分钟都会断开线段；全历史记录可在下方跨页选择。地图一次最多显示 ${escapeHtml(TRAJECTORY_RENDER_POINT_LIMIT)} 点，高德坐标每批最多转换 ${escapeHtml(AMAP_CONVERT_BATCH_LIMIT)} 点。选择仅保存在当前页面内存中，此处不作定位精度声明。</div>
       `;
     }
     function updateTrajectoryMaps(selectedDevice) {
@@ -10465,10 +11424,27 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         input.addEventListener('change', () => {
           const context = trajectorySelectionContext(selectedDevice);
           context.selection.mode = 'manual';
-          if (input.checked) context.selection.selectedKeys.add(input.dataset.trajectoryPointKey);
-          else context.selection.selectedKeys.delete(input.dataset.trajectoryPointKey);
+          if (input.checked) {
+            const candidatePoint = context.allPoints.find(
+              point => point.trajectory_point_key === input.dataset.trajectoryPointKey,
+            );
+            const projectedCount = mergeTrajectoryEvidencePoints(
+              context.quickSelectedPoints,
+              candidatePoint ? [candidatePoint] : [],
+              locationHistorySelectedPoints(selectedDevice.device_id),
+            ).length;
+            if (projectedCount > TRAJECTORY_RENDER_POINT_LIMIT) {
+              input.checked = false;
+              setLocationHistoryStatus(`地图最多选择 ${TRAJECTORY_RENDER_POINT_LIMIT} 个可信点，请先取消部分记录。`, 'warn');
+              return;
+            }
+            context.selection.selectedKeys.add(input.dataset.trajectoryPointKey);
+          } else {
+            context.selection.selectedKeys.delete(input.dataset.trajectoryPointKey);
+          }
           trajectorySelectionByDevice.set(selectedDevice.device_id, context.selection);
           rerenderTrajectorySelection(selectedDevice, input.dataset.trajectoryPointKey);
+          renderLocationHistory(selectedDevice);
         });
       });
       trajectoryPanel.querySelectorAll('[data-trajectory-action]').forEach(button => {
@@ -10476,16 +11452,31 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           const context = trajectorySelectionContext(selectedDevice);
           const action = button.dataset.trajectoryAction;
           if (action === 'follow') {
+            clearLocationHistorySelectionForDevice(selectedDevice.device_id);
             context.selection.mode = 'follow';
             context.selection.selectedKeys = new Set(context.allPoints.map(point => point.trajectory_point_key));
           } else {
             context.selection.mode = 'manual';
-            context.selection.selectedKeys = action === 'all'
-              ? new Set(context.allPoints.map(point => point.trajectory_point_key))
-              : new Set();
+            if (action === 'all') {
+              const projectedCount = mergeTrajectoryEvidencePoints(
+                context.allPoints,
+                locationHistorySelectedPoints(selectedDevice.device_id),
+              ).length;
+              if (projectedCount > TRAJECTORY_RENDER_POINT_LIMIT) {
+                setLocationHistoryStatus(`地图最多选择 ${TRAJECTORY_RENDER_POINT_LIMIT} 个可信点，请先取消部分历史记录。`, 'warn');
+                return;
+              }
+              context.selection.selectedKeys = new Set(
+                context.allPoints.map(point => point.trajectory_point_key),
+              );
+            } else {
+              clearLocationHistorySelectionForDevice(selectedDevice.device_id);
+              context.selection.selectedKeys = new Set();
+            }
           }
           trajectorySelectionByDevice.set(selectedDevice.device_id, context.selection);
           rerenderTrajectorySelection(selectedDevice);
+          renderLocationHistory(selectedDevice);
         });
       });
     }
@@ -10520,18 +11511,20 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const readiness = d1.field_readiness || {};
       const map = mapWithLocalReferences(d1.map_surface || {}, selectedDevice ? selectedDevice.device_id : '');
       const baseSemantics = amapPositionSemantics(map, estimate, readiness);
-      const selectionView = trajectorySelectionForPoints(
-        selectedDevice ? selectedDevice.device_id : 'no-device',
-        baseSemantics.points,
-      );
+      const selectionView = trajectorySelectionContext(selectedDevice);
       const positionPoint = baseSemantics.current
         ? {...baseSemantics.current, trajectory_point_key: trajectoryPointKey(baseSemantics.current)}
         : null;
       const semantics = {
         ...baseSemantics,
-        label: selectionView.selectedPoints.length
-          ? baseSemantics.label
-          : `${baseSemantics.label} / 未选择轨迹点`,
+        label: selectionView.selectedPoints.length && (
+          baseSemantics.kind === 'no-fix'
+          || baseSemantics.kind === 'pre-correction-hidden'
+        )
+          ? `当前无可信实时定位；正在显示 ${selectionView.selectedPoints.length} 个已选历史可信点`
+          : selectionView.selectedPoints.length
+            ? baseSemantics.label
+            : `${baseSemantics.label} / 未选择轨迹点`,
         points: selectionView.selectedPoints,
         positionPoint,
       };
@@ -10551,9 +11544,11 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         setAmapStatus(`${semantics.label} / 使用本地轨迹示意图`, 'warn');
         return;
       }
-      const hasTrustedPoint = (semantics.points.length > 0 || Boolean(semantics.positionPoint))
+      const hasSelectedTrustedPoint = semantics.points.length > 0;
+      const hasTrustedPositionPoint = Boolean(semantics.positionPoint)
         && semantics.kind !== 'no-fix'
         && semantics.kind !== 'pre-correction-hidden';
+      const hasTrustedPoint = hasSelectedTrustedPoint || hasTrustedPositionPoint;
       const overlayKey = amapOverlayKey(selectedDevice.device_id, semantics);
       if (amapInstance && overlayKey === amapOverlayCacheKey) {
         amapLiveMap.dataset.state = hasTrustedPoint ? 'ready' : 'ready-empty';
