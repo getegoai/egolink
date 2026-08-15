@@ -45,23 +45,23 @@ provider map and local fallback.
 
 # Acceptance Criteria
 
-- [ ] No timer or recurring background refresh mutates the Dashboard. Initial
+- [x] No timer or recurring background refresh mutates the Dashboard. Initial
       load, token save, device selection, and an explicit `刷新数据` action may
       request state deliberately.
-- [ ] Opening details, focusing a control, scrolling a list, or panning/zooming
+- [x] Opening details, focusing a control, scrolling a list, or panning/zooming
       the map is not interrupted merely because time passes.
-- [ ] The recent trusted-point panel lists the bounded 24-point window with
+- [x] The recent trusted-point panel lists the bounded 24-point window with
       checkboxes plus select-all, clear, and follow-latest controls. Selection
       remains page-local and is isolated per device.
-- [ ] Selected points are sorted by trusted server timestamp, never checkbox
+- [x] Selected points are sorted by trusted server timestamp, never checkbox
       click order. Zero points draw no line, one point is a sample only, and two
       or more adjacent samples may form straight segments.
-- [ ] A gap longer than ten minutes, invalid/reversed time, or an unselected
+- [x] A gap longer than ten minutes, invalid/reversed time, or an unselected
       intermediate sample breaks a segment. The UI states that connections are
       straight lines between selected samples and are not an inferred route.
-- [ ] The selected endpoint is labelled `所选终点`; current, stale, no-fix, and
+- [x] The selected endpoint is labelled `所选终点`; current, stale, no-fix, and
       last-known position semantics remain separate and honest.
-- [ ] Only eligible WGS-84 trusted points are selectable or sent to AMap. The
+- [x] Only eligible WGS-84 trusted points are selectable or sent to AMap. The
       selection is not stored in localStorage, a URL, logs, or the database.
 - [ ] Focused tests, full repository verification, context lint, Python compile,
       diff checks, and an authenticated browser interaction check pass before
@@ -88,5 +88,17 @@ git diff --check
 
 # Completion Evidence
 
-- Pending implementation, validation, commit, deployment, and browser review.
-
+- Implementation commit: `c2ac2a7` (`feat(web): add manual trajectory selection
+  [D2]`), limited to `server/message_hub.py` and the focused Dashboard test.
+- `python -m unittest quality_tests.test_message_hub_dashboard -v`: 51/51 PASS.
+  Dashboard plus Message Hub server focused regression: 102/102 PASS.
+- `python -m py_compile server/message_hub.py`: PASS. Independent source review
+  found no remaining trajectory, current/last-known, selection-race, or privacy
+  blocker.
+- `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`: 659/659 PASS.
+  `python scripts/context_lint.py` and `git diff --check`: PASS.
+- Deployment and authenticated browser interaction evidence remain pending. A
+  first bounded deployment attempt on 2026-08-15 exceeded its outer timeout
+  during an external AMap/HTTP probe and automatically restored the prior code;
+  the live database was not restored or modified. The validated root-only
+  snapshot is `/var/backups/egolink/web005-20260815T085038Z`.
