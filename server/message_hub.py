@@ -8495,10 +8495,14 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     .trajectory-state { border-left: 4px solid var(--blue); border-radius: 8px; padding: 10px 12px; background: #eef5ff; color: var(--ink-soft); font-size: 13px; }
     .trajectory-state.warn { border-color: var(--amber); background: #fff8eb; }
     .trajectory-note { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .trajectory-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .trajectory-controls button { min-height: 36px; padding: 7px 10px; }
+    .trajectory-selection-status { color: var(--ink-soft); font-size: 12px; font-weight: 700; }
     .trajectory-details { border-top: 1px solid #e3e7ee; padding-top: 10px; }
     .trajectory-details > summary { color: var(--blue); cursor: pointer; font-size: 13px; font-weight: 700; }
     .trajectory-list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; max-height: 240px; overflow-y: auto; }
-    .trajectory-list li { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; padding: 8px; border-radius: 8px; background: #fff; border: 1px solid #e6e9ef; font-size: 12px; }
+    .trajectory-list li { display: grid; grid-template-columns: 24px 116px minmax(0, 1fr); gap: 8px; align-items: start; padding: 8px; border-radius: 8px; background: #fff; border: 1px solid #e6e9ef; font-size: 12px; }
+    .trajectory-list input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--blue); }
     .trajectory-time { color: var(--ink-soft); font-weight: 700; }
     .trajectory-event { color: var(--muted); overflow-wrap: anywhere; }
     .map-grid { position: absolute; inset: 0; background-image: linear-gradient(#d9e0ea 1px, transparent 1px), linear-gradient(90deg, #d9e0ea 1px, transparent 1px); background-size: 28px 28px; }
@@ -8514,6 +8518,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     .map-point-end { width: 16px; height: 16px; background: var(--amber); box-shadow: 0 0 0 2px var(--amber); }
     .map-point-stale { width: 16px; height: 16px; background: var(--red); box-shadow: 0 0 0 2px var(--red); }
     .map-point-current { width: 16px; height: 16px; background: var(--blue); box-shadow: 0 0 0 2px var(--blue); }
+    .map-point-position { transform: translate(-50%, -160%); z-index: 4; }
     .map-point-reference { width: 13px; height: 13px; border-radius: 3px; background: var(--amber); box-shadow: 0 0 0 2px var(--amber); }
     .map-waiting { z-index: 1; color: var(--muted); font-size: 13px; font-weight: 600; border: 1px solid #c8d0dc; border-radius: 999px; padding: 6px 10px; background: rgba(255,255,255,0.82); }
     .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: var(--ink-soft); font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 5px 6px; }
@@ -8559,8 +8564,9 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           <button id="clearD2References" class="secondary" type="button">清除参考点</button>
           <input id="d2ManifestFile" type="file" accept="application/json,.json" hidden />
           <span id="d2ManifestStatus" class="map-import-status">暂无本地参考点</span>
-          <span class="refresh-note">每 3 秒自动刷新</span>
-          <span id="refreshStatus" class="refresh-status" role="status" aria-live="polite">正在等待首次刷新</span>
+          <button id="refreshDashboard" class="secondary" type="button">刷新数据</button>
+          <span class="refresh-note">页面不会自动重建</span>
+          <span id="refreshStatus" class="refresh-status" role="status" aria-live="polite">正在等待首次加载</span>
         </div>
       </div>
       <div id="locationMapGrid" class="location-map-grid provider-map-hidden">
@@ -8817,6 +8823,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     let amapConversionInFlightPromise = null;
     let amapOverlayCacheKey = '';
     let amapOverlayFailureKey = '';
+    const trajectorySelectionByDevice = new Map();
     function selectDashboardDevice(devices, currentRun = {}, preferredDeviceId = selectedDashboardDeviceId) {
       const available = Array.isArray(devices)
         ? devices.filter(device => device && device.device_id)
@@ -8954,6 +8961,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       updateD2ManifestStatus(selectedDevice ? selectedDevice.device_id : '');
       d1Link.innerHTML = d1LinkPanel(selectedDevice);
       trajectoryPanel.innerHTML = recentTrajectoryPanel(selectedDevice);
+      bindTrajectoryPanelEvents(selectedDevice);
       fieldState.innerHTML = latestFieldState(
         selectedDevice,
         lastSuccessfulDashboardState.raw_frames || [],
@@ -8968,6 +8976,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       localStorage.setItem('egolinkHubToken', tokenInput.value.trim());
       refresh();
     });
+    refreshDashboard.addEventListener('click', refresh);
     deviceSelector.addEventListener('change', () => {
       selectedDashboardDeviceId = deviceSelector.value;
       if (selectedDashboardDeviceId) {
@@ -9828,37 +9837,54 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         y: 92 - ((point.lat - minLat) / latRange) * 84,
       }));
     }
-    function d1MapTrack(points, referencePoints = []) {
-      const observedInput = (Array.isArray(points) ? points : []).map(point => ({...point, point_kind: 'observed'}));
+    function d1MapTrack(points, referencePoints = [], positionPoint = null, positionKind = 'last-known') {
+      const observedInput = (Array.isArray(points) ? points : []).map(point => ({...point, point_kind: 'selected'}));
       const referenceInput = (Array.isArray(referencePoints) ? referencePoints : []).map(point => ({...point, point_kind: 'reference'}));
-      const normalized = normalizeMapPoints([...observedInput, ...referenceInput]);
+      const positionInput = positionPoint ? [{...positionPoint, point_kind: 'position'}] : [];
+      const normalized = normalizeMapPoints([...observedInput, ...positionInput, ...referenceInput]);
       if (!normalized.length) return '';
-      const observed = normalized.filter(point => point.point_kind !== 'reference');
+      const observed = normalized.filter(point => point.point_kind === 'selected');
+      const position = normalized.find(point => point.point_kind === 'position') || null;
       const references = normalized.filter(point => point.point_kind === 'reference');
       const localSegments = trajectorySegments(observed).filter(segment => segment.length >= 2);
       const polyline = localSegments.length
         ? `<svg class="map-track" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${localSegments.map(segment => `<polyline points="${segment.map(point => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}" fill="none" stroke="#1f6feb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>`).join('')}</svg>`
         : '';
       const markers = observed.map((point, index) => {
-        const current = point.display_semantics === 'current_fix' && point.fix === true;
-        const stale = point.display_semantics === 'stale_fix' && point.fix === true;
         const start = observed.length >= 2 && index === 0;
         const end = index === observed.length - 1;
-        const endLabel = current ? '当前 GNSS 定位' : stale ? '历史位置（已过期）' : '最后可信位置';
-        const label = `${start ? '轨迹起点' : end ? endLabel : '历史轨迹点'} / seq ${point.seq ?? '未知'} / ${formatDashboardDateTime(point.server_received_at)}`;
-        const markerClass = current ? 'map-point-current' : stale ? 'map-point-stale' : end ? 'map-point-end' : start ? 'map-point-start' : '';
+        const label = `${start ? '所选起点' : end ? '所选终点' : '所选历史点'} / seq ${point.seq ?? '未知'} / ${formatDashboardDateTime(point.server_received_at)}`;
+        const markerClass = end ? 'map-point-end' : start ? 'map-point-start' : '';
         return `<span class="map-point ${markerClass}" title="${escapeHtml(label)}" style="left:${point.x.toFixed(2)}%; top:${point.y.toFixed(2)}%;"></span>`;
       }).join('');
+      const positionMarker = position ? (() => {
+        const positionLabel = positionKind === 'current'
+          ? '当前 GNSS 定位'
+          : positionKind === 'stale'
+            ? '历史位置（已过期）'
+            : '最后可信位置';
+        const markerClass = positionKind === 'current'
+          ? 'map-point-current'
+          : positionKind === 'stale'
+            ? 'map-point-stale'
+            : 'map-point-end';
+        const label = `${positionLabel} / seq ${position.seq ?? '未知'} / ${formatDashboardDateTime(position.server_received_at)}`;
+        return `<span class="map-point map-point-position ${markerClass}" title="${escapeHtml(label)}" style="left:${position.x.toFixed(2)}%; top:${position.y.toFixed(2)}%;"></span>`;
+      })() : '';
       const referenceMarkers = references.map(point => {
         const label = `${point.label || point.name || 'D2 reference'} ${coordinateLabel(point.lat, point.lon)}`;
         return `<span class="map-point map-point-reference" title="${escapeHtml(label)}" style="left:${point.x.toFixed(2)}%; top:${point.y.toFixed(2)}%;"></span>`;
       }).join('');
-      return polyline + markers + referenceMarkers;
+      return polyline + markers + positionMarker + referenceMarkers;
     }
-    function d1MapSurface(map, estimate, readiness = {}) {
+    function d1MapSurface(map, estimate, readiness = {}, deviceId = '') {
       const mode = map.mode || 'waiting_for_location_upload';
       let points = Array.isArray(map.points) ? map.points : [];
-      const trustedPoints = points.filter(point => point && point.amap_eligible === true && point.coordinate_contract === 'wgs84');
+      const allTrustedPoints = points.filter(point => point && point.amap_eligible === true && point.coordinate_contract === 'wgs84');
+      const selectionView = trajectorySelectionForPoints(deviceId || 'local-map', allTrustedPoints);
+      const trustedPoints = selectionView.selectedPoints;
+      const positionSemantics = amapPositionSemantics(map, estimate, readiness);
+      const positionPoint = positionSemantics.current || null;
       const referencePoints = Array.isArray(map.reference_points) ? map.reference_points : [];
       const provider = map.provider || {};
       const privacy = map.privacy || {};
@@ -9872,28 +9898,30 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const providerStatus = provider.status || 'not_configured';
       const reviewMode = map.review_mode || 'local_no_key';
       const providerLabel = providerMode === 'none' ? '本地轨迹示意图' : `地图服务 ${providerMode}`;
-      const surfaceVisible = map.visible || referencePoints.length > 0;
-      const latestTrustedPoint = trustedPoints.length ? trustedPoints[trustedPoints.length - 1] : null;
+      const surfaceVisible = map.visible || positionPoint || trustedPoints.length > 0 || referencePoints.length > 0;
       const latestFix = coord.latest_fix;
       const predicted = String(estimate.state || '').trim().toLowerCase() === 'predicted';
       const freshnessThreshold = Number(readiness.freshness_threshold_s ?? 180);
       const exclusionReasons = new Set(points.map(point => point && point.amap_exclusion_reason).filter(Boolean));
-      const hiddenPreCorrection = !trustedPoints.length && exclusionReasons.has('firmware_parser_not_allowlisted');
-      const hiddenNoLineage = !trustedPoints.length && exclusionReasons.has('location_memory_has_no_coordinate_provenance');
-      const hiddenNoFix = !trustedPoints.length && (latestFix === false || exclusionReasons.has('gnss_fix_not_true'));
-      const hiddenMessage = hiddenNoFix
+      const hiddenPreCorrection = !allTrustedPoints.length && exclusionReasons.has('firmware_parser_not_allowlisted');
+      const hiddenNoLineage = !allTrustedPoints.length && exclusionReasons.has('location_memory_has_no_coordinate_provenance');
+      const hiddenNoFix = !allTrustedPoints.length && (latestFix === false || exclusionReasons.has('gnss_fix_not_true'));
+      const selectionEmpty = allTrustedPoints.length > 0 && !trustedPoints.length;
+      const hiddenMessage = selectionEmpty
+        ? `${positionSemantics.label}；当前未选择轨迹记录`
+        : hiddenNoFix
         ? '当前 GNSS 未定位，暂无可信轨迹'
         : hiddenPreCorrection
           ? '旧版坐标已隐藏，等待修正版固件产生新的可信 GNSS 定位'
           : hiddenNoLineage
             ? '最后位置缺少可信坐标，暂不显示'
-            : !trustedPoints.length && points.length
+            : !allTrustedPoints.length && points.length
               ? '暂无可绘制的可信 GNSS 定位'
               : '';
       const caption = surfaceVisible
         ? hiddenMessage
           ? hiddenMessage
-          : `${displayState(estimate.state)} / ${trustedPoints.length} 个可信轨迹点 / ${coordCount}/${eventCount} 条定位上报`
+          : `${positionSemantics.label} / 已选 ${trustedPoints.length}/${allTrustedPoints.length} 个可信轨迹点 / ${coordCount}/${eventCount} 条定位上报`
         : '正在等待定位上报';
       points = trustedPoints.map(point => {
         let displaySemantics = 'history';
@@ -9907,7 +9935,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         return {...point, display_semantics: displaySemantics};
       });
       const marker = surfaceVisible
-        ? d1MapTrack(points, referencePoints) || `<div class="map-waiting">${hiddenMessage || '暂无可信轨迹点'}</div>`
+        ? d1MapTrack(points, referencePoints, positionPoint, positionSemantics.kind) || `<div class="map-waiting">${hiddenMessage || '暂无可信轨迹点'}</div>`
         : '<div class="map-waiting">正在等待定位</div>';
       return `
         <div id="localMapSurface" class="map-surface" data-d1-map-mode="${escapeHtml(mode)}" data-map-review-mode="${escapeHtml(reviewMode)}" data-map-provider-mode="${escapeHtml(providerMode)}">
@@ -9918,7 +9946,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           </div>
           <div class="map-legend">
             <span class="map-legend-item"><span class="map-legend-dot map-legend-current"></span>当前 / 最后可信点</span>
-            <span class="map-legend-item"><span class="map-legend-dot"></span>可信轨迹 ${escapeHtml(trustedPoints.length)}</span>
+            <span class="map-legend-item"><span class="map-legend-dot"></span>所选采样 ${escapeHtml(trustedPoints.length)}/${escapeHtml(allTrustedPoints.length)}</span>
             <span class="map-legend-item"><span class="map-legend-dot map-legend-reference"></span>D2 参考点 ${escapeHtml(referencePoints.length)}</span>
             <span class="map-legend-item">底图 ${escapeHtml(layers.provider_tiles ? '在线' : '关闭')}</span>
           </div>
@@ -10164,7 +10192,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         }))
         .catch(error => {
           // Keep the rejected promise sticky for this page lifetime. Repeated
-          // three-second refreshes must not destroy and recreate a map while
+          // explicit render requests must not destroy and recreate a map while
           // the provider still has asynchronous renderer work in flight.
           amapMapReady = false;
           amapLiveShell.dataset.lifecycle = 'failed';
@@ -10180,7 +10208,13 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         return Promise.resolve(valid.map((point, index) => ({...point, lnglat: amapConversionCacheValue[index]})));
       }
       if (cacheKey === amapConversionInFlightKey && amapConversionInFlightPromise) {
-        return amapConversionInFlightPromise;
+        // The same coordinate set can carry different render roles after a
+        // fast checkbox change.  Reuse only the provider result, then remap it
+        // onto this caller's current point objects so stale selection flags
+        // cannot leak out of an earlier in-flight request.
+        return amapConversionInFlightPromise.then(locations => (
+          valid.map((point, index) => ({...point, lnglat: locations[index]})).filter(point => point.lnglat)
+        ));
       }
       const conversionPromise = new Promise((resolve, reject) => {
         AMap.convertFrom(valid.map(point => [point.lon, point.lat]), 'gps', (status, result) => {
@@ -10188,17 +10222,20 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
             reject(new Error('AMap coordinate conversion failed'));
             return;
           }
-          const converted = valid.map((point, index) => ({...point, lnglat: result.locations[index]})).filter(point => point.lnglat);
-          if (converted.length === valid.length) {
+          const locations = result.locations.slice(0, valid.length);
+          if (locations.length === valid.length && locations.every(Boolean)) {
             amapConversionCacheKey = cacheKey;
-            amapConversionCacheValue = converted.map(point => point.lnglat);
+            amapConversionCacheValue = locations;
           }
-          resolve(converted);
+          resolve(locations);
         });
       });
       amapConversionInFlightKey = cacheKey;
       amapConversionInFlightPromise = conversionPromise;
-      return conversionPromise.finally(() => {
+      const remappedPromise = conversionPromise.then(locations => (
+        valid.map((point, index) => ({...point, lnglat: locations[index]})).filter(point => point.lnglat)
+      ));
+      return remappedPromise.finally(() => {
         if (amapConversionInFlightPromise === conversionPromise) {
           amapConversionInFlightKey = '';
           amapConversionInFlightPromise = null;
@@ -10250,17 +10287,97 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         : `最后可信位置 / ${age}`;
       return {kind: 'last-known', label: lastKnownLabel, points, current: lastPoint};
     }
+    function trajectoryPointKey(point) {
+      return JSON.stringify([
+        point && point.server_received_at || '',
+        point && point.seq !== undefined ? point.seq : null,
+        point && point.raw_frame_id || '',
+      ]);
+    }
+    function chronologicalTrajectoryPoints(points) {
+      return (Array.isArray(points) ? points : [])
+        .map((point, sourceOrder) => ({...point, trajectory_source_order: sourceOrder}))
+        .sort((left, right) => {
+          const leftTime = Date.parse(left.server_received_at || '');
+          const rightTime = Date.parse(right.server_received_at || '');
+          if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
+            return leftTime - rightTime;
+          }
+          if (Number.isFinite(leftTime) !== Number.isFinite(rightTime)) {
+            return Number.isFinite(leftTime) ? -1 : 1;
+          }
+          return left.trajectory_source_order - right.trajectory_source_order;
+        })
+        .map((point, trajectorySourceIndex) => ({
+          ...point,
+          trajectory_source_index: trajectorySourceIndex,
+          trajectory_point_key: trajectoryPointKey(point),
+        }));
+    }
+    function trajectorySelectionForPoints(deviceId, points) {
+      const allPoints = chronologicalTrajectoryPoints(points);
+      const availableKeys = new Set(allPoints.map(point => point.trajectory_point_key));
+      let selection = trajectorySelectionByDevice.get(deviceId);
+      if (!selection) {
+        selection = {mode: 'follow', selectedKeys: new Set(availableKeys)};
+      } else if (selection.mode === 'follow') {
+        selection.selectedKeys = new Set(availableKeys);
+      } else {
+        selection.selectedKeys = new Set(
+          [...selection.selectedKeys].filter(key => availableKeys.has(key)),
+        );
+      }
+      trajectorySelectionByDevice.set(deviceId, selection);
+      return {
+        allPoints,
+        selectedPoints: allPoints.filter(point => selection.selectedKeys.has(point.trajectory_point_key)),
+        selection,
+      };
+    }
+    function trajectorySelectionContext(selectedDevice) {
+      if (!selectedDevice) {
+        return {
+          semantics: {kind: 'no-fix', label: '暂无设备数据', points: []},
+          allPoints: [],
+          selectedPoints: [],
+          selection: {mode: 'follow', selectedKeys: new Set()},
+        };
+      }
+      const d1 = selectedDevice.d1_link || {};
+      const map = mapWithLocalReferences(d1.map_surface || {}, selectedDevice.device_id);
+      const baseSemantics = amapPositionSemantics(map, d1.location_estimate || {}, d1.field_readiness || {});
+      const {allPoints, selectedPoints, selection} = trajectorySelectionForPoints(
+        selectedDevice.device_id,
+        baseSemantics.points,
+      );
+      return {
+        semantics: {...baseSemantics, points: selectedPoints},
+        baseSemantics,
+        allPoints,
+        selectedPoints,
+        selection,
+      };
+    }
     function trajectorySegments(points, maxGapMs = 10 * 60 * 1000) {
       const source = Array.isArray(points) ? points : [];
       if (!source.length) return [];
       const segments = [[source[0]]];
       for (let index = 1; index < source.length; index += 1) {
-        const previousTime = Date.parse(source[index - 1].server_received_at || '');
-        const currentTime = Date.parse(source[index].server_received_at || '');
-        const hasLongGap = Number.isFinite(previousTime) && Number.isFinite(currentTime)
-          && currentTime - previousTime > maxGapMs;
-        if (hasLongGap) segments.push([]);
-        segments[segments.length - 1].push(source[index]);
+        const previous = source[index - 1];
+        const current = source[index];
+        const previousTime = Date.parse(previous.server_received_at || '');
+        const currentTime = Date.parse(current.server_received_at || '');
+        const invalidOrReversedTime = !Number.isFinite(previousTime)
+          || !Number.isFinite(currentTime)
+          || currentTime <= previousTime;
+        const hasLongGap = !invalidOrReversedTime && currentTime - previousTime > maxGapMs;
+        const previousSourceIndex = Number(previous.trajectory_source_index);
+        const currentSourceIndex = Number(current.trajectory_source_index);
+        const skippedSample = Number.isFinite(previousSourceIndex)
+          && Number.isFinite(currentSourceIndex)
+          && currentSourceIndex !== previousSourceIndex + 1;
+        if (invalidOrReversedTime || hasLongGap || skippedSample) segments.push([]);
+        segments[segments.length - 1].push(current);
       }
       return segments;
     }
@@ -10268,40 +10385,109 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       if (!selectedDevice) {
         return '<h3>最近可信轨迹</h3><div class="empty">暂无设备数据</div>';
       }
-      const d1 = selectedDevice.d1_link || {};
-      const map = mapWithLocalReferences(d1.map_surface || {}, selectedDevice.device_id);
-      const semantics = amapPositionSemantics(map, d1.location_estimate || {}, d1.field_readiness || {});
-      const points = Array.isArray(semantics.points) ? semantics.points : [];
-      const start = points.length ? points[0] : null;
-      const end = points.length ? points[points.length - 1] : null;
-      const segmentCount = trajectorySegments(points).filter(segment => segment.length >= 2).length;
+      const context = trajectorySelectionContext(selectedDevice);
+      const semantics = context.baseSemantics;
+      const points = context.allPoints;
+      const selectedPoints = context.selectedPoints;
+      const start = selectedPoints.length ? selectedPoints[0] : null;
+      const end = selectedPoints.length ? selectedPoints[selectedPoints.length - 1] : null;
+      const segmentCount = trajectorySegments(selectedPoints).filter(segment => segment.length >= 2).length;
       const stateClass = semantics.kind === 'current' ? '' : ' warn';
       const stateNote = !points.length
         ? semantics.label
-        : points.length === 1
-          ? `${semantics.label}；只有 1 个可信点，暂时不能形成轨迹`
-          : `${semantics.label}；轨迹由 ${points.length} 个可信 GNSS 点组成`;
-      const recentItems = points.slice(-8).reverse().map((point, index) => {
-        const absoluteIndex = points.length - index;
-        const role = absoluteIndex === points.length
-          ? (semantics.kind === 'current' ? '当前定位' : '最后可信点')
-          : absoluteIndex === 1 ? '轨迹起点' : '历史点';
-        return `<li><span class="trajectory-time">${escapeHtml(formatDashboardClock(point.server_received_at))}</span><span class="trajectory-event">${escapeHtml(role)} · 第 ${escapeHtml(absoluteIndex)} 点 · seq ${escapeHtml(point.seq ?? '未知')}</span></li>`;
+        : !selectedPoints.length
+          ? `${semantics.label}；当前未选择定位记录`
+          : selectedPoints.length === 1
+            ? `${semantics.label}；已选择 1 个可信点，暂时不能形成轨迹`
+            : `${semantics.label}；已选择 ${selectedPoints.length} / ${points.length} 个可信 GNSS 点`;
+      const pointItems = [...points].reverse().map((point, reverseIndex) => {
+        const absoluteIndex = points.length - reverseIndex;
+        const checked = context.selection.selectedKeys.has(point.trajectory_point_key) ? ' checked' : '';
+        const role = absoluteIndex === points.length ? '最新可信点' : absoluteIndex === 1 ? '最早可信点' : '历史点';
+        const checkboxLabel = `选择第 ${absoluteIndex} 个定位记录，${formatDashboardDateTime(point.server_received_at)}`;
+        return `<li><input type="checkbox" data-trajectory-point-key="${escapeHtml(point.trajectory_point_key)}" aria-label="${escapeHtml(checkboxLabel)}"${checked}/><span class="trajectory-time">${escapeHtml(formatDashboardDateTime(point.server_received_at))}</span><span class="trajectory-event">${escapeHtml(role)} · 第 ${escapeHtml(absoluteIndex)} 点 · seq ${escapeHtml(point.seq ?? '未知')}</span></li>`;
       }).join('');
+      const selectionMode = context.selection.mode === 'follow' ? '跟随最新' : '手动选择';
       return `
         <h3>最近可信轨迹</h3>
         <div class="trajectory-state${stateClass}">${escapeHtml(stateNote)}</div>
+        <div class="trajectory-controls" role="group" aria-label="轨迹记录选择">
+          <button type="button" class="secondary" data-trajectory-action="all">全选</button>
+          <button type="button" class="secondary" data-trajectory-action="clear">清空</button>
+          <button type="button" class="secondary" data-trajectory-action="follow">恢复跟随最新</button>
+          <span class="trajectory-selection-status">${escapeHtml(selectionMode)} · 已选 ${escapeHtml(selectedPoints.length)} / ${escapeHtml(points.length)}</span>
+        </div>
         <div class="trajectory-summary-grid">
           <div class="trajectory-stat"><span>可信点</span><strong>${escapeHtml(points.length)} / 最多 24</strong></div>
+          <div class="trajectory-stat"><span>已选点</span><strong>${escapeHtml(selectedPoints.length)} 个</strong></div>
           <div class="trajectory-stat"><span>可见轨迹段</span><strong>${escapeHtml(segmentCount)} 段</strong></div>
-          <div class="trajectory-stat"><span>开始</span><strong>${escapeHtml(start ? formatDashboardDateTime(start.server_received_at) : '暂无')}</strong></div>
-          <div class="trajectory-stat"><span>最后可信点</span><strong>${escapeHtml(end ? formatDashboardDateTime(end.server_received_at) : '暂无')}</strong></div>
-          <div class="trajectory-stat"><span>时间跨度</span><strong>${escapeHtml(start && end ? formatDashboardDuration(start.server_received_at, end.server_received_at) : '未知')}</strong></div>
-          <div class="trajectory-stat"><span>数据来源</span><strong>${points.length ? 'GNSS（WGS-84）' : '暂无'}</strong></div>
+          <div class="trajectory-stat"><span>所选起点</span><strong>${escapeHtml(start ? formatDashboardDateTime(start.server_received_at) : '暂无')}</strong></div>
+          <div class="trajectory-stat"><span>所选终点</span><strong>${escapeHtml(end ? formatDashboardDateTime(end.server_received_at) : '暂无')}</strong></div>
+          <div class="trajectory-stat"><span>所选时间跨度</span><strong>${escapeHtml(start && end ? formatDashboardDuration(start.server_received_at, end.server_received_at) : '未知')}</strong></div>
         </div>
-        ${recentItems ? `<details class="trajectory-details"><summary>查看最近 ${escapeHtml(Math.min(points.length, 8))} 个轨迹点</summary><ol class="trajectory-list">${recentItems}</ol></details>` : ''}
-        <div class="trajectory-note">显示最近最多 24 个坐标链已验证的定位点；超过 10 分钟的缺测区间会断开，不把直线当成真实行走路线。此处不作定位精度声明。</div>
+        ${pointItems ? `<div class="trajectory-details"><div class="trajectory-note">选择要比较的可信定位记录</div><ol class="trajectory-list">${pointItems}</ol></div>` : ''}
+        <div class="trajectory-note">地图只按定位时间顺序直线连接所选采样点，不代表实际行走路线。取消中间记录、时间异常或间隔超过 10 分钟都会断开线段；选择仅保存在当前页面内存中。此处不作定位精度声明。</div>
       `;
+    }
+    function updateTrajectoryMaps(selectedDevice) {
+      if (!selectedDevice) return;
+      const d1 = selectedDevice.d1_link || {};
+      const map = mapWithLocalReferences(d1.map_surface || {}, selectedDevice.device_id);
+      const localMap = document.getElementById('localMapSurface');
+      if (localMap) {
+        localMap.outerHTML = d1MapSurface(
+          map,
+          d1.location_estimate || {},
+          d1.field_readiness || {},
+          selectedDevice.device_id,
+        );
+        if (amapLiveMap.style.display === 'block') setLocalMapVisibility(false);
+      }
+      renderAmapForSelectedDevice(selectedDevice);
+    }
+    function rerenderTrajectorySelection(selectedDevice, focusKey = '') {
+      const previousList = trajectoryPanel.querySelector('.trajectory-list');
+      const previousScrollTop = previousList ? previousList.scrollTop : 0;
+      trajectoryPanel.innerHTML = recentTrajectoryPanel(selectedDevice);
+      bindTrajectoryPanelEvents(selectedDevice);
+      const nextList = trajectoryPanel.querySelector('.trajectory-list');
+      if (nextList) nextList.scrollTop = previousScrollTop;
+      if (focusKey) {
+        const match = [...trajectoryPanel.querySelectorAll('[data-trajectory-point-key]')]
+          .find(input => input.dataset.trajectoryPointKey === focusKey);
+        if (match) match.focus();
+      }
+      updateTrajectoryMaps(selectedDevice);
+    }
+    function bindTrajectoryPanelEvents(selectedDevice) {
+      if (!selectedDevice) return;
+      trajectoryPanel.querySelectorAll('[data-trajectory-point-key]').forEach(input => {
+        input.addEventListener('change', () => {
+          const context = trajectorySelectionContext(selectedDevice);
+          context.selection.mode = 'manual';
+          if (input.checked) context.selection.selectedKeys.add(input.dataset.trajectoryPointKey);
+          else context.selection.selectedKeys.delete(input.dataset.trajectoryPointKey);
+          trajectorySelectionByDevice.set(selectedDevice.device_id, context.selection);
+          rerenderTrajectorySelection(selectedDevice, input.dataset.trajectoryPointKey);
+        });
+      });
+      trajectoryPanel.querySelectorAll('[data-trajectory-action]').forEach(button => {
+        button.addEventListener('click', () => {
+          const context = trajectorySelectionContext(selectedDevice);
+          const action = button.dataset.trajectoryAction;
+          if (action === 'follow') {
+            context.selection.mode = 'follow';
+            context.selection.selectedKeys = new Set(context.allPoints.map(point => point.trajectory_point_key));
+          } else {
+            context.selection.mode = 'manual';
+            context.selection.selectedKeys = action === 'all'
+              ? new Set(context.allPoints.map(point => point.trajectory_point_key))
+              : new Set();
+          }
+          trajectorySelectionByDevice.set(selectedDevice.device_id, context.selection);
+          rerenderTrajectorySelection(selectedDevice);
+        });
+      });
     }
     function amapOverlayKey(deviceId, semantics) {
       const points = Array.isArray(semantics.points) ? semantics.points : [];
@@ -10309,6 +10495,9 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         device_id: deviceId || '',
         kind: semantics.kind,
         points: points.map(point => [point.seq ?? null, point.server_received_at || '', point.lon, point.lat]),
+        position: semantics.positionPoint
+          ? [semantics.positionPoint.seq ?? null, semantics.positionPoint.server_received_at || '', semantics.positionPoint.lon, semantics.positionPoint.lat]
+          : null,
       });
     }
     function showAmapEmptyState(semantics) {
@@ -10330,7 +10519,22 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const estimate = d1.location_estimate || {};
       const readiness = d1.field_readiness || {};
       const map = mapWithLocalReferences(d1.map_surface || {}, selectedDevice ? selectedDevice.device_id : '');
-      const semantics = amapPositionSemantics(map, estimate, readiness);
+      const baseSemantics = amapPositionSemantics(map, estimate, readiness);
+      const selectionView = trajectorySelectionForPoints(
+        selectedDevice ? selectedDevice.device_id : 'no-device',
+        baseSemantics.points,
+      );
+      const positionPoint = baseSemantics.current
+        ? {...baseSemantics.current, trajectory_point_key: trajectoryPointKey(baseSemantics.current)}
+        : null;
+      const semantics = {
+        ...baseSemantics,
+        label: selectionView.selectedPoints.length
+          ? baseSemantics.label
+          : `${baseSemantics.label} / 未选择轨迹点`,
+        points: selectionView.selectedPoints,
+        positionPoint,
+      };
       if (!selectedDevice) {
         if (amapInstance && amapOverlayCacheKey) amapInstance.clearMap();
         amapOverlayCacheKey = '';
@@ -10347,7 +10551,9 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         setAmapStatus(`${semantics.label} / 使用本地轨迹示意图`, 'warn');
         return;
       }
-      const hasTrustedPoint = semantics.kind !== 'no-fix' && semantics.kind !== 'pre-correction-hidden';
+      const hasTrustedPoint = (semantics.points.length > 0 || Boolean(semantics.positionPoint))
+        && semantics.kind !== 'no-fix'
+        && semantics.kind !== 'pre-correction-hidden';
       const overlayKey = amapOverlayKey(selectedDevice.device_id, semantics);
       if (amapInstance && overlayKey === amapOverlayCacheKey) {
         amapLiveMap.dataset.state = hasTrustedPoint ? 'ready' : 'ready-empty';
@@ -10356,7 +10562,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         setLocalMapVisibility(false);
         setAmapStatus(
           hasTrustedPoint
-            ? `${semantics.label} / 已显示最近 ${semantics.points.length} 个可信点`
+            ? `${semantics.label} / 已选 ${semantics.points.length} 个轨迹点`
             : `${semantics.label} / 高德底图已加载 / 暂无定位标记`,
           hasTrustedPoint ? 'ok' : 'warn',
         );
@@ -10386,12 +10592,27 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           amapOverlayFailureKey = '';
           return;
         }
-        const converted = await convertWgs84Points(AMap, semantics.points);
+        const positionKey = semantics.positionPoint ? semantics.positionPoint.trajectory_point_key : '';
+        const conversionPoints = semantics.points.map(point => ({
+          ...point,
+          trajectory_selected: true,
+          trajectory_position: point.trajectory_point_key === positionKey,
+        }));
+        if (semantics.positionPoint && !conversionPoints.some(point => point.trajectory_position)) {
+          conversionPoints.push({
+            ...semantics.positionPoint,
+            trajectory_selected: false,
+            trajectory_position: true,
+          });
+        }
+        const converted = await convertWgs84Points(AMap, conversionPoints);
         if (generation !== amapRenderGeneration) return;
         if (!converted.length) throw new Error('no valid converted coordinates');
+        const convertedSelected = converted.filter(point => point.trajectory_selected === true);
+        const convertedPosition = converted.find(point => point.trajectory_position === true) || null;
         amapInstance.clearMap();
         amapOverlays = [];
-        const segments = trajectorySegments(converted);
+        const segments = trajectorySegments(convertedSelected);
         for (const segment of segments) {
           const path = segment.map(point => point.lnglat);
           if (path.length >= 2) {
@@ -10407,9 +10628,9 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
             }));
           }
         }
-        if (converted.length >= 2) {
-          const first = converted[0];
-          const startTitle = `轨迹起点 / ${formatDashboardDateTime(first.server_received_at)} / seq ${first.seq ?? '未知'}`;
+        if (convertedSelected.length >= 2) {
+          const first = convertedSelected[0];
+          const startTitle = `所选起点 / ${formatDashboardDateTime(first.server_received_at)} / seq ${first.seq ?? '未知'}`;
           amapOverlays.push(new AMap.Marker({
             position: first.lnglat,
             title: startTitle,
@@ -10417,8 +10638,8 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
             anchor: 'center',
             zIndex: 120,
           }));
-          for (const point of converted.slice(1, -1)) {
-            const historyTitle = `历史轨迹点 / ${formatDashboardDateTime(point.server_received_at)} / seq ${point.seq ?? '未知'}`;
+          for (const point of convertedSelected.slice(1, -1)) {
+            const historyTitle = `所选历史点 / ${formatDashboardDateTime(point.server_received_at)} / seq ${point.seq ?? '未知'}`;
             amapOverlays.push(new AMap.Marker({
               position: point.lnglat,
               title: historyTitle,
@@ -10428,25 +10649,40 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
             }));
           }
         }
-        const latest = converted[converted.length - 1];
-        const markerClass = semantics.kind === 'current'
-          ? 'amap-current-marker'
-          : semantics.kind === 'stale'
-            ? 'amap-stale-marker'
-            : 'amap-memory-marker';
-        const markerLabel = semantics.kind === 'current'
+        const positionLabel = semantics.kind === 'current'
           ? '当前定位'
           : semantics.kind === 'stale'
             ? '历史位置（已过期）'
             : '最后可信位置';
-        const markerTitle = `${markerLabel} / ${formatDashboardDateTime(latest.server_received_at)} / seq ${latest.seq ?? '未知'}`;
-        amapOverlays.push(new AMap.Marker({
-          position: latest.lnglat,
-          title: markerTitle,
-          content: `<div class="amap-end-marker"><div class="${markerClass}" aria-label="${escapeHtml(markerTitle)}"></div><span class="amap-marker-label">${escapeHtml(markerLabel)}</span></div>`,
-          anchor: 'center',
-          zIndex: 140,
-        }));
+        if (convertedSelected.length) {
+          const latest = convertedSelected[convertedSelected.length - 1];
+          const overlapsPosition = convertedPosition
+            && latest.trajectory_point_key === convertedPosition.trajectory_point_key;
+          const markerLabel = overlapsPosition ? `所选终点 · ${positionLabel}` : '所选终点';
+          const markerTitle = `${markerLabel} / ${formatDashboardDateTime(latest.server_received_at)} / seq ${latest.seq ?? '未知'}`;
+          amapOverlays.push(new AMap.Marker({
+            position: latest.lnglat,
+            title: markerTitle,
+            content: `<div class="amap-end-marker"><div class="amap-memory-marker" aria-label="${escapeHtml(markerTitle)}"></div><span class="amap-marker-label">${escapeHtml(markerLabel)}</span></div>`,
+            anchor: 'center',
+            zIndex: 140,
+          }));
+        }
+        if (convertedPosition && !convertedPosition.trajectory_selected) {
+          const positionMarkerClass = semantics.kind === 'current'
+            ? 'amap-current-marker'
+            : semantics.kind === 'stale'
+              ? 'amap-stale-marker'
+              : 'amap-memory-marker';
+          const positionTitle = `${positionLabel} / ${formatDashboardDateTime(convertedPosition.server_received_at)} / seq ${convertedPosition.seq ?? '未知'}`;
+          amapOverlays.push(new AMap.Marker({
+            position: convertedPosition.lnglat,
+            title: positionTitle,
+            content: `<div class="amap-end-marker"><div class="${positionMarkerClass}" aria-label="${escapeHtml(positionTitle)}"></div><span class="amap-marker-label">${escapeHtml(positionLabel)}</span></div>`,
+            anchor: 'center',
+            zIndex: 160,
+          }));
+        }
         amapInstance.add(amapOverlays);
         amapInstance.setFitView(amapOverlays, false, [44, 44, 44, 44], 16);
         amapOverlayCacheKey = overlayKey;
@@ -10456,7 +10692,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         amapLiveMap.style.display = 'block';
         amapLiveMap.style.visibility = 'visible';
         setLocalMapVisibility(false);
-        setAmapStatus(`${semantics.label} / 最近可信轨迹 ${converted.length} 点 / WGS-84 已转换为 GCJ-02`, 'ok');
+        setAmapStatus(`${semantics.label} / 已选轨迹 ${convertedSelected.length} 点 / WGS-84 已转换为 GCJ-02`, 'ok');
       } catch (error) {
         if (generation !== amapRenderGeneration) return;
         if (!amapLiveShell.dataset.failureStage || amapLiveShell.dataset.failureStage === 'none') {
@@ -10514,7 +10750,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       return `
         <div id="d1FieldOverview" class="d1-overview">
           <div class="d1-map-pane">
-            ${d1MapSurface(map, estimate, readiness)}
+            ${d1MapSurface(map, estimate, readiness, d.device_id)}
           </div>
           <div class="d1-summary-pane">
             <div id="d1StatusStrip" class="d1-status-strip">
@@ -10711,6 +10947,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     async function refresh() {
       if (refreshInFlight) return;
       refreshInFlight = true;
+      refreshDashboard.disabled = true;
       refreshStatus.dataset.state = 'refreshing';
       setRefreshStatus('正在刷新…');
       try {
@@ -10789,10 +11026,10 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         setRefreshStatus(`刷新失败：${reason}${previousView}`, 'warn');
       } finally {
         refreshInFlight = false;
+        refreshDashboard.disabled = false;
       }
     }
     refresh();
-    setInterval(refresh, 3000);
   </script>
 </body>
 </html>"""

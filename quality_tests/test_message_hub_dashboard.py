@@ -84,7 +84,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("manifest device does not match active device", html)
         self.assertIn("browser_local_manifest", html)
         self.assertIn("mapWithLocalReferences", html)
-        self.assertIn("d1MapTrack(points, referencePoints)", html)
+        self.assertIn("d1MapTrack(points, referencePoints, positionPoint, positionSemantics.kind)", html)
         self.assertNotIn("/api/v1/d2-reference", html)
         self.assertNotIn("method: 'POST'", html)
 
@@ -142,7 +142,8 @@ class MessageHubDashboardTests(unittest.TestCase):
             'id="trajectoryPanel"',
             'hidden aria-hidden="true" data-dashboard-contract-labels="legacy-en"',
             "最多 24",
-            "轨迹起点",
+            "所选起点",
+            "所选终点",
             "最后可信位置",
             "当前为预测状态；地图显示最后可信位置",
             "当前 GNSS 未定位，暂无可信轨迹",
@@ -154,9 +155,9 @@ class MessageHubDashboardTests(unittest.TestCase):
             ".map-point-stale",
             "function trajectorySegments",
             "trajectorySegments(observed)",
-            "function d1MapSurface(map, estimate, readiness = {})",
+            "function d1MapSurface(map, estimate, readiness = {}, deviceId = '')",
             "? 'stale_fix'",
-            "d1MapSurface(map, estimate, readiness)",
+            "d1MapSurface(map, estimate, readiness, d.device_id)",
             "new AMap.Polyline",
             "可开始 D1 外场验收",
             "D1 外场验收尚未就绪",
@@ -166,8 +167,15 @@ class MessageHubDashboardTests(unittest.TestCase):
         ):
             self.assertIn(marker, html)
         self.assertIn("currentTime - previousTime > maxGapMs", html)
-        self.assertIn("trajectorySegments(points).filter(segment => segment.length >= 2).length", html)
+        self.assertIn("trajectorySegments(selectedPoints).filter(segment => segment.length >= 2).length", html)
         self.assertIn("可见轨迹段", html)
+        self.assertIn('id="refreshDashboard"', html)
+        self.assertIn("页面不会自动重建", html)
+        self.assertIn("data-trajectory-action=\"all\"", html)
+        self.assertIn("data-trajectory-action=\"clear\"", html)
+        self.assertIn("data-trajectory-action=\"follow\"", html)
+        self.assertIn("trajectorySelectionByDevice", html)
+        self.assertIn("选择仅保存在当前页面内存中", html)
         self.assertIn("overview.classList.toggle('provider-map-active', !visible)", html)
         self.assertIn('id="locationMapGrid" class="location-map-grid provider-map-hidden"', html)
         self.assertIn("locationGrid.classList.toggle('provider-map-hidden', visible)", html)
@@ -296,7 +304,52 @@ class MessageHubDashboardTests(unittest.TestCase):
         finally_start = refresh_function.index("finally", catch_start)
         catch_block = refresh_function[catch_start:finally_start]
         self.assertIn("lastSuccessfulDashboardState", catch_block)
-        self.assertIn("setInterval(refresh, 3000)", html)
+        self.assertIn("refreshDashboard.addEventListener('click', refresh)", html)
+        self.assertNotIn("setInterval(refresh", html)
+        self.assertEqual(html.count("\n    refresh();"), 1)
+
+    def test_dashboard_manual_refresh_and_page_local_trajectory_selection(self) -> None:
+        html = message_hub.render_dashboard(amap_js_api_key="public_JS_key_1234")
+
+        self.assertIn('<button id="refreshDashboard"', html)
+        self.assertIn("refreshDashboard.addEventListener('click', refresh)", html)
+        self.assertNotIn("setInterval(refresh", html)
+        self.assertNotIn("setTimeout(refresh", html)
+        self.assertIn("const trajectorySelectionByDevice = new Map()", html)
+        selection_start = html.index("function trajectorySelectionForPoints")
+        selection_end = html.index("function trajectorySelectionContext", selection_start)
+        selection_function = html[selection_start:selection_end]
+        self.assertIn("trajectorySelectionByDevice.get(deviceId)", selection_function)
+        self.assertIn("trajectorySelectionByDevice.set(deviceId, selection)", selection_function)
+        self.assertNotIn("localStorage", selection_function)
+        self.assertNotIn("location.href", selection_function)
+
+        ordering_start = html.index("function chronologicalTrajectoryPoints")
+        ordering_end = html.index("function trajectorySelectionForPoints", ordering_start)
+        ordering_function = html[ordering_start:ordering_end]
+        self.assertIn("return leftTime - rightTime", ordering_function)
+        self.assertIn("trajectory_source_index", ordering_function)
+        self.assertIn("trajectory_point_key", ordering_function)
+
+        segment_start = html.index("function trajectorySegments")
+        segment_end = html.index("function recentTrajectoryPanel", segment_start)
+        segment_function = html[segment_start:segment_end]
+        self.assertIn("currentTime <= previousTime", segment_function)
+        self.assertIn("currentTime - previousTime > maxGapMs", segment_function)
+        self.assertIn("currentSourceIndex !== previousSourceIndex + 1", segment_function)
+
+        self.assertIn("地图只按定位时间顺序直线连接所选采样点，不代表实际行走路线", html)
+        self.assertIn("选择仅保存在当前页面内存中", html)
+        self.assertIn("? `所选终点 · ${positionLabel}` : '所选终点'", html)
+        self.assertIn("selectedPoints: allPoints.filter", html)
+        render_start = html.index("async function renderAmapForSelectedDevice")
+        render_end = html.index("function d1LinkPanel", render_start)
+        render_function = html[render_start:render_end]
+        self.assertIn("selectionView.selectedPoints", render_function)
+        self.assertIn("convertWgs84Points(AMap, conversionPoints)", render_function)
+        self.assertIn("const convertedSelected = converted.filter", render_function)
+        self.assertIn("const convertedPosition = converted.find", render_function)
+        self.assertNotIn("localStorage", render_function)
 
     def test_dashboard_table_scroll_and_live_status_are_accessible(self) -> None:
         html = message_hub.render_dashboard()
@@ -2803,6 +2856,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("let amapOverlayFailureKey = ''", html)
         self.assertIn("cacheKey === amapConversionCacheKey", html)
         self.assertIn("cacheKey === amapConversionInFlightKey", html)
+        self.assertIn("return amapConversionInFlightPromise.then(locations =>", html)
+        self.assertIn("const remappedPromise = conversionPromise.then(locations =>", html)
         self.assertIn("overlayKey === amapOverlayCacheKey", html)
         self.assertIn("overlayKey === amapOverlayFailureKey", html)
         self.assertIn("review_mode: 'amap_live_with_local_fallback'", html)
@@ -2971,7 +3026,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertNotIn("amapLoadPromise = null", load_state)
         refresh_start = html.index("async function refresh()")
         refresh_state = html[
-            refresh_start : html.index("    setInterval(refresh, 3000)", refresh_start)
+            refresh_start : html.index("\n    refresh();", refresh_start)
         ]
         self.assertLess(
             refresh_state.index("await fetch('/api/state'"),
@@ -3031,7 +3086,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertNotIn("new AMap.Marker", empty_state)
         self.assertIn("const fieldCoordinateText = latestTrustedPoint", html)
         self.assertNotIn("coordinateLabel(map.lat, map.lon)", html)
-        self.assertIn("point.display_semantics === 'current_fix'", html)
+        self.assertIn("const positionPoint = positionSemantics.current || null", html)
         self.assertIn('id="amapLiveMap"', html)
         self.assertIn('id="d1Link"', html)
 
