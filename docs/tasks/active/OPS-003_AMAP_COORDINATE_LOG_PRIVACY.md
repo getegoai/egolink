@@ -75,18 +75,30 @@ environment values.
 
 - Changed files: this packet, the final EgoLink Nginx virtual-host template,
   the focused HTTPS configuration tests, and the VPS operations runbook.
+- Implementation commit: `4c4d7fe` (`fix(ops): suppress AMap coordinate access
+  logs [D2]`).
 - Test result: focused HTTPS configuration tests passed `7/7`; full repository
   verification passed `672/672`; context lint and scoped diff checks passed.
 - Nginx syntax result: the tracked virtual host was included from a temporary
   root configuration supplied to the VPS's installed Nginx; `nginx -t`
   reported syntax OK and a successful configuration test. Temporary files
-  were removed afterward; `/etc/nginx` was not changed and Nginx was not
-  reloaded.
-- Deployment result: not performed by this task.
-- Remaining risks: production continues using the prior virtual host until a
-  separately authorized deployment. This exact Nginx rule does not cover
-  historical logs, an upstream CDN/load balancer, application/provider logs,
-  alternate or trailing-slash paths, or coordinates deliberately sent over
-  plaintext HTTP before the redirect; normal Dashboard traffic uses HTTPS.
-  Disabling the route's access log also removes its per-request Nginx status
-  and volume diagnostics.
+  were removed afterward.
+- A separately authorized release installed the exact virtual-host change and
+  reloaded Nginx once after the new Message Hub was healthy. The production
+  virtual-host SHA-256 is
+  `68a961b46fd189c53d20e5538256080090889de79b6d69224d3f3724e28924b5`;
+  the root-only rollback snapshot is
+  `/var/backups/egolink/web006-ops003-20260815T111245Z`.
+- The rendered Nginx diff added only the two exact coordinate-convert blocks;
+  proxy/redirect behavior, headers, upstream, timeouts, TLS, cookies, and all
+  other virtual hosts remained unchanged. Final `nginx -t`, public HTTPS and
+  redirect gates, cookie forwarding, and a no-coordinate provider probe
+  passed. Nginx and the application reported no new warning/error entries, and
+  automatic application restart count remained zero.
+- No historical access log was read, copied, reported, or deleted during
+  validation. Remaining risks: this exact rule does not cover historical logs,
+  an upstream CDN/load balancer, application/provider logs, alternate or
+  trailing-slash paths, or coordinates deliberately sent over plaintext HTTP
+  before the redirect; normal Dashboard traffic uses HTTPS. Disabling the
+  route's access log also removes its per-request Nginx status and volume
+  diagnostics.

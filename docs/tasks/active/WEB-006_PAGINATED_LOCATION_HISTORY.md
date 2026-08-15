@@ -118,17 +118,44 @@ git diff --check
 
 # Completion Evidence
 
-- Builder implementation is present in the working tree only; it was not
-  committed or deployed from this task.
+- Implementation commit: `ca2b482` (`feat(web): add paginated location
+  history [D2]`). The companion coordinate-log privacy deployment is commit
+  `4c4d7fe` under OPS-003.
 - `python -m unittest quality_tests.test_message_hub_dashboard quality_tests.test_message_hub_server -q`:
   PASS, 113 tests.
 - `python -m py_compile server\message_hub.py`: PASS.
 - `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`: PASS, 672 tests.
 - `python scripts/context_lint.py`: PASS.
-- `git diff --check`: PASS; Git emitted only an unrelated shared-worktree
-  line-ending warning for `scripts/ops/nginx/ego.example.invalid.conf`.
-- The security review findings were addressed iteratively. Final release and
-  live-browser/deployment review remain separate from this builder task.
+- `git diff --check`: PASS.
+- A separately authorized release deployed the committed source to
+  `https://ego.example.invalid/`. The production `message_hub.py` SHA-256 is
+  `7f9ef64d3819615f2ef1cc22ed9fc49e8a6f7ea8d2abf8537748ed3c9b49a982`.
+  The root-only release snapshot is
+  `/var/backups/egolink/web006-ops003-20260815T111245Z`; its SQLite backup
+  passed `quick_check`. The live database was not restored or modified by the
+  release.
+- Live service gates passed: public health and HTTPS redirect, authenticated
+  and unauthenticated state behavior, authenticated history pagination and
+  filters, bounded response fields, `Cache-Control: no-store`, unchanged
+  `0.0.0.0:8790` compatibility listener, `NRestarts=0`, and no new application
+  or Nginx warning/error entries in the release window.
+- The first activation smoke used an over-broad serialized-response assertion
+  and produced a false negative. The protection rollback restored only code
+  and the EgoLink virtual host. After the assertion was replaced with a
+  structured-field check, the final activation passed. The release therefore
+  used three manual application restarts in total (first activation,
+  protection rollback, and final activation); the final activation itself used
+  one restart, and automatic restart count remained zero.
+- Authenticated Chrome validation passed against the final deployment: the
+  first two pages each showed 50 records; the trusted/selectable filter showed
+  34 selectable records in the inspected snapshot; two cross-page records
+  remained selected and rendered while AMap stayed `ready`; after eight
+  seconds the page, filters, selection, and map state were unchanged; the
+  browser console contained no application or AMap errors; and the page URL
+  contained no filters, cursors, or coordinates.
+- No token, coordinate, private device identifier, raw payload, or private
+  browser evidence was committed. Selection remains page-memory only and is
+  cleared by a hard reload.
 
 Do not move this task to done or update `docs/current/STATUS.md` from the
 builder role.
