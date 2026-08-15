@@ -24,6 +24,7 @@ context:
   - firmware/AGENTS.md
   - firmware/mqtt_heartbeat/main/app_main.c
   - firmware/mqtt_heartbeat/main/Kconfig.projbuild
+  - firmware/mqtt_heartbeat/sdkconfig
   - quality_tests/AGENTS.md
   - quality_tests/test_mqtt_heartbeat_firmware.py
 
@@ -31,6 +32,7 @@ allowed_paths:
   - docs/tasks/active/FW-007_LTE_WIFI_FAILOVER.md
   - firmware/mqtt_heartbeat/main/app_main.c
   - firmware/mqtt_heartbeat/main/Kconfig.projbuild
+  - firmware/mqtt_heartbeat/sdkconfig
   - quality_tests/test_mqtt_heartbeat_firmware.py
 
 out_of_scope:
@@ -50,21 +52,21 @@ offline. The first slice is deliberately one-way until reboot.
 
 # Acceptance Criteria
 
-- [ ] The feature is disabled by default and requires non-empty Wi-Fi runtime
+- [x] The feature is disabled by default and requires non-empty Wi-Fi runtime
       configuration when enabled.
-- [ ] LTE remains the only initial upload owner. Attach failure or a configurable
+- [x] LTE remains the only initial upload owner. Attach failure or a configurable
       consecutive transport-failure threshold triggers Wi-Fi once; command,
       heartbeat, sensor, and periodic location work have only one active owner.
-- [ ] A successful LTE poll resets the consecutive failure count. A parsed empty
+- [x] A successful LTE poll resets the consecutive failure count. A parsed empty
       command response is transport health, not a failure merely because no ACK
       was produced.
-- [ ] The transition is explicit in bounded logs/status and does not expose Wi-Fi
+- [x] The transition is explicit in bounded logs/status and does not expose Wi-Fi
       credentials, bearer tokens, SIM identifiers, or coordinates.
-- [ ] Wi-Fi connection failure ends in an explicit offline/fail-closed state; it
+- [x] Wi-Fi connection failure ends in an explicit offline/fail-closed state; it
       does not reboot, loop forever, or alternate transports.
-- [ ] Focused source/state tests, an ESP-IDF build of the enabled combined profile,
+- [x] Focused source/state tests, an ESP-IDF build of the enabled combined profile,
       full repository verification, context lint, and diff checks pass.
-- [ ] Hardware behavior remains unverified until a later authorized run removes
+- [x] Hardware behavior remains unverified until a later authorized run removes
       the SIM, observes LTE failure, Wi-Fi connection, fresh uploads, and no
       duplicate transport owner or reset loop.
 
@@ -85,4 +87,40 @@ git diff --check
 
 # Completion Evidence
 
-- Pending implementation and static/build validation.
+- Software implementation and static/build validation completed on 2026-08-15;
+  task remains active because the authorized hardware validation has not run.
+- Changed paths are limited to this task packet, `app_main.c`,
+  `Kconfig.projbuild`, the tracked MQTT heartbeat `sdkconfig`, and its focused
+  firmware test.
+- `python -m unittest quality_tests.test_mqtt_heartbeat_firmware -v`: 17 tests,
+  PASS.
+- Enabled combined-profile ESP-IDF 5.4.2 build: PASS in
+  `firmware/mqtt_heartbeat/build_fw007_failover` using two ignored local
+  sdkconfig overlays. Build identity was repository HEAD
+  `c2ac2a7a47c9389d400aad98c91d92eb82b51ea4` plus the five uncommitted FW-007
+  scoped files (`git describe`: `v0.1.0-68-gc2ac2a7-dirty`); HTTP, LTE command
+  loop, FW-007 failover, threshold 3, and D1 periodic location were enabled. The
+  generated sdkconfig is 74,455 bytes with
+  SHA-256 `33604A8EAE9253536AAE68C053721DC49E82D5B5E9B2D3C30D956EEC3541DC76`.
+- Build artifacts: app image 984,912 bytes, SHA-256
+  `0C3B61AC20FF3978690F155ED28CA1779DE8B4F9F1E702FB93F763D2C23C19E6`;
+  bootloader 20,928 bytes, SHA-256
+  `0C6EFF1CD80A87C2F5EFF8FE753280F3585854D882C26E127D8E8C7E95A70EAF`;
+  partition table 3,072 bytes, SHA-256
+  `7F00B6C042A89B15B0CAC534F82ED988CAF29278FF5700B0C511EB1B5BB7C820`.
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`: 659 tests,
+  PASS in 74.6 seconds wall time (74.019 seconds reported by unittest).
+- `python scripts\context_lint.py`: PASS. `git diff --check`: PASS.
+- Independent source review found and then verified the fix for one takeover
+  blocker: Wi-Fi now polls and ACKs raw commands with the same parser and
+  executed-command cache used before takeover. `set_report_interval`,
+  `request_location`, and `capture_imu_window` no longer fall through the legacy
+  generic JSON ACK path, and Wi-Fi-active heartbeat/sensor status no longer
+  claims mock 4G or a mock GNSS fix.
+- No firmware flash, SIM manipulation, device command, or serial capture was
+  performed. LTE-to-Wi-Fi takeover, fresh uploads, duplicate-owner absence, and
+  reset-loop absence remain unverified on hardware.
+- Remaining risks: the image leaves about 6% of the smallest app partition free;
+  a separate tracked `camera_smoke/sdkconfig` still has non-empty
+  `CONFIG_EGOLINK_WIFI_SSID` and `CONFIG_EGOLINK_WIFI_PASSWORD` entries and is
+  outside this task's allowed paths. No values were copied or emitted.

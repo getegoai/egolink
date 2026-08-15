@@ -237,6 +237,134 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertNotIn("start_wifi()", command_branch)
         self.assertNotIn("xTaskCreate(command_poll_task", command_branch)
 
+    def test_fw007_lte_wifi_failover_is_opt_in_bounded_and_single_owner(self) -> None:
+        ssid_block = self.kconfig.split("config EGOLINK_WIFI_SSID", 1)[1].split(
+            "config EGOLINK_WIFI_PASSWORD", 1
+        )[0]
+        password_block = self.kconfig.split("config EGOLINK_WIFI_PASSWORD", 1)[1].split(
+            "config EGOLINK_MQTT_BROKER_URI", 1
+        )[0]
+        self.assertIn('default ""', ssid_block)
+        self.assertIn('default ""', password_block)
+
+        failover_config = self.kconfig.split("config EGOLINK_LTE_WIFI_FAILOVER_ENABLED", 1)[1].split(
+            "config EGOLINK_LTE_WIFI_FAILOVER_FAILURE_THRESHOLD", 1
+        )[0]
+        self.assertIn("default n", failover_config)
+        self.assertIn(
+            "depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED",
+            failover_config,
+        )
+        self.assertIn("raw Wi-Fi", failover_config)
+        self.assertIn("reuses the LTE parser and executed-command cache", failover_config)
+        threshold_config = self.kconfig.split(
+            "config EGOLINK_LTE_WIFI_FAILOVER_FAILURE_THRESHOLD", 1
+        )[1].split("config EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED", 1)[0]
+        self.assertIn("default 3", threshold_config)
+        self.assertIn("range 1 20", threshold_config)
+        self.assertIn("including a valid empty-command response", threshold_config)
+
+        for token in [
+            "FW-007 failover requires a non-empty Wi-Fi SSID",
+            "FW-007 failover requires a non-empty Wi-Fi password",
+            "LTE_WIFI_FAILOVER_LTE_PRIMARY",
+            "LTE_WIFI_FAILOVER_WIFI_CONNECTING",
+            "LTE_WIFI_FAILOVER_WIFI_ACTIVE",
+            "LTE_WIFI_FAILOVER_OFFLINE",
+            "LTE_WIFI_FAILOVER_TRANSITION",
+            "one_way=true",
+            'lte_wifi_failover_run_once("lte_attach_timeout")',
+            'lte_wifi_failover_run_once("lte_http_poll_failures")',
+            "LTE_WIFI_FAILOVER_REJECTED",
+            "already_latched",
+            "wifi_config_missing",
+            "wifi_connect_failed",
+            "wifi_retry_exhausted",
+            "LTE_WIFI_FAILOVER_WIFI_PERIODIC_LOCATION",
+            "LTE_WIFI_FAILOVER_WIFI_RAW_COMMAND",
+            "publish_heartbeat();",
+            "publish_sensor_sample();",
+            "message_hub_publish_location_report(cmd_id);",
+            "message_hub_wifi_location_ack_message",
+            "message_hub_runtime_link_type",
+            '"wifi_failover"',
+            '"lte_transport_failed_wifi_active"',
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.app_main)
+
+        poll_once = self.app_main.split("static bool lte_http_poll_commands_once", 1)[1].split(
+            "static bool lte_wifi_failover_transport_threshold_reached", 1
+        )[0]
+        self.assertIn("bool *transport_ok", poll_once)
+        self.assertIn("*transport_ok = poll_ok", poll_once)
+        self.assertLess(poll_once.index("*transport_ok = poll_ok"), poll_once.index("parse_lte_raw_command_frame"))
+
+        health = self.app_main.split("static bool lte_wifi_failover_transport_threshold_reached", 1)[1].split(
+            "static void lte_http_command_task", 1
+        )[0]
+        self.assertIn("if (transport_ok)", health)
+        self.assertIn("s_lte_transport_consecutive_failures = 0", health)
+        self.assertIn("s_lte_transport_consecutive_failures += 1", health)
+        self.assertIn("CONFIG_EGOLINK_LTE_WIFI_FAILOVER_FAILURE_THRESHOLD", health)
+        self.assertNotIn("acked", health)
+
+        failover_owner = self.app_main.split("static void lte_wifi_failover_run_wifi_owner", 1)[1].split(
+            "static bool lte_wifi_failover_run_once", 1
+        )[0]
+        self.assertNotIn("xTaskCreate", failover_owner)
+        self.assertIn("WIFI_CONNECTED_BIT | WIFI_FAIL_BIT", failover_owner)
+        self.assertIn("wifi_http_poll_imu_window_command_once()", failover_owner)
+        self.assertNotIn("message_hub_poll_commands()", failover_owner)
+        self.assertIn("CONFIG_EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC", failover_owner)
+        self.assertIn("CONFIG_EGOLINK_HEARTBEAT_INTERVAL_SEC", failover_owner)
+        self.assertIn("CONFIG_EGOLINK_SENSOR_EVENT_INTERVAL_SEC", failover_owner)
+        self.assertIn("CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_INTERVAL_SEC", failover_owner)
+
+        wifi_raw_poll = self.app_main.split("static wifi_imu_window_poll_result_t wifi_http_poll_imu_window_command_once", 1)[
+            1
+        ].split("#endif", 1)[0]
+        self.assertIn("/commands/poll.raw", wifi_raw_poll)
+        self.assertIn("parse_lte_raw_command_frame", wifi_raw_poll)
+        self.assertIn("wifi_http_execute_and_ack_raw_command", wifi_raw_poll)
+
+        wifi_raw_execute = self.app_main.split(
+            "static wifi_imu_window_command_result_t wifi_http_execute_and_ack_raw_command", 1
+        )[1].split("typedef enum {\n    WIFI_IMU_WINDOW_POLL_NO_COMMAND", 1)[0]
+        for token in [
+            "CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED",
+            'strcmp(command->cmd, "set_report_interval")',
+            'strcmp(command->cmd, "request_location")',
+            'strcmp(command->cmd, "capture_imu_window")',
+            "message_hub_publish_location_report(command->cmd_id)",
+            'publish_imu_window(command->cmd_id, command->test_run_id, "wifi")',
+            "find_executed_command_result(command->cmd_id)",
+            "remember_executed_command_result(command->cmd_id",
+            "wifi_http_ack_raw_command(command, status, message, duplicate)",
+        ]:
+            with self.subTest(raw_wifi_token=token):
+                self.assertIn(token, wifi_raw_execute)
+        self.assertLess(
+            wifi_raw_execute.index("remember_executed_command_result(command->cmd_id"),
+            wifi_raw_execute.index("wifi_http_ack_raw_command(command, status, message, duplicate)"),
+        )
+
+        wifi_start = self.app_main.split("static esp_err_t start_wifi", 1)[1].split(
+            "static const char *lte_wifi_failover_state_name", 1
+        )[0]
+        self.assertNotIn("ESP_ERROR_CHECK", wifi_start)
+        self.assertIn("s_wifi_initialized", wifi_start)
+        self.assertIn("s_wifi_started", wifi_start)
+        self.assertIn("WIFI_CONNECT_BOUNDED_FAIL", wifi_start)
+        self.assertIn("esp_wifi_stop()", wifi_start)
+
+        wifi_events = self.app_main.split("static void wifi_event_handler", 1)[1].split(
+            "static esp_err_t start_wifi", 1
+        )[0]
+        self.assertNotIn("ESP_ERROR_CHECK", wifi_events)
+        self.assertIn("WIFI_MAX_RETRY", wifi_events)
+        self.assertIn("xEventGroupSetBits(s_event_group, WIFI_FAIL_BIT)", wifi_events)
+
     def test_raw_lte_location_observation_mode_is_opt_in_and_explainable(self) -> None:
         for token in [
             "config EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED",
@@ -528,7 +656,16 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertIn("lte_http_poll_commands_once", periodic_branch)
         self.assertIn("lte_http_publish_d1_periodic_location_once", periodic_branch)
         self.assertIn("vTaskDelay", periodic_branch)
-        self.assertNotIn("vTaskDelete(NULL)", periodic_branch)
+        failover_exit = periodic_branch.split("#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED", 1)[1].split(
+            "#endif", 1
+        )[0]
+        self.assertIn("lte_wifi_failover_transport_threshold_reached", failover_exit)
+        self.assertIn("vTaskDelete(NULL)", failover_exit)
+        periodic_without_failover_exit = periodic_branch.replace(
+            "#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED" + failover_exit + "#endif",
+            "",
+        )
+        self.assertNotIn("vTaskDelete(NULL)", periodic_without_failover_exit)
         self.assertIn("Test-only LTE-009 switch", self.sim7670_kconfig)
         self.assertIn("config EGOLINK_SIM7670_LTE_RECONNECT_STORE_FORWARD_TEST", self.sim7670_kconfig)
         self.assertIn("Test-only LTE-011 switch", self.sim7670_kconfig)

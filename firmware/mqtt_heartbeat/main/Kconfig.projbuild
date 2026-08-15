@@ -2,11 +2,17 @@ menu "Ego Link MQTT Heartbeat"
 
 config EGOLINK_WIFI_SSID
     string "Wi-Fi SSID"
-    default "home"
+    default ""
+    help
+        Runtime-only Wi-Fi configuration. Keep the tracked default empty and
+        provide the real value through an ignored local sdkconfig.
 
 config EGOLINK_WIFI_PASSWORD
     string "Wi-Fi password"
     default ""
+    help
+        Runtime-only Wi-Fi configuration. Keep the tracked default empty and
+        provide the real value through an ignored local sdkconfig.
 
 config EGOLINK_MQTT_BROKER_URI
     string "MQTT broker URI"
@@ -71,6 +77,30 @@ config EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC
     default 10
     range 2 3600
     depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+
+config EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+    bool "Enable bounded one-way LTE to Wi-Fi failover"
+    default n
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    help
+        Engineering-only FW-007 path. LTE remains the initial and only owner.
+        A bounded LTE attach failure or consecutive LTE HTTP poll failures can
+        transfer ownership to the existing Wi-Fi Message Hub raw command,
+        heartbeat, sensor, and location operations once per boot. The raw Wi-Fi
+        command path reuses the LTE parser and executed-command cache. There is
+        no automatic LTE failback, modem recovery, durable queue, or production
+        Wi-Fi safety-link claim. Non-empty Wi-Fi SSID and password values must
+        come from an ignored local sdkconfig.
+
+config EGOLINK_LTE_WIFI_FAILOVER_FAILURE_THRESHOLD
+    int "Consecutive LTE HTTP poll failures before Wi-Fi takeover"
+    default 3
+    range 1 20
+    depends on EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+    help
+        Counts consecutive failed LTE HTTP command polls. Any successful HTTP
+        poll, including a valid empty-command response, resets the count. ACK
+        outcome and command presence do not determine transport health.
 
 config EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
     bool "Enable bounded QMI8658 window command over Wi-Fi"

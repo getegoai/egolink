@@ -51,17 +51,37 @@ static const char *TAG = "egolink_mqtt_heartbeat";
 #define CONFIG_EGOLINK_TEST_RUN_ID ""
 #endif
 
+#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+_Static_assert(sizeof(CONFIG_EGOLINK_WIFI_SSID) > 1, "FW-007 failover requires a non-empty Wi-Fi SSID");
+_Static_assert(sizeof(CONFIG_EGOLINK_WIFI_PASSWORD) > 1, "FW-007 failover requires a non-empty Wi-Fi password");
+#endif
+
 static EventGroupHandle_t s_event_group;
 #if !CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
 static esp_mqtt_client_handle_t s_mqtt_client;
 #endif
 static int s_wifi_retry_count;
+static bool s_wifi_initialized;
+static bool s_wifi_started;
 static uint32_t s_seq;
 static portMUX_TYPE s_seq_mux = portMUX_INITIALIZER_UNLOCKED;
 static int s_last_rssi = -127;
 static const char *s_reset_reason = "unknown";
 static uint32_t s_boot_count;
 static bool s_boot_count_persisted;
+#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+typedef enum {
+    LTE_WIFI_FAILOVER_LTE_PRIMARY = 0,
+    LTE_WIFI_FAILOVER_WIFI_CONNECTING,
+    LTE_WIFI_FAILOVER_WIFI_ACTIVE,
+    LTE_WIFI_FAILOVER_OFFLINE,
+} lte_wifi_failover_state_t;
+
+static lte_wifi_failover_state_t s_lte_wifi_failover_state = LTE_WIFI_FAILOVER_LTE_PRIMARY;
+static bool s_lte_wifi_failover_latched;
+static int s_lte_transport_consecutive_failures;
+static bool lte_wifi_failover_run_once(const char *reason);
+#endif
 static char s_status_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_sensor_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
 static char s_lte_http_probe_lte_fragment[LTE_OBSERVATION_FRAGMENT_MAX];
@@ -778,6 +798,15 @@ static const char *message_hub_location_ack_message(void)
 #endif
 }
 
+static const char *message_hub_wifi_location_ack_message(void)
+{
+#if CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+    return "firmware uploaded SIM7670G GNSS location_report over Wi-Fi";
+#else
+    return "firmware uploaded location_report scaffold over Wi-Fi";
+#endif
+}
+
 static void build_location_report_payload(
     char *buffer,
     size_t buffer_size,
@@ -1025,7 +1054,7 @@ static void message_hub_poll_commands(void)
             message_hub_ack_command(
                 cmd_id->valuestring,
                 location_ok ? "ok" : "error",
-                location_ok ? message_hub_location_ack_message() : "location_report upload failed");
+                location_ok ? message_hub_wifi_location_ack_message() : "location_report upload failed");
             ack_count++;
             continue;
         }
@@ -3378,7 +3407,7 @@ static void remember_executed_command_result(const char *cmd_id, const char *sta
         (s_lte_executed_command_cache_next + 1u) % LTE_EXECUTED_COMMAND_CACHE_SIZE;
 }
 
-#if CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
+#if CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED || CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED
 static bool wifi_http_ack_raw_command(
     const lte_raw_command_t *command,
     const char *status,
@@ -3389,6 +3418,8 @@ static bool wifi_http_ack_raw_command(
     char payload[768];
     char frame[1024];
     uint32_t seq = next_seq();
+    const char *ack_test_run_id =
+        command->test_run_id_present ? command->test_run_id : CONFIG_EGOLINK_TEST_RUN_ID;
     snprintf(
         payload,
         sizeof(payload),
@@ -3407,7 +3438,7 @@ static bool wifi_http_ack_raw_command(
         status,
         message,
         CONFIG_EGOLINK_FW_VERSION,
-        command->test_run_id,
+        ack_test_run_id,
         seq,
         command->cmd_id,
         s_lte_command_parse_status,
@@ -3452,7 +3483,16 @@ static wifi_imu_window_command_result_t wifi_http_execute_and_ack_raw_command(
     const lte_executed_command_result_t *cached_result = find_executed_command_result(command->cmd_id);
     bool duplicate = cached_result != NULL;
     const char *status = "rejected";
+#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+#if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
+    const char *message =
+        "Wi-Fi failover raw command accepts set_report_interval, request_location, or capture_imu_window";
+#else
+    const char *message = "Wi-Fi failover raw command accepts set_report_interval or capture_imu_window";
+#endif
+#else
     const char *message = "Wi-Fi IMU window profile accepts only capture_imu_window";
+#endif
 
     ESP_LOGI(
         TAG,
@@ -3461,6 +3501,19 @@ static wifi_imu_window_command_result_t wifi_http_execute_and_ack_raw_command(
         command->cmd,
         duplicate ? "true" : "false");
     if (!duplicate) {
+#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+        if (strcmp(command->cmd, "set_report_interval") == 0) {
+            status = "ok";
+            message = "Wi-Fi failover raw command acknowledged set_report_interval";
+#if CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
+        } else if (strcmp(command->cmd, "request_location") == 0) {
+            bool location_ok = message_hub_publish_location_report(command->cmd_id);
+            status = location_ok ? "ok" : "error";
+            message = location_ok ? message_hub_wifi_location_ack_message()
+                                  : "Wi-Fi failover location_report upload failed";
+#endif
+        } else
+#endif
         if (strcmp(command->cmd, "capture_imu_window") == 0) {
             if (!imu_window_capture_cmd_id_valid(command->cmd_id)) {
                 message = "capture_imu_window cmd_id must be 1-16 safe characters";
@@ -3666,7 +3719,9 @@ static bool lte_http_execute_and_ack_raw_command(
     return lte_http_ack_command(command->cmd_id, ack_test_run_id, status, message, poll_result, duplicate);
 }
 
-static bool lte_http_poll_commands_once(sim7670_lte_http_probe_result_t *poll_result)
+static bool lte_http_poll_commands_once(
+    sim7670_lte_http_probe_result_t *poll_result,
+    bool *transport_ok)
 {
     char path[160];
     char url[256];
@@ -3681,6 +3736,9 @@ static bool lte_http_poll_commands_once(sim7670_lte_http_probe_result_t *poll_re
     build_message_hub_url(url, sizeof(url), path);
     bool poll_ok =
         sim7670_lte_http_get_raw(url, CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN, response, sizeof(response), poll_result);
+    if (transport_ok != NULL) {
+        *transport_ok = poll_ok;
+    }
     s_lte_command_last_command_count = 0;
     set_lte_command_parse_status(poll_ok ? "raw_http_ok_body_received" : "http_poll_failed");
     ESP_LOGI(
@@ -3699,6 +3757,25 @@ static bool lte_http_poll_commands_once(sim7670_lte_http_probe_result_t *poll_re
     return lte_http_execute_and_ack_raw_command(&command, poll_result);
 }
 
+#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+static bool lte_wifi_failover_transport_threshold_reached(bool transport_ok)
+{
+    if (transport_ok) {
+        s_lte_transport_consecutive_failures = 0;
+    } else if (s_lte_transport_consecutive_failures < CONFIG_EGOLINK_LTE_WIFI_FAILOVER_FAILURE_THRESHOLD) {
+        s_lte_transport_consecutive_failures += 1;
+    }
+    ESP_LOGI(
+        TAG,
+        "LTE_WIFI_FAILOVER_HEALTH transport_ok=%s consecutive_failures=%d threshold=%d",
+        transport_ok ? "true" : "false",
+        s_lte_transport_consecutive_failures,
+        CONFIG_EGOLINK_LTE_WIFI_FAILOVER_FAILURE_THRESHOLD);
+    return !transport_ok &&
+           s_lte_transport_consecutive_failures >= CONFIG_EGOLINK_LTE_WIFI_FAILOVER_FAILURE_THRESHOLD;
+}
+#endif
+
 static void lte_http_command_task(void *arg)
 {
     (void)arg;
@@ -3707,7 +3784,11 @@ static void lte_http_command_task(void *arg)
     ESP_LOGI(TAG, "LTE_HTTP_COMMAND_READY_RESULT ready=%s", lte_ready ? "true" : "false");
     if (!lte_ready) {
         platform_power_leave_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "lte_http_command_lte_not_ready");
+#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+        (void)lte_wifi_failover_run_once("lte_attach_timeout");
+#else
         platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_http_command_done");
+#endif
         vTaskDelete(NULL);
         return;
     }
@@ -3725,7 +3806,8 @@ static void lte_http_command_task(void *arg)
     for (int attempt = 1;; ++attempt) {
         sim7670_lte_http_probe_result_t poll_result;
         ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_ROUND_START attempt=%d max_attempts=%d periodic_location=true", attempt, max_attempts);
-        bool round_acked = lte_http_poll_commands_once(&poll_result);
+        bool poll_transport_ok = false;
+        bool round_acked = lte_http_poll_commands_once(&poll_result, &poll_transport_ok);
         acked = acked || round_acked;
         (void)lte_http_post_command_diag(round_acked ? "command_ack_observed" : "poll_no_ack", &poll_result, true, round_acked);
         ESP_LOGI(
@@ -3734,6 +3816,14 @@ static void lte_http_command_task(void *arg)
             attempt,
             round_acked ? "true" : "false",
             acked ? "true" : "false");
+#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+        if (lte_wifi_failover_transport_threshold_reached(poll_transport_ok)) {
+            platform_power_leave_state(PLATFORM_POWER_STATE_UPLOAD, "lte_wifi_failover_transport_threshold");
+            (void)lte_wifi_failover_run_once("lte_http_poll_failures");
+            vTaskDelete(NULL);
+            return;
+        }
+#endif
         if (s_imu_window_service_failed_closed) {
             ESP_LOGE(TAG, "IMU_WINDOW_SERVICE_FAIL_CLOSED stop_not_confirmed=true");
             break;
@@ -3752,9 +3842,18 @@ static void lte_http_command_task(void *arg)
     for (int attempt = 1; attempt <= max_attempts; ++attempt) {
         sim7670_lte_http_probe_result_t poll_result;
         ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_ROUND_START attempt=%d max_attempts=%d", attempt, max_attempts);
-        acked = lte_http_poll_commands_once(&poll_result);
+        bool poll_transport_ok = false;
+        acked = lte_http_poll_commands_once(&poll_result, &poll_transport_ok);
         (void)lte_http_post_command_diag(acked ? "command_ack_observed" : "poll_no_ack", &poll_result, true, acked);
         ESP_LOGI(TAG, "LTE_HTTP_COMMAND_POLL_ROUND_DONE attempt=%d acked=%s", attempt, acked ? "true" : "false");
+#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+        if (lte_wifi_failover_transport_threshold_reached(poll_transport_ok)) {
+            platform_power_leave_state(PLATFORM_POWER_STATE_UPLOAD, "lte_wifi_failover_transport_threshold");
+            (void)lte_wifi_failover_run_once("lte_http_poll_failures");
+            vTaskDelete(NULL);
+            return;
+        }
+#endif
         if (s_imu_window_service_failed_closed) {
             ESP_LOGE(TAG, "IMU_WINDOW_SERVICE_FAIL_CLOSED stop_not_confirmed=true");
             break;
@@ -3777,6 +3876,30 @@ static void lte_http_command_task(void *arg)
 #endif
 #endif
 #endif
+
+static bool wifi_failover_owner_active(void)
+{
+#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+    return s_lte_wifi_failover_state == LTE_WIFI_FAILOVER_WIFI_ACTIVE;
+#else
+    return false;
+#endif
+}
+
+static const char *message_hub_runtime_link_type(void)
+{
+    return wifi_failover_owner_active() ? "wifi_failover" : "mock_4g_over_wifi";
+}
+
+static const char *message_hub_runtime_modem_state(void)
+{
+    return wifi_failover_owner_active() ? "lte_transport_failed_wifi_active" : "mock_data_ready";
+}
+
+static const char *message_hub_runtime_gnss_state(void)
+{
+    return wifi_failover_owner_active() ? "unknown" : "mock_fix";
+}
 
 static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
 {
@@ -3811,10 +3934,10 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
         "\"reset_reason\":\"%s\","
         "\"boot_count\":%" PRIu32 ","
         "\"boot_uptime_ms\":%" PRId64 ","
-        "\"link_type\":\"mock_4g_over_wifi\","
+        "\"link_type\":\"%s\","
         "\"rssi\":%d,"
-        "\"modem_state\":\"mock_data_ready\","
-        "\"gnss_state\":\"mock_fix\","
+        "\"modem_state\":\"%s\","
+        "\"gnss_state\":\"%s\","
         "\"guard_mode\":\"child_safety\","
         "\"queue_size\":0"
         "%s",
@@ -3837,7 +3960,10 @@ static void build_status_payload(char *buffer, size_t buffer_size, uint32_t seq)
         s_reset_reason,
         s_boot_count,
         uptime_ms(),
+        message_hub_runtime_link_type(),
         rssi,
+        message_hub_runtime_modem_state(),
+        message_hub_runtime_gnss_state(),
         s_status_lte_fragment);
     append_test_run_id_and_close_json(buffer, buffer_size);
 }
@@ -3901,9 +4027,9 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
         "\"imu_gyro_mdps_x\":%d,"
         "\"imu_gyro_mdps_y\":%d,"
         "\"imu_gyro_mdps_z\":%d,"
-        "\"link_type\":\"mock_4g_over_wifi\","
-        "\"modem_state\":\"mock_data_ready\","
-        "\"gnss_state\":\"mock_fix\""
+        "\"link_type\":\"%s\","
+        "\"modem_state\":\"%s\","
+        "\"gnss_state\":\"%s\""
         "%s",
         CONFIG_EGOLINK_DEVICE_ID,
         now_ms,
@@ -3941,6 +4067,9 @@ static void build_sensor_payload(char *buffer, size_t buffer_size, uint32_t seq)
         imu.latest.gyro_mdps_x,
         imu.latest.gyro_mdps_y,
         imu.latest.gyro_mdps_z,
+        message_hub_runtime_link_type(),
+        message_hub_runtime_modem_state(),
+        message_hub_runtime_gnss_state(),
         s_sensor_lte_fragment);
     append_test_run_id_and_close_json(buffer, buffer_size);
 }
@@ -4159,13 +4288,23 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 {
     (void)arg;
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        ESP_ERROR_CHECK(esp_wifi_connect());
+        esp_err_t connect_err = esp_wifi_connect();
+        if (connect_err != ESP_OK) {
+            ESP_LOGE(TAG, "WIFI_CONNECT_REQUEST_FAIL phase=sta_start err=%s", esp_err_to_name(connect_err));
+            xEventGroupSetBits(s_event_group, WIFI_FAIL_BIT);
+        }
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         xEventGroupClearBits(s_event_group, WIFI_CONNECTED_BIT | MQTT_CONNECTED_BIT);
         if (s_wifi_retry_count < WIFI_MAX_RETRY) {
             ESP_LOGW(TAG, "Wi-Fi disconnected; retry %d/%d", s_wifi_retry_count + 1, WIFI_MAX_RETRY);
-            ESP_ERROR_CHECK(esp_wifi_connect());
-            s_wifi_retry_count++;
+            esp_err_t connect_err = esp_wifi_connect();
+            if (connect_err == ESP_OK) {
+                s_wifi_retry_count++;
+            } else {
+                ESP_LOGE(TAG, "WIFI_CONNECT_REQUEST_FAIL phase=retry err=%s", esp_err_to_name(connect_err));
+                s_wifi_retry_count = WIFI_MAX_RETRY;
+                xEventGroupSetBits(s_event_group, WIFI_FAIL_BIT);
+            }
         } else {
             ESP_LOGE(TAG, "MQTT_HEARTBEAT_WIFI_FAIL");
             xEventGroupSetBits(s_event_group, WIFI_FAIL_BIT);
@@ -4178,29 +4317,87 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         }
         ESP_LOGI(TAG, "MQTT_HEARTBEAT_WIFI_OK ip=" IPSTR " rssi=%d", IP2STR(&event->ip_info.ip), s_last_rssi);
         s_wifi_retry_count = 0;
+        xEventGroupClearBits(s_event_group, WIFI_FAIL_BIT);
         xEventGroupSetBits(s_event_group, WIFI_CONNECTED_BIT);
     }
 }
 
 static esp_err_t start_wifi(void)
 {
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
+    EventBits_t existing_bits = xEventGroupGetBits(s_event_group);
+    if (s_wifi_started && (existing_bits & WIFI_CONNECTED_BIT) != 0) {
+        return ESP_OK;
+    }
 
-    wifi_init_config_t init_config = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&init_config));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, wifi_event_handler, NULL, NULL));
+    s_wifi_retry_count = 0;
+    xEventGroupClearBits(s_event_group, WIFI_CONNECTED_BIT | WIFI_FAIL_BIT | MQTT_CONNECTED_BIT);
 
-    wifi_config_t wifi_config = {0};
-    strlcpy((char *)wifi_config.sta.ssid, CONFIG_EGOLINK_WIFI_SSID, sizeof(wifi_config.sta.ssid));
-    strlcpy((char *)wifi_config.sta.password, CONFIG_EGOLINK_WIFI_PASSWORD, sizeof(wifi_config.sta.password));
-    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    esp_err_t err = ESP_OK;
+    if (!s_wifi_initialized) {
+        err = esp_netif_init();
+        if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+            ESP_LOGE(TAG, "WIFI_INIT_FAIL phase=netif err=%s", esp_err_to_name(err));
+            return err;
+        }
+        err = esp_event_loop_create_default();
+        if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+            ESP_LOGE(TAG, "WIFI_INIT_FAIL phase=event_loop err=%s", esp_err_to_name(err));
+            return err;
+        }
+        if (esp_netif_create_default_wifi_sta() == NULL) {
+            ESP_LOGE(TAG, "WIFI_INIT_FAIL phase=default_sta");
+            return ESP_FAIL;
+        }
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
+        wifi_init_config_t init_config = WIFI_INIT_CONFIG_DEFAULT();
+        err = esp_wifi_init(&init_config);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "WIFI_INIT_FAIL phase=driver err=%s", esp_err_to_name(err));
+            return err;
+        }
+        err = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, wifi_event_handler, NULL, NULL);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "WIFI_INIT_FAIL phase=wifi_handler err=%s", esp_err_to_name(err));
+            return err;
+        }
+        err = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, wifi_event_handler, NULL, NULL);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "WIFI_INIT_FAIL phase=ip_handler err=%s", esp_err_to_name(err));
+            return err;
+        }
+
+        wifi_config_t wifi_config = {0};
+        strlcpy((char *)wifi_config.sta.ssid, CONFIG_EGOLINK_WIFI_SSID, sizeof(wifi_config.sta.ssid));
+        strlcpy((char *)wifi_config.sta.password, CONFIG_EGOLINK_WIFI_PASSWORD, sizeof(wifi_config.sta.password));
+        wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+
+        err = esp_wifi_set_mode(WIFI_MODE_STA);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "WIFI_INIT_FAIL phase=mode err=%s", esp_err_to_name(err));
+            return err;
+        }
+        err = esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "WIFI_INIT_FAIL phase=config err=%s", esp_err_to_name(err));
+            return err;
+        }
+        s_wifi_initialized = true;
+    }
+
+    if (!s_wifi_started) {
+        err = esp_wifi_start();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "WIFI_INIT_FAIL phase=start err=%s", esp_err_to_name(err));
+            return err;
+        }
+        s_wifi_started = true;
+    } else {
+        err = esp_wifi_connect();
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "WIFI_CONNECT_REQUEST_FAIL phase=restart err=%s", esp_err_to_name(err));
+            return err;
+        }
+    }
 
     EventBits_t bits = xEventGroupWaitBits(
         s_event_group,
@@ -4208,9 +4405,166 @@ static esp_err_t start_wifi(void)
         pdFALSE,
         pdFALSE,
         pdMS_TO_TICKS(20000));
-    ESP_RETURN_ON_FALSE((bits & WIFI_CONNECTED_BIT) != 0, ESP_FAIL, TAG, "Wi-Fi connection timed out");
+    if ((bits & WIFI_CONNECTED_BIT) == 0) {
+        ESP_LOGE(TAG, "WIFI_CONNECT_BOUNDED_FAIL timeout_ms=20000");
+        esp_err_t stop_err = esp_wifi_stop();
+        if (stop_err != ESP_OK) {
+            ESP_LOGW(TAG, "WIFI_STOP_AFTER_FAIL err=%s", esp_err_to_name(stop_err));
+        }
+        s_wifi_started = false;
+        return ESP_FAIL;
+    }
     return ESP_OK;
 }
+
+#if CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+static const char *lte_wifi_failover_state_name(lte_wifi_failover_state_t state)
+{
+    switch (state) {
+        case LTE_WIFI_FAILOVER_LTE_PRIMARY:
+            return "lte_primary";
+        case LTE_WIFI_FAILOVER_WIFI_CONNECTING:
+            return "wifi_connecting";
+        case LTE_WIFI_FAILOVER_WIFI_ACTIVE:
+            return "wifi_active";
+        case LTE_WIFI_FAILOVER_OFFLINE:
+            return "offline";
+        default:
+            return "unknown";
+    }
+}
+
+static void lte_wifi_failover_transition(lte_wifi_failover_state_t next_state, const char *reason)
+{
+    ESP_LOGW(
+        TAG,
+        "LTE_WIFI_FAILOVER_TRANSITION from=%s to=%s reason=%s one_way=true",
+        lte_wifi_failover_state_name(s_lte_wifi_failover_state),
+        lte_wifi_failover_state_name(next_state),
+        reason ? reason : "unspecified");
+    s_lte_wifi_failover_state = next_state;
+}
+
+static bool lte_wifi_failover_config_valid(void)
+{
+    return CONFIG_EGOLINK_WIFI_SSID[0] != '\0' && CONFIG_EGOLINK_WIFI_PASSWORD[0] != '\0';
+}
+
+static void lte_wifi_failover_run_wifi_owner(void)
+{
+    int64_t next_command_poll_ms = 0;
+    int64_t next_heartbeat_ms = 0;
+    int64_t next_sensor_ms = 0;
+#if CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED && CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
+    int64_t next_periodic_location_ms = 0;
+    uint32_t periodic_location_index = 0;
+#endif
+
+    while (true) {
+        EventBits_t bits = xEventGroupWaitBits(
+            s_event_group,
+            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+            pdFALSE,
+            pdFALSE,
+            pdMS_TO_TICKS(1000));
+        if ((bits & WIFI_FAIL_BIT) != 0 && (bits & WIFI_CONNECTED_BIT) == 0) {
+            ESP_LOGE(TAG, "LTE_WIFI_FAILOVER_WIFI_OWNER_STOP reason=wifi_retry_exhausted");
+            return;
+        }
+        if ((bits & WIFI_CONNECTED_BIT) == 0) {
+            continue;
+        }
+
+        int64_t now_ms = uptime_ms();
+        if (now_ms >= next_command_poll_ms) {
+            wifi_imu_window_poll_result_t command_result = wifi_http_poll_imu_window_command_once();
+            ESP_LOGI(
+                TAG,
+                "LTE_WIFI_FAILOVER_WIFI_RAW_COMMAND result=%s",
+                wifi_imu_window_poll_result_name(command_result));
+            if (s_imu_window_service_failed_closed) {
+                ESP_LOGE(TAG, "LTE_WIFI_FAILOVER_WIFI_OWNER_STOP reason=imu_window_fail_closed");
+                return;
+            }
+            next_command_poll_ms = uptime_ms() +
+                                   (int64_t)CONFIG_EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC * 1000;
+        }
+        now_ms = uptime_ms();
+        if (now_ms >= next_heartbeat_ms) {
+            publish_heartbeat();
+            next_heartbeat_ms = uptime_ms() + (int64_t)CONFIG_EGOLINK_HEARTBEAT_INTERVAL_SEC * 1000;
+        }
+        now_ms = uptime_ms();
+        if (now_ms >= next_sensor_ms) {
+            publish_sensor_sample();
+            next_sensor_ms = uptime_ms() + (int64_t)CONFIG_EGOLINK_SENSOR_EVENT_INTERVAL_SEC * 1000;
+        }
+#if CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED && CONFIG_EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
+        now_ms = uptime_ms();
+        if (now_ms >= next_periodic_location_ms) {
+            char cmd_id[64];
+            periodic_location_index += 1;
+            snprintf(cmd_id, sizeof(cmd_id), "d1-wifi-periodic-%" PRIu32, periodic_location_index);
+            bool location_ok = message_hub_publish_location_report(cmd_id);
+            ESP_LOGI(
+                TAG,
+                "LTE_WIFI_FAILOVER_WIFI_PERIODIC_LOCATION index=%" PRIu32 " ok=%s",
+                periodic_location_index,
+                location_ok ? "true" : "false");
+            next_periodic_location_ms = uptime_ms() +
+                                        (int64_t)CONFIG_EGOLINK_SIM7670_D1_PERIODIC_LOCATION_INTERVAL_SEC * 1000;
+        }
+#endif
+        vTaskDelay(pdMS_TO_TICKS(250));
+    }
+}
+
+static bool lte_wifi_failover_run_once(const char *reason)
+{
+    if (s_lte_wifi_failover_latched) {
+        ESP_LOGE(
+            TAG,
+            "LTE_WIFI_FAILOVER_REJECTED state=%s reason=already_latched",
+            lte_wifi_failover_state_name(s_lte_wifi_failover_state));
+        return false;
+    }
+    s_lte_wifi_failover_latched = true;
+
+    if (!lte_wifi_failover_config_valid()) {
+        lte_wifi_failover_transition(LTE_WIFI_FAILOVER_OFFLINE, "wifi_config_missing");
+        platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_wifi_failover_config_missing");
+        return false;
+    }
+
+    lte_wifi_failover_transition(LTE_WIFI_FAILOVER_WIFI_CONNECTING, reason);
+    platform_power_enter_state(PLATFORM_POWER_STATE_NETWORK_ATTACH, "lte_wifi_failover_wifi_connect");
+    esp_err_t wifi_err = start_wifi();
+    platform_power_leave_state(
+        PLATFORM_POWER_STATE_NETWORK_ATTACH,
+        wifi_err == ESP_OK ? "lte_wifi_failover_wifi_connected" : "lte_wifi_failover_wifi_failed");
+    if (wifi_err != ESP_OK) {
+        lte_wifi_failover_transition(LTE_WIFI_FAILOVER_OFFLINE, "wifi_connect_failed");
+        platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_wifi_failover_offline");
+        return false;
+    }
+
+    lte_wifi_failover_transition(LTE_WIFI_FAILOVER_WIFI_ACTIVE, reason);
+    message_hub_register_device();
+    platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_wifi_failover_wifi_active");
+    lte_wifi_failover_run_wifi_owner();
+
+    if (s_wifi_started) {
+        esp_err_t stop_err = esp_wifi_stop();
+        if (stop_err != ESP_OK) {
+            ESP_LOGW(TAG, "WIFI_STOP_AFTER_FAILOVER_OWNER err=%s", esp_err_to_name(stop_err));
+        }
+        s_wifi_started = false;
+    }
+    lte_wifi_failover_transition(LTE_WIFI_FAILOVER_OFFLINE, "wifi_retry_exhausted");
+    platform_power_enter_state(PLATFORM_POWER_STATE_GUARDING, "lte_wifi_failover_offline");
+    return false;
+}
+#endif
 
 #if !CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
