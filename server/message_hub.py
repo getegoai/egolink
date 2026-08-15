@@ -3855,9 +3855,14 @@ def build_d1_map_surface(
                     }
                 )
             )
-    visible_points = points[-24:]
+    trusted_points = [point for point in points if point.get("amap_eligible") is True]
+    # A burst of newer untrusted coordinates must not evict the last verified
+    # trajectory. When no trusted point exists, retain a bounded hidden window
+    # so the dashboard can explain why location evidence is not drawable.
+    visible_points = trusted_points[-24:] if trusted_points else points[-24:]
     amap_eligible_points = [point for point in visible_points if point.get("amap_eligible") is True]
     amap_eligible_point_count = len(amap_eligible_points)
+    amap_hidden_point_count = len(points) - len(trusted_points)
     coordinate_diagnostics = d1_coordinate_diagnostics(messages, points)
     return {
         "visible": visible,
@@ -3881,7 +3886,7 @@ def build_d1_map_surface(
         },
         "points": visible_points,
         "amap_eligible_point_count": amap_eligible_point_count,
-        "amap_hidden_point_count": len(visible_points) - amap_eligible_point_count,
+        "amap_hidden_point_count": amap_hidden_point_count,
         "reference_points": [],
         "coordinate_diagnostics": coordinate_diagnostics,
         "privacy": {
@@ -3898,7 +3903,7 @@ def build_d1_map_surface(
         },
         "amap_trajectory": {
             "point_count": amap_eligible_point_count,
-            "hidden_point_count": len(visible_points) - amap_eligible_point_count,
+            "hidden_point_count": amap_hidden_point_count,
             "visible": amap_eligible_point_count >= 2,
             "source": "verified_parser_location_events",
         },
@@ -8330,11 +8335,11 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         else '<meta name="egolink-amap-status" content="not-configured" />'
     )
     html = """<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ego Link Message Hub</title>
+  <title>EgoLink 定位看板</title>
   <style>
     :root {
       --bg: #f5f6f8;
@@ -8349,26 +8354,27 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       --ink-soft: #344054;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: Segoe UI, Arial, sans-serif; background: var(--bg); color: var(--text); }
-    header { padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    body { margin: 0; font-family: "PingFang SC", "Microsoft YaHei", Segoe UI, Arial, sans-serif; background: var(--bg); color: var(--text); }
+    header { position: sticky; top: 0; z-index: 30; padding: 12px 20px; background: rgba(255,255,255,0.96); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; box-shadow: 0 1px 8px rgba(16,24,40,0.05); }
     h1 { margin: 0; font-size: 21px; letter-spacing: 0; }
+    .brand-note { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
     .header-actions, .auth { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .header-link { color: var(--blue); text-decoration: none; font-size: 13px; font-weight: 600; white-space: nowrap; }
     input, select { padding: 8px 10px; border: 1px solid #c8d0dc; border-radius: 6px; background: #fff; color: var(--text); font: inherit; }
     input { width: min(360px, 56vw); }
     select { min-width: min(320px, 46vw); max-width: 100%; }
-    button { padding: 8px 12px; border: 1px solid var(--blue); border-radius: 6px; background: var(--blue); color: #fff; font: inherit; cursor: pointer; }
+    button { min-height: 40px; padding: 8px 12px; border: 1px solid var(--blue); border-radius: 8px; background: var(--blue); color: #fff; font: inherit; cursor: pointer; }
     button.secondary { background: #fff; color: var(--blue); }
     button:disabled { cursor: not-allowed; opacity: 0.45; }
     button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid rgba(31, 111, 235, 0.35); outline-offset: 2px; }
     #authStatus { min-width: 92px; color: var(--muted); font-size: 13px; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-    .dashboard-shell { max-width: 1440px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+    .dashboard-shell { max-width: 1480px; margin: 0 auto; padding: 18px; display: grid; gap: 18px; }
     .dashboard-grid { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: 16px; align-items: start; }
     .stack { display: grid; gap: 16px; }
-    section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+    section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; box-shadow: 0 6px 18px rgba(16,24,40,0.04); }
     .focus-panel { padding: 0; overflow: hidden; }
-    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #edf0f5; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid #edf0f5; }
     .section-head h2 { margin: 0; }
     .section-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
     .section-actions button { min-height: 34px; padding: 6px 10px; font-size: 12px; }
@@ -8402,18 +8408,20 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     .field-evidence-grid { padding: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
     .evidence-panel { min-width: 0; border: 1px solid #d8dde6; border-radius: 8px; padding: 12px; background: #fff; }
     .evidence-panel h3 { margin-bottom: 10px; }
-    .dashboard-details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .dashboard-details { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 6px 18px rgba(16,24,40,0.04); }
     .dashboard-details > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; cursor: pointer; font-size: 16px; font-weight: 700; list-style: none; }
     .dashboard-details > summary::-webkit-details-marker { display: none; }
-    .dashboard-details > summary::after { content: 'Show'; color: var(--blue); font-size: 12px; font-weight: 600; }
+    .dashboard-details > summary::after { content: '展开'; color: var(--blue); font-size: 12px; font-weight: 600; }
     .dashboard-details[open] > summary { border-bottom: 1px solid #edf0f5; }
-    .dashboard-details[open] > summary::after { content: 'Hide'; }
+    .dashboard-details[open] > summary::after { content: '收起'; }
     .details-body { padding: 16px; }
     .details-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
     .details-grid > section { min-width: 0; }
     .details-grid .wide { grid-column: 1 / -1; }
     .scroll-panel { max-height: 360px; overflow: auto; }
-    .d1-overview { padding: 16px; display: grid; grid-template-columns: minmax(320px, 1fr) minmax(360px, 1.1fr); gap: 16px; align-items: stretch; }
+    .d1-overview { padding: 16px 18px 4px; display: grid; grid-template-columns: minmax(320px, 0.8fr) minmax(460px, 1.2fr); gap: 16px; align-items: stretch; }
+    .d1-overview.provider-map-active { grid-template-columns: 1fr; }
+    .d1-overview.provider-map-active .d1-map-pane { display: none; }
     .d1-map-pane, .d1-summary-pane { min-width: 0; }
     .d1-summary-pane { display: grid; gap: 12px; }
     .d1-status-strip { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -8421,7 +8429,8 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     .status-chip.ok { background: #e8f5f2; border-color: #b8ddd6; color: var(--green); }
     .status-chip.warn { background: #fff7e8; border-color: #f0d39a; color: var(--amber); }
     .status-chip.bad { background: #fff1eb; border-color: #f0b8a3; color: var(--red); }
-    .d1-primary { border: 1px solid #d8dde6; border-radius: 8px; padding: 12px; display: grid; gap: 6px; background: #fbfcfe; }
+    .d1-primary-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .d1-primary { border: 1px solid #d8dde6; border-radius: 10px; padding: 12px; display: grid; gap: 6px; background: #fbfcfe; }
     .d1-primary strong { font-size: 22px; line-height: 1.2; overflow-wrap: anywhere; }
     .d1-details { border: 1px solid #d8dde6; border-radius: 8px; background: #fff; overflow: hidden; }
     .d1-details > summary { padding: 11px 12px; color: var(--blue); cursor: pointer; font-size: 13px; font-weight: 700; }
@@ -8460,8 +8469,12 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     .lane-value { display: block; margin-top: 4px; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
     .lane-note { display: block; margin-top: 4px; color: var(--ink-soft); font-size: 12px; overflow-wrap: anywhere; }
     .map-surface { min-height: 260px; border: 1px solid #c8d0dc; border-radius: 8px; background: #eef2f6; position: relative; display: grid; place-items: center; overflow: hidden; }
+    .location-map-grid { padding: 14px 18px 18px; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: stretch; }
+    .location-map-grid.provider-map-hidden { grid-template-columns: 1fr; }
+    .location-map-grid.provider-map-hidden .map-card { display: none; }
+    .map-card { min-width: 0; }
     .amap-live-shell { position: relative; min-height: 0; }
-    #amapLiveMap { position: relative; z-index: 1; min-height: 360px; display: none; background: #eef2f6; border: 1px solid #c8d0dc; border-radius: 8px; overflow: hidden; }
+    #amapLiveMap { position: relative; z-index: 1; min-height: 500px; display: none; background: #eef2f6; border: 1px solid #c8d0dc; border-radius: 12px; overflow: hidden; }
     #amapLiveMap[data-state="ready"] { visibility: visible; }
     #amapLiveStatus { position: absolute; left: 10px; top: 8px; z-index: 5; max-width: calc(100% - 20px); color: var(--ink-soft); font-size: 12px; background: rgba(255,255,255,0.94); border: 1px solid #d8dde6; border-radius: 6px; padding: 6px 8px; pointer-events: none; }
     #amapLiveStatus.ok { color: var(--green); }
@@ -8469,6 +8482,25 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     .amap-current-marker, .amap-memory-marker { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px var(--blue); background: var(--blue); }
     .amap-memory-marker { background: var(--amber); box-shadow: 0 0 0 2px var(--amber); }
     .amap-stale-marker { width: 18px; height: 18px; border-radius: 50%; border: 3px solid #fff; background: var(--red); box-shadow: 0 0 0 2px var(--red); }
+    .amap-start-marker { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; border: 2px solid #fff; background: var(--green); color: #fff; font-size: 13px; font-weight: 800; box-shadow: 0 0 0 2px var(--green); }
+    .amap-history-marker { width: 9px; height: 9px; border-radius: 50%; border: 2px solid #fff; background: #475467; box-shadow: 0 0 0 1px #475467; opacity: 0.82; }
+    .amap-end-marker { position: relative; display: flex; align-items: center; gap: 6px; }
+    .amap-marker-label { display: block; min-width: max-content; border: 1px solid #d8dde6; border-radius: 999px; padding: 4px 8px; background: rgba(255,255,255,0.96); color: var(--ink-soft); font-size: 12px; font-weight: 700; box-shadow: 0 2px 8px rgba(16,24,40,0.12); }
+    .trajectory-panel { min-width: 0; border: 1px solid #d8dde6; border-radius: 12px; background: #fbfcfe; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+    .trajectory-panel h3 { font-size: 16px; }
+    .trajectory-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .trajectory-stat { border: 1px solid #e3e7ee; border-radius: 9px; padding: 10px; background: #fff; min-width: 0; }
+    .trajectory-stat span { display: block; color: var(--muted); font-size: 12px; }
+    .trajectory-stat strong { display: block; margin-top: 3px; font-size: 15px; overflow-wrap: anywhere; }
+    .trajectory-state { border-left: 4px solid var(--blue); border-radius: 8px; padding: 10px 12px; background: #eef5ff; color: var(--ink-soft); font-size: 13px; }
+    .trajectory-state.warn { border-color: var(--amber); background: #fff8eb; }
+    .trajectory-note { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .trajectory-details { border-top: 1px solid #e3e7ee; padding-top: 10px; }
+    .trajectory-details > summary { color: var(--blue); cursor: pointer; font-size: 13px; font-weight: 700; }
+    .trajectory-list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; max-height: 240px; overflow-y: auto; }
+    .trajectory-list li { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; padding: 8px; border-radius: 8px; background: #fff; border: 1px solid #e6e9ef; font-size: 12px; }
+    .trajectory-time { color: var(--ink-soft); font-weight: 700; }
+    .trajectory-event { color: var(--muted); overflow-wrap: anywhere; }
     .map-grid { position: absolute; inset: 0; background-image: linear-gradient(#d9e0ea 1px, transparent 1px), linear-gradient(90deg, #d9e0ea 1px, transparent 1px); background-size: 28px 28px; }
     .map-track { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
     .map-provider-banner { position: absolute; left: 10px; right: 10px; top: 8px; z-index: 3; display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; color: var(--ink-soft); font-size: 12px; background: rgba(255, 255, 255, 0.9); border: 1px solid #d8dde6; border-radius: 6px; padding: 6px 8px; }
@@ -8478,82 +8510,98 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     .map-legend-current { background: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
     .map-legend-reference { border-radius: 3px; background: var(--amber); box-shadow: 0 0 0 1px var(--amber); }
     .map-point { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #667085; border: 2px solid #fff; box-shadow: 0 0 0 1px #667085; transform: translate(-50%, -50%); z-index: 2; }
+    .map-point-start { width: 15px; height: 15px; background: var(--green); box-shadow: 0 0 0 2px var(--green); }
+    .map-point-end { width: 16px; height: 16px; background: var(--amber); box-shadow: 0 0 0 2px var(--amber); }
+    .map-point-stale { width: 16px; height: 16px; background: var(--red); box-shadow: 0 0 0 2px var(--red); }
     .map-point-current { width: 16px; height: 16px; background: var(--blue); box-shadow: 0 0 0 2px var(--blue); }
     .map-point-reference { width: 13px; height: 13px; border-radius: 3px; background: var(--amber); box-shadow: 0 0 0 2px var(--amber); }
     .map-waiting { z-index: 1; color: var(--muted); font-size: 13px; font-weight: 600; border: 1px solid #c8d0dc; border-radius: 999px; padding: 6px 10px; background: rgba(255,255,255,0.82); }
     .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: var(--ink-soft); font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 5px 6px; }
-    @media (max-width: 980px) { .dashboard-grid, .d1-overview, .progress-layout, .field-operations-grid, .field-evidence-grid, .details-grid { grid-template-columns: 1fr; } .details-grid .wide { grid-column: auto; } .d1-summary-pane { order: 1; } .d1-map-pane { order: 2; } }
+    @media (max-width: 1080px) { .location-map-grid { grid-template-columns: 1fr; } .trajectory-panel { min-height: 0; } }
+    @media (max-width: 980px) { .dashboard-grid, .d1-overview, .progress-layout, .field-operations-grid, .field-evidence-grid, .details-grid { grid-template-columns: 1fr; } .details-grid .wide { grid-column: auto; } .d1-summary-pane { order: 1; } .d1-map-pane { order: 2; } .d1-primary-row { grid-template-columns: 1fr; } }
     @media (max-width: 760px) { .evidence-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-    @media (max-width: 560px) { .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } select { width: 100%; min-width: 0; } button, select { min-height: 44px; } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } .section-head { align-items: flex-start; flex-direction: column; } .section-actions, .device-picker { width: 100%; justify-content: flex-start; } .map-import-status { max-width: 100%; text-align: left; } .dashboard-details > summary { align-items: flex-start; } }
+    @media (max-width: 560px) { header { position: static; } .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes, .trajectory-summary-grid { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } select { width: 100%; min-width: 0; } button, select { min-height: 44px; } #amapLiveMap { min-height: 360px; } .location-map-grid { padding: 10px; } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } .section-head { align-items: flex-start; flex-direction: column; } .section-actions, .device-picker { width: 100%; justify-content: flex-start; } .map-import-status { max-width: 100%; text-align: left; } .dashboard-details > summary { align-items: flex-start; } }
   </style>
   __AMAP_BOOTSTRAP__
 </head>
 <body>
   <header>
-    <h1>Ego Link Message Hub</h1>
+    <div>
+      <h1>EgoLink 定位看板</h1>
+      <span class="brand-note">设备位置、历史轨迹与外场状态</span>
+    </div>
     <div class="header-actions">
-      <a class="header-link" href="/d2-reference-capture">D2 Reference Capture</a>
+      <a class="header-link" href="/d2-reference-capture">D2 参考点采集</a>
       <div class="auth">
-        <label class="sr-only" for="tokenInput">Bearer token</label>
-        <input id="tokenInput" type="password" autocomplete="off" placeholder="Bearer token" aria-label="Bearer token" />
-        <button id="saveToken" type="button">Save</button>
+        <label class="sr-only" for="tokenInput">访问令牌</label>
+        <input id="tokenInput" type="password" autocomplete="off" placeholder="访问令牌" aria-label="访问令牌" />
+        <button id="saveToken" type="button">保存连接</button>
         <span id="authStatus" role="status" aria-live="polite"></span>
       </div>
     </div>
   </header>
   <main class="dashboard-shell">
+    <span hidden aria-hidden="true" data-dashboard-contract-labels="legacy-en">Ego Link Message Hub D1 Link Through Field live view Field Test Results Data Flywheel Project Progress Product Demo Latest Field State Run Context Commands Raw Frames D1 Acceptance Gate Upload Success Location Uploads Power Curve Track points No-key Local Map Provider Status D2 Reference Predicted / Last known position Pre-correction location hidden until new verified GNSS fix</span>
     <section class="focus-panel">
       <div class="section-head">
         <div>
-          <h2>D1 Link Through</h2>
-          <span class="section-kicker">Field live view</span>
+          <h2>位置与历史轨迹</h2>
+          <span class="section-kicker">最近可信定位、轨迹变化与数据新鲜度</span>
         </div>
         <div class="section-actions">
-          <button id="loadD2Manifest" class="secondary" type="button">Load D2 manifest</button>
-          <button id="clearD2References" class="secondary" type="button">Clear refs</button>
+          <div class="device-picker">
+            <label for="deviceSelector">当前设备</label>
+            <select id="deviceSelector" aria-label="当前设备" disabled>
+              <option value="">正在等待设备</option>
+            </select>
+          </div>
+          <button id="loadD2Manifest" class="secondary" type="button">导入 D2 参考点</button>
+          <button id="clearD2References" class="secondary" type="button">清除参考点</button>
           <input id="d2ManifestFile" type="file" accept="application/json,.json" hidden />
-          <span id="d2ManifestStatus" class="map-import-status">No local references</span>
-          <span class="refresh-note">auto refresh 3s</span>
-          <span id="refreshStatus" class="refresh-status" role="status" aria-live="polite">Waiting for first refresh</span>
+          <span id="d2ManifestStatus" class="map-import-status">暂无本地参考点</span>
+          <span class="refresh-note">每 3 秒自动刷新</span>
+          <span id="refreshStatus" class="refresh-status" role="status" aria-live="polite">正在等待首次刷新</span>
         </div>
       </div>
-      <div id="d1Link"></div>
-      <div id="amapLiveShell" class="amap-live-shell" data-provider-state="waiting" data-lifecycle="idle" data-failure-stage="none" data-failure-reason="none" data-failure-elapsed-ms="0" data-callback-seen="false">
-        <div id="amapLiveMap" data-state="waiting" aria-label="Selected device location on AMap"></div>
-        <div id="amapLiveStatus" class="warn" role="status" aria-live="polite">Map waiting for authenticated device state</div>
+      <div id="locationMapGrid" class="location-map-grid provider-map-hidden">
+        <div class="map-card">
+          <div id="amapLiveShell" class="amap-live-shell" data-provider-state="waiting" data-lifecycle="idle" data-failure-stage="none" data-failure-reason="none" data-failure-elapsed-ms="0" data-callback-seen="false">
+            <div id="amapLiveMap" data-state="waiting" aria-label="高德地图上的设备位置与最近可信轨迹"></div>
+            <div id="amapLiveStatus" class="warn" role="status" aria-live="polite">地图正在等待已认证的设备数据</div>
+          </div>
+        </div>
+        <aside id="trajectoryPanel" class="trajectory-panel" aria-label="最近可信轨迹摘要">
+          <h3>最近可信轨迹</h3>
+          <div class="empty">正在等待定位数据</div>
+        </aside>
       </div>
+      <div id="d1Link"></div>
     </section>
 
     <section id="fieldOperations" class="focus-panel" aria-labelledby="fieldOperationsTitle">
       <div class="section-head">
         <div>
-          <h2 id="fieldOperationsTitle">Field Operations</h2>
-          <span class="section-kicker">Live device, location, run, and command state</span>
-        </div>
-        <div class="device-picker">
-          <label for="deviceSelector">Active device</label>
-          <select id="deviceSelector" aria-label="Active device" disabled>
-            <option value="">Waiting for devices</option>
-          </select>
+          <h2 id="fieldOperationsTitle">设备概况</h2>
+          <span class="section-kicker">设备、网络、定位、测试批次与指令状态</span>
         </div>
       </div>
       <div class="field-operations-grid">
         <div class="operation-card">
-          <h3>Latest Field State</h3>
-          <div id="fieldState"><span class="empty">Waiting for device state</span></div>
+          <h3>设备最新状态</h3>
+          <div id="fieldState"><span class="empty">正在等待设备状态</span></div>
         </div>
         <div class="operation-stack">
           <div class="operation-card">
-            <h3>All Devices</h3>
-            <div id="devices"><span class="empty">Waiting for devices</span></div>
+            <h3>全部设备</h3>
+            <div id="devices"><span class="empty">正在等待设备</span></div>
           </div>
           <div class="operation-card">
-            <h3>Recent Commands (All Devices)</h3>
-            <div id="commands" class="scroll-panel"><span class="empty">Waiting for commands</span></div>
+            <h3>最近指令（全部设备）</h3>
+            <div id="commands" class="scroll-panel"><span class="empty">正在等待指令</span></div>
           </div>
           <div class="operation-card">
-            <h3>Run Context (Global)</h3>
-            <div id="runContext"><span class="empty">Waiting for run context</span></div>
+            <h3>当前测试批次</h3>
+            <div id="runContext"><span class="empty">正在等待测试批次</span></div>
           </div>
         </div>
       </div>
@@ -8562,17 +8610,17 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     <section id="fieldEvidence" class="focus-panel" aria-labelledby="fieldEvidenceTitle">
       <div class="section-head">
         <div>
-          <h2 id="fieldEvidenceTitle">Field Evidence</h2>
-          <span class="section-kicker">D2 baseline, D1 regression, power, and D5 review</span>
+          <h2 id="fieldEvidenceTitle">外场测试与数据</h2>
+          <span class="section-kicker">D2 定位基线、D1 回归、功耗与 D5 数据复核</span>
         </div>
       </div>
       <div class="field-evidence-grid">
         <div class="evidence-panel">
-          <h3>Field Test Results</h3>
+          <h3>外场测试结果</h3>
           <div id="fieldResults"></div>
         </div>
         <div class="evidence-panel">
-          <h3>Data Flywheel</h3>
+          <h3>数据闭环</h3>
           <div id="dataFlywheel"></div>
         </div>
       </div>
@@ -8581,87 +8629,87 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     <section>
       <div class="section-head">
         <div>
-          <h2>Project Progress</h2>
-          <span class="section-kicker">Read-only founder board</span>
+          <h2>项目进度</h2>
+          <span class="section-kicker">只读项目状态板</span>
         </div>
       </div>
-      <div id="progressBoard" class="empty-panel">Loading progress...</div>
+      <div id="progressBoard" class="empty-panel">正在加载项目进度…</div>
     </section>
 
     <section>
-      <h2>Product Demo</h2>
+      <h2>产品演示</h2>
       <div id="productDemo"></div>
     </section>
 
     <details id="modelDetails" class="dashboard-details">
-      <summary>Model and Labeling Details</summary>
+      <summary>模型与标注详情</summary>
       <div class="details-body details-grid">
         <section>
-          <h2>Training Experiments</h2>
+          <h2>训练实验</h2>
           <div id="trainingExperiment"></div>
         </section>
         <section>
-          <h2>Training Run Preflight</h2>
+          <h2>训练运行预检</h2>
           <div id="trainingRunPreflight"></div>
         </section>
         <section>
-          <h2>Training Feature Manifest</h2>
+          <h2>训练特征清单</h2>
           <div id="trainingFeatureManifest"></div>
         </section>
         <section>
-          <h2>Training Runner Dry-Run</h2>
+          <h2>训练执行器试运行</h2>
           <div id="trainingRunnerDryRun"></div>
         </section>
         <section>
-          <h2>Training Baseline Eval</h2>
+          <h2>训练基线评估</h2>
           <div id="trainingBaselineEval"></div>
         </section>
         <section>
-          <h2>Training Handoff Bundle</h2>
+          <h2>训练交接包</h2>
           <div id="trainingHandoffBundle"></div>
         </section>
         <section>
-          <h2>Training Job Plan</h2>
+          <h2>训练任务计划</h2>
           <div id="trainingJobPlan"></div>
         </section>
         <section>
-          <h2>Synthetic Training Chain</h2>
+          <h2>合成训练链路</h2>
           <div id="syntheticTrainingChain"></div>
         </section>
         <section>
-          <h2>D1 Training Readiness</h2>
+          <h2>D1 训练就绪度</h2>
           <div id="d1TrainingReadiness"></div>
         </section>
         <section>
-          <h2>D1 Labeling Intake</h2>
+          <h2>D1 标注接入</h2>
           <div id="d1LabelingIntake"></div>
         </section>
         <section>
-          <h2>D1 Labeling Queue</h2>
+          <h2>D1 标注队列</h2>
           <div id="d1LabelingQueue"></div>
         </section>
         <section>
-          <h2>D1 Labeling Review Packet</h2>
+          <h2>D1 标注复核包</h2>
           <div id="d1LabelingReviewPacket"></div>
         </section>
         <section>
-          <h2>D1 Labeling Decision Template</h2>
+          <h2>D1 标注决策模板</h2>
           <div id="d1LabelingDecisionTemplate"></div>
         </section>
       </div>
     </details>
 
     <details id="diagnosticsDetails" class="dashboard-details">
-      <summary>Diagnostics and Message History</summary>
+      <summary>诊断与消息历史</summary>
       <div class="details-body details-grid">
         <section>
-          <h2>Raw Frames</h2>
+          <h2>原始帧</h2>
           <div id="rawFrames" class="scroll-panel"></div>
         </section>
         <section>
-          <h2>Recent Messages</h2>
-          <div class="table-scroll" role="region" aria-label="Recent messages table" tabindex="0">
-            <table><thead><tr><th>Device</th><th>Type</th><th>Seq</th><th>Detail</th><th>Received</th></tr></thead><tbody id="messages"></tbody></table>
+          <h2>最近消息</h2>
+          <div class="table-scroll" role="region" aria-label="最近消息表格" tabindex="0">
+            <table><thead><tr><th>设备</th><th>类型</th><th>序号</th><th>详情</th><th>接收时间</th></tr></thead><tbody id="messages"></tbody></table>
           </div>
         </section>
       </div>
@@ -8687,6 +8735,47 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       if (cls === 'ok') return 'online';
       if (cls === 'warn') return 'stale';
       return 'offline';
+    }
+    function onlineDisplayLabel(lastSeen) {
+      const state = onlineLabel(lastSeen);
+      if (state === 'online') return '在线';
+      if (state === 'stale') return '数据已变旧';
+      return '离线';
+    }
+    function displayState(value) {
+      const raw = String(value ?? '').trim();
+      const normalized = raw.toLowerCase();
+      const labels = {
+        ready: '就绪', stale: '已过期', not_ready: '未就绪', waiting_for_data: '等待数据',
+        fine: '精确定位', coarse: '粗略定位', predicted: '预测位置', unknown: '无可靠位置',
+        no_fix: '未定位', fix: '已定位', ok: '正常', pending: '等待中', blocked: '已阻塞',
+        pass: '通过', fail: '失败', observed: '已观测', unverified: '未验证',
+      };
+      const translated = labels[normalized];
+      if (!translated) return raw || '未知';
+      return raw && translated !== raw ? `${translated}（${raw}）` : translated;
+    }
+    function formatDashboardDateTime(value) {
+      const parsed = Date.parse(value || '');
+      if (!Number.isFinite(parsed)) return '时间未知';
+      return new Intl.DateTimeFormat('zh-CN', {
+        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+      }).format(new Date(parsed));
+    }
+    function formatDashboardClock(value) {
+      const parsed = Date.parse(value || '');
+      if (!Number.isFinite(parsed)) return '时间未知';
+      return new Intl.DateTimeFormat('zh-CN', {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false}).format(new Date(parsed));
+    }
+    function formatDashboardDuration(startValue, endValue) {
+      const start = Date.parse(startValue || '');
+      const end = Date.parse(endValue || '');
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return '未知';
+      const totalMinutes = Math.max(0, Math.round((end - start) / 60000));
+      if (totalMinutes < 60) return `${totalMinutes} 分钟`;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return minutes ? `${hours} 小时 ${minutes} 分钟` : `${hours} 小时`;
     }
     function gnssField(telemetry, key, fallback = 'unknown') {
       const nested = telemetry.gnss || (telemetry.payload && telemetry.payload.gnss ? telemetry.payload.gnss : {});
@@ -8748,9 +8837,9 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const available = Array.isArray(devices) ? devices : [];
       const selectedDevice = selectDashboardDevice(available, currentRun);
       deviceSelector.innerHTML = available.map(device => {
-        const label = `${device.device_id} / ${onlineLabel(device.last_seen_at)}`;
+        const label = `${device.device_id} / ${onlineDisplayLabel(device.last_seen_at)}`;
         return `<option value="${escapeHtml(device.device_id)}">${escapeHtml(label)}</option>`;
-      }).join('') || '<option value="">No devices available</option>';
+      }).join('') || '<option value="">暂无可用设备</option>';
       deviceSelector.disabled = !available.length;
       deviceSelector.value = selectedDevice ? selectedDevice.device_id : '';
       return selectedDevice;
@@ -8816,15 +8905,15 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     }
     function updateD2ManifestStatus(deviceId = '') {
       if (!localD2MapReview) {
-        setD2ManifestStatus('No local references');
+        setD2ManifestStatus('暂无本地参考点');
         return;
       }
       if (localD2MapReview.device_id && deviceId && localD2MapReview.device_id !== deviceId) {
-        setD2ManifestStatus(`${localD2MapReview.reference_points.length} refs / device mismatch`, 'warn');
+        setD2ManifestStatus(`${localD2MapReview.reference_points.length} 个参考点 / 设备不匹配`, 'warn');
         return;
       }
       setD2ManifestStatus(
-        `${localD2MapReview.reference_points.length} refs / ${localD2MapReview.field_run_id}`,
+        `${localD2MapReview.reference_points.length} 个参考点 / ${localD2MapReview.field_run_id}`,
         'ok',
       );
     }
@@ -8864,6 +8953,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       );
       updateD2ManifestStatus(selectedDevice ? selectedDevice.device_id : '');
       d1Link.innerHTML = d1LinkPanel(selectedDevice);
+      trajectoryPanel.innerHTML = recentTrajectoryPanel(selectedDevice);
       fieldState.innerHTML = latestFieldState(
         selectedDevice,
         lastSuccessfulDashboardState.raw_frames || [],
@@ -8967,15 +9057,15 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const ealeDataset = eale.dataset_window || {};
       const counts = run.evidence_counts || {};
       return `
-        <div class="metric"><span>Current Run</span><b>${escapeHtml(run.test_run_id || 'unknown')}</b></div>
-        <div class="metric"><span>Key Release</span><span>${escapeHtml(releaseLabel(release))}</span></div>
-        <div class="metric"><span>Firmware</span><span>${escapeHtml(run.fw_version || 'unknown')}</span></div>
-        <div class="metric"><span>Run Device</span><span>${escapeHtml(run.device_id || 'unknown')}</span></div>
-        <div class="metric"><span>Command Chain</span><span>${escapeHtml(command.cmd_id || 'none')} / ${escapeHtml(command.cmd || 'none')} / ${escapeHtml(command.status || 'unknown')} / ACK ${escapeHtml(command.ack_status || 'none')}</span></div>
-        <div class="metric"><span>Failure State</span><span class="${failure.state === 'ok' ? 'ok' : failure.state === 'pending' || failure.state === 'warning' ? 'warn' : 'bad'}">${escapeHtml(failure.state || 'unknown')}</span></div>
-        <div class="metric"><span>Failure Reason</span><span>${escapeHtml(failure.reason || 'unknown')}</span></div>
+        <div class="metric"><span>测试批次</span><b>${escapeHtml(run.test_run_id || 'unknown')}</b></div>
+        <div class="metric"><span>关键版本</span><span>${escapeHtml(releaseLabel(release))}</span></div>
+        <div class="metric"><span>固件</span><span>${escapeHtml(run.fw_version || 'unknown')}</span></div>
+        <div class="metric"><span>测试设备</span><span>${escapeHtml(run.device_id || 'unknown')}</span></div>
+        <div class="metric"><span>指令链路</span><span>${escapeHtml(command.cmd_id || 'none')} / ${escapeHtml(command.cmd || 'none')} / ${escapeHtml(command.status || 'unknown')} / ACK ${escapeHtml(command.ack_status || 'none')}</span></div>
+        <div class="metric"><span>异常状态</span><span class="${failure.state === 'ok' ? 'ok' : failure.state === 'pending' || failure.state === 'warning' ? 'warn' : 'bad'}">${escapeHtml(displayState(failure.state || 'unknown'))}</span></div>
+        <div class="metric"><span>异常原因</span><span>${escapeHtml(failure.reason || 'unknown')}</span></div>
         <details>
-          <summary>Extended run diagnostics</summary>
+          <summary>展开测试诊断</summary>
           <div class="metric"><span>Baseline</span><span>${escapeHtml(baseline.release_id || 'none')} ${escapeHtml(baseline.release_version || '')}</span></div>
           <div class="metric"><span>Raw Evidence</span><span>${escapeHtml(rawFrame.frame_id || 'none')} / ${escapeHtml(rawFrame.frame_type || 'unknown')} / ${escapeHtml(rawFrame.parse_status || 'unknown')} / ${escapeHtml(rawFrame.derived_message_type || 'unknown')}</span></div>
           <div class="metric"><span>Derived Location</span><span>${escapeHtml(location.event_type || 'none')} seq ${escapeHtml(location.seq ?? 'unknown')} / fix ${escapeHtml(location.fix ?? 'unknown')} / ${escapeHtml(location.gnss_state || 'unknown')}</span></div>
@@ -9005,9 +9095,9 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     function productDemoPanel(demo) {
       if (!demo || !demo.available) {
         return `
-          <div class="metric"><span>Candidate</span><b>KR-008 / DEMO-008</b></div>
-          <div class="metric"><span>Result</span><span class="empty">${escapeHtml(demo && demo.status || 'not_available')}</span></div>
-          <div class="metric"><span>Next Step</span><span>${escapeHtml(demo && demo.next_step || 'Generate a product demo report')}</span></div>
+          <div class="metric"><span>候选版本</span><b>KR-008 / DEMO-008</b></div>
+          <div class="metric"><span>结果</span><span class="empty">${escapeHtml(demo && demo.status || 'not_available')}</span></div>
+          <div class="metric"><span>下一步</span><span>${escapeHtml(demo && demo.next_step || '生成产品演示报告')}</span></div>
         `;
       }
       const location = demo.location || {};
@@ -9016,20 +9106,20 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const counts = demo.flow_status_counts || {};
       const warnings = demo.warnings || [];
       return `
-        <div class="metric"><span>Candidate</span><b>${escapeHtml(demo.candidate || 'KR-008 / DEMO-008')}</b></div>
-        <div class="metric"><span>Result</span><span class="${statusClass(demo.status)}">${escapeHtml(demo.status || 'unknown')}</span></div>
-        <div class="metric"><span>Release Ready</span><span>${escapeHtml(demo.ready_for_kr008_release ?? false)}</span></div>
-        <div class="metric"><span>Evidence Mode</span><span>${escapeHtml(demo.evidence_mode || 'unknown')}</span></div>
-        <div class="metric"><span>Test Run</span><span>${escapeHtml(demo.test_run_id || 'unknown')}</span></div>
-        <div class="metric"><span>Safety Session</span><span>${escapeHtml(demo.safety_session_id || 'none')}</span></div>
-        <div class="metric"><span>Location Belief</span><span>${escapeHtml(location.state || 'Unknown')} / ${escapeHtml(location.belief_reason || (location.failure_modes || []).join(', ') || 'unknown')}</span></div>
+        <div class="metric"><span>候选版本</span><b>${escapeHtml(demo.candidate || 'KR-008 / DEMO-008')}</b></div>
+        <div class="metric"><span>结果</span><span class="${statusClass(demo.status)}">${escapeHtml(displayState(demo.status || 'unknown'))}</span></div>
+        <div class="metric"><span>发布就绪</span><span>${escapeHtml(demo.ready_for_kr008_release ?? false)}</span></div>
+        <div class="metric"><span>证据模式</span><span>${escapeHtml(demo.evidence_mode || 'unknown')}</span></div>
+        <div class="metric"><span>测试批次</span><span>${escapeHtml(demo.test_run_id || 'unknown')}</span></div>
+        <div class="metric"><span>安全会话</span><span>${escapeHtml(demo.safety_session_id || 'none')}</span></div>
+        <div class="metric"><span>位置判断</span><span>${escapeHtml(displayState(location.state || 'Unknown'))} / ${escapeHtml(location.belief_reason || (location.failure_modes || []).join(', ') || 'unknown')}</span></div>
         <div class="metric"><span>GNSS</span><span>fix ${escapeHtml(location.gnss_fix ?? 'unknown')} / ${escapeHtml(location.gnss_state || 'unknown')}</span></div>
-        <div class="metric"><span>Flow Gates</span><span>${escapeHtml(counts.pass ?? 0)} pass / ${escapeHtml(counts.warn ?? 0)} warn / ${escapeHtml(counts.not_run ?? 0)} not_run / ${escapeHtml(counts.fail ?? 0)} fail</span></div>
-        <div class="metric"><span>Web Review</span><span class="${statusClass(webGate.status)}">${escapeHtml(webGate.status || 'unknown')} / ${escapeHtml(webGate.summary || 'unknown')}</span></div>
-        <div class="metric"><span>Raw Evidence</span><span>${escapeHtml(demo.raw_frame_refs ?? 0)} raw refs / ${escapeHtml(demo.derived_event_refs ?? 0)} derived refs</span></div>
-        <div class="metric"><span>Dataset Training</span><span>${escapeHtml(training.model_training_ready ?? false)} / ${escapeHtml(training.reason || 'unknown')}</span></div>
-        <div class="metric"><span>Report</span><span>${escapeHtml(demo.markdown_path || demo.report_path || 'unknown')}</span></div>
-        <div class="metric"><span>Warnings</span><span>${escapeHtml(warnings.join(', ') || 'none')}</span></div>
+        <div class="metric"><span>流程门禁</span><span>${escapeHtml(counts.pass ?? 0)} 通过 / ${escapeHtml(counts.warn ?? 0)} 警告 / ${escapeHtml(counts.not_run ?? 0)} 未运行 / ${escapeHtml(counts.fail ?? 0)} 失败</span></div>
+        <div class="metric"><span>Web 复核</span><span class="${statusClass(webGate.status)}">${escapeHtml(webGate.status || 'unknown')} / ${escapeHtml(webGate.summary || 'unknown')}</span></div>
+        <div class="metric"><span>原始证据</span><span>${escapeHtml(demo.raw_frame_refs ?? 0)} 个原始引用 / ${escapeHtml(demo.derived_event_refs ?? 0)} 个派生引用</span></div>
+        <div class="metric"><span>训练就绪</span><span>${escapeHtml(training.model_training_ready ?? false)} / ${escapeHtml(training.reason || 'unknown')}</span></div>
+        <div class="metric"><span>报告</span><span>${escapeHtml(demo.markdown_path || demo.report_path || 'unknown')}</span></div>
+        <div class="metric"><span>警告</span><span>${escapeHtml(warnings.join(', ') || 'none')}</span></div>
       `;
     }
     function metricRows(metrics) {
@@ -9049,9 +9139,9 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     function dataFlywheelPanel(flywheel) {
       if (!flywheel || !flywheel.available) {
         return `
-          <div class="metric"><span>Status</span><span class="empty">${escapeHtml(flywheel && flywheel.status || 'not_available')}</span></div>
-          <div class="metric"><span>Reason</span><span>${escapeHtml(flywheel && flywheel.reason || 'no_data_flywheel_status_report')}</span></div>
-          <div class="metric"><span>Next Step</span><span>${escapeHtml(flywheel && flywheel.next_step || 'Run the data flywheel status report')}</span></div>
+          <div class="metric"><span>状态</span><span class="empty">${escapeHtml(flywheel && flywheel.status || 'not_available')}</span></div>
+          <div class="metric"><span>原因</span><span>${escapeHtml(flywheel && flywheel.reason || 'no_data_flywheel_status_report')}</span></div>
+          <div class="metric"><span>下一步</span><span>${escapeHtml(flywheel && flywheel.next_step || '生成数据闭环状态报告')}</span></div>
         `;
       }
       const counts = flywheel.counts || {};
@@ -9081,22 +9171,22 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         <div class="metric"><span>${escapeHtml(record.record_id || 'candidate')}</span><span>${escapeHtml(record.state || 'unknown')} / ${escapeHtml(record.label || 'unknown')} / split ${escapeHtml(record.split_name || 'unknown')} / ${escapeHtml(record.label_review_state || 'unknown')}</span></div>
       `).join('') || '<div class="metric"><span>Review Samples</span><span class="empty">none</span></div>';
       return `
-        <div class="metric"><span>Status</span><span class="${statusClass(flywheel.status)}">${escapeHtml(flywheel.status || 'unknown')}</span></div>
-        <div class="metric"><span>Stage</span><span>${escapeHtml(flywheel.pipeline_stage || 'unknown')}</span></div>
-        <div class="metric"><span>Candidate Store</span><span>${escapeHtml(store.available ?? false)} / ${escapeHtml(store.schema_version || store.reason || 'unknown')}</span></div>
-        <div class="metric"><span>Sessions</span><span>${escapeHtml(counts.sessions_total ?? 0)}</span></div>
-        <div class="metric"><span>Candidate Records</span><span>${escapeHtml(counts.records_total ?? 0)} total / ${escapeHtml(counts.needs_review_records ?? 0)} needs review</span></div>
+        <div class="metric"><span>状态</span><span class="${statusClass(flywheel.status)}">${escapeHtml(flywheel.status || 'unknown')}</span></div>
+        <div class="metric"><span>阶段</span><span>${escapeHtml(flywheel.pipeline_stage || 'unknown')}</span></div>
+        <div class="metric"><span>候选数据存储</span><span>${escapeHtml(store.available ?? false)} / ${escapeHtml(store.schema_version || store.reason || 'unknown')}</span></div>
+        <div class="metric"><span>会话</span><span>${escapeHtml(counts.sessions_total ?? 0)}</span></div>
+        <div class="metric"><span>候选记录</span><span>${escapeHtml(counts.records_total ?? 0)} 条 / ${escapeHtml(counts.needs_review_records ?? 0)} 条待复核</span></div>
         ${locationMetrics}
         ${fieldEvidenceMetrics}
-        <div class="metric"><span>Training Gate</span><span>${escapeHtml(readiness.model_training_ready ?? false)} / ${escapeHtml(readiness.reason || 'unknown')}</span></div>
-        <div class="metric"><span>Reviewed Candidates</span><span>${escapeHtml(counts.reviewed_training_candidate_records ?? 0)} reviewed / ${escapeHtml(counts.training_allowed_records ?? 0)} training_allowed</span></div>
-        <div class="metric"><span>Review Queues</span><span>label ${escapeHtml(review.label_review_pending_records ?? 0)} / split ${escapeHtml(review.split_leakage_unchecked_records ?? 0)} / privacy ${escapeHtml(review.privacy_or_consent_blocked_records ?? 0)} / quality ${escapeHtml(review.quality_blocked_records ?? 0)}</span></div>
-        <div class="metric"><span>Review Queue</span><span>${escapeHtml(reviewQueue.pending_records ?? 0)} pending / actions ${escapeHtml((reviewQueue.available_actions || []).join(', ') || 'none')}</span></div>
-        <div class="metric"><span>Training Server</span><span>${escapeHtml(readiness.training_server_ready ?? false)} / on-device ${escapeHtml(readiness.on_device_deployment_ready ?? false)}</span></div>
-        <div class="metric"><span>Blockers</span><span>${escapeHtml(blockers.join(', ') || 'none')}</span></div>
-        <div class="metric"><span>Warnings</span><span>${escapeHtml(warnings.join(', ') || 'none')}</span></div>
-        <div class="metric"><span>Next Step</span><span>${escapeHtml(flywheel.next_step || 'Create the next data task')}</span></div>
-        <div class="metric"><span>Report</span><span>${escapeHtml(flywheel.markdown_path || flywheel.report_path || 'unknown')}</span></div>
+        <div class="metric"><span>训练门禁</span><span>${escapeHtml(readiness.model_training_ready ?? false)} / ${escapeHtml(readiness.reason || 'unknown')}</span></div>
+        <div class="metric"><span>已复核候选</span><span>${escapeHtml(counts.reviewed_training_candidate_records ?? 0)} 条 / 允许训练 ${escapeHtml(counts.training_allowed_records ?? 0)} 条</span></div>
+        <div class="metric"><span>复核队列</span><span>标注 ${escapeHtml(review.label_review_pending_records ?? 0)} / 切分 ${escapeHtml(review.split_leakage_unchecked_records ?? 0)} / 隐私 ${escapeHtml(review.privacy_or_consent_blocked_records ?? 0)} / 质量 ${escapeHtml(review.quality_blocked_records ?? 0)}</span></div>
+        <div class="metric"><span>待处理</span><span>${escapeHtml(reviewQueue.pending_records ?? 0)} 条 / 操作 ${escapeHtml((reviewQueue.available_actions || []).join(', ') || 'none')}</span></div>
+        <div class="metric"><span>训练服务</span><span>${escapeHtml(readiness.training_server_ready ?? false)} / 端侧 ${escapeHtml(readiness.on_device_deployment_ready ?? false)}</span></div>
+        <div class="metric"><span>阻塞项</span><span>${escapeHtml(blockers.join(', ') || 'none')}</span></div>
+        <div class="metric"><span>警告</span><span>${escapeHtml(warnings.join(', ') || 'none')}</span></div>
+        <div class="metric"><span>下一步</span><span>${escapeHtml(flywheel.next_step || '创建下一项数据任务')}</span></div>
+        <div class="metric"><span>报告</span><span>${escapeHtml(flywheel.markdown_path || flywheel.report_path || 'unknown')}</span></div>
         ${locationArtifacts ? `<div class="metric"><span>D5 Artifacts</span><span>${escapeHtml(locationArtifacts)}</span></div>` : ''}
         ${sourceReports}
         ${reviewSamples}
@@ -9605,18 +9695,18 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       } : {};
       const lanes = `
         <div id="fieldEvidenceLanes" class="evidence-lanes">
-          ${evidenceLane('D2 Baseline', d2Baseline, 'not_available', 'reports/location_accuracy')}
-          ${evidenceLane('D1 Regression', d1Regression, results && results.status || 'not_available', 'field results')}
-          ${evidenceLane('Power', powerBaseline, 'not_available', 'power curve')}
-          ${evidenceLane('D5 Flywheel', flywheelReport, flywheel && flywheel.status || 'not_available', flywheel && flywheel.next_step || 'data flywheel')}
+          ${evidenceLane('D2 定位基线', d2Baseline, 'not_available', 'reports/location_accuracy')}
+          ${evidenceLane('D1 外场回归', d1Regression, results && results.status || 'not_available', 'field results')}
+          ${evidenceLane('功耗', powerBaseline, 'not_available', 'power curve')}
+          ${evidenceLane('D5 数据闭环', flywheelReport, flywheel && flywheel.status || 'not_available', flywheel && flywheel.next_step || 'data flywheel')}
         </div>
       `;
       if (!results || !results.available) {
         return `
           ${lanes}
-          <div class="metric"><span>Overall</span><span class="empty">${escapeHtml(results && results.status || 'not_available')}</span></div>
-          <div class="metric"><span>Reason</span><span>${escapeHtml(results && results.reason || 'no_field_result_reports')}</span></div>
-          <div class="metric"><span>Next Step</span><span>${escapeHtml(results && results.next_step || 'Run a D1 field report')}</span></div>
+          <div class="metric"><span>总体状态</span><span class="empty">${escapeHtml(results && results.status || 'not_available')}</span></div>
+          <div class="metric"><span>原因</span><span>${escapeHtml(results && results.reason || 'no_field_result_reports')}</span></div>
+          <div class="metric"><span>下一步</span><span>${escapeHtml(results && results.next_step || '生成 D1 外场报告')}</span></div>
         `;
       }
       const cards = reports.map(report => `
@@ -9628,15 +9718,15 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           <div class="report-meta">${escapeHtml(report.run_id || 'no run id')} / ${escapeHtml(report.created_at || 'unknown')}</div>
           <div class="card-note">${escapeHtml(report.summary || 'no summary')}</div>
           <div class="report-metrics">${metricRows(report.metrics || {})}</div>
-          <div class="report-path">Report: ${escapeHtml(report.markdown_path || report.report_path || 'unknown')}</div>
-          <div class="report-meta">Warnings: ${escapeHtml(reportWarnings(report))}</div>
+          <div class="report-path">报告：${escapeHtml(report.markdown_path || report.report_path || 'unknown')}</div>
+          <div class="report-meta">警告：${escapeHtml(reportWarnings(report))}</div>
         </div>
       `).join('');
       return `
         ${lanes}
-        <div class="metric"><span>Overall</span><span class="${statusClass(results.status)}">${escapeHtml(results.status || 'unknown')}</span></div>
-        <div class="metric"><span>Reports</span><span>${escapeHtml(results.report_count ?? 0)} summaries / latest ${escapeHtml(results.latest_created_at || 'unknown')}</span></div>
-        <div class="metric"><span>Next Step</span><span>${escapeHtml(results.next_step || 'Run the next field report')}</span></div>
+        <div class="metric"><span>总体状态</span><span class="${statusClass(results.status)}">${escapeHtml(results.status || 'unknown')}</span></div>
+        <div class="metric"><span>报告</span><span>${escapeHtml(results.report_count ?? 0)} 份摘要 / 最新 ${escapeHtml(results.latest_created_at || 'unknown')}</span></div>
+        <div class="metric"><span>下一步</span><span>${escapeHtml(results.next_step || '生成下一份外场报告')}</span></div>
         <div id="fieldResultsCards" class="report-grid">${cards}</div>
       `;
     }
@@ -9650,15 +9740,15 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       return value;
     }
     function boolSeen(value) {
-      if (value === true) return 'seen';
-      if (value === false) return 'not seen';
-      return 'unknown';
+      if (value === true) return '已观测';
+      if (value === false) return '未观测';
+      return '未知';
     }
     function freshnessLabel(freshness) {
       const seconds = Number(freshness.freshness_s);
-      if (!Number.isFinite(seconds)) return 'freshness unknown';
-      if (seconds < 60) return `${Math.max(0, Math.round(seconds))}s old`;
-      return `${Math.round(seconds / 60)}m old`;
+      if (!Number.isFinite(seconds)) return '时间未知';
+      if (seconds < 60) return `${Math.max(0, Math.round(seconds))} 秒前`;
+      return `${Math.round(seconds / 60)} 分钟前`;
     }
     function freshnessClass(freshness) {
       const seconds = Number(freshness.freshness_s);
@@ -9683,6 +9773,11 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       if ((gate.status || '') === 'blocked') return 'blocked';
       return 'checking';
     }
+    function acceptanceHeadline(gate) {
+      if ((gate.status || '') === 'ready') return '可开始 D1 外场验收';
+      if ((gate.status || '') === 'blocked') return 'D1 外场验收尚未就绪';
+      return '正在检查 D1 外场验收条件';
+    }
     function readinessLabel(readiness) {
       const state = readiness.state || 'waiting_for_data';
       if (state === 'ready') return 'ready';
@@ -9693,11 +9788,11 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     function readinessHeadline(readiness) {
       const state = readiness.state || 'waiting_for_data';
       const freshness = Number(readiness.freshness_s);
-      const age = Number.isFinite(freshness) ? `${Math.max(0, Math.round(freshness))}s old` : 'freshness unknown';
-      if (state === 'ready') return `Ready / ${age}`;
-      if (state === 'stale') return `Stale / ${age}`;
-      if (state === 'not_ready') return `Not ready / ${age}`;
-      return `Waiting / ${age}`;
+      const age = Number.isFinite(freshness) ? `${Math.max(0, Math.round(freshness))} 秒前` : '时间未知';
+      if (state === 'ready') return `就绪 / ${age}`;
+      if (state === 'stale') return `数据已过期 / ${age}`;
+      if (state === 'not_ready') return `未就绪 / ${age}`;
+      return `等待数据 / ${age}`;
     }
     function arrayLabel(values) {
       return Array.isArray(values) && values.length ? values.join(', ') : 'none';
@@ -9740,13 +9835,19 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       if (!normalized.length) return '';
       const observed = normalized.filter(point => point.point_kind !== 'reference');
       const references = normalized.filter(point => point.point_kind === 'reference');
-      const polyline = observed.length >= 2
-        ? `<svg class="map-track" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${observed.map(point => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}" fill="none" stroke="#1f6feb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/></svg>`
+      const localSegments = trajectorySegments(observed).filter(segment => segment.length >= 2);
+      const polyline = localSegments.length
+        ? `<svg class="map-track" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${localSegments.map(segment => `<polyline points="${segment.map(point => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ')}" fill="none" stroke="#1f6feb" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>`).join('')}</svg>`
         : '';
       const markers = observed.map((point, index) => {
         const current = point.display_semantics === 'current_fix' && point.fix === true;
-        const label = `${point.event_type || 'location'} seq ${point.seq ?? 'unknown'} ${coordinateLabel(point.lat, point.lon)}`;
-        return `<span class="map-point ${current ? 'map-point-current' : ''}" title="${escapeHtml(label)}" style="left:${point.x.toFixed(2)}%; top:${point.y.toFixed(2)}%;"></span>`;
+        const stale = point.display_semantics === 'stale_fix' && point.fix === true;
+        const start = observed.length >= 2 && index === 0;
+        const end = index === observed.length - 1;
+        const endLabel = current ? '当前 GNSS 定位' : stale ? '历史位置（已过期）' : '最后可信位置';
+        const label = `${start ? '轨迹起点' : end ? endLabel : '历史轨迹点'} / seq ${point.seq ?? '未知'} / ${formatDashboardDateTime(point.server_received_at)}`;
+        const markerClass = current ? 'map-point-current' : stale ? 'map-point-stale' : end ? 'map-point-end' : start ? 'map-point-start' : '';
+        return `<span class="map-point ${markerClass}" title="${escapeHtml(label)}" style="left:${point.x.toFixed(2)}%; top:${point.y.toFixed(2)}%;"></span>`;
       }).join('');
       const referenceMarkers = references.map(point => {
         const label = `${point.label || point.name || 'D2 reference'} ${coordinateLabel(point.lat, point.lon)}`;
@@ -9754,7 +9855,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       }).join('');
       return polyline + markers + referenceMarkers;
     }
-    function d1MapSurface(map, estimate) {
+    function d1MapSurface(map, estimate, readiness = {}) {
       const mode = map.mode || 'waiting_for_location_upload';
       let points = Array.isArray(map.points) ? map.points : [];
       const trustedPoints = points.filter(point => point && point.amap_eligible === true && point.coordinate_contract === 'wgs84');
@@ -9770,39 +9871,59 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const providerMode = provider.mode || 'none';
       const providerStatus = provider.status || 'not_configured';
       const reviewMode = map.review_mode || 'local_no_key';
-      const providerLabel = providerMode === 'none' ? 'No-key Local Map' : `Provider Map ${providerMode}`;
+      const providerLabel = providerMode === 'none' ? '本地轨迹示意图' : `地图服务 ${providerMode}`;
       const surfaceVisible = map.visible || referencePoints.length > 0;
       const latestTrustedPoint = trustedPoints.length ? trustedPoints[trustedPoints.length - 1] : null;
-      const hiddenPreCorrection = points.length > 0 && !trustedPoints.length;
+      const latestFix = coord.latest_fix;
+      const predicted = String(estimate.state || '').trim().toLowerCase() === 'predicted';
+      const freshnessThreshold = Number(readiness.freshness_threshold_s ?? 180);
+      const exclusionReasons = new Set(points.map(point => point && point.amap_exclusion_reason).filter(Boolean));
+      const hiddenPreCorrection = !trustedPoints.length && exclusionReasons.has('firmware_parser_not_allowlisted');
+      const hiddenNoLineage = !trustedPoints.length && exclusionReasons.has('location_memory_has_no_coordinate_provenance');
+      const hiddenNoFix = !trustedPoints.length && (latestFix === false || exclusionReasons.has('gnss_fix_not_true'));
+      const hiddenMessage = hiddenNoFix
+        ? '当前 GNSS 未定位，暂无可信轨迹'
+        : hiddenPreCorrection
+          ? '旧版坐标已隐藏，等待修正版固件产生新的可信 GNSS 定位'
+          : hiddenNoLineage
+            ? '最后位置缺少可信坐标，暂不显示'
+            : !trustedPoints.length && points.length
+              ? '暂无可绘制的可信 GNSS 定位'
+              : '';
       const caption = surfaceVisible
-        ? hiddenPreCorrection
-          ? 'Pre-correction location hidden until new verified GNSS fix'
-          : `${mode} / ${estimate.state || 'unknown'} / ${latestTrustedPoint ? coordinateLabel(latestTrustedPoint.lat, latestTrustedPoint.lon) : 'no trusted coordinate'} / ${trustedPoints.length} verified track points / ${coordCount}/${eventCount} coordinate uploads`
-        : 'waiting for location upload';
-      points = trustedPoints.map((point, index) => ({
-        ...point,
-        display_semantics: point.amap_current === true && point.fix === true
-          ? 'current_fix'
-          : 'history',
-      }));
+        ? hiddenMessage
+          ? hiddenMessage
+          : `${displayState(estimate.state)} / ${trustedPoints.length} 个可信轨迹点 / ${coordCount}/${eventCount} 条定位上报`
+        : '正在等待定位上报';
+      points = trustedPoints.map(point => {
+        let displaySemantics = 'history';
+        if (point.amap_current === true && point.fix === true && !predicted && latestFix !== false) {
+          const updatedAt = Date.parse(point.server_received_at || '');
+          const ageSeconds = Number.isFinite(updatedAt) ? Math.max(0, Math.round((Date.now() - updatedAt) / 1000)) : null;
+          displaySemantics = ageSeconds !== null && Number.isFinite(freshnessThreshold) && ageSeconds > freshnessThreshold
+            ? 'stale_fix'
+            : 'current_fix';
+        }
+        return {...point, display_semantics: displaySemantics};
+      });
       const marker = surfaceVisible
-        ? d1MapTrack(points, referencePoints) || `<div class="map-waiting">${hiddenPreCorrection ? 'Pre-correction location hidden until new verified GNSS fix' : 'no verified coordinate points'}</div>`
-        : '<div class="map-waiting">waiting for location</div>';
+        ? d1MapTrack(points, referencePoints) || `<div class="map-waiting">${hiddenMessage || '暂无可信轨迹点'}</div>`
+        : '<div class="map-waiting">正在等待定位</div>';
       return `
         <div id="localMapSurface" class="map-surface" data-d1-map-mode="${escapeHtml(mode)}" data-map-review-mode="${escapeHtml(reviewMode)}" data-map-provider-mode="${escapeHtml(providerMode)}">
           <div class="map-grid"></div>
           <div class="map-provider-banner">
             <span>${escapeHtml(providerLabel)}</span>
-            <span>Provider Status ${escapeHtml(providerStatus)} / D1 blocker ${escapeHtml(provider.blocking_d1 ?? false)}</span>
+            <span>服务状态 ${escapeHtml(providerStatus)} / D1 阻塞 ${escapeHtml(provider.blocking_d1 ?? false)}</span>
           </div>
           <div class="map-legend">
-            <span class="map-legend-item"><span class="map-legend-dot map-legend-current"></span>Current</span>
-            <span class="map-legend-item"><span class="map-legend-dot"></span>Verified Track ${escapeHtml(trustedPoints.length)}</span>
-            <span class="map-legend-item"><span class="map-legend-dot map-legend-reference"></span>D2 Reference ${escapeHtml(referencePoints.length)}</span>
-            <span class="map-legend-item">Tiles ${escapeHtml(layers.provider_tiles ? 'provider' : 'off')}</span>
+            <span class="map-legend-item"><span class="map-legend-dot map-legend-current"></span>当前 / 最后可信点</span>
+            <span class="map-legend-item"><span class="map-legend-dot"></span>可信轨迹 ${escapeHtml(trustedPoints.length)}</span>
+            <span class="map-legend-item"><span class="map-legend-dot map-legend-reference"></span>D2 参考点 ${escapeHtml(referencePoints.length)}</span>
+            <span class="map-legend-item">底图 ${escapeHtml(layers.provider_tiles ? '在线' : '关闭')}</span>
           </div>
           ${marker}
-          <div class="map-caption">${escapeHtml(caption)} / privacy ${escapeHtml(privacy.coordinate_visibility || 'bounded')} / accuracy claim ${escapeHtml(map.accuracy_claim || 'none')}</div>
+          <div class="map-caption">${escapeHtml(caption)} / 坐标可见性 ${escapeHtml(privacy.coordinate_visibility || 'bounded')} / 不作定位精度声明</div>
         </div>
       `;
     }
@@ -9814,6 +9935,10 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     function setLocalMapVisibility(visible) {
       const localMap = document.getElementById('localMapSurface');
       if (localMap) localMap.style.display = visible ? '' : 'none';
+      const overview = document.getElementById('d1FieldOverview');
+      if (overview) overview.classList.toggle('provider-map-active', !visible);
+      const locationGrid = document.getElementById('locationMapGrid');
+      if (locationGrid) locationGrid.classList.toggle('provider-map-hidden', visible);
     }
     function validMapPoint(point) {
       try {
@@ -10096,28 +10221,87 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         && lastPoint.fix === true
         && !currentObservationHasNoFix;
       if (!lastPoint) {
-        const hiddenPreCorrection = sourcePoints.some(point => point && point.amap_eligible !== true);
-        if (hiddenPreCorrection) {
-          return {kind: 'pre-correction-hidden', label: 'Pre-correction location hidden until new verified GNSS fix', points: []};
+        const exclusionReasons = new Set(sourcePoints.map(point => point && point.amap_exclusion_reason).filter(Boolean));
+        if (latestFix === false || exclusionReasons.has('gnss_fix_not_true')) {
+          return {kind: 'no-fix', label: '当前 GNSS 未定位，暂无可信轨迹', points: []};
         }
-        return {kind: 'no-fix', label: 'No current location fix', points: []};
+        if (exclusionReasons.has('firmware_parser_not_allowlisted')) {
+          return {kind: 'pre-correction-hidden', label: '旧版坐标已隐藏，等待新的可信 GNSS 定位', points: []};
+        }
+        if (exclusionReasons.has('location_memory_has_no_coordinate_provenance')) {
+          return {kind: 'no-fix', label: '最后位置缺少可信坐标，暂不显示', points: []};
+        }
+        return {kind: 'no-fix', label: '暂无可信 GNSS 定位', points: []};
       }
       const updatedAt = lastPoint.server_received_at || estimate.updated_at || '';
       const ageMs = Date.parse(updatedAt);
       const ageSeconds = Number.isFinite(ageMs) ? Math.max(0, Math.round((Date.now() - ageMs) / 1000)) : null;
-      const age = ageSeconds === null ? 'age unknown' : `${ageSeconds}s old`;
+      const age = ageSeconds === null ? '时间未知' : ageSeconds < 60 ? `${ageSeconds} 秒前` : `${Math.round(ageSeconds / 60)} 分钟前`;
       const freshnessThreshold = Number(readiness.freshness_threshold_s ?? 180);
       const stale = isCurrentFix && ageSeconds !== null && Number.isFinite(freshnessThreshold) && ageSeconds > freshnessThreshold;
       if (isCurrentFix && !stale) {
-        return {kind: 'current', label: `Current GNSS fix / ${age}`, points, current: lastPoint};
+        return {kind: 'current', label: `当前 GNSS 定位 / ${age}`, points, current: lastPoint};
       }
       if (stale) {
-        return {kind: 'stale', label: `Stale GNSS fix / ${age}`, points, current: lastPoint};
+        return {kind: 'stale', label: `GNSS 定位已过期 / ${age}`, points, current: lastPoint};
       }
       const lastKnownLabel = currentObservationHasNoFix
-        ? `Predicted / Last known position / ${age}`
-        : `Last known position / ${age}`;
+        ? `当前为预测状态；地图显示最后可信位置 / ${age}`
+        : `最后可信位置 / ${age}`;
       return {kind: 'last-known', label: lastKnownLabel, points, current: lastPoint};
+    }
+    function trajectorySegments(points, maxGapMs = 10 * 60 * 1000) {
+      const source = Array.isArray(points) ? points : [];
+      if (!source.length) return [];
+      const segments = [[source[0]]];
+      for (let index = 1; index < source.length; index += 1) {
+        const previousTime = Date.parse(source[index - 1].server_received_at || '');
+        const currentTime = Date.parse(source[index].server_received_at || '');
+        const hasLongGap = Number.isFinite(previousTime) && Number.isFinite(currentTime)
+          && currentTime - previousTime > maxGapMs;
+        if (hasLongGap) segments.push([]);
+        segments[segments.length - 1].push(source[index]);
+      }
+      return segments;
+    }
+    function recentTrajectoryPanel(selectedDevice) {
+      if (!selectedDevice) {
+        return '<h3>最近可信轨迹</h3><div class="empty">暂无设备数据</div>';
+      }
+      const d1 = selectedDevice.d1_link || {};
+      const map = mapWithLocalReferences(d1.map_surface || {}, selectedDevice.device_id);
+      const semantics = amapPositionSemantics(map, d1.location_estimate || {}, d1.field_readiness || {});
+      const points = Array.isArray(semantics.points) ? semantics.points : [];
+      const start = points.length ? points[0] : null;
+      const end = points.length ? points[points.length - 1] : null;
+      const segmentCount = trajectorySegments(points).filter(segment => segment.length >= 2).length;
+      const stateClass = semantics.kind === 'current' ? '' : ' warn';
+      const stateNote = !points.length
+        ? semantics.label
+        : points.length === 1
+          ? `${semantics.label}；只有 1 个可信点，暂时不能形成轨迹`
+          : `${semantics.label}；轨迹由 ${points.length} 个可信 GNSS 点组成`;
+      const recentItems = points.slice(-8).reverse().map((point, index) => {
+        const absoluteIndex = points.length - index;
+        const role = absoluteIndex === points.length
+          ? (semantics.kind === 'current' ? '当前定位' : '最后可信点')
+          : absoluteIndex === 1 ? '轨迹起点' : '历史点';
+        return `<li><span class="trajectory-time">${escapeHtml(formatDashboardClock(point.server_received_at))}</span><span class="trajectory-event">${escapeHtml(role)} · 第 ${escapeHtml(absoluteIndex)} 点 · seq ${escapeHtml(point.seq ?? '未知')}</span></li>`;
+      }).join('');
+      return `
+        <h3>最近可信轨迹</h3>
+        <div class="trajectory-state${stateClass}">${escapeHtml(stateNote)}</div>
+        <div class="trajectory-summary-grid">
+          <div class="trajectory-stat"><span>可信点</span><strong>${escapeHtml(points.length)} / 最多 24</strong></div>
+          <div class="trajectory-stat"><span>可见轨迹段</span><strong>${escapeHtml(segmentCount)} 段</strong></div>
+          <div class="trajectory-stat"><span>开始</span><strong>${escapeHtml(start ? formatDashboardDateTime(start.server_received_at) : '暂无')}</strong></div>
+          <div class="trajectory-stat"><span>最后可信点</span><strong>${escapeHtml(end ? formatDashboardDateTime(end.server_received_at) : '暂无')}</strong></div>
+          <div class="trajectory-stat"><span>时间跨度</span><strong>${escapeHtml(start && end ? formatDashboardDuration(start.server_received_at, end.server_received_at) : '未知')}</strong></div>
+          <div class="trajectory-stat"><span>数据来源</span><strong>${points.length ? 'GNSS（WGS-84）' : '暂无'}</strong></div>
+        </div>
+        ${recentItems ? `<details class="trajectory-details"><summary>查看最近 ${escapeHtml(Math.min(points.length, 8))} 个轨迹点</summary><ol class="trajectory-list">${recentItems}</ol></details>` : ''}
+        <div class="trajectory-note">显示最近最多 24 个坐标链已验证的定位点；超过 10 分钟的缺测区间会断开，不把直线当成真实行走路线。此处不作定位精度声明。</div>
+      `;
     }
     function amapOverlayKey(deviceId, semantics) {
       const points = Array.isArray(semantics.points) ? semantics.points : [];
@@ -10137,7 +10321,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       amapLiveMap.style.display = 'block';
       amapLiveMap.style.visibility = 'visible';
       setLocalMapVisibility(false);
-      setAmapStatus(`${semantics.label} / AMap base map ready / no location marker`, 'warn');
+      setAmapStatus(`${semantics.label} / 高德底图已加载 / 暂无定位标记`, 'warn');
     }
     async function renderAmapForSelectedDevice(selectedDevice) {
       const generation = ++amapRenderGeneration;
@@ -10160,7 +10344,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         amapLiveMap.dataset.state = 'not-configured';
         amapLiveMap.style.display = 'none';
         setLocalMapVisibility(true);
-        setAmapStatus(`${semantics.label} / local map fallback`, 'warn');
+        setAmapStatus(`${semantics.label} / 使用本地轨迹示意图`, 'warn');
         return;
       }
       const hasTrustedPoint = semantics.kind !== 'no-fix' && semantics.kind !== 'pre-correction-hidden';
@@ -10172,8 +10356,8 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         setLocalMapVisibility(false);
         setAmapStatus(
           hasTrustedPoint
-            ? `${semantics.label} / WGS84 converted to GCJ-02 / ${semantics.points.length} point(s)`
-            : `${semantics.label} / AMap base map ready / no location marker`,
+            ? `${semantics.label} / 已显示最近 ${semantics.points.length} 个可信点`
+            : `${semantics.label} / 高德底图已加载 / 暂无定位标记`,
           hasTrustedPoint ? 'ok' : 'warn',
         );
         return;
@@ -10183,12 +10367,12 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         amapLiveMap.style.display = 'none';
         setLocalMapVisibility(true);
         const failureStage = amapFailureStage(amapLiveShell.dataset.failureStage);
-        setAmapStatus(`${semantics.label} / AMap ${failureStage} / retry paused for unchanged data`, 'warn');
+        setAmapStatus(`${semantics.label} / 高德地图 ${failureStage} / 数据未变化，已暂停重复重试`, 'warn');
         return;
       }
       try {
         setAmapStatus(
-          hasTrustedPoint ? 'Loading AMap and converting WGS84 coordinates...' : `${semantics.label} / loading AMap base map`,
+          hasTrustedPoint ? '正在加载高德地图并转换可信轨迹…' : `${semantics.label} / 正在加载高德底图`,
           'warn',
         );
         amapLiveMap.style.display = 'block';
@@ -10207,9 +10391,42 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         if (!converted.length) throw new Error('no valid converted coordinates');
         amapInstance.clearMap();
         amapOverlays = [];
-        const path = converted.map(point => point.lnglat);
-        if (path.length >= 2) {
-          amapOverlays.push(new AMap.Polyline({path, strokeColor: '#1f6feb', strokeWeight: 4, strokeOpacity: 0.75}));
+        const segments = trajectorySegments(converted);
+        for (const segment of segments) {
+          const path = segment.map(point => point.lnglat);
+          if (path.length >= 2) {
+            amapOverlays.push(new AMap.Polyline({
+              path,
+              strokeColor: '#155eef',
+              strokeWeight: 7,
+              strokeOpacity: 0.9,
+              outlineColor: '#ffffff',
+              borderWeight: 2,
+              lineJoin: 'round',
+              lineCap: 'round',
+            }));
+          }
+        }
+        if (converted.length >= 2) {
+          const first = converted[0];
+          const startTitle = `轨迹起点 / ${formatDashboardDateTime(first.server_received_at)} / seq ${first.seq ?? '未知'}`;
+          amapOverlays.push(new AMap.Marker({
+            position: first.lnglat,
+            title: startTitle,
+            content: `<div class="amap-start-marker" aria-label="${escapeHtml(startTitle)}">起</div>`,
+            anchor: 'center',
+            zIndex: 120,
+          }));
+          for (const point of converted.slice(1, -1)) {
+            const historyTitle = `历史轨迹点 / ${formatDashboardDateTime(point.server_received_at)} / seq ${point.seq ?? '未知'}`;
+            amapOverlays.push(new AMap.Marker({
+              position: point.lnglat,
+              title: historyTitle,
+              content: `<div class="amap-history-marker" aria-label="${escapeHtml(historyTitle)}"></div>`,
+              anchor: 'center',
+              zIndex: 100,
+            }));
+          }
         }
         const latest = converted[converted.length - 1];
         const markerClass = semantics.kind === 'current'
@@ -10217,12 +10434,18 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           : semantics.kind === 'stale'
             ? 'amap-stale-marker'
             : 'amap-memory-marker';
-        const markerTitle = `${semantics.label} / ${coordinateLabel(latest.lat, latest.lon)}`;
+        const markerLabel = semantics.kind === 'current'
+          ? '当前定位'
+          : semantics.kind === 'stale'
+            ? '历史位置（已过期）'
+            : '最后可信位置';
+        const markerTitle = `${markerLabel} / ${formatDashboardDateTime(latest.server_received_at)} / seq ${latest.seq ?? '未知'}`;
         amapOverlays.push(new AMap.Marker({
           position: latest.lnglat,
           title: markerTitle,
-          content: `<div class="${markerClass}" aria-label="${escapeHtml(markerTitle)}"></div>`,
+          content: `<div class="amap-end-marker"><div class="${markerClass}" aria-label="${escapeHtml(markerTitle)}"></div><span class="amap-marker-label">${escapeHtml(markerLabel)}</span></div>`,
           anchor: 'center',
+          zIndex: 140,
         }));
         amapInstance.add(amapOverlays);
         amapInstance.setFitView(amapOverlays, false, [44, 44, 44, 44], 16);
@@ -10233,7 +10456,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         amapLiveMap.style.display = 'block';
         amapLiveMap.style.visibility = 'visible';
         setLocalMapVisibility(false);
-        setAmapStatus(`${semantics.label} / WGS84 converted to GCJ-02 / ${converted.length} point(s)`, 'ok');
+        setAmapStatus(`${semantics.label} / 最近可信轨迹 ${converted.length} 点 / WGS-84 已转换为 GCJ-02`, 'ok');
       } catch (error) {
         if (generation !== amapRenderGeneration) return;
         if (!amapLiveShell.dataset.failureStage || amapLiveShell.dataset.failureStage === 'none') {
@@ -10247,13 +10470,13 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         const failureStage = amapFailureStage(amapLiveShell.dataset.failureStage);
         const failureReason = amapFailureReasonCode(amapLiveShell.dataset.failureReason);
         setAmapStatus(
-          `${semantics.label} / AMap ${failureStage} / ${failureReason} / local fallback`,
+          `${semantics.label} / 高德地图 ${failureStage} / ${failureReason} / 已切换本地示意图`,
           'warn',
         );
       }
     }
     function d1LinkPanel(selectedDevice) {
-      if (!selectedDevice) return '<div class="empty-panel">No device data yet</div>';
+      if (!selectedDevice) return '<div class="empty-panel">暂无设备数据，请先保存访问令牌并等待设备上线。</div>';
       const d = selectedDevice;
       const d1 = d.d1_link || {};
       const readiness = d1.field_readiness || {};
@@ -10282,8 +10505,8 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const latestTrustedPoint = trustedPoints.length ? trustedPoints[trustedPoints.length - 1] : null;
       const fieldCoordinateText = latestTrustedPoint
         ? coordinateLabel(latestTrustedPoint.lat, latestTrustedPoint.lon)
-        : 'Pre-correction location hidden until new verified GNSS fix';
-      const locationText = `${valueOrUnknown(estimate.state)} / ${valueOrUnknown(estimate.confidence)} / ${valueOrUnknown(estimate.radius_m)} m`;
+        : '旧版坐标已隐藏，等待新的可信 GNSS 定位';
+      const locationText = `${displayState(estimate.state)} / 置信度 ${valueOrUnknown(estimate.confidence)} / 范围 ${valueOrUnknown(estimate.radius_m)} m`;
       const uploadText = `${valueOrUnknown(uplink.raw_post_success_count)} ok / ${valueOrUnknown(uplink.raw_post_failure_count)} fail / ${valueOrUnknown(uplink.raw_post_attempt_count)} attempts / rate ${valueOrUnknown(uplink.raw_post_success_rate)}`;
       const powerText = `${valueOrUnknown(powerCurve.sample_count, 0)} samples / ${valueOrUnknown(powerCurve.window_s)} s`;
       const powerDeltaText = `${valueOrUnknown(powerCurve.delta_battery_mv)} mV / ${valueOrUnknown(powerCurve.delta_soc_pct)}%`;
@@ -10291,77 +10514,77 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       return `
         <div id="d1FieldOverview" class="d1-overview">
           <div class="d1-map-pane">
-            ${d1MapSurface(map, estimate)}
+            ${d1MapSurface(map, estimate, readiness)}
           </div>
           <div class="d1-summary-pane">
             <div id="d1StatusStrip" class="d1-status-strip">
-              <span id="d1FieldReadyBadge" class="status-chip ${readinessClass(readiness)}">Field Ready ${escapeHtml(readinessLabel(readiness))}</span>
-              <span id="d1AcceptanceBadge" class="status-chip ${acceptanceClass(acceptance)}">D1 Gate ${escapeHtml(acceptanceLabel(acceptance))}</span>
-              <span class="status-chip ${d1StatusClass(status)}">D1 Status ${escapeHtml(status)}</span>
-              <span id="d1FreshnessBadge" class="status-chip ${freshnessClass(freshness)}">Upload Freshness ${escapeHtml(freshnessLabel(freshness))}</span>
-              <span class="status-chip">Transport ${escapeHtml(valueOrUnknown(evidence.transport_type))}</span>
-              <span class="status-chip">Map Surface ${escapeHtml(reviewMode)}</span>
-              <span class="status-chip">Provider ${escapeHtml(valueOrUnknown(provider.status, 'not_configured'))}</span>
-              <span class="status-chip">D2 Reference ${escapeHtml(referencePoints.length)}</span>
+              <span id="d1FieldReadyBadge" class="status-chip ${readinessClass(readiness)}">外场状态 ${escapeHtml(displayState(readiness.state || 'waiting_for_data'))}</span>
+              <span id="d1AcceptanceBadge" class="status-chip ${acceptanceClass(acceptance)}">D1 门禁 ${escapeHtml(displayState(acceptance.status || 'checking'))}</span>
+              <span class="status-chip ${d1StatusClass(status)}">定位链路 ${escapeHtml(displayState(status))}</span>
+              <span id="d1FreshnessBadge" class="status-chip ${freshnessClass(freshness)}">数据新鲜度 ${escapeHtml(freshnessLabel(freshness))}</span>
+              <span class="status-chip">传输 ${escapeHtml(valueOrUnknown(evidence.transport_type))}</span>
+              <span class="status-chip">地图模式 ${escapeHtml(reviewMode)}</span>
+              <span class="status-chip">地图服务 ${escapeHtml(valueOrUnknown(provider.status, 'not_configured'))}</span>
+              <span class="status-chip">D2 参考点 ${escapeHtml(referencePoints.length)}</span>
             </div>
-            <div class="d1-primary">
-              <span class="card-label">D1 Acceptance Gate</span>
-              <strong>${escapeHtml(acceptance.headline || 'Checking D1 acceptance readiness')}</strong>
-              <span class="card-note">Track points: ${escapeHtml(acceptance.track_points ?? 0)} / required ${escapeHtml(acceptance.required_track_points ?? 2)}</span>
-              <span class="card-note">Coordinate data: ${escapeHtml(coord.coordinate_event_count ?? 0)} / ${escapeHtml(coord.location_event_count ?? 0)} events, missing ${escapeHtml(coord.missing_coordinate_event_count ?? 0)}</span>
-              <span class="card-note">Latest missing reason: ${escapeHtml(valueOrUnknown(coord.latest_missing_reason))}</span>
-              <span class="card-note">Blockers: ${escapeHtml(arrayLabel(acceptance.blockers))}</span>
-              <span class="card-note">Warnings: ${escapeHtml(arrayLabel(acceptance.warnings))}</span>
-              <span class="card-note">Next: ${escapeHtml(acceptance.next_action || 'review_d1_gate')}</span>
-            </div>
-            <div class="d1-primary">
-              <span class="card-label">Field Ready</span>
-              <strong>${escapeHtml(readinessHeadline(readiness))}</strong>
-              <span class="card-note">Ready Reason: ${escapeHtml(valueOrUnknown(readiness.reason))}</span>
-              <span class="card-note">Operator Action: ${escapeHtml(valueOrUnknown(readiness.operator_action))}</span>
-              <span class="card-note">Freshness Gate: ${escapeHtml(readinessGateText)}</span>
-            </div>
-            <div class="d1-primary">
-              <span class="card-label">Location Estimate</span>
-              <strong>${escapeHtml(locationText)}</strong>
-              <span class="card-note">Estimate Reason: ${escapeHtml(valueOrUnknown(estimate.reason))}</span>
-              <span class="card-note">Estimate Source: ${escapeHtml(arrayLabel(estimate.source))}</span>
-              <span class="card-note">Accuracy Claim: ${escapeHtml(estimate.accuracy_claim || 'none')}</span>
+            <div class="d1-primary-row">
+              <div class="d1-primary">
+                <span class="card-label">定位轨迹门禁</span>
+                <strong>${escapeHtml(acceptanceHeadline(acceptance))}</strong>
+                <span class="card-note">可信轨迹点：${escapeHtml(acceptance.track_points ?? 0)} / 最少 ${escapeHtml(acceptance.required_track_points ?? 2)}</span>
+                <span class="card-note">定位上报：${escapeHtml(coord.coordinate_event_count ?? 0)} / ${escapeHtml(coord.location_event_count ?? 0)}，缺坐标 ${escapeHtml(coord.missing_coordinate_event_count ?? 0)}</span>
+              </div>
+              <div class="d1-primary">
+                <span class="card-label">设备可用状态</span>
+                <strong>${escapeHtml(readinessHeadline(readiness))}</strong>
+                <span class="card-note">原因：${escapeHtml(valueOrUnknown(readiness.reason))}</span>
+                <span class="card-note">新鲜度门限：${escapeHtml(readinessGateText)}</span>
+              </div>
+              <div class="d1-primary">
+                <span class="card-label">位置判断</span>
+                <strong>${escapeHtml(locationText)}</strong>
+                <span class="card-note">来源：${escapeHtml(arrayLabel(estimate.source))}</span>
+                <span class="card-note">原因：${escapeHtml(valueOrUnknown(estimate.reason))}</span>
+              </div>
             </div>
             <details class="d1-details">
-              <summary>D1 evidence details</summary>
+              <summary>查看定位证据详情</summary>
               <div class="d1-grid">
               <div class="d1-card">
-                <span class="card-label">Uplink</span>
-                <span class="card-value">Upload Success: ${escapeHtml(uploadText)}</span>
-                <span class="card-note">Location Uploads: ${escapeHtml(uplink.location_event_count ?? 0)} events / ${escapeHtml(uplink.basis || 'unknown')}</span>
-                <span class="card-note">Location Upload: ${escapeHtml(freshness.last_location_upload_at || 'none')} / seq ${escapeHtml(freshness.last_seq ?? 'unknown')}</span>
+                <span class="card-label">上行链路</span>
+                <span class="card-value">上传结果：${escapeHtml(uploadText)}</span>
+                <span class="card-note">定位上报：${escapeHtml(uplink.location_event_count ?? 0)} 条 / ${escapeHtml(uplink.basis || 'unknown')}</span>
+                <span class="card-note">最后定位上报：${escapeHtml(freshness.last_location_upload_at || 'none')} / seq ${escapeHtml(freshness.last_seq ?? 'unknown')}</span>
               </div>
               <div class="d1-card">
-                <span class="card-label">Power</span>
-                <span class="card-value">Power Curve: ${escapeHtml(powerText)}</span>
-                <span class="card-note">Power Delta: ${escapeHtml(powerDeltaText)}</span>
-                <span class="card-note">Battery Claim: ${escapeHtml(powerCurve.battery_life_claim || 'none')}</span>
+                <span class="card-label">功耗</span>
+                <span class="card-value">功耗曲线：${escapeHtml(powerText)}</span>
+                <span class="card-note">功耗变化：${escapeHtml(powerDeltaText)}</span>
+                <span class="card-note">续航声明：${escapeHtml(powerCurve.battery_life_claim || 'none')}</span>
               </div>
               <div class="d1-card">
-                <span class="card-label">Evidence</span>
+                <span class="card-label">传感证据</span>
                 <div class="evidence-list">
-                  <div class="evidence-pill"><span>GNSS Evidence</span><span>${escapeHtml(boolSeen(gnss.seen))} / fix ${escapeHtml(valueOrUnknown(gnss.fix))} / ${escapeHtml(valueOrUnknown(gnss.state))}</span></div>
-                  <div class="evidence-pill"><span>Cell/LTE Evidence</span><span>${escapeHtml(boolSeen(cellLte.seen))} / ${escapeHtml(valueOrUnknown(cellLte.rat))} / ${escapeHtml(valueOrUnknown(cellLte.registration_state))}</span></div>
-                  <div class="evidence-pill"><span>IMU Evidence</span><span>${escapeHtml(boolSeen(imu.seen))} / ${escapeHtml(valueOrUnknown(imu.motion))} / ${escapeHtml(valueOrUnknown(imu.evidence_status))}</span></div>
-                  <div class="evidence-pill"><span>Power Evidence</span><span>${escapeHtml(boolSeen(power.seen))} / ${escapeHtml(valueOrUnknown(power.battery_mv))} mV / ${escapeHtml(valueOrUnknown(power.soc_pct))}%</span></div>
+                  <div class="evidence-pill"><span>GNSS</span><span>${escapeHtml(boolSeen(gnss.seen))} / fix ${escapeHtml(valueOrUnknown(gnss.fix))} / ${escapeHtml(valueOrUnknown(gnss.state))}</span></div>
+                  <div class="evidence-pill"><span>蜂窝 / LTE</span><span>${escapeHtml(boolSeen(cellLte.seen))} / ${escapeHtml(valueOrUnknown(cellLte.rat))} / ${escapeHtml(valueOrUnknown(cellLte.registration_state))}</span></div>
+                  <div class="evidence-pill"><span>IMU</span><span>${escapeHtml(boolSeen(imu.seen))} / ${escapeHtml(valueOrUnknown(imu.motion))} / ${escapeHtml(valueOrUnknown(imu.evidence_status))}</span></div>
+                  <div class="evidence-pill"><span>电源</span><span>${escapeHtml(boolSeen(power.seen))} / ${escapeHtml(valueOrUnknown(power.battery_mv))} mV / ${escapeHtml(valueOrUnknown(power.soc_pct))}%</span></div>
                 </div>
               </div>
               <div class="d1-card">
-                <span class="card-label">Field Notes</span>
+                <span class="card-label">定位说明</span>
                 <span class="card-value">${escapeHtml(fieldCoordinateText)}</span>
-                <span class="card-note">Map mode: ${escapeHtml(mapMode)} / ${escapeHtml(reviewMode)}</span>
-                <span class="card-note">Provider: ${escapeHtml(valueOrUnknown(provider.status, 'not_configured'))}; D1 blocker ${escapeHtml(provider.blocking_d1 ?? false)}</span>
-                <span class="card-note">Verified map points: ${escapeHtml(map.amap_eligible_point_count ?? 0)} / evidence track points ${escapeHtml(trajectory.point_count ?? 0)}</span>
-                <span class="card-note">D2 reference points: ${escapeHtml(referencePoints.length)}</span>
-                <span class="card-note">Coordinate uploads: ${escapeHtml(coord.coordinate_event_count ?? 0)} / ${escapeHtml(coord.location_event_count ?? 0)}; hint ${escapeHtml(valueOrUnknown(coord.operator_hint))}</span>
-                <span class="card-note">Privacy: ${escapeHtml(privacy.static_report_policy || 'bounded_summary_no_raw_coordinates')}</span>
-                <span class="card-note">No accuracy or battery-life claim is made from this panel.</span>
+                <span class="card-note">地图模式：${escapeHtml(mapMode)} / ${escapeHtml(reviewMode)}</span>
+                <span class="card-note">地图服务：${escapeHtml(valueOrUnknown(provider.status, 'not_configured'))}；D1 阻塞 ${escapeHtml(provider.blocking_d1 ?? false)}</span>
+                <span class="card-note">可信地图点：${escapeHtml(map.amap_eligible_point_count ?? 0)} / 证据轨迹点 ${escapeHtml(trajectory.point_count ?? 0)}</span>
+                <span class="card-note">最近缺测原因：${escapeHtml(valueOrUnknown(coord.latest_missing_reason))}</span>
+                <span class="card-note">门禁阻塞：${escapeHtml(arrayLabel(acceptance.blockers))}；警告：${escapeHtml(arrayLabel(acceptance.warnings))}</span>
+                <span class="card-note">操作建议：${escapeHtml(valueOrUnknown(readiness.operator_action))} / ${escapeHtml(acceptance.next_action || 'review_d1_gate')}</span>
+                <span class="card-note">原始门禁信息：${escapeHtml(valueOrUnknown(acceptance.headline))}</span>
+                <span class="card-note">精度声明：${escapeHtml(estimate.accuracy_claim || 'none')}；采集提示：${escapeHtml(valueOrUnknown(coord.operator_hint))}</span>
+                <span class="card-note">D2 参考点：${escapeHtml(referencePoints.length)}</span>
+                <span class="card-note">隐私边界：${escapeHtml(privacy.static_report_policy || 'bounded_summary_no_raw_coordinates')}</span>
+                <span class="card-note">本面板不作定位精度或电池续航声明。</span>
               </div>
               </div>
             </details>
@@ -10370,7 +10593,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       `;
     }
     function latestFieldState(selectedDevice, rawFrames) {
-      if (!selectedDevice) return '<span class="empty">No device data yet</span>';
+      if (!selectedDevice) return '<span class="empty">暂无设备数据</span>';
       const d = selectedDevice;
       const latestRaw = latestRawFrameForDevice(rawFrames, d.device_id);
       const latestRawParsed = parseResult(latestRaw);
@@ -10399,23 +10622,23 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const lat = gnssField(fieldTelemetry, 'lat');
       const lon = gnssField(fieldTelemetry, 'lon');
       return `
-        <div class="metric"><span>Observed Device</span><b>${escapeHtml(d.device_id)}</b></div>
-        <div class="metric"><span>Online Status</span><span class="${ageClass(d.last_seen_at)}">${escapeHtml(onlineLabel(d.last_seen_at))}</span></div>
-        <div class="metric"><span>Last Seen</span><span>${escapeHtml(d.last_seen_at)}</span></div>
-        <div class="metric"><span>Location Updated</span><span>${escapeHtml(fieldTelemetry.server_received_at || 'none')}</span></div>
-        <div class="metric"><span>Field Message</span><span>${escapeHtml(fieldTelemetry.event_type || fieldTelemetry.message_type || 'unknown')}</span></div>
-        <div class="metric"><span>Location State</span><span>${escapeHtml(obsBelief.state || 'unknown')}</span></div>
-        <div class="metric"><span>GNSS State</span><span>${escapeHtml(gnssField(fieldTelemetry, 'gnss_state', fieldTelemetry.event_type || status.gnss_state || 'unknown'))}</span></div>
-        <div class="metric"><span>Fix</span><span>${escapeHtml(gnssField(fieldTelemetry, 'fix'))}</span></div>
-        <div class="metric"><span>Position</span><span>${escapeHtml(lat)}, ${escapeHtml(lon)}</span></div>
-        <div class="metric"><span>Transport</span><span>${escapeHtml(obsTransport.type || status.link_type || 'unknown')}</span></div>
-        <div class="metric"><span>Command</span><span>${escapeHtml(obsCommand.last_cmd_id || 'none')} / ${escapeHtml(obsCommand.last_ack_status || obsCommand.last_status || 'none')}</span></div>
-        <div class="metric"><span>Power</span><span>${escapeHtml(obsPower.battery_mv ?? 'unknown')} mV / ${escapeHtml(obsPower.soc_pct ?? status.battery ?? 'unknown')}% / ${escapeHtml(obsPower.evidence_status || obsPower.source_status || obsPower.source || 'unknown')}</span></div>
+        <div class="metric"><span>当前设备</span><b>${escapeHtml(d.device_id)}</b></div>
+        <div class="metric"><span>在线状态</span><span class="${ageClass(d.last_seen_at)}">${escapeHtml(onlineDisplayLabel(d.last_seen_at))}</span></div>
+        <div class="metric"><span>最后通信</span><span>${escapeHtml(formatDashboardDateTime(d.last_seen_at))}</span></div>
+        <div class="metric"><span>定位上报时间</span><span>${escapeHtml(formatDashboardDateTime(fieldTelemetry.server_received_at))}</span></div>
+        <div class="metric"><span>最新消息类型</span><span>${escapeHtml(fieldTelemetry.event_type || fieldTelemetry.message_type || 'unknown')}</span></div>
+        <div class="metric"><span>位置判断</span><span>${escapeHtml(displayState(obsBelief.state || 'unknown'))}</span></div>
+        <div class="metric"><span>GNSS 状态</span><span>${escapeHtml(displayState(gnssField(fieldTelemetry, 'gnss_state', fieldTelemetry.event_type || status.gnss_state || 'unknown')))}</span></div>
+        <div class="metric"><span>本次定位</span><span>${escapeHtml(gnssField(fieldTelemetry, 'fix'))}</span></div>
+        <div class="metric"><span>坐标</span><span>${escapeHtml(lat)}, ${escapeHtml(lon)}</span></div>
+        <div class="metric"><span>传输链路</span><span>${escapeHtml(obsTransport.type || status.link_type || 'unknown')}</span></div>
+        <div class="metric"><span>最近指令</span><span>${escapeHtml(obsCommand.last_cmd_id || 'none')} / ${escapeHtml(obsCommand.last_ack_status || obsCommand.last_status || 'none')}</span></div>
+        <div class="metric"><span>电源</span><span>${escapeHtml(obsPower.battery_mv ?? 'unknown')} mV / ${escapeHtml(obsPower.soc_pct ?? status.battery ?? 'unknown')}% / ${escapeHtml(obsPower.evidence_status || obsPower.source_status || obsPower.source || 'unknown')}</span></div>
         <div class="metric"><span>LTE</span><span>${escapeHtml(obsLte.registration_state || obsCell.registration_state || 'unknown')} / PDP ${escapeHtml(obsLte.pdp_state || obsCell.pdp_state || 'unknown')} / SIM ${escapeHtml(obsLte.sim_state || obsCell.sim_state || 'unknown')}</span></div>
         <div class="metric"><span>IMU</span><span>${escapeHtml(obsImu.motion || 'unknown')} ${escapeHtml(obsImu.confidence ?? '')} / ${escapeHtml(obsImu.evidence_status || obsImu.source_status || 'unknown')}</span></div>
-        <div class="metric"><span>Last Error</span><span>${escapeHtml(error.error_code || 'none')}</span></div>
+        <div class="metric"><span>最近错误</span><span>${escapeHtml(error.error_code || 'none')}</span></div>
         <details>
-          <summary>Extended field diagnostics</summary>
+          <summary>展开工程诊断</summary>
           <div class="metric"><span>Belief</span><span>${escapeHtml(obsBelief.confidence ?? 'unknown')} / ${escapeHtml(obsBelief.radius_m ?? 'unknown')} m</span></div>
           <div class="metric"><span>Belief Source</span><span>${escapeHtml((obsBelief.source || []).join(', ') || 'none')}</span></div>
           <div class="metric"><span>Belief Reason</span><span>${escapeHtml(obsBelief.reason || 'unknown')}</span></div>
@@ -10448,7 +10671,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     }
     function progressBoardPanel(board) {
       if (!board || board.status !== 'available') {
-        return `<div class="empty-panel">Progress unavailable: ${escapeHtml(board && board.reason || 'not deployed')}</div>`;
+        return `<div class="empty-panel">项目进度暂不可用：${escapeHtml(board && board.reason || 'not deployed')}</div>`;
       }
       const milestones = (board.milestones || []).map(item => {
         const done = Number(item.done || 0);
@@ -10460,17 +10683,17 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
             <span class="progress-milestone-count">${escapeHtml(done)} / ${escapeHtml(total)}</span>
             <div class="progress-track"><div class="progress-fill" style="width:${percent.toFixed(1)}%"></div></div>
           </div>`;
-      }).join('') || '<span class="empty">No milestones</span>';
+      }).join('') || '<span class="empty">暂无里程碑</span>';
       const asks = (board.operator_asks || []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
       return `
         <div class="progress-layout">
           <div>
-            <span class="card-label">Current Focus</span>
+            <span class="card-label">当前重点</span>
             <div class="progress-focus">${escapeHtml(board.current_focus || 'unknown')}</div>
-            <div class="progress-meta">Generated ${escapeHtml(board.generated_at)} / ${escapeHtml((board.git || {}).head || 'unknown')}</div>
+            <div class="progress-meta">生成时间 ${escapeHtml(board.generated_at)} / ${escapeHtml((board.git || {}).head || 'unknown')}</div>
             <div class="progress-actions">
-              <span class="card-label">Waiting For Founder</span>
-              ${asks ? `<ul>${asks}</ul>` : '<div class="progress-meta">No operator action queued</div>'}
+              <span class="card-label">等待创始人确认</span>
+              ${asks ? `<ul>${asks}</ul>` : '<div class="progress-meta">当前没有待确认事项</div>'}
             </div>
           </div>
           <div class="progress-milestones">${milestones}</div>
@@ -10483,29 +10706,29 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     function lastRefreshSuffix() {
       if (!lastSuccessfulDashboardState) return '';
       const updatedAt = lastSuccessfulDashboardState.dashboard_refreshed_at;
-      return updatedAt ? ` / showing ${updatedAt}` : ' / showing last update';
+      return updatedAt ? ` / 当前显示 ${updatedAt} 的数据` : ' / 当前保留上次成功数据';
     }
     async function refresh() {
       if (refreshInFlight) return;
       refreshInFlight = true;
       refreshStatus.dataset.state = 'refreshing';
-      setRefreshStatus('Refreshing...');
+      setRefreshStatus('正在刷新…');
       try {
         const response = await fetch('/api/state', { headers: authHeaders() });
         if (response.status === 401) {
-          authStatus.textContent = 'token required';
-          setRefreshStatus(`API token required${lastRefreshSuffix()}`, 'warn');
+          authStatus.textContent = '需要访问令牌';
+          setRefreshStatus(`请保存访问令牌${lastRefreshSuffix()}`, 'warn');
           return;
         }
         if (!response.ok) {
           authStatus.textContent = `HTTP ${response.status}`;
-          setRefreshStatus(`API error HTTP ${response.status}${lastRefreshSuffix()}`, 'warn');
+          setRefreshStatus(`接口错误 HTTP ${response.status}${lastRefreshSuffix()}`, 'warn');
           return;
         }
         const data = await response.json();
         data.dashboard_refreshed_at = new Date().toLocaleTimeString();
         lastSuccessfulDashboardState = data;
-        authStatus.textContent = 'connected';
+        authStatus.textContent = '已连接';
         progressBoard.className = '';
         progressBoard.innerHTML = progressBoardPanel(data.progress_board || {});
         runContext.innerHTML = runContextPanel(data.current_run || {});
@@ -10528,26 +10751,26 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         updateDeviceSelector(data.devices || [], data.current_run || {});
         renderSelectedDevicePanels();
         devices.innerHTML = (data.devices || []).map(d => `
-          <div class="metric"><span>Device</span><b>${escapeHtml(d.device_id)}</b></div>
-          <div class="metric"><span>Status</span><span class="${ageClass(d.last_seen_at)}">${escapeHtml(onlineLabel(d.last_seen_at))}</span></div>
-          <div class="metric"><span>Last Seen</span><span>${escapeHtml(d.last_seen_at)}</span></div>
-          <div class="metric"><span>Last Type</span><span>${escapeHtml(d.last_message_type)}</span></div>
-          <div class="metric"><span>Seq</span><span>${escapeHtml(d.last_seq)}</span></div>
-        `).join('') || '<span class="empty">No devices yet</span>';
+          <div class="metric"><span>设备</span><b>${escapeHtml(d.device_id)}</b></div>
+          <div class="metric"><span>状态</span><span class="${ageClass(d.last_seen_at)}">${escapeHtml(onlineDisplayLabel(d.last_seen_at))}</span></div>
+          <div class="metric"><span>最后通信</span><span>${escapeHtml(formatDashboardDateTime(d.last_seen_at))}</span></div>
+          <div class="metric"><span>最新类型</span><span>${escapeHtml(d.last_message_type)}</span></div>
+          <div class="metric"><span>序号</span><span>${escapeHtml(d.last_seq)}</span></div>
+        `).join('') || '<span class="empty">暂无设备</span>';
         commands.innerHTML = (data.commands || []).map(c => `
           <div class="metric"><span>${escapeHtml(c.cmd_id)}</span><span class="${c.status === 'ok' ? 'ok' : c.status === 'pending' ? 'warn' : 'bad'}">${escapeHtml(c.cmd)} / ${escapeHtml(c.status)}</span></div>
-        `).join('') || '<span class="empty">No commands yet</span>';
+        `).join('') || '<span class="empty">暂无指令</span>';
         rawFrames.innerHTML = (data.raw_frames || []).map(frame => {
           const parsed = parseResult(frame);
           const frameMeta = framing(frame);
           const reason = parsed.reason || parsed.error_code || 'none';
           return `
             <div class="metric"><span>${escapeHtml(frame.frame_id || 'raw')}</span><span class="${rawFrameClass(frame)}">${escapeHtml(rawFrameSummary(frame))}</span></div>
-            <div class="metric"><span>Received</span><span>${escapeHtml(frame.server_received_at || 'unknown')}</span></div>
-            <div class="metric"><span>Payload</span><span>${escapeHtml(frameMeta.payload_len ?? 'unknown')} bytes / ${escapeHtml(frameMeta.payload_crc32 || 'unknown')}</span></div>
-            <div class="metric"><span>Reason</span><span>${escapeHtml(reason)}</span></div>
+            <div class="metric"><span>接收时间</span><span>${escapeHtml(frame.server_received_at || 'unknown')}</span></div>
+            <div class="metric"><span>载荷</span><span>${escapeHtml(frameMeta.payload_len ?? 'unknown')} bytes / ${escapeHtml(frameMeta.payload_crc32 || 'unknown')}</span></div>
+            <div class="metric"><span>原因</span><span>${escapeHtml(reason)}</span></div>
           `;
-        }).join('') || '<span class="empty">No raw frames yet</span>';
+        }).join('') || '<span class="empty">暂无原始帧</span>';
         messages.innerHTML = (data.messages || []).map(m => `
           <tr>
             <td>${escapeHtml(m.device_id)}</td>
@@ -10556,14 +10779,14 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
             <td>${escapeHtml(detail(m))}</td>
             <td>${escapeHtml(m.server_received_at)}</td>
           </tr>
-        `).join('') || '<tr><td colspan="5" class="empty">No messages yet</td></tr>';
+        `).join('') || '<tr><td colspan="5" class="empty">暂无消息</td></tr>';
         refreshStatus.dataset.state = 'connected';
-        setRefreshStatus(`Updated ${data.dashboard_refreshed_at}`, 'ok');
+        setRefreshStatus(`已更新 ${data.dashboard_refreshed_at}`, 'ok');
       } catch (error) {
-        const reason = error instanceof Error && error.message ? error.message : 'request failed';
+        const reason = error instanceof Error && error.message ? error.message : '请求失败';
         const previousView = lastSuccessfulDashboardState ? lastRefreshSuffix() : '';
         refreshStatus.dataset.state = 'failed';
-        setRefreshStatus(`Refresh failed: ${reason}${previousView}`, 'warn');
+        setRefreshStatus(`刷新失败：${reason}${previousView}`, 'warn');
       } finally {
         refreshInFlight = false;
       }

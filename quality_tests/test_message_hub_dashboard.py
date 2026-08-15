@@ -67,7 +67,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         html = message_hub.render_dashboard()
 
         self.assertIn('href="/d2-reference-capture"', html)
-        self.assertIn("D2 Reference Capture", html)
+        self.assertIn("D2 参考点采集", html)
 
     def test_dashboard_loads_d2_reference_manifest_locally_without_upload_api(self) -> None:
         html = message_hub.render_dashboard()
@@ -124,19 +124,75 @@ class MessageHubDashboardTests(unittest.TestCase):
         positions = [html.index(marker) for marker in ordered_markers]
 
         self.assertEqual(positions, sorted(positions))
-        self.assertIn("Field live view", html)
-        self.assertIn("Field Test Results", html)
-        self.assertIn("Data Flywheel", html)
-        self.assertIn("Project Progress", html)
+        self.assertIn('<html lang="zh-CN">', html)
+        self.assertIn("位置与历史轨迹", html)
+        self.assertIn("外场测试结果", html)
+        self.assertIn("数据闭环", html)
+        self.assertIn("项目进度", html)
+
+    def test_dashboard_is_chinese_first_and_exposes_recent_trusted_trajectory(self) -> None:
+        html = message_hub.render_dashboard(amap_js_api_key="public_JS_key_1234")
+
+        for marker in (
+            '<html lang="zh-CN">',
+            "EgoLink 定位看板",
+            "位置与历史轨迹",
+            "当前设备",
+            "最近可信轨迹",
+            'id="trajectoryPanel"',
+            'hidden aria-hidden="true" data-dashboard-contract-labels="legacy-en"',
+            "最多 24",
+            "轨迹起点",
+            "最后可信位置",
+            "当前为预测状态；地图显示最后可信位置",
+            "当前 GNSS 未定位，暂无可信轨迹",
+            "最后位置缺少可信坐标，暂不显示",
+            "此处不作定位精度声明",
+            ".amap-start-marker",
+            ".amap-history-marker",
+            ".amap-end-marker",
+            ".map-point-stale",
+            "function trajectorySegments",
+            "trajectorySegments(observed)",
+            "function d1MapSurface(map, estimate, readiness = {})",
+            "? 'stale_fix'",
+            "d1MapSurface(map, estimate, readiness)",
+            "new AMap.Polyline",
+            "可开始 D1 外场验收",
+            "D1 外场验收尚未就绪",
+            "原始门禁信息",
+            "最近缺测原因",
+            "操作建议",
+        ):
+            self.assertIn(marker, html)
+        self.assertIn("currentTime - previousTime > maxGapMs", html)
+        self.assertIn("trajectorySegments(points).filter(segment => segment.length >= 2).length", html)
+        self.assertIn("可见轨迹段", html)
+        self.assertIn("overview.classList.toggle('provider-map-active', !visible)", html)
+        self.assertIn('id="locationMapGrid" class="location-map-grid provider-map-hidden"', html)
+        self.assertIn("locationGrid.classList.toggle('provider-map-hidden', visible)", html)
+        self.assertIn(".location-map-grid.provider-map-hidden .map-card { display: none; }", html)
+        semantics = html[
+            html.index("function amapPositionSemantics") : html.index("function trajectorySegments")
+        ]
+        self.assertLess(
+            semantics.index("latestFix === false || exclusionReasons.has('gnss_fix_not_true')"),
+            semantics.index("exclusionReasons.has('firmware_parser_not_allowlisted')"),
+        )
+        self.assertIn("#amapLiveMap { position: relative; z-index: 1; min-height: 500px", html)
+        self.assertIn("#amapLiveMap { min-height: 360px; }", html)
+        self.assertIn("button, select { min-height: 44px; }", html)
 
     def test_dashboard_disclosures_default_closed_and_preserve_existing_targets(self) -> None:
         html = message_hub.render_dashboard()
 
+        selector_pos = html.index('id="deviceSelector"')
         operations_pos = html.index('id="fieldOperations"')
         operations_start = html.rfind("<section", 0, operations_pos)
         operations_end = html.index('id="fieldResults"', operations_pos)
         operations_body = html[operations_start:operations_end]
-        for operations_target in ("deviceSelector", "commands", "fieldState"):
+        self.assertLess(selector_pos, operations_pos)
+        for operations_target in ("commands", "fieldState"):
             self.assertIn(f'id="{operations_target}"', operations_body)
 
         disclosure_bodies: dict[str, str] = {}
@@ -251,7 +307,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn('.d1-map-pane { order: 2; }', html)
         self.assertIn('button, select { min-height: 44px; }', html)
         self.assertIn('<details class="d1-details">', html)
-        self.assertIn('<summary>D1 evidence details</summary>', html)
+        self.assertIn('<summary>查看定位证据详情</summary>', html)
         refresh_pos = html.index('id="refreshStatus"')
         refresh_start = html.rfind("<", 0, refresh_pos)
         refresh_end = html.index(">", refresh_pos)
@@ -272,33 +328,33 @@ class MessageHubDashboardTests(unittest.TestCase):
     def test_dashboard_exposes_field_state_and_command_panels(self) -> None:
         html = message_hub.render_dashboard()
 
-        self.assertIn("Latest Field State", html)
-        self.assertIn("Run Context", html)
-        self.assertIn("Commands", html)
-        self.assertIn("Raw Frames", html)
-        self.assertIn("Product Demo", html)
-        self.assertIn("Field Test Results", html)
-        self.assertIn("Data Flywheel", html)
-        self.assertIn("Project Progress", html)
+        self.assertIn("设备最新状态", html)
+        self.assertIn("当前测试批次", html)
+        self.assertIn("最近指令", html)
+        self.assertIn("原始帧", html)
+        self.assertIn("产品演示", html)
+        self.assertIn("外场测试结果", html)
+        self.assertIn("数据闭环", html)
+        self.assertIn("项目进度", html)
         self.assertIn('id="progressBoard"', html)
         self.assertIn("progressBoardPanel", html)
-        self.assertIn("Waiting For Founder", html)
-        self.assertIn("Training Experiments", html)
-        self.assertIn("Training Run Preflight", html)
-        self.assertIn("Training Feature Manifest", html)
-        self.assertIn("Training Runner Dry-Run", html)
-        self.assertIn("Training Baseline Eval", html)
-        self.assertIn("Training Handoff Bundle", html)
-        self.assertIn("Training Job Plan", html)
-        self.assertIn("Synthetic Training Chain", html)
-        self.assertIn("D1 Training Readiness", html)
-        self.assertIn("D1 Labeling Intake", html)
-        self.assertIn("D1 Labeling Queue", html)
-        self.assertIn("D1 Labeling Review Packet", html)
-        self.assertIn("D1 Labeling Decision Template", html)
+        self.assertIn("等待创始人确认", html)
+        self.assertIn("训练实验", html)
+        self.assertIn("训练运行预检", html)
+        self.assertIn("训练特征清单", html)
+        self.assertIn("训练执行器试运行", html)
+        self.assertIn("训练基线评估", html)
+        self.assertIn("训练交接包", html)
+        self.assertIn("训练任务计划", html)
+        self.assertIn("合成训练链路", html)
+        self.assertIn("D1 训练就绪度", html)
+        self.assertIn("D1 标注接入", html)
+        self.assertIn("D1 标注队列", html)
+        self.assertIn("D1 标注复核包", html)
+        self.assertIn("D1 标注决策模板", html)
         self.assertIn("D1 Link Through", html)
         self.assertIn("dashboard-shell", html)
-        self.assertIn("Field live view", html)
+        self.assertIn("位置与历史轨迹", html)
         self.assertIn("runContext", html)
         self.assertIn("rawFrames", html)
         self.assertIn("productDemo", html)
@@ -379,11 +435,11 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Measured Metrics", html)
         self.assertIn("Classification Metrics", html)
         self.assertIn("Footprint Metrics", html)
-        self.assertIn("Candidate Records", html)
+        self.assertIn("候选记录", html)
         self.assertIn("D2 Baselines", html)
         self.assertIn("D2 Attempts", html)
-        self.assertIn("Training Gate", html)
-        self.assertIn("Review Queues", html)
+        self.assertIn("训练门禁", html)
+        self.assertIn("复核队列", html)
         self.assertIn("Review Queue", html)
         self.assertIn("review_queue", html)
         self.assertIn("sample_records", html)
@@ -399,21 +455,21 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("d1AcceptanceBadge", html)
         self.assertIn("field_readiness", html)
         self.assertIn("acceptance_gate", html)
-        self.assertIn("Field Ready", html)
+        self.assertIn("外场状态", html)
         self.assertIn("D1 Acceptance Gate", html)
         self.assertIn("acceptanceClass", html)
         self.assertIn("acceptanceLabel", html)
-        self.assertIn("Coordinate data", html)
-        self.assertIn("Latest missing reason", html)
-        self.assertIn("Ready Reason", html)
-        self.assertIn("Operator Action", html)
-        self.assertIn("Freshness Gate", html)
+        self.assertIn("定位上报", html)
+        self.assertIn("缺坐标", html)
+        self.assertIn("原因：", html)
+        self.assertIn("下一步", html)
+        self.assertIn("新鲜度门限", html)
         self.assertIn("readinessClass", html)
         self.assertIn("readinessHeadline", html)
         self.assertIn("status-chip", html)
         self.assertIn("d1-card", html)
-        self.assertIn("D1 Status", html)
-        self.assertIn("Map Surface", html)
+        self.assertIn("定位链路", html)
+        self.assertIn("本地轨迹示意图", html)
         self.assertIn("map-surface", html)
         self.assertIn("map-track", html)
         self.assertIn("map-point-current", html)
@@ -428,39 +484,39 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("D2 Reference", html)
         self.assertIn("fieldEvidenceLanes", html)
         self.assertIn("D2 Baseline", html)
-        self.assertIn("D5 Flywheel", html)
+        self.assertIn("D5 数据闭环", html)
         self.assertIn("Track points", html)
-        self.assertIn("Accuracy Claim", html)
-        self.assertIn("Upload Freshness", html)
+        self.assertIn("不作定位精度声明", html)
+        self.assertIn("数据新鲜度", html)
         self.assertIn("Upload Success", html)
         self.assertIn("Location Uploads", html)
         self.assertIn("Power Curve", html)
-        self.assertIn("Power Delta", html)
-        self.assertIn("Battery Claim", html)
+        self.assertIn("功耗变化", html)
+        self.assertIn("续航声明", html)
         self.assertIn("uplink_metrics", html)
         self.assertIn("power_curve", html)
         self.assertIn("raw_post_success_rate", html)
         self.assertIn("battery_life_claim", html)
-        self.assertIn("GNSS Evidence", html)
-        self.assertIn("Cell/LTE Evidence", html)
-        self.assertIn("IMU Evidence", html)
-        self.assertIn("Power Evidence", html)
+        self.assertIn("传感证据", html)
+        self.assertIn("蜂窝 / LTE", html)
+        self.assertIn("IMU", html)
+        self.assertIn("电源", html)
         self.assertIn("product_demo", html)
         self.assertIn("KR-008", html)
         self.assertIn("DEMO-008", html)
-        self.assertIn("Evidence Mode", html)
-        self.assertIn("Web Review", html)
-        self.assertIn("Release Ready", html)
+        self.assertIn("证据模式", html)
+        self.assertIn("Web 复核", html)
+        self.assertIn("发布就绪", html)
         self.assertIn("raw_frames", html)
         self.assertIn("current_run", html)
-        self.assertIn("Current Run", html)
-        self.assertIn("Key Release", html)
+        self.assertIn("当前测试批次", html)
+        self.assertIn("关键版本", html)
         self.assertIn("Baseline", html)
-        self.assertIn("Command Chain", html)
+        self.assertIn("指令链路", html)
         self.assertIn("Raw Evidence", html)
         self.assertIn("Derived Location", html)
-        self.assertIn("Failure State", html)
-        self.assertIn("Failure Reason", html)
+        self.assertIn("异常状态", html)
+        self.assertIn("异常原因", html)
         self.assertIn("Network Reconnect", html)
         self.assertIn("Network Error", html)
         self.assertIn("Raw POST", html)
@@ -487,15 +543,15 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("Raw Frame ID", html)
         self.assertIn("Raw Derived", html)
         self.assertIn("onlineLabel", html)
-        self.assertIn("GNSS State", html)
+        self.assertIn("GNSS 状态", html)
         self.assertIn("gnssField", html)
         self.assertIn("Fix", html)
         self.assertIn("Satellites", html)
         self.assertIn("HDOP", html)
         self.assertIn("Source Status", html)
-        self.assertIn("Location Updated", html)
-        self.assertIn("Field Message", html)
-        self.assertIn("Location State", html)
+        self.assertIn("定位上报时间", html)
+        self.assertIn("最新消息类型", html)
+        self.assertIn("位置判断", html)
         self.assertIn("Belief", html)
         self.assertIn("Belief Source", html)
         self.assertIn("Belief Reason", html)
@@ -521,8 +577,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("observability", html)
         self.assertIn("latest_location", html)
         self.assertIn("location_memory", html)
-        self.assertIn("API token required", html)
-        self.assertIn("Last Error", html)
+        self.assertIn("需要访问令牌", html)
+        self.assertIn("最近错误", html)
         self.assertIn("tokenInput", html)
         self.assertIn("Authorization: `Bearer ${token}`", html)
 
@@ -753,10 +809,75 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertFalse(surface["layers"]["trajectory"])
         self.assertEqual(surface["amap_trajectory"]["point_count"], 1)
         self.assertEqual(surface["amap_trajectory"]["hidden_point_count"], 1)
-        self.assertFalse(surface["points"][0]["amap_eligible"])
-        self.assertTrue(surface["points"][1]["amap_eligible"])
-        self.assertEqual(surface["points"][1]["coordinate_contract"], "wgs84")
-        self.assertEqual(surface["points"][1]["fw_version"], "0.1.0-fw005-gnss-correctness")
+        self.assertEqual(len(surface["points"]), 1)
+        self.assertTrue(surface["points"][0]["amap_eligible"])
+        self.assertEqual(surface["points"][0]["coordinate_contract"], "wgs84")
+        self.assertEqual(surface["points"][0]["fw_version"], "0.1.0-fw005-gnss-correctness")
+
+    def test_d1_map_surface_bounds_recent_trusted_history_to_24_in_time_order(self) -> None:
+        started = datetime(2026, 8, 15, 1, 0, tzinfo=timezone.utc)
+        chronological = [
+            {
+                "message_type": "event",
+                "event_type": "location_report",
+                "seq": index,
+                "server_received_at": (started + timedelta(minutes=index)).isoformat(),
+                "fw_version": "0.1.0-fw005-gnss-correctness",
+                "fix": True,
+                "lat": 22.700000 + index / 100000,
+                "lon": 114.200000 + index / 100000,
+            }
+            for index in range(1, 31)
+        ]
+
+        surface = message_hub.build_d1_map_surface(
+            messages=list(reversed(chronological)),
+            latest_location=chronological[-1],
+            location_memory={},
+            map_mode="current_fix",
+            map_lat=chronological[-1]["lat"],
+            map_lon=chronological[-1]["lon"],
+            coordinate_source="gnss",
+            visible=True,
+        )
+
+        self.assertEqual(len(surface["points"]), 24)
+        self.assertEqual(surface["amap_eligible_point_count"], 24)
+        self.assertEqual([point["seq"] for point in surface["points"]], list(range(7, 31)))
+        self.assertTrue(surface["points"][-1]["amap_current"])
+        self.assertTrue(surface["layers"]["trajectory"])
+
+        newer_untrusted = [
+            {
+                "message_type": "event",
+                "event_type": "location_report",
+                "seq": index,
+                "server_received_at": (started + timedelta(minutes=index)).isoformat(),
+                "fw_version": "0.1.0-fw005-gnss-correctness",
+                "fix": False,
+                "lat": 22.710000 + index / 100000,
+                "lon": 114.210000 + index / 100000,
+            }
+            for index in range(31, 55)
+        ]
+        mixed = chronological + newer_untrusted
+
+        mixed_surface = message_hub.build_d1_map_surface(
+            messages=list(reversed(mixed)),
+            latest_location=newer_untrusted[-1],
+            location_memory={},
+            map_mode="memory_coordinate",
+            map_lat=chronological[-1]["lat"],
+            map_lon=chronological[-1]["lon"],
+            coordinate_source="location_memory",
+            visible=True,
+        )
+
+        self.assertEqual(len(mixed_surface["points"]), 24)
+        self.assertEqual(mixed_surface["amap_eligible_point_count"], 24)
+        self.assertEqual([point["seq"] for point in mixed_surface["points"]], list(range(7, 31)))
+        self.assertFalse(any(point.get("amap_current") for point in mixed_surface["points"]))
+        self.assertFalse(mixed_surface["coordinate_diagnostics"]["latest_fix"])
 
     def test_d1_link_summary_waits_without_periodic_location_upload(self) -> None:
         now = datetime.now(timezone.utc).isoformat()
@@ -2607,7 +2728,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn('name="egolink-amap-status" content="not-configured"', html)
         self.assertNotIn('src="https://webapi.amap.com/loader.js"', html)
         self.assertIn("No-key Local Map", html)
-        self.assertIn("local map fallback", html)
+        self.assertIn("使用本地轨迹示意图", html)
 
     def test_amap_dashboard_injects_only_public_js_key(self) -> None:
         public_key = "public_JS_key_1234"
@@ -2666,9 +2787,8 @@ class MessageHubDashboardTests(unittest.TestCase):
         html = message_hub.render_dashboard(amap_js_api_key="public_JS_key_1234")
 
         d1_link_start = html.index('<div id="d1Link">')
-        d1_link_end = html.index("</div>", d1_link_start)
         amap_shell_start = html.index('<div id="amapLiveShell"')
-        self.assertLess(d1_link_end, amap_shell_start)
+        self.assertLess(amap_shell_start, d1_link_start)
         self.assertIn('data-failure-stage="none"', html)
         self.assertIn('data-failure-reason="none"', html)
         self.assertIn('data-failure-elapsed-ms="0"', html)
@@ -2726,7 +2846,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertNotIn("Object.freeze([104, 35])", html)
         self.assertNotIn("viewMode: '2D'", html)
         self.assertNotIn("mapStyle: 'amap://styles/whitesmoke'", html)
-        self.assertIn("AMap base map ready / no location marker", html)
+        self.assertIn("高德底图已加载 / 暂无定位标记", html)
         self.assertIn("const mapContainer = document.getElementById('amapLiveMap')", html)
         self.assertIn("new AMap.Map(mapContainer", html)
         self.assertIn("map-container-missing", html)
@@ -2881,10 +3001,10 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertNotIn("amapInstance.add", cache_hit_state)
         self.assertNotIn("setFitView", cache_hit_state)
         self.assertIn("amapOverlayFailureKey = overlayKey", render_state)
-        self.assertIn("AMap ${failureStage} / retry paused for unchanged data", render_state)
+        self.assertIn("高德地图 ${failureStage} / 数据未变化，已暂停重复重试", render_state)
         self.assertIn("amapOverlayFailureKey = ''", render_state)
         self.assertIn("recordAmapFailure('overlay', error, overlayStartedAt)", render_state)
-        self.assertIn("AMap ${failureStage} / ${failureReason} / local fallback", render_state)
+        self.assertIn("高德地图 ${failureStage} / ${failureReason} / 已切换本地示意图", render_state)
         render_catch = render_state[render_state.rindex("} catch (error) {") :]
         self.assertNotIn("error.name", render_catch)
         self.assertNotIn("error.message", render_catch)
