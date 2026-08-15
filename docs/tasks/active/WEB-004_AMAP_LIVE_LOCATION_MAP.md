@@ -6,7 +6,7 @@ priority: high
 requires_hardware: false
 serves_demo: D2-D5
 created: 2026-08-12
-last_updated: 2026-08-14
+last_updated: 2026-08-15
 
 context:
   - docs/AGENTS.md
@@ -69,7 +69,7 @@ of Git.
 - [x] A clean committed build is backed up and deployed to the existing VPS,
       and passes health/auth/map-marker/provider smoke checks; failure restores
       code/unit only and does not restore the live database.
-- [ ] A post-`f46b052` authenticated browser session visibly renders provider
+- [x] A post-`f46b052` authenticated browser session visibly renders provider
       tiles and the correct current/last-known marker semantics across at least
       two refresh cycles without a new console error.
 
@@ -148,13 +148,47 @@ git diff --check
   verified trajectory (at most 24 points). When the newest report is `no_fix`,
   the most recent trusted point is explicitly `Predicted / Last known`, never a
   current GNSS fix. No private coordinate value is copied into this packet.
-- Remaining risks: final operator-side visual confirmation should use a hard
-  refresh of `https://ego.example.invalid/`; an already-open tab can retain the
-  pre-repair page. The public port 8790 remains an HTTP firmware-compatibility
-  endpoint, so this is still not a production security claim. AMap is a
-  third-party script and receives only eligible coordinates used for the
-  provider view; production still needs ingress migration/origin isolation,
-  consent enforcement, and provider-console quota/origin restrictions.
+- Chinese trajectory release: commit `22a174b` reorganized the first screen as
+  `位置与历史轨迹`, made Chinese the primary visible language, and added a
+  bounded recent-history view. The provider and local fallback both draw at
+  most 24 trusted WGS-84 fixes, break lines across gaps longer than ten
+  minutes, and distinguish the start, intermediate history, current fix,
+  stale fix, and last-known endpoint. A newer `no_fix` event cannot evict the
+  older trusted window or relabel its endpoint as current. The summary shows
+  trusted-point count, drawable segment count, start/end times, duration,
+  source, and the eight most recent point timestamps without exposing raw
+  coordinates in this packet.
+- Chinese trajectory validation: the final focused Dashboard/server suite
+  passed `101/101`; full repository verification passed `657/657`; the
+  relevant trajectory/no-fix fixtures passed `54/54`; `py_compile`, context
+  lint, and diff checks passed. Desktop and 390 x 844 authenticated Chrome
+  reviews visibly showed AMap tiles, `24 / 最多 24` trusted points, one
+  drawable segment, start/end timing, and `最后可信位置` for the stale predicted
+  state. The map remained visible after a seven-second wait covering two
+  three-second refresh cycles, and final console filtering returned no
+  `TypeError` or AMap warning/error.
+- Chinese trajectory deployment: the root-only pre-release snapshot is
+  `/var/backups/egolink/web004-zh-trajectory-20260815T035840Z`. Its manifest,
+  code/reports archives, SQLite backup, and read-only `quick_check` passed.
+  Deployed `server/message_hub.py` SHA-256 is
+  `67d642022c05bf141cf700c938102961c1bcb0ea99dc879073f83c42c7ab959c`,
+  matching commit `22a174b`. Message Hub and Nginx are active with zero
+  automatic restarts; HTTPS and the compatibility endpoint return health 200,
+  the state API retains its 401/200 authentication boundary, AMap init and
+  conversion return provider success, the environment file is unchanged, and
+  the post-restart warning window is empty. The standard deployment briefly
+  rewrote the unit to loopback-only; the snapshot unit was restored without
+  changing the new code, database, reports, environment, Nginx, or TLS. This
+  required two bounded manual service starts and left the compatibility
+  listener at its prior `0.0.0.0:8790` setting.
+- Remaining risks: this is deliberately a recent trusted-point window, not a
+  complete daily or multi-day route service. Time-range history needs a
+  separate bounded, paginated API task. The public port 8790 remains an HTTP
+  firmware-compatibility endpoint, so this is still not a production security
+  claim. AMap is a third-party script and receives only eligible coordinates
+  used for the provider view; production still needs ingress migration/origin
+  isolation, consent enforcement, and provider-console quota/origin
+  restrictions.
 
 # Builder Prompt
 
