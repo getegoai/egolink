@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-12
+last_verified: 2026-08-15
 verified_by: codex
 ---
 
@@ -14,9 +14,41 @@ All unknown fields must remain explicit. Do not infer hardware capability from p
 | connectivity-node-001 | `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | ESP32-S3 + SIM7670G | external ATK-NB018 V1.0 QMI8658A observed at I2C `0x6A` on GPIO15/16; D2-006 captured 100 real non-mock samples; D2-007 again observed `WHO_AM_I=0x05` and confirmed idle stop but did not capture because LTE was not ready; D2-008 uploaded 26/26 real non-mock six-axis `sensor_sample` messages over Wi-Fi; D2-009 uploaded one bounded 100-sample window over Wi-Fi; D5-002 uploaded three further independently commanded 100-sample windows in one boot with zero read/mock/deadline failures and all three cadence qualified; FIELD-011 uploaded one bounded 100-sample window over LTE with zero read/mock/deadline failures and cadence qualified; FW-006 again observed QMI identity, idle-stop and a later real `mock=false` sample; D5-002 has one operator-confirmed flat-on-table stationary session and FIELD-011 has one operator-confirmed stationary window with pose unrecorded; mounting/calibration/accuracy and other activity labels remain unverified; evidence `reports/board_validation/20260810-qmi8658-probe/`, `reports/board_validation/20260810-d2007-imu-lte/`, `reports/board_validation/20260811-d2008-wifi-imu/`, `reports/board_validation/20260811-d2009-wifi-imu-window/`, `reports/board_validation/20260811-d5002-imu-seed/`, `reports/field_validation/FIELD-011-20260811-001/`, and `reports/firmware_validation/FW-006-20260812-001/` | SIM7670G PC-side AT no-fix evidence; firmware `request_location` scaffold observed as `driver_not_integrated` no-fix; FW-002B fix1 firmware-side SIM7670G UART/AT no-fix evidence observed with USB disconnected; FW-002C fix3 firmware-side SIM7670G UART/AT `fix=true` evidence observed with USB disconnected and `source_status=observed`; FIELD-011 same-image periodic location reported indoor `fix=false` / `no_fix`; FW-006 contains the corrected parser but its bounded startup observed no fixed response, so that parser remains hardware-unverified | SIM7670G LTE/AT evidence; LTE-001B fix1 firmware-side LTE status observability observed with USB disconnected as `LTE_READY`, registered, PDP active, assigned IP present, RAT `LTE`, and cell/signal metrics; FW-003/LTE-004/LOC-004A/LOC-005A/LTE-006 fix1/LTE-007/LTE-008 fix1 raw LTE command/report/observation/ACK slices observed with USB disconnected; D2-007 did not reach LTE command polling because this run reported `LTE_SIM_NOT_READY`; D2-008, D2-009, and D5-002 intentionally bypassed cellular and used Wi-Fi; FIELD-011 completed one real QMI8658 window over LTE with ten chunks, one manifest and one matching `ok` ACK; FW-006 startup reached `LTE_READY` and posted periodic location/observation events; Wi-Fi Message Hub heartbeat/ACK, request_location scaffold, FW-002B SIM7670G UART/AT no-fix report, FW-002C resetdiag fix2 short stability observation, and FW-002C fix3 GNSS real-fix report observed with USB disconnected | OV5640 smoke evidence | TF/SD not product-verified | USB-Free Message Hub communication observed; request_location scaffold observed; FW-002B fix1 flashed and runtime-validated for no-fix AT diagnostics; FW-002B stability observer saw a seq regression/reboot; FW-002C resetdiag fix1 reproduced repeated `panic` resets; FW-002C resetdiag fix2 passed a 120-second USB-Free VPS stability observation with `seq_regressions=0`; FW-002C fix3 passed USB-Free firmware-side SIM7670G real-fix validation; LTE-001B fix1 passed USB-Free firmware-side LTE status observability; KR-005 passed one USB-Free LTE-006 fix1 reliability explainability slice; LTE-008 fix1 passed one USB-Free bounded retry visibility slice without exercising a failed retry; QMI8658 identity and bounded static sampling passed D2-006; D2-007 startup identity/idle-stop passed but bounded LTE window capture failed before sampling with zero raw frames; D2-008 low-rate real six-axis Wi-Fi telemetry passed with 26 samples; D2-009 bounded 100 x 50 ms Wi-Fi window and explicit export passed with one cadence-qualified training-disabled window; D5-002 passed three independent 100 x 50 ms Wi-Fi windows, 300 samples, 30 chunks, three manifests/ACKs, and a three-window explicit export; FIELD-011 passed one operator-confirmed stationary joint-image LTE/QMI bench window and same-image periodic LTE location observation after a full power cycle; FW-006 replaced FIELD-011 once and passed a bounded USB-attached startup identity/QMI idle-stop/real-sample/LTE-ready check, but did not observe a fixed GNSS response; outdoor GNSS fix, USB-free FW-006 operation, three walking windows, LTE long-run stability, reconnect recovery, camera/GNSS/LTE product capability, IMU calibration/accuracy/mounting, activity diversity beyond stationary, battery accuracy, product power behavior, and final enclosure/mounting GNSS acceptance remain bounded by named tests |
 | pc-bridge | development bridge | Windows PC | host CPU | n/a | n/a | PC-side SIM7670G AT probe | PC-side USB/RNDIS/AT observation | n/a | local JSONL/session files | development-only, not product dependency |
 
-## Current FW-006 Hardware Update
+## Current FW-007 Hardware Update
 
-- The current image is FW-006 `0.1.0-fw005-gnss-correctness`
+- The current connectivity-node image is FW-007
+  `0.1.0-fw007-lte-wifi-failover` (application descriptor
+  `fw007-e9ca7a4`; app SHA-256
+  `8F3508C62CA96C54628B3C3FB0A64B5BB14EAF7BBB8188DA54FAEE0739283799`).
+  It was flashed exactly once on COM3 on 2026-08-15 with all three normal
+  regions hash-verified; the flash operation did not target or erase the NVS
+  partition, while normal boot diagnostics retained/updated `boot_count`.
+  Read-only identity matched ESP32-S3 QFN56 revision v0.2 and MAC
+  `02:00:00:00:00:03`.
+- In the operator-authorized SIM-absent run, modem USB AT and firmware state
+  both reported the missing/not-ready SIM condition. The LTE readiness counter
+  reached 120 at about 286 seconds device uptime, then the firmware moved once
+  from `lte_primary` through `wifi_connecting` to `wifi_active`; Wi-Fi became
+  active about 4.5 seconds after the transition and Message Hub registration
+  returned HTTP 200. The approximately 4 minute 50 second boot-to-takeover
+  wall time is longer than the configured 120-second delay counter because
+  bounded modem status-query time is additional.
+- Fresh VPS heartbeats and location reports continued over
+  `link_type=wifi_failover`; one bounded `request_location` command produced a
+  linked report and an `ok` ACK with `transport_type=wifi`. The recorded
+  post-takeover windows contained no LTE command-poll round, offline
+  transition, panic, brownout, or reset marker. This is an observed bounded
+  engineering failover pass, not production or long-run radio evidence.
+  Automatic Wi-Fi-to-LTE failback and a durable offline queue are not
+  implemented in this first slice; physical SIM removal after an established
+  LTE session, LTE recovery, USB-free endurance, and long-run reliability
+  remain unverified. Evidence:
+  `docs/tasks/active/FW-007_LTE_WIFI_FAILOVER.md` and
+  `firmware/mqtt_heartbeat/build_fw007_hw_20260815/`.
+
+## Prior FW-006 Hardware Update
+
+- The prior FW-006 image was `0.1.0-fw005-gnss-correctness`
   (`v0.1.0-45-g6ba36c2`; app SHA-256
   `D52CA34099BE41AFC5F2D9CDF49C22962ECE3A61CFB7083C6189CD69BEBEB827`),
   flashed exactly once on COM3 on 2026-08-12 with all three normal regions

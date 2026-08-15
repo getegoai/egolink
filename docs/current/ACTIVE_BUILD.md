@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-12
+last_verified: 2026-08-15
 verified_by: codex
 ---
 
@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | UI-001 field-friendly D1 status sidecar is currently flashed: cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt, QMI8658 engineering sampler. Bounded smoke `ui001-amoled-friendly-smoke-20260704` observed `cmd=display_status` plus `status_rendered`. |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-12 | FW-006 GNSS-correctness image `0.1.0-fw005-gnss-correctness` (`v0.1.0-45-g6ba36c2`, app SHA-256 `D52CA340...BEBEB827`) is currently flashed on ESP32-S3 MAC `02:00:00:00:00:03`. One COM3 three-region flash passed hash verification without writing NVS. Its sole 20-second USB-attached startup capture observed QMI8658 `WHO_AM_I=0x05`, one real `mock=false` sample, confirmed idle stop, SIM7670 UART ready, `LTE_READY`, and successful periodic location/observation posts without panic, brownout, or reset loop. No fixed GNSS response was observed, so corrected-coordinate parsing remains hardware-unverified. |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-15 | FW-007 LTE-to-Wi-Fi failover image `0.1.0-fw007-lte-wifi-failover` (application descriptor `fw007-e9ca7a4`, app SHA-256 `8F3508C6...9283799`) is currently flashed on ESP32-S3 QFN56 revision v0.2, MAC `02:00:00:00:00:03`. One COM3 three-region flash passed hash verification without targeting or erasing the NVS partition; normal boot diagnostics retained and updated their existing NVS `boot_count`. With the SIM absent at boot, the bounded run observed `LTE_SIM_NOT_READY`, then one-way Wi-Fi takeover and fresh Message Hub heartbeat/location/command-ACK uploads without a duplicate LTE owner, panic, brownout, or reset marker in the recorded post-takeover windows. Actual boot-to-Wi-Fi-active time was about 4 minutes 50 seconds because modem status-query time is additional to the configured 120-second delay counter. Physical SIM removal after an established LTE session, automatic Wi-Fi-to-LTE failback, durable offline queueing, and long-run reliability remain unverified/not implemented in this slice. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -50,7 +50,8 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   2026-08-10, D2-007 subsequently replaced D2-006, D2-008 replaced D2-007,
   D2-009 replaced D2-008, D5-002 replaced D2-009, and FIELD-011 replaced
   D5-002 with the joint LTE/GNSS/QMI8658 field-seed image on 2026-08-11;
-  FW-006 replaced FIELD-011 on 2026-08-12.
+  FW-006 replaced FIELD-011 on 2026-08-12, and FW-007 replaced FW-006 on
+  2026-08-15.
 - AMOLED `ask_user` command path rendered and returned `user_confirmation=safe` in Demo v0.2 evidence.
 - Demo v0.3 generated a complete safety record using Demo v0.2 real AMOLED confirmation evidence plus live SIM7670G GNSS AT probe.
 - SIM7670G GNSS AT probe was reachable indoors, selected `COM6`, and produced `fix=false`.
@@ -127,6 +128,25 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   marker. It did not observe a real GNSS fix/fixed-coordinate response, so the
   corrected coordinate parser is not yet hardware-verified. Evidence:
   `reports/firmware_validation/FW-006-20260812-001/`.
+- FW-007 replaced FW-006 once on 2026-08-15 with the opt-in combined
+  LTE-to-Wi-Fi failover image `0.1.0-fw007-lte-wifi-failover`
+  (`fw007-e9ca7a4`; app SHA-256
+  `8F3508C62CA96C54628B3C3FB0A64B5BB14EAF7BBB8188DA54FAEE0739283799`).
+  The COM3 three-region flash was hash-verified without targeting or erasing
+  the NVS partition; normal boot diagnostics retained/updated `boot_count`. The
+  SIM-absent startup reached the configured LTE readiness counter of 120 at
+  about 286 seconds device uptime, changed once from `lte_primary` through
+  `wifi_connecting` to `wifi_active`, connected Wi-Fi in about 4.5 seconds,
+  and registered with Message Hub HTTP 200. VPS evidence then retained fresh
+  Wi-Fi failover heartbeats/location reports and a Wi-Fi `request_location`
+  ACK; bounded post-takeover windows contained no LTE command-poll round,
+  offline transition, panic, brownout, or reset marker. This is a bounded
+  SIM-absent engineering pass only: automatic failback, durable offline
+  queueing, LTE recovery, physical SIM removal after an established LTE
+  session, USB-free endurance, and long-run reliability remain unverified or
+  outside this bounded run. Evidence:
+  `docs/tasks/active/FW-007_LTE_WIFI_FAILOVER.md` and
+  `firmware/mqtt_heartbeat/build_fw007_hw_20260815/`.
 - Camera smoke capture on the SIM7670G board has produced bounded JPEG evidence.
 - R1 connectivity-node firmware `0.1.0-fw001-hw-r1` has passed USB-Free
   Message Hub validation on independent power with USB disconnected:
