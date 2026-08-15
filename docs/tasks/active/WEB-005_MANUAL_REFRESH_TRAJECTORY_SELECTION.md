@@ -63,9 +63,9 @@ provider map and local fallback.
       last-known position semantics remain separate and honest.
 - [x] Only eligible WGS-84 trusted points are selectable or sent to AMap. The
       selection is not stored in localStorage, a URL, logs, or the database.
-- [ ] Focused tests, full repository verification, context lint, Python compile,
-      diff checks, and an authenticated browser interaction check pass before
-      deployment.
+- [x] Focused tests, full repository verification, context lint, Python compile,
+      and diff checks pass before deployment; an authenticated browser
+      interaction check passes immediately after deployment.
 
 # Validation Commands
 
@@ -97,8 +97,33 @@ git diff --check
   blocker.
 - `powershell -ExecutionPolicy Bypass -File scripts/verify.ps1`: 659/659 PASS.
   `python scripts/context_lint.py` and `git diff --check`: PASS.
-- Deployment and authenticated browser interaction evidence remain pending. A
-  first bounded deployment attempt on 2026-08-15 exceeded its outer timeout
-  during an external AMap/HTTP probe and automatically restored the prior code;
-  the live database was not restored or modified. The validated root-only
-  snapshot is `/var/backups/egolink/web005-20260815T085038Z`.
+- Deployment completed on 2026-08-15 from committed source `c2ac2a7`. The
+  production source SHA-256 is
+  `42e7f71432549eba371d434712a97408b1ec46a5e377d849e3463d7f10855f95`.
+  The root-only rollback snapshot is
+  `/var/backups/egolink/web005-retry-20260815T090121Z`; its manifest, code and
+  report archives, SQLite-consistent backup, and `quick_check` passed.
+- The final deployment health gate reached ready in 353 ms. Message Hub and
+  Nginx were active, `NRestarts=0`, the compatibility listener remained on
+  `0.0.0.0:8790`, public health returned 200, unauthenticated state returned
+  401, authenticated state returned 200, and the post-start journal window had
+  no application warning or error. Runtime environment, Nginx, unit content,
+  live database, and reports were preserved.
+- An authenticated Chrome check verified the Chinese Dashboard, visible AMap
+  base map, successful WGS-84 to GCJ-02 conversion, and the 24-point trusted
+  selection. More than seven seconds across two former refresh intervals did
+  not replace the DOM, close an open detail, change the selection, or redraw
+  the map. The explicit refresh action updated state and re-enabled itself.
+- Browser interaction covered zero selected points (no trajectory but the
+  independent last-known marker remained), one point (sample only), all 24
+  points, and removal of a middle point (two visible segments). Switching to a
+  second device and back restored the first device's manual selection; a hard
+  reload reset it to follow-latest, confirming page-memory-only storage. No
+  AMap `TypeError`, provider, proxy, or application console error appeared;
+  unrelated extension message-channel errors were excluded.
+- Four earlier deploy attempts each performed a deploy/rollback pair because
+  the release harness used an unreachable VPS hairpin probe, checked the
+  nonexistent `health.status` field instead of `health.ok`, or required an
+  unavailable `sqlite3` CLI. The final corrected deployment added one start,
+  for nine manual starts in total; automatic restart count remained zero. Each
+  rollback restored code and unit only. The live database was never restored.
