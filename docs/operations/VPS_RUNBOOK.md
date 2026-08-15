@@ -101,6 +101,14 @@ and 443 and proxies only this virtual host to `127.0.0.1:8790`; direct port
 `8790` remains available for current device compatibility. Certificate private
 keys stay under `/etc/letsencrypt` and are never copied into Git or evidence.
 
+The exact AMap coordinate-conversion route disables Nginx access logging on
+both the HTTP redirect and HTTPS proxy virtual hosts. Nginx exact-location
+matching ignores the query string, so the coordinates still reach the same
+redirect/upstream while the request line is not persisted. All other routes
+continue to use normal access logging. Preserve this exact-path boundary when
+editing the virtual host; do not broaden it to `/_AMapService` or the whole
+Dashboard.
+
 ### Preflight And Snapshot
 
 Before changing the VPS, confirm public DNS points only to the intended host,
@@ -156,6 +164,13 @@ install -o root -g root -m 755 \
 nginx -t
 systemctl reload nginx
 ```
+
+For changes to the tracked final virtual host, first stage it outside
+`/etc/nginx`, include it from a temporary minimal Nginx root configuration, and
+run `nginx -t` against that temporary configuration. This validates syntax
+without replacing or reloading the live virtual host. Do not use real
+coordinates as a smoke-test query and do not inspect or copy historical access
+log request lines as part of this check.
 
 This host reuses its existing Certbot account; never place the account contact
 address or account files in the repository. The tracked final virtual host references the

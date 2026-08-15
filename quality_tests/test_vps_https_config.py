@@ -10,6 +10,34 @@ HTTPS_CONFIG = REPO_ROOT / "scripts" / "ops" / "nginx" / "ego.example.invalid.co
 RENEWAL_HOOK = (
     REPO_ROOT / "scripts" / "ops" / "certbot" / "10-egolink-nginx-reload.sh"
 )
+AMAP_COORDINATE_PATH = "/_AMapService/v3/assistant/coordinate/convert"
+
+
+def _location_bodies(config: str, selector: str) -> list[str]:
+    marker = f"location {selector} {{"
+    bodies: list[str] = []
+    cursor = 0
+    while True:
+        start = config.find(marker, cursor)
+        if start < 0:
+            return bodies
+        body_start = start + len(marker)
+        depth = 1
+        position = body_start
+        while position < len(config) and depth:
+            if config[position] == "{":
+                depth += 1
+            elif config[position] == "}":
+                depth -= 1
+            position += 1
+        if depth:
+            raise AssertionError(f"unterminated location block: {selector}")
+        bodies.append(config[body_start : position - 1].strip())
+        cursor = position
+
+
+def _directives(body: str) -> tuple[str, ...]:
+    return tuple(line.strip() for line in body.splitlines() if line.strip())
 
 
 class VpsHttpsConfigTests(unittest.TestCase):
@@ -61,6 +89,56 @@ class VpsHttpsConfigTests(unittest.TestCase):
             "proxy_set_header Upgrade $http_upgrade;",
         ):
             self.assertIn(header, config)
+
+    def test_coordinate_convert_access_log_is_disabled_only_for_exact_path(
+        self,
+    ) -> None:
+        config = HTTPS_CONFIG.read_text(encoding="utf-8")
+        exact_bodies = _location_bodies(config, f"= {AMAP_COORDINATE_PATH}")
+        catch_all_bodies = _location_bodies(config, "/")
+
+        self.assertEqual(len(exact_bodies), 2)
+        self.assertEqual(config.count("access_log off;"), 2)
+        self.assertTrue(all("access_log off;" in body for body in exact_bodies))
+        self.assertEqual(len(catch_all_bodies), 2)
+        self.assertTrue(
+            all("access_log off;" not in body for body in catch_all_bodies)
+        )
+        self.assertNotIn(f"location ^~ {AMAP_COORDINATE_PATH}", config)
+        self.assertNotIn(f"location ~ {AMAP_COORDINATE_PATH}", config)
+
+    def test_coordinate_locations_preserve_redirect_and_proxy_behavior(
+        self,
+    ) -> None:
+        config = HTTPS_CONFIG.read_text(encoding="utf-8")
+        exact_bodies = _location_bodies(config, f"= {AMAP_COORDINATE_PATH}")
+        catch_all_bodies = _location_bodies(config, "/")
+
+        exact_redirect = next(body for body in exact_bodies if "return 301" in body)
+        normal_redirect = next(
+            body for body in catch_all_bodies if "return 301" in body
+        )
+        exact_proxy = next(body for body in exact_bodies if "proxy_pass" in body)
+        normal_proxy = next(body for body in catch_all_bodies if "proxy_pass" in body)
+
+        self.assertEqual(
+            tuple(
+                directive
+                for directive in _directives(exact_redirect)
+                if directive != "access_log off;"
+            ),
+            _directives(normal_redirect),
+        )
+        self.assertEqual(
+            tuple(
+                directive
+                for directive in _directives(exact_proxy)
+                if directive != "access_log off;"
+            ),
+            _directives(normal_proxy),
+        )
+        self.assertIn("https://ego.example.invalid$request_uri", exact_redirect)
+        self.assertIn("proxy_pass http://127.0.0.1:8790;", exact_proxy)
 
     def test_configs_contain_no_runtime_credentials(self) -> None:
         combined = BOOTSTRAP_CONFIG.read_text(encoding="utf-8") + HTTPS_CONFIG.read_text(
