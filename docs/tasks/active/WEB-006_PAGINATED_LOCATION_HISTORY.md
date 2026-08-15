@@ -1,0 +1,134 @@
+---
+id: WEB-006
+title: Paginated searchable all-location history
+status: active
+priority: high
+requires_hardware: false
+serves_demo: D2-D5
+created: 2026-08-15
+last_updated: 2026-08-15
+
+context:
+  - docs/AGENTS.md
+  - docs/CONTEXT_INDEX.md
+  - docs/product/NORTH_STAR.md
+  - docs/product/EGO_MASTER_CONTEXT.md
+  - docs/product/PRODUCT_CHARTER.md
+  - docs/product/P0_SCOPE.md
+  - docs/current/STATUS.md
+  - docs/current/ACTIVE_BUILD.md
+  - docs/development/DEV_FLOW.md
+  - docs/development/DIRECTOR_WORKFLOW.md
+  - docs/tasks/active/WEB-004_AMAP_LIVE_LOCATION_MAP.md
+  - docs/tasks/active/WEB-005_MANUAL_REFRESH_TRAJECTORY_SELECTION.md
+  - server/message_hub.py
+  - quality_tests/AGENTS.md
+  - quality_tests/test_message_hub_dashboard.py
+  - quality_tests/test_message_hub_server.py
+
+allowed_paths:
+  - docs/tasks/active/WEB-006_PAGINATED_LOCATION_HISTORY.md
+  - server/message_hub.py
+  - quality_tests/test_message_hub_dashboard.py
+  - quality_tests/test_message_hub_server.py
+
+out_of_scope:
+  - firmware, hardware control, device commands, or data collection
+  - Message Hub ingest protocol, authentication, retention, or existing data mutation
+  - arbitrary payload/full-text search, coordinate search, route inference, or geofencing
+  - storing selections, filters, coordinates, tokens, private device data, or runtime logs in Git
+  - DNS, TLS, Nginx, ports, deployment, or database restoration
+---
+
+# Goal
+
+Let an authenticated operator browse every stored location report and location
+observation for the selected device through bounded pagination and safe
+metadata filters. All matching records remain visible, while only trusted
+WGS-84 fixes can be selected across pages and drawn chronologically alongside
+the existing 24-point quick view.
+
+# Public Contract And Privacy Boundary
+
+- Add authenticated read-only
+  `POST /api/v1/devices/{device_id}/locations/search`. Its JSON body accepts
+  only a bounded page size, an opaque continuation cursor, optional inclusive
+  server-received time bounds, optional exact sequence number, and fixed
+  event-type/trust enums. Coordinates and arbitrary search strings are rejected.
+- Results list every matching stored location report/observation in the frozen
+  snapshot. Only AMap-eligible WGS-84 points already accepted by the corrected-
+  firmware trust rule contain coordinates and are selectable. Raw payloads,
+  tokens, Wi-Fi/cell identifiers, and unrelated messages are never returned.
+- The exact `0.1.0-fw007-lte-wifi-failover` image identifier joins the existing
+  corrected-parser allowlist because FW-007 inherits that parser in the same
+  tested source slice. This is not a prefix/version-range relaxation and does
+  not claim GNSS accuracy or product acceptance. FW-007's separate bounded
+  SIM-absent Wi-Fi failover pass does not itself validate its coordinates.
+- Keyset pagination is newest-first, deterministic by database message ID, and
+  capped at 100 returned records, 2,000 inspected location rows, and a bounded
+  8 MB stored-payload byte inspection budget per request. A single stored
+  payload above 64 KiB is not loaded into application memory or echoed; its row
+  remains reachable as bounded, unselectable metadata.
+  The first request freezes a per-device maximum-message snapshot anchor;
+  continuation cursors carry that anchor and advance past every inspected row,
+  so concurrent ingest cannot duplicate or skip older results. Sparse matches
+  remain traversable without an unbounded request. `exhausted=true` is the only
+  end-of-history signal; a short or empty page alone is not.
+- Search and pagination values travel in the authenticated JSON body, not in a
+  URL. Neither the API nor the Dashboard writes coordinates, filters, cursors,
+  or selected points to logs, URLs, localStorage, or the database.
+
+# Acceptance Criteria
+
+- [x] The history API rejects unauthenticated calls, unknown devices, unknown
+      fields, invalid cursors/times/enums, coordinate-like search fields, and
+      page sizes outside 1-100.
+- [x] Every stored location report/observation matching the declared metadata
+      filters is reachable exactly once by following `next_cursor`; ordering is
+      stable across equal timestamps, and sparse matches cannot terminate
+      traversal early. Old-firmware, no-fix, and observation rows expose only
+      bounded safe metadata and never coordinates or an enabled checkbox.
+- [x] The Chinese Dashboard keeps the existing bounded 24-point quick selector
+      and adds an explicit full-history browser with time/sequence/type search,
+      next/previous page controls, loading/empty/error/exhausted states, and no
+      recurring refresh.
+- [x] Selections survive next/previous/search navigation in page memory and are
+      isolated per device. Search changes clear page navigation but do not
+      silently discard already selected points; an explicit clear action does.
+- [x] Selected history points and quick-view points are de-duplicated, sorted
+      by trusted server time, and rendered with the existing current/last-known
+      marker distinction and ten-minute trajectory-gap rule. No route or
+      accuracy claim is introduced. A page may return at most 100 records, one
+      AMap conversion request contains at most 40 points, and the UI explicitly
+      enforces/displays both a 200-unique-history-record selection limit and a
+      200-point merged map render limit.
+- [x] Focused Dashboard/server tests, Python compile, full verification,
+      context lint, and diff checks pass. Deployment and browser validation are
+      left to a separate release step.
+
+# Validation Commands
+
+```powershell
+python -m unittest quality_tests.test_message_hub_dashboard quality_tests.test_message_hub_server -v
+python -m py_compile server\message_hub.py
+powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
+python scripts/context_lint.py
+git diff --check
+```
+
+# Completion Evidence
+
+- Builder implementation is present in the working tree only; it was not
+  committed or deployed from this task.
+- `python -m unittest quality_tests.test_message_hub_dashboard quality_tests.test_message_hub_server -q`:
+  PASS, 113 tests.
+- `python -m py_compile server\message_hub.py`: PASS.
+- `powershell -ExecutionPolicy Bypass -File scripts\verify.ps1`: PASS, 672 tests.
+- `python scripts/context_lint.py`: PASS.
+- `git diff --check`: PASS; Git emitted only an unrelated shared-worktree
+  line-ending warning for `scripts/ops/nginx/ego.example.invalid.conf`.
+- The security review findings were addressed iteratively. Final release and
+  live-browser/deployment review remain separate from this builder task.
+
+Do not move this task to done or update `docs/current/STATUS.md` from the
+builder role.
