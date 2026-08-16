@@ -109,6 +109,7 @@
       "required": [
         "source_contract_version",
         "test_run_id",
+        "device_boot_count",
         "sample_count_per_window",
         "requested_interval_us",
         "current_capture_rate_hz",
@@ -119,6 +120,7 @@
       "properties": {
         "source_contract_version": { "const": "egolink.imu_window.v1" },
         "test_run_id": { "$ref": "#/$defs/safeId" },
+        "device_boot_count": { "$ref": "#/$defs/bootCount" },
         "sample_count_per_window": { "const": 100 },
         "requested_interval_us": { "const": 50000 },
         "current_capture_rate_hz": { "const": 20.0 },
@@ -166,6 +168,7 @@
         "all_windows_cadence_qualified",
         "all_windows_static",
         "all_face_labels_verified",
+        "all_windows_gyro_consistent",
         "thresholds"
       ],
       "properties": {
@@ -174,6 +177,7 @@
         "all_windows_cadence_qualified": { "const": true },
         "all_windows_static": { "const": true },
         "all_face_labels_verified": { "const": true },
+        "all_windows_gyro_consistent": { "const": true },
         "thresholds": {
           "type": "object",
           "additionalProperties": false,
@@ -184,6 +188,7 @@
             "max_face_off_axis_mean_mg",
             "max_static_gyro_mean_mdps",
             "max_static_gyro_stddev_mdps",
+            "max_cross_window_gyro_delta_mdps",
             "sensitivity_mg_per_g",
             "max_accel_bias_mg",
             "max_primary_residual_mg",
@@ -196,6 +201,7 @@
             "max_face_off_axis_mean_mg": { "type": "number", "minimum": 0 },
             "max_static_gyro_mean_mdps": { "type": "number", "minimum": 0 },
             "max_static_gyro_stddev_mdps": { "type": "number", "minimum": 0 },
+            "max_cross_window_gyro_delta_mdps": { "type": "number", "minimum": 0 },
             "sensitivity_mg_per_g": { "$ref": "#/$defs/pair" },
             "max_accel_bias_mg": { "type": "number", "minimum": 0 },
             "max_primary_residual_mg": { "type": "number", "minimum": 0 },
@@ -225,6 +231,7 @@
   "$defs": {
     "safeId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,96}$" },
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "bootCount": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
     "triple": {
       "type": "array",
       "minItems": 3,
@@ -250,6 +257,28 @@
         "z_negative": { "$ref": "#/$defs/triple" }
       }
     },
+    "roleMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x_positive",
+        "x_negative",
+        "y_positive",
+        "y_negative",
+        "z_positive",
+        "z_negative",
+        "gyro_stationary"
+      ],
+      "properties": {
+        "x_positive": { "$ref": "#/$defs/triple" },
+        "x_negative": { "$ref": "#/$defs/triple" },
+        "y_positive": { "$ref": "#/$defs/triple" },
+        "y_negative": { "$ref": "#/$defs/triple" },
+        "z_positive": { "$ref": "#/$defs/triple" },
+        "z_negative": { "$ref": "#/$defs/triple" },
+        "gyro_stationary": { "$ref": "#/$defs/triple" }
+      }
+    },
     "sourceWindow": {
       "type": "object",
       "additionalProperties": false,
@@ -257,6 +286,7 @@
         "role",
         "window_id",
         "capture_cmd_id",
+        "boot_count",
         "test_run_id",
         "transport_type",
         "samples_sha256",
@@ -269,6 +299,7 @@
         },
         "window_id": { "$ref": "#/$defs/safeId" },
         "capture_cmd_id": { "$ref": "#/$defs/safeId" },
+        "boot_count": { "$ref": "#/$defs/bootCount" },
         "test_run_id": { "$ref": "#/$defs/safeId" },
         "transport_type": { "enum": ["lte", "wifi"] },
         "samples_sha256": { "$ref": "#/$defs/sha256" },
@@ -337,14 +368,25 @@
     "gyroscope": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["method", "axis_order", "bias_mdps_xyz", "stddev_mdps_xyz", "source_window_id", "sample_count"],
+      "required": [
+        "method",
+        "axis_order",
+        "bias_mdps_xyz",
+        "stddev_mdps_xyz",
+        "source_window_id",
+        "sample_count",
+        "window_mean_mdps",
+        "max_abs_cross_window_delta_mdps"
+      ],
       "properties": {
         "method": { "const": "signed_stationary_mean_bias_v0.1" },
         "axis_order": { "const": ["x", "y", "z"] },
         "bias_mdps_xyz": { "$ref": "#/$defs/triple" },
         "stddev_mdps_xyz": { "$ref": "#/$defs/triple" },
         "source_window_id": { "$ref": "#/$defs/safeId" },
-        "sample_count": { "const": 100 }
+        "sample_count": { "const": 100 },
+        "window_mean_mdps": { "$ref": "#/$defs/roleMap" },
+        "max_abs_cross_window_delta_mdps": { "type": "number", "minimum": 0 }
       }
     }
   }

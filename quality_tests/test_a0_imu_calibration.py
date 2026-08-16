@@ -12,6 +12,9 @@ import unittest
 from jsonschema import Draft202012Validator
 
 from pc_simulator import imu_six_face_calibration as calibration
+from quality_tests import test_imu_window_export as window_export
+from scripts import export_imu_windows
+from server import message_hub
 
 
 ROLE_BASE_ACCEL = {
@@ -24,6 +27,16 @@ ROLE_BASE_ACCEL = {
     "gyro_stationary": [50, -30, 1025],
 }
 GYRO_BIAS = [120, -250, 75]
+BOOT_COUNT = 7
+
+
+def fixture_capture_cmd_id(role_index: int) -> str:
+    return f"cmd-a0001-{role_index:02d}"
+
+
+def fixture_window_id(role_index: int, *, boot_count: int = BOOT_COUNT) -> str:
+    """Mirror the wire contract: window_id == imuw-<capture_cmd_id>-b<boot_count>."""
+    return f"imuw-{fixture_capture_cmd_id(role_index)}-b{boot_count}"
 
 
 def fixture_metadata() -> dict:
@@ -50,7 +63,7 @@ def fixture_metadata() -> dict:
         "calibration_software_commit": "3" * 40,
         "temperature_status": "unavailable_in_imu_window_v1",
         "source_windows": {
-            role: f"imuw-a0001-{index:02d}" for index, role in enumerate(calibration.SOURCE_ROLES)
+            role: fixture_window_id(index) for index, role in enumerate(calibration.SOURCE_ROLES)
         },
     }
 
@@ -89,7 +102,8 @@ def fixture_rows(metadata: dict) -> list[dict]:
             {
                 "contract_version": calibration.SOURCE_CONTRACT_VERSION,
                 "window_id": metadata["source_windows"][role],
-                "capture_cmd_id": f"cmd-a0001-{role_index:02d}",
+                "capture_cmd_id": fixture_capture_cmd_id(role_index),
+                "boot_count": BOOT_COUNT,
                 "device_id": metadata["device_id"],
                 "fw_version": metadata["firmware"]["fw_version"],
                 "test_run_id": metadata["test_run_id"],
@@ -276,6 +290,74 @@ class A0ImuCalibrationTests(unittest.TestCase):
         with self.assertRaisesRegex(calibration.ImuCalibrationError, "calibration_time_source"):
             calibration.build_calibration_outputs(metadata, self.rows)
 
+    def test_rotating_stationary_window_is_rejected_instead_of_becoming_gyro_bias(self) -> None:
+        rows = copy.deepcopy(self.rows)
+        gyro_window_id = self.metadata["source_windows"]["gyro_stationary"]
+        for row in rows:
+            if row["window_id"] != gyro_window_id:
+                continue
+            for sample in row["samples"]:
+                sample["gyro_mdps"][2] += 15_000
+            row["samples_sha256"] = hashlib.sha256(
+                calibration.encode_source_samples(row["samples"], window_id=row["window_id"])
+            ).hexdigest()
+        with self.assertRaisesRegex(calibration.ImuCalibrationError, "at least one window was rotating"):
+            calibration.build_calibration_outputs(self.metadata, rows)
+
+    def test_rotating_face_window_is_rejected_by_cross_window_gyro_agreement(self) -> None:
+        rows = copy.deepcopy(self.rows)
+        face_window_id = self.metadata["source_windows"]["y_negative"]
+        for row in rows:
+            if row["window_id"] != face_window_id:
+                continue
+            for sample in row["samples"]:
+                sample["gyro_mdps"][0] -= 9_000
+            row["samples_sha256"] = hashlib.sha256(
+                calibration.encode_source_samples(row["samples"], window_id=row["window_id"])
+            ).hexdigest()
+        with self.assertRaisesRegex(calibration.ImuCalibrationError, "at least one window was rotating"):
+            calibration.build_calibration_outputs(self.metadata, rows)
+
+    def test_gyro_agreement_is_recorded_for_every_window(self) -> None:
+        artifact, _windows, _jsonl, report = self.build()
+        gyroscope = artifact["gyroscope"]
+        self.assertEqual(set(gyroscope["window_mean_mdps"]), set(calibration.SOURCE_ROLES))
+        self.assertEqual(gyroscope["max_abs_cross_window_delta_mdps"], 0.0)
+        self.assertTrue(artifact["quality"]["all_windows_gyro_consistent"])
+        self.assertIn("Fit Diagnostics (Not Accuracy)", report)
+        self.assertIn("not independent accuracy", report)
+
+    def test_windows_from_more_than_one_boot_fail_closed(self) -> None:
+        metadata = copy.deepcopy(self.metadata)
+        rows = copy.deepcopy(self.rows)
+        other_boot = BOOT_COUNT + 1
+        for role_index, role in enumerate(calibration.SOURCE_ROLES):
+            if role_index < 4:
+                continue
+            rows[role_index]["boot_count"] = other_boot
+            rows[role_index]["window_id"] = fixture_window_id(role_index, boot_count=other_boot)
+            metadata["source_windows"][role] = rows[role_index]["window_id"]
+        with self.assertRaisesRegex(calibration.ImuCalibrationError, "must share one device boot"):
+            calibration.build_calibration_outputs(metadata, rows)
+
+    def test_window_id_must_derive_from_capture_cmd_id_and_boot_count(self) -> None:
+        rows = copy.deepcopy(self.rows)
+        rows[0]["boot_count"] = BOOT_COUNT + 3
+        with self.assertRaisesRegex(calibration.ImuCalibrationError, "not derived from its own"):
+            calibration.build_calibration_outputs(self.metadata, rows)
+
+    def test_unfilled_placeholder_provenance_fails_closed(self) -> None:
+        for field in ("firmware_commit", "firmware_image_sha256"):
+            metadata = copy.deepcopy(self.metadata)
+            metadata["firmware"][field] = "0" * len(metadata["firmware"][field])
+            with self.subTest(field=field):
+                with self.assertRaisesRegex(calibration.ImuCalibrationError, "all-zero placeholder"):
+                    calibration.build_calibration_outputs(metadata, self.rows)
+        metadata = copy.deepcopy(self.metadata)
+        metadata["calibration_software_commit"] = "0" * 40
+        with self.assertRaisesRegex(calibration.ImuCalibrationError, "all-zero placeholder"):
+            calibration.build_calibration_outputs(metadata, self.rows)
+
     def test_standard_command_preserves_source_bytes_and_hash(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir_raw:
             temp_dir = Path(temp_dir_raw)
@@ -327,6 +409,134 @@ class A0ImuCalibrationTests(unittest.TestCase):
             self.assertEqual(
                 materialized[0]["samples"][0]["uncalibrated"]["accel_mg"],
                 self.rows[0]["samples"][0]["accel_mg"],
+            )
+
+
+EXPORT_POSE_ACCEL = {
+    "x_positive": [1005, 12, -8],
+    "x_negative": [-995, 12, -8],
+    "y_positive": [5, 1010, -8],
+    "y_negative": [5, -990, -8],
+    "z_positive": [5, 12, 1002],
+    "z_negative": [5, 12, -998],
+    "gyro_stationary": [5, 12, 1002],
+}
+EXPORT_GYRO_BIAS = [40, -60, 25]
+EXPORT_BOOT_COUNT = 7
+
+
+def export_pose_sample_bytes(role: str, role_index: int) -> bytes:
+    base = EXPORT_POSE_ACCEL[role]
+    payload = bytearray()
+    for index in range(message_hub.IMU_WINDOW_SAMPLE_COUNT):
+        accel = [base[axis] + ((index + role_index + axis) % 3) - 1 for axis in range(3)]
+        gyro = [EXPORT_GYRO_BIAS[axis] + ((index + role_index + axis) % 3) - 1 for axis in range(3)]
+        payload.extend((1000 + index * message_hub.IMU_WINDOW_INTERVAL_US).to_bytes(4, "little"))
+        for value in [*accel, *gyro]:
+            payload.extend(int(value).to_bytes(4, "little", signed=True))
+    return bytes(payload)
+
+
+class A0ImuCalibrationExporterCompatibilityTests(unittest.TestCase):
+    """The calibration tool must consume genuine scripts/export_imu_windows.py output."""
+
+    def ingest_pose(self, store, role: str, role_index: int) -> str:
+        cmd_id = f"cmd-pose-{role_index}"
+        store.create_command(
+            window_export.DEVICE_ID,
+            {
+                "cmd": "capture_imu_window",
+                "cmd_id": cmd_id,
+                "test_run_id": window_export.TEST_RUN_ID,
+                "payload": {"sample_count": 100, "interval_ms": 50},
+            },
+        )
+        samples = export_pose_sample_bytes(role, role_index)
+        for index in range(message_hub.IMU_WINDOW_CHUNK_COUNT):
+            frame = message_hub.build_raw_frame(
+                "event",
+                f"imu-{cmd_id}-b{EXPORT_BOOT_COUNT}-c{index:02d}",
+                window_export.chunk_payload(
+                    index, samples, cmd_id=cmd_id, boot_count=EXPORT_BOOT_COUNT
+                ),
+                seq=index + 1,
+            )
+            record = store.ingest_raw_frame(window_export.DEVICE_ID, frame)
+            self.assertEqual(record["parse_result"]["status"], "ok", record["parse_result"])
+        manifest_frame = message_hub.build_raw_frame(
+            "event",
+            f"imu-{cmd_id}-b{EXPORT_BOOT_COUNT}-manifest",
+            window_export.manifest_payload(samples, cmd_id=cmd_id, boot_count=EXPORT_BOOT_COUNT),
+            seq=message_hub.IMU_WINDOW_CHUNK_COUNT + 1,
+        )
+        record = store.ingest_raw_frame(window_export.DEVICE_ID, manifest_frame)
+        self.assertEqual(record["parse_result"]["status"], "ok", record["parse_result"])
+        return f"imuw-{cmd_id}-b{EXPORT_BOOT_COUNT}"
+
+    def test_real_export_output_is_accepted_and_bound_without_reshaping(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir_raw:
+            temp_dir = Path(temp_dir_raw)
+            db_path = temp_dir / "hub.db"
+            store = message_hub.MessageHubStore(db_path)
+            store.create_test_run({"test_run_id": window_export.TEST_RUN_ID})
+            source_windows = {
+                role: self.ingest_pose(store, role, role_index)
+                for role_index, role in enumerate(calibration.SOURCE_ROLES)
+            }
+            export_result = export_imu_windows.export_imu_windows(
+                db_path,
+                temp_dir / "export",
+                device_id=window_export.DEVICE_ID,
+                test_run_id=window_export.TEST_RUN_ID,
+            )
+            self.assertTrue(export_result["ok"], export_result["invalid"])
+            self.assertEqual(export_result["summary"]["valid_windows"], 7)
+
+            jsonl_path = temp_dir / "export" / "imu_windows.jsonl"
+            metadata = fixture_metadata()
+            metadata.update(
+                calibration_run_id="A0-001-EXPORT-COMPAT-001",
+                device_id=window_export.DEVICE_ID,
+                test_run_id=window_export.TEST_RUN_ID,
+                source_windows=source_windows,
+            )
+            metadata["firmware"]["fw_version"] = "0.1.0-imu-unit"
+
+            windows = calibration.load_export_windows([jsonl_path])
+            artifact, calibrated, _jsonl, _report = calibration.build_calibration_outputs(
+                metadata, windows
+            )
+            # The exported window carries fields the calibration tool does not consume; it
+            # must neither require them to be stripped nor silently drop what it does bind.
+            exported = {
+                row["window_id"]: row
+                for row in (
+                    json.loads(line)
+                    for line in jsonl_path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                )
+            }
+
+        self.assertEqual(len(calibrated), 7)
+        self.assertEqual(
+            {row["boot_count"] for row in artifact["source_windows"]}, {EXPORT_BOOT_COUNT}
+        )
+        self.assertEqual(artifact["capture_profile"]["device_boot_count"], EXPORT_BOOT_COUNT)
+        self.assertFalse(artifact["production_ready"])
+        self.assertFalse(artifact["training_allowed"])
+        for row in artifact["source_windows"]:
+            self.assertEqual(
+                row["window_id"], f"imuw-{row['capture_cmd_id']}-b{row['boot_count']}"
+            )
+        by_role = {window["role"]: window for window in calibrated}
+        for role, window_id in source_windows.items():
+            self.assertEqual(
+                [sample["uncalibrated"]["accel_mg"] for sample in by_role[role]["samples"]],
+                [sample["accel_mg"] for sample in exported[window_id]["samples"]],
+            )
+            self.assertEqual(
+                by_role[role]["source_window"]["samples_sha256"],
+                exported[window_id]["samples_sha256"],
             )
 
 

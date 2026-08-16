@@ -53,6 +53,11 @@ gyro_stationary
 每个窗口必须 real/non-mock、cadence-qualified、静止，并通过 sample hash、姿态
 主轴/符号和固定来源检查。
 
+七个窗口必须来自**同一次开机**：`boot_count` 必须一致，且每个 `window_id`
+必须满足 wire 合同的推导式 `imuw-<capture_cmd_id>-b<boot_count>`。跨 boot 意味着
+传感器被重新初始化、monotonic uptime 基准也已重置，这样的组合不构成一次
+连贯校准，工具直接 fail closed，要求在一次开机内重采七个姿态。
+
 真实采集属于 task packet 的后续 hardware phase：每次由 operator 摆放并确认
 姿态，稳定后才允许创建一个有界命令。静态实现阶段不得 flash、创建 VPS 命令
 或操作设备。
@@ -80,10 +85,10 @@ gyro_stationary
   "test_run_id": "A0-001-REAL-YYYYMMDD-001",
   "firmware": {
     "fw_version": "record-the-observed-runtime-version",
-    "firmware_commit": "0000000000000000000000000000000000000000",
-    "firmware_image_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    "firmware_commit": "<40-or-64-hex-of-the-flashed-source-commit>",
+    "firmware_image_sha256": "<64-hex-of-the-executed-image>"
   },
-  "calibration_software_commit": "0000000000000000000000000000000000000000",
+  "calibration_software_commit": "<40-or-64-hex-of-this-repo-commit>",
   "temperature_status": "unavailable_in_imu_window_v1",
   "source_windows": {
     "x_positive": "imuw-a0001xp-b1",
@@ -97,9 +102,11 @@ gyro_stationary
 }
 ```
 
-占位 hash 只能用于 synthetic/local format exercise，不能作为硬件证据。真实
-artifact 必须记录实际 source commit、被执行 image 的 SHA-256 和 calibration
-software commit；`fw_version` 本身不能替代这些值。
+真实 artifact 必须记录实际 source commit、被执行 image 的 SHA-256 和 calibration
+software commit；`fw_version` 本身不能替代这些值。全零 hash 是"未填写"的典型
+形态，工具直接拒绝 `firmware_commit`、`firmware_image_sha256` 和
+`calibration_software_commit` 的全零值——否则照抄模板未改就会生成一个看起来
+已绑定固件、实际什么都没绑定的 artifact。
 
 `calibration_time_utc` 是校准作业的 provenance，不是 sample UTC。metadata 必须用
 `calibration_time_source` 声明它来自 `operator_provided_utc` 或
@@ -141,6 +148,13 @@ gyro_bias_i        = mean(signed stationary gyro_i)
 gyro_cal_i         = gyro_uncal_i - gyro_bias_i
 ```
 
+七个姿态全部是静止采集，因此六个 face window 的 gyro 均值是同一个 zero-rate
+offset 的独立观测。工具要求 `gyro_stationary` 估计出的 bias 与全部七个窗口的
+gyro 均值逐轴一致（`max_cross_window_gyro_delta_mdps`），并把每个窗口的
+`window_mean_mdps` 写进 artifact。单窗口静止阈值本身很宽，一个缓慢匀速转动的
+窗口可以单独通过它，但会在这一步暴露——这是防止"真实转动被记成 gyro bias"的
+关键闸门，而不是靠单窗口阈值。
+
 SI 派生使用标准重力 `9.80665 m/s²` 和 degree-to-radian 换算。artifact 同时记录
 bias、sensitivity、correction gain、calibrated face residual、signed gyro bias、
 质量门和来源 hashes。
@@ -172,7 +186,14 @@ sorted compact canonical JSON 计算。同一份 metadata 和相同 input bytes 
 ID、artifact hash 与 calibrated JSONL。
 
 六面 `primary_axis_mg` / `off_axis_mg` residual 是同一组六面数据的拟合内诊断，只用于
-fail-closed sanity check，不是独立 holdout 精度、重复性或产品标定精度证据。
+fail-closed sanity check，不是独立 holdout 精度、重复性或产品标定精度证据。生成的
+`imu_calibration_report.md` 现在直接打印这些 residual 和 gyro 跨窗口偏差，并在同一节
+写明它们不是精度——避免读者把"residual 很小"读成"传感器很准"。
+
+一个有用的实测边界：`off_axis` residual 闸门同时限制了整体夹具倾斜带来的系统性
+scale 误差。若整套夹具相对重力一致倾斜 θ，倾斜会在 residual 中显现，θ ≳ 9° 时被
+拒绝，因此能通过闸门的最坏情况 sensitivity 误差约 1.1%。这是闸门的约束力，不是
+对该器件精度的测量结论。
 
 所有输出固定：
 
@@ -191,14 +212,17 @@ sample_utc = unavailable_pending_A0-002
 
 - 缺少、额外或重复 role/window/cmd/sample hash；
 - sample content 与 v1 28-byte reconstruction hash 不一致；
+- `window_id` 与自身 `capture_cmd_id`/`boot_count` 推导式不一致；
+- 七个窗口 `boot_count` 不一致（跨开机拼装）；
 - device、test run、firmware、sensor、I2C address 或 units 不一致；
 - mock、非 observed、training-enabled 或非 monotonic-only 来源；
 - sample count、offset、capture bounds、cadence metadata 不一致；
 - cadence 不满足当前 20 Hz engineering qualification；
 - 静止稳定性失败；
+- `gyro_stationary` bias 与其余窗口 gyro 均值跨窗口不一致（有窗口在转动）；
 - face dominant axis/sign 与 label 不一致；
 - bias、sensitivity 或校准后 face residual 超出明示阈值；
-- metadata commit/image hash、UTC 或 provenance 缺失；
+- metadata commit/image hash、UTC 或 provenance 缺失或为全零占位；
 - output schema 不通过。
 
 Synthetic fixture 仅保护算法和合同，永远不能成为 A0-001 Gate evidence。

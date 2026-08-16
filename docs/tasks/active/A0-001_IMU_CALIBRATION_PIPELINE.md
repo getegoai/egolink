@@ -119,10 +119,18 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 - Documentation: `docs/development/IMU_CALIBRATION.md`, ADR-0009 and the
   control-contract index entries
 - Focused test: `python -m unittest quality_tests.test_a0_imu_calibration -v`
-  passed 11/11 on 2026-08-16
+  passed 11/11 on 2026-08-16 and 18/18 after the 2026-08-16 review
 - Repository validation: `python scripts/context_lint.py` passed and
   `scripts/verify.ps1` passed 683/683 on 2026-08-16
+- Independent review 2026-08-16 closed four fail-open gaps found in `c779881`:
+  a rotating window was accepted and recorded as gyro bias, `boot_count` was
+  exported but never bound, `window_id` was not checked against its own
+  `capture_cmd_id`/`boot_count` derivation, and all-zero placeholder firmware
+  and software hashes were accepted. Real `scripts/export_imu_windows.py`
+  output is now exercised end to end rather than only a hand-shaped fixture.
 - Hardware result: pending; no capture, flash or device command was performed,
   so A0-001 remains active and A-R0 remains `0/8`
 - Remaining risks: raw ADC counts, temperature, final mounting, independent
-  repeatability, temperature drift and production calibration are unavailable
+  repeatability, temperature drift and production calibration are unavailable.
+  The six-face residuals stay fit-internal, so they bound fixture tilt (about
+  1.1% worst-case sensitivity error at the gate) but never measure accuracy.

@@ -55,6 +55,7 @@ MIN_FACE_DOMINANT_MG = 700.0
 MAX_FACE_OFF_AXIS_MEAN_MG = 300.0
 MAX_STATIC_GYRO_MEAN_MDPS = 20_000.0
 MAX_STATIC_GYRO_STDDEV_MDPS = 5_000.0
+MAX_CROSS_WINDOW_GYRO_DELTA_MDPS = 2_000.0
 MIN_SENSITIVITY_MG_PER_G = 700.0
 MAX_SENSITIVITY_MG_PER_G = 1300.0
 MAX_ACCEL_BIAS_MG = 300.0
@@ -120,6 +121,15 @@ def _utc_timestamp(value: Any, name: str) -> str:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ImuCalibrationError(f"{name} must include an explicit timezone")
     return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _recorded_hash(value: str, name: str) -> str:
+    """Reject the all-zero placeholder so unfilled provenance cannot look bound."""
+    if set(value) == {"0"}:
+        raise ImuCalibrationError(
+            f"{name} is an unfilled all-zero placeholder; record the real value before generating an artifact"
+        )
+    return value
 
 
 def normalize_metadata(value: dict[str, Any]) -> dict[str, Any]:
@@ -208,20 +218,29 @@ def normalize_metadata(value: dict[str, Any]) -> dict[str, Any]:
         "test_run_id": _text(metadata["test_run_id"], "metadata.test_run_id", pattern=SAFE_ID_RE),
         "firmware": {
             "fw_version": _text(firmware["fw_version"], "metadata.firmware.fw_version"),
-            "firmware_commit": _text(
-                firmware["firmware_commit"], "metadata.firmware.firmware_commit", pattern=GIT_COMMIT_RE
-            ).lower(),
-            "firmware_image_sha256": _text(
-                firmware["firmware_image_sha256"],
+            "firmware_commit": _recorded_hash(
+                _text(
+                    firmware["firmware_commit"], "metadata.firmware.firmware_commit", pattern=GIT_COMMIT_RE
+                ).lower(),
+                "metadata.firmware.firmware_commit",
+            ),
+            "firmware_image_sha256": _recorded_hash(
+                _text(
+                    firmware["firmware_image_sha256"],
+                    "metadata.firmware.firmware_image_sha256",
+                    pattern=SHA256_RE,
+                ).lower(),
                 "metadata.firmware.firmware_image_sha256",
-                pattern=SHA256_RE,
-            ).lower(),
+            ),
         },
-        "calibration_software_commit": _text(
-            metadata["calibration_software_commit"],
+        "calibration_software_commit": _recorded_hash(
+            _text(
+                metadata["calibration_software_commit"],
+                "metadata.calibration_software_commit",
+                pattern=GIT_COMMIT_RE,
+            ).lower(),
             "metadata.calibration_software_commit",
-            pattern=GIT_COMMIT_RE,
-        ).lower(),
+        ),
         "temperature_status": temperature_status,
         "source_windows": normalized_windows,
     }
@@ -347,6 +366,12 @@ def _validate_source_window(row: dict[str, Any], metadata: dict[str, Any], role:
     window_id = _text(row.get("window_id"), f"{role}.window_id", pattern=SAFE_ID_RE)
     if window_id != metadata["source_windows"][role]:
         raise ImuCalibrationError(f"{role} window_id does not match metadata")
+    capture_cmd_id = _text(row.get("capture_cmd_id"), f"{role}.capture_cmd_id", pattern=SAFE_ID_RE)
+    boot_count = _int(row.get("boot_count"), f"{role}.boot_count", minimum=1, maximum=2**32 - 1)
+    if window_id != f"imuw-{capture_cmd_id}-b{boot_count}":
+        raise ImuCalibrationError(
+            f"{role} window_id is not derived from its own capture_cmd_id and boot_count"
+        )
     if row.get("contract_version") != SOURCE_CONTRACT_VERSION:
         raise ImuCalibrationError(f"{role} is not an {SOURCE_CONTRACT_VERSION} window")
     if row.get("source") != "qmi8658_i2c" or row.get("source_status") != "observed":
@@ -424,7 +449,8 @@ def _validate_source_window(row: dict[str, Any], metadata: dict[str, Any], role:
     return {
         "role": role,
         "window_id": window_id,
-        "capture_cmd_id": _text(row.get("capture_cmd_id"), f"{role}.capture_cmd_id", pattern=SAFE_ID_RE),
+        "capture_cmd_id": capture_cmd_id,
+        "boot_count": boot_count,
         "test_run_id": row["test_run_id"],
         "transport_type": _text(row.get("transport_type"), f"{role}.transport_type"),
         "samples_sha256": declared_hash,
@@ -490,6 +516,24 @@ def _build_estimates(windows: dict[str, dict[str, Any]]) -> tuple[dict[str, Any]
     gyro_bias = [_round(value) for value in gyro_window["statistics"]["gyro_mean_mdps"]]
     gyro_stddev = [_round(value) for value in gyro_window["statistics"]["gyro_stddev_mdps"]]
 
+    # Every one of the seven poses is captured stationary, so the six face windows are
+    # independent observations of the same zero-rate offset. A window that was actually
+    # rotating passes the per-window stationary bound on its own but disagrees here, so
+    # this is what stops real rotation from being recorded as gyro bias.
+    window_gyro_means = {
+        role: [_round(value) for value in windows[role]["statistics"]["gyro_mean_mdps"]]
+        for role in SOURCE_ROLES
+    }
+    max_cross_window_delta = max(
+        abs(means[axis_index] - gyro_bias[axis_index])
+        for means in window_gyro_means.values()
+        for axis_index in range(3)
+    )
+    if max_cross_window_delta > MAX_CROSS_WINDOW_GYRO_DELTA_MDPS:
+        raise ImuCalibrationError(
+            "stationary gyro bias disagrees with the face windows; at least one window was rotating"
+        )
+
     accelerometer = {
         "method": "opposite_face_diagonal_bias_and_sensitivity_v0.1",
         "axis_order": list(AXES),
@@ -512,6 +556,8 @@ def _build_estimates(windows: dict[str, dict[str, Any]]) -> tuple[dict[str, Any]
         "stddev_mdps_xyz": gyro_stddev,
         "source_window_id": gyro_window["window_id"],
         "sample_count": SAMPLE_COUNT,
+        "window_mean_mdps": window_gyro_means,
+        "max_abs_cross_window_delta_mdps": _round(max_cross_window_delta),
     }
     return accelerometer, gyroscope
 
@@ -639,6 +685,12 @@ def build_calibration_outputs(
         raise ImuCalibrationError("calibration source windows must have unique capture_cmd_id values")
     if len(set(sample_hashes)) != len(sample_hashes):
         raise ImuCalibrationError("calibration source windows must have unique sample hashes")
+    boot_counts = {windows[role]["boot_count"] for role in SOURCE_ROLES}
+    if len(boot_counts) != 1:
+        raise ImuCalibrationError(
+            "calibration source windows must share one device boot; capture all seven poses without rebooting"
+        )
+    device_boot_count = boot_counts.pop()
 
     accelerometer, gyroscope = _build_estimates(windows)
     source_window_refs = [
@@ -648,6 +700,7 @@ def build_calibration_outputs(
                 "role",
                 "window_id",
                 "capture_cmd_id",
+                "boot_count",
                 "test_run_id",
                 "transport_type",
                 "samples_sha256",
@@ -724,6 +777,7 @@ def build_calibration_outputs(
         "capture_profile": {
             "source_contract_version": SOURCE_CONTRACT_VERSION,
             "test_run_id": metadata["test_run_id"],
+            "device_boot_count": device_boot_count,
             "sample_count_per_window": SAMPLE_COUNT,
             "requested_interval_us": REQUESTED_INTERVAL_US,
             "current_capture_rate_hz": CURRENT_CAPTURE_RATE_HZ,
@@ -749,6 +803,7 @@ def build_calibration_outputs(
             "all_windows_cadence_qualified": True,
             "all_windows_static": True,
             "all_face_labels_verified": True,
+            "all_windows_gyro_consistent": True,
             "thresholds": {
                 "accel_norm_mean_mg": [MIN_ACCEL_NORM_MG, MAX_ACCEL_NORM_MG],
                 "max_accel_norm_stddev_mg": MAX_ACCEL_NORM_STDDEV_MG,
@@ -756,6 +811,7 @@ def build_calibration_outputs(
                 "max_face_off_axis_mean_mg": MAX_FACE_OFF_AXIS_MEAN_MG,
                 "max_static_gyro_mean_mdps": MAX_STATIC_GYRO_MEAN_MDPS,
                 "max_static_gyro_stddev_mdps": MAX_STATIC_GYRO_STDDEV_MDPS,
+                "max_cross_window_gyro_delta_mdps": MAX_CROSS_WINDOW_GYRO_DELTA_MDPS,
                 "sensitivity_mg_per_g": [MIN_SENSITIVITY_MG_PER_G, MAX_SENSITIVITY_MG_PER_G],
                 "max_accel_bias_mg": MAX_ACCEL_BIAS_MG,
                 "max_primary_residual_mg": MAX_PRIMARY_RESIDUAL_MG,
@@ -805,6 +861,19 @@ def format_report(artifact: dict[str, Any]) -> str:
             f"- Accel sensitivity mg/g xyz: `{accel['sensitivity_mg_per_g_xyz']}`",
             f"- Accel correction gain xyz: `{accel['correction_gain_xyz']}`",
             f"- Signed gyro bias mdps xyz: `{gyro['bias_mdps_xyz']}`",
+            f"- Device boot count: `{artifact['capture_profile']['device_boot_count']}`",
+            "",
+            "## Fit Diagnostics (Not Accuracy)",
+            "",
+            f"- Max abs calibrated primary-axis residual: `{accel['residuals']['max_abs_primary_axis_mg']}` mg",
+            f"- Max abs calibrated off-axis residual: `{accel['residuals']['max_abs_off_axis_mg']}` mg",
+            f"- Max abs cross-window gyro delta: `{gyro['max_abs_cross_window_delta_mdps']}` mdps",
+            "",
+            "These residuals are computed on the same six face windows that produced the",
+            "fit, so they are self-consistency checks, not independent accuracy,",
+            "repeatability or production-calibration evidence. A small residual does not",
+            "mean the sensor is accurate; it means the six poses agree with the diagonal",
+            "model fitted to them.",
             "",
             "## Source Windows",
             "",
