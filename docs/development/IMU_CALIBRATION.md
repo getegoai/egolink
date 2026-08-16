@@ -53,10 +53,20 @@ gyro_stationary
 每个窗口必须 real/non-mock、cadence-qualified、静止，并通过 sample hash、姿态
 主轴/符号和固定来源检查。
 
-七个窗口必须来自**同一次开机**：`boot_count` 必须一致，且每个 `window_id`
-必须满足 wire 合同的推导式 `imuw-<capture_cmd_id>-b<boot_count>`。跨 boot 意味着
-传感器被重新初始化、monotonic uptime 基准也已重置，这样的组合不构成一次
-连贯校准，工具直接 fail closed，要求在一次开机内重采七个姿态。
+每个 `window_id` 必须满足 wire 合同的推导式
+`imuw-<capture_cmd_id>-b<boot_count>`，`boot_count` 必须存在且有效。
+
+**七个姿态不可能在一次开机内采完。** 固件
+`EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS` 的取值范围是 `1..4`（默认 1，
+且有 4 条的编译期 cache 断言），即单次开机最多 4 条成功的
+`capture_imu_window`。因此 7 个窗口必然跨至少 2 次开机（默认配置下是 7 次）。
+提高该上限属于固件改动，明确在 A0-001 `out_of_scope` 内。
+
+工具据此**记录而不是拒绝**跨 boot：`capture_profile.device_boot_counts` 列出全部
+boot，每个 source window ref 绑定自己的 `boot_count`，跨 boot 时 artifact 自动
+追加 `calibration_spans_multiple_device_boots` limitation。集合的连贯性由
+device、firmware、sensor identity 和 test_run 一致性保证——这些仍然 fail closed。
+跨 boot 的代价是 monotonic uptime 基准重置，因此绝不可跨窗口比较 uptime。
 
 真实采集属于 task packet 的后续 hardware phase：每次由 operator 摆放并确认
 姿态，稳定后才允许创建一个有界命令。静态实现阶段不得 flash、创建 VPS 命令
@@ -213,7 +223,7 @@ sample_utc = unavailable_pending_A0-002
 - 缺少、额外或重复 role/window/cmd/sample hash；
 - sample content 与 v1 28-byte reconstruction hash 不一致；
 - `window_id` 与自身 `capture_cmd_id`/`boot_count` 推导式不一致；
-- 七个窗口 `boot_count` 不一致（跨开机拼装）；
+- `boot_count` 缺失或非法（跨 boot 本身不拒绝，但必须记录）；
 - device、test run、firmware、sensor、I2C address 或 units 不一致；
 - mock、非 observed、training-enabled 或非 monotonic-only 来源；
 - sample count、offset、capture bounds、cadence metadata 不一致；

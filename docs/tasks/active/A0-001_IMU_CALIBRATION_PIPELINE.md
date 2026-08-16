@@ -122,6 +122,13 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
   passed 11/11 on 2026-08-16 and 18/18 after the 2026-08-16 review
 - Repository validation: `python scripts/context_lint.py` passed and
   `scripts/verify.ps1` passed 683/683 on 2026-08-16
+- Capture feasibility: the Wi-Fi IMU profile caps successful commands per boot
+  at `1..4` (`EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS`, default 1), so
+  the seven poses necessarily span at least two boots. Raising that cap is
+  firmware behavior and stays out of scope, so the tool records and binds the
+  boot span instead of requiring one boot. `scripts/run_imu_capture_session.py`
+  still requires exactly three windows per plan and is not in `allowed_paths`,
+  so the operator capture path remains an open decision before any capture.
 - Independent review 2026-08-16 closed four fail-open gaps found in `c779881`:
   a rotating window was accepted and recorded as gyro bias, `boot_count` was
   exported but never bound, `window_id` was not checked against its own

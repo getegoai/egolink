@@ -685,12 +685,11 @@ def build_calibration_outputs(
         raise ImuCalibrationError("calibration source windows must have unique capture_cmd_id values")
     if len(set(sample_hashes)) != len(sample_hashes):
         raise ImuCalibrationError("calibration source windows must have unique sample hashes")
-    boot_counts = {windows[role]["boot_count"] for role in SOURCE_ROLES}
-    if len(boot_counts) != 1:
-        raise ImuCalibrationError(
-            "calibration source windows must share one device boot; capture all seven poses without rebooting"
-        )
-    device_boot_count = boot_counts.pop()
+    # The Wi-Fi IMU profile caps successful capture commands per boot at 1..4
+    # (EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS), so seven poses cannot come from one
+    # boot. Boot spans are therefore recorded and bound, not rejected; device, firmware,
+    # sensor and test-run identity are what keep the set coherent.
+    device_boot_counts = sorted({windows[role]["boot_count"] for role in SOURCE_ROLES})
 
     accelerometer, gyroscope = _build_estimates(windows)
     source_window_refs = [
@@ -739,6 +738,8 @@ def build_calibration_outputs(
         "repeatability_not_yet_established",
         "production_calibration_not_established",
     ]
+    if len(device_boot_counts) > 1:
+        limitations.append("calibration_spans_multiple_device_boots")
     artifact: dict[str, Any] = {
         "schema_version": ARTIFACT_SCHEMA_VERSION,
         "calibration_id": calibration_id,
@@ -777,7 +778,7 @@ def build_calibration_outputs(
         "capture_profile": {
             "source_contract_version": SOURCE_CONTRACT_VERSION,
             "test_run_id": metadata["test_run_id"],
-            "device_boot_count": device_boot_count,
+            "device_boot_counts": device_boot_counts,
             "sample_count_per_window": SAMPLE_COUNT,
             "requested_interval_us": REQUESTED_INTERVAL_US,
             "current_capture_rate_hz": CURRENT_CAPTURE_RATE_HZ,
@@ -861,7 +862,7 @@ def format_report(artifact: dict[str, Any]) -> str:
             f"- Accel sensitivity mg/g xyz: `{accel['sensitivity_mg_per_g_xyz']}`",
             f"- Accel correction gain xyz: `{accel['correction_gain_xyz']}`",
             f"- Signed gyro bias mdps xyz: `{gyro['bias_mdps_xyz']}`",
-            f"- Device boot count: `{artifact['capture_profile']['device_boot_count']}`",
+            f"- Device boot counts: `{artifact['capture_profile']['device_boot_counts']}`",
             "",
             "## Fit Diagnostics (Not Accuracy)",
             "",

@@ -327,7 +327,9 @@ class A0ImuCalibrationTests(unittest.TestCase):
         self.assertIn("Fit Diagnostics (Not Accuracy)", report)
         self.assertIn("not independent accuracy", report)
 
-    def test_windows_from_more_than_one_boot_fail_closed(self) -> None:
+    def test_multi_boot_capture_is_recorded_rather_than_silently_merged(self) -> None:
+        # The Wi-Fi IMU profile caps successful commands per boot at 1..4, so seven poses
+        # cannot come from one boot. The boot span must be bound and disclosed, not rejected.
         metadata = copy.deepcopy(self.metadata)
         rows = copy.deepcopy(self.rows)
         other_boot = BOOT_COUNT + 1
@@ -337,8 +339,21 @@ class A0ImuCalibrationTests(unittest.TestCase):
             rows[role_index]["boot_count"] = other_boot
             rows[role_index]["window_id"] = fixture_window_id(role_index, boot_count=other_boot)
             metadata["source_windows"][role] = rows[role_index]["window_id"]
-        with self.assertRaisesRegex(calibration.ImuCalibrationError, "must share one device boot"):
-            calibration.build_calibration_outputs(metadata, rows)
+        artifact, _windows, _jsonl, report = calibration.build_calibration_outputs(metadata, rows)
+
+        self.assertEqual(
+            artifact["capture_profile"]["device_boot_counts"], [BOOT_COUNT, other_boot]
+        )
+        self.assertIn("calibration_spans_multiple_device_boots", artifact["limitations"])
+        self.assertIn(str(other_boot), report)
+        self.assertEqual(
+            {row["boot_count"] for row in artifact["source_windows"]}, {BOOT_COUNT, other_boot}
+        )
+
+    def test_single_boot_capture_does_not_claim_a_multi_boot_limitation(self) -> None:
+        artifact, _windows, _jsonl, _report = self.build()
+        self.assertEqual(artifact["capture_profile"]["device_boot_counts"], [BOOT_COUNT])
+        self.assertNotIn("calibration_spans_multiple_device_boots", artifact["limitations"])
 
     def test_window_id_must_derive_from_capture_cmd_id_and_boot_count(self) -> None:
         rows = copy.deepcopy(self.rows)
@@ -521,7 +536,7 @@ class A0ImuCalibrationExporterCompatibilityTests(unittest.TestCase):
         self.assertEqual(
             {row["boot_count"] for row in artifact["source_windows"]}, {EXPORT_BOOT_COUNT}
         )
-        self.assertEqual(artifact["capture_profile"]["device_boot_count"], EXPORT_BOOT_COUNT)
+        self.assertEqual(artifact["capture_profile"]["device_boot_counts"], [EXPORT_BOOT_COUNT])
         self.assertFalse(artifact["production_ready"])
         self.assertFalse(artifact["training_allowed"])
         for row in artifact["source_windows"]:
