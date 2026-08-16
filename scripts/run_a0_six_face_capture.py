@@ -44,6 +44,13 @@ from scripts.run_imu_capture_session import (
 
 RECORD_SCHEMA_VERSION = "egolink.a0_six_face_capture.v0.1"
 TASK_ID = "A0-001"
+# A face cannot always be named before it is measured: with the module fixed in an
+# enclosure the operator rests it on an arbitrary side, and which sensor axis ends up
+# vertical is only known from the samples. Recording "unidentified" is honest; forcing a
+# guessed face label onto the record is not. The role binding happens later in the
+# calibration metadata, where the tool re-checks it against the data.
+UNIDENTIFIED_POSE = "unidentified"
+CAPTURE_POSES = (*SOURCE_ROLES, UNIDENTIFIED_POSE)
 CMD_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,16}$")
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,48}$")
 
@@ -170,8 +177,8 @@ def capture_pose(
     sleep_fn: Callable[[float], None] = time.sleep,
     redaction_values: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    if pose not in SOURCE_ROLES:
-        raise SixFaceCaptureError(f"pose must be one of {list(SOURCE_ROLES)}")
+    if pose not in CAPTURE_POSES:
+        raise SixFaceCaptureError(f"pose must be one of {list(CAPTURE_POSES)}")
     if transport_type not in TRANSPORT_TYPES:
         raise SixFaceCaptureError(f"transport type must be one of {sorted(TRANSPORT_TYPES)}")
     _safe(cmd_id, "cmd_id", CMD_ID_RE)
@@ -265,7 +272,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--device-id", required=True)
     parser.add_argument("--test-run-id", required=True)
-    parser.add_argument("--pose", required=True, choices=list(SOURCE_ROLES))
+    parser.add_argument(
+        "--pose",
+        required=True,
+        choices=list(CAPTURE_POSES),
+        help="Use 'unidentified' when the face is only knowable from the samples",
+    )
     parser.add_argument("--cmd-id", required=True, help="1-16 safe characters; window_id derives from it")
     parser.add_argument("--transport-type", required=True, choices=sorted(TRANSPORT_TYPES))
     parser.add_argument("--output", required=True, type=Path)

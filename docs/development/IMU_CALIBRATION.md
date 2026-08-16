@@ -105,10 +105,37 @@ python scripts/run_a0_six_face_capture.py --device-id <device> --test-run-id <ru
 - `--cmd-id` 每个姿态唯一、≤16 字符；`window_id` 由它和 boot count 推导。
 - token 只从环境变量 `--token-env` 读取，不写进记录、不打印。
 - 已存在的姿态记录不会被覆盖，重采请换新的输出路径或先归档。
-- 单次开机最多 4 条成功命令（默认 1），采到上限后需要重启设备再继续；跨 boot
-  是预期行为，artifact 会如实记录。
+- 如果发命令前无法确定这一面是哪个轴朝上（模块固定在外壳里时很常见），`--pose`
+  用 `unidentified`，不要猜一个 face 名字填进去。姿态归属在 metadata 里绑定，并由
+  工具用数据反向校验；记录里写一个猜错的 face 名只会污染溯源。
+- 每次开机的成功命令上限取决于走哪条路径。`1..4` 那个上限只属于专用 Wi-Fi profile
+  （`EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS`）。2026-08-16 在 FW-007 的
+  **LTE 命令循环**上实测七条命令全部落在同一次开机（boot `26946`），该上限不适用。
+  跨 boot 仍是允许的，artifact 会如实记录 `device_boot_counts`。
 
 七个姿态全部完成后，用 `scripts/export_imu_windows.py` 导出，再运行标准生成命令。
+
+## 重复性对比
+
+单轮校准在构造上必然自洽，这说明不了第二轮会得到什么。`repeatability_not_yet_established`
+因此是单轮 artifact 最大的空白。补它需要**第二轮独立六面采集**（新的 test run、新的
+七个窗口，device 和 mounting 必须相同），然后：
+
+```powershell
+python scripts/compare_a0_imu_calibrations.py `
+  --baseline <第一轮>/derived/imu_calibration_artifact.json `
+  --repeat   <第二轮>/derived/imu_calibration_artifact.json `
+  --output-dir reports/imu_calibration/<repeat-run-id>/derived `
+  --json
+```
+
+工具逐轴给出 accel bias、sensitivity 和 gyro bias 的差值，并 fail closed 于：同一份
+artifact 自比、两轮共用源窗口、device/sensor/mounting 不一致——重新装配过 IMU 的两轮
+不构成重复性对比，因为它们测的不是同一个安装关系。
+
+输出固定 `repeatability_characterized=false`：**两轮只给出一个差值，不是分布**，
+表征至少需要三轮。其中的阈值是 proposed engineering observation bounds，用来让明显
+发散的第二轮暴露出来，**不是已验证的规格**，落在界内也不构成精度结论。
 
 ## Metadata 合同
 
