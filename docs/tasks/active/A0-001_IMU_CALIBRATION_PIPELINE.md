@@ -93,8 +93,18 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 # Hardware Validation
 
+- Blocking precondition: the image currently flashed is FW-007
+  `0.1.0-fw007-lte-wifi-failover`. `sdkconfig.fw007-failover.local` does not set
+  `CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED`, and its Kconfig default is
+  `n`, so the running image cannot serve `capture_imu_window` at all. Six-face
+  capture therefore requires an operator-authorized reflash to an IMU-window
+  profile before any pose. `sdkconfig.d5002-wifi-seed.local` already enables it
+  with `MAX_SUCCESSFUL_COMMANDS=3`, so reusing that profile needs no new
+  firmware configuration and implies three boots for seven poses.
 - Board: connectivity-node ESP32-S3-SIM7670G with external QMI8658A
-- Firmware commit: to be recorded by the operator capture
+- Firmware commit: to be recorded by the operator capture. `firmware_image_sha256`
+  must be the image actually flashed for calibration, not the FW-007 hash
+  recorded in `ACTIVE_BUILD.md`.
 - Connection: bounded Message Hub IMU-window command over the selected
   supported transport; no USB dependency for accepted runtime evidence
 - Expected output: six stable, correctly labelled opposite poses plus
