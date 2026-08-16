@@ -23,7 +23,9 @@ allowed_paths:
   - docs/tasks/active/A0-001_IMU_CALIBRATION_PIPELINE.md
   - pc_simulator/imu_six_face_calibration.py
   - quality_tests/test_a0_imu_calibration.py
+  - quality_tests/test_a0_six_face_capture.py
   - scripts/generate_a0_imu_calibration.py
+  - scripts/run_a0_six_face_capture.py
   - shared/contracts/README.md
   - shared/contracts/imu_calibrated_window.schema.json
   - shared/contracts/imu_calibration_artifact.schema.json

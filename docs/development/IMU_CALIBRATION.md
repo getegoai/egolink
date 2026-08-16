@@ -72,6 +72,44 @@ device、firmware、sensor identity 和 test_run 一致性保证——这些仍�
 姿态，稳定后才允许创建一个有界命令。静态实现阶段不得 flash、创建 VPS 命令
 或操作设备。
 
+## 操作员逐面清单
+
+采集用 `scripts/run_a0_six_face_capture.py`，**一次调用只采一个姿态**，绝不连续
+自动采多个——六面校准必须在窗口之间物理翻面并重新静置。
+
+`scripts/run_imu_capture_session.py` 不适用于本任务：它要求每个 plan 恰好 3 个
+窗口、无条件新建 test run、并把证据标记成 `D5-002` 或 `FIELD-011`。它保持不变。
+
+每个姿态重复以下三步：
+
+1. **摆放**。把设备按该姿态放稳在水平面上，手离开，等读数稳定。
+2. **空跑确认**（不接触设备，不发命令）：
+
+```bash
+python scripts/run_a0_six_face_capture.py --device-id <device> --test-run-id <run> --pose z_positive --cmd-id a0001-zp --transport-type wifi --output reports/imu_calibration/<run-id>/capture/z_positive.json
+```
+
+3. **确认无误后执行**。加 `--execute --operator-confirmed-stationary`；**只有第一个
+   姿态**额外加 `--create-test-run`，其余六个必须复用同一个 test run：
+
+```bash
+python scripts/run_a0_six_face_capture.py --device-id <device> --test-run-id <run> --pose z_positive --cmd-id a0001-zp --transport-type wifi --output reports/imu_calibration/<run-id>/capture/z_positive.json --hub <hub-url> --execute --operator-confirmed-stationary
+```
+
+要点：
+
+- 七个姿态顺序：`x_positive` `x_negative` `y_positive` `y_negative`
+  `z_positive` `z_negative` `gyro_stationary`；最后一个是独立静止窗口，设备
+  保持任一稳定姿态不动即可，不得复用任何 face 窗口。
+- 七个姿态必须用**同一个** `--device-id` 和 `--test-run-id`。
+- `--cmd-id` 每个姿态唯一、≤16 字符；`window_id` 由它和 boot count 推导。
+- token 只从环境变量 `--token-env` 读取，不写进记录、不打印。
+- 已存在的姿态记录不会被覆盖，重采请换新的输出路径或先归档。
+- 单次开机最多 4 条成功命令（默认 1），采到上限后需要重启设备再继续；跨 boot
+  是预期行为，artifact 会如实记录。
+
+七个姿态全部完成后，用 `scripts/export_imu_windows.py` 导出，再运行标准生成命令。
+
 ## Metadata 合同
 
 命令需要一个 operator-reviewed metadata JSON。字段严格匹配，额外或缺失字段
