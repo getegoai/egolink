@@ -6,7 +6,7 @@ priority: high
 requires_hardware: true
 serves_demo: D2-D5
 created: 2026-08-15
-last_updated: 2026-08-15
+last_updated: 2026-08-16
 
 context:
   - docs/AGENTS.md
@@ -71,6 +71,10 @@ offline. The first slice is deliberately one-way until reboot.
 - [x] An operator-authorized SIM-absent run observes LTE failure, Wi-Fi
       connection, fresh uploads, and no duplicate transport owner or reset loop
       in bounded post-takeover windows.
+- [x] An operator-authorized online-removal run first establishes stable LTE,
+      then physically removes the SIM and observes the transport-failure
+      threshold, the one-way `lte_http_poll_failures` transition, fresh Wi-Fi
+      uploads in the same boot, and no duplicate transport owner or reset loop.
 
 # Validation Commands
 
@@ -127,6 +131,42 @@ git diff --check
   FW-007 runtime version, and the matching test-run identity. Coordinates,
   Wi-Fi credentials, bearer tokens, and SIM identifiers are omitted from this
   evidence.
+- A second operator-authorized run on 2026-08-16 exercised physical SIM
+  removal after LTE was already online, without rebuilding or flashing the
+  image. After the operator inserted the SIM, a bounded USB AT check initially
+  still reported `SIM_NOT_INSERTED`; a controlled modem functional restart
+  made `CPIN=READY` and home registration observable. The ESP32 was then reset
+  into the same FW-007 image. COM3 observed the expected runtime identity,
+  `LTE_HTTP_COMMAND_READY_RESULT ready=true`, two consecutive healthy LTE
+  polls, one successful scheduled location upload, and no premature Wi-Fi
+  transition. Independently, a 25-second VPS window from 13:11:17 to 13:11:42
+  CST retained six LTE samples, sequence 18 through 23, one unchanged boot,
+  and fresh registered/PDP-ready telemetry.
+- The operator confirmed physical removal at 13:40:05 CST; a bounded USB AT
+  query immediately reported `SIM_NOT_INSERTED`. Because the serial monitor
+  was reacquired after the first two failure rounds, it directly retained the
+  threshold line at `consecutive_failures=3`, not separate lines for counts one
+  and two. It then retained the one-way transitions from `lte_primary` through
+  `wifi_connecting` to `wifi_active`, with reason
+  `lte_http_poll_failures`. Wi-Fi became active about 6.9 seconds after the
+  reacquired monitor started and about 1.3 seconds after its first retained
+  failure marker.
+- The post-takeover COM3 window ran for about 125 seconds and retained one
+  successful Message Hub registration, 13 Wi-Fi raw-command polls, two
+  successful periodic location uploads, zero LTE command-poll rounds after
+  `wifi_active`, zero offline transitions, and zero reset, panic, or brownout
+  markers. Read-only VPS evidence independently placed the final LTE message at
+  13:40:03.490 (sequence 253) and the first `wifi_failover` message at
+  13:40:51.837 (sequence 258): a 48.347-second server-receive gap and
+  46.837 seconds after the operator confirmation. Both messages belonged to
+  the same boot and sequence continued forward.
+- The VPS post-takeover observation continued for about 205.9 seconds through
+  sequence 279 with no sequence or boot regression and no LTE-linked message.
+  It retained 12 heartbeats, six sensor samples, and four location reports over
+  `wifi_failover`; the device error table remained empty, Message Hub remained
+  healthy, and automatic service restart count remained zero. No command was
+  created during this hot-removal window, so command ACK behavior was not
+  re-tested here; it remains covered only by the earlier SIM-absent Wi-Fi run.
 - Local ignored build-artifact path:
   `firmware/mqtt_heartbeat/build_fw007_hw_20260815/`. It contains runtime
   configuration and is not a committed replay bundle. No raw private serial
@@ -136,9 +176,10 @@ git diff --check
 
 # Completion Evidence
 
-- Software implementation, static/build validation, and the authorized
-  SIM-absent hardware run completed on 2026-08-15. The packet remains active
-  pending Director review and closure.
+- Software implementation, static/build validation, the authorized SIM-absent
+  run, and the established-LTE physical-removal run completed on 2026-08-15
+  and 2026-08-16. The packet remains active pending Director review and
+  closure.
 - Changed paths are limited to this task packet, `app_main.c`,
   `Kconfig.projbuild`, the tracked MQTT heartbeat `sdkconfig`, and its focused
   firmware test.
@@ -181,10 +222,11 @@ git diff --check
   the first slice has no automatic Wi-Fi-to-LTE failback or durable offline
   queue; the `120`-second LTE readiness setting currently measures configured
   delay time rather than end-to-end wall time, so the observed SIM-absent
-  takeover took about 4 minutes 50 seconds from boot; because the SIM was
-  already absent at power-on, an online LTE session followed by physical SIM
-  removal and the consecutive-transport-failure threshold remains a separate
-  unverified hardware path;
+  takeover took about 4 minutes 50 seconds from boot; the online-removal run
+  directly retained only threshold count three because counts one and two fell
+  inside the serial-monitor reacquisition gap; command ACK was not re-tested in
+  that second run; LTE recovery, Wi-Fi-to-LTE failback, USB-free endurance, and
+  long-run reliability remain unverified or unimplemented;
   a separate tracked `camera_smoke/sdkconfig` still has non-empty
   `CONFIG_EGOLINK_WIFI_SSID` and `CONFIG_EGOLINK_WIFI_PASSWORD` entries and is
   outside this task's allowed paths. No values were copied or emitted.

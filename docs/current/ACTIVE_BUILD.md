@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-15
+last_verified: 2026-08-16
 verified_by: codex
 ---
 
@@ -17,7 +17,7 @@ verified_by: codex
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | UI-001 field-friendly D1 status sidecar is currently flashed: cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt, QMI8658 engineering sampler. Bounded smoke `ui001-amoled-friendly-smoke-20260704` observed `cmd=display_status` plus `status_rendered`. |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-15 | FW-007 LTE-to-Wi-Fi failover image `0.1.0-fw007-lte-wifi-failover` (application descriptor `fw007-e9ca7a4`, app SHA-256 `8F3508C6...9283799`) is currently flashed on ESP32-S3 QFN56 revision v0.2, MAC `02:00:00:00:00:03`. One COM3 three-region flash passed hash verification without targeting or erasing the NVS partition; normal boot diagnostics retained and updated their existing NVS `boot_count`. With the SIM absent at boot, the bounded run observed `LTE_SIM_NOT_READY`, then one-way Wi-Fi takeover and fresh Message Hub heartbeat/location/command-ACK uploads without a duplicate LTE owner, panic, brownout, or reset marker in the recorded post-takeover windows. Actual boot-to-Wi-Fi-active time was about 4 minutes 50 seconds because modem status-query time is additional to the configured 120-second delay counter. Physical SIM removal after an established LTE session, automatic Wi-Fi-to-LTE failback, durable offline queueing, and long-run reliability remain unverified/not implemented in this slice. |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-16 | FW-007 LTE-to-Wi-Fi failover image `0.1.0-fw007-lte-wifi-failover` (application descriptor `fw007-e9ca7a4`, app SHA-256 `8F3508C6...9283799`) is currently flashed on ESP32-S3 QFN56 revision v0.2, MAC `02:00:00:00:00:03`. One COM3 three-region flash passed hash verification without targeting or erasing the NVS partition; normal boot diagnostics retained and updated their existing NVS `boot_count`. The SIM-absent startup run observed one-way Wi-Fi takeover in about 4 minutes 50 seconds and a Wi-Fi command ACK. A second run established stable LTE before physical SIM removal, then observed threshold count three and the `lte_http_poll_failures` transition to `wifi_active`; the first Wi-Fi server message arrived 46.837 seconds after operator confirmation, in the same boot with forward sequence continuity. Post-takeover serial and VPS windows retained Wi-Fi heartbeats/sensor/location uploads without a duplicate LTE owner, offline transition, panic, brownout, or reset. Automatic Wi-Fi-to-LTE failback, durable offline queueing, LTE recovery, USB-free endurance, and long-run reliability remain unverified/not implemented in this slice. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
@@ -140,11 +140,21 @@ Port numbers are observations, not stable configuration. Tooling must identify d
   and registered with Message Hub HTTP 200. VPS evidence then retained fresh
   Wi-Fi failover heartbeats/location reports and a Wi-Fi `request_location`
   ACK; bounded post-takeover windows contained no LTE command-poll round,
-  offline transition, panic, brownout, or reset marker. This is a bounded
-  SIM-absent engineering pass only: automatic failback, durable offline
-  queueing, LTE recovery, physical SIM removal after an established LTE
-  session, USB-free endurance, and long-run reliability remain unverified or
-  outside this bounded run. Evidence:
+  offline transition, panic, brownout, or reset marker.
+- On 2026-08-16 the same image, without another flash, first established stable
+  LTE and then underwent an operator-confirmed physical SIM removal. USB AT
+  confirmed the SIM was absent. COM3 retained threshold count three and the
+  one-way `lte_primary -> wifi_connecting -> wifi_active` transition with
+  reason `lte_http_poll_failures`; counts one and two occurred before serial
+  reacquisition and were not individually retained. The VPS received its last
+  LTE message at 13:40:03.490 CST and first `wifi_failover` message at
+  13:40:51.837, in the same boot with forward sequence continuity. About 206
+  seconds of VPS observation retained 12 heartbeats, six sensor samples, and
+  four location reports with no LTE-linked message, device error, or service
+  restart. No command was created, so this second run did not re-test ACK.
+  Automatic failback, durable offline queueing, LTE recovery, USB-free
+  endurance, and long-run reliability remain unverified or outside these
+  bounded runs. Evidence:
   `docs/tasks/active/FW-007_LTE_WIFI_FAILOVER.md` and
   `firmware/mqtt_heartbeat/build_fw007_hw_20260815/`.
 - Camera smoke capture on the SIM7670G board has produced bounded JPEG evidence.

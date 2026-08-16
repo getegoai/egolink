@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-15
+last_verified: 2026-08-16
 verified_by: codex
 ---
 
@@ -37,12 +37,25 @@ All unknown fields must remain explicit. Do not infer hardware capability from p
   `link_type=wifi_failover`; one bounded `request_location` command produced a
   linked report and an `ok` ACK with `transport_type=wifi`. The recorded
   post-takeover windows contained no LTE command-poll round, offline
-  transition, panic, brownout, or reset marker. This is an observed bounded
-  engineering failover pass, not production or long-run radio evidence.
-  Automatic Wi-Fi-to-LTE failback and a durable offline queue are not
-  implemented in this first slice; physical SIM removal after an established
-  LTE session, LTE recovery, USB-free endurance, and long-run reliability
-  remain unverified. Evidence:
+  transition, panic, brownout, or reset marker.
+- A second operator-authorized run on 2026-08-16 reused the same image without
+  another flash. After LTE readiness and consecutive healthy polls were
+  established, the operator physically removed the SIM and USB AT confirmed
+  `SIM_NOT_INSERTED`. COM3 retained threshold count three and the one-way
+  transition to `wifi_active` with reason `lte_http_poll_failures`; threshold
+  counts one and two occurred before serial reacquisition and were not
+  individually retained. The VPS last received LTE at 13:40:03.490 CST and
+  first received `wifi_failover` at 13:40:51.837, with one unchanged boot and
+  forward sequence continuity. A following 205.9-second VPS window retained
+  12 heartbeats, six sensor samples, and four location reports, with no
+  LTE-linked message or device error. The matching serial window retained no
+  LTE command poll after `wifi_active`, offline transition, panic, brownout,
+  or reset. This is observed bounded engineering failover evidence, not
+  production or long-run radio evidence. No command was issued, so the second
+  run did not re-test Wi-Fi ACK behavior.
+- Automatic Wi-Fi-to-LTE failback and a durable offline queue are not
+  implemented in this first slice; LTE recovery, USB-free endurance, and
+  long-run reliability remain unverified. Evidence:
   `docs/tasks/active/FW-007_LTE_WIFI_FAILOVER.md` and
   `firmware/mqtt_heartbeat/build_fw007_hw_20260815/`.
 
