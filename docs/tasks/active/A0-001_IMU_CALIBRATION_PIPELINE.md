@@ -114,9 +114,15 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
   is source and build-config reasoning, not a runtime result; one bounded
   observation is still required before any pose sequence is planned.
 - Board: connectivity-node ESP32-S3-SIM7670G with external QMI8658A
-- Firmware commit: to be recorded by the operator capture. `firmware_image_sha256`
-  must be the image actually flashed for calibration, not the FW-007 hash
-  recorded in `ACTIVE_BUILD.md`.
+- Capture performed 2026-08-16 on the already-flashed FW-007 image; no reflash,
+  no firmware change, no configuration change was needed or made.
+- Firmware commit `e9ca7a4673f434697e0ae0e6b2faca2ba1467784`, image SHA-256
+  `8f3508c6...39283799`, fw_version `0.1.0-fw007-lte-wifi-failover`
+- Connection: bounded `capture_imu_window` over LTE via the Message Hub, one
+  operator-confirmed command per pose, seven commands total in boot `26946`
+- Result: seven windows, all cadence-qualified, zero invalid, zero mock
+- Evidence path: `reports/imu_calibration/A0-001-REAL-20260816-001/`
+  (`reports/` is gitignored, so the artifact stays local by repository convention)
 - Connection: bounded Message Hub IMU-window command over the selected
   supported transport; no USB dependency for accepted runtime evidence
 - Expected output: six stable, correctly labelled opposite poses plus
@@ -159,8 +165,19 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
   `capture_cmd_id`/`boot_count` derivation, and all-zero placeholder firmware
   and software hashes were accepted. Real `scripts/export_imu_windows.py`
   output is now exercised end to end rather than only a hand-shaped fixture.
-- Hardware result: pending; no capture, flash or device command was performed,
-  so A0-001 remains active and A-R0 remains `0/8`
+- Hardware result 2026-08-16: the real six-face plus independent stationary
+  gyro capture is complete. Calibration `imucal-e6e1c71fc02a239c8372fabc`,
+  payload SHA-256 `a2bd6598b90872a4cc909a3e5a2527d440d3031820684254ae8c7f40d987969e`,
+  run `A0-001-REAL-20260816-001`, all seven windows from boot `26946` over LTE.
+  Accel bias mg `[5.09, 67.98, -25.78]`, sensitivity mg/g
+  `[993.82, 997.99, 994.14]`, signed gyro bias mdps
+  `[-1863.83, -2367.87, 22.07]`. Max cross-window gyro delta `166.64` mdps
+  against a `2000` bound; max calibrated off-axis residual `85.51` mg against a
+  `150` bound. All 700 materialized samples preserve their source
+  `accel_mg`/`gyro_mdps` exactly, and the source JSONL was not modified.
+- A0-001 stays `active` and A-R0 stays `0/8`: the artifact exists but has not
+  been reviewed and accepted as Gate evidence, and the Control Plane has not
+  been updated. Generation is not acceptance.
 - Remaining risks: raw ADC counts, temperature, final mounting, independent
   repeatability, temperature drift and production calibration are unavailable.
   The six-face residuals stay fit-internal, so they bound fixture tilt (about

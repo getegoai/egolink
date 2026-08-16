@@ -892,9 +892,10 @@ def format_report(artifact: dict[str, Any]) -> str:
             "",
             *[f"- `{item}`" for item in artifact["limitations"]],
             "",
-            "A passing static pipeline or synthetic fixture is not A0-001 Gate",
-            "evidence. A reviewed real six-face plus independent gyro capture is",
-            "still required, and A-R0 remains unchanged until that evidence exists.",
+            "Every source window here is real observed QMI8658 evidence; the tool",
+            "rejects mock and non-observed input. Generating this artifact is still",
+            "not an A0-001 Gate pass on its own: the capture and this artifact must",
+            "be reviewed and accepted, and A-R0 stays unchanged until then.",
             "",
         ]
     )
