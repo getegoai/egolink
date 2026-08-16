@@ -93,14 +93,26 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 # Hardware Validation
 
-- Blocking precondition: the image currently flashed is FW-007
-  `0.1.0-fw007-lte-wifi-failover`. `sdkconfig.fw007-failover.local` does not set
-  `CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED`, and its Kconfig default is
-  `n`, so the running image cannot serve `capture_imu_window` at all. Six-face
-  capture therefore requires an operator-authorized reflash to an IMU-window
-  profile before any pose. `sdkconfig.d5002-wifi-seed.local` already enables it
-  with `MAX_SUCCESSFUL_COMMANDS=3`, so reusing that profile needs no new
-  firmware configuration and implies three boots for seven poses.
+- Flashed-image capability: the image currently flashed is FW-007
+  `0.1.0-fw007-lte-wifi-failover`. It does not set
+  `CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED`, but that switch is only one
+  of two ways to obtain the capability. `app_main.c` guards the raw command
+  handler with `#if CONFIG_EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED ||
+  CONFIG_EGOLINK_LTE_WIFI_FAILOVER_ENABLED`, and the `capture_imu_window`
+  branch sits outside the failover-only block. FW-007 sets
+  `LTE_WIFI_FAILOVER_ENABLED=y`, so both its LTE command loop and its Wi-Fi
+  failover raw command path accept `capture_imu_window`. FIELD-011 captured an
+  IMU window over LTE with the Wi-Fi profile switch off, which matches.
+  No reflash is currently known to be required.
+- The `1..4` successful-commands-per-boot cap belongs to the dedicated Wi-Fi
+  profile only: its `_Static_assert` sits in the `#else` branch of
+  `#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED`. Failover depends
+  on that loop, so FW-007 takes the other branch and the cap does not apply.
+  The practical per-boot bound there is the poll-attempt limit instead.
+- Unverified on hardware: the flashed poll-attempt bound, the device's current
+  transport state, and whether a capture actually completes on this image. This
+  is source and build-config reasoning, not a runtime result; one bounded
+  observation is still required before any pose sequence is planned.
 - Board: connectivity-node ESP32-S3-SIM7670G with external QMI8658A
 - Firmware commit: to be recorded by the operator capture. `firmware_image_sha256`
   must be the image actually flashed for calibration, not the FW-007 hash
