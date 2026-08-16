@@ -19,6 +19,8 @@
 | `location_fusion_sample.schema.json` | DATA-001 JSONL dataset sample contract for location fusion exports |
 | `imu_window_chunk.schema.json` | Normalized complete KV wire object for one bounded real-QMI IMU chunk over exact lowercase `lte` or `wifi`; sample bytes remain Base64 and training-disabled. |
 | `imu_window_manifest.schema.json` | Normalized complete KV wire object for a bounded real-QMI IMU window manifest over exact lowercase `lte` or `wifi`, including its privacy/quality gates. |
+| `imu_calibration_artifact.schema.json` | A0-001 六面 accelerometer bias/sensitivity 与独立 signed gyro-bias 工程校准 artifact；绑定设备、固件、安装、来源窗口及 hashes，并固定 `production_ready=false` / `training_allowed=false`。 |
+| `imu_calibrated_window.schema.json` | `imu_window_export.v1` 的非覆盖式 calibrated JSONL 派生视图；逐样本保留原始未校准 mg/mdps，并添加 calibrated mg/mdps 与 SI 值。 |
 
 ## 变更规则
 

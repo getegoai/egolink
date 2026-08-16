@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/imu_calibrated_window.schema.json",
+  "title": "EgoLink materialized calibrated IMU window v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "calibration_id",
+    "calibration_identity_sha256",
+    "role",
+    "source_window",
+    "sample_count",
+    "requested_interval_us",
+    "training_allowed",
+    "production_ready",
+    "availability",
+    "samples"
+  ],
+  "properties": {
+    "schema_version": { "const": "egolink.imu_calibrated_window.v0.1" },
+    "calibration_id": { "type": "string", "pattern": "^imucal-[0-9a-f]{24}$" },
+    "calibration_identity_sha256": { "$ref": "#/$defs/sha256" },
+    "role": {
+      "enum": ["x_positive", "x_negative", "y_positive", "y_negative", "z_positive", "z_negative", "gyro_stationary"]
+    },
+    "source_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version",
+        "window_id",
+        "capture_cmd_id",
+        "test_run_id",
+        "transport_type",
+        "samples_sha256",
+        "source_export_sha256",
+        "time_basis"
+      ],
+      "properties": {
+        "contract_version": { "const": "egolink.imu_window.v1" },
+        "window_id": { "$ref": "#/$defs/safeId" },
+        "capture_cmd_id": { "$ref": "#/$defs/safeId" },
+        "test_run_id": { "$ref": "#/$defs/safeId" },
+        "transport_type": { "enum": ["lte", "wifi"] },
+        "samples_sha256": { "$ref": "#/$defs/sha256" },
+        "source_export_sha256": { "$ref": "#/$defs/sha256" },
+        "time_basis": { "const": "device_monotonic_uptime_only" }
+      }
+    },
+    "sample_count": { "const": 100 },
+    "requested_interval_us": { "const": 50000 },
+    "training_allowed": { "const": false },
+    "production_ready": { "const": false },
+    "availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adc_counts", "temperature", "sample_utc"],
+      "properties": {
+        "adc_counts": { "const": "unavailable_in_imu_window_v1" },
+        "temperature": { "const": "unavailable_in_imu_window_v1" },
+        "sample_utc": { "const": "unavailable_pending_A0-002" }
+      }
+    },
+    "samples": {
+      "type": "array",
+      "minItems": 100,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "offset_us", "uncalibrated", "calibrated"],
+        "properties": {
+          "index": { "type": "integer", "minimum": 0, "maximum": 99 },
+          "offset_us": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+          "uncalibrated": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["accel_mg", "gyro_mdps"],
+            "properties": {
+              "accel_mg": { "$ref": "#/$defs/intTriple" },
+              "gyro_mdps": { "$ref": "#/$defs/intTriple" }
+            }
+          },
+          "calibrated": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["accel_mg", "gyro_mdps", "accel_m_s2", "gyro_rad_s"],
+            "properties": {
+              "accel_mg": { "$ref": "#/$defs/numberTriple" },
+              "gyro_mdps": { "$ref": "#/$defs/numberTriple" },
+              "accel_m_s2": { "$ref": "#/$defs/numberTriple" },
+              "gyro_rad_s": { "$ref": "#/$defs/numberTriple" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "safeId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,96}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "intTriple": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 }
+    },
+    "numberTriple": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number" }
+    }
+  }
+}
