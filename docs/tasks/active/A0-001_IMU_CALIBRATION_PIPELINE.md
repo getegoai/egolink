@@ -171,6 +171,19 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
   evidence. Control Plane commit `2fa3402` records it and is deployed. A0-001
   stays `active` and A-R0 stays `0/8`; this bench run is not a Field Session,
   training-ready evidence, production calibration or Gate PASS.
+- Founder direction on 2026-08-17 closes further calibration expansion. The
+  artifact is `engineering-ready / awaiting field verification` and may be
+  referenced by the first real Field Session, while the task and Gate remain
+  `active`. FW-007 preserves QMI8658 sensor XYZ without software remapping;
+  sensor-to-module-PCB/main-PCB/body mapping remains `unrecorded` until one
+  bounded +Z/+X/+Y body-up physical confirmation is captured after the board
+  returns. Repeatability, temperature, cross-axis and production calibration
+  are not current blockers.
+- The existing `z_negative` window remains accepted for this engineering
+  artifact: its raw equivalent tilt is about `8.045°`, bias-corrected residual
+  about `4.354°`, while `y_positive` has the larger calibrated residual angle
+  at about `4.965°`. A replacement is optional only if it is effectively free
+  during the body-axis confirmation; it does not block the Field Session.
 - Evidence gaps: p3-p6 lack independent operator receipts; the raw Message Hub
   DB was not retained with the package; `reports/` is gitignored; independent
   repeatability, body-axis mapping, temperature, sample UTC, raw ADC counts,

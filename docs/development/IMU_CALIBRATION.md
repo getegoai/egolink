@@ -53,6 +53,31 @@ gyro_stationary
 每个窗口必须 real/non-mock、cadence-qualified、静止，并通过 sample hash、姿态
 主轴/符号和固定来源检查。
 
+### Sensor / PCB / device 坐标轴收口
+
+当前 FW-007 数据轴就是 QMI8658A sensor frame：数组 `[x, y, z]` 直接对应
+AX/AY/AZ 与 GX/GY/GZ，固件未执行软件换轴或反号。QST 官方
+[QMI8658A Datasheet Rev A](https://www.qstcorp.com/upload/pdf/202301/13-52-25%20QMI8658A%20Datasheet%20Rev%20A.pdf)
+§2 定义该 frame 为右手系，`+Z_sensor` 离开芯片有标记的顶面，正角速度绕各正轴
+逆时针；§5.6 定义 AX/AY/AZ 与 GX/GY/GZ 输出寄存器。
+
+ATK-NB018 PCB、Waveshare 主 PCB 与 `enclosure-fixed-imu-20260816` body frame
+之间尚无具名物理标记、照片和已知姿态证据，因此当前映射必须保持：
+
+| 层级 | X | Y | Z | 状态 |
+|---|---|---|---|---|
+| 固件数组 | QMI AX / GX | QMI AY / GY | QMI AZ / GZ | 已由代码确认，无换轴/反号 |
+| QMI sensor frame | 见官方 Pin-1/顶面方向图 | 见官方 Pin-1/顶面方向图 | 离开芯片顶面 | 已由 datasheet 定义 |
+| ATK-NB018 / 主 PCB / device body | `unrecorded` | `unrecorded` | `unrecorded` | 不得由接线或六面 label 推断 |
+
+开发板返回后只做一次 3–5 分钟有界确认：先给 body frame 和主 PCB 以具名边/正面
+标出 `+X_body`、`+Z_body`，令 `+Y_body = +Z_body × +X_body` 并拍摄安装照片；再将
+`+Z_body`、`+X_body`、`+Y_body` 依次朝上，各用已有 FW-007
+`capture_imu_window` 采一条 100×50 ms 静止窗。用 calibrated accel mean 记录
+`R_sensor_from_body`、其转置 `R_body_from_sensor`、window IDs、照片 hash 和
+`mounting_profile_id`。只有测得 signed permutation 时才简写为轴交换/反号；否则保留
+测得的 3×3 映射。该确认无需刷机、新 schema 或重开 production calibration。
+
 每个 `window_id` 必须满足 wire 合同的推导式
 `imuw-<capture_cmd_id>-b<boot_count>`，`boot_count` 必须存在且有效。
 
@@ -312,3 +337,10 @@ hash 已独立重算；标准命令可逐字节重建 artifact、calibrated JSON
 sample UTC 和 raw ADC counts。`calibration_software_commit` 记录为 `f1439fe`，
 而报告尾注文案在 `c54ed7d` 才提交；算法与两个机器产物可复现，但报告生成
 provenance 不完全由前一个提交唯一标识。
+
+本轮不因这些 production 级缺口继续扩展校准。`z_negative` 原始均值的等效离轴角
+约 `8.045°`，扣除当前 bias 后约 `4.354°`；`y_positive` 的校准后等效残差角反而
+更大（约 `4.965°`，max off-axis `85.51 mg`）。`z_negative` 已通过 `150 mg`
+工程门，单独重采不会消除当前最大残差，因此不阻塞首个 Field Session；只有在上述
+body-axis 确认时能顺带完成，才追加一条 `z_negative` verification window，且不覆盖
+原 artifact。

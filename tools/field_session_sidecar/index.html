@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' data: blob:; connect-src 'none'; img-src 'self' data: blob:; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+    >
+    <title>Ego Link Field Sidecar</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0b0f14;
+        color: #eef3f8;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: #0b0f14; }
+      main { width: min(760px, 100%); margin: 0 auto; padding: 20px 16px 48px; }
+      h1 { margin: 0 0 6px; font-size: 1.45rem; }
+      h2 { margin: 0 0 14px; font-size: 1.05rem; }
+      p { line-height: 1.55; }
+      .subtle { color: #9eacbb; font-size: .9rem; }
+      .card { margin-top: 16px; padding: 16px; border: 1px solid #27313c; border-radius: 12px; background: #121923; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      label { display: grid; gap: 6px; color: #c9d3dd; font-size: .88rem; }
+      input, textarea, button { font: inherit; }
+      input, textarea { width: 100%; border: 1px solid #394756; border-radius: 8px; padding: 11px; color: #eef3f8; background: #0b1119; }
+      textarea { min-height: 74px; resize: vertical; }
+      button { min-height: 46px; border: 1px solid #3b4a5a; border-radius: 9px; padding: 10px 12px; color: #eef3f8; background: #1b2633; cursor: pointer; }
+      button.primary { border-color: #2f8f76; background: #14604e; }
+      button.event { text-align: left; font-weight: 650; }
+      button.camera { border-color: #486d97; background: #213f60; }
+      button.danger { color: #ffb7b7; border-color: #713d45; background: #321d23; }
+      button:disabled { cursor: not-allowed; opacity: .42; }
+      .events { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .events button:last-child { grid-column: 1 / -1; }
+      .status { display: grid; grid-template-columns: auto 1fr; gap: 7px 12px; margin: 0; font-size: .9rem; }
+      .status dt { color: #8fa0b2; }
+      .status dd { margin: 0; overflow-wrap: anywhere; }
+      .banner { display: none; margin-top: 14px; padding: 12px; border-radius: 9px; line-height: 1.45; }
+      .banner.visible { display: block; }
+      .banner.info { color: #c8eaff; background: #123249; }
+      .banner.error { color: #ffd1d1; background: #481d25; }
+      .banner.warning { color: #ffe7ae; background: #473819; }
+      .toolbar { display: flex; flex-wrap: wrap; gap: 10px; }
+      .check { display: flex; align-items: flex-start; gap: 9px; margin-top: 12px; }
+      .check input { width: auto; margin-top: 3px; }
+      .records { margin: 0; padding-left: 22px; color: #cdd7e1; }
+      .records li { padding: 4px 0; }
+      code { color: #a8e9d8; }
+      @media (max-width: 600px) {
+        .grid, .events { grid-template-columns: 1fr; }
+        .events button:last-child { grid-column: auto; }
+        main { padding: 14px 12px 40px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Ego Link 外场采集 Sidecar</h1>
+      <p class="subtle">手机本地记录人工事件和少量 JPEG。无上传、无后台接口；浏览器时钟只记为 estimated / unverified。</p>
+
+      <section class="card" id="setup-card">
+        <h2>1. 绑定 Field Session</h2>
+        <div class="grid">
+          <label>
+            Session ID
+            <input id="session-id" autocomplete="off" placeholder="FS-20260817T080000Z-abcdef123456">
+          </label>
+          <label>
+            操作者引用
+            <input id="operator-ref" autocomplete="off" placeholder="operator-01">
+          </label>
+          <label>
+            手机/浏览器设备 ID
+            <input id="device-id" autocomplete="off" value="field-phone-001">
+          </label>
+        </div>
+        <label class="check">
+          <input id="privacy-ack" type="checkbox">
+          <span>若本次要拍照：我确认仅为本地工程采集保存少量私有 JPEG，不上传、不入 Git、不授权训练，并在实验后复核留存/删除。未勾选仍可记录人工事件，但禁止加入 JPEG；本确认不等于 Control Plane 或 Gate 审批。</span>
+        </label>
+        <div class="toolbar" style="margin-top: 14px">
+          <button class="primary" id="start-button" type="button">开始本地记录</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>2. 同一时间轴记录</h2>
+        <label>
+          本次事件备注（可留空）
+          <textarea id="event-note" maxlength="1024" placeholder="只记录必要信息，避免写入姓名、门牌等隐私。"></textarea>
+        </label>
+        <div class="events" style="margin-top: 12px">
+          <button class="event action" data-event="START_WALKING" type="button">START_WALKING · 开始步行</button>
+          <button class="event action" data-event="PUT_IN_BAG" type="button">PUT_IN_BAG · 放入包中</button>
+          <button class="event action" data-event="ENTER_BUILDING" type="button">ENTER_BUILDING · 进入建筑</button>
+          <button class="event action" data-event="EXIT_BUILDING" type="button">EXIT_BUILDING · 离开建筑</button>
+          <button class="event action danger" data-event="STOP" type="button">STOP · 结束本次 Sidecar 记录</button>
+        </div>
+        <div class="toolbar" style="margin-top: 12px">
+          <button class="camera action" id="camera-button" type="button">拍摄一张 JPEG</button>
+          <input id="camera-input" type="file" accept="image/jpeg" capture="environment" hidden>
+        </div>
+        <p class="subtle">照片时间是浏览器返回文件的时刻，不是相机 exposure time。最多 6 张；压缩后单张不超过 512 KiB、合计不超过 2 MiB。</p>
+      </section>
+
+      <section class="card">
+        <h2>3. 状态与导出</h2>
+        <dl class="status">
+          <dt>状态</dt><dd id="status-value">未开始</dd>
+          <dt>Session</dt><dd id="status-session">—</dd>
+          <dt>时钟域</dt><dd id="status-clock">—</dd>
+          <dt>记录数</dt><dd id="status-records">0</dd>
+          <dt>JPEG</dt><dd id="status-media">0 张 / 0 KiB</dd>
+          <dt>导出 SHA-256</dt><dd id="status-digest">—</dd>
+        </dl>
+        <div id="message" class="banner" role="status" aria-live="polite"></div>
+        <div class="toolbar" style="margin-top: 14px">
+          <button id="export-button" type="button">下载确定性 JSON Bundle</button>
+          <button class="danger" id="reset-button" type="button">清除本机草稿</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>本次记录</h2>
+        <ol id="record-list" class="records"></ol>
+        <p id="empty-records" class="subtle">尚无人工事件或照片。</p>
+      </section>
+    </main>
+    <script src="sidecar-core.js"></script>
+    <script src="sidecar-app.js"></script>
+  </body>
+</html>
