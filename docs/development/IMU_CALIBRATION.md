@@ -1,15 +1,15 @@
 ---
 document_status: engineering_baseline
-last_verified: 2026-08-16
+last_verified: 2026-08-17
 verified_by: codex
 ---
 
 # A0-001 IMU 六面工程校准
 
-本文件定义 A0-001 的静态软件合同。它不代表已完成真实六面采集，也不代表
-量产 IMU 验收。只有真实 QMI8658A 六面姿态和独立静止陀螺仪窗口经过评审并
-生成命名 artifact 后，A0-001 才能进入 PASS；代码、schema 或 synthetic fixture
-通过时，A-R0 仍保持 `0/8`。
+本文件定义 A0-001 的工程软件合同。2026-08-16 已完成真实工作台六面姿态和
+独立静止陀螺仪采集；2026-08-17 独立审计接受其命名 artifact 为工程校准
+产物。它不是 Field Session、训练就绪或量产 IMU 验收证据。A0-001 保持
+`active`，A-R0 保持 `0/8`，直到当前控制合同要求的 Field Session 等证据齐备。
 
 ## 当前输入边界
 
@@ -56,11 +56,10 @@ gyro_stationary
 每个 `window_id` 必须满足 wire 合同的推导式
 `imuw-<capture_cmd_id>-b<boot_count>`，`boot_count` 必须存在且有效。
 
-**七个姿态不可能在一次开机内采完。** 固件
-`EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS` 的取值范围是 `1..4`（默认 1，
-且有 4 条的编译期 cache 断言），即单次开机最多 4 条成功的
-`capture_imu_window`。因此 7 个窗口必然跨至少 2 次开机（默认配置下是 7 次）。
-提高该上限属于固件改动，明确在 A0-001 `out_of_scope` 内。
+`EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS` 的 `1..4` 成功命令上限
+只属于专用 Wi-Fi profile。FW-007 的 LTE command loop 不受该上限；
+2026-08-16 的七个窗口全部来自同一次开机（boot `26946`）。提高 Wi-Fi
+profile 上限仍属于固件改动，明确在 A0-001 `out_of_scope` 内。
 
 工具据此**记录而不是拒绝**跨 boot：`capture_profile.device_boot_counts` 列出全部
 boot，每个 source window ref 绑定自己的 `boot_count`，跨 boot 时 artifact 自动
@@ -68,9 +67,8 @@ boot，每个 source window ref 绑定自己的 `boot_count`，跨 boot 时 arti
 device、firmware、sensor identity 和 test_run 一致性保证——这些仍然 fail closed。
 跨 boot 的代价是 monotonic uptime 基准重置，因此绝不可跨窗口比较 uptime。
 
-真实采集属于 task packet 的后续 hardware phase：每次由 operator 摆放并确认
-姿态，稳定后才允许创建一个有界命令。静态实现阶段不得 flash、创建 VPS 命令
-或操作设备。
+后续采集仍须由 operator 逐面摆放并确认姿态，稳定后才允许创建一个有界命令。
+本文件不授权 flash、创建 VPS 命令或修改设备配置。
 
 ## 操作员逐面清单
 
@@ -301,3 +299,16 @@ sample_utc = unavailable_pending_A0-002
 - output schema 不通过。
 
 Synthetic fixture 仅保护算法和合同，永远不能成为 A0-001 Gate evidence。
+
+## 当前工程证据状态
+
+工作台运行 `A0-001-REAL-20260816-001` 产生 7 个窗口、700 个真实样本，
+全部经 FW-007 LTE command loop 在 boot `26946` 采集。校准
+`imucal-e6e1c71fc02a239c8372fabc` 的 source、identity、payload 和 materialized
+hash 已独立重算；标准命令可逐字节重建 artifact、calibrated JSONL 和报告。
+
+当前仍缺：p3-p6 的独立 operator receipt、原 Message Hub DB 的离线 raw-frame
+复核、可由新 clone 访问的不可变证据位置，以及独立重复性、body-axis、温度、
+sample UTC 和 raw ADC counts。`calibration_software_commit` 记录为 `f1439fe`，
+而报告尾注文案在 `c54ed7d` 才提交；算法与两个机器产物可复现，但报告生成
+provenance 不完全由前一个提交唯一标识。

@@ -5,7 +5,7 @@ status: active
 priority: critical
 requires_hardware: true
 created: 2026-08-16
-last_updated: 2026-08-16
+last_updated: 2026-08-17
 
 context:
   - docs/current/EGO_LINK_A_LINE_AI_CONTEXT.md
@@ -82,8 +82,12 @@ stationary gyro bias, and emits:
 - [x] Automated tests cover valid estimation, deterministic identity,
   schema validation, integrity failure, missing pose, source mismatch and
   raw/calibrated preservation.
-- [ ] A real six-pose operator capture remains required before A0-001 can pass;
-  synthetic fixtures or code existence are not Gate evidence.
+- [x] A real bench six-face plus independent gyro capture produced a
+  reproducible engineering artifact; the 2026-08-17 integrity review accepts
+  it only as `artifact` evidence.
+- [ ] A qualifying Field Session must reference the calibration artifact,
+  preserve pre-calibration and calibrated values, and expose a shareable
+  immutable evidence reference before A0-001 and A-R0-C1 can close.
 
 # Validation Commands
 
@@ -111,10 +115,6 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
   `#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED`. Failover depends
   on that loop, so FW-007 takes the other branch and the cap does not apply.
   The practical per-boot bound there is the poll-attempt limit instead.
-- Unverified on hardware: the flashed poll-attempt bound, the device's current
-  transport state, and whether a capture actually completes on this image. This
-  is source and build-config reasoning, not a runtime result; one bounded
-  observation is still required before any pose sequence is planned.
 - Board: connectivity-node ESP32-S3-SIM7670G with external QMI8658A
 - Capture performed 2026-08-16 on the already-flashed FW-007 image; no reflash,
   no firmware change, no configuration change was needed or made.
@@ -125,11 +125,6 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 - Result: seven windows, all cadence-qualified, zero invalid, zero mock
 - Evidence path: `reports/imu_calibration/A0-001-REAL-20260816-001/`
   (`reports/` is gitignored, so the artifact stays local by repository convention)
-- Connection: bounded Message Hub IMU-window command over the selected
-  supported transport; no USB dependency for accepted runtime evidence
-- Expected output: six stable, correctly labelled opposite poses plus
-  stationary gyro samples, all hash-bound to one calibration artifact
-- Evidence path: `reports/imu_calibration/<calibration-run-id>/` (pending)
 
 # Decisions
 
@@ -150,17 +145,12 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
   `shared/contracts/imu_calibrated_window.schema.json`
 - Documentation: `docs/development/IMU_CALIBRATION.md`, ADR-0009 and the
   control-contract index entries
-- Focused test: `python -m unittest quality_tests.test_a0_imu_calibration -v`
-  passed 11/11 on 2026-08-16 and 18/18 after the 2026-08-16 review
+- Focused calibration/capture/repeatability tests passed 36/36 on 2026-08-17.
 - Repository validation: `python scripts/context_lint.py` passed and
-  `scripts/verify.ps1` passed 683/683 on 2026-08-16
-- Capture feasibility: the Wi-Fi IMU profile caps successful commands per boot
-  at `1..4` (`EGOLINK_WIFI_IMU_WINDOW_MAX_SUCCESSFUL_COMMANDS`, default 1), so
-  the seven poses necessarily span at least two boots. Raising that cap is
-  firmware behavior and stays out of scope, so the tool records and binds the
-  boot span instead of requiring one boot. `scripts/run_imu_capture_session.py`
-  still requires exactly three windows per plan and is not in `allowed_paths`,
-  so the operator capture path remains an open decision before any capture.
+  `scripts/verify.ps1` passed 708/708 on 2026-08-17.
+- Capture feasibility: the Wi-Fi-only `1..4` successful-command cap does not
+  apply to the FW-007 LTE command loop. The real run captured all seven windows
+  in boot `26946`; cross-boot capture remains allowed and explicitly recorded.
 - Independent review 2026-08-16 closed four fail-open gaps found in `c779881`:
   a rotating window was accepted and recorded as gyro bias, `boot_count` was
   exported but never bound, `window_id` was not checked against its own
@@ -177,10 +167,15 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
   against a `2000` bound; max calibrated off-axis residual `85.51` mg against a
   `150` bound. All 700 materialized samples preserve their source
   `accel_mg`/`gyro_mdps` exactly, and the source JSONL was not modified.
-- A0-001 stays `active` and A-R0 stays `0/8`: the artifact exists but has not
-  been reviewed and accepted as Gate evidence, and the Control Plane has not
-  been updated. Generation is not acceptance.
-- Remaining risks: raw ADC counts, temperature, final mounting, independent
-  repeatability, temperature drift and production calibration are unavailable.
-  The six-face residuals stay fit-internal, so they bound fixture tilt (about
-  1.1% worst-case sensitivity error at the gate) but never measure accuracy.
+- The 2026-08-17 integrity review accepts the result as engineering `artifact`
+  evidence. Control Plane commit `2fa3402` records it and is deployed. A0-001
+  stays `active` and A-R0 stays `0/8`; this bench run is not a Field Session,
+  training-ready evidence, production calibration or Gate PASS.
+- Evidence gaps: p3-p6 lack independent operator receipts; the raw Message Hub
+  DB was not retained with the package; `reports/` is gitignored; independent
+  repeatability, body-axis mapping, temperature, sample UTC, raw ADC counts,
+  temperature drift and production calibration remain unavailable.
+- `calibration_software_commit` records `f1439fe`; the report-footer wording
+  was committed later in `c54ed7d`. The algorithm and machine artifacts remain
+  reproducible, but the report provenance is not fully identified by the
+  recorded software commit.
