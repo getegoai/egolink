@@ -1,0 +1,756 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/field_session_manifest.schema.json",
+  "title": "Ego Link Field Session Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "session_id",
+    "session_type",
+    "lifecycle_state",
+    "seal",
+    "created_at_utc",
+    "capture_interval",
+    "primary_device_id",
+    "device_runs",
+    "software",
+    "artifacts",
+    "calibrations",
+    "scenario",
+    "capture_profile",
+    "sensor_policies",
+    "battery",
+    "privacy",
+    "split",
+    "provenance",
+    "streams",
+    "time_lineage",
+    "limitations"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "egolink.field_session.v0.1"
+    },
+    "session_id": {
+      "$ref": "#/$defs/sessionId"
+    },
+    "session_type": {
+      "type": "string",
+      "enum": ["field", "bench", "simulation", "replay"]
+    },
+    "lifecycle_state": {
+      "type": "string",
+      "enum": ["planned", "capturing", "complete"]
+    },
+    "seal": {
+      "$ref": "#/$defs/seal"
+    },
+    "created_at_utc": {
+      "$ref": "#/$defs/utcTimestamp"
+    },
+    "capture_interval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_utc", "end_utc", "timezone"],
+      "properties": {
+        "start_utc": { "$ref": "#/$defs/nullableUtcTimestamp" },
+        "end_utc": { "$ref": "#/$defs/nullableUtcTimestamp" },
+        "timezone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "primary_device_id": {
+      "$ref": "#/$defs/id"
+    },
+    "device_runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/deviceRun" }
+    },
+    "software": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "repository_commit",
+        "capture_tool",
+        "capture_tool_version"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "repository_commit": { "$ref": "#/$defs/nullableCommit" },
+        "capture_tool": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "capture_tool_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact" }
+    },
+    "calibrations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/calibration" }
+    },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "protocol_id",
+        "test_scenario",
+        "route_id",
+        "operator_ref",
+        "repeat_index",
+        "declared_carry_conditions",
+        "declared_motion_conditions",
+        "declared_environments",
+        "notes"
+      ],
+      "properties": {
+        "protocol_id": { "$ref": "#/$defs/id" },
+        "test_scenario": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "route_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        },
+        "operator_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "repeat_index": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "declared_carry_conditions": { "$ref": "#/$defs/stringSet" },
+        "declared_motion_conditions": { "$ref": "#/$defs/stringSet" },
+        "declared_environments": { "$ref": "#/$defs/stringSet" },
+        "notes": {
+          "type": ["string", "null"],
+          "maxLength": 4096
+        }
+      }
+    },
+    "capture_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile_id", "protocol_version", "required_sources", "optional_sources"],
+      "properties": {
+        "profile_id": { "$ref": "#/$defs/id" },
+        "protocol_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "required_sources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/source" }
+        },
+        "optional_sources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/source" }
+        }
+      }
+    },
+    "sensor_policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["imu", "gnss", "lte", "camera", "audio"],
+      "properties": {
+        "imu": { "$ref": "#/$defs/policy" },
+        "gnss": { "$ref": "#/$defs/policy" },
+        "lte": { "$ref": "#/$defs/policy" },
+        "camera": { "$ref": "#/$defs/policy" },
+        "audio": { "$ref": "#/$defs/policy" }
+      }
+    },
+    "battery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "$ref": "#/$defs/batteryMeasurement" },
+        "end": { "$ref": "#/$defs/batteryMeasurement" }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "consent_status",
+        "privacy_review_status",
+        "location_privacy_class",
+        "raw_image_allowed",
+        "raw_audio_allowed",
+        "training_allowed",
+        "retention_status",
+        "consent_artifact_id",
+        "retention_policy_artifact_id",
+        "reviewed_by",
+        "reviewed_at_utc"
+      ],
+      "properties": {
+        "consent_status": {
+          "type": "string",
+          "enum": ["not_reviewed", "allowed", "denied"]
+        },
+        "privacy_review_status": {
+          "type": "string",
+          "enum": ["not_reviewed", "approved", "rejected"]
+        },
+        "location_privacy_class": {
+          "type": "string",
+          "enum": ["unknown", "engineering_private", "private_location", "public_bounded"]
+        },
+        "raw_image_allowed": { "type": "boolean" },
+        "raw_audio_allowed": { "const": false },
+        "training_allowed": { "const": false },
+        "retention_status": {
+          "type": "string",
+          "enum": ["not_reviewed", "approved", "rejected"]
+        },
+        "consent_artifact_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        },
+        "retention_policy_artifact_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        },
+        "reviewed_by": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "reviewed_at_utc": { "$ref": "#/$defs/nullableUtcTimestamp" }
+      }
+    },
+    "split": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "strategy", "group_keys", "leakage_review_status", "reviewed_by", "reviewed_at_utc"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": ["unassigned", "excluded"]
+        },
+        "strategy": {
+          "type": "string",
+          "enum": ["session_blocked", "session_route_device_blocked"]
+        },
+        "group_keys": { "$ref": "#/$defs/stringSet" },
+        "leakage_review_status": {
+          "type": "string",
+          "enum": ["pending", "failed"]
+        },
+        "reviewed_by": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "reviewed_at_utc": { "$ref": "#/$defs/nullableUtcTimestamp" }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["message_hub_test_run_ids", "field_run_ids", "legacy_session_ids"],
+      "properties": {
+        "message_hub_test_run_ids": { "$ref": "#/$defs/idSet" },
+        "field_run_ids": { "$ref": "#/$defs/idSet" },
+        "legacy_session_ids": { "$ref": "#/$defs/idSet" }
+      }
+    },
+    "streams": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/stream" }
+    },
+    "time_lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_contract_version", "mapping_contract_version", "record_artifact_ids", "mapping_artifact_ids", "validation_report_artifact_id"],
+      "properties": {
+        "record_contract_version": {
+          "const": "egolink.sensor_time_lineage.v0.1"
+        },
+        "mapping_contract_version": {
+          "const": "egolink.clock_mapping_segment.v0.1"
+        },
+        "record_artifact_ids": { "$ref": "#/$defs/idSet" },
+        "mapping_artifact_ids": { "$ref": "#/$defs/idSet" },
+        "validation_report_artifact_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1024
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^FS-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+    },
+    "idSet": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "stringSet": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "source": {
+      "type": "string",
+      "enum": ["gnss", "lte", "imu", "camera", "audio", "device", "manual_event", "label"]
+    },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:Z|[+]00:00)$"
+    },
+    "nullableUtcTimestamp": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/utcTimestamp" }
+      ]
+    },
+    "nullableCommit": {
+      "type": ["string", "null"],
+      "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$"
+    },
+    "nullableNonNegativeInt64": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "seal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "method",
+        "sealed_at_utc",
+        "sealed_by",
+        "manifest_core_sha256",
+        "artifact_set_sha256"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["unsealed", "sealed"]
+        },
+        "method": {
+          "const": "canonical_json_with_manifest_core_sha256_null"
+        },
+        "sealed_at_utc": { "$ref": "#/$defs/nullableUtcTimestamp" },
+        "sealed_by": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "manifest_core_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "artifact_set_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-fA-F]{64}$"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "role",
+        "format",
+        "sha256",
+        "size_bytes",
+        "record_count",
+        "media_type",
+        "content_contract_version",
+        "privacy_class",
+        "part_group",
+        "part_index",
+        "part_count"
+      ],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/id" },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "stream_data",
+            "time_lineage_records",
+            "clock_mapping",
+            "time_validation_report",
+            "calibration",
+            "raw_media",
+            "policy",
+            "consent",
+            "retention_policy",
+            "legacy_attachment"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "enum": ["json", "jsonl", "binary", "jpeg"]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "record_count": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "content_contract_version": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "privacy_class": {
+          "type": "string",
+          "enum": ["structured_sensor", "private_location", "private_media", "policy_metadata", "unknown"]
+        },
+        "part_group": {
+          "type": "null"
+        },
+        "part_index": {
+          "type": "null"
+        },
+        "part_count": {
+          "type": "null"
+        }
+      }
+    },
+    "deviceRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device_run_id",
+        "device_id",
+        "role",
+        "board_id",
+        "hardware_revision",
+        "firmware_version",
+        "firmware_commit",
+        "firmware_image_sha256",
+        "boot_count",
+        "monotonic_clock_domain_ids",
+        "source_status"
+      ],
+      "properties": {
+        "device_run_id": { "$ref": "#/$defs/id" },
+        "device_id": { "$ref": "#/$defs/id" },
+        "role": {
+          "type": "string",
+          "enum": ["primary", "connectivity", "wearable", "camera", "host_bridge", "external_reference"]
+        },
+        "board_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "hardware_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "firmware_version": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "firmware_commit": { "$ref": "#/$defs/nullableCommit" },
+        "firmware_image_sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-fA-F]{64}$"
+        },
+        "boot_count": { "$ref": "#/$defs/nullableNonNegativeInt64" },
+        "monotonic_clock_domain_ids": { "$ref": "#/$defs/idSet" },
+        "source_status": {
+          "type": "string",
+          "enum": ["verified", "observed", "mock", "pc_side_verified", "unknown", "unverified"]
+        }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["calibration_id", "sensor", "device_id", "status", "artifact_id", "applies_to_stream_ids"],
+      "properties": {
+        "calibration_id": { "$ref": "#/$defs/id" },
+        "sensor": {
+          "type": "string",
+          "enum": ["imu", "camera", "other"]
+        },
+        "device_id": { "$ref": "#/$defs/id" },
+        "status": {
+          "type": "string",
+          "enum": ["engineering", "validated", "production"]
+        },
+        "artifact_id": { "$ref": "#/$defs/id" },
+        "applies_to_stream_ids": { "$ref": "#/$defs/idSet" }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "policy_id", "requested_rate_hz", "config_artifact_id"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["continuous", "scheduled", "event_triggered", "disabled", "unknown"]
+        },
+        "policy_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        },
+        "requested_rate_hz": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0,
+          "maximum": 1000000
+        },
+        "config_artifact_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        }
+      }
+    },
+    "batteryMeasurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit", "source_status", "source_ref"],
+      "properties": {
+        "value": { "type": ["number", "null"] },
+        "unit": {
+          "type": "string",
+          "enum": ["percent", "millivolt", "milliamp_hour", "unavailable"]
+        },
+        "source_status": {
+          "type": "string",
+          "enum": ["verified", "observed", "mock", "unknown", "unavailable"]
+        },
+        "source_ref": {
+          "type": ["string", "null"],
+          "maxLength": 512
+        }
+      }
+    },
+    "stream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stream_id",
+        "source",
+        "variant",
+        "status",
+        "format",
+        "record_contract_version",
+        "artifact_id",
+        "observation_count",
+        "device_run_id",
+        "clock_domain_id",
+        "bounds",
+        "raw_preserved",
+        "calibration_id",
+        "source_stream_id",
+        "generator",
+        "reason_codes"
+      ],
+      "properties": {
+        "stream_id": { "$ref": "#/$defs/id" },
+        "source": { "$ref": "#/$defs/source" },
+        "variant": {
+          "type": "string",
+          "enum": [
+            "raw_counts",
+            "uncalibrated_engineering",
+            "calibrated",
+            "normalized_observation",
+            "manual_event",
+            "device_telemetry",
+            "label",
+            "derived"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["captured", "declared_unavailable", "not_requested"]
+        },
+        "format": {
+          "type": ["string", "null"],
+          "maxLength": 128
+        },
+        "record_contract_version": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "artifact_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        },
+        "observation_count": {
+          "$ref": "#/$defs/nullableNonNegativeInt64"
+        },
+        "device_run_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        },
+        "clock_domain_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        },
+        "bounds": { "$ref": "#/$defs/streamBounds" },
+        "raw_preserved": { "type": ["boolean", "null"] },
+        "calibration_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        },
+        "source_stream_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        },
+        "generator": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/generator" }
+          ]
+        },
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]{1,96}$"
+          }
+        }
+      }
+    },
+    "streamBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence_first",
+        "sequence_last",
+        "monotonic_start_ns",
+        "monotonic_end_ns",
+        "utc_start",
+        "utc_end"
+      ],
+      "properties": {
+        "sequence_first": { "$ref": "#/$defs/nullableNonNegativeInt64" },
+        "sequence_last": { "$ref": "#/$defs/nullableNonNegativeInt64" },
+        "monotonic_start_ns": { "$ref": "#/$defs/nullableNonNegativeInt64" },
+        "monotonic_end_ns": { "$ref": "#/$defs/nullableNonNegativeInt64" },
+        "utc_start": { "$ref": "#/$defs/nullableUtcTimestamp" },
+        "utc_end": { "$ref": "#/$defs/nullableUtcTimestamp" }
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "commit", "source_stream_ids", "config_artifact_id"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "commit": { "$ref": "#/$defs/nullableCommit" },
+        "source_stream_ids": { "$ref": "#/$defs/idSet" },
+        "config_artifact_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/id" }
+          ]
+        }
+      }
+    }
+  }
+}

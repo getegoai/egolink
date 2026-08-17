@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/field_manual_event.schema.json",
+  "title": "Ego Link Field Manual Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "event_id",
+    "session_id",
+    "sequence_id",
+    "event_type",
+    "capture_method",
+    "device_run_id",
+    "timestamp_monotonic_ns",
+    "timestamp_utc",
+    "source_timestamp",
+    "monotonic_clock_domain_id",
+    "boot_count",
+    "mapping_id",
+    "timestamp_uncertainty_ns",
+    "receive_timestamp_utc",
+    "ingest_timestamp_utc",
+    "alignment_status",
+    "timestamp_monotonic_origin",
+    "timestamp_utc_origin",
+    "operator_ref",
+    "note",
+    "label_semantics",
+    "reason_codes"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "egolink.field_manual_event.v0.1"
+    },
+    "event_id": {
+      "$ref": "#/$defs/id"
+    },
+    "session_id": {
+      "$ref": "#/$defs/sessionId"
+    },
+    "sequence_id": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "START_WALKING",
+        "ENTER_BUILDING",
+        "EXIT_BUILDING",
+        "PUT_IN_BAG",
+        "TAKE_FROM_BAG",
+        "ENTER_VEHICLE",
+        "LANDMARK",
+        "STOP",
+        "OTHER"
+      ]
+    },
+    "capture_method": {
+      "type": "string",
+      "enum": ["device_button", "web_button", "test_phone"]
+    },
+    "device_run_id": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/id" }
+      ]
+    },
+    "timestamp_monotonic_ns": {
+      "$ref": "#/$defs/nullableNonNegativeInt64"
+    },
+    "timestamp_utc": {
+      "$ref": "#/$defs/nullableUtcTimestamp"
+    },
+    "source_timestamp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_value", "unit", "clock_domain_id", "source_field"],
+      "properties": {
+        "raw_value": {
+          "type": ["string", "number", "null"]
+        },
+        "unit": {
+          "type": "string",
+          "enum": ["ns", "us", "ms", "s", "iso8601", "unavailable"]
+        },
+        "clock_domain_id": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "source_field": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "monotonic_clock_domain_id": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/id" }
+      ]
+    },
+    "boot_count": {
+      "$ref": "#/$defs/nullableNonNegativeInt64"
+    },
+    "mapping_id": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/id" }
+      ]
+    },
+    "timestamp_uncertainty_ns": {
+      "$ref": "#/$defs/nullableNonNegativeInt64"
+    },
+    "receive_timestamp_utc": {
+      "$ref": "#/$defs/nullableUtcTimestamp"
+    },
+    "ingest_timestamp_utc": {
+      "$ref": "#/$defs/nullableUtcTimestamp"
+    },
+    "alignment_status": {
+      "type": "string",
+      "enum": ["unavailable", "receive_only", "estimated", "verified"]
+    },
+    "timestamp_monotonic_origin": {
+      "type": "string",
+      "enum": ["producer_clock", "unavailable"]
+    },
+    "timestamp_utc_origin": {
+      "type": "string",
+      "enum": ["source_timestamp", "clock_mapping", "unavailable"]
+    },
+    "operator_ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "note": {
+      "type": ["string", "null"],
+      "maxLength": 1024
+    },
+    "label_semantics": {
+      "const": "weak_operator_event"
+    },
+    "reason_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_]{1,96}$"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^FS-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$"
+    },
+    "nullableNonNegativeInt64": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "nullableUtcTimestamp": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(?:Z|[+]00:00)$"
+        }
+      ]
+    }
+  }
+}

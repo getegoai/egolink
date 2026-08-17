@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/imu_field_calibrated_window.schema.json",
+  "title": "Ego Link field-session calibrated IMU window v0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "field_session_id",
+    "calibration_id",
+    "calibration_identity_sha256",
+    "source_window",
+    "sample_count",
+    "requested_interval_us",
+    "training_allowed",
+    "production_ready",
+    "availability",
+    "samples"
+  ],
+  "properties": {
+    "schema_version": { "const": "egolink.imu_field_calibrated_window.v0.1" },
+    "field_session_id": { "$ref": "#/$defs/sessionId" },
+    "calibration_id": { "type": "string", "pattern": "^imucal-[0-9a-f]{24}$" },
+    "calibration_identity_sha256": { "$ref": "#/$defs/sha256" },
+    "source_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version",
+        "window_id",
+        "capture_cmd_id",
+        "test_run_id",
+        "transport_type",
+        "samples_sha256",
+        "source_artifact_sha256",
+        "time_basis"
+      ],
+      "properties": {
+        "contract_version": { "const": "egolink.imu_window.v1" },
+        "window_id": { "$ref": "#/$defs/safeId" },
+        "capture_cmd_id": { "$ref": "#/$defs/safeId" },
+        "test_run_id": { "$ref": "#/$defs/safeId" },
+        "transport_type": { "enum": ["lte", "wifi"] },
+        "samples_sha256": { "$ref": "#/$defs/sha256" },
+        "source_artifact_sha256": { "$ref": "#/$defs/sha256" },
+        "time_basis": { "const": "device_monotonic_uptime_only" }
+      }
+    },
+    "sample_count": { "const": 100 },
+    "requested_interval_us": { "const": 50000 },
+    "training_allowed": { "const": false },
+    "production_ready": { "const": false },
+    "availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adc_counts", "temperature", "sample_utc"],
+      "properties": {
+        "adc_counts": { "const": "unavailable_in_imu_window_v1" },
+        "temperature": { "enum": ["unavailable_in_imu_window_v1", "available_in_source_metadata"] },
+        "sample_utc": { "const": "external_a0_002_time_lineage" }
+      }
+    },
+    "samples": {
+      "type": "array",
+      "minItems": 100,
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "offset_us", "uncalibrated", "calibrated"],
+        "properties": {
+          "index": { "type": "integer", "minimum": 0, "maximum": 99 },
+          "offset_us": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+          "uncalibrated": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["accel_mg", "gyro_mdps"],
+            "properties": {
+              "accel_mg": { "$ref": "#/$defs/intTriple" },
+              "gyro_mdps": { "$ref": "#/$defs/intTriple" }
+            }
+          },
+          "calibrated": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["accel_mg", "gyro_mdps", "accel_m_s2", "gyro_rad_s"],
+            "properties": {
+              "accel_mg": { "$ref": "#/$defs/numberTriple" },
+              "gyro_mdps": { "$ref": "#/$defs/numberTriple" },
+              "accel_m_s2": { "$ref": "#/$defs/numberTriple" },
+              "gyro_rad_s": { "$ref": "#/$defs/numberTriple" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "safeId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+    "sessionId": { "type": "string", "pattern": "^FS-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{12}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "intTriple": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 }
+    },
+    "numberTriple": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "number" }
+    }
+  }
+}

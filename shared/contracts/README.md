@@ -23,6 +23,9 @@
 | `imu_calibrated_window.schema.json` | `imu_window_export.v1` 的非覆盖式 calibrated JSONL 派生视图；逐样本保留原始未校准 mg/mdps，并添加 calibrated mg/mdps 与 SI 值。 |
 | `sensor_time_lineage.schema.json` | A0-002 的逐 observation 时间血缘合同；显式区分源时间、boot-scoped monotonic ns、UTC、receive/ingest UTC、alignment/uncertainty 与不可变来源。 |
 | `clock_mapping_segment.schema.json` | A0-002 的 boot-scoped monotonic→UTC 有界映射段；绑定原点、显式 UTC rate correction、有效区间、可复算 anchors、fit error、uncertainty 与来源证据。 |
+| `field_session_manifest.schema.json` | A0-003 标准 Session 包清单：绑定唯一 Session ID、四源与人工事件、device/boot/software/calibration、隐私、stream 范围、artifact hashes、A0-002 exact-input 报告及 seal/package closure；raw Session 不自行授权训练。 |
+| `field_manual_event.schema.json` | A0-003 人工事件 weak-label 合同：保存事件类型、事件/传输时间、操作者、note，以及可用时的 device/boot/clock/mapping lineage。 |
+| `imu_field_calibrated_window.schema.json` | A0-003 普通外场 IMU window 的非覆盖式 calibrated 视图；区别于只适用于 A0-001 七个校准姿态的 `imu_calibrated_window.v0.1`。 |
 
 ## 变更规则
 
