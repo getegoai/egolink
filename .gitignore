@@ -33,6 +33,7 @@ firmware/**/managed_components/
 firmware/**/sdkconfig.old
 firmware/**/sdkconfig.local
 firmware/**/sdkconfig.*.local
+firmware/camera_smoke/sdkconfig
 
 # Hardware smoke-test captures
 firmware/**/captures/

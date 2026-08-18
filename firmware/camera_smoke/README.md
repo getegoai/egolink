@@ -44,6 +44,10 @@ Ego Link Camera Smoke -> Wi-Fi SSID
 Ego Link Camera Smoke -> Wi-Fi password
 ```
 
+`sdkconfig` is generated locally and must not be committed. Keep credentials
+in the local generated config only; the tracked `sdkconfig.defaults` contains
+no SSID or password.
+
 ## Flash And Monitor
 
 ```powershell
