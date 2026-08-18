@@ -1,11 +1,12 @@
 ---
 id: FIELD-AI-001
 title: 首个可回放四源 AI Field Session 与 60 秒 GNSS blackout smoke
-status: active
+status: superseded
 priority: critical
 requires_hardware: true
 created: 2026-08-17
-last_updated: 2026-08-17
+last_updated: 2026-08-18
+superseded_by: FT-001B
 
 context:
   - docs/current/EGO_LINK_A_LINE_AI_CONTEXT.md
@@ -19,7 +20,7 @@ context:
   - shared/contracts/
 
 allowed_paths:
-  - docs/tasks/active/FIELD-AI-001_FIRST_REAL_AI_SESSION.md
+  - docs/tasks/done/FIELD-AI-001_FIRST_REAL_AI_SESSION.md
   - docs/tasks/active/A0-001_IMU_CALIBRATION_PIPELINE.md
   - docs/development/IMU_CALIBRATION.md
   - tools/field_session_sidecar/
@@ -41,6 +42,15 @@ out_of_scope:
 ---
 
 # Problem
+
+> **Superseded on 2026-08-18.** This packet required a four-source Session,
+> phone-side Camera/events and trustworthy four-source synchronization before
+> the first blackout smoke. Founder direction replaced that prerequisite with
+> [FT-001B](../active/FT-001B_FIRST_REPLAYABLE_ASYNC_GNSS_IMU_SESSION.md): independent
+> asynchronous acquisition, a GNSS+IMU minimum, opportunistic LTE, optional
+> Camera/manual events and server-side event-time reconstruction. The evidence
+> and non-claims below remain historical; unchecked criteria are not carried
+> forward as current blockers.
 
 已有 A0-001 工程校准、A0-002 时间合同和 A0-003 包合同，但尚无同一次真实外出测试的
 GNSS、LTE、IMU、Camera 与人工事件包，也没有能对该包执行 60 秒 GNSS 遮蔽的最小定位

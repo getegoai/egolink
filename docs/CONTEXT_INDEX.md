@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-14
+last_verified: 2026-08-18
 verified_by: codex
 ---
 
@@ -38,7 +38,7 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 | Dual-board / PC Bridge architecture | `docs/architecture/SYSTEM_OVERVIEW.md`, `docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md` | `docs/architecture/adr/` |
 | VPS message hub or USB-Free field testing | `docs/development/DEV_FLOW.md`, `docs/development/VPS_MESSAGE_HUB.md`, `docs/development/PROTOCOL.md`, `docs/development/FIELD_TEST.md`, `docs/architecture/adr/ADR-0001-usb-free-vps-message-hub.md` | `docs/current/ROADMAP_EGOLINK_P0.md`, `docs/development/LOCATION_ENGINE.md`, `docs/development/LTE_TRANSPORT.md` |
 | Location fusion or dataset planning | `docs/development/LOCATION_ENGINE.md`, `docs/development/LOCATION_DATASET.md`, `docs/development/LOCATION_FUSION_ALGORITHM.md`, `docs/architecture/adr/ADR-0004-p0-rule-location-and-transitional-vps-memory.md`, `shared/contracts/` | `docs/architecture/adr/ADR-0007-gnss-denied-personal-location-memory.md`, `docs/development/PROTOCOL.md`, `docs/current/KEY_RELEASES.md`, `docs/tasks/done/DATA-001_LOCATION_FUSION_DATASET_BASELINE.md`, `docs/tasks/done/ALG-000_LOCATION_FUSION_ALGORITHM_DESIGN.md` |
-| A-line AI, data platform, multisource localization or state understanding | `docs/current/EGO_LINK_A_LINE_AI_CONTEXT.md`, `docs/architecture/adr/ADR-0009-ai-v0-1-belief-estimation-baseline.md` | `docs/development/UNIFIED_TIMESTAMP.md`, `docs/development/FIELD_SESSION_SCHEMA.md`, `docs/development/LOCATION_ENGINE.md`, `docs/development/LOCATION_DATASET.md`, `shared/contracts/` |
+| A-line AI, data platform, multisource localization or state understanding | `docs/current/EGO_LINK_AI_CURRENT_CONTEXT.md`, `docs/architecture/adr/ADR-0010-asynchronous-observation-timeline-and-store-forward.md` | `docs/current/EGO_LINK_A_LINE_AI_CONTEXT.md`, `docs/architecture/adr/ADR-0009-ai-v0-1-belief-estimation-baseline.md`, `docs/development/UNIFIED_TIMESTAMP.md`, `docs/development/FIELD_SESSION_SCHEMA.md`, `docs/development/LOCATION_ENGINE.md`, `docs/development/LOCATION_DATASET.md`, `shared/contracts/` |
 | Firmware change | `firmware/AGENTS.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/BOARD_MATRIX.md` | Named firmware README only |
 | Hardware validation | `firmware/AGENTS.md`, `docs/hardware/BOARD_MATRIX.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/validation/` | Named evidence report |
 | Current sales-product hardware selection or procurement | `docs/product/EGO_MASTER_CONTEXT.md`, `docs/architecture/adr/ADR-0008-egolink-core-product-direction-reset.md`, `docs/product/MASS_PRODUCTION_REQUIREMENTS.md` | `docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md`, `docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md`; ADR-0005/0006 and `V1_PRO_EVT_PROCUREMENT_BASELINE.md` are superseded history only |
@@ -65,10 +65,13 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 - P0 development flow is authoritative in `docs/development/DEV_FLOW.md`; near-term R0-R4 sequencing is authoritative in `docs/current/ROADMAP_EGOLINK_P0.md`.
 - Location-engine planning is authoritative in `docs/development/LOCATION_ENGINE.md`; location-fusion dataset planning is authoritative in `docs/development/LOCATION_DATASET.md`; ADR-0007 records the proposed GNSS-denied personal-memory extension pending founder review; SIM7670G LTE transport planning is authoritative in `docs/development/LTE_TRANSPORT.md`.
 - Architecture changes require an ADR under `docs/architecture/adr/`.
-- The A-line AI baseline is authoritative in
-  `docs/current/EGO_LINK_A_LINE_AI_CONTEXT.md`; ADR-0009 freezes the v0.1
-  estimator architecture, two-layer A0/A1-A2 sequencing and current A-R0 task
-  numbering without advancing any evidence Gate.
+- The current A-line execution baseline is authoritative in
+  `docs/current/EGO_LINK_AI_CURRENT_CONTEXT.md`; ADR-0010 freezes independent
+  asynchronous acquisition, server-side event-time reconstruction and bounded
+  persistent Store-and-Forward. The broader A-line baseline and ADR-0009 remain
+  authoritative for the v0.1 estimator architecture, two-layer A0/A1-A2
+  sequencing and A-R0 numbering where they do not conflict with the current
+  execution baseline. None of these documents advances an evidence Gate.
 - ADR-0008 accepts the screenless modular EgoLink Core sales-product direction
   and supersedes the conflicting V1 Pro decisions in ADR-0005/0006. Named A0
   candidates are not a production-frozen BOM until later accepted decisions.
