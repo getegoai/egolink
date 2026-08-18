@@ -108,9 +108,9 @@ config EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
     depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
     help
         Dedicated engineering profile for polling the existing EGLK/1 raw
-        capture_imu_window command over Wi-Fi. It captures exactly 100 real
-        QMI8658 samples at 50 ms, stops measurement before upload, and does
-        not start periodic heartbeat or sensor telemetry tasks.
+        capture_imu_window command over Wi-Fi. It captures 100-600 real
+        QMI8658 samples at 50 ms (default 300), stops measurement before
+        upload, and does not start periodic heartbeat or sensor telemetry tasks.
 
 config EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS
     int "Bounded Wi-Fi IMU command poll attempts"

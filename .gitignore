@@ -38,6 +38,10 @@ firmware/camera_smoke/sdkconfig
 # Hardware smoke-test captures
 firmware/**/captures/
 
+# Large binary packs (use Git LFS or external storage instead)
+*.zip
+docs/EGO_PROJECT_CONTROL_PACK_v0.3/
+
 # Local editor and OS files
 .vscode/
 .idea/

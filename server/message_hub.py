@@ -4123,10 +4123,14 @@ def location_history_record(row: Mapping[str, Any]) -> dict[str, Any]:
             trust_reason = candidate_reason if candidate_reason in allowed_reasons else "coordinate_fields_missing"
     selectable = bool(point and point.get("amap_eligible") is True)
     fix_value = first_known(message.get("fix"), dict_value(message, "gnss", "fix"))
+    boot_count_value = message.get("boot_count")
+    if isinstance(boot_count_value, bool) or not isinstance(boot_count_value, int):
+        boot_count_value = None
     record: dict[str, Any] = {
         "record_id": f"location-{int(row['id'])}",
         "event_type": str(row["event_type"] or "unknown"),
         "seq": bounded_location_history_seq(row["seq"]),
+        "boot_count": boot_count_value,
         "device_ts": bounded_location_history_text(row["ts"], 64),
         "server_received_at": bounded_location_history_text(row["server_received_at"], 64),
         "fix": fix_value if isinstance(fix_value, bool) else None,
@@ -8980,14 +8984,10 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       <div id="locationMapGrid" class="location-map-grid provider-map-hidden">
         <div class="map-card">
           <div id="amapLiveShell" class="amap-live-shell" data-provider-state="waiting" data-lifecycle="idle" data-failure-stage="none" data-failure-reason="none" data-failure-elapsed-ms="0" data-callback-seen="false">
-            <div id="amapLiveMap" data-state="waiting" aria-label="高德地图上的设备位置与最近可信轨迹"></div>
+            <div id="amapLiveMap" data-state="waiting" aria-label="高德地图上的设备位置"></div>
             <div id="amapLiveStatus" class="warn" role="status" aria-live="polite">地图正在等待已认证的设备数据</div>
           </div>
         </div>
-        <aside id="trajectoryPanel" class="trajectory-panel" aria-label="最近可信轨迹摘要">
-          <h3>最近可信轨迹</h3>
-          <div class="empty">正在等待定位数据</div>
-        </aside>
       </div>
       <section id="locationHistoryBrowser" class="location-history-browser" aria-labelledby="locationHistoryTitle">
         <div class="history-browser-head">
@@ -9043,7 +9043,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         </form>
         <div class="history-table-wrap" role="region" aria-label="全部定位历史记录" tabindex="0">
           <table class="history-table">
-            <thead><tr><th>选择</th><th>服务端接收时间</th><th>类型</th><th>序号</th><th>定位状态</th><th>坐标可信度</th><th>固件</th></tr></thead>
+            <thead><tr><th><input type="checkbox" id="historySelectAll" aria-label="全选当前页"></th><th>服务端接收时间</th><th>类型</th><th>序号</th><th>定位状态</th><th>坐标可信度</th><th>固件</th></tr></thead>
             <tbody id="locationHistoryRows"><tr><td colspan="7" class="empty">尚未加载历史记录</td></tr></tbody>
           </table>
         </div>
@@ -9498,7 +9498,15 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     function isoFromHistoryControl(controlId) {
       const raw = document.getElementById(controlId).value;
       if (!raw) return null;
-      const parsed = new Date(raw);
+      // datetime-local inputs produce values like "2024-01-15T10:30" with no timezone.
+      // Append the local timezone offset so the Date constructor always interprets it as local time,
+      // then toISOString() correctly converts to UTC.
+      const localOffset = -new Date().getTimezoneOffset();
+      const sign = localOffset >= 0 ? '+' : '-';
+      const pad = (n) => String(Math.floor(Math.abs(n))).padStart(2, '0');
+      const offsetString = `UTC${sign}${pad(localOffset / 60)}:${pad(localOffset % 60)}`;
+      const withOffset = raw.includes('Z') || raw.includes('UTC') || raw.match(/[+-]\\d{2}:\\d{2}$/) ? raw : raw + offsetString;
+      const parsed = new Date(withOffset);
       if (!Number.isFinite(parsed.getTime())) throw new Error('时间格式无效');
       return parsed.toISOString();
     }
@@ -9746,8 +9754,6 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       );
       updateD2ManifestStatus(selectedDevice ? selectedDevice.device_id : '');
       d1Link.innerHTML = d1LinkPanel(selectedDevice);
-      trajectoryPanel.innerHTML = recentTrajectoryPanel(selectedDevice);
-      bindTrajectoryPanelEvents(selectedDevice);
       renderLocationHistory(selectedDevice);
       fieldState.innerHTML = latestFieldState(
         selectedDevice,
@@ -9797,6 +9803,30 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       } catch (error) {
         setLocationHistoryStatus(error instanceof Error ? error.message : '查询条件无效', 'bad');
       }
+    });
+    document.getElementById('historySelectAll').addEventListener('change', (event) => {
+      const selectedDevice = selectedDashboardDevice();
+      if (!selectedDevice) return;
+      const state = locationHistoryStateForDevice(selectedDevice.device_id);
+      const checkboxes = document.querySelectorAll('#locationHistoryRows input[type="checkbox"][data-history-record-id]');
+      checkboxes.forEach(cb => {
+        if (!cb.disabled) {
+          cb.checked = event.target.checked;
+          const recordId = cb.dataset.historyRecordId;
+          const record = state.records.find(r => r.record_id === recordId);
+          if (record) {
+            const point = locationHistoryPoint(record);
+            if (event.target.checked && point) {
+              if (state.selectedRecords.size < TRAJECTORY_RENDER_POINT_LIMIT) {
+                state.selectedRecords.set(record.record_id, point);
+              }
+            } else {
+              state.selectedRecords.delete(record.record_id);
+            }
+          }
+        }
+      });
+      renderLocationHistory(selectedDevice);
     });
     document.getElementById('resetLocationHistory').addEventListener('click', () => {
       const selectedDevice = selectedDashboardDevice();
@@ -11330,63 +11360,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       return segments;
     }
     function recentTrajectoryPanel(selectedDevice) {
-      if (!selectedDevice) {
-        return '<h3>最近可信轨迹</h3><div class="empty">暂无设备数据</div>';
-      }
-      const context = trajectorySelectionContext(selectedDevice);
-      const semantics = context.baseSemantics;
-      const points = context.allPoints;
-      const selectedPoints = context.selectedPoints;
-      const recentRequestedCount = points.filter(point => context.selection.selectedKeys.has(point.trajectory_point_key)).length;
-      const recentDisplayedCount = context.quickSelectedPoints.length;
-      const start = selectedPoints.length ? selectedPoints[0] : null;
-      const end = selectedPoints.length ? selectedPoints[selectedPoints.length - 1] : null;
-      const segmentCount = trajectorySegments(selectedPoints).filter(segment => segment.length >= 2).length;
-      const stateClass = semantics.kind === 'current' ? '' : ' warn';
-      const stateNote = !points.length && selectedPoints.length
-        ? `当前无可信实时定位；正在显示 ${selectedPoints.length} 个已选历史可信点`
-        : !points.length
-          ? semantics.label
-          : !selectedPoints.length
-            ? `${semantics.label}；当前未选择定位记录`
-            : selectedPoints.length === 1
-              ? `${semantics.label}；已选择 1 个可信点，暂时不能形成轨迹`
-              : `${semantics.label}；地图已选择 ${selectedPoints.length} 个可信 GNSS 点（最近窗口显示 ${recentDisplayedCount} / 勾选 ${recentRequestedCount}）`;
-      const pointItems = [...points].reverse().map((point, reverseIndex) => {
-        const absoluteIndex = points.length - reverseIndex;
-        const checked = context.selection.selectedKeys.has(point.trajectory_point_key) ? ' checked' : '';
-        const role = absoluteIndex === points.length ? '最新可信点' : absoluteIndex === 1 ? '最早可信点' : '历史点';
-        const checkboxLabel = `选择第 ${absoluteIndex} 个定位记录，${formatDashboardDateTime(point.server_received_at)}`;
-        return `<li><input type="checkbox" data-trajectory-point-key="${escapeHtml(point.trajectory_point_key)}" aria-label="${escapeHtml(checkboxLabel)}"${checked}/><span class="trajectory-time">${escapeHtml(formatDashboardDateTime(point.server_received_at))}</span><span class="trajectory-event">${escapeHtml(role)} · 第 ${escapeHtml(absoluteIndex)} 点 · seq ${escapeHtml(point.seq ?? '未知')}</span></li>`;
-      }).join('');
-      const selectionMode = context.selection.mode === 'follow' ? '跟随最新' : '手动选择';
-      const historyCapacityNotice = context.historySuppressedCount
-        ? `另有 ${escapeHtml(context.historySuppressedCount)} 条超限历史选择未显示。`
-        : '';
-      const capacityNotice = context.quickSuppressedCount || context.historySuppressedCount
-        ? `<div class="trajectory-note warn">地图达到 ${escapeHtml(TRAJECTORY_RENDER_POINT_LIMIT)} 点上限：优先保留显式历史选择，本次有 ${escapeHtml(context.quickSuppressedCount)} 个最近窗口点未显示。${historyCapacityNotice}历史选择自身最多 ${escapeHtml(TRAJECTORY_RENDER_POINT_LIMIT)} 条。</div>`
-        : '';
-      return `
-        <h3>最近可信轨迹</h3>
-        <div class="trajectory-state${stateClass}">${escapeHtml(stateNote)}</div>
-        ${capacityNotice}
-        <div class="trajectory-controls" role="group" aria-label="轨迹记录选择">
-          <button type="button" class="secondary" data-trajectory-action="all">全选</button>
-          <button type="button" class="secondary" data-trajectory-action="clear">清空</button>
-          <button type="button" class="secondary" data-trajectory-action="follow">恢复跟随最新（清除历史选择）</button>
-          <span class="trajectory-selection-status">${escapeHtml(selectionMode)} · 最近窗口显示 ${escapeHtml(recentDisplayedCount)} / 勾选 ${escapeHtml(recentRequestedCount)} · 地图共 ${escapeHtml(selectedPoints.length)} / ${escapeHtml(TRAJECTORY_RENDER_POINT_LIMIT)}</span>
-        </div>
-        <div class="trajectory-summary-grid">
-          <div class="trajectory-stat"><span>可信点</span><strong>${escapeHtml(points.length)} / 最多 24</strong></div>
-          <div class="trajectory-stat"><span>地图已选点</span><strong>${escapeHtml(selectedPoints.length)} / 最多 ${escapeHtml(TRAJECTORY_RENDER_POINT_LIMIT)}</strong></div>
-          <div class="trajectory-stat"><span>可见轨迹段</span><strong>${escapeHtml(segmentCount)} 段</strong></div>
-          <div class="trajectory-stat"><span>所选起点</span><strong>${escapeHtml(start ? formatDashboardDateTime(start.server_received_at) : '暂无')}</strong></div>
-          <div class="trajectory-stat"><span>所选终点</span><strong>${escapeHtml(end ? formatDashboardDateTime(end.server_received_at) : '暂无')}</strong></div>
-          <div class="trajectory-stat"><span>所选时间跨度</span><strong>${escapeHtml(start && end ? formatDashboardDuration(start.server_received_at, end.server_received_at) : '未知')}</strong></div>
-        </div>
-        ${pointItems ? `<div class="trajectory-details"><div class="trajectory-note">选择要比较的可信定位记录</div><ol class="trajectory-list">${pointItems}</ol></div>` : ''}
-        <div class="trajectory-note">地图只按定位时间顺序直线连接所选采样点，不代表实际行走路线。最近窗口取消中间记录、时间异常或间隔超过 10 分钟都会断开线段；全历史记录可在下方跨页选择。地图一次最多显示 ${escapeHtml(TRAJECTORY_RENDER_POINT_LIMIT)} 点，高德坐标每批最多转换 ${escapeHtml(AMAP_CONVERT_BATCH_LIMIT)} 点。选择仅保存在当前页面内存中，此处不作定位精度声明。</div>
-      `;
+      return '';
     }
     function updateTrajectoryMaps(selectedDevice) {
       if (!selectedDevice) return;
@@ -11404,81 +11378,12 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       }
       renderAmapForSelectedDevice(selectedDevice);
     }
-    function rerenderTrajectorySelection(selectedDevice, focusKey = '') {
-      const previousList = trajectoryPanel.querySelector('.trajectory-list');
-      const previousScrollTop = previousList ? previousList.scrollTop : 0;
-      trajectoryPanel.innerHTML = recentTrajectoryPanel(selectedDevice);
-      bindTrajectoryPanelEvents(selectedDevice);
-      const nextList = trajectoryPanel.querySelector('.trajectory-list');
-      if (nextList) nextList.scrollTop = previousScrollTop;
-      if (focusKey) {
-        const match = [...trajectoryPanel.querySelectorAll('[data-trajectory-point-key]')]
-          .find(input => input.dataset.trajectoryPointKey === focusKey);
-        if (match) match.focus();
-      }
+    function rerenderTrajectorySelection(selectedDevice, focusKey) {
+      if (!selectedDevice) return;
       updateTrajectoryMaps(selectedDevice);
     }
     function bindTrajectoryPanelEvents(selectedDevice) {
-      if (!selectedDevice) return;
-      trajectoryPanel.querySelectorAll('[data-trajectory-point-key]').forEach(input => {
-        input.addEventListener('change', () => {
-          const context = trajectorySelectionContext(selectedDevice);
-          context.selection.mode = 'manual';
-          if (input.checked) {
-            const candidatePoint = context.allPoints.find(
-              point => point.trajectory_point_key === input.dataset.trajectoryPointKey,
-            );
-            const projectedCount = mergeTrajectoryEvidencePoints(
-              context.quickSelectedPoints,
-              candidatePoint ? [candidatePoint] : [],
-              locationHistorySelectedPoints(selectedDevice.device_id),
-            ).length;
-            if (projectedCount > TRAJECTORY_RENDER_POINT_LIMIT) {
-              input.checked = false;
-              setLocationHistoryStatus(`地图最多选择 ${TRAJECTORY_RENDER_POINT_LIMIT} 个可信点，请先取消部分记录。`, 'warn');
-              return;
-            }
-            context.selection.selectedKeys.add(input.dataset.trajectoryPointKey);
-          } else {
-            context.selection.selectedKeys.delete(input.dataset.trajectoryPointKey);
-          }
-          trajectorySelectionByDevice.set(selectedDevice.device_id, context.selection);
-          rerenderTrajectorySelection(selectedDevice, input.dataset.trajectoryPointKey);
-          renderLocationHistory(selectedDevice);
-        });
-      });
-      trajectoryPanel.querySelectorAll('[data-trajectory-action]').forEach(button => {
-        button.addEventListener('click', () => {
-          const context = trajectorySelectionContext(selectedDevice);
-          const action = button.dataset.trajectoryAction;
-          if (action === 'follow') {
-            clearLocationHistorySelectionForDevice(selectedDevice.device_id);
-            context.selection.mode = 'follow';
-            context.selection.selectedKeys = new Set(context.allPoints.map(point => point.trajectory_point_key));
-          } else {
-            context.selection.mode = 'manual';
-            if (action === 'all') {
-              const projectedCount = mergeTrajectoryEvidencePoints(
-                context.allPoints,
-                locationHistorySelectedPoints(selectedDevice.device_id),
-              ).length;
-              if (projectedCount > TRAJECTORY_RENDER_POINT_LIMIT) {
-                setLocationHistoryStatus(`地图最多选择 ${TRAJECTORY_RENDER_POINT_LIMIT} 个可信点，请先取消部分历史记录。`, 'warn');
-                return;
-              }
-              context.selection.selectedKeys = new Set(
-                context.allPoints.map(point => point.trajectory_point_key),
-              );
-            } else {
-              clearLocationHistorySelectionForDevice(selectedDevice.device_id);
-              context.selection.selectedKeys = new Set();
-            }
-          }
-          trajectorySelectionByDevice.set(selectedDevice.device_id, context.selection);
-          rerenderTrajectorySelection(selectedDevice);
-          renderLocationHistory(selectedDevice);
-        });
-      });
+      // trajectory panel removed
     }
     function amapOverlayKey(deviceId, semantics) {
       const points = Array.isArray(semantics.points) ? semantics.points : [];

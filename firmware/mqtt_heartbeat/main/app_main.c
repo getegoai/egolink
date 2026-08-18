@@ -111,7 +111,9 @@ static lte_executed_command_result_t s_lte_executed_command_cache[LTE_EXECUTED_C
 static size_t s_lte_executed_command_cache_next;
 
 #define IMU_WINDOW_CONTRACT_VERSION "egolink.imu_window.v1"
-#define IMU_WINDOW_SAMPLE_COUNT 100u
+#define IMU_WINDOW_SAMPLE_COUNT 300u
+#define IMU_WINDOW_SAMPLE_COUNT_MIN 100u
+#define IMU_WINDOW_SAMPLE_COUNT_MAX 600u
 #define IMU_WINDOW_INTERVAL_MS 50u
 #define IMU_WINDOW_INTERVAL_US (IMU_WINDOW_INTERVAL_MS * 1000u)
 #define IMU_WINDOW_WARMUP_SAMPLE_COUNT 10u
@@ -141,7 +143,7 @@ typedef struct {
     bool measurement_stop_ok;
 } imu_window_capture_result_t;
 
-static uint8_t s_imu_window_binary[IMU_WINDOW_SAMPLE_COUNT * IMU_WINDOW_RECORD_BYTES];
+static uint8_t s_imu_window_binary[IMU_WINDOW_SAMPLE_COUNT_MAX * IMU_WINDOW_RECORD_BYTES];
 static char s_imu_window_chunk_base64[IMU_WINDOW_CHUNK_BASE64_MAX];
 static char s_imu_window_payload[1100];
 static char s_imu_window_frame[IMU_WINDOW_RAW_FRAME_MAX_BYTES + 1u];
@@ -907,6 +909,7 @@ static void build_location_report_payload(
         "{\"protocol_version\":\"egolink.p0.v1\","
         "\"device_id\":\"%s\","
         "\"ts\":\"uptime_ms:%" PRId64 "\","
+        "\"boot_count\":%" PRIu32 ","
         "\"seq\":%" PRIu32 ","
         "\"message_type\":\"event\","
         "\"event_type\":\"location_report\","
@@ -950,6 +953,7 @@ static void build_location_report_payload(
         "\"source_status\":\"%s\"}}",
         CONFIG_EGOLINK_DEVICE_ID,
         uptime_ms(),
+        s_boot_count,
         seq,
         CONFIG_EGOLINK_FW_VERSION,
         source,
@@ -1801,14 +1805,18 @@ static void imu_window_record_read_failure(imu_window_capture_result_t *result, 
         snapshot.backend_status != NULL ? snapshot.backend_status : fallback_status);
 }
 
-static bool capture_real_imu_window(imu_window_capture_result_t *result)
+static bool capture_real_imu_window(imu_window_capture_result_t *result, uint32_t sample_count)
 {
     if (result == NULL) {
         imu_window_set_error("capture_result_missing");
         return false;
     }
+    if (sample_count < IMU_WINDOW_SAMPLE_COUNT_MIN || sample_count > IMU_WINDOW_SAMPLE_COUNT_MAX) {
+        imu_window_set_error("sample_count_out_of_range");
+        return false;
+    }
     memset(result, 0, sizeof(*result));
-    memset(s_imu_window_binary, 0, sizeof(s_imu_window_binary));
+    memset(s_imu_window_binary, 0, (size_t)sample_count * IMU_WINDOW_RECORD_BYTES);
     result->min_interval_us = UINT32_MAX;
 
     platform_imu_snapshot_t snapshot;
@@ -1830,8 +1838,8 @@ static bool capture_real_imu_window(imu_window_capture_result_t *result)
 
     ESP_LOGI(
         TAG,
-        "IMU_WINDOW_CAPTURE_START samples=%u interval_ms=%u warmup_samples=%u",
-        (unsigned)IMU_WINDOW_SAMPLE_COUNT,
+        "IMU_WINDOW_CAPTURE_START samples=%" PRIu32 " interval_ms=%u warmup_samples=%u",
+        sample_count,
         (unsigned)IMU_WINDOW_INTERVAL_MS,
         (unsigned)IMU_WINDOW_WARMUP_SAMPLE_COUNT);
     bool warmup_ok = true;
@@ -1860,7 +1868,7 @@ static bool capture_real_imu_window(imu_window_capture_result_t *result)
     int64_t start_us = esp_timer_get_time();
     result->capture_start_uptime_us = (uint64_t)start_us;
 
-    for (uint32_t index = 0; warmup_ok && index < IMU_WINDOW_SAMPLE_COUNT; ++index) {
+    for (uint32_t index = 0; warmup_ok && index < sample_count; ++index) {
         if (index > 0u) {
             vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(IMU_WINDOW_INTERVAL_MS));
         }
@@ -1929,7 +1937,7 @@ static bool capture_real_imu_window(imu_window_capture_result_t *result)
     }
 
     bool ok = result->warmup_sample_count == IMU_WINDOW_WARMUP_SAMPLE_COUNT &&
-              result->captured_samples == IMU_WINDOW_SAMPLE_COUNT && result->read_failure_count == 0u &&
+              result->captured_samples == sample_count && result->read_failure_count == 0u &&
               result->mock_sample_count == 0u && result->measurement_stop_ok;
     if (ok) {
         imu_window_set_error("none");
@@ -1970,6 +1978,8 @@ static bool build_imu_window_manifest_frame(
 #else
     int sensor_i2c_address = -1;
 #endif
+    uint32_t actual_chunk_count =
+        (capture->captured_samples + IMU_WINDOW_SAMPLES_PER_CHUNK - 1u) / IMU_WINDOW_SAMPLES_PER_CHUNK;
     int manifest_written = snprintf(
         s_imu_window_payload,
         sizeof(s_imu_window_payload),
@@ -2031,8 +2041,8 @@ static bool build_imu_window_manifest_frame(
         capture->mock_sample_count,
         capture->warmup_sample_count,
         (unsigned)(IMU_WINDOW_WARMUP_INTERVAL_MS * 1000u),
-        (unsigned)IMU_WINDOW_CHUNK_COUNT,
-        (unsigned)IMU_WINDOW_CHUNK_COUNT,
+        (unsigned)actual_chunk_count,
+        (unsigned)actual_chunk_count,
         samples_crc,
         sensor_i2c_address);
     if (manifest_written <= 0 || (size_t)manifest_written >= sizeof(s_imu_window_payload)) {
@@ -2102,7 +2112,8 @@ static bool imu_window_post_raw(
     return false;
 }
 
-static bool publish_imu_window(const char *cmd_id, const char *test_run_id, const char *transport_type)
+static bool publish_imu_window(const char *cmd_id, const char *test_run_id, const char *transport_type,
+                               uint32_t sample_count)
 {
     if (cmd_id == NULL || cmd_id[0] == '\0') {
         imu_window_set_error("command_id_missing");
@@ -2122,7 +2133,7 @@ static bool publish_imu_window(const char *cmd_id, const char *test_run_id, cons
     }
 
     imu_window_capture_result_t capture;
-    if (!capture_real_imu_window(&capture)) {
+    if (!capture_real_imu_window(&capture, sample_count)) {
         return false;
     }
 
@@ -2147,10 +2158,12 @@ static bool publish_imu_window(const char *cmd_id, const char *test_run_id, cons
         return false;
     }
 
+    uint32_t actual_chunk_count =
+        (capture.captured_samples + IMU_WINDOW_SAMPLES_PER_CHUNK - 1u) / IMU_WINDOW_SAMPLES_PER_CHUNK;
     uint32_t uploaded_chunks = 0;
-    for (uint32_t chunk_index = 0; chunk_index < IMU_WINDOW_CHUNK_COUNT; ++chunk_index) {
+    for (uint32_t chunk_index = 0; chunk_index < actual_chunk_count; ++chunk_index) {
         uint32_t sample_start = chunk_index * IMU_WINDOW_SAMPLES_PER_CHUNK;
-        uint32_t remaining = IMU_WINDOW_SAMPLE_COUNT - sample_start;
+        uint32_t remaining = capture.captured_samples - sample_start;
         uint32_t chunk_samples = remaining < IMU_WINDOW_SAMPLES_PER_CHUNK ? remaining : IMU_WINDOW_SAMPLES_PER_CHUNK;
         size_t chunk_bytes = (size_t)chunk_samples * IMU_WINDOW_RECORD_BYTES;
         const uint8_t *chunk_data = &s_imu_window_binary[sample_start * IMU_WINDOW_RECORD_BYTES];
@@ -2199,10 +2212,10 @@ static bool publish_imu_window(const char *cmd_id, const char *test_run_id, cons
             window_id,
             cmd_id,
             chunk_index,
-            (unsigned)IMU_WINDOW_CHUNK_COUNT,
+            (unsigned)actual_chunk_count,
             sample_start,
             chunk_samples,
-            (unsigned)IMU_WINDOW_SAMPLE_COUNT,
+            (unsigned)capture.captured_samples,
             (unsigned)IMU_WINDOW_INTERVAL_US,
             (unsigned)IMU_WINDOW_RECORD_BYTES,
             chunk_crc,
@@ -2244,7 +2257,7 @@ static bool publish_imu_window(const char *cmd_id, const char *test_run_id, cons
             "IMU_WINDOW_CHUNK_POST_DONE window_id=%s chunk=%" PRIu32 "/%u bytes=%u ok=%s reason=%s status=%d",
             window_id,
             chunk_index,
-            (unsigned)IMU_WINDOW_CHUNK_COUNT,
+            (unsigned)actual_chunk_count,
             (unsigned)strlen(s_imu_window_frame),
             posted ? "true" : "false",
             post_reason,
@@ -2404,6 +2417,8 @@ static void build_lte_location_report_kv_payload(
         "fw_version=%s\n"
         "test_run_id=%s\n"
         "seq=%" PRIu32 "\n"
+        "boot_count=%" PRIu32 "\n"
+        "ts_uptime_us=%" PRId64 "\n"
         "source=%s\n"
         "source_status=%s\n"
         "fix=%s\n"
@@ -2431,6 +2446,8 @@ static void build_lte_location_report_kv_payload(
         CONFIG_EGOLINK_FW_VERSION,
         CONFIG_EGOLINK_TEST_RUN_ID,
         seq,
+        s_boot_count,
+        uptime_ms() * 1000,
         source,
         source_status,
         json_bool(fix),
@@ -3517,11 +3534,14 @@ static wifi_imu_window_command_result_t wifi_http_execute_and_ack_raw_command(
         if (strcmp(command->cmd, "capture_imu_window") == 0) {
             if (!imu_window_capture_cmd_id_valid(command->cmd_id)) {
                 message = "capture_imu_window cmd_id must be 1-16 safe characters";
-            } else if (!command->parameters_valid || command->sample_count != IMU_WINDOW_SAMPLE_COUNT ||
+            } else if (!command->parameters_valid ||
+                       command->sample_count < IMU_WINDOW_SAMPLE_COUNT_MIN ||
+                       command->sample_count > IMU_WINDOW_SAMPLE_COUNT_MAX ||
                        command->interval_ms != IMU_WINDOW_INTERVAL_MS) {
-                message = "capture_imu_window requires exact test_run_id, sample_count=100, and interval_ms=50";
+                message = "capture_imu_window requires test_run_id, sample_count 100-600, and interval_ms=50";
             } else {
-                bool window_ok = publish_imu_window(command->cmd_id, command->test_run_id, "wifi");
+                bool window_ok = publish_imu_window(command->cmd_id, command->test_run_id, "wifi",
+                                                    command->sample_count);
                 status = window_ok ? "ok" : "error";
                 if (window_ok) {
                     message = "bounded real IMU window chunks and manifest uploaded over Wi-Fi";
@@ -3669,12 +3689,15 @@ static bool lte_http_execute_and_ack_raw_command(
             if (!imu_window_capture_cmd_id_valid(command->cmd_id)) {
                 status = "rejected";
                 message = "capture_imu_window cmd_id must be 1-16 safe characters";
-            } else if (!command->parameters_valid || command->sample_count != IMU_WINDOW_SAMPLE_COUNT ||
-                command->interval_ms != IMU_WINDOW_INTERVAL_MS) {
+            } else if (!command->parameters_valid ||
+                       command->sample_count < IMU_WINDOW_SAMPLE_COUNT_MIN ||
+                       command->sample_count > IMU_WINDOW_SAMPLE_COUNT_MAX ||
+                       command->interval_ms != IMU_WINDOW_INTERVAL_MS) {
                 status = "rejected";
-                message = "capture_imu_window requires exact test_run_id, sample_count=100, and interval_ms=50";
+                message = "capture_imu_window requires test_run_id, sample_count 100-600, and interval_ms=50";
             } else {
-                bool window_ok = publish_imu_window(command->cmd_id, command->test_run_id, "lte");
+                bool window_ok = publish_imu_window(command->cmd_id, command->test_run_id, "lte",
+                                                    command->sample_count);
                 status = window_ok ? "ok" : "error";
                 if (window_ok) {
                     message = "bounded real IMU window chunks and manifest uploaded";
