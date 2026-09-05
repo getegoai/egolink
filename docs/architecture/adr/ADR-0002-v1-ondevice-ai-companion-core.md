@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-14
+last_verified: 2026-08-23
 verified_by: codex
 ---
 
@@ -30,6 +30,21 @@ on-device AI requirement while aligning interaction and compute placement with
 that newer product direction. It does not claim that EgoBase or the production
 hardware already exists.
 
+## 2026-08-23 ADR-0011 / ADR-0012 Integration
+
+[ADR-0011](ADR-0011-first-launch-reliable-location-ego-call-sos.md) partially
+supersedes the launch-blocker wording in clauses 1 and 3 below, and
+[ADR-0012](ADR-0012-p0-productization-sprint-1.md) freezes the executable P0
+scope. The first commercial loop is Reliable Location + Ego Call + physical
+SOS. Its local deterministic Safety Kernel and Rule Policy v0 remain launch
+requirements only for physical SOS, location escalation, low-battery/offline
+truth, durable events and bounded retry. MotionNet-class anomaly inference,
+proactive check-in, the complete M1 training foundation, advanced context
+awareness, formal learned-model acceptance, and model-footprint completion no
+longer block an otherwise acceptable first launch. They remain L2/L3 product-
+development and hardware-growth work. The historical accepted wording is
+retained below for traceability; ADR-0012 controls current sequencing.
+
 ### Historical 2026-07-03 Decision Text
 
 The accepted 2026-07-03 wording is preserved here for traceability. It placed
@@ -40,8 +55,8 @@ supersedes only those interaction-channel, compute-placement and power-wording
 clauses: the current product is screenless, EgoBase is the intended private
 heavy-compute/long-term-memory tier, the VPS is bounded and transitional, and
 always-available safety does not mean full-rate continuous capture. The core
-2026-07-03 decision that on-device AI is a launch-critical differentiator
-remains accepted.
+2026-07-03 decision that on-device AI is a long-term product differentiator
+remains accepted, but it is not a Productization Sprint 1 capability Gate.
 
 Original clauses:
 
@@ -72,7 +87,11 @@ Original clauses:
   business evaluation, and production module/MCU selection is gated by the
   PROD-001 mass-production requirements definition.
 
-## Decision (as amended by ADR-0008 on 2026-08-14)
+## Historical Decision (as amended by ADR-0008 on 2026-08-14)
+
+The clauses below are preserved as the pre-ADR-0011/0012 product decision.
+Where they call learned anomaly, M1 or model-footprint work a V1 launch blocker,
+the 2026-08-23 integration section above supersedes them.
 
 1. **On-device AI companion capability is a V1 launch requirement.** The
    wearable runs latency-critical, always-available intelligence locally:

@@ -57,10 +57,12 @@ class ModelFootprintAssessmentDocTests(unittest.TestCase):
         ):
             self.assertIn(token, self.doc)
 
-    def test_model_001_remains_active_until_measurements_exist(self):
+    def test_model_001_rebase_keeps_measurements_honest_without_blocking_launch(self):
         self.assertIn("status: paused", self.task)
-        self.assertIn("MODEL-001 remains open but paused for D1", self.task)
-        self.assertIn("Paused by NORTH_STAR alignment", self.task)
+        self.assertIn("ADR-0011", self.task)
+        self.assertIn("Deterministic Safety Kernel resource fit remains a hardware selection gate", self.task)
+        self.assertIn("do not block the first", self.task)
+        self.assertIn("not globally blocked", self.task)
         self.assertIn("measurements pending", self.plan)
         self.assertIn("A passing build is not runtime RAM, latency, or power evidence", self.doc_flat)
 

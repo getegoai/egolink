@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-14
+last_verified: 2026-08-23
 verified_by: codex
 owner: founder
 ---
@@ -11,6 +11,20 @@ owner: founder
 - Date: 2026-08-14
 - Decision owner: founder
 - Scope: current sales-product direction; no current-board or protocol change
+
+## 2026-08-23 ADR-0011 / ADR-0012 Integration
+
+[ADR-0011](ADR-0011-first-launch-reliable-location-ego-call-sos.md) and
+[ADR-0012](ADR-0012-p0-productization-sprint-1.md) supersede this ADR's first-
+launch sequencing where it made native VoLTE, camera or broad on-device AI a
+release requirement. The sellable P0 is Reliable Location + LTE-data Ego Call
++ physical SOS. Native VoLTE is a hardware reserve; camera is an optional
+experimental still interface; anomaly, proactive check-in and context models
+are non-blocking L2/L3 work. The screenless modular EgoCore direction, audio as
+core hardware, product-owned safety state, privacy, A0-to-A1 method and measured
+48-hour target remain accepted. Historical clauses and the supersession matrix
+below are retained as the 2026-08-14 decision record, not current Sprint 1
+dispatch authority.
 
 ## Context
 
@@ -108,26 +122,26 @@ parallel.
     `Unknown` is the correct result when evidence is insufficient. Personal
     place/route memory and Top-K hypotheses remain governed by proposed
     ADR-0007 until separately accepted and implemented.
-15. `safe`, `needs_help` and `no_response` are screen-independent product
-    outcome semantics for the user-confirmation loop. This ADR does not redefine
-    wire/schema enum spellings; protocol adapters must preserve and explicitly
+15. `safe`, `needs_help` and `no_response` remain screen-independent historical
+    semantics for an optional L2/L3 user-confirmation loop. ADR-0012 removes
+    that loop from the Sprint 1 P0 critical path. This ADR does not redefine
+    wire/schema enum spellings; any future adapter must preserve and explicitly
     map the machine-readable contract values.
 16. "Always available" safety and AI means that a low-power wake and local
     policy path remains available; it does not authorize continuous full-rate
     sensing. A generative or language model must never be the sole authorizer
     for physical SOS, a confirmed user request, no-response escalation or
     another mandatory safety action.
-17. ADR-0002 remains accepted for the on-device AI launch requirement. This ADR
-    partially supersedes only its display/touch interaction assumption, its
-    default placement of heavy personal reasoning/training on the VPS, and the
-    ambiguous `always-on sensing` wording. The original text remains preserved
-    in ADR-0002; all other on-device AI and reliability principles continue.
+17. ADR-0012 supersedes ADR-0002/this ADR wherever learned on-device AI was a
+    first-launch requirement. Deterministic local P0 policy and reliability
+    remain mandatory; model/data quality, local-compute and graceful no-LTE
+    principles continue as non-blocking L2/L3 engineering constraints.
 
 ## Supersession Matrix
 
 | Prior authority | Superseded scope | Retained value |
 | --- | --- | --- |
-| ADR-0002 (partial) | Display/touch interaction assumption, VPS as default heavy personal-compute/training tier, and ambiguous `always-on sensing` wording | On-device AI as a launch-critical differentiator, local safety decisions, data/model evidence gates and graceful no-LTE degradation |
+| ADR-0002 (partial) | Display/touch interaction assumption, VPS as default heavy personal-compute/training tier, ambiguous `always-on sensing` wording, and learned-AI launch blocking (superseded by ADR-0012) | Deterministic local safety decisions, data/model evidence gates for future promotion, local-compute discipline and graceful no-LTE degradation |
 | ADR-0005 | Frozen nRF54LM20B/Air780EGH platform and associated V1 Pro BOM | Historical tradeoffs, measurable power/model/sourcing gates |
 | ADR-0006 | OLED/data-first-no-phone/no-camera product direction, sensor and battery population | Honest reachability language, privacy/data minimization, measured ingress and power gates |
 | `V1_PRO_FORM_FACTOR_BASELINE.md` and drawing | Watch envelope, OLED, four-layer PCB, 900 mAh bay, no-camera layout | Historical mechanical/RF test thinking |

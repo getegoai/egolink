@@ -6,11 +6,13 @@ priority: high
 requires_hardware: false
 serves_demo: D4-D5
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-08-23
 
 context:
   - docs/roadmap/V1_PRODUCT_PLAN.md
   - docs/architecture/adr/ADR-0002-v1-ondevice-ai-companion-core.md
+  - docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md
+  - docs/current/FIRST_LAUNCH_EXECUTION.md
   - docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md
   - docs/modeling/MODEL_ARCHITECTURE.md
   - docs/development/DATA_FLYWHEEL_PIPELINE.md
@@ -37,9 +39,11 @@ out_of_scope:
 
 # Problem
 
-ADR-0002 makes on-device AI a V1 core differentiator, and PROD-001 cannot
-select a production MCU until MotionNet-class RAM, flash, latency, and
-sleep-vs-inference power are measured. The repository needs a MODEL-001
+ADR-0002 keeps on-device intelligence as a core product differentiator, while
+ADR-0011 separates first-launch deterministic Safety Kernel resource fit from
+advanced MotionNet-class growth evidence. Production MCU evaluation must prove
+the minimum local rule/safety loop and measure, rather than guess, RAM, flash,
+latency and power headroom for later models. The repository needs a MODEL-001
 protocol before any estimate, build, runtime benchmark, or MCU comparison can
 be treated as evidence.
 
@@ -91,13 +95,21 @@ powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
 
 # Decisions
 
-- MODEL-001 remains open but paused for D1; it is not completed because real
-  RAM/flash/latency/power measurements are still pending.
+- MODEL-001 remains open and paused pending a representative artifact and a
+  re-scoped measurement packet; real RAM/flash/latency/power measurements are
+  still pending.
 - Build size is not runtime RAM, latency, or energy evidence.
-- MCU selection remains blocked until measured evidence and founder/business
-  constraints converge.
-- 2026-07-04: Paused by NORTH_STAR alignment. It is useful for D4-D5, but D1
-  link-through comes first.
+- Deterministic Safety Kernel resource fit remains a hardware selection gate.
+  Advanced-model measurements are growth evidence and do not block the first
+  Reliable Location + Ego Call + SOS launch unless a later accepted ADR
+  promotes a measured capability.
+- MCU selection still requires measured Safety Kernel/power headroom and
+  founder/business constraints; it is not globally blocked on completing a
+  MotionNet-class model benchmark.
+- 2026-07-04 historical decision: the packet was paused by the then-current
+  NORTH_STAR alignment to put D1 link-through first. ADR-0011 removes that
+  global serial dependency; a successor measurement slice may run in the L2
+  or A0 lane without becoming a launch blocker.
 
 # Progress Evidence
 

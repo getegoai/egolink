@@ -1,12 +1,13 @@
 ---
 id: LOC-006
 title: GNSS-denied hybrid location strategy freeze
-status: active
+status: accepted_for_transition
 priority: high
 requires_hardware: false
 serves_demo: D2
 created: 2026-08-12
 last_updated: 2026-08-14
+execution_state: completed
 
 context:
   - docs/AGENTS.md

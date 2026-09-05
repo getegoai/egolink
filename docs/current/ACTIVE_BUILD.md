@@ -1,10 +1,392 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-16
+last_verified: 2026-09-04
 verified_by: codex
 ---
 
 # Active Build
+
+## 2026-09-04 LOC-021Q/R/S / CALL-020R Offline Owner Checkpoint
+
+The active offline Location candidate now extends through `LOC-021Q/R/S`.
+Q supplies the exact sole, pinned boot-long modem owner and makes GNSS cleanup,
+power-off recovery and owner status explicit. R connects durable SOS urgency
+and deferred Cell work to that owner without creating a second modem caller.
+S adds a separately selected, default-off modem-only composition: it obtains a
+read-back-verified NVS boot epoch before durable storage initialization, starts
+the Q owner once, and injects an offline no-I/O transport-failure result. It
+does not wire external SOS/IMU ingress, a command loop or a live network path.
+The Q/R/P/O selection passes `54/54`, S+Q passes `21/21`, and the combined
+critical selection passes `110/110`.
+
+Two fresh ESP-IDF v5.4.2 ESP32-S3 builds passed. The S profile at
+`tmp/loc021s_profile_clean_20260904_c/` produces a `0x5DC90`-byte application
+with `0xA2370` bytes (63%) free in the factory partition and application
+SHA-256
+`1D9466776D4A388CB4EBE4E853ECFCAD28DDB966460CA3652FB4084099815F5A`.
+The final clean default profile at `tmp/loc021s_default_clean_20260904_b/`
+produces a `0xDACF0`-byte application with `0x25310` bytes (15%) free and
+application SHA-256
+`A3D300A60E60031A441826659362B25CB956B534D1C3677795571800BE6B5807`.
+Compile, map and symbol checks show the S profile selects only the S entry and
+the default profile selects only the legacy entry.
+
+The active CALL candidate now extends through `CALL-020R`. Its single pinned
+owner task drives the Q responder and G media runner, treats worker termination
+as an immediate cancellation trigger, and recovers incomplete join, runner
+close, lease return and physical uninstall through phase-idempotent cleanup.
+The post-MEDIA deadline/clock race is closed: once MEDIA has started, even an
+exact deadline or invalid clock goes through cancellation and the media
+finalizer rather than the pre-media abort path. R/Q focused validation passes
+`33/33`.
+
+Fresh CALL builds also passed. The default image at
+`firmware/audio_loop/build_call020r_fix_default/` is `0x2FB70` bytes with 81%
+of the smallest app partition free and SHA-256
+`47E4574BE34AD70507193F56F753E7CD4C3DA97B4E9563EB9FCB56A2A33A519D`.
+The owner-profile image at `firmware/audio_loop/build_call020r_fix_owner/` is
+`0x45930` bytes with 73% free and SHA-256
+`8EF932C6F5A9E794FBBAEDEB26E9B20B42D85C437DB432940709DA6A5275EA05`.
+
+The final repository-wide `scripts/verify.ps1` run passes `1614` tests with
+`12` environment-guarded skips. No image in this checkpoint was flashed or
+booted, and no board, UART, USB-media, SIM, TLS, network or other external I/O
+ran. All three product Gates remain `P0-LOC=NOT_RUN`, `P0-CALL=NOT_RUN` and
+`P0-SOS=NOT_RUN`.
+
+The next Location slice is LOC-021T0's durable ordered-ingress WAL. LOC-021T1 wiring of
+concurrent product ingress remains blocked on persistent K checkpoint,
+outbox-tombstone and no-output-replay guarantees; secure transport and an
+explicitly authorized live run follow. CALL still requires authentication, a
+real verified TLS/SIM route, RESULT/post-stop telemetry, live media evidence
+and measured heap/stack behavior.
+
+## 2026-09-03 LOC-021M-P / CALL-020N-Q Offline Integration Checkpoint
+
+The active offline mainline now includes LOC-021M/N/O/P: a fixed-capacity
+priority modem arbiter, an owner-free executor and a bounded SIM7670 GNSS/LTE
+adapter. They preserve a single modem owner, allow critical SOS to preempt or
+retarget Location work without fabricating transport settlement, and expose
+bounded report truth to the existing Location pipeline. LOC-021P passes
+`13/13` focused tests, the root related selection `61/61`, and independent
+review `79/79`.
+
+A clean ESP-IDF v5.4.2 build at `tmp/loc021p_idf_clean_20260903/` produces an
+application of `0xDACF0` bytes with `0x25310` bytes (15%) free in the
+`0x100000` factory partition. Its application SHA-256 is
+`70C2BEF5A332F3BA966C40159D926731609A5026E4647CCD469FECAFC361AAC5`.
+This build was not flashed. Product composition of the sole modem owner, UART
+initialization and GNSS-stop compensation remain open.
+
+CALL-020N/O/P/P.1/Q now provides the proposed single-USB phase boundary, the
+strict host CONTROL-to-MEDIA connector with bounded boot-prefix drain, and a
+default-off device EGLC responder. Root's H-Q selection passes `173/173`, and
+Q's focused source-contract suite passes `20/20`. The clean dedicated build at
+`tmp/call020q_final3_dedicated_clean_20260903/` produces an application of
+`0x44A50` bytes with `0xBB5B0` bytes (73%) free; its application SHA-256 is
+`898F1D692472BAE659188433608E1B6FDCC2BB126316F7499471BE7F152D36D7`.
+Q's independent final audit passes with no offline implementation blocker;
+this remains source-contract/build evidence only.
+
+The new CALL and Location paths are default-off, add no `app_main`, and ran no
+real sensor, UART, USB media, SIM, TLS or network I/O. Call authentication,
+real TLS/route establishment, RESULT/post-stop telemetry, the owner task and a
+live run remain unconnected. The final repository-wide `scripts/verify.ps1`
+run passes `1564` tests with `11` environment-guarded skips. `CALL-010`
+remains `accepted_for_transition`; ADR-0013 remains `proposed`; `P0-LOC`,
+`P0-CALL` and `P0-SOS` all remain `NOT_RUN`.
+
+## 2026-09-03 LOC-021L / CALL-020M Dormant Integration Checkpoint
+
+The active offline candidate now includes the independently audited
+`location_hardware_adapter` and CALL host-control lifecycle. LOC-021L converts
+only caller-captured, boot-monotonic typed reports. It conservatively rejects
+ambiguous GNSS no-fix truth, partial LTE conclusions and mock/unknown IMU
+provenance; its device-scoped Cell reference is a stable pseudonym, not
+anonymization. Every current actuator is explicitly unsupported and no
+synchronous multi-AT query runs under the shared Location/SOS owner.
+
+CALL-020M is default-off and its command line can only render an inert plan.
+The injectable execution API owns prepare/preflight/open/start/stop/close,
+one-shot token clearing, stable cleanup identities, thread quiescence and
+retryable local/remote ownership. The repository still supplies neither the
+host-to-CALL-020G control connector nor a real verified TLS connector; their
+callbacks must prove hard bounds and cancellation before enablement.
+
+A fresh final-source ESP-IDF v5.4.2 ESP32-S3 build at
+`tmp/p0_mainline_final_clean_20260903/` passes. It produces an application of
+`0xDACF0` bytes with `0x25310` bytes (15%) free and a bootloader of `0x51C0`
+bytes with `0x2E40` bytes (36%) free. This build was not flashed. LOC selected
+regression is `244 PASS / 3 skips`, CALL is `237/237`, outbox is `76/76` and
+SOS is `118 PASS / 4 skips`; the final repository-wide validation passes
+`1433` tests with `10` environment-guarded skips. No real sensor, UART, SIM,
+TLS, media, network or physical SOS was exercised; all three product Gates
+remain `NOT_RUN`.
+
+## 2026-09-03 G/H/J Offline Delivery Checkpoint
+
+The active offline candidate now includes the G exact-byte SIM7670 adapter,
+the H split-phase delivery runtime and the I/J SOS delivery composition. G is
+bounded to an 8 KiB response and exposes cooperative cancellation, but remains
+fail-closed until the exact board's TLS/UART path proves complete,
+non-truncated response bytes. H separates shared-owner `prepare` and `settle`
+from owner-free transport execution. A durable SOS can request cooperative
+preemption of Location; cancellation retains Location for retry and preserves
+CRITICAL SOS priority, while a result that wins the race remains authoritative
+and non-cooperative transport acceptance may be unknown.
+
+I/J keep the local SOS journal/enqueue, feedback, urgent-Location and Ego Call
+request path outside the HTTP owner. They remain default-off and inject the
+real transport, Location and Call effects. No native concurrent run, physical
+button, TLS/UART exchange, Guardian notification or connected call is current
+build evidence. The newer LOC-021L/CALL-020M checkpoint above advances only the
+offline shadow-mapping and host-lifecycle boundaries; real modem ownership,
+connectors and separately authorized live work remain. `P0-LOC`, `P0-CALL` and
+`P0-SOS` all remain `NOT_RUN`.
+
+## 2026-09-02 Mainline Offline Integration Checkpoint
+
+The active repository candidate now has separate, dormant device components
+for Location Engine v0, Sensor Policy v0, Location State emission, exact-byte
+persistent outbox delivery, SOS long-press input and ordered SOS orchestration.
+The `LOC-021J` single-owner runtime pipeline composes Engine, Policy, emitter
+and outbox without transport or background tasks and does not commit staged
+state until its required state envelope is durably enqueued.
+`LOC-021K` then wraps that pipeline in a default-off single-owner lifecycle and
+exposes only injected, observable GNSS/Cell/IMU/LTE/upload actuator requests;
+it still has no real driver or `app_main` integration.
+The server candidate has durable location ingest/ACK, hashed Guardian-to-device
+authorization, a hardened minimum Guardian page, and strict durable manual-SOS
+ingest/latest-alert/human-ack routes. Root verification of the combined
+Message Hub/location/Guardian/SOS boundary passes `194/194`.
+These components have not been composed into the currently flashed firmware,
+deployed to the VPS, or exercised through reboot/reconnect/field conditions.
+
+The persistent partition adapter is intentionally limited to field testing:
+each state mutation rewrites a complete `22,240`-byte slot. Product use still
+requires a journaled or wear-levelled backend with measured retention,
+endurance, recovery and confidentiality behavior.
+
+The manual-SOS server accepts `retention_seconds=86400` as event metadata but
+does not yet expire timeline rows, propagate deletion to backups, verify
+erasure, or encrypt the database under a product key lifecycle. Those are
+explicit pre-production privacy blockers.
+
+`SOS-010E` validates the exact persisted manual-SOS payload and deletes it only
+after an accepted/duplicate ACK matches device, event, payload hash, derived
+ACK ID and durable-ingest scope. `SOS-010F/G` add a default-off sampled-input
+composition and a fixed 320-byte pending-edge journal so a qualified edge is
+stored before sequence consumption/orchestration and can replay with its exact
+identity. `SOS-010H` supplies a build-only NVS backend fixed to partition
+`nvs`, namespace `ego_sos_pend`, key `edge_v1`; init is RAM-only and load is
+read-only. H focused validation is `8 PASS / 1 native-host skip`, the H/G/F set
+is `27 PASS / 3 native-host skips`, and a clean ESP32-S3 build passes. No NVS
+callback, reboot, power loss or physical button ran, and NVS atomicity,
+endurance, encryption and secure erase remain unverified.
+
+The default-off `p0_delivery_runtime` now owns the single dispatcher drive
+boundary for both `manual_sos` and `location_state`: at most one selector, one
+injected bounded POST and one finish occur per ready attempt. Wrong 2xx bodies,
+transport failures and uncertain durable settlement retain the record and use
+explicit recovery without another POST. Focused validation is
+`9 PASS / 1 native-host skip`; all outbox regressions pass `76/76`, and a clean
+ESP32-S3 build passes. It still has no real HTTP implementation, credential,
+task or `app_main` wiring.
+
+CALL-020G now retains a non-autorun operator API and the complete four-worker
+codec/I2S-to-USB D/E/F chain in a clean dedicated ELF. Its image is `254,592`
+bytes, its global runner context is `44,216` bytes of BSS, and the linker
+reports `251,057` bytes remaining in shared D/IRAM. The separate clean default
+image is `195,440` bytes and contains no CALL-020 symbols. This closes the
+dead-link question. The first IRAM window's one-byte report remains a future
+layout-pressure warning because later executable text is already accounted in
+shared D/IRAM; it is not by itself a runtime failure. This does not provide
+runtime memory or media evidence. The
+dedicated boot stub is intentionally inert, and four `4,096`-byte stacks plus
+TCBs, USB rings, I2S DMA and codec allocations still need measured heap and
+watermark evidence after a separately authorized control seam exists.
+
+CALL-020H provides a caller-injected, bounded host serial resynchronizer for
+ROM/boot prefixes and fragmented EGLM media. CALL-020I supplies strict
+process-local authenticated relay admission, CALL-020J wraps a caller-injected
+already-connected TLS socket after frozen external verification, and CALL-020K
+adds a default-off exact-port OS serial owner with optional lazy pyserial import
+but no enumeration, guessing or reconnect. `CALL-020L` now composes K/H and J
+into the existing four-worker bridge behind explicit, single-use `open/start`.
+L passes `15/15`; validation through L is `181/181`, and the CALL contracts
+plus CALL-010 static set is `213/213`. Every serial driver/socket was a
+process-local fake. The next boundary is a separately reviewed device control
+trigger and real connector/TLS/PKI path, followed by a verified SIM route and
+measured runtime memory/media behavior.
+
+All three product capability Gates remain `NOT_RUN`. No current offline result
+authorizes flashing, device control, SIM traffic, VPS deployment or capture.
+
+## 2026-09-02 CALL-010 Runs And UI-001 Restoration
+
+The wearable node completed operator-authorized, bounded CALL-010
+logical-runtime runs and one staged output-only diagnostic over USB
+Serial/JTAG `COM8`. The identified
+target was ESP32-S3 QFN56 revision v0.2, MAC `02:00:00:00:00:01`; the 4G
+connectivity node was not changed. Operator image
+`firmware/audio_loop/build_operator_static/egolink_call010_audio_loop.bin`
+was `278800` bytes with SHA-256
+`327485660B436ABCEBE166586581C184C5164EAF7A1EC1B030EC4D20701976BB`.
+Run `CALL-010-20260902-006` completed the configured `30/30/120`-second
+output/input/attenuated-loop sequence with all `1500/1500`, `1500/1500` and
+`6000/6000` logical frames, with phase metrics reporting `read_errors=0`,
+`write_errors=0` and `frame_seq_gaps=0`, no captured fatal marker, and a final
+verified PA-off state. It retained no raw audio. The two logical input
+channels had low nonzero PCM metrics, which may be noise floor and do not
+prove physical microphone pickup. Initialization
+also emitted two error-level `i2s_channel_disable ... channel has not been
+enabled yet` diagnostics; these remain unresolved even though phase-metric
+read/write error counters were zero.
+
+Follow-up run `CALL-010-20260902-007` repeated the same controlled-start
+`30/30/120`-second sequence with the same operator image. The operator later
+confirmed that no sound was heard during the entire run, so run 007's acoustic
+output result is `FAIL` even though all logical phases and final-safe checks
+passed. The operator has now confirmed speaking during the 30-second input
+window; both logical-channel RMS values were approximately ten times the low
+run-006 baseline and their peaks were higher. This known spoken stimulus and
+correlated digital metric change strengthens input-path evidence, but does not
+establish physical microphone/channel mapping, calibrated sensitivity, audio
+quality or a concurrent acoustic loop. Run 007 retained no raw audio and
+showed the same two unresolved initialization-time I2S disable diagnostics.
+
+Output-only diagnostic run `CALL-010-20260902-008` then used a separate
+`278960`-byte image with SHA-256
+`014207FD036987A4DD3FA1EE26CFD51944FE3C5EEF04B40BEDD7A983E97F0B0A`.
+After a 15-second PA-off/muted countdown, it emitted a 1 kHz, PCM-peak-5000
+reference for two seconds each at volume `55`, `70`, and `85`, with two-second
+muted/PA-off gaps. Each stage completed `100/100` frames and
+`128000/128000` requested/actual bytes; ES8311 register readback matched
+`0x99`, `0xa8`, and `0xb7`. No microphone was constructed or read, no raw
+audio was retained, no fatal/deadline marker occurred, and the final PA-off
+marker passed. The stage-level result is `PASS_ALL_STAGES_AND_FINAL_SAFE`, but
+the strict runner result is `FAIL_OR_INCOMPLETE` solely because one upstream
+initialization-time `i2s_channel_disable ... channel has not been enabled yet`
+error-level line was captured. The operator subsequently confirmed that the
+bounded high-volume sequence sounded clear and normal overall, with no painful
+or distorted result reported; the three stages were not individually
+identified. Run 008 therefore passes the bounded qualitative
+speaker-output acoustic check; this does not waive the strict runner diagnostic
+or constitute an SPL or product-acoustics measurement.
+
+After run 008, an offline output-diagnostic-only change pre-arms TX while PA
+is forced low before codec open, removing the known first-open blind-disable
+cause without enabling RX. Focused tests passed `8/8`, and ESP-IDF `v5.4.2`
+built a new `279280`-byte image with SHA-256
+`B79C6E0B5B5EF76165DF5FA2DF3DDE82786E7C8EC20D5B4C5D97E8427FF3DAC8`.
+This image has **not** been flashed or run, does not alter run 008's strict
+result, and has no hardware evidence. No further hardware run is authorized.
+
+Post-run source review also shows that this was an exceptionally weak audible
+stimulus rather than a decisive speaker-health test. Volume `12` produced the
+verified ES8311 value `0x6e`, approximately `-40.5 dB`, while the generated
+chirp peak was only `1800/32767` (approximately `-25.2 dBFS`). Their nominal
+combined level was about `-65.7 dB` below the corresponding full-scale codec
+path before the external amplifier; local-loop playback was attenuated by a
+further factor of `16` (approximately `-24.1 dB`). For comparison, the
+official Arduino `08_ES8311` example selects volume `85`. The operator
+confirmed the unit is in a complete enclosure, and external photos show
+visible acoustic openings. The product assembly is documented with an internal
+speaker, but the V1.0 main-board schematic ends the NS4150B output at `P5/P6`
+contacts marked `SPK`; the photos do not verify the internal speaker assembly
+or `P5/P6` contact.
+
+Logical runtime is complete for the earlier bounded sequences, and run 008's
+staged output is now operator-confirmed clear and normal. This resolves the
+active speaker-output audibility debug branch for the development board. It
+does not establish physical microphone/channel mapping, calibrated SPL,
+AEC/AGC, acoustic echo, DMA underrun/overrun behavior, application-level
+concurrent RX/TX, or a measured local-loop delay. Physical PCB revision remains
+unknown, and run 008 retains its initialization diagnostic even though an
+unflashed offline candidate addresses its identified cause. Together with run
+007's spoken-stimulus/input-metric response, the basic development-board audio
+endpoints are sufficient to unlock CALL-020. CALL-010 remains active with
+`accepted_for_transition`; simultaneous I/O and measurable local-loop delay
+remain non-transition-blocking closure work. `P0-CALL` and all other P0
+capability Gates remain `NOT_RUN`.
+Detailed evidence is under
+`reports/board_validation/CALL-010-20260902-006/` and
+`reports/board_validation/CALL-010-20260902-007/`, with the staged output and
+latest restore evidence under
+`reports/board_validation/CALL-010-20260902-008/`.
+
+The temporary CALL-010 override has been reversed. UI-001 is again the
+current wearable image. Its application is `659120` bytes with SHA-256
+`11D72868A956E86F7B91D1B9D6008404FBD02B61299D566399DDC90F50A23139`;
+the `22208`-byte bootloader and `3072`-byte partition table have SHA-256
+`2248730A914CA30FDEC279FE065EB3CB7F1E3C5CBB3F49BE33E6F1C358A9AD63`
+and `7F00B6C042A89B15B0CAC534F82ED988CAF29278FF5700B0C511EB1B5BB7C820`.
+All three flash writes passed hash verification. The run-006 15-second reboot
+capture observed UI-001 `hello` and `display_ready`; UI-001 was restored again
+after runs 007 and 008. The latest run-008 bounded boot observed `hello` and
+`display_ready`, and smoke `UI001-RESTORE-20260902-008` passed
+`status_rendered` and `ask_user_rendered`. The latest restoration evidence is
+under `reports/board_validation/CALL-010-20260902-008/restore_ui001_*` and
+`reports/board_validation/CALL-010-20260902-008/ui001_smoke/`.
+
+## 2026-09-02 Offline P0 Integration Candidates (Not Deployed)
+
+The current working tree advances the three P0 lanes as independent offline
+host slices while retaining the physical and network evidence boundaries:
+
+- LOC-021 A/B/C now includes a standard-library Location State runtime, a
+  SQLite append-only timeline plus derived current-state store, authenticated
+  bounded Message Hub HTTP ingest and a default-redacted current-location
+  response. Root
+  verification passes `41/41` LOC-focused tests. The existing Message Hub
+  suite is agent-reported `61/61` pending a root rerun. No device emission,
+  device outbox wiring, real Guardian-device binding, VPS deployment or field
+  run is part of this result.
+- CALL-020A's bounded in-memory media runtime passes `11/11` focused tests;
+  CALL-020B's framed I/O/preflight and deterministic fake duplex pump passes
+  `21/21`; the combined CALL-focused offline suite passes `65/65`. There is no
+  real concurrent 20 ms pump, continuous wearable USB CDC media path, matching
+  TLS relay, verified LTE route or real media run yet. Current RNDIS evidence
+  is enumeration only; the historical source-bound ping/curl through
+  `192.168.0.100` timed out.
+- SOS-010A's isolated host composition passes `8/8` focused tests. It does not
+  connect the location upload adapter, prove Guardian human delivery, establish
+  a remote call or exercise a physical button.
+
+These candidates are deliberately parallel: the next LOC slice is device
+emission plus persistent-outbox wiring; the next CALL slice is continuous USB
+media plus a genuinely concurrent bridge and matching relay; and the next SOS
+slice is the server/device adapter boundary. No candidate was flashed,
+deployed, sent over the SIM, or run on hardware. Those actions require fresh
+explicit operator authorization. `P0-LOC`, `P0-CALL` and `P0-SOS` all remain
+`NOT_RUN`.
+
+## 2026-08-23 Validated Working-Tree Candidates (Not Flashed)
+
+This section is the preserved 2026-08-23 baseline. Its CALL-010 "not
+flashed" statement is superseded by the 2026-09-02 section above.
+
+The working tree contains distinct, deliberately non-promoted candidates:
+
+- the main connectivity source candidate restores the public bounded IMU
+  command to exact 100 x 50 ms, preserves boot/time lineage for raw LTE
+  location derivation, and fixes Dashboard history selection; it has not been
+  rebuilt with ESP-IDF in this Sprint 1 integration run;
+- the isolated CALL-010 target has two successful ESP-IDF 5.4.2 builds: dormant
+  `195280` bytes (SHA-256 `22A28843...C01086`) and operator-test `277408` bytes
+  (`16A8936E...3D758F`); neither image was flashed or run; and
+- PC references now cover Location Engine/Sensor Policy/Replay, the additive
+  Location State Envelope and server mirror seam, persistent priority outbox,
+  Ego Call control/media-trace preparation, and static audio safety.
+
+The merged repository suite passes `929/929`; the P0-focused integration set
+passes `132/132`; `context_lint` and `git diff --check` pass. These results do
+not replace the `current board` entries below and are not evidence for IMU
+continuous capture, GNSS fix/accuracy, RTC media, device audio, TLS modem
+transport, battery, or product behavior. The connectivity node remains on the
+recorded FW-007 image until a separately authorized build/flash/run records a
+new image identity and evidence path. All three P0 capability Gates remain
+`NOT_RUN`.
 
 ## Host
 
@@ -16,13 +398,33 @@ verified_by: codex
 
 | role | current board | observed ports | current use |
 |---|---|---|---|
-| `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG, recently `COM9` | UI-001 field-friendly D1 status sidecar is currently flashed: cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt, QMI8658 engineering sampler. Bounded smoke `ui001-amoled-friendly-smoke-20260704` observed `cmd=display_status` plus `status_rendered`. |
+| `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG `COM8` observed 2026-09-02; MAC `02:00:00:00:00:01` | UI-001 field-friendly D1 status sidecar is currently flashed after the bounded CALL-010 override was reversed. The `659120`-byte application has SHA-256 `11D72868...A23139`; the latest run-008 bounded restore observed `hello`, `display_ready`, `status_rendered` and `ask_user_rendered`. It retains the cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt and QMI8658 engineering sampler. |
 | `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-16 | FW-007 LTE-to-Wi-Fi failover image `0.1.0-fw007-lte-wifi-failover` (application descriptor `fw007-e9ca7a4`, app SHA-256 `8F3508C6...9283799`) is currently flashed on ESP32-S3 QFN56 revision v0.2, MAC `02:00:00:00:00:03`. One COM3 three-region flash passed hash verification without targeting or erasing the NVS partition; normal boot diagnostics retained and updated their existing NVS `boot_count`. The SIM-absent startup run observed one-way Wi-Fi takeover in about 4 minutes 50 seconds and a Wi-Fi command ACK. A second run established stable LTE before physical SIM removal, then observed threshold count three and the `lte_http_poll_failures` transition to `wifi_active`; the first Wi-Fi server message arrived 46.837 seconds after operator confirmation, in the same boot with forward sequence continuity. Post-takeover serial and VPS windows retained Wi-Fi heartbeats/sensor/location uploads without a duplicate LTE owner, offline transition, panic, brownout, or reset. Automatic Wi-Fi-to-LTE failback, durable offline queueing, LTE recovery, USB-free endurance, and long-run reliability remain unverified/not implemented in this slice. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 
 ## Recently Verified Capabilities
 
+- CALL-010 runs `CALL-010-20260902-006` and `-007` completed controlled-start
+  `30/30/120`-second logical output/input/attenuated-loop sequences on the
+  wearable board. Run 006 established a low logical-channel baseline; during
+  the run-007 input window, the operator confirms speaking, input RMS rose
+  approximately tenfold and peaks increased. This is correlated input-path
+  evidence, but does not establish physical microphone/channel mapping,
+  calibrated sensitivity, audio quality or a concurrent acoustic loop. Run 007
+  passed its logical/final-safe checks but failed acoustic output because the operator
+  heard no sound throughout. Two initialization-time I2S disable diagnostics
+  also remain unresolved. Concurrent RX/TX queues, DMA underrun/overrun and
+  acoustic delay remain unverified. Output-only run `-008` completed all
+  volume `55/70/85` stage writes, matching register readbacks and final PA-off
+  checks without constructing or reading a microphone. Its stage-level result
+  is `PASS_ALL_STAGES_AND_FINAL_SAFE`, while its strict result remains
+  `FAIL_OR_INCOMPLETE` solely because one upstream initialization I2S-disable
+  diagnostic was captured. The operator confirmed the overall output sequence
+  sounded clear and normal, giving this bounded speaker-output
+  slice an acoustic PASS; individual stages were not separately identified.
+  The basic endpoints unlock CALL-020, but full-duplex/acoustic-loop and LTE/RTC
+  acceptance remain unverified, so this does not advance `P0-CALL`.
 - Full Demo v0.5 runner can produce one complete summary from real AMOLED IMU/touch evidence, SIM7670G GNSS AT evidence, mock-only structured audio evidence, session recording, quality gate, and replay.
 - Same-run AMOLED IMU/touch confirmation evidence has been captured: `motion_event`, `ask_user_rendered`, `user_confirmation=safe`, and final PC `safety_event`.
 - AMOLED-001 sidecar display smoke has been captured on `COM9`: `status_update`

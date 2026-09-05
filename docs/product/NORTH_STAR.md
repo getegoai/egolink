@@ -1,9 +1,56 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-14
+last_verified: 2026-08-23
 verified_by: codex
 owner: founder
 ---
+
+## 2026-08-23 Founder First-Launch Update
+
+The first-launch value loop is now **Reliable Location + Ego Call + physical
+SOS**, as accepted by
+[ADR-0011](../architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md)
+and operationally frozen by
+[ADR-0012](../architecture/adr/ADR-0012-p0-productization-sprint-1.md).
+The launch remains people-first: children and older adults are the primary
+personas, adult use is compatible, and pet use remains a later platform
+variant.
+
+The sellable P0 release decision is deliberately smaller than the long-term
+capability map:
+
+| Gate | Capability | First-launch requirement |
+| --- | --- | --- |
+| `P0-LOC` | Reliable Location | must `PASS` |
+| `P0-CALL` | Ego Call | must `PASS` |
+| `P0-SOS` | physical-SOS loop | must `PASS` |
+| `L2-AI` | AI-enhanced location | best effort; non-blocking |
+| `L3` | context/event understanding | outside the launch critical path |
+
+Productization Sprint 1 therefore adds no new sensor dependency and does not
+build learned multi-source fusion, camera AI, general anomaly detection, a
+polished complete app, PSTN, or native VoLTE. Interfaces and honest collection
+hooks remain, but only Location Engine/Sensor Policy/Replay, the minimum real
+Ego Call chain, SOS composition, and their product-assurance evidence consume
+P0 critical-path capacity.
+
+`Ego Call` over LTE data through a controlled RTC service and Guardian app is
+the first-launch communications path. Native VoLTE is no longer a software
+launch blocker; A0 must still preserve and evaluate a viable modem, audio,
+power, and RF migration path under `G0V-VOLTE-RESERVE`.
+
+`L1 Location`, `L2 Intelligence`, and `L3 Awareness` are capability-priority
+layers, not replacements for the product-assurance gates. L1 is launch
+mandatory, L2 is bounded best effort, and advanced learned L3 behavior evolves
+after launch. A minimum deterministic `Rule Policy v0`/Safety Kernel remains on
+the launch path: physical SOS, local feedback, location attempt, user outcome,
+durable event recording, and honest `pending`/`failed` delivery state cannot be
+deferred or vetoed by AI.
+
+Execution is multi-lane. Location evidence, Ego Call/SOS, reliability and
+power, A0 hardware, privacy/compliance, and bounded AI/data work advance in
+parallel. A blocked external or hardware dependency blocks only its dependent
+lane; it is not permission to stop independent work.
 
 ## 2026-08-14 Founder Product-Baseline Update
 
@@ -56,15 +103,25 @@ authority 分工处理，不得用本文件覆盖实机证据、协议或 accept
 ## 1. 最终产品（不可漂移的目标）
 
 随身 AI 主动守护定位器（中国市场）：
+首发用户价值闭环固定为 **可靠定位 + Ego Call + 实体 SOS**；Ego Call 通过 LTE
+数据、受控 RTC 服务和 Guardian app 实现。所有远程动作都必须显示真实送达状态，
+网络或 RTC 不可用时，本地 SOS、定位尝试、反馈和有界事件记录仍继续。
+
 1. **核心功能一：定位**。至少以 GNSS、基站和 IMU 形成诚实降级的多源定位，
    配省电策略——传感器按需/占空比工作，绝不持续全速常开。Wi-Fi/BLE 是否
    进入量产产品由 Master Context 与独立 2.4 GHz/RF 门禁决定，基础安全链路
    不得预先依赖它。
-2. **核心功能二：AI 主动安全**。设备采集环境数据，AI 分析预测风险并主动
-   执行动作（如给联系人发信息/打电话）。
+2. **核心功能二：首发安全底座**。首发内置、可审计、可回放的规则式 Safety
+   Kernel，但 Sprint 1 只负责实体 SOS、本地反馈、定位升级、低电/离线诚实状态、
+   持久事件与有界重试。通用异常候选、主动 check-in、上下文理解和学习式风险
+   判断保留接口与数据能力，转入 L2/L3，不占首发关键路径。AI 永远不能否决人工
+   SOS 或强制安全动作。
 3. 量产目标：按 ADR-0008 形成独立定制的模块化 EgoCore PCB，而不是简单相加
    两块开发板能力；48h 守护续航是硬指标，量产定义见
    `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`。
+
+能力优先级使用 `L1 Location`、`L2 Intelligence`、`L3 Awareness`；它们用于安排
+资源，不替代通信、定位、功耗、可靠性、防水声学、RF 和 NPI 等产品放行门。
 
 ## 2. 迭代哲学：Demo 阶梯，先通后好
 
@@ -83,15 +140,21 @@ authority 分工处理，不得用本文件覆盖实机证据、协议或 accept
 | **D4 主动安全第一步** | 运动异常候选（阈值/统计即可）→ 自动通知联系人（短信或推送）闭环 | 误报率开始记录（打"实验性"标签） |
 | **D5 数据飞轮转起来** | 外场数据→标注→模型/参数更新→下一版精度提升，形成"发版即变准"的可见循环 | 精度演进曲线（逐版本对比）上看板 |
 
+这张 Demo 表保留研发谱系，不重开当前首发范围。Productization Sprint 1 直接围绕
+`P0-LOC`、`P0-CALL`、`P0-SOS` 取用已有 D1/D2/D5 工具；D4 异常通知在首发后或
+独立非阻塞实验中推进，不能成为进入定位、通话或 SOS 工作的串行前置条件。
+
 每完成一个 Demo：打 tag（v0.D.x）→ 一页 demo 报告（含指标对比上一版）→
-创始人验收 → 才进入下一级。指标定义一旦建立（D2）就逐版本追踪，不许断。
+创始人验收。`才进入下一级` 只约束同一证据依赖链，不要求不同工作线串行等待；
+D2/D5、Ego Call/SOS、可靠性/功耗、产品 A0 和合规工作可以并行。指标定义一旦
+建立（D2）就逐版本追踪，不许断。
 
 ## 3. 防漂移规则（对执行者的硬约束）
 
-1. 每个任务开工前自问并在结果中写明：**这个任务服务于哪个 Demo？**
-   答不出来的任务不做，报告 Director。
-2. 与当前 Demo 无关的"完善型"工作（重构、补文档、加边界声明）一律推迟，
-   除非它阻塞当前 Demo。
+1. 每个任务开工前自问并在结果中写明：**这个任务服务于哪个 Demo、首发能力
+   或产品 Gate？** 答不出来的任务不做，报告 Director。
+2. 与当前 Demo、首发能力或产品 Gate 无关的"完善型"工作（重构、补文档、加
+   边界声明）一律推迟，除非它阻塞当前依赖链。
 3. 连续 3 轮修复仍不过 → 停下上报，不许换路径蛮干（LTE-003 八轮修复的
    教训）。
 4. 阻塞超过约 2 小时（等硬件、等决策、等资料）→ 立即上报，不空转。
@@ -153,6 +216,13 @@ ACTIVE_BUILD 和 BOARD_MATRIX 反映现状；machine-readable contracts 控制�
 
 ## 变更记录
 
+- 2026-08-23 创始人进一步冻结 Productization Sprint 1：规则 Safety Kernel 的
+  首发责任收敛到实体 SOS、定位升级、低电/离线诚实状态和持久事件；异常候选、
+  主动 check-in 与广义状态理解转入 L2/L3，不再作为首发前置任务。
+- 2026-08-23 创始人确认首发收敛为 Reliable Location + Ego Call + SOS；
+  ADR-0011 将 LTE 数据 RTC/Guardian app 设为首发通话主线，把 Native VoLTE
+  调整为并行 `G0V-VOLTE-RESERVE`，并明确 L1/L2/L3 是能力优先级、最低规则
+  Safety Kernel 首发内置、高级上下文模型后置及多线并行执行。
 - 2026-08-14 创始人确认新版 Master Context 为当前销售产品方向基线；ADR-0008
   记录无屏模块化 EgoCore 路线，并保留开发板 D2/D5 主线并行推进。
 - 2026-07-09 创始人更新：D1 连续外场测试改为持续回归，不再作为无限期转入卡点；

@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-03
+last_verified: 2026-08-23
 verified_by: codex
 ---
 
@@ -9,6 +9,66 @@ verified_by: codex
 This roadmap is the near-term USB-Free, VPS Message-First route for P0
 development. The broader P0-to-product migration remains in
 `../roadmap/P0_TO_PRODUCT_MIGRATION.md`.
+
+## 2026-08-23 Productization Sprint 1 Rebase
+
+[ADR-0012](../architecture/adr/ADR-0012-p0-productization-sprint-1.md) and
+[`FIRST_LAUNCH_EXECUTION.md`](FIRST_LAUNCH_EXECUTION.md) supersede the old
+interpretation of R0-R4 and D1-D5 as a global serial release path. Those gates
+and completed assets remain valid engineering evidence, but current execution
+converges on three sellable-P0 outcomes:
+
+| Gate | Required outcome | Current state |
+|---|---|---|
+| `P0-LOC` | device-owned operational location state with honest Guardian view and representative replay/field evidence | `NOT_RUN` |
+| `P0-CALL` | authorized, stable device↔Guardian two-way voice over LTE data on the representative product path | `NOT_RUN` |
+| `P0-SOS` | physical long press, durable local event/feedback, location escalation, Guardian alert and Ego Call attempt | `NOT_RUN` |
+
+The immediate dependency chain is:
+
+```text
+LOC-020 -> POLICY-010 -> REPLAY-010 -> LOC-021 -> FIELD-020 ----+
+                                             |                  |
+CALL-010 -> CALL-020 ------------------+      +-> SOS-010 -------+-> release
+HW-020 -> HW-021 -> HW-022 ------------+-> CALL-021 --^
+OUTBOX-010 -----------------------------------------^
+
+HW-022 + LOC-021 + CALL-021 + SOS-010 -> PWR-020
+
+FIELD-020 + SOS-010 + OUTBOX-010 + OPS-004 + PWR-020 + HW-022
+    + COMPLIANCE-010 + acoustic/RF/water/security/privacy/NPI evidence
+    -> P0-RELEASE-010
+```
+
+`FIELD-020` and `SOS-010` proceed independently after their own prerequisites
+and meet only at `P0-RELEASE-010`; field work is not a serial prerequisite for
+SOS. `HW-020` is completed only as an interface baseline. `HW-021` owns the
+exact buildable integrated design, `HW-022` owns the physical independently
+powered prototype, and `CALL-021` depends on both real `CALL-020` evidence and
+that prototype.
+
+Current task state is deliberately narrower than Gate state:
+
+- `LOC-020`, `POLICY-010`, `REPLAY-010`, and `HW-020` are accepted for
+  transition as reference/interface work; `LOC-021` and `HW-021` are in
+  progress.
+- `CALL-010` is in progress but its hardware run is operator-gated;
+  `CALL-020` has in-progress offline trace tooling but no real LTE-media run.
+- `OUTBOX-010` has an in-progress host reference; product persistence,
+  `OPS-004`, `HW-022`, `CALL-021`, `FIELD-020`, `SOS-010`, `PWR-020`, and the
+  final release review remain incomplete or queued.
+- No item above changes `P0-LOC`, `P0-CALL`, or `P0-SOS` from `NOT_RUN`.
+
+Device Location Engine v0 and Sensor Policy v0 own the minimum state needed
+offline. Server EALE/fusion remains a richer derived evidence, replay and
+comparison layer and must preserve source event-time ordering. `L2-AI` starts
+with data quality, replay and offline/shadow comparison; learned fusion and
+camera/context work are non-blocking. PSTN, SMS, public emergency dispatch and
+native VoLTE are excluded from the Sprint 1 software path; native VoLTE remains
+the separate `G0V-VOLTE-RESERVE`.
+
+The sections below are retained for evidence lineage and reusable tooling. A
+historical R/D/KR pass cannot be promoted into any of the three P0 Gate states.
 
 ## 2026-06-28 Route Update: Observable First
 
@@ -125,8 +185,8 @@ Definition of Done:
 - dataset tooling can rebuild observation windows from raw-frame lineage,
   derived events, labels, and quality checks instead of using transient
   Dashboard state.
-- EALE-P0 algorithm design is frozen as a server-side, derived-only,
-  explainable rule/scoring baseline.
+- EALE-P0 remains the server-derived explainable rule/scoring and replay
+  baseline; under ADR-0012 it is not the device operational-state owner.
 
 Remaining R2.5 work:
 
@@ -469,6 +529,19 @@ Definition of Done:
 ## R4: Product Demo Version
 
 Goal: make a non-developer understandable product prototype demo.
+
+This section preserves the earlier R4 demo lineage. Its anomaly/user-
+confirmation assets are optional L2/L3 evidence and are not current P0
+dependencies. The current launch skeleton is the physical-SOS composition
+below; camera or learned decisions cannot start, veto, or delay it:
+
+```text
+physical long press
+-> durable local SOS record and local feedback
+-> upload last trusted location and elevate Location Engine policy
+-> Guardian alert and Ego Call attempt
+-> honest delivery/call state and replay
+```
 
 The product-demo closed loop is not the current KR-006. KR-006 is already the
 raw POST retry fault-injection baseline. The demo loop should be tracked after

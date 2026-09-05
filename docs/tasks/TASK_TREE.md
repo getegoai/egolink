@@ -1,30 +1,204 @@
 ---
 document_status: current_task_tree
-generated_at: 2026-07-09
+generated_at: 2026-09-04
 generated_by: codex
 ---
 
 # EGOLINK Task Tree
 
-This tree records the current task structure from the local repository state.
-It does not move, delete, or rewrite task packets.
+## 2026-09-04 Current Delta
+
+`LOC-021Q/R/S` completes the current offline Location composition checkpoint.
+Q establishes the boot-long modem owner and bounded GNSS-stop compensation; R
+closes the single-owner durable-SOS ingress and deferred Cell-obligation
+boundary. S adds an isolated, default-off modem-only smoke application that
+statically excludes the legacy `app_main`, obtains `boot_epoch` from NVS and
+fails closed without automatic erase, initializes the exact shared outbox,
+Location, SOS, dispatcher and P0 delivery runtime, uses an explicit no-I/O
+`TRANSPORT_FAILED` callback, and issues at most one GNSS status request after Q
+starts. S does not wire external SOS, IMU or concurrent product ingress.
+
+`CALL-020R` completes the offline device-owner and lifecycle-cleanup boundary.
+The next CALL work remains authentication, real TLS, a verified route, exact
+RESULT/post-stop telemetry and live memory measurement. The combined critical
+selection passes `110/110`; the final repository-wide `scripts/verify.ps1` run
+passes `1614` tests with `12` environment-guarded skips.
+
+The next hard Location slice is `LOC-021T0`: a persistent, source-occurrence-
+ordered ingress WAL with lane watermarks. `LOC-021T1` may become the product
+bridge only with a persistent K reducer/identity/retry checkpoint, or equivalent
+full replay, plus exact outbox tombstone and no-output replay semantics. A
+bounded S modem-only hardware smoke may run with fresh operator authorization
+without waiting for T0/T1; authenticated Message Hub ingest is a separate
+integration. No real I/O, hardware, network, flash or deployment action ran in
+this checkpoint. `CALL-010` remains `accepted_for_transition`; `P0-LOC`,
+`P0-CALL` and `P0-SOS` remain `NOT_RUN`.
+
+The parallel execution tree and order at the top are current. The long task
+inventory below is retained for engineering lineage; it does not override
+active packets, `FIRST_LAUNCH_EXECUTION.md`, or ADR-0012.
 
 ## Root Objective
 
-EGOLINK P0 proves an AI-assisted active safety locator loop:
+EGOLINK's first launch proves one reliable safety-and-contact loop:
 
 ```text
-motion candidate
--> PC Bridge receives event
--> AMOLED asks the user
--> user confirmation
--> location / communication evidence
--> complete safety event record
--> quality gate
--> replay without boards
+Guardian location view -> honest location_belief/source/age/uncertainty
+device call <-> managed RTC <-> Guardian call
+physical SOS -> local durable action/feedback -> priority location + call attempt
+all three -> honest delivery/failure state -> bounded replayable evidence
 ```
 
-## Control Plane
+The launch does not wait for advanced learned models, camera awareness, or
+native VoLTE. Those remain L2/L3 growth or an independently measured reserve.
+
+All three capability Gates currently remain `NOT_RUN`: `P0-LOC`, `P0-CALL`
+and `P0-SOS`. A task being implemented, reviewed or passing focused tests does
+not advance a Gate.
+
+## Current Parallel Execution Tree
+
+```text
+First launch: Reliable Location + Ego Call + physical SOS
+|- Lane A - P0-LOC Location Engine and field truth
+|  |- LOC-020 + POLICY-010 + REPLAY-010 accepted      PC reference boundary
+|  |- LOC-021 device/server/Guardian integration      offline A-S
+|  |  |- S isolated modem-only smoke profile          default-off; bounded run ready
+|  |  `- T0 ordered-ingress WAL -> T1 product bridge  persistence/replay work pending
+|  |- concurrent SOS/IMU product ingress              not wired into S
+|  |- FIELD-020 representative campaign               after live LOC integration
+|  `- L2 data/replay/estimators                        queued non-blocking
+|- Lane B - Ego Call and SOS
+|  |- CALL-010 exact-board basic audio endpoints       accepted for transition
+|  |- CALL-020 bounded PC-bridged LTE voice PoC        offline A-R; auth/TLS/route/live pending
+|  |- CALL-021 PC-free embedded RTC path               after CALL-020 + HW-022
+|  `- SOS-010 physical composition                     offline A-J; physical/live pending
+|- Lane C - reliability, security, and power
+|  |- OPS-004 authenticated Message Hub ingress        separate secure integration
+|  |- OUTBOX-010 persistent priority outbox            G/H offline ready; T1 replay work pending
+|  |- PWR-001 development-board baseline               evidence queue
+|  `- PWR-020 integrated 48-hour power matrix          after product loop
+|- Lane D - A0 and China launch readiness
+|  |- HW-020 P0 A0 interface baseline                  accepted for transition
+|  |- HW-021 exact parts/design engineering pack       in progress; C0.1 blockers open
+|  |- HW-022 integrated prototype build/bring-up       after HW-021 + CALL-020
+|  `- COMPLIANCE-010 qualified China opinion           ready for authorization
+`- Release - P0-RELEASE-010 capability + assurance     final convergence
+```
+
+`PROD-002` is retained only as the legacy pre-compliance intake; its active
+successor is `COMPLIANCE-010`. `G0-EGOCALL` is the legacy name for the
+first-launch communications evidence family; the release Gate is `P0-CALL`.
+Operator/external waits block only dependent evidence. Shared source paths
+still require a green integration boundary before the next builder starts.
+
+## Current Recommended Execution Order
+
+1. Implement `LOC-021T0` as the next hard product slice: persist source-
+   occurrence order in an ingress WAL and advance explicit lane watermarks.
+   Keep this work independent from the already isolated S modem-only smoke.
+2. Admit `LOC-021T1` as the product bridge only after either a persistent K
+   reducer/identity/retry checkpoint or equivalent complete replay exists, and
+   exact outbox tombstone plus no-output replay semantics are specified and
+   tested. Do not silently substitute execution order for occurrence order.
+3. In parallel, advance CALL authentication, real TLS, verified routing,
+   RESULT/post-stop telemetry and live memory measurement; advance OPS-004
+   secure Message Hub ingest separately; continue HW-021, OUTBOX integration
+   and COMPLIANCE-010 at their own authorization boundaries.
+4. With fresh operator authorization, S may run a bounded modem-only hardware
+   smoke without waiting for T0/T1. That run must not be described as concurrent
+   SOS/IMU product ingress, secure Message Hub ingest or a P0 Gate result.
+5. After their separate live boundaries are ready, execute LOC ingest, CALL on
+   a verified SIM/LTE route and physical SOS delivery/call state; then run
+   FIELD-020, build/bring up HW-022 and measure PWR-020. Neither CALL-010 nor
+   CALL-020 passes `P0-CALL` by implementation alone.
+6. Converge capability and assurance evidence in P0-RELEASE-010. Promote L2
+   estimators only through offline comparison and Shadow Mode; Rule Safety
+   remains the fail-safe launch kernel and no learned output vetoes SOS.
+
+## 2026-09-04 Current Offline Slice Evidence
+
+- `LOC-021 A-S`: A-K retain the offline runtime, bounded authenticated ingest,
+  native reducer/policy/emitter, exact-byte outbox, transactional pipeline,
+  durable ACK and minimum bound-Guardian surface. L-P retain the caller-timed
+  hardware mapper, fixed-capacity priority arbitration, owner-free execution
+  and bounded SIM7670 GNSS/LTE adaptation. Q/R close the offline boot-long modem
+  owner, GNSS-stop compensation, full durable-SOS ingress owner and deferred
+  Cell-obligation boundary. S is a dedicated, default-off modem-only profile:
+  legacy `app_main` is excluded at source selection, NVS `boot_epoch` fails
+  closed without erase, the exact shared outbox/Location/SOS/dispatcher/P0
+  delivery runtime is initialized, transport is explicitly no-I/O and failed,
+  and Q receives at most one GNSS status request. S is not the product bridge
+  and does not accept external SOS, IMU or concurrent product ingress. T0's
+  durable occurrence-ordered WAL/lane watermarks and T1's durable or equivalent
+  full-replay bridge remain pending. `P0-LOC=NOT_RUN`.
+- `CALL-010`: run 008's bounded staged output is operator-confirmed clear and
+  normal overall, so the basic endpoints are `accepted_for_transition` while
+  concurrent/full-duplex and product acoustics remain open.
+- `CALL-020A-R`: host runtime/framing/concurrent bridge and wearable
+  framing/USB/audio composition pass their focused offline suites. G retains a
+  non-autorun operator API and the complete D/E/F chain in a clean dedicated
+  ELF; its `254,592`-byte image leaves `251,057` bytes in shared D/IRAM. The
+  first IRAM window remains layout-tight but is not a standalone runtime
+  blocker. The boot stub remains inert, and dynamic heap/stack/DMA headroom is
+  unmeasured. H adds a caller-injected ROM-prefix/EGLM resynchronizing host
+  serial adapter; I/J/K add strict process-local relay admission, an externally
+  attested already-connected TLS stream and a default-off exact-port OS serial
+  owner. K passes `19/19`, while the CALL-focused set through K passes
+  `166/166`. L adds the explicit K/H-to-J four-worker composition and passes
+  `15/15`; the focused set through L passes `181/181` and the combined set
+  passes `213/213`. M adds a default-off, plan-only-by-CLI host lifecycle with
+  audited concurrent close, bounded idempotent cleanup, token zeroization and
+  retryable resource ownership; M passes `24/24` and the final CALL selection
+  passes `237/237`. N-Q add the proposed single-USB phase architecture, the
+  strict host CONTROL-to-MEDIA connector with bounded boot-prefix drain and a
+  default-off device EGLC responder. Root H-Q passes `173/173`; Q focused
+  passes `20/20`, and its dedicated image is `0x44A50` bytes with `0xBB5B0`
+  bytes free. Q's independent final audit passes with no offline implementation
+  blocker. P/Q add no
+  `app_main`, are default-off and ran no real I/O. R completes the offline
+  device-owner and lifecycle-cleanup boundary. Authentication, real TLS, a
+  verified route, RESULT/post-stop telemetry, live memory measurement and real
+  media remain pending.
+  `P0-CALL=NOT_RUN`.
+- `SOS-010A-J`: isolated host semantics, dormant physical-input core, device
+  orchestration, strict durable server ingest/ACK and bound-Guardian latest/
+  human-ack paths are present. E validates exact device payload/response
+  identity and deletes only on a positive durable ACK. F/G/H add a default-off
+  sampled-input owner, exact 320-byte pending-edge journal and build-only fixed
+  NVS backend. I/J add the default-off unified delivery composition and
+  owner-free transport phase with cooperative durable-SOS preemption;
+  real NVS/power-loss behavior, native concurrency, transport, push
+  notification, remote call and physical button execution remain unverified.
+  Retention/verified erasure and database encryption/key lifecycle are also
+  pre-production blockers.
+  `P0-SOS=NOT_RUN`.
+- `OUTBOX-010E-H`: one dispatcher is now the only selector/finish owner for
+  `manual_sos` and `location_state`; the default-off delivery runtime performs
+  at most one bounded injected POST per ready attempt and has explicit no-
+  resend settlement recovery. G adds an exact-byte, 8 KiB bounded SIM7670
+  adapter and cancellation seam but fails closed on current TLS/UART
+  limitations. H adds split prepare/execute/settle and cooperative durable-SOS
+  Location preemption with explicit acceptance-unknown truth. T1 still needs
+  exact outbox tombstone and no-output replay behavior. Exact-board live TLS/
+  UART and authenticated runtime wiring remain pending; the current raw
+  partition remains field-test-only.
+
+The combined critical offline selection passes `110/110`; the final full
+repository verification passes `1614` tests with `12` environment-guarded
+skips.
+
+### Current Evidence Boundary
+
+The LOC A-S and CALL A-R checkpoint is source-, build- and offline-test evidence
+only. It performed no flash, device-control action, intentional SIM traffic,
+network request, VPS deployment or other real I/O. S is an isolated modem-only
+profile; concurrent SOS/IMU product ingress and secure Message Hub ingest are
+not wired or proven. A bounded S hardware smoke can proceed only with fresh
+operator authorization and does not need to wait for T0/T1, but every live
+claim remains separate. `P0-LOC`, `P0-CALL` and `P0-SOS` remain `NOT_RUN`.
+
+## Historical Control Plane And Task Inventory
 
 - `ENG-000 Repository context migration`
   - Status: completed as a local control-plane migration baseline.
@@ -1310,10 +1484,10 @@ mainline update):
 - Location fusion algorithm design
   - Path: `docs/tasks/done/ALG-000_LOCATION_FUSION_ALGORITHM_DESIGN.md`
   - Status: completed as `ALG-000`.
-  - Current role: freezes EALE-P0 as a server-side, derived-only,
-    explainable rule/scoring baseline that consumes DATA-001 observation
+  - Current role: preserves EALE-P0 as the server-derived explainable
+    rule/scoring and replay baseline that consumes DATA-001 observation
     windows without changing firmware wire protocol or claiming positioning
-    accuracy.
+    accuracy. Under ADR-0012 it is not the device operational-state owner.
   - Evidence: `docs/development/LOCATION_FUSION_ALGORITHM.md`.
 - Server-derived EALE-P0 location belief
   - Path: `docs/tasks/done/ALG-001_SERVER_DERIVED_LOCATION_BELIEF.md`
@@ -1363,9 +1537,10 @@ mainline update):
   - Authority: `shared/contracts/`.
 - ADR process
   - Authority: `docs/architecture/adr/README.md`.
-  - Current state: only README/template observed in ADR directory.
+  - Current launch decision: ADR-0011 is accepted and partially supersedes
+    the conflicting first-launch clauses in ADR-0002 and ADR-0008.
 
-## Current Recommended Execution Order
+## Historical Recommended Execution Order (superseded 2026-08-23)
 
 1. Treat KR-003 as the current Walking Skeleton baseline: raw LTE command
    queue, command-scoped no-fix GNSS report, real firmware-side SIM7670G

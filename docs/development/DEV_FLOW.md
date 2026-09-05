@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-27
+last_verified: 2026-08-23
 verified_by: codex
 ---
 
@@ -17,6 +17,43 @@ device or simulator -> Public VPS Message Hub -> Web Dashboard
 This document is the development-flow baseline for new P0 work. The existing
 GitHub Flow and task mechanics remain in `WORKFLOW.md`; this file defines the
 product-facing order in which work should be shaped.
+
+## Productization Sprint 1 Overlay
+
+[ADR-0012](../architecture/adr/ADR-0012-p0-productization-sprint-1.md) and
+[`FIRST_LAUNCH_EXECUTION.md`](../current/FIRST_LAUNCH_EXECUTION.md) control the
+current execution order. The USB-Free/VPS/R0-R4 material below remains a
+reusable engineering method and evidence lineage; it is not a global serial
+permission chain.
+
+The current user-capability Gates are:
+
+| Gate | Current state |
+|---|---|
+| `P0-LOC` | `NOT_RUN` |
+| `P0-CALL` | `NOT_RUN` |
+| `P0-SOS` | `NOT_RUN` |
+
+Work runs in four independent swimlanes—Location, Call/SOS,
+Reliability/Security/Power, and A0/China readiness—with one integration-sized
+WIP item per lane. Cross-lane work may proceed concurrently; two builders must
+not edit the same shared path at the same time. A blocked operator, supplier or
+external-evidence dependency blocks only its descendants.
+
+Sprint 1 remains contract-first and event-time-first:
+
+- the device owns Location Engine v0/Sensor Policy v0 operational state;
+- the server mirrors, derives, replays and compares without replacing source
+  event time with receive/ingest order;
+- call media stays outside Message Hub telemetry;
+- physical SOS composes the accepted safety event and persistent priority
+  outbox;
+- learned fusion, continuous-IMU estimators and camera/context work are
+  data/replay-first L2/L3 work and do not block the P0 skeleton.
+
+A green build, fixture, simulator, schema or PC bridge is evidence for its
+named slice only. It does not change a P0 Gate from `NOT_RUN`, and no work in
+this flow claims PSTN, SMS, public emergency dispatch or native VoLTE.
 
 ## Core Principles
 
@@ -41,7 +78,10 @@ product-facing order in which work should be shaped.
 | Protocol | envelopes, fields, topics/APIs, compatibility, error semantics | P0.1-P0.4 |
 
 Track changes may be developed independently, but each accepted milestone must
-attach to an R0-R4 demonstrable loop in `../current/ROADMAP_EGOLINK_P0.md`.
+attach to a demonstrable loop and named evidence boundary. Historical R0-R4
+lineage remains in `../current/ROADMAP_EGOLINK_P0.md`; current Sprint 1 work
+instead attaches to `P0-LOC`, `P0-CALL`, `P0-SOS` or a named cross-cutting
+assurance Gate.
 
 ## R0-R4 Route
 
@@ -93,4 +133,6 @@ is needed, update `PROTOCOL.md` and, when machine-readable contracts are added,
 - USB-Free field testing: `FIELD_TEST.md`
 - Near-term roadmap: `../current/ROADMAP_EGOLINK_P0.md`
 - Architecture decision: `../architecture/adr/ADR-0001-usb-free-vps-message-hub.md`
+- Productization decision: `../architecture/adr/ADR-0012-p0-productization-sprint-1.md`
+- Current execution graph: `../current/FIRST_LAUNCH_EXECUTION.md`
 - Git and task mechanics: `WORKFLOW.md`

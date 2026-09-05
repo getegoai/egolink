@@ -1,14 +1,69 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-26
+last_verified: 2026-08-23
 verified_by: codex
 ---
 
 # Ego Link 从 P0 到产品形态迁移路线
 
-> 状态：P0 当前路线修订  
-> 更新日期：2026-06-24  
+> 状态：P0 到首发产品的当前迁移路线
+> 更新日期：2026-08-23
 > 相关架构：`docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md`
+
+## 2026-08-23 首发与调度重基线
+
+[ADR-0011](../architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md)
+、[ADR-0012](../architecture/adr/ADR-0012-p0-productization-sprint-1.md)
+和 [FIRST_LAUNCH_EXECUTION.md](../current/FIRST_LAUNCH_EXECUTION.md) 控制当前
+迁移顺序：首发闭环是 `Reliable Location + Ego Call + SOS`，由四条独立 lane
+并行推进，而不是等待下方 P0-A → P4 全部串行完成。最低 Rule Policy/Safety
+Kernel 仍必须在端侧确定性工作；MotionNet/AudioGate、事件相机和高级上下文理解
+作为 L2/L3 并行或后续能力，不阻塞一个已满足产品保证门的首发闭环。
+
+AMOLED/触摸板、双板与 PC Bridge 是已验证资产和迁移工具，不是当前无屏 EgoCore
+的产品形态要求。首发通话主路由为 LTE data + managed RTC + Guardian App；最终 PCB
+仍应评估并尽量保留 Native VoLTE 模组/音频/RF 迁移路径，但它受独立
+`G0V-VOLTE-RESERVE` 管理，不是首发软件门。下方 P0-A/P0-B/P1/P2 阶段文本保留
+历史依赖和验收资产价值，不得再解释为全局串行许可链。
+
+ADR-0012 进一步冻结当前三项产品能力 Gate：`P0-LOC`、`P0-CALL`、`P0-SOS`
+目前全部为 `NOT_RUN`。设备端 Location Engine v0 / Sensor Policy v0 持有断网时
+仍需工作的最小定位与策略状态；服务器只做版本化镜像、事件时间轴、回放、比较
+和更丰富的 derived fusion。任何 receive/ingest 顺序都不能代替 source event
+time。旧 `G0-EGOCALL` 仅作为历史证据族名称，当前放行名称为 `P0-CALL`；旧
+`PROD-002` 仅保留为合规 intake，执行后继为 `COMPLIANCE-010`。
+
+当前依赖链是：
+
+```text
+LOC-020 -> POLICY-010 -> REPLAY-010 -> LOC-021 -> FIELD-020 ----+
+                                             |                  |
+CALL-010 -> CALL-020 ------------------+      +-> SOS-010 -------+-> release
+HW-020 -> HW-021 -> HW-022 ------------+-> CALL-021 --^
+OUTBOX-010 -----------------------------------------^
+
+HW-022 + LOC-021 + CALL-021 + SOS-010 -> PWR-020
+
+FIELD-020 + SOS-010 + OUTBOX-010 + OPS-004 + PWR-020 + HW-022
+    + COMPLIANCE-010 + acoustic/RF/water/security/privacy/NPI evidence
+    -> P0-RELEASE-010
+```
+
+`FIELD-020` 与 `SOS-010` 在各自依赖满足后并行推进，只在最终
+`P0-RELEASE-010` 汇合；外场数据不是启动 SOS 集成的串行前置。硬件迁移必须经过
+`HW-020` 接口基线 -> `HW-021` 精确可制造设计 -> `HW-022` 实体集成样机；
+`CALL-021` 同时依赖真实 `CALL-020` 结果和 `HW-022`，不能用双开发板或 PC Bridge
+证据代替。`COMPLIANCE-010` 在 HW-020 之后独立启动，并在最终 release review
+汇合，而不是等待 PCB 完成后才开始。
+
+当前状态：LOC/POLICY/REPLAY 与 HW-020 已完成参考/接口边界并获准进入下一步；
+LOC-021、CALL-010、CALL-020 的离线准备、OUTBOX-010 主机参考和 HW-021 正在推进；
+FIELD-020、OPS-004、HW-022、CALL-021、SOS-010、PWR-020 与最终 release review
+仍未完成。所有这些工程状态均不改变三个 P0 Gate 的 `NOT_RUN`。
+
+Sprint 1 不构建 PSTN、SMS、公共应急调度或 Native VoLTE；Camera 仅可作为带
+授权、事件时间和触发原因的可选实验观测。AI 先做数据质量、事件时间回放、离线
+对比和 Shadow Mode，不进入 P0 决策链。
 
 ## 1. 长期方向
 
@@ -23,10 +78,16 @@ Ego Link 长期定位不变：它是 EGO 的随身感知节点、安全前哨和
     +
 一颗 4G / VoLTE 蜂窝模组
     +
-IMU、麦克风、摄像头、交互器件和电源系统
+IMU、麦克风/扬声器、交互器件和电源系统
+    +
+可选摄像头兼容接口（非 P0 放行依赖）
 ```
 
-## 2. 阶段路线
+## 2. 历史阶段路线（非当前 P0 依赖图）
+
+下列 P0-A 至 P4 保留迁移资产和长期能力的历史分层，不控制 Productization
+Sprint 1 的任务启动或放行。当前依赖只以上文 ADR-0012 图为准；其中 MotionNet、
+AudioGate、摄像头和通用 ContextRouter 能力属于非阻塞 L2/L3 或后续阶段。
 
 ```text
 P0-A

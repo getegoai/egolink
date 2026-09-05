@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-14
+last_verified: 2026-08-23
 verified_by: codex
 ---
 
@@ -8,16 +8,18 @@ verified_by: codex
 
 ## Authority Boundary
 
-This charter owns the current P0 development promise and non-claims. The
-current sales-product direction, screenless modular EgoCore requirements, and
-product release gates are defined in [EGO_MASTER_CONTEXT.md](EGO_MASTER_CONTEXT.md)
-and ADR-0008. P0 remains an evidence vehicle and does not freeze or prove the
-sales-product PCB, enclosure, component slate, VoLTE, camera, ingress, or
-endurance behavior.
+This charter owns the sellable first-generation P0 promise and non-claims.
+The screenless modular EgoCore requirements and release evidence remain defined
+in [EGO_MASTER_CONTEXT.md](EGO_MASTER_CONTEXT.md), ADR-0008 and ADR-0011.
+Current development boards are evidence vehicles for this P0; they do not
+freeze or prove the sales-product PCB, enclosure, BOM, ingress, endurance, RF,
+audio, waterproofing, or compliance behavior.
 
 Ego Link is the wearable/mobile companion node for Project EGO.
 
-The P0 product direction is an AI-assisted active safety locator and companion entry point, not a standalone brain, phone replacement, cloud AI product, or final mass-production wearable.
+The P0 product is a reliable safety locator and family-contact device. It is
+not a standalone brain, phone replacement, cloud-AI product, general camera-AI
+platform, or finished mass-production design.
 
 ## Product Role
 
@@ -30,13 +32,19 @@ Long-term complex memory, multimodal understanding, and broader coordination bel
 
 ## Current Product Promise
 
-P0 should prove that the system can:
+P0 must pass all three user-facing capability Gates:
 
-- observe or synthesize a safety candidate;
-- ask the user whether they are safe;
-- capture user confirmation;
-- refresh location or communication evidence;
-- create a complete replayable safety event record.
+- `P0-LOC`: a guardian opens the minimum Guardian client and sees the best
+  current explainable location, update age, source, confidence and uncertainty;
+- `P0-CALL`: the guardian can call the device and the device can initiate a
+  stable two-way full-duplex Ego Call over LTE data;
+- `P0-SOS`: a long physical-button press immediately starts local feedback,
+  durable SOS recording, location escalation, guardian notification and Ego
+  Call with honest delivery/session state.
+
+The minimum first-generation user story is therefore: know where the device
+is, speak in either direction, and press SOS to establish location plus human
+contact. A P0 release is forbidden unless all three Gates are `PASS`.
 
 Product-demo and field-test evidence must obey
 `docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md`: no raw audio/image retention
@@ -48,8 +56,10 @@ consent and privacy review.
 
 P0 does not claim:
 
-- production fall-detection accuracy;
-- real emergency dispatch;
-- real calling or SMS workflow;
-- final enclosure, battery, power, or wearable ergonomics;
-- final model architecture or training readiness.
+- production fall/anomaly/context-understanding accuracy;
+- AI location fusion or learned Sensor Policy readiness;
+- camera understanding or camera-dependent safety;
+- public emergency dispatch, PSTN, SMS, or native VoLTE;
+- polished complete consumer App, multi-party calling, AI voice or recording;
+- final enclosure, battery life, power, RF, waterproofing, acoustics, BOM,
+  compliance or wearable ergonomics before their measured Gates pass.

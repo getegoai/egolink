@@ -1,18 +1,22 @@
 ---
 document_status: authoritative
-last_verified: 2026-06-30
+last_verified: 2026-08-23
 verified_by: codex
 ---
 
-# Location Fusion Algorithm Baseline
+# Server-Derived Location Fusion Algorithm Baseline
 
-This document freezes the P0 algorithm direction for Ego Link location fusion.
-The algorithm name is **EALE-P0**, short for Evidence-Aware Location
-Estimator.
+This document preserves the server-derived location-fusion and replay baseline.
+The algorithm name is **EALE-P0**, short for Evidence-Aware Location Estimator.
+[ADR-0012](../architecture/adr/ADR-0012-p0-productization-sprint-1.md)
+partially supersedes the earlier server-only live-ownership interpretation:
+device Location Engine v0/Sensor Policy v0 now owns the minimum operational
+state required offline. EALE-P0 mirrors and derives from versioned evidence; it
+does not replace or retroactively rewrite the recorded device state.
 
 EALE-P0 is not a learned positioning model. It is a server-side, derived-only,
 explainable rule and scoring layer that turns stored evidence into a
-conservative `location_belief`. It keeps KR-003 stable:
+conservative, separately identified `location_belief`. It keeps KR-003 stable:
 
 ```text
 raw LTE command/location/observation/ACK loop
@@ -23,6 +27,10 @@ raw LTE command/location/observation/ACK loop
 -> candidates
 -> explainable location_belief
 ```
+
+`P0-LOC` remains `NOT_RUN`. KR-004, ALG-001/002, a derived belief or an offline
+replay is reusable engineering evidence and cannot by itself pass the product
+Gate.
 
 ## Review Of The Algorithm Discussion
 
@@ -67,6 +75,8 @@ EALE-P0 is allowed to:
 - produce an explainable server-side `location_belief`;
 - output `Unknown` when evidence is insufficient;
 - retain failure reasons for later replay and dataset analysis.
+- compare device belief/policy outputs with a separately versioned server
+  derivation while preserving both records.
 
 EALE-P0 is not allowed to:
 
@@ -76,6 +86,9 @@ EALE-P0 is not allowed to:
 - infer precise coordinates from cell-only evidence;
 - store raw private Wi-Fi BSSID values by default;
 - hide missing or unverified evidence behind fake values.
+- order device state by server receive/ingest time when source event-time
+  lineage is missing or ambiguous.
+- promote a learned or camera-derived result into the P0 operational path.
 
 ## Input Unit
 
@@ -93,7 +106,8 @@ The initial supported DATA-001 sample types are:
 Each window must preserve:
 
 - `device_id`, `test_run_id`, firmware version, command ID, sequence, and
-  server receive time when available;
+  source event time, boot-scoped monotonic/clock-mapping lineage and server
+  receive/ingest time when available;
 - raw-frame references with frame ID, byte length, SHA-256, CRC, parser status,
   and parser version;
 - derived event references;
@@ -113,6 +127,8 @@ EALE-P0 first normalizes each feature group into source evidence:
   "present": true,
   "source_status": "verified | observed | pc_side_verified | unverified | mock | unknown",
   "evidence_status": "ok | missing | failed | stale | partial",
+  "event_time": "2026-06-30T00:00:00Z",
+  "boot_monotonic_ns": 123000000,
   "server_received_at": "2026-06-30T00:00:00Z",
   "age_s": 0,
   "raw_frame_refs": [],
@@ -126,6 +142,9 @@ EALE-P0 first normalizes each feature group into source evidence:
 `source_status` describes whether the source is trustworthy. `evidence_status`
 describes whether the evidence exists and is usable in this window. This keeps
 an unverified but present source different from a missing source.
+`event_time` and its boot/clock lineage drive ordering and freshness. Server
+receive/ingest timestamps describe transport and may break no semantic ties;
+they must not be substituted for an unavailable source event time.
 
 ## Feature Groups
 
@@ -435,9 +454,11 @@ A single cell-only observation must not create an exact place.
 
 ## Learned Model Path
 
-Learned models are not part of KR-004. Future learned components may replace
-small parts of EALE-P0 only after DATA-001 has enough labelled, privacy-cleared
-samples:
+Learned models are not part of KR-004 or Productization Sprint 1. AI work is
+data/replay first: future learned components may be evaluated offline and then
+in Shadow Mode only after DATA-001 has enough labelled, privacy-cleared
+samples. A later accepted decision is required before any learned output can
+affect device policy or the product belief:
 
 - Source Reliability Model: predicts evidence reliability, not location.
 - Known Place Classifier: predicts `place_id` from hashed Wi-Fi/cell and
@@ -448,9 +469,9 @@ matching, logistic regression, random forest, gradient boosting, or a small
 MLP. A learned component should enter a release candidate only if it reduces
 false high-confidence beliefs without weakening lineage or privacy.
 
-## KR-004 Gate Direction
+## Historical KR-004 Engineering Gate Direction
 
-KR-004 should be "Multi-source explainable location evidence baseline", not
+KR-004 is "Multi-source explainable location evidence baseline", not
 "accurate fusion positioning".
 
 Recommended acceptance:
