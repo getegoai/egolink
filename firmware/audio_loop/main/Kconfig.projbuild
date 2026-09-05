@@ -1,0 +1,204 @@
+menu "EgoLink CALL-010 audio loop"
+
+config EGOLINK_AUDIO_LOOP_AUTORUN
+    bool "Run the bounded engineering sequence at boot"
+    default n
+    help
+        Keep disabled for ordinary builds. Enabling this option does not grant
+        permission to flash or run hardware; CALL-010 still requires an
+        explicit operator-approved bounded hardware task.
+
+config EGOLINK_AUDIO_OUTPUT_DIAGNOSTIC
+    bool "Run the short output-only stepped-volume diagnostic"
+    depends on EGOLINK_AUDIO_LOOP_AUTORUN
+    default n
+    help
+        Select the CALL-010 speaker-path diagnostic instead of the longer
+        microphone/local-loop sequence. The diagnostic creates no RX channel
+        or microphone device, keeps the PA off for a 15-second warning period,
+        and emits three bounded 1 kHz stages capped at volume 85. Enabling it
+        does not grant permission to flash or drive hardware.
+
+config EGOLINK_AUDIO_OUTPUT_SECONDS
+    int "Known-chirp output phase seconds"
+    range 1 60
+    default 30
+
+config EGOLINK_AUDIO_INPUT_SECONDS
+    int "Microphone metrics phase seconds"
+    range 1 60
+    default 30
+
+config EGOLINK_AUDIO_DUPLEX_SECONDS
+    int "Attenuated local-loop phase seconds"
+    range 1 180
+    default 120
+
+config EGOLINK_AUDIO_SAFE_VOLUME
+    int "Engineering output volume"
+    range 1 20
+    default 12
+
+config EGOLINK_CALL020_MEDIA_ADAPTER_CORE
+    bool "Allow future CALL-020 media adapter core integration"
+    default n
+    help
+        Keep disabled. The compiled CALL-020D component supplies only bounded
+        framing, queues, deadlines and conversion seams. It does not create a
+        USB CDC/TinyUSB endpoint, worker task or audio path, and app_main does
+        not instantiate it. Enabling this option is not permission to flash,
+        capture audio, drive the speaker or access a transport.
+
+config EGOLINK_CALL020_USB_SERIAL_JTAG_ENDPOINT
+    bool "Enable dedicated CALL-020 USB Serial/JTAG byte endpoint"
+    default n
+    depends on EGOLINK_CALL020_MEDIA_ADAPTER_CORE
+    depends on ESP_CONSOLE_NONE
+    depends on ESP_CONSOLE_SECONDARY_NONE
+    depends on LOG_DEFAULT_LEVEL_NONE
+    depends on BOOTLOADER_LOG_LEVEL_NONE
+    help
+        Keep disabled. This CALL-020E endpoint takes exclusive application
+        ownership of the USB Serial/JTAG byte stream and therefore cannot
+        coexist with a primary or secondary console or application/bootloader
+        logging on that stream. It is intended only for a separately built,
+        dedicated operator profile. The current app_main does not instantiate
+        it. Enabling it is not permission to flash, access USB, capture audio,
+        drive the speaker, access LTE or start a network session. Initial ROM
+        output may still precede application ownership and must not be treated
+        as an EGLM media transfer.
+
+config EGOLINK_CALL020_WEARABLE_COMPOSITION
+    bool "Compile dedicated CALL-020 wearable audio/USB composition"
+    default n
+    depends on EGOLINK_CALL020_USB_SERIAL_JTAG_ENDPOINT
+    depends on !EGOLINK_AUDIO_LOOP_AUTORUN
+    depends on ESP_CONSOLE_NONE
+    depends on ESP_CONSOLE_SECONDARY_NONE
+    depends on LOG_DEFAULT_LEVEL_NONE
+    depends on BOOTLOADER_LOG_LEVEL_NONE
+    help
+        Keep disabled in ordinary builds. This CALL-020F option compiles the
+        bounded composition of the actual safe codec/I2S initializer, two
+        independently owned framing-core instances, and the exclusive USB
+        Serial/JTAG endpoint. The existing app_main does not instantiate or
+        start it. A future operator runner must supply real session/endpoint
+        identities; build fixture identities are explicitly rejected. This
+        option is not permission to flash, open USB, capture audio, drive the
+        speaker, access LTE, or start a network session.
+
+config EGOLINK_CALL020_OUTPUT_VOLUME
+    int "CALL-020 engineering downlink output volume"
+    range 1 85
+    default 55
+    depends on EGOLINK_CALL020_WEARABLE_COMPOSITION
+    help
+        Initial engineering value for the separately authorized CALL-020
+        operator image. Volume 55 is the lowest level confirmed clear in the
+        bounded CALL-010 stepped diagnostic; 85 is the reviewed hard cap.
+        Compilation is not acoustic validation or permission to run audio.
+
+config EGOLINK_CALL020_OPERATOR_RUNNER
+    bool "Retain non-autorun CALL-020 same-core operator API"
+    default n
+    depends on EGOLINK_CALL020_WEARABLE_COMPOSITION
+    depends on !EGOLINK_AUDIO_LOOP_AUTORUN
+    depends on ESP_CONSOLE_NONE
+    depends on ESP_CONSOLE_SECONDARY_NONE
+    depends on LOG_DEFAULT_LEVEL_NONE
+    depends on BOOTLOADER_LOG_LEVEL_NONE
+    help
+        Dedicated CALL-020G link/map profile only. This retains a global
+        operator runner plus its D/E/F dependencies in the final ELF while
+        leaving app_main unchanged. Linking does not prepare or start it and
+        opens no audio, GPIO, I2S or USB resource. A future explicitly
+        authorized caller must execute prepare/start/cancel/join/close on one
+        CPU core. Enabling this option is not permission to flash or run it.
+
+config EGOLINK_CALL020_DEVICE_CONTROL_RESPONDER
+    bool "Retain default-off CALL-020Q same-USB CONTROL responder"
+    default n
+    depends on EGOLINK_CALL020_OPERATOR_RUNNER
+    depends on EGOLINK_CALL020_USB_SERIAL_JTAG_ENDPOINT
+    depends on !EGOLINK_AUDIO_LOOP_AUTORUN
+    depends on ESP_CONSOLE_NONE
+    depends on ESP_CONSOLE_SECONDARY_NONE
+    depends on LOG_DEFAULT_LEVEL_NONE
+    depends on BOOTLOADER_LOG_LEVEL_NONE
+    help
+        Link the CALL-020Q API-only EGLC v1 device responder and bounded
+        USB Serial/JTAG CONTROL pump. Without the separately selected R owner,
+        the inert boot stub invokes none of it. A same-core caller must
+        initialize it with enabled=y,
+        install one registry-backed driver lease, and serve bounded frames.
+        START ACK is the last CONTROL write; RESULT and post-start control are
+        unavailable. Enabling this option is not authorization to flash, open
+        USB, capture audio, drive a speaker, use a SIM or contact a network.
+
+config EGOLINK_CALL020_DEVICE_CONTROL_OWNER
+    bool "Enable dedicated one-shot CALL-020R device lifecycle owner"
+    default n
+    depends on EGOLINK_CALL020_DEVICE_CONTROL_RESPONDER
+    depends on !EGOLINK_AUDIO_LOOP_AUTORUN
+    depends on ESP_CONSOLE_NONE
+    depends on ESP_CONSOLE_SECONDARY_NONE
+    depends on LOG_DEFAULT_LEVEL_NONE
+    depends on BOOTLOADER_LOG_LEVEL_NONE
+    help
+        Keep disabled in ordinary and retained-runner builds. The separate R
+        profile boots exactly one pinned lifecycle task. START ACK remains the
+        last CONTROL byte; after MEDIA it performs only local forced-safe,
+        cancel, four-worker quiescence, bounded join, runner close, lease
+        return and physical driver close. It has no RESULT, authentication,
+        SIM, LTE or network implementation. Enabling or building this option
+        is not authorization to flash, open USB, capture or play audio.
+
+config EGOLINK_CALL020_DEVICE_OWNER_CONTROL_TIMEOUT_MS
+    int "CALL-020R total CONTROL lifetime milliseconds"
+    range 1000 300000
+    default 120000
+    depends on EGOLINK_CALL020_DEVICE_CONTROL_OWNER
+
+config EGOLINK_CALL020_DEVICE_OWNER_FRAME_WAIT_MS
+    int "CALL-020R per-frame CONTROL wait milliseconds"
+    range 1 10000
+    default 1000
+    depends on EGOLINK_CALL020_DEVICE_CONTROL_OWNER
+
+config EGOLINK_CALL020_DEVICE_OWNER_MEDIA_SECONDS
+    int "CALL-020R hard MEDIA runtime seconds"
+    range 1 600
+    default 600
+    depends on EGOLINK_CALL020_DEVICE_CONTROL_OWNER
+
+config EGOLINK_CALL020_DEVICE_OWNER_QUIESCE_GRACE_MS
+    int "CALL-020R post-cancel worker grace milliseconds"
+    range 200 5000
+    default 5000
+    depends on EGOLINK_CALL020_DEVICE_CONTROL_OWNER
+
+config EGOLINK_CALL020_DEVICE_OWNER_POLL_MS
+    int "CALL-020R owner poll slice milliseconds"
+    range 1 100
+    default 20
+    depends on EGOLINK_CALL020_DEVICE_CONTROL_OWNER
+
+config EGOLINK_CALL020_DEVICE_OWNER_TASK_STACK_BYTES
+    int "CALL-020R owner task stack bytes"
+    range 4096 16384
+    default 8192
+    depends on EGOLINK_CALL020_DEVICE_CONTROL_OWNER
+
+config EGOLINK_CALL020_DEVICE_OWNER_TASK_PRIORITY
+    int "CALL-020R owner task priority"
+    range 1 10
+    default 6
+    depends on EGOLINK_CALL020_DEVICE_CONTROL_OWNER
+
+config EGOLINK_CALL020_DEVICE_OWNER_TASK_CORE
+    int "CALL-020R owner CPU core"
+    range 0 1
+    default 0
+    depends on EGOLINK_CALL020_DEVICE_CONTROL_OWNER
+
+endmenu
