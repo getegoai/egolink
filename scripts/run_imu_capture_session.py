@@ -243,6 +243,13 @@ def _window_evidence(
     if len(window_ids) != 1 or not next(iter(window_ids)):
         raise CaptureSessionError(f"command {cmd_id} has conflicting window IDs")
     window_id = str(next(iter(window_ids)))
+    boot_count_values = [metadata.get("boot_count") for _, metadata, _ in parts]
+    if any(type(value) is not int or value < 1 for value in boot_count_values):
+        raise CaptureSessionError(f"command {cmd_id} has conflicting or invalid boot_count lineage")
+    boot_counts = set(boot_count_values)
+    if len(boot_counts) != 1:
+        raise CaptureSessionError(f"command {cmd_id} has conflicting or invalid boot_count lineage")
+    boot_count = next(iter(boot_counts))
     chunks: dict[int, tuple[dict[str, Any], str]] = {}
     manifests: list[tuple[dict[str, Any], str]] = []
     for event_type, metadata, frame_id in parts:
@@ -290,10 +297,44 @@ def _window_evidence(
         and manifest["deadline_miss_count"] <= 5
     )
     samples_crc32 = manifest.get("samples_crc32")
-    if not fixed_ok or not cadence_ok or not isinstance(samples_crc32, str) or re.fullmatch(r"[0-9A-F]{8}", samples_crc32) is None:
+    capture_start_uptime_us = manifest.get("capture_start_uptime_us")
+    capture_end_uptime_us = manifest.get("capture_end_uptime_us")
+    capture_span_us = (
+        capture_end_uptime_us - capture_start_uptime_us
+        if isinstance(capture_start_uptime_us, int)
+        and not isinstance(capture_start_uptime_us, bool)
+        and isinstance(capture_end_uptime_us, int)
+        and not isinstance(capture_end_uptime_us, bool)
+        else None
+    )
+    interval_count = SAMPLE_COUNT - 1
+    capture_bounds_ok = (
+        not isinstance(capture_start_uptime_us, bool)
+        and isinstance(capture_start_uptime_us, int)
+        and capture_start_uptime_us >= 0
+        and not isinstance(capture_end_uptime_us, bool)
+        and isinstance(capture_end_uptime_us, int)
+        and capture_end_uptime_us > capture_start_uptime_us
+        and capture_span_us is not None
+        and cadence_ok
+        and capture_span_us >= manifest["min_interval_us"] * interval_count
+        and capture_span_us <= manifest["max_interval_us"] * interval_count + 250_000
+        and abs(capture_span_us - manifest["mean_interval_us"] * interval_count) <= 250_000
+    )
+    if (
+        not fixed_ok
+        or not cadence_ok
+        or not capture_bounds_ok
+        or not isinstance(samples_crc32, str)
+        or re.fullmatch(r"[0-9A-F]{8}", samples_crc32) is None
+    ):
         raise CaptureSessionError(f"command {cmd_id} manifest failed fixed capture/cadence quality checks")
     return {
         "window_id": window_id,
+        "boot_count": boot_count,
+        "capture_start_uptime_us": capture_start_uptime_us,
+        "capture_end_uptime_us": capture_end_uptime_us,
+        "capture_span_us": capture_span_us,
         "samples_crc32": samples_crc32,
         "chunk_count": CHUNK_COUNT,
         "chunk_frame_ids": [chunks[index][1] for index in range(CHUNK_COUNT)],

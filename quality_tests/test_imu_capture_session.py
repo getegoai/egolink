@@ -35,7 +35,14 @@ def valid_plan() -> dict:
     }
 
 
-def raw_window(cmd_id: str, test_run_id: str, ordinal: int, *, transport_type: str = "wifi") -> list[dict]:
+def raw_window(
+    cmd_id: str,
+    test_run_id: str,
+    ordinal: int,
+    *,
+    transport_type: str = "wifi",
+    boot_count: int = 1,
+) -> list[dict]:
     common = {
         "contract_version": "egolink.imu_window.v1",
         "window_id": f"imuw-{cmd_id}-b1",
@@ -45,6 +52,7 @@ def raw_window(cmd_id: str, test_run_id: str, ordinal: int, *, transport_type: s
         "source": "qmi8658_i2c",
         "source_status": "observed",
         "training_allowed": False,
+        "boot_count": boot_count,
     }
     frames = []
     for index in range(10):
@@ -71,6 +79,8 @@ def raw_window(cmd_id: str, test_run_id: str, ordinal: int, *, transport_type: s
                         **common,
                         "sample_count": 100,
                         "requested_interval_us": 50000,
+                        "capture_start_uptime_us": ordinal * 10_000_000,
+                        "capture_end_uptime_us": ordinal * 10_000_000 + 4_950_000,
                         "chunk_count": 10,
                         "uploaded_chunk_count": 10,
                         "read_failure_count": 0,
@@ -179,6 +189,41 @@ class RaisingClient:
 
 
 class ImuCaptureSessionTests(unittest.TestCase):
+    def test_window_evidence_rejects_bad_capture_span_and_mixed_boot(self) -> None:
+        tiny_span = raw_window("d5002-span", "d5-002-seed-01", 1)
+        tiny_span[-1]["parse_result"]["derived_message"]["imu_window"].update(
+            {"capture_start_uptime_us": 1_000_000, "capture_end_uptime_us": 1_000_001}
+        )
+        with self.assertRaisesRegex(capture.CaptureSessionError, "capture/cadence"):
+            capture._window_evidence(
+                tiny_span,
+                cmd_id="d5002-span",
+                test_run_id="d5-002-seed-01",
+                transport_type="wifi",
+            )
+
+        mixed_boot = raw_window("d5002-boot", "d5-002-seed-01", 1)
+        mixed_boot[0]["parse_result"]["derived_message"]["imu_window"]["boot_count"] = 2
+        with self.assertRaisesRegex(capture.CaptureSessionError, "boot_count"):
+            capture._window_evidence(
+                mixed_boot,
+                cmd_id="d5002-boot",
+                test_run_id="d5-002-seed-01",
+                transport_type="wifi",
+            )
+
+        bool_alias_boot = raw_window("d5002-bool-boot", "d5-002-seed-01", 1)
+        bool_alias_boot[0]["parse_result"]["derived_message"]["imu_window"][
+            "boot_count"
+        ] = True
+        with self.assertRaisesRegex(capture.CaptureSessionError, "boot_count"):
+            capture._window_evidence(
+                bool_alias_boot,
+                cmd_id="d5002-bool-boot",
+                test_run_id="d5-002-seed-01",
+                transport_type="wifi",
+            )
+
     def test_default_dry_run_makes_no_hub_calls(self) -> None:
         class NoCalls:
             def __getattr__(self, name):
