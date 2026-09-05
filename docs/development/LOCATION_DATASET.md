@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-11
+last_verified: 2026-08-23
 verified_by: codex
 ---
 
@@ -20,6 +20,13 @@ raw frame evidence
 -> labelled dataset sample
 -> model or rule evaluation
 ```
+
+Under [ADR-0012](../architecture/adr/ADR-0012-p0-productization-sprint-1.md),
+this is the server evidence/replay/derived-fusion path. Device Location Engine
+v0 remains the operational live-state owner; dataset or server outputs do not
+silently replace its recorded belief or policy state. Sprint 1 AI is
+data/replay first and non-blocking. `P0-LOC` remains `NOT_RUN` until named
+device integration and representative field acceptance are run.
 
 Do not train directly from transient Dashboard state. Dashboard state is an
 operator view. Training data must be rebuilt from stored raw evidence,
@@ -43,7 +50,7 @@ are proven by KR-003, while others remain mock, unknown, or unverified.
 | Group | Important fields | Current P0 state |
 |---|---|---|
 | Identity and lineage | `device_id`, `fw_version`, `test_run_id`, `cmd_id`, `frame_id`, `seq`, `boot_id`, parser version | Available for raw LTE command/location slices. `cmd_id` links `request_location`, `location_report`, `location_observation`, and ACK. |
-| Time and ordering | `server_received_at`, device `ts`, `uptime_s`, `boot_uptime_ms`, `seq` | Server receive time is the ordering authority. Device time may be monotonic or uptime-like and must not be treated as wall time unless explicitly synchronized. |
+| Time and ordering | source/capture time, `boot_id`, boot-scoped monotonic time, UTC anchor/clock mapping, `server_received_at`, `ingest_time`, `seq` | Source event time plus boot-scoped monotonic/clock-mapping lineage is the semantic ordering authority. Receive/ingest time records transport behavior and must not replace missing or ambiguous event time. |
 | GNSS | `fix`, `lat`, `lon`, `satellites`, `hdop`, `gnss_state`, `gnss_query_ok`, `source_status` | Firmware-side GNSS fix has been observed in prior USB-Free evidence; KR-003 location reports were no-fix but diagnosable. Coordinates must stay in bounded evidence/export stores, not copied into current docs. |
 | Cell/LTE radio | `cell_rat`, `mcc`, `mnc`, `tac`, `cell_id`, `rsrp`, `rsrq`, `rssi`, `sinr`, registration/PDP state, `assigned_ip`, LTE reason code | KR-003 proves real firmware-side SIM7670G cell/LTE observation over LTE raw frames. It does not infer position from cell data. |
 | Transport/runtime | `transport.type`, LTE HTTP phase/status/reason, RTT/action elapsed, reset reason, uptime, free heap, watchdog/reset counters | Available enough to explain failed field runs and distinguish no-fix from transport or runtime failure. |
@@ -65,6 +72,9 @@ device_id
 test_run_id
 start_server_received_at
 end_server_received_at
+start_event_time
+end_event_time
+clock_mapping_refs[]
 anchor_event_id
 anchor_cmd_id
 raw_frame_refs[]
@@ -90,6 +100,9 @@ The first useful window types are:
 
 Incomplete and malformed data should be retained as dataset candidates with a
 failure label. They are often more valuable for robustness than perfect runs.
+Rows whose event order is ambiguous or unavailable must be counted and
+excluded from order-dependent comparisons rather than guessed from arrival
+order.
 
 ## Minimum Dataset Manifest
 
@@ -205,14 +218,17 @@ being explicitly not ready for learned-model training.
 
 The baseline leaves these deliberate next steps:
 
-1. Add operator labels and known-place calibration labels as explicit inputs.
-2. Add split-leakage checks across multiple sessions, devices, places, and
+1. Complete REPLAY-010 event-time policy comparison with explicit excluded and
+   ambiguous-row counts; do not claim accuracy or power savings without ground
+   truth and measured energy.
+2. Add operator labels and known-place calibration labels as explicit inputs.
+3. Add split-leakage checks across multiple sessions, devices, places, and
    time blocks.
-3. Extend feature extraction as real firmware-side Wi-Fi, IMU, and power
+4. Extend feature extraction as real firmware-side Wi-Fi, IMU, and power
    observations become verified.
-4. Add Parquet or a database-backed feature store after the JSONL contract
+5. Add Parquet or a database-backed feature store after the JSONL contract
    stabilizes.
-5. Add model-training dataset manifests only after consent and privacy policy
+6. Add model-training dataset manifests only after consent and privacy policy
    are explicit for the selected runs.
 
 DATA-001 is a data foundation task. It should not introduce a learned fusion

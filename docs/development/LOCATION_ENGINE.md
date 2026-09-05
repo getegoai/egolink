@@ -1,14 +1,26 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-12
+last_verified: 2026-08-23
 verified_by: codex
 ---
 
 # Ego Adaptive Location Engine
 
-Ego Adaptive Location Engine (EALE) is the P0 location direction after the
-USB-Free Message Hub path and firmware-side SIM7670G real GNSS fix were proven.
-The frozen P0 algorithm baseline is `LOCATION_FUSION_ALGORITHM.md`.
+Under [ADR-0012](../architecture/adr/ADR-0012-p0-productization-sprint-1.md),
+Ego Link has two explicit location layers:
+
+```text
+device Location Engine v0 + Sensor Policy v0
+-> versioned observation and operational state
+-> server mirror, event-time timeline, replay, comparison and derived fusion
+```
+
+The device layer is the live operational authority needed to act offline. The
+server-side Evidence-Aware Location Estimator (EALE-P0) in
+`LOCATION_FUSION_ALGORITHM.md` remains a reusable derived-fusion and replay
+baseline; it is not the sole owner of current device state. `P0-LOC` is
+currently `NOT_RUN`. LOC-020/POLICY-010 code or replay evidence does not by
+itself pass that Gate.
 
 EALE is not "wait for GPS". It is:
 
@@ -29,8 +41,41 @@ low-power observation
 - Cell, Wi-Fi, IMU, power, and transport context are product data assets.
 - Personal location memory is built from observed field evidence, not from
   unlabelled assumptions.
+- Device state reduction follows source event time plus boot-scoped monotonic
+  and clock-mapping lineage. Server receive/ingest order must not manufacture
+  a newer device state.
+- LOC-020 binds every trusted coordinate to an actual `timestamp_utc_ns`,
+  `gnss_source_utc_ns`, or boot-counted/clock-domain-scoped monotonic timestamp;
+  its millisecond lane must equal `event_time_ms`, and the selected capture
+  field is retained in `evidence_ref`. A string such as `capture_event` alone
+  is not time evidence.
+- Learned fusion and camera/context work start with data quality, replay and
+  offline/shadow comparison. They are non-blocking L2/L3 work in Sprint 1.
 
-## GNSS-Denied Product Strategy
+## Device Operational State
+
+Location Engine v0 owns at least:
+
+- mobility, GNSS and LTE state;
+- last trusted location and its source event time;
+- current public location belief, accuracy, confidence, source and
+  uncertainty;
+- battery and effective Sensor Policy state;
+- GNSS attempt/backoff and action lineage.
+
+Sensor Policy configuration has both a structural schema and the required
+`egolink.sensor_policy.semantic.v0.1` validator. The latter covers finite
+numbers and cross-field threshold/order rules that standard JSON Schema cannot
+express. Firmware, VPS and replay must port the named validator identically.
+
+These dimensions remain separate. Public belief is
+`Fine | Coarse | Predicted | Unknown`; mobility is independent; Sensor Policy
+uses `STABLE | MOVING | LOCATION_UNCERTAIN | SOS | LOW_BATTERY`, with SOS
+overriding low-battery budgets without erasing the battery condition. Server
+derived beliefs carry their own generator/config identity and never silently
+overwrite the recorded device belief.
+
+## GNSS-Denied Growth Strategy (non-blocking in Sprint 1)
 
 Proposed ADR-0007 defines a product extension of EALE for founder review
 without changing the EALE-P0 public states or the ADR-0004 rule-first boundary:
@@ -50,9 +95,11 @@ may produce `Coarse` or `Predicted` only with an area/radius, freshness,
 reason, and evidence references. Stale or conflicting hypotheses become
 `Unknown`.
 
-P0 implements this path with lookup, clustering, transition statistics,
-thresholds, and conservative decay. ADR-0004 still approves only IMU motion
-state as a learned candidate. Source-reliability, GNSS-acquisition, or
+The historical plan implements this path with lookup, clustering, transition
+statistics, thresholds, and conservative decay. Under ADR-0012 these assets may
+feed server-derived/offline replay but do not precede LOC-021/FIELD-020 and do
+not become an unmeasured device dependency. ADR-0004 still approves only IMU
+motion state as a learned candidate. Source-reliability, GNSS-acquisition, or
 sensing-value models are post-P0 research ideas requiring a later
 founder-reviewed ADR/task before they may affect policy or belief; no model
 directly regresses latitude/longitude.
@@ -114,6 +161,14 @@ Exact user coordinates and Wi-Fi fingerprints must stay inside bounded evidence
 or explicitly privacy-reviewed data stores. Current docs should describe the
 evidence shape without copying private coordinates.
 
+LOC-021 freezes `egolink.location_state_envelope.v0.1` as an additive contract
+around the Location Engine v0 state. It binds device, boot, session,
+observation, sequence, source-event nanoseconds and the exact Sensor Policy
+identity without changing the existing `egolink.p0.v1` event envelope.
+`server_receive_time_ms` is trusted-adapter transport evidence only; it cannot
+own ordering, state age or location freshness. The live adapter, persistence
+and device producer remain unimplemented until their named LOC-021 slices.
+
 ## P0 Rule Engine
 
 Start with rules, not a complex model:
@@ -126,7 +181,7 @@ Start with rules, not a complex model:
   bounded GNSS pulse.
 - Known GNSS-bad zone -> reduce GNSS attempt duration or trigger less often.
 
-The formal P0 rule/scoring design is EALE-P0 in
+The server-derived rule/scoring design is EALE-P0 in
 `LOCATION_FUSION_ALGORITHM.md`. That document keeps the public states here
 (`Fine`, `Coarse`, `Predicted`, `Unknown`) and represents more detailed
 outcomes such as known-place, last-known hold, no-fix, stale, and runtime
@@ -174,6 +229,22 @@ then exported as labelled dataset samples with lineage, privacy class, split
 assignment, and generator versions.
 
 ## Near-Term Tasks
+
+Current ADR-0012 execution takes precedence over the historical inventory
+below:
+
+1. `LOC-020`: accepted device-semantic Location Engine v0 PC reference; not
+   product or hardware evidence.
+2. `POLICY-010`: accepted configurable Sensor Policy v0 PC reference; the
+   named semantic validator must be ported by every consumer.
+3. `REPLAY-010`: accepted event-time replay/comparison over Field Session
+   artifacts; data/replay evidence only.
+4. `LOC-021`: integrate the reducer/config identity into device runtime,
+   server mirror and Guardian view.
+5. `FIELD-020`: run representative outdoor/indoor/GNSS-denied/motion/power
+   evidence after LOC-021. Only named acceptance may change `P0-LOC`.
+
+Historical/reusable task lineage:
 
 1. `DATA-001`: completed location-fusion dataset sample/export baseline from
    raw-frame lineage, derived events, labels, and quality checks.
