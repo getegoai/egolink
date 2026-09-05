@@ -1,5 +1,5 @@
 #include "sim7670_gnss.h"
-
+#include "sim7670_http_exact_parser.h"
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
@@ -13,6 +13,7 @@
 #include "driver/uart.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -25,11 +26,26 @@
 #define SIM7670_LTE_HTTP_ENABLED \
     (CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED)
 
+/*
+ * The legacy translation unit still compiles its private HTTP helpers when
+ * only GNSS/LTE status is selected. Kconfig intentionally omits the HTTP
+ * timeout in that build. Keep those unreachable helpers buildable without
+ * enabling an HTTP mode; enabled HTTP builds continue to use the configured
+ * value exactly as before.
+ */
+#if SIM7670_LTE_HTTP_ENABLED
+#define SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS \
+    CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS
+#else
+#define SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS UINT32_C(30000)
+#endif
+
 #if SIM7670_AT_BACKEND_ENABLED
 static const char *TAG = "sim7670_gnss";
 
 static bool s_initialized;
 static SemaphoreHandle_t s_uart_mutex;
+static TaskHandle_t s_exclusive_owner_task;
 
 static uart_port_t configured_uart_num(void)
 {
@@ -76,6 +92,17 @@ void sim7670_lte_report_init(sim7670_lte_report_t *report)
     snprintf(report->reason_code, sizeof(report->reason_code), "%s", "LTE_STATUS_DISABLED");
 }
 
+void sim7670_location_bounded_result_init(
+    sim7670_location_bounded_result_t *result)
+{
+    if (result == NULL) {
+        return;
+    }
+    memset(result, 0, sizeof(*result));
+    result->outcome = SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN;
+    result->reason = SIM7670_LOCATION_BOUNDED_REASON_INVALID_ARGUMENT;
+}
+
 const char *sim7670_lte_backend_name(void)
 {
 #if CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED
@@ -97,6 +124,97 @@ void sim7670_lte_http_probe_result_init(sim7670_lte_http_probe_result_t *result)
     snprintf(result->reason_code, sizeof(result->reason_code), "%s", "LTE_HTTP_DISABLED");
 }
 
+void sim7670_lte_http_exact_result_init(
+    sim7670_lte_http_exact_result_t *result)
+{
+    if (result == NULL) {
+        return;
+    }
+    memset(result, 0, sizeof(*result));
+    result->status = SIM7670_LTE_HTTP_EXACT_INVALID_ARGUMENT;
+}
+
+static void sim7670_exact_secure_clear(void *buffer, size_t length)
+{
+    volatile uint8_t *cursor = (volatile uint8_t *)buffer;
+    while (cursor != NULL && length > 0U) {
+        *cursor = 0U;
+        ++cursor;
+        --length;
+    }
+}
+
+static void sim7670_exact_clear_caller_response(
+    const sim7670_lte_http_exact_request_t *request)
+{
+    if (request == NULL || request->response_body == NULL) {
+        return;
+    }
+    const size_t clear_length =
+        request->response_capacity <=
+                SIM7670_LTE_HTTP_EXACT_CALLER_RESPONSE_CAPACITY_MAX_BYTES
+            ? request->response_capacity
+            : SIM7670_LTE_HTTP_EXACT_CALLER_RESPONSE_CAPACITY_MAX_BYTES;
+    sim7670_exact_secure_clear(request->response_body, clear_length);
+}
+
+static bool sim7670_exact_timeouts_are_valid(
+    const sim7670_lte_http_exact_request_t *request)
+{
+    return request != NULL && request->command_timeout_ms > 0U &&
+           request->command_timeout_ms <=
+               SIM7670_LTE_HTTP_EXACT_TIMEOUT_MAX_MS &&
+           request->data_timeout_ms > 0U &&
+           request->data_timeout_ms <=
+               SIM7670_LTE_HTTP_EXACT_TIMEOUT_MAX_MS &&
+           request->action_timeout_ms > 0U &&
+           request->action_timeout_ms <=
+               SIM7670_LTE_HTTP_EXACT_TIMEOUT_MAX_MS &&
+           request->read_timeout_ms > 0U &&
+           request->read_timeout_ms <=
+               SIM7670_LTE_HTTP_EXACT_TIMEOUT_MAX_MS;
+}
+
+sim7670_lte_http_exact_status_t sim7670_lte_http_post_bytes_exact(
+    const sim7670_lte_http_exact_request_t *request,
+    sim7670_lte_http_exact_result_t *result)
+{
+    sim7670_lte_http_exact_result_t local_result;
+    if (result == NULL) {
+        result = &local_result;
+    }
+    sim7670_exact_clear_caller_response(request);
+    sim7670_lte_http_exact_result_init(result);
+    if (request == NULL || request->payload == NULL ||
+        request->payload_length == 0U || request->response_body == NULL ||
+        request->response_capacity == 0U ||
+        request->response_capacity >
+            SIM7670_LTE_HTTP_EXACT_CALLER_RESPONSE_CAPACITY_MAX_BYTES) {
+        result->status = SIM7670_LTE_HTTP_EXACT_INVALID_ARGUMENT;
+        return result->status;
+    }
+    if (sim7670_http_exact_url_is_valid(request->url) == 0 ||
+        sim7670_http_exact_bearer_is_valid(request->bearer_token) == 0 ||
+        !sim7670_exact_timeouts_are_valid(request)) {
+        result->status = SIM7670_LTE_HTTP_EXACT_INVALID_CONFIG;
+        return result->status;
+    }
+    if (request->payload_length >
+        SIM7670_LTE_HTTP_EXACT_PAYLOAD_MAX_BYTES) {
+        result->status = SIM7670_LTE_HTTP_EXACT_PAYLOAD_TOO_LARGE;
+        return result->status;
+    }
+
+    /*
+     * OPS-004 has not integrated a reviewed modem CA store plus exact
+     * hostname/SNI and clock verification. This boundary is intentionally
+     * terminal before UART initialization, bearer setup or payload I/O; a
+     * caller boolean or callback is not accepted as security evidence.
+     */
+    result->status = SIM7670_LTE_HTTP_EXACT_TLS_PROFILE_UNVERIFIED;
+    return result->status;
+}
+
 const char *sim7670_lte_http_backend_name(void)
 {
 #if SIM7670_LTE_HTTP_ENABLED
@@ -107,10 +225,99 @@ const char *sim7670_lte_http_backend_name(void)
 }
 
 #if SIM7670_AT_BACKEND_ENABLED
+bool sim7670_at_backend_is_initialized(void)
+{
+    return s_initialized;
+}
+
+bool sim7670_at_backend_current_task_is_exclusive_owner(void)
+{
+    return s_initialized && s_exclusive_owner_task != NULL &&
+        xTaskGetCurrentTaskHandle() == s_exclusive_owner_task;
+}
+
+static bool sim7670_at_backend_current_task_is_allowed(void)
+{
+    return s_exclusive_owner_task == NULL ||
+        xTaskGetCurrentTaskHandle() == s_exclusive_owner_task;
+}
+
+esp_err_t sim7670_at_backend_init_exclusive_current_task(void)
+{
+    const TaskHandle_t current_task = xTaskGetCurrentTaskHandle();
+    if (current_task == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (s_initialized) {
+        return s_exclusive_owner_task == current_task
+            ? ESP_OK
+            : ESP_ERR_INVALID_STATE;
+    }
+    if (s_uart_mutex != NULL || s_exclusive_owner_task != NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    const uart_config_t uart_config = {
+        .baud_rate = CONFIG_EGOLINK_SIM7670_UART_BAUD,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+        .source_clk = UART_SCLK_DEFAULT,
+    };
+    const uart_port_t uart_num = configured_uart_num();
+    esp_err_t err = uart_driver_install(
+        uart_num, AT_RESPONSE_BUFFER_SIZE * 2, 0, 0, NULL, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(
+            TAG, "SIM7670_EXCLUSIVE_UART_INSTALL_FAIL err=%s",
+            esp_err_to_name(err));
+        return err == ESP_ERR_INVALID_STATE ? ESP_ERR_INVALID_STATE : err;
+    }
+    err = uart_param_config(uart_num, &uart_config);
+    if (err == ESP_OK) {
+        err = uart_set_pin(
+            uart_num,
+            CONFIG_EGOLINK_SIM7670_UART_TX_GPIO,
+            CONFIG_EGOLINK_SIM7670_UART_RX_GPIO,
+            UART_PIN_NO_CHANGE,
+            UART_PIN_NO_CHANGE);
+    }
+    if (err == ESP_OK) {
+        err = uart_flush_input(uart_num);
+    }
+    if (err != ESP_OK) {
+        (void)uart_driver_delete(uart_num);
+        ESP_LOGE(
+            TAG, "SIM7670_EXCLUSIVE_UART_CONFIG_FAIL err=%s",
+            esp_err_to_name(err));
+        return err;
+    }
+
+    SemaphoreHandle_t uart_mutex = xSemaphoreCreateMutex();
+    if (uart_mutex == NULL) {
+        (void)uart_driver_delete(uart_num);
+        return ESP_ERR_NO_MEM;
+    }
+    s_uart_mutex = uart_mutex;
+    s_exclusive_owner_task = current_task;
+    s_initialized = true;
+    ESP_LOGI(
+        TAG,
+        "SIM7670_EXCLUSIVE_UART_READY uart=%d tx_gpio=%d rx_gpio=%d baud=%d",
+        (int)uart_num,
+        CONFIG_EGOLINK_SIM7670_UART_TX_GPIO,
+        CONFIG_EGOLINK_SIM7670_UART_RX_GPIO,
+        CONFIG_EGOLINK_SIM7670_UART_BAUD);
+    return ESP_OK;
+}
+
 esp_err_t sim7670_gnss_init(void)
 {
     if (s_initialized) {
-        return ESP_OK;
+        return sim7670_at_backend_current_task_is_allowed()
+            ? ESP_OK
+            : ESP_ERR_INVALID_STATE;
     }
     if (s_uart_mutex == NULL) {
         s_uart_mutex = xSemaphoreCreateMutex();
@@ -854,7 +1061,7 @@ static bool sim7670_lte_http_read_json_body(
         if (sim7670_send_httpread_json_labeled(
                 command,
                 "AT+HTTPREAD=0,<len>",
-                CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
+                SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
                 response,
                 response_size,
                 response_body,
@@ -874,7 +1081,7 @@ static bool sim7670_lte_http_read_json_body(
     if (sim7670_send_httpread_json_labeled(
             "AT+HTTPREAD",
             "AT+HTTPREAD",
-            CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
+            SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
             response,
             response_size,
             response_body,
@@ -912,7 +1119,7 @@ static bool sim7670_lte_http_read_raw_body(
         if (sim7670_send_httpread_raw_labeled(
                 command,
                 "AT+HTTPREAD=0,<len>",
-                CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
+                SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
                 response,
                 response_size,
                 response_body,
@@ -933,7 +1140,7 @@ static bool sim7670_lte_http_read_raw_body(
     if (sim7670_send_httpread_raw_labeled(
             "AT+HTTPREAD",
             "AT+HTTPREAD",
-            CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
+            SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
             response,
             response_size,
             response_body,
@@ -950,7 +1157,33 @@ static bool sim7670_lte_http_read_raw_body(
     return false;
 }
 
-static bool parse_cgpsinfo(const char *line, sim7670_gnss_report_t *report)
+typedef enum {
+    GNSS_PARSE_INVALID = 0,
+    GNSS_PARSE_FIX,
+    GNSS_PARSE_NO_FIX,
+} gnss_parse_outcome_t;
+
+static bool prefixed_fields_are_all_empty(
+    const char *line,
+    const char *prefix,
+    int first_accepted_count,
+    int second_accepted_count)
+{
+    const int count = prefixed_field_count(line, prefix);
+    if (count != first_accepted_count && count != second_accepted_count) {
+        return false;
+    }
+    for (int index = 0; index < count; ++index) {
+        char field[2];
+        if (field_at(line, prefix, index, field, sizeof(field))[0] != '\0') {
+            return false;
+        }
+    }
+    return true;
+}
+
+static gnss_parse_outcome_t parse_cgpsinfo(
+    const char *line, sim7670_gnss_report_t *report)
 {
     char lat_raw[24];
     char ns[4];
@@ -958,21 +1191,34 @@ static bool parse_cgpsinfo(const char *line, sim7670_gnss_report_t *report)
     char ew[4];
     char field[24];
     double value = 0.0;
-    if (prefixed_field_count(line, "+CGPSINFO:") < 9) {
-        return false;
+    double lat = 0.0;
+    double lon = 0.0;
+    if (report == NULL) {
+        return GNSS_PARSE_INVALID;
     }
-    bool lat_ok = parse_ddmm_coordinate(
+    if (prefixed_fields_are_all_empty(line, "+CGPSINFO:", 9, 9)) {
+        return GNSS_PARSE_NO_FIX;
+    }
+    if (prefixed_field_count(line, "+CGPSINFO:") != 9) {
+        return GNSS_PARSE_INVALID;
+    }
+    const bool lat_ok = parse_ddmm_coordinate(
         field_at(line, "+CGPSINFO:", 0, lat_raw, sizeof(lat_raw)),
         field_at(line, "+CGPSINFO:", 1, ns, sizeof(ns)),
         true,
-        &report->lat);
-    bool lon_ok = parse_ddmm_coordinate(
+        &lat);
+    const bool lon_ok = parse_ddmm_coordinate(
         field_at(line, "+CGPSINFO:", 2, lon_raw, sizeof(lon_raw)),
         field_at(line, "+CGPSINFO:", 3, ew, sizeof(ew)),
         false,
-        &report->lon);
-    report->lat_valid = lat_ok;
-    report->lon_valid = lon_ok;
+        &lon);
+    if (!lat_ok || !lon_ok) {
+        return GNSS_PARSE_INVALID;
+    }
+    report->lat = lat;
+    report->lon = lon;
+    report->lat_valid = true;
+    report->lon_valid = true;
     if (parse_double_field(field_at(line, "+CGPSINFO:", 6, field, sizeof(field)), &value)) {
         report->altitude_m = value;
         report->altitude_valid = true;
@@ -987,7 +1233,7 @@ static bool parse_cgpsinfo(const char *line, sim7670_gnss_report_t *report)
     }
     copy_truncated(report->utc_date, sizeof(report->utc_date), field_at(line, "+CGPSINFO:", 4, field, sizeof(field)));
     copy_truncated(report->utc_time, sizeof(report->utc_time), field_at(line, "+CGPSINFO:", 5, field, sizeof(field)));
-    return lat_ok && lon_ok;
+    return GNSS_PARSE_FIX;
 }
 
 static bool cgnss_coordinate_candidate(
@@ -1026,7 +1272,8 @@ static bool cgnss_coordinate_candidate(
     return parsed;
 }
 
-static bool parse_cgnssinfo(const char *line, sim7670_gnss_report_t *report)
+static gnss_parse_outcome_t parse_cgnssinfo(
+    const char *line, sim7670_gnss_report_t *report)
 {
     char field[24];
     double value = 0.0;
@@ -1035,14 +1282,25 @@ static bool parse_cgnssinfo(const char *line, sim7670_gnss_report_t *report)
     int tail_index = 0;
     double lat = 0.0;
     double lon = 0.0;
+    if (report == NULL) {
+        return GNSS_PARSE_INVALID;
+    }
+    /* Both layouts have been observed from this modem with every field empty. */
+    if (prefixed_fields_are_all_empty(line, "+CGNSSINFO:", 9, 18)) {
+        return GNSS_PARSE_NO_FIX;
+    }
     if (!parse_int_field(field_at(line, "+CGNSSINFO:", 0, field, sizeof(field)), &mode) ||
         (mode != 2 && mode != 3)) {
-        return false;
+        return GNSS_PARSE_INVALID;
     }
-    bool fix = cgnss_coordinate_candidate(line, 5, 6, 7, 8, &lat, &lon, &tail_index) ||
-               cgnss_coordinate_candidate(line, 4, 5, 6, 7, &lat, &lon, &tail_index);
-    if (!fix || prefixed_field_count(line, "+CGNSSINFO:") < tail_index + 9) {
-        return false;
+    const bool fix =
+        cgnss_coordinate_candidate(
+            line, 5, 6, 7, 8, &lat, &lon, &tail_index) ||
+        cgnss_coordinate_candidate(
+            line, 4, 5, 6, 7, &lat, &lon, &tail_index);
+    if (!fix ||
+        prefixed_field_count(line, "+CGNSSINFO:") != tail_index + 9) {
+        return GNSS_PARSE_INVALID;
     }
     report->lat = lat;
     report->lon = lon;
@@ -1085,7 +1343,7 @@ static bool parse_cgnssinfo(const char *line, sim7670_gnss_report_t *report)
         report->utc_time,
         sizeof(report->utc_time),
         field_at(line, "+CGNSSINFO:", tail_index + 1, field, sizeof(field)));
-    return fix;
+    return GNSS_PARSE_FIX;
 }
 
 static const char *find_line(const char *response, const char *prefix)
@@ -1093,23 +1351,28 @@ static const char *find_line(const char *response, const char *prefix)
     return response == NULL ? NULL : strstr(response, prefix);
 }
 
-static bool parse_best_fix(const char *command, const char *response, sim7670_gnss_report_t *report)
+static gnss_parse_outcome_t parse_gnss_query(
+    const char *command,
+    const char *expected_prefix,
+    const char *response,
+    sim7670_gnss_report_t *report)
 {
-    const char *line = find_line(response, "+CGNSSINFO:");
-    if (line != NULL) {
-        copy_truncated(report->raw_command, sizeof(report->raw_command), command);
-        copy_truncated(report->raw_response, sizeof(report->raw_response), line);
+    const char *line = find_line(response, expected_prefix);
+    copy_truncated(report->raw_command, sizeof(report->raw_command), command);
+    copy_truncated(
+        report->raw_response,
+        sizeof(report->raw_response),
+        line != NULL ? line : response);
+    if (line == NULL) {
+        return GNSS_PARSE_INVALID;
+    }
+    if (strcmp(expected_prefix, "+CGNSSINFO:") == 0) {
         return parse_cgnssinfo(line, report);
     }
-    line = find_line(response, "+CGPSINFO:");
-    if (line != NULL) {
-        copy_truncated(report->raw_command, sizeof(report->raw_command), command);
-        copy_truncated(report->raw_response, sizeof(report->raw_response), line);
+    if (strcmp(expected_prefix, "+CGPSINFO:") == 0) {
         return parse_cgpsinfo(line, report);
     }
-    copy_truncated(report->raw_command, sizeof(report->raw_command), command);
-    copy_truncated(report->raw_response, sizeof(report->raw_response), response);
-    return false;
+    return GNSS_PARSE_INVALID;
 }
 
 static void strip_quotes(char *text)
@@ -1197,10 +1460,11 @@ static void update_lte_http_raw(sim7670_lte_http_probe_result_t *result, const c
     copy_truncated(result->raw_response, sizeof(result->raw_response), response);
 }
 
-static void split_mcc_mnc(const char *combined, sim7670_lte_report_t *report)
+static bool split_mcc_mnc(
+    const char *combined, sim7670_lte_report_t *report)
 {
     if (combined == NULL || combined[0] == '\0' || report == NULL) {
-        return;
+        return false;
     }
     char value[SIM7670_LTE_ID_MAX * 2];
     copy_truncated(value, sizeof(value), combined);
@@ -1210,19 +1474,23 @@ static void split_mcc_mnc(const char *combined, sim7670_lte_report_t *report)
         separator = strchr(value, ',');
     }
     if (separator == NULL) {
-        return;
+        return false;
     }
     *separator = '\0';
+    if (value[0] == '\0' || separator[1] == '\0') {
+        return false;
+    }
     copy_truncated(report->mcc, sizeof(report->mcc), value);
     copy_truncated(report->mnc, sizeof(report->mnc), separator + 1);
+    return true;
 }
 
-static void parse_cpin(const char *response, sim7670_lte_report_t *report)
+static bool parse_cpin(const char *response, sim7670_lte_report_t *report)
 {
     char state[SIM7670_LTE_STATUS_MAX];
     const char *line = find_line(response, "+CPIN:");
     if (line == NULL || report == NULL) {
-        return;
+        return false;
     }
     copy_truncated(state, sizeof(state), line + strlen("+CPIN:"));
     char *line_end = strpbrk(state, "\r\n");
@@ -1230,16 +1498,34 @@ static void parse_cpin(const char *response, sim7670_lte_report_t *report)
         *line_end = '\0';
     }
     strip_quotes(state);
+    const bool recognized =
+        strcmp(state, "READY") == 0 || strcmp(state, "SIM PIN") == 0 ||
+        strcmp(state, "SIM PUK") == 0 ||
+        strcmp(state, "SIM PIN2") == 0 ||
+        strcmp(state, "SIM PUK2") == 0 ||
+        strcmp(state, "PH-NET PIN") == 0 ||
+        strcmp(state, "NOT INSERTED") == 0 ||
+        strcmp(state, "NOT READY") == 0;
+    if (!recognized) {
+        return false;
+    }
     copy_truncated(report->sim_state, sizeof(report->sim_state), state);
     report->sim_ready = strcmp(state, "READY") == 0;
+    return true;
 }
 
-static void parse_cops(const char *response, sim7670_lte_report_t *report)
+static bool parse_cops(const char *response, sim7670_lte_report_t *report)
 {
     const char *line = find_line(response, "+COPS:");
     char field[SIM7670_LTE_OPERATOR_MAX];
+    int mode = 0;
     if (line == NULL || report == NULL) {
-        return;
+        return false;
+    }
+    if (!parse_int_field(
+            field_at(line, "+COPS:", 0, field, sizeof(field)), &mode) ||
+        mode < 0 || mode > 4) {
+        return false;
     }
     copy_truncated(report->operator_name, sizeof(report->operator_name), field_at(line, "+COPS:", 2, field, sizeof(field)));
     strip_quotes(report->operator_name);
@@ -1249,17 +1535,20 @@ static void parse_cops(const char *response, sim7670_lte_report_t *report)
     if (rat[0] != '\0') {
         copy_truncated(report->rat, sizeof(report->rat), rat);
     }
+    return true;
 }
 
-static void parse_cereg(const char *response, sim7670_lte_report_t *report)
+static bool parse_cereg(const char *response, sim7670_lte_report_t *report)
 {
     const char *line = find_line(response, "+CEREG:");
     char field0[SIM7670_LTE_ID_MAX];
     char field1[SIM7670_LTE_ID_MAX];
     char field2[SIM7670_LTE_ID_MAX];
     char field3[SIM7670_LTE_ID_MAX];
-    if (line == NULL || report == NULL) {
-        return;
+    int stat_value = 0;
+    if (line == NULL || report == NULL ||
+        prefixed_field_count(line, "+CEREG:") < 2) {
+        return false;
     }
     (void)field_at(line, "+CEREG:", 0, field0, sizeof(field0));
     (void)field_at(line, "+CEREG:", 1, field1, sizeof(field1));
@@ -1269,75 +1558,140 @@ static void parse_cereg(const char *response, sim7670_lte_report_t *report)
     strip_quotes(field1);
     strip_quotes(field2);
     strip_quotes(field3);
-    const char *stat = field1[0] != '\0' ? field1 : field0;
+    const char *stat = field1;
+    if (!parse_int_field(stat, &stat_value) || stat_value < 0 ||
+        stat_value > 5) {
+        return false;
+    }
     copy_truncated(report->registration_state, sizeof(report->registration_state), registration_state_from_stat(stat));
-    report->registered = stat[0] == '1' || stat[0] == '5';
+    report->registered = stat_value == 1 || stat_value == 5;
     if (field1[0] != '\0') {
         copy_truncated(report->tac, sizeof(report->tac), field2);
         copy_truncated(report->cell_id, sizeof(report->cell_id), field3);
     }
+    return true;
 }
 
-static void parse_cgatt(const char *response, sim7670_lte_report_t *report)
+static bool parse_cgatt(const char *response, sim7670_lte_report_t *report)
 {
     const char *line = find_line(response, "+CGATT:");
     char field[SIM7670_LTE_STATUS_MAX];
+    int attached = 0;
     if (line == NULL || report == NULL) {
-        return;
+        return false;
     }
     (void)field_at(line, "+CGATT:", 0, field, sizeof(field));
-    report->attached = strcmp(field, "1") == 0;
-}
-
-static void parse_cgdcont(const char *response, sim7670_lte_report_t *report)
-{
-    const char *line = find_line(response, "+CGDCONT:");
-    char apn[SIM7670_LTE_OPERATOR_MAX];
-    if (line == NULL || report == NULL) {
-        return;
+    if (!parse_int_field(field, &attached) ||
+        (attached != 0 && attached != 1)) {
+        return false;
     }
-    (void)field_at(line, "+CGDCONT:", 2, apn, sizeof(apn));
-    strip_quotes(apn);
-    copy_truncated(report->apn_state, sizeof(report->apn_state), apn[0] != '\0' ? "configured" : "missing");
+    report->attached = attached == 1;
+    return true;
 }
 
-static void parse_cgact(const char *response, sim7670_lte_report_t *report)
+static bool parse_cgdcont(const char *response, sim7670_lte_report_t *report)
 {
-    const char *line = find_line(response, "+CGACT:");
-    char field[SIM7670_LTE_STATUS_MAX];
-    if (line == NULL || report == NULL) {
-        return;
+    if (response == NULL || report == NULL) {
+        return false;
     }
-    (void)field_at(line, "+CGACT:", 1, field, sizeof(field));
-    report->pdp_active = strcmp(field, "1") == 0;
-    copy_truncated(report->pdp_state, sizeof(report->pdp_state), report->pdp_active ? "active" : "inactive");
+    const char *cursor = response;
+    const char *line = NULL;
+    while ((line = find_line(cursor, "+CGDCONT:")) != NULL) {
+        char apn[SIM7670_LTE_OPERATOR_MAX];
+        char field[SIM7670_LTE_STATUS_MAX];
+        int cid = 0;
+        if (prefixed_field_count(line, "+CGDCONT:") >= 3 &&
+            parse_int_field(
+                field_at(line, "+CGDCONT:", 0, field, sizeof(field)),
+                &cid) &&
+            cid == 1 &&
+            field_at(line, "+CGDCONT:", 1, field, sizeof(field))[0] !=
+                '\0') {
+            (void)field_at(
+                line, "+CGDCONT:", 2, apn, sizeof(apn));
+            strip_quotes(apn);
+            copy_truncated(
+                report->apn_state,
+                sizeof(report->apn_state),
+                apn[0] != '\0' ? "configured" : "missing");
+            return true;
+        }
+        cursor = line + strlen("+CGDCONT:");
+    }
+    return false;
 }
 
-static void parse_cgpaddr(const char *response, sim7670_lte_report_t *report)
+static bool parse_cgact(const char *response, sim7670_lte_report_t *report)
+{
+    if (response == NULL || report == NULL) {
+        return false;
+    }
+    const char *cursor = response;
+    const char *line = NULL;
+    while ((line = find_line(cursor, "+CGACT:")) != NULL) {
+        char field[SIM7670_LTE_STATUS_MAX];
+        int cid = 0;
+        int active = 0;
+        if (parse_int_field(
+                field_at(line, "+CGACT:", 0, field, sizeof(field)),
+                &cid) &&
+            cid == 1 &&
+            parse_int_field(
+                field_at(line, "+CGACT:", 1, field, sizeof(field)),
+                &active) &&
+            (active == 0 || active == 1)) {
+            report->pdp_active = active == 1;
+            copy_truncated(
+                report->pdp_state,
+                sizeof(report->pdp_state),
+                report->pdp_active ? "active" : "inactive");
+            return true;
+        }
+        cursor = line + strlen("+CGACT:");
+    }
+    return false;
+}
+
+static bool parse_cgpaddr(const char *response, sim7670_lte_report_t *report)
 {
     const char *line = find_line(response, "+CGPADDR:");
     char ip[SIM7670_LTE_IP_MAX];
+    char field[SIM7670_LTE_STATUS_MAX];
+    int cid = 0;
     if (line == NULL || report == NULL) {
-        return;
+        return false;
+    }
+    if (prefixed_field_count(line, "+CGPADDR:") < 2 ||
+        !parse_int_field(
+            field_at(line, "+CGPADDR:", 0, field, sizeof(field)), &cid) ||
+        cid != 1) {
+        return false;
     }
     (void)field_at(line, "+CGPADDR:", 1, ip, sizeof(ip));
     strip_quotes(ip);
     copy_truncated(report->assigned_ip, sizeof(report->assigned_ip), ip);
     report->ip_valid = ip[0] != '\0' && strcmp(ip, "0.0.0.0") != 0;
+    return true;
 }
 
-static void parse_csq(const char *response, sim7670_lte_report_t *report)
+static bool parse_csq(const char *response, sim7670_lte_report_t *report)
 {
     const char *line = find_line(response, "+CSQ:");
     char field[SIM7670_LTE_STATUS_MAX];
     int raw = 0;
     if (line == NULL || report == NULL) {
-        return;
+        return false;
     }
-    if (parse_int_field(field_at(line, "+CSQ:", 0, field, sizeof(field)), &raw) && raw >= 0 && raw <= 31) {
+    if (!parse_int_field(
+            field_at(line, "+CSQ:", 0, field, sizeof(field)), &raw) ||
+        !((raw >= 0 && raw <= 31) || raw == 99)) {
+        return false;
+    }
+    if (raw != 99) {
         report->rssi = -113 + (2 * raw);
         report->rssi_valid = true;
     }
+    return true;
 }
 
 static int split_prefixed_fields(
@@ -1360,22 +1714,26 @@ static int split_prefixed_fields(
     return count;
 }
 
-static void parse_cpsi(const char *response, sim7670_lte_report_t *report)
+static bool parse_cpsi(const char *response, sim7670_lte_report_t *report)
 {
     const char *line = find_line(response, "+CPSI:");
     char fields[20][SIM7670_LTE_ID_MAX];
     int value = 0;
     if (line == NULL || report == NULL) {
-        return;
+        return false;
     }
     int count = split_prefixed_fields(line, "+CPSI:", fields, 20);
     if (count <= 0) {
-        return;
+        return false;
     }
     copy_truncated(report->rat, sizeof(report->rat), fields[0]);
-    if (count > 2) {
-        split_mcc_mnc(fields[2], report);
+    if (strcmp(fields[0], "NO SERVICE") == 0) {
+        return true;
     }
+    if (count < 5) {
+        return false;
+    }
+    const bool mcc_mnc_valid = split_mcc_mnc(fields[2], report);
     if (count > 3) {
         copy_truncated(report->tac, sizeof(report->tac), fields[3]);
     }
@@ -1398,6 +1756,10 @@ static void parse_cpsi(const char *response, sim7670_lte_report_t *report)
         report->sinr = value;
         report->sinr_valid = true;
     }
+    report->cell_identity_valid =
+        mcc_mnc_valid && report->tac[0] != '\0' &&
+        report->cell_id[0] != '\0';
+    return true;
 }
 
 static void classify_lte_status(sim7670_lte_report_t *report)
@@ -1411,17 +1773,779 @@ static void classify_lte_status(sim7670_lte_report_t *report)
         set_lte_reason(report, "LTE_UART_INIT_FAILED");
     } else if (!report->at_ok) {
         set_lte_reason(report, "LTE_AT_UNREACHABLE");
+    } else if (!report->cpin_query.parse_valid) {
+        set_lte_reason(report, "LTE_STATUS_UNKNOWN");
     } else if (!report->sim_ready) {
         set_lte_reason(report, "LTE_SIM_NOT_READY");
+    } else if (!report->cereg_query.parse_valid) {
+        set_lte_reason(report, "LTE_STATUS_UNKNOWN");
     } else if (!report->registered) {
         set_lte_reason(report, "LTE_NOT_REGISTERED");
+    } else if (!report->cgatt_query.parse_valid) {
+        set_lte_reason(report, "LTE_STATUS_UNKNOWN");
     } else if (!report->attached) {
         set_lte_reason(report, "LTE_NOT_ATTACHED");
+    } else if (!report->cgact_query.parse_valid) {
+        set_lte_reason(report, "LTE_STATUS_UNKNOWN");
     } else if (!report->pdp_active) {
         set_lte_reason(report, "LTE_PDP_INACTIVE");
     } else {
         set_lte_reason(report, "LTE_READY");
     }
+}
+
+static void record_gnss_query_outcome(
+    sim7670_gnss_query_evidence_t *evidence,
+    gnss_parse_outcome_t outcome)
+{
+    if (evidence == NULL) {
+        return;
+    }
+    evidence->parse_valid = outcome != GNSS_PARSE_INVALID;
+    evidence->fix_observed = outcome == GNSS_PARSE_FIX;
+    evidence->no_fix_observed = outcome == GNSS_PARSE_NO_FIX;
+}
+
+typedef bool (*lte_response_parser_fn)(
+    const char *response, sim7670_lte_report_t *report);
+
+static void run_lte_status_query(
+    sim7670_lte_report_t *report,
+    sim7670_at_query_evidence_t *evidence,
+    const char *command,
+    const char *expected_prefix,
+    char *response,
+    size_t response_size,
+    lte_response_parser_fn parser)
+{
+    if (report == NULL || evidence == NULL || command == NULL ||
+        expected_prefix == NULL || response == NULL || response_size == 0U ||
+        parser == NULL) {
+        return;
+    }
+    evidence->attempted = true;
+    evidence->response_observed = sim7670_send_at_complete(
+        command,
+        expected_prefix,
+        CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS,
+        response,
+        response_size);
+    if (!evidence->response_observed) {
+        return;
+    }
+    update_lte_raw(report, command, response);
+    evidence->parse_valid = parser(response, report);
+}
+
+typedef enum {
+    SIM7670_BOUNDED_AT_OK = 0,
+    SIM7670_BOUNDED_AT_DEADLINE,
+    SIM7670_BOUNDED_AT_OWNER_BUSY,
+    SIM7670_BOUNDED_AT_TX_INCOMPLETE,
+    SIM7670_BOUNDED_AT_RESPONSE_TIMEOUT,
+    SIM7670_BOUNDED_AT_IO_ERROR,
+    SIM7670_BOUNDED_AT_TERMINAL_ERROR,
+    SIM7670_BOUNDED_AT_RESPONSE_TRUNCATED,
+} sim7670_bounded_at_status_t;
+
+static bool bounded_request_valid(
+    const sim7670_location_bounded_request_t *request)
+{
+    return request != NULL && request->timeout_ms > UINT32_C(0) &&
+        request->timeout_ms <= SIM7670_LOCATION_BOUNDED_TIMEOUT_MAX_MS &&
+        request->per_command_timeout_cap_ms > UINT32_C(0) &&
+        request->per_command_timeout_cap_ms <=
+            SIM7670_LOCATION_BOUNDED_COMMAND_CAP_MAX_MS &&
+        request->cancel_requested != NULL &&
+        request->operation_token != UINT32_C(0);
+}
+
+static int64_t bounded_now_us(void)
+{
+    return esp_timer_get_time();
+}
+
+/*
+ * Deliberately rounds down. A wait may be shorter than remaining wall time but
+ * can never be rounded up past the request/command deadline. Sub-tick tails
+ * are polled non-blocking.
+ */
+static TickType_t bounded_wait_ticks_floor(
+    int64_t now_us,
+    int64_t deadline_us,
+    uint32_t maximum_wait_ms)
+{
+    if (now_us < INT64_C(0) || deadline_us <= now_us) {
+        return (TickType_t)0;
+    }
+    uint64_t remaining_ms =
+        (uint64_t)(deadline_us - now_us) / UINT64_C(1000);
+    if (remaining_ms > (uint64_t)maximum_wait_ms) {
+        remaining_ms = (uint64_t)maximum_wait_ms;
+    }
+    const uint64_t tick_period_ms = (uint64_t)portTICK_PERIOD_MS;
+    if (tick_period_ms == UINT64_C(0)) {
+        return (TickType_t)0;
+    }
+    uint64_t ticks = remaining_ms / tick_period_ms;
+    const uint64_t maximum_ticks = (uint64_t)portMAX_DELAY - UINT64_C(1);
+    if (ticks > maximum_ticks) {
+        ticks = maximum_ticks;
+    }
+    return (TickType_t)ticks;
+}
+
+static int64_t bounded_command_deadline_us(
+    int64_t now_us,
+    int64_t request_deadline_us,
+    uint32_t command_cap_ms)
+{
+    const int64_t cap_us = (int64_t)command_cap_ms * INT64_C(1000);
+    const int64_t cap_deadline =
+        now_us <= INT64_MAX - cap_us ? now_us + cap_us : INT64_MAX;
+    return cap_deadline < request_deadline_us
+        ? cap_deadline
+        : request_deadline_us;
+}
+
+static void bounded_increment_u16(uint16_t *value)
+{
+    if (*value != UINT16_MAX) {
+        ++(*value);
+    }
+}
+
+static sim7670_bounded_at_status_t sim7670_send_at_complete_bounded(
+    const char *command,
+    const char *expect,
+    int64_t request_deadline_us,
+    uint32_t command_cap_ms,
+    char *response,
+    size_t response_size,
+    sim7670_location_bounded_result_t *result)
+{
+    if (command == NULL || expect == NULL || response == NULL ||
+        response_size == 0U || result == NULL) {
+        return SIM7670_BOUNDED_AT_IO_ERROR;
+    }
+    response[0] = '\0';
+    int64_t now_us = bounded_now_us();
+    if (now_us < INT64_C(0) || now_us >= request_deadline_us) {
+        return SIM7670_BOUNDED_AT_DEADLINE;
+    }
+    const int64_t command_deadline_us = bounded_command_deadline_us(
+        now_us, request_deadline_us, command_cap_ms);
+    const TickType_t owner_wait = bounded_wait_ticks_floor(
+        now_us, command_deadline_us, command_cap_ms);
+    if (xSemaphoreTake(s_uart_mutex, owner_wait) != pdTRUE) {
+        return SIM7670_BOUNDED_AT_OWNER_BUSY;
+    }
+    now_us = bounded_now_us();
+    if (now_us < INT64_C(0) || now_us >= command_deadline_us) {
+        xSemaphoreGive(s_uart_mutex);
+        return SIM7670_BOUNDED_AT_OWNER_BUSY;
+    }
+
+    sim7670_bounded_at_status_t status = SIM7670_BOUNDED_AT_IO_ERROR;
+    result->io_started = true;
+    bounded_increment_u16(&result->commands_attempted);
+    if (uart_flush_input(configured_uart_num()) != ESP_OK) {
+        xSemaphoreGive(s_uart_mutex);
+        return status;
+    }
+    now_us = bounded_now_us();
+    if (now_us < INT64_C(0) || now_us >= command_deadline_us) {
+        xSemaphoreGive(s_uart_mutex);
+        return SIM7670_BOUNDED_AT_DEADLINE;
+    }
+
+    char transmit[SIM7670_LTE_HTTP_RAW_COMMAND_MAX];
+    const size_t command_length = strlen(command);
+    if (command_length > sizeof(transmit) - 3U) {
+        xSemaphoreGive(s_uart_mutex);
+        return SIM7670_BOUNDED_AT_TX_INCOMPLETE;
+    }
+    (void)memcpy(transmit, command, command_length);
+    transmit[command_length] = '\r';
+    transmit[command_length + 1U] = '\n';
+    const size_t transmit_length = command_length + 2U;
+    size_t transmitted = 0U;
+    while (transmitted < transmit_length) {
+        now_us = bounded_now_us();
+        if (now_us < INT64_C(0) || now_us >= command_deadline_us) {
+            status = SIM7670_BOUNDED_AT_TX_INCOMPLETE;
+            break;
+        }
+        const size_t remaining = transmit_length - transmitted;
+        const uint32_t offered = remaining <= UINT32_MAX
+            ? (uint32_t)remaining
+            : UINT32_MAX;
+        const int written = uart_tx_chars(
+            configured_uart_num(), transmit + transmitted, offered);
+        if (written < 0 || (uint32_t)written > offered) {
+            status = SIM7670_BOUNDED_AT_IO_ERROR;
+            break;
+        }
+        if (written == 0) {
+            taskYIELD();
+            continue;
+        }
+        transmitted += (size_t)written;
+    }
+    if (transmitted != transmit_length) {
+        xSemaphoreGive(s_uart_mutex);
+        return status;
+    }
+    now_us = bounded_now_us();
+    if (now_us < INT64_C(0) || now_us > command_deadline_us) {
+        xSemaphoreGive(s_uart_mutex);
+        return SIM7670_BOUNDED_AT_DEADLINE;
+    }
+    bounded_increment_u16(&result->commands_tx_complete);
+
+    uint8_t chunk[AT_READ_CHUNK_SIZE];
+    size_t length = 0U;
+    while (true) {
+        now_us = bounded_now_us();
+        if (now_us < INT64_C(0)) {
+            status = SIM7670_BOUNDED_AT_IO_ERROR;
+            break;
+        }
+        if (now_us >= command_deadline_us) {
+            status = SIM7670_BOUNDED_AT_RESPONSE_TIMEOUT;
+            break;
+        }
+        const TickType_t read_wait = bounded_wait_ticks_floor(
+            now_us, command_deadline_us, UINT32_C(100));
+        const int read = uart_read_bytes(
+            configured_uart_num(), chunk, sizeof(chunk), read_wait);
+        now_us = bounded_now_us();
+        if (now_us < INT64_C(0) || now_us > command_deadline_us) {
+            status = SIM7670_BOUNDED_AT_RESPONSE_TIMEOUT;
+            break;
+        }
+        if (read < 0) {
+            status = SIM7670_BOUNDED_AT_IO_ERROR;
+            break;
+        }
+        if (read == 0) {
+            taskYIELD();
+            continue;
+        }
+        const size_t read_size = (size_t)read;
+        const size_t available = response_size - 1U - length;
+        if (read_size > available) {
+            if (available > 0U) {
+                (void)memcpy(response + length, chunk, available);
+                length += available;
+                response[length] = '\0';
+            }
+            status = SIM7670_BOUNDED_AT_RESPONSE_TRUNCATED;
+            break;
+        }
+        (void)memcpy(response + length, chunk, read_size);
+        length += read_size;
+        response[length] = '\0';
+        bool terminal_error = false;
+        if (response_is_complete(response, expect, &terminal_error)) {
+            status = terminal_error
+                ? SIM7670_BOUNDED_AT_TERMINAL_ERROR
+                : SIM7670_BOUNDED_AT_OK;
+            break;
+        }
+        if (length == response_size - 1U) {
+            status = SIM7670_BOUNDED_AT_RESPONSE_TRUNCATED;
+            break;
+        }
+    }
+    xSemaphoreGive(s_uart_mutex);
+    now_us = bounded_now_us();
+    if (now_us < INT64_C(0) || now_us > request_deadline_us) {
+        return SIM7670_BOUNDED_AT_DEADLINE;
+    }
+    if (now_us > command_deadline_us) {
+        return SIM7670_BOUNDED_AT_RESPONSE_TIMEOUT;
+    }
+    if (status == SIM7670_BOUNDED_AT_OK) {
+        bounded_increment_u16(&result->commands_completed);
+    }
+    return status;
+}
+
+static sim7670_location_bounded_reason_t bounded_reason_from_at(
+    sim7670_bounded_at_status_t status)
+{
+    switch (status) {
+    case SIM7670_BOUNDED_AT_DEADLINE:
+        return SIM7670_LOCATION_BOUNDED_REASON_DEADLINE_EXPIRED;
+    case SIM7670_BOUNDED_AT_OWNER_BUSY:
+        return SIM7670_LOCATION_BOUNDED_REASON_MODEM_OWNER_BUSY;
+    case SIM7670_BOUNDED_AT_TX_INCOMPLETE:
+        return SIM7670_LOCATION_BOUNDED_REASON_TX_INCOMPLETE;
+    case SIM7670_BOUNDED_AT_RESPONSE_TIMEOUT:
+        return SIM7670_LOCATION_BOUNDED_REASON_AT_RESPONSE_TIMEOUT;
+    case SIM7670_BOUNDED_AT_TERMINAL_ERROR:
+        return SIM7670_LOCATION_BOUNDED_REASON_AT_TERMINAL_ERROR;
+    case SIM7670_BOUNDED_AT_RESPONSE_TRUNCATED:
+        return SIM7670_LOCATION_BOUNDED_REASON_RESPONSE_TRUNCATED;
+    case SIM7670_BOUNDED_AT_IO_ERROR:
+    case SIM7670_BOUNDED_AT_OK:
+    default:
+        return SIM7670_LOCATION_BOUNDED_REASON_AT_IO_ERROR;
+    }
+}
+
+static void bounded_finish(
+    sim7670_location_bounded_result_t *result,
+    int64_t start_us,
+    int64_t deadline_us,
+    sim7670_location_bounded_outcome_t outcome,
+    sim7670_location_bounded_reason_t reason)
+{
+    int64_t finish_us = bounded_now_us();
+    if (finish_us < start_us) {
+        finish_us = start_us;
+        outcome = SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN;
+        reason = SIM7670_LOCATION_BOUNDED_REASON_AT_IO_ERROR;
+    } else if (finish_us > deadline_us) {
+        outcome = SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN;
+        reason = SIM7670_LOCATION_BOUNDED_REASON_DEADLINE_EXPIRED;
+    }
+    result->outcome = outcome;
+    result->reason = reason;
+    result->partial_or_unknown =
+        outcome == SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN ||
+        (outcome == SIM7670_LOCATION_BOUNDED_COOPERATIVE_CANCELLED &&
+         result->io_started);
+    result->elapsed_ms =
+        (uint64_t)(finish_us - start_us) / UINT64_C(1000);
+}
+
+static bool bounded_cancel_requested(
+    const sim7670_location_bounded_request_t *request)
+{
+    return request->cancel_requested(
+        request->cancel_context, request->operation_token);
+}
+
+static bool bounded_begin(
+    const sim7670_location_bounded_request_t *request,
+    sim7670_location_bounded_result_t *result,
+    int64_t *start_us,
+    int64_t *deadline_us)
+{
+    if (!bounded_request_valid(request) || result == NULL || start_us == NULL ||
+        deadline_us == NULL) {
+        return false;
+    }
+    *start_us = bounded_now_us();
+    const int64_t timeout_us = (int64_t)request->timeout_ms * INT64_C(1000);
+    if (*start_us < INT64_C(0) || *start_us > INT64_MAX - timeout_us) {
+        return false;
+    }
+    *deadline_us = *start_us + timeout_us;
+    if (bounded_cancel_requested(request)) {
+        result->cancel_before_io = true;
+        bounded_finish(
+            result, *start_us, *deadline_us,
+            SIM7670_LOCATION_BOUNDED_COOPERATIVE_CANCELLED,
+            SIM7670_LOCATION_BOUNDED_REASON_CANCEL_BEFORE_IO);
+        return false;
+    }
+    return true;
+}
+
+static bool bounded_cancel_at_boundary(
+    const sim7670_location_bounded_request_t *request,
+    sim7670_location_bounded_result_t *result,
+    int64_t start_us,
+    int64_t deadline_us)
+{
+    const int64_t now_us = bounded_now_us();
+    if (now_us < INT64_C(0) || now_us >= deadline_us) {
+        bounded_finish(
+            result, start_us, deadline_us,
+            SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN,
+            SIM7670_LOCATION_BOUNDED_REASON_DEADLINE_EXPIRED);
+        return true;
+    }
+    if (!bounded_cancel_requested(request)) {
+        return false;
+    }
+    result->cancelled_between_commands = result->io_started;
+    result->cancel_before_io = !result->io_started;
+    bounded_finish(
+        result, start_us, deadline_us,
+        SIM7670_LOCATION_BOUNDED_COOPERATIVE_CANCELLED,
+        result->io_started
+            ? SIM7670_LOCATION_BOUNDED_REASON_CANCEL_BETWEEN_AT
+            : SIM7670_LOCATION_BOUNDED_REASON_CANCEL_BEFORE_IO);
+    return true;
+}
+
+static bool bounded_at_or_finish_unknown(
+    sim7670_bounded_at_status_t status,
+    sim7670_location_bounded_result_t *result,
+    int64_t start_us,
+    int64_t deadline_us)
+{
+    if (status == SIM7670_BOUNDED_AT_OK) {
+        return true;
+    }
+    bounded_finish(
+        result, start_us, deadline_us,
+        SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN,
+        bounded_reason_from_at(status));
+    return false;
+}
+
+static bool bounded_lte_query_one(
+    const sim7670_location_bounded_request_t *request,
+    sim7670_location_bounded_result_t *result,
+    int64_t start_us,
+    int64_t deadline_us,
+    sim7670_lte_report_t *report,
+    sim7670_at_query_evidence_t *evidence,
+    const char *command,
+    const char *expected_prefix,
+    char *response,
+    size_t response_size,
+    lte_response_parser_fn parser)
+{
+    if (bounded_cancel_at_boundary(
+            request, result, start_us, deadline_us)) {
+        return false;
+    }
+    evidence->attempted = true;
+    const sim7670_bounded_at_status_t at_status =
+        sim7670_send_at_complete_bounded(
+            command, expected_prefix, deadline_us,
+            request->per_command_timeout_cap_ms, response, response_size,
+            result);
+    if (!bounded_at_or_finish_unknown(
+            at_status, result, start_us, deadline_us)) {
+        return false;
+    }
+    evidence->response_observed = true;
+    update_lte_raw(report, command, response);
+    evidence->parse_valid = parser(response, report);
+    if (!evidence->parse_valid) {
+        bounded_finish(
+            result, start_us, deadline_us,
+            SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN,
+            SIM7670_LOCATION_BOUNDED_REASON_PARSE_INVALID);
+        return false;
+    }
+    return true;
+}
+
+sim7670_location_bounded_outcome_t
+sim7670_gnss_request_location_bounded(
+    const sim7670_location_bounded_request_t *request,
+    sim7670_gnss_report_t *report,
+    sim7670_location_bounded_result_t *result)
+{
+    sim7670_location_bounded_result_t local_result;
+    if (result == NULL) {
+        result = &local_result;
+    }
+    sim7670_location_bounded_result_init(result);
+    sim7670_gnss_report_init(report);
+    if (report == NULL || !bounded_request_valid(request)) {
+        result->outcome =
+            SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        return result->outcome;
+    }
+#if !CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+    result->outcome = SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+    result->reason = SIM7670_LOCATION_BOUNDED_REASON_DRIVER_DISABLED;
+    return result->outcome;
+#else
+    report->driver_enabled = true;
+    if (!sim7670_at_backend_is_initialized()) {
+        result->outcome = SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        result->reason =
+            SIM7670_LOCATION_BOUNDED_REASON_UART_NOT_INITIALIZED;
+        return result->outcome;
+    }
+    if (!sim7670_at_backend_current_task_is_allowed()) {
+        result->outcome = SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        result->reason =
+            SIM7670_LOCATION_BOUNDED_REASON_EXCLUSIVE_OWNER_MISMATCH;
+        return result->outcome;
+    }
+    report->uart_ready = true;
+    int64_t start_us = INT64_C(0);
+    int64_t deadline_us = INT64_C(0);
+    if (!bounded_begin(request, result, &start_us, &deadline_us)) {
+        return result->outcome;
+    }
+
+    char response[AT_RESPONSE_BUFFER_SIZE];
+    sim7670_bounded_at_status_t at_status =
+        sim7670_send_at_complete_bounded(
+            "AT", "OK", deadline_us,
+            request->per_command_timeout_cap_ms, response, sizeof(response),
+            result);
+    if (!bounded_at_or_finish_unknown(
+            at_status, result, start_us, deadline_us)) {
+        return result->outcome;
+    }
+    report->at_ok = true;
+    if (bounded_cancel_at_boundary(
+            request, result, start_us, deadline_us)) {
+        return result->outcome;
+    }
+
+#if CONFIG_EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
+    at_status = sim7670_send_at_complete_bounded(
+        "AT+CGNSSPWR=1", "OK", deadline_us,
+        request->per_command_timeout_cap_ms, response, sizeof(response),
+        result);
+    if (!bounded_at_or_finish_unknown(
+            at_status, result, start_us, deadline_us) ||
+        bounded_cancel_at_boundary(
+            request, result, start_us, deadline_us)) {
+        return result->outcome;
+    }
+#endif
+
+    report->cgnssinfo_query.attempted = true;
+    at_status = sim7670_send_at_complete_bounded(
+        "AT+CGNSSINFO", "+CGNSSINFO:", deadline_us,
+        request->per_command_timeout_cap_ms, response, sizeof(response),
+        result);
+    if (!bounded_at_or_finish_unknown(
+            at_status, result, start_us, deadline_us)) {
+        return result->outcome;
+    }
+    report->cgnssinfo_query.response_observed = true;
+    gnss_parse_outcome_t parse_outcome = parse_gnss_query(
+        "AT+CGNSSINFO", "+CGNSSINFO:", response, report);
+    record_gnss_query_outcome(&report->cgnssinfo_query, parse_outcome);
+    if (parse_outcome == GNSS_PARSE_INVALID) {
+        bounded_finish(
+            result, start_us, deadline_us,
+            SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN,
+            SIM7670_LOCATION_BOUNDED_REASON_PARSE_INVALID);
+        return result->outcome;
+    }
+    bool fix = parse_outcome == GNSS_PARSE_FIX;
+    if (!fix) {
+        if (bounded_cancel_at_boundary(
+                request, result, start_us, deadline_us)) {
+            return result->outcome;
+        }
+        report->cgpsinfo_query.attempted = true;
+        at_status = sim7670_send_at_complete_bounded(
+            "AT+CGPSINFO", "+CGPSINFO:", deadline_us,
+            request->per_command_timeout_cap_ms, response, sizeof(response),
+            result);
+        if (!bounded_at_or_finish_unknown(
+                at_status, result, start_us, deadline_us)) {
+            return result->outcome;
+        }
+        report->cgpsinfo_query.response_observed = true;
+        parse_outcome = parse_gnss_query(
+            "AT+CGPSINFO", "+CGPSINFO:", response, report);
+        record_gnss_query_outcome(&report->cgpsinfo_query, parse_outcome);
+        if (parse_outcome == GNSS_PARSE_INVALID) {
+            bounded_finish(
+                result, start_us, deadline_us,
+                SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN,
+                SIM7670_LOCATION_BOUNDED_REASON_PARSE_INVALID);
+            return result->outcome;
+        }
+        fix = parse_outcome == GNSS_PARSE_FIX;
+    }
+
+    report->fix = fix && report->lat_valid && report->lon_valid;
+    report->location_result_valid = true;
+    report->no_fix_observed =
+        !report->fix &&
+        (report->cgnssinfo_query.no_fix_observed ||
+         report->cgpsinfo_query.no_fix_observed);
+    if (report->fix) {
+        set_status(report, "fix", "observed");
+    } else if (report->no_fix_observed) {
+        set_status(report, "no_fix", "observed");
+    } else {
+        bounded_finish(
+            result, start_us, deadline_us,
+            SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN,
+            SIM7670_LOCATION_BOUNDED_REASON_PARSE_INVALID);
+        return result->outcome;
+    }
+    if (bounded_cancel_at_boundary(
+            request, result, start_us, deadline_us)) {
+        return result->outcome;
+    }
+    bounded_finish(
+        result, start_us, deadline_us,
+        SIM7670_LOCATION_BOUNDED_REPORT_READY,
+        SIM7670_LOCATION_BOUNDED_REASON_NONE);
+    return result->outcome;
+#endif
+}
+
+sim7670_location_bounded_outcome_t sim7670_gnss_power_off_bounded(
+    const sim7670_location_bounded_request_t *request,
+    sim7670_location_bounded_result_t *result)
+{
+    sim7670_location_bounded_result_t local_result;
+    if (result == NULL) {
+        result = &local_result;
+    }
+    sim7670_location_bounded_result_init(result);
+    if (!bounded_request_valid(request)) {
+        result->outcome =
+            SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        return result->outcome;
+    }
+#if !CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
+    result->outcome = SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+    result->reason = SIM7670_LOCATION_BOUNDED_REASON_DRIVER_DISABLED;
+    return result->outcome;
+#else
+    if (!sim7670_at_backend_is_initialized()) {
+        result->outcome = SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        result->reason =
+            SIM7670_LOCATION_BOUNDED_REASON_UART_NOT_INITIALIZED;
+        return result->outcome;
+    }
+    if (!sim7670_at_backend_current_task_is_allowed()) {
+        result->outcome = SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        result->reason =
+            SIM7670_LOCATION_BOUNDED_REASON_EXCLUSIVE_OWNER_MISMATCH;
+        return result->outcome;
+    }
+    int64_t start_us = INT64_C(0);
+    int64_t deadline_us = INT64_C(0);
+    if (!bounded_begin(request, result, &start_us, &deadline_us)) {
+        return result->outcome;
+    }
+    char response[AT_RESPONSE_BUFFER_SIZE];
+    const sim7670_bounded_at_status_t at_status =
+        sim7670_send_at_complete_bounded(
+            "AT+CGNSSPWR=0", "OK", deadline_us,
+            request->per_command_timeout_cap_ms, response, sizeof(response),
+            result);
+    if (!bounded_at_or_finish_unknown(
+            at_status, result, start_us, deadline_us)) {
+        return result->outcome;
+    }
+    /* A terminal OK completes cleanup even if cancellation arrives after it. */
+    bounded_finish(
+        result, start_us, deadline_us,
+        SIM7670_LOCATION_BOUNDED_REPORT_READY,
+        SIM7670_LOCATION_BOUNDED_REASON_NONE);
+    return result->outcome;
+#endif
+}
+
+sim7670_location_bounded_outcome_t sim7670_lte_query_status_bounded(
+    const sim7670_location_bounded_request_t *request,
+    sim7670_lte_report_t *report,
+    sim7670_location_bounded_result_t *result)
+{
+    sim7670_location_bounded_result_t local_result;
+    if (result == NULL) {
+        result = &local_result;
+    }
+    sim7670_location_bounded_result_init(result);
+    sim7670_lte_report_init(report);
+    if (report == NULL || !bounded_request_valid(request)) {
+        result->outcome =
+            SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        return result->outcome;
+    }
+#if !CONFIG_EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    result->outcome = SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+    result->reason = SIM7670_LOCATION_BOUNDED_REASON_DRIVER_DISABLED;
+    return result->outcome;
+#else
+    report->driver_enabled = true;
+    if (!sim7670_at_backend_is_initialized()) {
+        result->outcome = SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        result->reason =
+            SIM7670_LOCATION_BOUNDED_REASON_UART_NOT_INITIALIZED;
+        return result->outcome;
+    }
+    if (!sim7670_at_backend_current_task_is_allowed()) {
+        result->outcome = SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        result->reason =
+            SIM7670_LOCATION_BOUNDED_REASON_EXCLUSIVE_OWNER_MISMATCH;
+        return result->outcome;
+    }
+    report->uart_ready = true;
+    int64_t start_us = INT64_C(0);
+    int64_t deadline_us = INT64_C(0);
+    if (!bounded_begin(request, result, &start_us, &deadline_us)) {
+        return result->outcome;
+    }
+
+    char response[AT_RESPONSE_BUFFER_SIZE];
+    const sim7670_bounded_at_status_t at_status =
+        sim7670_send_at_complete_bounded(
+            "AT", "OK", deadline_us,
+            request->per_command_timeout_cap_ms, response, sizeof(response),
+            result);
+    if (!bounded_at_or_finish_unknown(
+            at_status, result, start_us, deadline_us)) {
+        return result->outcome;
+    }
+    report->at_ok = true;
+    update_lte_raw(report, "AT", response);
+
+    if (!bounded_lte_query_one(
+            request, result, start_us, deadline_us, report,
+            &report->cpin_query, "AT+CPIN?", "+CPIN:", response,
+            sizeof(response), parse_cpin) ||
+        !bounded_lte_query_one(
+            request, result, start_us, deadline_us, report,
+            &report->cops_query, "AT+COPS?", "+COPS:", response,
+            sizeof(response), parse_cops) ||
+        !bounded_lte_query_one(
+            request, result, start_us, deadline_us, report,
+            &report->cereg_query, "AT+CEREG?", "+CEREG:", response,
+            sizeof(response), parse_cereg) ||
+        !bounded_lte_query_one(
+            request, result, start_us, deadline_us, report,
+            &report->cgatt_query, "AT+CGATT?", "+CGATT:", response,
+            sizeof(response), parse_cgatt) ||
+        !bounded_lte_query_one(
+            request, result, start_us, deadline_us, report,
+            &report->cgdcont_query, "AT+CGDCONT?", "+CGDCONT:", response,
+            sizeof(response), parse_cgdcont) ||
+        !bounded_lte_query_one(
+            request, result, start_us, deadline_us, report,
+            &report->cgact_query, "AT+CGACT?", "+CGACT:", response,
+            sizeof(response), parse_cgact) ||
+        !bounded_lte_query_one(
+            request, result, start_us, deadline_us, report,
+            &report->cgpaddr_query, "AT+CGPADDR=1", "+CGPADDR:", response,
+            sizeof(response), parse_cgpaddr) ||
+        !bounded_lte_query_one(
+            request, result, start_us, deadline_us, report,
+            &report->csq_query, "AT+CSQ", "+CSQ:", response,
+            sizeof(response), parse_csq) ||
+        !bounded_lte_query_one(
+            request, result, start_us, deadline_us, report,
+            &report->cpsi_query, "AT+CPSI?", "+CPSI:", response,
+            sizeof(response), parse_cpsi)) {
+        return result->outcome;
+    }
+    classify_lte_status(report);
+    if (bounded_cancel_at_boundary(
+            request, result, start_us, deadline_us)) {
+        return result->outcome;
+    }
+    bounded_finish(
+        result, start_us, deadline_us,
+        SIM7670_LOCATION_BOUNDED_REPORT_READY,
+        SIM7670_LOCATION_BOUNDED_REASON_NONE);
+    return result->outcome;
+#endif
 }
 
 bool sim7670_gnss_request_location(sim7670_gnss_report_t *report)
@@ -1453,31 +2577,53 @@ bool sim7670_gnss_request_location(sim7670_gnss_report_t *report)
     (void)sim7670_send_at("AT+CGNSSPWR=1", "OK", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response));
 #endif
 
-    bool got_gnss_line = sim7670_send_at_complete(
+    report->cgnssinfo_query.attempted = true;
+    const bool got_gnss_line = sim7670_send_at_complete(
         "AT+CGNSSINFO",
         "+CGNSSINFO:",
         CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS,
         response,
         sizeof(response));
+    report->cgnssinfo_query.response_observed = got_gnss_line;
     bool fix = false;
     if (got_gnss_line) {
-        fix = parse_best_fix("AT+CGNSSINFO", response, report);
+        const gnss_parse_outcome_t outcome = parse_gnss_query(
+            "AT+CGNSSINFO", "+CGNSSINFO:", response, report);
+        record_gnss_query_outcome(&report->cgnssinfo_query, outcome);
+        fix = outcome == GNSS_PARSE_FIX;
     }
     if (!fix) {
-        bool got_gps_line = sim7670_send_at_complete(
+        report->cgpsinfo_query.attempted = true;
+        const bool got_gps_line = sim7670_send_at_complete(
             "AT+CGPSINFO",
             "+CGPSINFO:",
             CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS,
             response,
             sizeof(response));
+        report->cgpsinfo_query.response_observed = got_gps_line;
         if (got_gps_line) {
-            bool gps_fix = parse_best_fix("AT+CGPSINFO", response, report);
-            fix = gps_fix;
+            const gnss_parse_outcome_t outcome = parse_gnss_query(
+                "AT+CGPSINFO", "+CGPSINFO:", response, report);
+            record_gnss_query_outcome(&report->cgpsinfo_query, outcome);
+            fix = outcome == GNSS_PARSE_FIX;
         }
     }
 
     report->fix = fix && report->lat_valid && report->lon_valid;
-    set_status(report, report->fix ? "fix" : "no_fix", report->fix ? "observed" : "unverified");
+    report->location_result_valid =
+        report->cgnssinfo_query.parse_valid ||
+        report->cgpsinfo_query.parse_valid;
+    report->no_fix_observed =
+        !report->fix &&
+        (report->cgnssinfo_query.no_fix_observed ||
+         report->cgpsinfo_query.no_fix_observed);
+    if (report->fix) {
+        set_status(report, "fix", "observed");
+    } else if (report->no_fix_observed) {
+        set_status(report, "no_fix", "observed");
+    } else {
+        set_status(report, "query_unverified", "unverified");
+    }
     return true;
 #endif
 }
@@ -1507,42 +2653,33 @@ bool sim7670_lte_query_status(sim7670_lte_report_t *report)
     report->at_ok = true;
     update_lte_raw(report, "AT", response);
 
-    if (sim7670_send_at("AT+CPIN?", "+CPIN:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
-        update_lte_raw(report, "AT+CPIN?", response);
-        parse_cpin(response, report);
-    }
-    if (sim7670_send_at("AT+COPS?", "+COPS:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
-        update_lte_raw(report, "AT+COPS?", response);
-        parse_cops(response, report);
-    }
-    if (sim7670_send_at("AT+CEREG?", "+CEREG:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
-        update_lte_raw(report, "AT+CEREG?", response);
-        parse_cereg(response, report);
-    }
-    if (sim7670_send_at("AT+CGATT?", "+CGATT:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
-        update_lte_raw(report, "AT+CGATT?", response);
-        parse_cgatt(response, report);
-    }
-    if (sim7670_send_at("AT+CGDCONT?", "+CGDCONT:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
-        update_lte_raw(report, "AT+CGDCONT?", response);
-        parse_cgdcont(response, report);
-    }
-    if (sim7670_send_at("AT+CGACT?", "+CGACT:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
-        update_lte_raw(report, "AT+CGACT?", response);
-        parse_cgact(response, report);
-    }
-    if (sim7670_send_at("AT+CGPADDR=1", "+CGPADDR:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
-        update_lte_raw(report, "AT+CGPADDR=1", response);
-        parse_cgpaddr(response, report);
-    }
-    if (sim7670_send_at("AT+CSQ", "+CSQ:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
-        update_lte_raw(report, "AT+CSQ", response);
-        parse_csq(response, report);
-    }
-    if (sim7670_send_at("AT+CPSI?", "+CPSI:", CONFIG_EGOLINK_SIM7670_AT_TIMEOUT_MS, response, sizeof(response))) {
-        update_lte_raw(report, "AT+CPSI?", response);
-        parse_cpsi(response, report);
-    }
+    run_lte_status_query(
+        report, &report->cpin_query, "AT+CPIN?", "+CPIN:", response,
+        sizeof(response), parse_cpin);
+    run_lte_status_query(
+        report, &report->cops_query, "AT+COPS?", "+COPS:", response,
+        sizeof(response), parse_cops);
+    run_lte_status_query(
+        report, &report->cereg_query, "AT+CEREG?", "+CEREG:", response,
+        sizeof(response), parse_cereg);
+    run_lte_status_query(
+        report, &report->cgatt_query, "AT+CGATT?", "+CGATT:", response,
+        sizeof(response), parse_cgatt);
+    run_lte_status_query(
+        report, &report->cgdcont_query, "AT+CGDCONT?", "+CGDCONT:",
+        response, sizeof(response), parse_cgdcont);
+    run_lte_status_query(
+        report, &report->cgact_query, "AT+CGACT?", "+CGACT:", response,
+        sizeof(response), parse_cgact);
+    run_lte_status_query(
+        report, &report->cgpaddr_query, "AT+CGPADDR=1", "+CGPADDR:",
+        response, sizeof(response), parse_cgpaddr);
+    run_lte_status_query(
+        report, &report->csq_query, "AT+CSQ", "+CSQ:", response,
+        sizeof(response), parse_csq);
+    run_lte_status_query(
+        report, &report->cpsi_query, "AT+CPSI?", "+CPSI:", response,
+        sizeof(response), parse_cpsi);
     classify_lte_status(report);
     return true;
 #endif
@@ -1683,7 +2820,7 @@ static bool sim7670_lte_http_post_payload(
     if (!sim7670_send_at(
             "AT+HTTPACTION=1",
             "+HTTPACTION:",
-            CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
+            SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
             response,
             sizeof(response))) {
         update_lte_http_raw(result, "AT+HTTPACTION=1", response);
@@ -1854,7 +2991,7 @@ bool sim7670_lte_http_get_json(
     if (!sim7670_send_at(
             "AT+HTTPACTION=0",
             "+HTTPACTION:",
-            CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
+            SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
             response,
             sizeof(response))) {
         update_lte_http_raw(result, "AT+HTTPACTION=0", response);
@@ -2020,7 +3157,7 @@ bool sim7670_lte_http_get_raw(
     if (!sim7670_send_at(
             "AT+HTTPACTION=0",
             "+HTTPACTION:",
-            CONFIG_EGOLINK_SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
+            SIM7670_LTE_HTTP_ACTION_TIMEOUT_MS,
             response,
             sizeof(response))) {
         update_lte_http_raw(result, "AT+HTTPACTION=0", response);
@@ -2081,6 +3218,21 @@ bool sim7670_lte_http_get_raw(
 #endif
 }
 #else
+bool sim7670_at_backend_is_initialized(void)
+{
+    return false;
+}
+
+bool sim7670_at_backend_current_task_is_exclusive_owner(void)
+{
+    return false;
+}
+
+esp_err_t sim7670_at_backend_init_exclusive_current_task(void)
+{
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
 esp_err_t sim7670_gnss_init(void)
 {
     return ESP_ERR_NOT_SUPPORTED;
@@ -2092,10 +3244,57 @@ bool sim7670_gnss_request_location(sim7670_gnss_report_t *report)
     return false;
 }
 
+sim7670_location_bounded_outcome_t
+sim7670_gnss_request_location_bounded(
+    const sim7670_location_bounded_request_t *request,
+    sim7670_gnss_report_t *report,
+    sim7670_location_bounded_result_t *result)
+{
+    (void)request;
+    sim7670_gnss_report_init(report);
+    if (result != NULL) {
+        sim7670_location_bounded_result_init(result);
+        result->outcome =
+            SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        result->reason = SIM7670_LOCATION_BOUNDED_REASON_DRIVER_DISABLED;
+    }
+    return SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+}
+
+sim7670_location_bounded_outcome_t sim7670_gnss_power_off_bounded(
+    const sim7670_location_bounded_request_t *request,
+    sim7670_location_bounded_result_t *result)
+{
+    (void)request;
+    if (result != NULL) {
+        sim7670_location_bounded_result_init(result);
+        result->outcome =
+            SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        result->reason = SIM7670_LOCATION_BOUNDED_REASON_DRIVER_DISABLED;
+    }
+    return SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+}
+
 bool sim7670_lte_query_status(sim7670_lte_report_t *report)
 {
     sim7670_lte_report_init(report);
     return false;
+}
+
+sim7670_location_bounded_outcome_t sim7670_lte_query_status_bounded(
+    const sim7670_location_bounded_request_t *request,
+    sim7670_lte_report_t *report,
+    sim7670_location_bounded_result_t *result)
+{
+    (void)request;
+    sim7670_lte_report_init(report);
+    if (result != NULL) {
+        sim7670_location_bounded_result_init(result);
+        result->outcome =
+            SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        result->reason = SIM7670_LOCATION_BOUNDED_REASON_DRIVER_DISABLED;
+    }
+    return SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
 }
 
 bool sim7670_lte_http_post_json(

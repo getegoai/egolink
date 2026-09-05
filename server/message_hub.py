@@ -31,6 +31,36 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pc_simulator import protocol
+from server.guardian_device_authorization import GuardianDeviceAuthorizer
+from server.guardian_location_page import (
+    GUARDIAN_LOCATION_CSS,
+    GUARDIAN_LOCATION_CSS_PATH,
+    GUARDIAN_LOCATION_HTML,
+    GUARDIAN_LOCATION_JS,
+    GUARDIAN_LOCATION_JS_PATH,
+    GUARDIAN_LOCATION_PATH,
+    GUARDIAN_LOCATION_SECURITY_HEADERS,
+)
+from server.location_delivery_ack import build_location_state_delivery_ack
+from server.location_state_runtime import (
+    LocationStateConflictError,
+    LocationStateRegressionError,
+    LocationStateValidationError,
+)
+from server.location_state_store import LocationStateStore
+from server.manual_sos_delivery_ack import (
+    DELIVERY_SCOPE as MANUAL_SOS_DELIVERY_SCOPE,
+    ManualSosDeliveryAckError,
+    build_manual_sos_delivery_ack,
+)
+from server.manual_sos_store import (
+    MAX_MANUAL_SOS_BODY_BYTES,
+    ManualSosConflictError,
+    ManualSosNotFoundError,
+    ManualSosStore,
+    ManualSosStoreError,
+    ManualSosValidationError,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -349,6 +379,8 @@ class MessageHubStore:
         self._raw_post_fail_once_seen: set[str] = set()
         self._raw_post_fail_once_lock = threading.Lock()
         self._init_schema()
+        self.location_states = LocationStateStore(self.db_path)
+        self.manual_sos = ManualSosStore(self.db_path)
 
     def connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path)
@@ -1564,6 +1596,7 @@ def make_handler(
     store: MessageHubStore,
     *,
     token: str | None = None,
+    guardian_authorizer: GuardianDeviceAuthorizer | None = None,
     product_demo_root: Path = DEFAULT_PRODUCT_DEMO_REPORTS,
     field_results_root: Path = DEFAULT_FIELD_RESULT_REPORTS,
     data_flywheel_root: Path = DEFAULT_DATA_FLYWHEEL_REPORTS,
@@ -1598,28 +1631,231 @@ def make_handler(
                 self.route_get()
             except MessageHubError as error:
                 self.respond_error(error)
+            except ManualSosValidationError:
+                self.respond_error(
+                    MessageHubError(
+                        "invalid_manual_sos",
+                        "manual SOS request rejected",
+                        status=422,
+                    )
+                )
+            except ManualSosNotFoundError:
+                self.respond_error(
+                    MessageHubError(
+                        "manual_sos_not_found",
+                        "manual SOS event was not found",
+                        status=404,
+                    )
+                )
+            except ManualSosStoreError:
+                self.respond_error(
+                    MessageHubError(
+                        "manual_sos_store_error",
+                        "manual SOS durable store is unavailable",
+                        status=500,
+                    )
+                )
+            except (
+                LocationStateConflictError,
+                LocationStateRegressionError,
+                LocationStateValidationError,
+            ) as error:
+                code = (
+                    "location_state_conflict"
+                    if isinstance(error, LocationStateConflictError)
+                    else "location_state_regression"
+                    if isinstance(error, LocationStateRegressionError)
+                    else "invalid_location_state"
+                )
+                self.respond_error(
+                    MessageHubError(
+                        code,
+                        "location state request rejected",
+                        status=409 if code != "invalid_location_state" else 422,
+                    )
+                )
             except Exception as error:  # pragma: no cover - defensive handler boundary.
                 self.respond_error(MessageHubError("server_error", str(error), status=500))
 
         def do_POST(self) -> None:
             try:
-                if not authorized(self.headers.get("Authorization"), token):
+                post_segments = split_path(urlparse(self.path).path)
+                is_manual_sos_ingest = post_segments == [
+                    "api",
+                    "v1",
+                    "safety-events",
+                    "manual-sos",
+                ]
+                is_guardian_sos_ack = (
+                    len(post_segments) == 8
+                    and post_segments[:3] == ["api", "v1", "devices"]
+                    and post_segments[4:6]
+                    == ["safety-events", "manual-sos"]
+                    and post_segments[7] == "guardian-ack"
+                )
+                if (
+                    (
+                        post_segments == ["api", "v1", "location-states"]
+                        or is_manual_sos_ingest
+                    )
+                    and not token
+                ):
+                    raise MessageHubError(
+                        (
+                            "manual_sos_ingest_auth_not_configured"
+                            if is_manual_sos_ingest
+                            else "location_state_auth_not_configured"
+                        ),
+                        (
+                            "manual SOS ingest authentication is not configured"
+                            if is_manual_sos_ingest
+                            else "location state authentication is not configured"
+                        ),
+                        status=503,
+                    )
+                guardian_authorization = (
+                    self.require_guardian_authorization(post_segments[3])
+                    if is_guardian_sos_ack
+                    else None
+                )
+                if (
+                    not is_guardian_sos_ack
+                    and not authorized(self.headers.get("Authorization"), token)
+                ):
                     raise MessageHubError("unauthorized", "missing or invalid bearer token", status=401)
-                self.route_post()
+                self.route_post(guardian_authorization=guardian_authorization)
             except MessageHubError as error:
                 self.respond_error(error)
+            except ManualSosValidationError:
+                self.respond_error(
+                    MessageHubError(
+                        "invalid_manual_sos",
+                        "manual SOS request rejected",
+                        status=422,
+                    )
+                )
+            except ManualSosConflictError:
+                self.respond_error(
+                    MessageHubError(
+                        "manual_sos_conflict",
+                        "manual SOS durable identity conflicts",
+                        status=409,
+                    )
+                )
+            except ManualSosNotFoundError:
+                self.respond_error(
+                    MessageHubError(
+                        "manual_sos_not_found",
+                        "manual SOS event was not found",
+                        status=404,
+                    )
+                )
+            except (ManualSosStoreError, ManualSosDeliveryAckError):
+                self.respond_error(
+                    MessageHubError(
+                        "manual_sos_store_error",
+                        "manual SOS durable operation failed",
+                        status=500,
+                    )
+                )
             except json.JSONDecodeError:
                 self.respond_error(MessageHubError("invalid_json", "request body is not valid JSON"))
+            except (LocationStateConflictError, LocationStateRegressionError, LocationStateValidationError) as error:
+                code = "location_state_conflict" if isinstance(error, LocationStateConflictError) else "location_state_regression" if isinstance(error, LocationStateRegressionError) else "invalid_location_state"
+                self.respond_error(MessageHubError(code, "location state request rejected", status=409 if code != "invalid_location_state" else 422))
             except Exception as error:  # pragma: no cover - defensive handler boundary.
                 self.respond_error(MessageHubError("server_error", str(error), status=500))
+
+        def require_guardian_authorization(self, device_id: str) -> Any:
+            if guardian_authorizer is None:
+                raise MessageHubError(
+                    "guardian_authorization_not_configured",
+                    "Guardian device-binding authorization is not configured",
+                    status=503,
+                )
+            decision = guardian_authorizer.authorize(
+                self.headers.get("Authorization"), device_id
+            )
+            if decision.status == "unauthenticated":
+                raise MessageHubError(
+                    "unauthorized",
+                    "missing or invalid Guardian bearer token",
+                    status=401,
+                )
+            if not decision.authorized:
+                raise MessageHubError(
+                    "forbidden",
+                    "Guardian is not bound to the requested device",
+                    status=403,
+                )
+            return decision
 
         def route_get(self) -> None:
             parsed_url = urlparse(self.path)
             path = parsed_url.path
             query = parse_qs(parsed_url.query, keep_blank_values=True)
             segments = split_path(path)
+            is_location_state_current = (
+                len(segments) == 6
+                and segments[:3] == ["api", "v1", "devices"]
+                and segments[4:] == ["location-state", "current"]
+            )
+            is_manual_sos_latest = (
+                len(segments) == 7
+                and segments[:3] == ["api", "v1", "devices"]
+                and segments[4:]
+                == ["safety-events", "manual-sos", "latest"]
+            )
+            manual_sos_authorization = (
+                self.require_guardian_authorization(segments[3])
+                if is_manual_sos_latest
+                else None
+            )
+            location_authorization = None
+            if is_location_state_current and guardian_authorizer is not None:
+                location_authorization = guardian_authorizer.authorize(
+                    self.headers.get("Authorization"), segments[3]
+                )
+                if location_authorization.status == "unauthenticated":
+                    raise MessageHubError(
+                        "unauthorized",
+                        "missing or invalid Guardian bearer token",
+                        status=401,
+                    )
+                if location_authorization.status != "authorized":
+                    raise MessageHubError(
+                        "forbidden",
+                        "Guardian is not bound to the requested device",
+                        status=403,
+                    )
+            elif is_location_state_current and not token:
+                raise MessageHubError(
+                    "location_state_auth_not_configured",
+                    "location state authentication is not configured",
+                    status=503,
+                )
             if path == "/":
                 self.respond_html(render_dashboard(amap_js_api_key=amap_api_key))
+                return
+            if path == GUARDIAN_LOCATION_PATH:
+                self.respond_html(
+                    GUARDIAN_LOCATION_HTML,
+                    headers=GUARDIAN_LOCATION_SECURITY_HEADERS,
+                )
+                return
+            if path == GUARDIAN_LOCATION_JS_PATH:
+                self.respond_bytes(
+                    GUARDIAN_LOCATION_JS.encode("utf-8"),
+                    content_type="application/javascript; charset=utf-8",
+                    headers=GUARDIAN_LOCATION_SECURITY_HEADERS,
+                )
+                return
+            if path == GUARDIAN_LOCATION_CSS_PATH:
+                self.respond_bytes(
+                    GUARDIAN_LOCATION_CSS.encode("utf-8"),
+                    content_type="text/css; charset=utf-8",
+                    headers=GUARDIAN_LOCATION_SECURITY_HEADERS,
+                )
                 return
             if path == "/d2-reference-capture":
                 self.respond_html(render_d2_reference_capture())
@@ -1636,7 +1872,21 @@ def make_handler(
                     raise MessageHubError("amap_same_origin_required", "same-origin map request required", status=403)
                 self.proxy_amap(path, parsed_url.query, amap_api_key, amap_security_code)
                 return
-            if segments and segments[0] == "api" and not authorized(self.headers.get("Authorization"), token):
+            if (
+                segments
+                and segments[0] == "api"
+                and not (
+                    is_location_state_current
+                    and location_authorization is not None
+                    and location_authorization.authorized
+                )
+                and not (
+                    is_manual_sos_latest
+                    and manual_sos_authorization is not None
+                    and manual_sos_authorization.authorized
+                )
+                and not authorized(self.headers.get("Authorization"), token)
+            ):
                 raise MessageHubError("unauthorized", "missing or invalid bearer token", status=401)
             if path == "/api/state":
                 devices = store.list_devices()
@@ -1712,6 +1962,48 @@ def make_handler(
                 "latest",
             ]:
                 self.respond_json({"telemetry": store.latest_telemetry(segments[3])})
+                return
+            if is_location_state_current:
+                if parsed_url.query:
+                    raise MessageHubError("location_state_query_forbidden", "current location state accepts no query parameters")
+                self.respond_json(
+                    {
+                        "location_state": store.location_states.authenticated_current(
+                            segments[3],
+                            utc_now_ns=time.time_ns(),
+                            location_access_authorized=(
+                                location_authorization is not None
+                                and location_authorization.authorized
+                            ),
+                            authorization_subject=(
+                                location_authorization.guardian_id
+                                if location_authorization is not None
+                                else None
+                            ),
+                        )
+                    },
+                    headers={"Cache-Control": "no-store"},
+                )
+                return
+            if is_manual_sos_latest:
+                if parsed_url.query:
+                    raise MessageHubError(
+                        "manual_sos_query_forbidden",
+                        "latest manual SOS accepts no query parameters",
+                    )
+                self.respond_json(
+                    {
+                        "manual_sos_alert": store.manual_sos.latest_alert(
+                            segments[3],
+                            authorization_subject=(
+                                manual_sos_authorization.guardian_id
+                                if manual_sos_authorization is not None
+                                else ""
+                            ),
+                        )
+                    },
+                    headers={"Cache-Control": "no-store"},
+                )
                 return
             if len(segments) == 6 and segments[:3] == ["api", "v1", "devices"] and segments[4:] == [
                 "telemetry",
@@ -1844,9 +2136,21 @@ def make_handler(
                 return
             raise MessageHubError("not_found", "route not found", status=404)
 
-        def route_post(self) -> None:
+        def route_post(self, *, guardian_authorization: Any = None) -> None:
             parsed_url = urlparse(self.path)
             segments = split_path(parsed_url.path)
+            is_manual_sos_ingest = segments == [
+                "api",
+                "v1",
+                "safety-events",
+                "manual-sos",
+            ]
+            is_guardian_sos_ack = (
+                len(segments) == 8
+                and segments[:3] == ["api", "v1", "devices"]
+                and segments[4:6] == ["safety-events", "manual-sos"]
+                and segments[7] == "guardian-ack"
+            )
             is_location_history_search = (
                 len(segments) == 6
                 and segments[:3] == ["api", "v1", "devices"]
@@ -1857,6 +2161,52 @@ def make_handler(
                     "location_history_query_string_forbidden",
                     "location history search accepts JSON body fields only",
                 )
+            if (is_manual_sos_ingest or is_guardian_sos_ack) and parsed_url.query:
+                raise MessageHubError(
+                    "manual_sos_query_forbidden",
+                    "manual SOS routes accept no query parameters",
+                )
+            if is_manual_sos_ingest:
+                raw_body = self.read_manual_sos_body()
+                ack_time_ms = int(time.time() * 1000)
+                result = store.manual_sos.ingest(
+                    raw_body,
+                    server_receive_time_ms=ack_time_ms,
+                )
+                delivery_ack = build_manual_sos_delivery_ack(
+                    raw_body,
+                    result,
+                    ack_time_ms=ack_time_ms,
+                )
+                self.respond_json(
+                    {
+                        "ok": True,
+                        "result": {"status": result["status"]},
+                        "delivery_ack": delivery_ack,
+                        "delivery_scope": MANUAL_SOS_DELIVERY_SCOPE,
+                    },
+                    headers={"Cache-Control": "no-store"},
+                )
+                return
+            if is_guardian_sos_ack:
+                self.require_empty_request_body()
+                if guardian_authorization is None or not guardian_authorization.authorized:
+                    raise MessageHubError(
+                        "forbidden",
+                        "Guardian authorization is required",
+                        status=403,
+                    )
+                result = store.manual_sos.acknowledge(
+                    segments[3],
+                    segments[6],
+                    guardian_id=guardian_authorization.guardian_id,
+                    acknowledged_at_ms=int(time.time() * 1000),
+                )
+                self.respond_json(
+                    {"ok": True, "guardian_ack": result},
+                    headers={"Cache-Control": "no-store"},
+                )
+                return
             if len(segments) == 5 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "raw-ingest":
                 device_id = segments[3]
                 raw_body = self.read_raw_body()
@@ -1923,6 +2273,32 @@ def make_handler(
                     return
                 self.respond_json({"ok": True, "raw_frame": redact_raw_frame_record(record)})
                 return
+            if segments == ["api", "v1", "location-states"]:
+                raw_body = self.read_raw_body()
+                body = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+                if not isinstance(body, dict):
+                    raise MessageHubError("invalid_json", "request body must be a JSON object")
+                ack_time_ms = int(time.time() * 1000)
+                result = store.location_states.ingest(
+                    body,
+                    server_receive_time_ms=ack_time_ms,
+                )
+                delivery_ack = build_location_state_delivery_ack(
+                    raw_body,
+                    body,
+                    result,
+                    ack_time_ms=ack_time_ms,
+                )
+                self.respond_json(
+                    {
+                        "ok": True,
+                        "result": result,
+                        "delivery_ack": delivery_ack,
+                        "delivery_scope": "server_durable_ingest_only",
+                    },
+                    headers={"Cache-Control": "no-store"},
+                )
+                return
             body = self.read_json_body()
             if segments == ["api", "v1", "devices", "register"]:
                 self.respond_json({"ok": True, "device": store.register_device(body)})
@@ -1968,6 +2344,78 @@ def make_handler(
                 raise MessageHubError("invalid_json", "request body must be a JSON object")
             return value
 
+        def read_manual_sos_body(self) -> bytes:
+            if self.headers.get("Transfer-Encoding") is not None:
+                raise MessageHubError(
+                    "invalid_manual_sos_length",
+                    "manual SOS requires one bounded Content-Length",
+                )
+            lengths = self.headers.get_all("Content-Length") or []
+            if len(lengths) != 1 or not lengths[0].strip().isdigit():
+                raise MessageHubError(
+                    "invalid_manual_sos_length",
+                    "manual SOS requires one bounded Content-Length",
+                )
+            length_text = lengths[0].strip()
+            if len(length_text) > len(str(MAX_MANUAL_SOS_BODY_BYTES)):
+                raise MessageHubError(
+                    "manual_sos_body_too_large",
+                    "manual SOS request body is too large",
+                    status=413,
+                )
+            length = int(length_text)
+            if length <= 0:
+                raise MessageHubError(
+                    "invalid_manual_sos_length",
+                    "manual SOS body must be nonempty",
+                )
+            if length > MAX_MANUAL_SOS_BODY_BYTES:
+                raise MessageHubError(
+                    "manual_sos_body_too_large",
+                    "manual SOS request body is too large",
+                    status=413,
+                )
+            raw_body = self.rfile.read(length)
+            if len(raw_body) != length:
+                raise MessageHubError(
+                    "incomplete_manual_sos_body",
+                    "manual SOS body ended before Content-Length",
+                )
+            media_type = str(self.headers.get("Content-Type") or "").split(
+                ";", 1
+            )[0].strip().lower()
+            if media_type != "application/json":
+                raise MessageHubError(
+                    "manual_sos_content_type_required",
+                    "manual SOS requires application/json",
+                    status=415,
+                )
+            return raw_body
+
+        def require_empty_request_body(self) -> None:
+            if self.headers.get("Transfer-Encoding") is not None:
+                raise MessageHubError(
+                    "guardian_ack_body_forbidden",
+                    "Guardian acknowledgement accepts no request body",
+                )
+            lengths = self.headers.get_all("Content-Length") or []
+            if len(lengths) > 1:
+                raise MessageHubError(
+                    "guardian_ack_body_forbidden",
+                    "Guardian acknowledgement accepts no request body",
+                )
+            if lengths:
+                value = lengths[0].strip()
+                if (
+                    not value.isdigit()
+                    or len(value) > 1
+                    or int(value) != 0
+                ):
+                    raise MessageHubError(
+                        "guardian_ack_body_forbidden",
+                        "Guardian acknowledgement accepts no request body",
+                    )
+
         def read_raw_body(self) -> bytes:
             length = int(self.headers.get("Content-Length") or "0")
             if length <= 0:
@@ -1992,11 +2440,19 @@ def make_handler(
             self.end_headers()
             self.wfile.write(body)
 
-        def respond_html(self, html: str, status: int = 200) -> None:
+        def respond_html(
+            self,
+            html: str,
+            status: int = 200,
+            *,
+            headers: dict[str, str] | None = None,
+        ) -> None:
             body = html.encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
             self.end_headers()
             self.wfile.write(body)
 
@@ -2017,9 +2473,13 @@ def make_handler(
             self.wfile.write(body)
 
         def respond_error(self, error: MessageHubError) -> None:
+            error_path = urlparse(self.path).path
             headers = (
                 {"Cache-Control": "no-store"}
-                if urlparse(self.path).path.endswith("/locations/search")
+                if error_path.endswith("/locations/search")
+                or error_path.endswith("/location-state/current")
+                or "/safety-events/manual-sos" in error_path
+                or error_path == "/api/v1/safety-events/manual-sos"
                 else None
             )
             self.respond_json(
@@ -2418,6 +2878,23 @@ def parse_raw_frame_record(
         if parse_result["status"] != "ok":
             record["parse_result"] = parse_result
             return record
+        lineage_error = validate_raw_frame_lineage(
+            kv_payload,
+            header_seq_value=fields.get("seq"),
+        )
+        if lineage_error is not None:
+            error_code, reason = lineage_error
+            parse_result.update(
+                {
+                    "transport_status": "ok",
+                    "status": "malformed",
+                    "error_code": error_code,
+                    "reason": reason,
+                    "derived_message_type": "unknown",
+                }
+            )
+            record["parse_result"] = parse_result
+            return record
         derived = derive_raw_frame_message(record, kv_payload, expected_cmd_id=expected_cmd_id)
         parse_result.update(
             {
@@ -2533,6 +3010,66 @@ def parse_optional_int(value: Any) -> int | None:
         return int(str(value), 10)
     except ValueError:
         return None
+
+
+def validate_raw_frame_lineage(
+    kv_payload: dict[str, str],
+    *,
+    header_seq_value: Any = None,
+) -> tuple[str, str] | None:
+    """Reject unusable lineage before a raw frame becomes a derived event."""
+
+    payload_seq_value = kv_payload.get("seq")
+    parsed_sequences: dict[str, int] = {}
+    for source, seq_value in (
+        ("payload", payload_seq_value),
+        ("header", header_seq_value),
+    ):
+        if seq_value not in (None, ""):
+            seq = parse_optional_int(seq_value)
+            if seq is None or seq < 0:
+                return (
+                    "RAW_FRAME_INVALID_SEQUENCE",
+                    f"raw frame {source} seq must be a non-negative integer",
+                )
+            parsed_sequences[source] = seq
+    if (
+        "payload" in parsed_sequences
+        and "header" in parsed_sequences
+        and parsed_sequences["payload"] != parsed_sequences["header"]
+    ):
+        return (
+            "RAW_FRAME_SEQUENCE_MISMATCH",
+            "raw frame EGLK header seq does not match payload seq",
+        )
+
+    boot_value = kv_payload.get("boot-count")
+    if boot_value not in (None, ""):
+        boot_count = parse_optional_int(boot_value)
+        if boot_count is None or boot_count < 0 or boot_count > 2**32 - 1:
+            return (
+                "RAW_FRAME_INVALID_BOOT_COUNT",
+                "raw frame boot_count must be an unsigned 32-bit integer",
+            )
+
+    timestamp = kv_payload.get("ts")
+    if timestamp not in (None, ""):
+        uptime_match = re.fullmatch(r"uptime_ms:([0-9]+)", timestamp)
+        if uptime_match is not None:
+            if int(uptime_match.group(1)) <= 2**63 - 1:
+                return None
+        else:
+            try:
+                parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            except ValueError:
+                parsed = None
+            if parsed is not None and parsed.tzinfo is not None and parsed.utcoffset() is not None:
+                return None
+        return (
+            "RAW_FRAME_INVALID_TIMESTAMP",
+            "raw frame ts must be valid uptime_ms:<non-negative-int64> or timezone-aware ISO-8601",
+        )
+    return None
 
 
 def validate_raw_frame_header(
@@ -3182,6 +3719,7 @@ def derive_raw_frame_message(
         "fw_version": first_known(record.get("fw_version"), kv_payload.get("fw-version"), "unknown"),
         "seq": seq,
         "ts": first_known(kv_payload.get("ts"), f"raw_frame:{record['frame_id']}"),
+        "boot_count": parse_optional_int(kv_payload.get("boot-count")),
         "test_run_id": record.get("test_run_id") or kv_payload.get("test-run-id"),
         "raw_frame": {
             "frame_id": record["frame_id"],
@@ -8993,7 +9531,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         <div class="history-browser-head">
           <div>
             <h3 id="locationHistoryTitle">全部定位历史</h3>
-            <div class="history-browser-note">按当前设备查询数据库快照；未定位或坐标合同未验证的记录也会列出，但不能勾选。查询条件和选择只保存在当前页面内存中。</div>
+            <div class="history-browser-note">按当前设备查询数据库快照；未定位或坐标合同未验证的记录也会列出，但不能勾选。查询条件和选择仅保存在当前页面内存中。地图只按定位时间顺序直线连接所选采样点，不代表实际行走路线；地图一次最多显示 200 点，高德坐标每批最多转换 40 点，优先保留显式历史选择。此处不作定位精度声明。</div>
           </div>
           <span id="historySelectionLabel" class="history-selection-label">地图已选 0 / 最多 200 点</span>
         </div>
@@ -9498,16 +10036,25 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     function isoFromHistoryControl(controlId) {
       const raw = document.getElementById(controlId).value;
       if (!raw) return null;
-      // datetime-local inputs produce values like "2024-01-15T10:30" with no timezone.
-      // Append the local timezone offset so the Date constructor always interprets it as local time,
-      // then toISOString() correctly converts to UTC.
-      const localOffset = -new Date().getTimezoneOffset();
-      const sign = localOffset >= 0 ? '+' : '-';
-      const pad = (n) => String(Math.floor(Math.abs(n))).padStart(2, '0');
-      const offsetString = `UTC${sign}${pad(localOffset / 60)}:${pad(localOffset % 60)}`;
-      const withOffset = raw.includes('Z') || raw.includes('UTC') || raw.match(/[+-]\\d{2}:\\d{2}$/) ? raw : raw + offsetString;
-      const parsed = new Date(withOffset);
+      // Build the selected wall-clock time in the browser's local zone. The
+      // Date constructor applies the offset for that selected date, so a
+      // historical winter query is not shifted by today's summer/DST offset.
+      const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d{1,3}))?)?$/.exec(raw);
+      if (!match) throw new Error('时间格式无效');
+      const parts = match.slice(1, 7).map((value) => Number(value || 0));
+      const milliseconds = Number((match[7] || '').padEnd(3, '0') || 0);
+      const parsed = new Date(
+        parts[0], parts[1] - 1, parts[2], parts[3], parts[4], parts[5], milliseconds,
+      );
       if (!Number.isFinite(parsed.getTime())) throw new Error('时间格式无效');
+      if (
+        parsed.getFullYear() !== parts[0]
+        || parsed.getMonth() !== parts[1] - 1
+        || parsed.getDate() !== parts[2]
+        || parsed.getHours() !== parts[3]
+        || parsed.getMinutes() !== parts[4]
+        || parsed.getSeconds() !== parts[5]
+      ) throw new Error('时间格式无效或本地时间不存在');
       return parsed.toISOString();
     }
     function locationHistoryFiltersFromControls() {
@@ -9609,6 +10156,12 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       }
       const context = trajectorySelectionContext(selectedDevice);
       selectionLabel.textContent = `地图已选 ${context.selectedPoints.length} / 最多 ${TRAJECTORY_RENDER_POINT_LIMIT} 点 · 历史勾选 ${state.selectedRecords.size} 条`;
+      const selectAll = document.getElementById('historySelectAll');
+      const selectableRecords = state.records.filter(record => locationHistoryPoint(record));
+      const selectedOnPage = selectableRecords.filter(record => state.selectedRecords.has(record.record_id)).length;
+      selectAll.disabled = selectableRecords.length === 0;
+      selectAll.checked = selectableRecords.length > 0 && selectedOnPage === selectableRecords.length;
+      selectAll.indeterminate = selectedOnPage > 0 && selectedOnPage < selectableRecords.length;
       const rowHtml = state.records.map(record => {
         const point = locationHistoryPoint(record);
         const checked = state.selectedRecords.has(record.record_id) ? ' checked' : '';
@@ -9826,6 +10379,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
           }
         }
       });
+      rerenderTrajectorySelection(selectedDevice);
       renderLocationHistory(selectedDevice);
     });
     document.getElementById('resetLocationHistory').addEventListener('click', () => {
@@ -11946,6 +12500,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="EGOLINK_MESSAGE_HUB_TOKEN",
         help="Environment variable containing the optional bearer token.",
     )
+    parser.add_argument(
+        "--guardian-bindings-env",
+        default="EGOLINK_GUARDIAN_BINDINGS_FILE",
+        help=(
+            "Environment variable containing the path to a hashed "
+            "Guardian-device binding file."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -11953,13 +12515,30 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     store = MessageHubStore(args.db)
     token = os.environ.get(args.token_env) or None
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(store, token=token))
+    guardian_bindings_path = os.environ.get(args.guardian_bindings_env) or None
+    guardian_authorizer = (
+        GuardianDeviceAuthorizer.from_file(Path(guardian_bindings_path))
+        if guardian_bindings_path is not None
+        else None
+    )
+    server = ThreadingHTTPServer(
+        (args.host, args.port),
+        make_handler(
+            store,
+            token=token,
+            guardian_authorizer=guardian_authorizer,
+        ),
+    )
     print(f"Ego Link Message Hub running at http://{args.host}:{args.port}")
     print(f"SQLite database: {args.db}")
     if token:
         print("Bearer token authentication: enabled")
     else:
         print("Bearer token authentication: disabled")
+    if guardian_authorizer is not None:
+        print("Guardian-device binding authorization: enabled")
+    else:
+        print("Guardian-device binding authorization: disabled")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

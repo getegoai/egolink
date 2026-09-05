@@ -1,0 +1,19 @@
+menu "Ego Link LOC-021Q SIM7670 location modem owner"
+
+config EGOLINK_SIM7670_LOCATION_MODEM_OWNER_ENABLED
+    bool "Enable the LOC-021Q exclusive SIM7670 location modem owner"
+    default n
+    depends on EGOLINK_SIM7670_GNSS_ENABLED && EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    depends on !EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    depends on !EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    depends on !EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+    depends on !EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED
+    help
+        Compile-only boundary for the dormant LOC-021Q owner component.
+        Runtime start is still explicit and the component is not wired into
+        app_main. These exclusions remove several known legacy modem modes,
+        but LTE status itself still has direct callers in the current app.
+        A later live profile must prove that every such caller is unreachable
+        before it may start this exclusive owner.
+
+endmenu

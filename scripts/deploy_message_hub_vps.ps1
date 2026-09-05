@@ -34,12 +34,17 @@ if ($Public -and $ListenHost -eq "127.0.0.1") {
     $ListenHost = "0.0.0.0"
 }
 
-if ($ListenHost -eq "0.0.0.0" -and -not $env:EGOLINK_MESSAGE_HUB_TOKEN) {
-    throw "Public listen requires EGOLINK_MESSAGE_HUB_TOKEN in the local environment. Do not commit this token."
+$loopbackListenHosts = @("127.0.0.1", "::1", "localhost")
+if ($Public -or $loopbackListenHosts -notcontains $ListenHost) {
+    throw (
+        "OPS-004 refuses public/plaintext Message Hub binding. " +
+        "Keep the service on loopback and expose it only through the reviewed Nginx HTTPS virtual host."
+    )
 }
 
 $managedRuntimeEnvironmentNames = @(
     "EGOLINK_MESSAGE_HUB_TOKEN",
+    "EGOLINK_GUARDIAN_BINDINGS_FILE",
     "EGOLINK_AMAP_JS_API_KEY",
     "EGOLINK_AMAP_SECURITY_JS_CODE"
 )
@@ -506,8 +511,11 @@ try {
     Copy-RelativePath "docs\generated\progress_board.json"
     Copy-RelativePath "pc_simulator\__init__.py"
     Copy-RelativePath "pc_simulator\protocol.py"
+    Copy-RelativePath "pc_simulator\sensor_policy_v0.py"
+    Copy-RelativePath "pc_simulator\location_engine_v0.py"
     Copy-RelativePath "scripts\run_message_hub.py"
     Copy-RelativePath "shared\contracts"
+    Copy-RelativePath "shared\config\sensor_policy_v0.json"
     Copy-RelativePath "README.md"
     if ($IncludeFieldReportSummaries) {
         Copy-FieldReportSummaries
@@ -637,7 +645,7 @@ systemctl --no-pager --full status egolink-message-hub.service || true
 
     Write-Host "Deployed Ego Link Message Hub to ${User}@${HostName}:${RemoteDir}"
     Write-Host "Service: egolink-message-hub.service"
-    Write-Host "Listen: $ListenHost`:$Port"
+    Write-Host "Listen: $ListenHost`:$Port (loopback-only; public ingress is HTTPS via Nginx)"
 } finally {
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $packageRoot
     Remove-Item -Force -ErrorAction SilentlyContinue $archive

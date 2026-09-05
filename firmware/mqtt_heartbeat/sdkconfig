@@ -583,9 +583,27 @@ CONFIG_EGOLINK_PLATFORM_IMU_BOOT_SAMPLE_COUNT=0
 # end of Ego Link platform IMU
 
 #
+# Ego Link platform power
+#
+CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MOCK=y
+# CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048 is not set
+# end of Ego Link platform power
+
+#
 # Ego Link SIM7670G GNSS
 #
 # end of Ego Link SIM7670G GNSS
+
+#
+# Ego Link LOC-021Q SIM7670 location modem owner
+#
+# end of Ego Link LOC-021Q SIM7670 location modem owner
+
+#
+# EgoLink SIM7670 P0 delivery adapter
+#
+# CONFIG_EGOLINK_SIM7670_P0_DELIVERY_TEST_DRIVER_ENABLED is not set
+# end of EgoLink SIM7670 P0 delivery adapter
 
 #
 # Compiler options

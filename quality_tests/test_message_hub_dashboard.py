@@ -132,7 +132,7 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("数据闭环", html)
         self.assertIn("项目进度", html)
 
-    def test_dashboard_is_chinese_first_and_exposes_recent_trusted_trajectory(self) -> None:
+    def test_dashboard_is_chinese_first_and_exposes_trusted_history_trajectory(self) -> None:
         html = message_hub.render_dashboard(amap_js_api_key="public_JS_key_1234")
 
         for marker in (
@@ -140,16 +140,18 @@ class MessageHubDashboardTests(unittest.TestCase):
             "EgoLink 定位看板",
             "位置与历史轨迹",
             "当前设备",
-            "最近可信轨迹",
-            'id="trajectoryPanel"',
+            "全部定位历史",
+            'id="locationHistoryBrowser"',
+            'id="historySelectAll"',
             'hidden aria-hidden="true" data-dashboard-contract-labels="legacy-en"',
-            "最多 24",
-            "所选起点",
-            "所选终点",
             "最后可信位置",
             "当前为预测状态；地图显示最后可信位置",
             "当前 GNSS 未定位，暂无可信轨迹",
             "最后位置缺少可信坐标，暂不显示",
+            "地图只按定位时间顺序直线连接所选采样点，不代表实际行走路线",
+            "一次最多显示 200 点",
+            "高德坐标每批最多转换 40 点",
+            "优先保留显式历史选择",
             "此处不作定位精度声明",
             ".amap-start-marker",
             ".amap-history-marker",
@@ -169,15 +171,11 @@ class MessageHubDashboardTests(unittest.TestCase):
         ):
             self.assertIn(marker, html)
         self.assertIn("currentTime - previousTime > maxGapMs", html)
-        self.assertIn("trajectorySegments(selectedPoints).filter(segment => segment.length >= 2).length", html)
-        self.assertIn("可见轨迹段", html)
         self.assertIn('id="refreshDashboard"', html)
         self.assertIn("页面不会自动重建", html)
-        self.assertIn("data-trajectory-action=\"all\"", html)
-        self.assertIn("data-trajectory-action=\"clear\"", html)
-        self.assertIn("data-trajectory-action=\"follow\"", html)
         self.assertIn("trajectorySelectionByDevice", html)
         self.assertIn("选择仅保存在当前页面内存中", html)
+        self.assertNotIn('id="trajectoryPanel"', html)
         self.assertIn("overview.classList.toggle('provider-map-active', !visible)", html)
         self.assertIn('id="locationMapGrid" class="location-map-grid provider-map-hidden"', html)
         self.assertIn("locationGrid.classList.toggle('provider-map-hidden', visible)", html)
@@ -383,6 +381,14 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("boundedTrajectorySelection(\n        quickSelectedPoints,\n        historySelectedRecords", html)
         self.assertIn("history_record_id: record.record_id", html)
 
+        time_start = html.index("function isoFromHistoryControl")
+        time_end = html.index("function locationHistoryFiltersFromControls", time_start)
+        time_function = html[time_start:time_end]
+        self.assertIn("const parsed = new Date(", time_function)
+        self.assertIn("parsed.getFullYear() !== parts[0]", time_function)
+        self.assertNotIn("new Date().getTimezoneOffset()", time_function)
+        self.assertNotIn("offsetString", time_function)
+
         request_start = html.index("async function loadLocationHistory")
         request_end = html.index("function renderSelectedDevicePanels", request_start)
         request_function = html[request_start:request_end]
@@ -480,21 +486,18 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn("projectedHistory.size > TRAJECTORY_RENDER_POINT_LIMIT", history)
         self.assertIn("state.selectedRecords.set(record.record_id, point)", history)
 
-        panel_start = html.index("function recentTrajectoryPanel")
-        panel_end = html.index("function updateTrajectoryMaps", panel_start)
-        panel = html[panel_start:panel_end]
-        self.assertIn("优先保留显式历史选择", panel)
-        self.assertIn("context.quickSuppressedCount", panel)
-        self.assertIn("context.historySuppressedCount", panel)
-        self.assertIn("条超限历史选择未显示", panel)
-        self.assertIn(
-            "!points.length && selectedPoints.length",
-            panel,
-        )
-        self.assertIn(
-            "当前无可信实时定位；正在显示 ${selectedPoints.length} 个已选历史可信点",
-            panel,
-        )
+        self.assertIn("优先保留显式历史选择", html)
+        select_all_start = html.index("document.getElementById('historySelectAll').addEventListener")
+        select_all_end = html.index("document.getElementById('resetLocationHistory')", select_all_start)
+        select_all = html[select_all_start:select_all_end]
+        self.assertIn("state.selectedRecords.size < TRAJECTORY_RENDER_POINT_LIMIT", select_all)
+        self.assertIn("rerenderTrajectorySelection(selectedDevice)", select_all)
+
+        history_start = html.index("function renderLocationHistory")
+        history_end = html.index("async function loadLocationHistory", history_start)
+        history = html[history_start:history_end]
+        self.assertIn("selectAll.checked", history)
+        self.assertIn("selectAll.indeterminate", history)
 
         amap_start = html.index("async function renderAmapForSelectedDevice")
         amap_end = html.index("function d1LinkPanel", amap_start)

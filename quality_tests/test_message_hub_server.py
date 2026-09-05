@@ -947,6 +947,8 @@ class MessageHubStoreTests(unittest.TestCase):
                 "fw_version=0.1.0-lte004-raw-lte-location\n"
                 "test_run_id=raw-location-test\n"
                 "seq=42\n"
+                "boot_count=27\n"
+                "ts=uptime_ms:123400\n"
                 "source=sim7670g_firmware_gnss\n"
                 "source_status=unverified\n"
                 "fix=false\n"
@@ -977,6 +979,8 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(record["parse_result"]["derived_message_type"], "event")
         self.assertEqual(history[0]["event_type"], "location_report")
         self.assertEqual(history[0]["test_run_id"], "raw-location-test")
+        self.assertEqual(history[0]["boot_count"], 27)
+        self.assertEqual(history[0]["ts"], "uptime_ms:123400")
         self.assertIs(history[0]["fix"], False)
         self.assertIsNone(history[0].get("lat"))
         self.assertEqual(history[0]["gnss_state"], "no_fix")
@@ -989,6 +993,71 @@ class MessageHubStoreTests(unittest.TestCase):
         self.assertEqual(device["location_memory"]["reason"], "gnss_no_fix_no_location_memory")
         self.assertEqual(exported["raw_frames"][0]["frame_id"], "loc-cmd-raw-location")
         self.assertTrue(exported["raw_frames"][0]["raw_payload"]["data_redacted"])
+
+    def test_raw_event_rejects_unusable_lineage_before_derivation(self) -> None:
+        cases = (
+            ("boot_count=-1", "RAW_FRAME_INVALID_BOOT_COUNT"),
+            ("boot_count=4294967296", "RAW_FRAME_INVALID_BOOT_COUNT"),
+            ("boot_count=not-an-int", "RAW_FRAME_INVALID_BOOT_COUNT"),
+            ("ts=garbage", "RAW_FRAME_INVALID_TIMESTAMP"),
+            ("ts=2026-99-99T99:99:99Z", "RAW_FRAME_INVALID_TIMESTAMP"),
+            ("seq=-1", "RAW_FRAME_INVALID_SEQUENCE"),
+        )
+        for index, (invalid_line, expected_code) in enumerate(cases):
+            with self.subTest(invalid_line=invalid_line), tempfile.TemporaryDirectory() as tmp:
+                store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+                payload = (
+                    "event_type=location_report\n"
+                    "priority=normal\n"
+                    "seq=42\n"
+                    "boot_count=27\n"
+                    "ts=uptime_ms:123400\n"
+                    "source=sim7670g_firmware_gnss\n"
+                    "fix=false\n"
+                    f"{invalid_line}\n"
+                ).encode("utf-8")
+                frame = message_hub.build_raw_frame(
+                    "event",
+                    f"loc-invalid-lineage-{index}",
+                    payload,
+                )
+                record = store.ingest_raw_frame("ego-link-001", frame)
+                history = store.telemetry_history("ego-link-001")
+
+            self.assertEqual(record["parse_result"]["status"], "malformed")
+            self.assertEqual(record["parse_result"]["error_code"], expected_code)
+            self.assertEqual(record["parse_result"]["derived_message_type"], "unknown")
+            self.assertNotIn("derived_message", record["parse_result"])
+            self.assertEqual(history, [])
+
+    def test_raw_event_rejects_header_payload_sequence_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = message_hub.MessageHubStore(Path(tmp) / "hub.db")
+            payload = (
+                "event_type=location_report\n"
+                "priority=normal\n"
+                "seq=42\n"
+                "boot_count=27\n"
+                "ts=uptime_ms:123400\n"
+                "source=sim7670g_firmware_gnss\n"
+                "fix=false\n"
+            ).encode("utf-8")
+            frame = message_hub.build_raw_frame(
+                "event",
+                "loc-seq-mismatch",
+                payload,
+                seq=99,
+            )
+            record = store.ingest_raw_frame("ego-link-001", frame)
+            history = store.telemetry_history("ego-link-001")
+
+        self.assertEqual(record["parse_result"]["status"], "malformed")
+        self.assertEqual(
+            record["parse_result"]["error_code"],
+            "RAW_FRAME_SEQUENCE_MISMATCH",
+        )
+        self.assertNotIn("derived_message", record["parse_result"])
+        self.assertEqual(history, [])
 
     def test_raw_location_observation_derives_cell_lte_after_raw_storage(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

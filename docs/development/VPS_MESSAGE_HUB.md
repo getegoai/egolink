@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-14
+last_verified: 2026-09-02
 verified_by: codex
 ---
 
@@ -40,6 +40,38 @@ The VPS Message Hub is not responsible for:
 - calling a cloud LLM as the core safety path;
 - treating USB serial logs as formal runtime evidence.
 
+## Minimum Guardian Device Binding
+
+The current code has an additive, default-off P0 authorization boundary for
+the exact-location read route. When `EGOLINK_GUARDIAN_BINDINGS_FILE` names a
+valid `egolink.guardian_device_bindings.v0.1` JSON file, a Guardian bearer
+token may read only the devices listed for its binding. The file contains only
+lowercase SHA-256 token digests; plaintext Guardian tokens must remain in the
+client/secret-provisioning boundary. Device-ingest authentication remains the
+separate `EGOLINK_MESSAGE_HUB_TOKEN`, and a Guardian token cannot access other
+Message Hub APIs.
+
+If the binding file is absent, the existing single-token current-state route
+remains coordinate-redacted. If it is malformed, startup fails closed. A
+missing/invalid Guardian token returns `401`; a valid Guardian token requesting
+an unbound device returns `403` without returning location state. Query-string
+flags cannot grant coordinate access. Responses remain `no-store`.
+
+`GET /guardian-location` is the matching minimum human test surface. The page
+contains no credentials or device data. It sends the entered Guardian token in
+the `Authorization` header of one same-origin request, never in the URL or Web
+Storage, clears the password field immediately, and renders returned values as
+text. Its strict CSP permits only its same-origin script, stylesheet and API
+request; it disables camera, microphone and browser geolocation. This is an
+engineering acceptance surface for location belief/source, position, age,
+accuracy, confidence, uncertainty, battery, SOS and stale/offline state—not a
+map, polished App or product account flow.
+
+This is a minimum local/VPS authorization seam, not complete account security:
+token generation/rotation/revocation, rate limiting, client secure storage,
+provisioning audit, deletion/export consent, multi-tenant administration and a
+deployed penetration review remain open before sale.
+
 `location_memory` is a P0 engineering exception, not a permanent product
 ownership decision. Personal known places, common routes, GNSS-bad zones, and
 long-term location memory must migrate to the device or local Ego Base by
@@ -61,11 +93,20 @@ key contents in repository files or command arguments.
 
 ### Public Dashboard Entry
 
-The official human-facing entry is `https://ego.example.invalid/`. Nginx terminates
-TLS and proxies the complete same-origin Dashboard/API surface to the Message
-Hub on loopback port `8790`. HTTP on the domain redirects to HTTPS. Port `8790`
-remains the P0 compatibility endpoint for existing device firmware and is not
-the preferred browser entry.
+The official human-facing and target device-ingress entry is
+`https://ego.example.invalid/`. Nginx terminates TLS and proxies the complete
+same-origin Dashboard/API surface to the Message Hub on loopback port `8790`.
+Ordinary browser HTTP redirects to HTTPS, while plaintext `/api/`, Dashboard
+WebSocket, and exact AMap coordinate-conversion requests fail with `426` and
+never reach the upstream. The tracked OPS-004 deployment path refuses
+non-loopback Message Hub bindings.
+
+OPS-004 is currently a static, not-deployed candidate. Before its separately
+authorized migration, the live binding and firewall state of port `8790` must
+be observed rather than inferred. The target configuration has no public
+plaintext compatibility endpoint. A legacy device that cannot verify TLS
+must retain its queued record and report transport unavailable; it must not
+send a bearer credential or location payload over plaintext.
 
 The reproducible virtual-host sources are:
 
@@ -132,10 +173,35 @@ deploy and restart the Message Hub, verify the provider and fallback paths,
 then revoke the old credential in the AMap console. Never record credential
 values, partial values, hashes, or fingerprints in task packets or evidence.
 
+## OPS-004 Authenticated TLS Boundary
+
+The target firmware base origin is exactly `https://ego.example.invalid`, with an
+independently configured expected host of `ego.example.invalid`. The ESP-IDF HTTP
+path attaches the built-in CA bundle, keeps hostname checking enabled, disables
+automatic redirects, rejects missing or malformed bearer tokens, and rejects
+plaintext, unexpected authority, explicit port, userinfo, path, query, or
+fragment before network and sensor startup.
+
+Current SIMCom documentation describes CA trust, server authentication, SNI,
+local-time checking and certificate common-name checking for qualifying
+SIM76XX firmware. The exact SIM7670G firmware and its negative behavior remain
+unverified, so the current OPS-004 firmware preflight still stops the modem AT
+HTTP path before network startup or payload transmission. An `https://` string
+or documented command is not peer-verification evidence. The bounded,
+query-only `tls-capability` diagnostic must run first under fresh operator
+authorization; provisioning and wrong-CA/hostname/time/SNI rejection require a
+separate no-credential hardware test before this path can be enabled.
+
+The only plaintext engineering fallback is a diagnostic `GET /health` with no
+bearer token, body, device command, or location. It requires an explicit UTC
+expiry no more than one hour in the future and is always marked
+`production_acceptable=false`. It cannot satisfy an OPS-004 or product Gate.
+
 ## Transport Options
 
-P0 may start with either HTTP polling or MQTT, but the implementation must keep
-a transport boundary so later migration is possible.
+The implementation keeps a transport boundary so later MQTT-over-TLS migration
+remains possible. Authenticated device ingress must use a peer-verified secure
+transport; plaintext HTTP is historical engineering evidence only.
 
 Recommended shape:
 
@@ -163,6 +229,30 @@ Existing `egolink.p0.v1` JSON endpoints may remain for PC simulator, Web, and
 legacy firmware compatibility. Raw-frame endpoints or content negotiation
 should be additive.
 
+LOC-021 adds the versioned `egolink.location_state_envelope.v0.1` contract for
+device-derived Location Engine state. Its source-event clock and boot/session/
+sequence identity own ordering; the Message Hub's receive timestamp is only
+transport evidence. LOC-021C adds an authenticated bounded JSON ingest route
+and authenticated current-state route backed by the additive SQLite timeline.
+The existing single bearer token cannot establish Guardian-device binding, so
+exact coordinates remain redacted and no query parameter can unlock them. UTC
+event clocks may be compared with current server UTC; boot-monotonic freshness
+remains unavailable without a trustworthy mapping. Receive time substitutes
+for neither source clock.
+
+An accepted location-state POST now returns an additive
+`egolink.persistent_priority_outbox.ack.v0.1` object in `delivery_ack`. The ACK
+is created only after the SQLite transaction has durably accepted the envelope
+or confirmed an exact idempotent duplicate. Its `payload_sha256` hashes the
+exact request bytes without JSON re-encoding; the device adapter must persist
+and resend those same bytes. The matching bounded outbox event ID is
+`loc-<payload_sha256>`. HTTP status alone never authorizes deletion. The
+response explicitly labels its scope `server_durable_ingest_only`: it does not
+claim Guardian display, human acknowledgement, freshness or P0 acceptance, and
+it never echoes the location state or coordinates. Device and session IDs use
+the shared outbox-safe ASCII `1..128` identifier subset so the envelope and
+durable queue cannot disagree at runtime.
+
 ## Minimal HTTP API
 
 ```text
@@ -171,6 +261,7 @@ POST /api/v1/devices/{device_id}/heartbeat
 POST /api/v1/devices/{device_id}/telemetry
 POST /api/v1/devices/{device_id}/ack
 POST /api/v1/devices/{device_id}/error
+POST /api/v1/location-states
 POST /api/v1/devices/{device_id}/raw-ingest
 GET  /api/v1/devices/{device_id}/commands/poll
 GET  /api/v1/devices/{device_id}/commands/poll.raw
@@ -181,6 +272,7 @@ GET  /api/v1/devices
 GET  /api/v1/devices/{device_id}
 GET  /api/v1/devices/{device_id}/telemetry/latest
 GET  /api/v1/devices/{device_id}/telemetry/history
+GET  /api/v1/devices/{device_id}/location-state/current
 GET  /api/v1/devices/{device_id}/raw-frames
 GET  /api/v1/devices/{device_id}/field-export?started_at=...&ended_at=...
 POST /api/v1/devices/{device_id}/commands
@@ -192,6 +284,7 @@ GET  /api/v1/test-runs/{test_run_id}/export
 GET  /api/v1/product-demo/latest
 GET  /api/v1/progress/latest
 
+GET  /guardian-location
 GET  /health
 WS   /ws/dashboard
 ```
@@ -267,7 +360,7 @@ P0 minimum:
 - server requests authenticate the device token;
 - repository examples use `.env.example` and fake values only.
 
-HTTP may use:
+HTTPS uses:
 
 ```text
 Authorization: Bearer <device_token>

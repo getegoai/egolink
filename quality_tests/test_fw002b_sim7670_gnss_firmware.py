@@ -144,7 +144,10 @@ class FW002BSim7670GnssFirmwareTests(unittest.TestCase):
             "at_unreachable",
             "uart_init_failed",
             "no_fix",
-            'report->fix ? "observed" : "unverified"',
+            'set_status(report, "no_fix", "observed")',
+            'set_status(report, "query_unverified", "unverified")',
+            "location_result_valid",
+            "no_fix_observed",
         ]:
             with self.subTest(token=token):
                 self.assertIn(token, combined)

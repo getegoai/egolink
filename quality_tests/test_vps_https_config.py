@@ -10,6 +10,11 @@ HTTPS_CONFIG = REPO_ROOT / "scripts" / "ops" / "nginx" / "ego.example.invalid.co
 RENEWAL_HOOK = (
     REPO_ROOT / "scripts" / "ops" / "certbot" / "10-egolink-nginx-reload.sh"
 )
+DEPLOY_SCRIPT = REPO_ROOT / "scripts" / "deploy_message_hub_vps.ps1"
+FIRMWARE_KCONFIG = REPO_ROOT / "firmware" / "mqtt_heartbeat" / "main" / "Kconfig.projbuild"
+FIRMWARE_SOURCE = REPO_ROOT / "firmware" / "mqtt_heartbeat" / "main" / "app_main.c"
+FIRMWARE_DEFAULTS = REPO_ROOT / "firmware" / "mqtt_heartbeat" / "sdkconfig.vps_http.defaults.example"
+FT001B_RUNNER = REPO_ROOT / "tools" / "run_ft001b_imu_burst.py"
 AMAP_COORDINATE_PATH = "/_AMapService/v3/assistant/coordinate/convert"
 
 
@@ -75,6 +80,18 @@ class VpsHttpsConfigTests(unittest.TestCase):
         self.assertNotIn("includeSubDomains", config)
         self.assertNotIn("ssl_protocols TLSv1 ", config)
 
+    def test_plaintext_api_and_websocket_ingress_fail_closed(self) -> None:
+        config = HTTPS_CONFIG.read_text(encoding="utf-8")
+        api_blocks = _location_bodies(config, "^~ /api/")
+        api_root_blocks = _location_bodies(config, "= /api")
+        websocket_blocks = _location_bodies(config, "= /ws/dashboard")
+
+        self.assertEqual(api_blocks, ["return 426;"])
+        self.assertEqual(api_root_blocks, ["return 426;"])
+        self.assertEqual(websocket_blocks, ["return 426;"])
+        self.assertNotIn("proxy_pass", api_blocks[0])
+        self.assertNotIn("proxy_pass", websocket_blocks[0])
+
     def test_https_proxy_is_loopback_and_preserves_origin_metadata(self) -> None:
         config = HTTPS_CONFIG.read_text(encoding="utf-8")
 
@@ -114,7 +131,7 @@ class VpsHttpsConfigTests(unittest.TestCase):
         exact_bodies = _location_bodies(config, f"= {AMAP_COORDINATE_PATH}")
         catch_all_bodies = _location_bodies(config, "/")
 
-        exact_redirect = next(body for body in exact_bodies if "return 301" in body)
+        exact_plaintext_rejection = next(body for body in exact_bodies if "return 426" in body)
         normal_redirect = next(
             body for body in catch_all_bodies if "return 301" in body
         )
@@ -122,12 +139,8 @@ class VpsHttpsConfigTests(unittest.TestCase):
         normal_proxy = next(body for body in catch_all_bodies if "proxy_pass" in body)
 
         self.assertEqual(
-            tuple(
-                directive
-                for directive in _directives(exact_redirect)
-                if directive != "access_log off;"
-            ),
-            _directives(normal_redirect),
+            tuple(directive for directive in _directives(exact_plaintext_rejection) if directive != "access_log off;"),
+            ("return 426;",),
         )
         self.assertEqual(
             tuple(
@@ -137,7 +150,7 @@ class VpsHttpsConfigTests(unittest.TestCase):
             ),
             _directives(normal_proxy),
         )
-        self.assertIn("https://ego.example.invalid$request_uri", exact_redirect)
+        self.assertIn("https://ego.example.invalid$request_uri", normal_redirect)
         self.assertIn("proxy_pass http://127.0.0.1:8790;", exact_proxy)
 
     def test_configs_contain_no_runtime_credentials(self) -> None:
@@ -170,6 +183,37 @@ class VpsHttpsConfigTests(unittest.TestCase):
             "/etc/letsencrypt/renewal-hooks/deploy/10-egolink-nginx-reload.sh",
             runbook,
         )
+
+    def test_deploy_script_refuses_non_loopback_message_hub_binding(self) -> None:
+        script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('$loopbackListenHosts = @("127.0.0.1", "::1", "localhost")', script)
+        self.assertIn("if ($Public -or $loopbackListenHosts -notcontains $ListenHost)", script)
+        self.assertIn("OPS-004 refuses public/plaintext Message Hub binding", script)
+        self.assertIn("public ingress is HTTPS via Nginx", script)
+
+    def test_device_target_uses_exact_host_ca_bundle_and_no_redirects(self) -> None:
+        kconfig = FIRMWARE_KCONFIG.read_text(encoding="utf-8")
+        source = FIRMWARE_SOURCE.read_text(encoding="utf-8")
+        defaults = FIRMWARE_DEFAULTS.read_text(encoding="utf-8")
+
+        self.assertIn('default "https://ego.example.invalid"', kconfig)
+        self.assertIn('default "ego.example.invalid"', kconfig)
+        self.assertIn("select MBEDTLS_CERTIFICATE_BUNDLE", kconfig)
+        self.assertNotIn('CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL="http://', defaults)
+        self.assertIn("CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y", defaults)
+        self.assertIn(".crt_bundle_attach = esp_crt_bundle_attach", source)
+        self.assertIn(".skip_cert_common_name_check = false", source)
+        self.assertIn(".disable_auto_redirect = true", source)
+        self.assertIn('return "sim7670_tls_peer_verification_unavailable"', source)
+
+    def test_ft001b_execute_target_is_https_only(self) -> None:
+        runner = FT001B_RUNNER.read_text(encoding="utf-8")
+
+        self.assertIn('default="https://ego.example.invalid"', runner)
+        self.assertIn('parsed.scheme != "https"', runner)
+        self.assertIn("parsed.hostname != EXPECTED_MESSAGE_HUB_HOST", runner)
+        self.assertIn("if not token:", runner)
 
 
 if __name__ == "__main__":

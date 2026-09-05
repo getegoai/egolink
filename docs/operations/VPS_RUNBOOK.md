@@ -1,15 +1,18 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-12
+last_verified: 2026-09-02
 verified_by: codex
-source_task: OPS-002
+source_task: OPS-002, OPS-004-static-candidate
 ---
 
 # VPS Message Hub Operations Runbook
 
 Production host: `203.0.113.10` (Rocky Linux 9.8), service
 `egolink-message-hub` on port `8790`. This VPS is a real production service:
-devices post to it continuously; treat every change as a production change.
+devices may post to it continuously; treat every change as a production
+change. OPS-004's tracked target binds `8790` to loopback and exposes only the
+Nginx HTTPS origin. That target has not been deployed by the static task; first
+observe the live listener/firewall state.
 
 ## 1. Access
 
@@ -81,25 +84,39 @@ devices post to it continuously; treat every change as a production change.
 - Runtime token lives only in `/etc/egolink-message-hub.env`
   (`EGOLINK_MESSAGE_HUB_TOKEN=...`), permissions `600 root:root`. Never
   commit it to the repository.
-- Rotation: edit the env file with a new value, `systemctl restart
-  egolink-message-hub`, then update the same token on the dev PC
-  (`$env:EGOLINK_MESSAGE_HUB_TOKEN`) and re-provision firmware config
-  (`scripts/prepare_fw001_hw_config.ps1`) before the next flash.
+- Rotation is a separately authorized production action. First prove the
+  intended device path validates the certificate chain and exact host, then
+  install the new server value, provision the matching device secret through
+  an ignored local configuration, verify bounded HTTPS traffic, and revoke the
+  old value. Never rotate first and fall back to transmitting either token over
+  plaintext. The present SIM7670 path is not eligible because peer verification
+  remains unimplemented/unverified.
 
 ## 7. Deploy
 
 - Standard deploy: `scripts/deploy_message_hub_vps.ps1` from the dev PC
-  (uses `EGOLINK_VPS_HOST`, SSH key auth). Deploys server code only; the DB
-  and env file are never overwritten by deploys.
+  (uses `EGOLINK_VPS_HOST`, SSH key auth). The OPS-004 candidate accepts only
+  `127.0.0.1`, `::1`, or `localhost`; `-Public` and other listen addresses
+  fail before packaging or SSH. It deploys server code only; the DB and env
+  file are never overwritten by deploys.
 - After deploy: check `/health`, Dashboard render, and one authenticated
   `/api/state` call.
 
 ## 8. Domain And HTTPS
 
-The official browser entry is `https://ego.example.invalid/`. Nginx owns ports 80
-and 443 and proxies only this virtual host to `127.0.0.1:8790`; direct port
-`8790` remains available for current device compatibility. Certificate private
-keys stay under `/etc/letsencrypt` and are never copied into Git or evidence.
+The official browser and target device-ingress entry is
+`https://ego.example.invalid/`. Nginx owns ports 80 and 443 and proxies only this
+virtual host to `127.0.0.1:8790`. In the target configuration, direct port
+`8790` is loopback-only and is not a device compatibility endpoint.
+Certificate private keys stay under `/etc/letsencrypt` and are never copied
+into Git or evidence.
+
+Ordinary plaintext browser requests may redirect, but `/api/`,
+`/ws/dashboard`, and the exact AMap coordinate-conversion path on port 80
+return `426` without proxying. This makes a mistaken plaintext device/private
+location request fail closed; clients must still preflight HTTPS locally
+because a credential has already crossed the network by the time a server can
+reject it.
 
 The exact AMap coordinate-conversion route disables Nginx access logging on
 both the HTTP redirect and HTTPS proxy virtual hosts. Nginx exact-location
@@ -185,13 +202,16 @@ environment and do not echo it:
 
 ```bash
 curl -fsSI http://ego.example.invalid/ | grep -i '^location: https://ego.example.invalid/'
+test "$(curl -sS -o /dev/null -w '%{http_code}' http://ego.example.invalid/api/state)" = 426
 curl -fsS https://ego.example.invalid/health
 test "$(curl -sS -o /dev/null -w '%{http_code}' https://ego.example.invalid/api/state)" = 401
 test "$(curl -sS -o /dev/null -w '%{http_code}' \
   -H "Authorization: Bearer $EGOLINK_MESSAGE_HUB_TOKEN" \
   https://ego.example.invalid/api/state)" = 200
 openssl s_client -connect ego.example.invalid:443 -servername ego.example.invalid \
-  </dev/null 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+  -verify_hostname ego.example.invalid -verify_return_error </dev/null 2>/dev/null
+ss -lntp | grep '127.0.0.1:8790'
+if ss -lntp | grep -E '(^|[[:space:]])(0\.0\.0\.0|\[::\]):8790'; then exit 1; fi
 systemctl is-active nginx egolink-message-hub
 systemctl is-enabled certbot-renew.timer
 systemctl list-timers certbot-renew.timer --no-pager
@@ -200,14 +220,56 @@ journalctl -u nginx --since '-10 minutes' --no-pager
 tail -n 50 /var/log/nginx/error.log
 ```
 
+Do not include an Authorization header in the HTTP/426 check. Supply the real
+token only to the HTTPS request through the environment, never the command
+line, report, shell history, or Markdown. Observe for a bounded 10-minute
+window: Nginx and service active, no public `8790` listener, authenticated
+HTTPS `2xx`, unauthenticated HTTPS `401/403`, plaintext API `426`, and no TLS,
+authentication, restart, or outbox-drain errors. Do not inspect request bodies
+or copy private access logs into evidence.
+
+### OPS-004 Migration Sequence
+
+This sequence requires a fresh operator authorization. It is documentation,
+not evidence that the static candidate has been deployed.
+
+1. Record UTC start/end, current firmware identity, listener/firewall state,
+   certificate subject/SAN/issuer/dates, service state, and an existing
+   authenticated HTTPS smoke. Do not record token values, lengths, hashes, or
+   location bodies.
+2. Take the scoped snapshot above, plus `firewall-cmd --list-all` into its
+   protected directory. Stage and syntax-check the tracked Nginx configuration
+   without reloading it.
+3. Deploy the Message Hub with the default loopback listener; do not pass
+   `-Public` or a non-loopback `-ListenHost`.
+4. Install the reviewed HTTPS virtual host, run `nginx -t`, then reload Nginx.
+   Verify HTTPS, exact hostname, authentication, and plaintext `426` before
+   changing any device credential.
+5. Close any public `8790/tcp` firewall rule only after confirming the service
+   is loopback-bound. Re-run the bounded observation commands above.
+6. Provision and test an ESP-TLS device candidate separately. Keep SIM7670
+   data ingress stopped until CA-chain and hostname verification are actually
+   implemented and hardware-observed. Rotate credentials only after every
+   allowed sender has a verified TLS path.
+
+### Time-bounded Engineering Fallback
+
+There is no authenticated plaintext or location-data fallback. Before public
+`8790` is closed, a modem reachability comparison may issue only a body-free,
+token-free `GET /health`; the diagnostic requires an explicit UTC expiry no
+more than one hour ahead and labels the result non-production. When the window
+ends, stop the diagnostic. Do not reopen `8790` for this check after migration.
+
 Also use an authenticated browser session to confirm the AMap canvas visibly
 loads from the HTTPS origin. With no trusted GNSS fix, the canvas must contain
 no device marker and must keep the no-fix or pre-correction warning.
 
 ### Rollback
 
-If Nginx validation or a post-change gate fails, restore only the EgoLink
-virtual host from the snapshot. Do not restore or modify the live SQLite DB:
+If Nginx validation or a post-change gate fails, keep the application on
+loopback and restore only a previously working **HTTPS** EgoLink virtual host
+from the snapshot. Do not restore or modify the live SQLite DB and do not
+reopen public `8790`:
 
 ```bash
 if test -e "$snapshot/had-existing-vhost"; then
@@ -224,9 +286,52 @@ If the application deployment also needs rollback, restore only
 restart `egolink-message-hub`. An issued certificate may remain safely in
 place for later reuse; deleting it is not part of routine rollback.
 
-## 9. Known Gaps (tracked, not hidden)
+If a device TLS candidate fails, stop its ingress attempts and retain pending
+records in the bounded outbox. Roll back to a build that leaves this transport
+disabled, not to a build that sends bearer credentials or location over
+plaintext. Service continuity is subordinate to this privacy boundary.
+
+## 9. Manual SOS Server Candidate (Not Deployed)
+
+SOS-010D adds a loopback-tested application candidate; it is not evidence of a
+VPS deployment or a device-to-server run. Its exact boundaries are:
+
+- `POST /api/v1/safety-events/manual-sos` requires the configured device-
+  ingest bearer token. It accepts at most 1024 exact UTF-8 JSON bytes and only
+  the coordinate-free `manual_sos`/`critical`/`device_rule` subset emitted by
+  the current device orchestrator. A positive outbox ACK is returned only
+  after SQLite accepts or identifies an exact-byte duplicate. The ACK scope is
+  only `server_durable_ingest_only`.
+- `GET /api/v1/devices/<device-id>/safety-events/manual-sos/latest` and
+  `POST /api/v1/devices/<device-id>/safety-events/manual-sos/<event-id>/guardian-ack`
+  require a Guardian bearer token whose hashed binding file authorizes that
+  exact device. If `EGOLINK_GUARDIAN_BINDINGS_FILE` is absent, these routes
+  return unavailable; they never fall back to `EGOLINK_MESSAGE_HUB_TOKEN`.
+- Guardian acknowledgement is a separate durable, idempotent fact. It does
+  not delete the device outbox record, change the server-ingest ACK or imply a
+  successful call. The current UI/API does not send a push notification and
+  reports call state as `not_reported`.
+- The SQLite timeline retains the exact request body for ACK identity. It is
+  excluded from Guardian projections but remains private data in the database
+  and backups. This implementation does not add at-rest encryption.
+
+The safety-event field `privacy.retention_seconds=86400` is currently accepted
+and persisted as source metadata but is **not enforced** by a deletion job,
+backup expiry rule or verified erasure workflow. Do not interpret it as an
+implemented 24-hour retention guarantee. Retention/backup propagation,
+authorized erasure and at-rest key lifecycle are pre-production privacy
+blockers. Do not deploy this candidate until those decisions and a scoped
+operator rollout are reviewed.
+
+## 10. Known Gaps (tracked, not hidden)
 
 - No off-host backup copy yet.
 - No outbound alerting (log-file detection only).
-- The device compatibility endpoint on public port `8790` remains HTTP until
-  firmware migration to the HTTPS domain is explicitly planned and validated.
+- Live public-port/firewall state has not been re-observed by OPS-004's static
+  work and must be checked before migration.
+- SIM7670 CA provisioning, certificate-chain verification, SNI/hostname
+  behavior, modem clock prerequisites, and TLS memory/power/reconnect behavior
+  remain unimplemented or hardware-unverified. The firmware stops that path.
+- Manual SOS push delivery, call signaling, device sender/positive-ACK parser,
+  enforced event retention and physical end-to-end SOS evidence are not
+  implemented or verified.

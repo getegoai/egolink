@@ -1,0 +1,13 @@
+menu "EgoLink SIM7670 P0 delivery adapter"
+
+config EGOLINK_SIM7670_P0_DELIVERY_TEST_DRIVER_ENABLED
+    bool "Allow injected P0 delivery driver in offline test builds"
+    default n
+    help
+        Unit-test-only seam for deterministic fake-driver contract checks.
+        Ordinary firmware must keep this disabled and use the built-in exact
+        driver, which remains fail-closed until OPS-004 integrates reviewed
+        modem CA, hostname/SNI and clock verification. This option must not be
+        enabled in a flashed or field image.
+
+endmenu

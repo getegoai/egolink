@@ -7,6 +7,9 @@
 
 #include "cJSON.h"
 #include "esp_check.h"
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+#include "esp_crt_bundle.h"
+#endif
 #include "esp_event.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -111,9 +114,7 @@ static lte_executed_command_result_t s_lte_executed_command_cache[LTE_EXECUTED_C
 static size_t s_lte_executed_command_cache_next;
 
 #define IMU_WINDOW_CONTRACT_VERSION "egolink.imu_window.v1"
-#define IMU_WINDOW_SAMPLE_COUNT 300u
-#define IMU_WINDOW_SAMPLE_COUNT_MIN 100u
-#define IMU_WINDOW_SAMPLE_COUNT_MAX 600u
+#define IMU_WINDOW_SAMPLE_COUNT 100u
 #define IMU_WINDOW_INTERVAL_MS 50u
 #define IMU_WINDOW_INTERVAL_US (IMU_WINDOW_INTERVAL_MS * 1000u)
 #define IMU_WINDOW_WARMUP_SAMPLE_COUNT 10u
@@ -143,7 +144,7 @@ typedef struct {
     bool measurement_stop_ok;
 } imu_window_capture_result_t;
 
-static uint8_t s_imu_window_binary[IMU_WINDOW_SAMPLE_COUNT_MAX * IMU_WINDOW_RECORD_BYTES];
+static uint8_t s_imu_window_binary[IMU_WINDOW_SAMPLE_COUNT * IMU_WINDOW_RECORD_BYTES];
 static char s_imu_window_chunk_base64[IMU_WINDOW_CHUNK_BASE64_MAX];
 static char s_imu_window_payload[1100];
 static char s_imu_window_frame[IMU_WINDOW_RAW_FRAME_MAX_BYTES + 1u];
@@ -172,6 +173,8 @@ typedef struct {
     size_t capacity;
     size_t length;
 } http_response_buffer_t;
+
+#define MESSAGE_HUB_BEARER_TOKEN_MAX_BYTES 160u
 #endif
 
 static const char *json_bool(bool value)
@@ -585,6 +588,79 @@ static int refresh_wifi_rssi(void)
 }
 
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+static bool message_hub_expected_host_is_valid(void)
+{
+    const char *host = CONFIG_EGOLINK_MESSAGE_HUB_EXPECTED_TLS_HOST;
+    size_t length = strlen(host);
+    if (length == 0u || length > 253u || host[0] == '.' || host[length - 1u] == '.') {
+        return false;
+    }
+    for (size_t index = 0; index < length; ++index) {
+        char ch = host[index];
+        bool valid = (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '.' || ch == '-';
+        if (!valid) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool message_hub_bearer_token_is_valid(void)
+{
+    const char *token = CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN;
+    size_t length = strlen(token);
+    if (length == 0u || length > MESSAGE_HUB_BEARER_TOKEN_MAX_BYTES || token[0] == '<') {
+        return false;
+    }
+    for (size_t index = 0; index < length; ++index) {
+        unsigned char ch = (unsigned char)token[index];
+        bool valid = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+                     (ch >= '0' && ch <= '9') || ch == '.' || ch == '_' || ch == '~' ||
+                     ch == '+' || ch == '/' || ch == '-' || ch == '=';
+        if (!valid) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static const char *message_hub_transport_configuration_error(void)
+{
+    static const char https_prefix[] = "https://";
+    const char *base_url = CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL;
+    const char *expected_host = CONFIG_EGOLINK_MESSAGE_HUB_EXPECTED_TLS_HOST;
+    if (!message_hub_expected_host_is_valid()) {
+        return "expected_tls_host_invalid";
+    }
+    if (strncmp(base_url, https_prefix, sizeof(https_prefix) - 1u) != 0) {
+        return "plaintext_or_invalid_scheme";
+    }
+    const char *authority = base_url + sizeof(https_prefix) - 1u;
+    size_t host_length = strlen(expected_host);
+    if (strncmp(authority, expected_host, host_length) != 0) {
+        return "unexpected_tls_host";
+    }
+    const char *suffix = authority + host_length;
+    if (!(suffix[0] == '\0' || (suffix[0] == '/' && suffix[1] == '\0'))) {
+        return "tls_base_url_must_be_host_only";
+    }
+    if (!message_hub_bearer_token_is_valid()) {
+        return "bearer_token_missing_or_invalid";
+    }
+#if CONFIG_EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED || CONFIG_EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    /*
+     * The current SIM7670 AT HTTP component has no reviewed API for binding a
+     * CA trust store and enforcing hostname verification. Do not send a
+     * bearer token or payload through that path merely because its URL says
+     * https. A later modem-specific slice must remove this stop only after it
+     * implements and tests both checks.
+     */
+    return "sim7670_tls_peer_verification_unavailable";
+#else
+    return NULL;
+#endif
+}
+
 static esp_err_t message_hub_http_event_handler(esp_http_client_event_t *event)
 {
     if (event->event_id != HTTP_EVENT_ON_DATA || event->user_data == NULL || event->data == NULL) {
@@ -605,7 +681,7 @@ static esp_err_t message_hub_http_event_handler(esp_http_client_event_t *event)
     return ESP_OK;
 }
 
-static void build_message_hub_url(char *buffer, size_t buffer_size, const char *path)
+static bool build_message_hub_url(char *buffer, size_t buffer_size, const char *path)
 {
     const char *base_url = CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL;
     size_t base_len = strlen(base_url);
@@ -613,7 +689,8 @@ static void build_message_hub_url(char *buffer, size_t buffer_size, const char *
     bool path_has_slash = path[0] == '/';
     const char *separator = (base_has_slash || path_has_slash) ? "" : "/";
     const char *normalized_path = (base_has_slash && path_has_slash) ? path + 1 : path;
-    snprintf(buffer, buffer_size, "%s%s%s", base_url, separator, normalized_path);
+    int written = snprintf(buffer, buffer_size, "%s%s%s", base_url, separator, normalized_path);
+    return written >= 0 && (size_t)written < buffer_size;
 }
 
 static bool message_hub_request_with_content_type(
@@ -626,7 +703,10 @@ static bool message_hub_request_with_content_type(
     int *status_code)
 {
     char url[256];
-    build_message_hub_url(url, sizeof(url), path);
+    if (!build_message_hub_url(url, sizeof(url), path)) {
+        ESP_LOGE(TAG, "MESSAGE_HUB_HTTPS_URL_REJECTED path=%s", path);
+        return false;
+    }
 
     http_response_buffer_t response = {
         .buffer = response_buffer,
@@ -642,6 +722,10 @@ static bool message_hub_request_with_content_type(
         .timeout_ms = 8000,
         .event_handler = message_hub_http_event_handler,
         .user_data = &response,
+        .transport_type = HTTP_TRANSPORT_OVER_SSL,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .skip_cert_common_name_check = false,
+        .disable_auto_redirect = true,
     };
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (client == NULL) {
@@ -650,10 +734,14 @@ static bool message_hub_request_with_content_type(
     }
 
     esp_http_client_set_method(client, method);
-    if (strlen(CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN) > 0) {
-        char auth_header[192];
-        snprintf(auth_header, sizeof(auth_header), "Bearer %s", CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN);
-        esp_http_client_set_header(client, "Authorization", auth_header);
+    char auth_header[MESSAGE_HUB_BEARER_TOKEN_MAX_BYTES + sizeof("Bearer ")];
+    snprintf(auth_header, sizeof(auth_header), "Bearer %s", CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN);
+    esp_err_t header_err = esp_http_client_set_header(client, "Authorization", auth_header);
+    memset(auth_header, 0, sizeof(auth_header));
+    if (header_err != ESP_OK) {
+        ESP_LOGE(TAG, "MESSAGE_HUB_HTTPS_AUTH_HEADER_REJECTED path=%s", path);
+        esp_http_client_cleanup(client);
+        return false;
     }
     if (payload != NULL) {
         esp_http_client_set_header(client, "Content-Type", content_type ? content_type : "application/json");
@@ -1805,18 +1893,14 @@ static void imu_window_record_read_failure(imu_window_capture_result_t *result, 
         snapshot.backend_status != NULL ? snapshot.backend_status : fallback_status);
 }
 
-static bool capture_real_imu_window(imu_window_capture_result_t *result, uint32_t sample_count)
+static bool capture_real_imu_window(imu_window_capture_result_t *result)
 {
     if (result == NULL) {
         imu_window_set_error("capture_result_missing");
         return false;
     }
-    if (sample_count < IMU_WINDOW_SAMPLE_COUNT_MIN || sample_count > IMU_WINDOW_SAMPLE_COUNT_MAX) {
-        imu_window_set_error("sample_count_out_of_range");
-        return false;
-    }
     memset(result, 0, sizeof(*result));
-    memset(s_imu_window_binary, 0, (size_t)sample_count * IMU_WINDOW_RECORD_BYTES);
+    memset(s_imu_window_binary, 0, sizeof(s_imu_window_binary));
     result->min_interval_us = UINT32_MAX;
 
     platform_imu_snapshot_t snapshot;
@@ -1838,8 +1922,8 @@ static bool capture_real_imu_window(imu_window_capture_result_t *result, uint32_
 
     ESP_LOGI(
         TAG,
-        "IMU_WINDOW_CAPTURE_START samples=%" PRIu32 " interval_ms=%u warmup_samples=%u",
-        sample_count,
+        "IMU_WINDOW_CAPTURE_START samples=%u interval_ms=%u warmup_samples=%u",
+        (unsigned)IMU_WINDOW_SAMPLE_COUNT,
         (unsigned)IMU_WINDOW_INTERVAL_MS,
         (unsigned)IMU_WINDOW_WARMUP_SAMPLE_COUNT);
     bool warmup_ok = true;
@@ -1868,7 +1952,7 @@ static bool capture_real_imu_window(imu_window_capture_result_t *result, uint32_
     int64_t start_us = esp_timer_get_time();
     result->capture_start_uptime_us = (uint64_t)start_us;
 
-    for (uint32_t index = 0; warmup_ok && index < sample_count; ++index) {
+    for (uint32_t index = 0; warmup_ok && index < IMU_WINDOW_SAMPLE_COUNT; ++index) {
         if (index > 0u) {
             vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(IMU_WINDOW_INTERVAL_MS));
         }
@@ -1937,7 +2021,7 @@ static bool capture_real_imu_window(imu_window_capture_result_t *result, uint32_
     }
 
     bool ok = result->warmup_sample_count == IMU_WINDOW_WARMUP_SAMPLE_COUNT &&
-              result->captured_samples == sample_count && result->read_failure_count == 0u &&
+              result->captured_samples == IMU_WINDOW_SAMPLE_COUNT && result->read_failure_count == 0u &&
               result->mock_sample_count == 0u && result->measurement_stop_ok;
     if (ok) {
         imu_window_set_error("none");
@@ -1978,8 +2062,6 @@ static bool build_imu_window_manifest_frame(
 #else
     int sensor_i2c_address = -1;
 #endif
-    uint32_t actual_chunk_count =
-        (capture->captured_samples + IMU_WINDOW_SAMPLES_PER_CHUNK - 1u) / IMU_WINDOW_SAMPLES_PER_CHUNK;
     int manifest_written = snprintf(
         s_imu_window_payload,
         sizeof(s_imu_window_payload),
@@ -2041,8 +2123,8 @@ static bool build_imu_window_manifest_frame(
         capture->mock_sample_count,
         capture->warmup_sample_count,
         (unsigned)(IMU_WINDOW_WARMUP_INTERVAL_MS * 1000u),
-        (unsigned)actual_chunk_count,
-        (unsigned)actual_chunk_count,
+        (unsigned)IMU_WINDOW_CHUNK_COUNT,
+        (unsigned)IMU_WINDOW_CHUNK_COUNT,
         samples_crc,
         sensor_i2c_address);
     if (manifest_written <= 0 || (size_t)manifest_written >= sizeof(s_imu_window_payload)) {
@@ -2112,8 +2194,7 @@ static bool imu_window_post_raw(
     return false;
 }
 
-static bool publish_imu_window(const char *cmd_id, const char *test_run_id, const char *transport_type,
-                               uint32_t sample_count)
+static bool publish_imu_window(const char *cmd_id, const char *test_run_id, const char *transport_type)
 {
     if (cmd_id == NULL || cmd_id[0] == '\0') {
         imu_window_set_error("command_id_missing");
@@ -2133,7 +2214,7 @@ static bool publish_imu_window(const char *cmd_id, const char *test_run_id, cons
     }
 
     imu_window_capture_result_t capture;
-    if (!capture_real_imu_window(&capture, sample_count)) {
+    if (!capture_real_imu_window(&capture)) {
         return false;
     }
 
@@ -2158,12 +2239,10 @@ static bool publish_imu_window(const char *cmd_id, const char *test_run_id, cons
         return false;
     }
 
-    uint32_t actual_chunk_count =
-        (capture.captured_samples + IMU_WINDOW_SAMPLES_PER_CHUNK - 1u) / IMU_WINDOW_SAMPLES_PER_CHUNK;
     uint32_t uploaded_chunks = 0;
-    for (uint32_t chunk_index = 0; chunk_index < actual_chunk_count; ++chunk_index) {
+    for (uint32_t chunk_index = 0; chunk_index < IMU_WINDOW_CHUNK_COUNT; ++chunk_index) {
         uint32_t sample_start = chunk_index * IMU_WINDOW_SAMPLES_PER_CHUNK;
-        uint32_t remaining = capture.captured_samples - sample_start;
+        uint32_t remaining = IMU_WINDOW_SAMPLE_COUNT - sample_start;
         uint32_t chunk_samples = remaining < IMU_WINDOW_SAMPLES_PER_CHUNK ? remaining : IMU_WINDOW_SAMPLES_PER_CHUNK;
         size_t chunk_bytes = (size_t)chunk_samples * IMU_WINDOW_RECORD_BYTES;
         const uint8_t *chunk_data = &s_imu_window_binary[sample_start * IMU_WINDOW_RECORD_BYTES];
@@ -2212,10 +2291,10 @@ static bool publish_imu_window(const char *cmd_id, const char *test_run_id, cons
             window_id,
             cmd_id,
             chunk_index,
-            (unsigned)actual_chunk_count,
+            (unsigned)IMU_WINDOW_CHUNK_COUNT,
             sample_start,
             chunk_samples,
-            (unsigned)capture.captured_samples,
+            (unsigned)IMU_WINDOW_SAMPLE_COUNT,
             (unsigned)IMU_WINDOW_INTERVAL_US,
             (unsigned)IMU_WINDOW_RECORD_BYTES,
             chunk_crc,
@@ -2257,7 +2336,7 @@ static bool publish_imu_window(const char *cmd_id, const char *test_run_id, cons
             "IMU_WINDOW_CHUNK_POST_DONE window_id=%s chunk=%" PRIu32 "/%u bytes=%u ok=%s reason=%s status=%d",
             window_id,
             chunk_index,
-            (unsigned)actual_chunk_count,
+            (unsigned)IMU_WINDOW_CHUNK_COUNT,
             (unsigned)strlen(s_imu_window_frame),
             posted ? "true" : "false",
             post_reason,
@@ -2418,7 +2497,7 @@ static void build_lte_location_report_kv_payload(
         "test_run_id=%s\n"
         "seq=%" PRIu32 "\n"
         "boot_count=%" PRIu32 "\n"
-        "ts_uptime_us=%" PRId64 "\n"
+        "ts=uptime_ms:%" PRId64 "\n"
         "source=%s\n"
         "source_status=%s\n"
         "fix=%s\n"
@@ -2447,7 +2526,7 @@ static void build_lte_location_report_kv_payload(
         CONFIG_EGOLINK_TEST_RUN_ID,
         seq,
         s_boot_count,
-        uptime_ms() * 1000,
+        uptime_ms(),
         source,
         source_status,
         json_bool(fix),
@@ -3534,14 +3613,11 @@ static wifi_imu_window_command_result_t wifi_http_execute_and_ack_raw_command(
         if (strcmp(command->cmd, "capture_imu_window") == 0) {
             if (!imu_window_capture_cmd_id_valid(command->cmd_id)) {
                 message = "capture_imu_window cmd_id must be 1-16 safe characters";
-            } else if (!command->parameters_valid ||
-                       command->sample_count < IMU_WINDOW_SAMPLE_COUNT_MIN ||
-                       command->sample_count > IMU_WINDOW_SAMPLE_COUNT_MAX ||
+            } else if (!command->parameters_valid || command->sample_count != IMU_WINDOW_SAMPLE_COUNT ||
                        command->interval_ms != IMU_WINDOW_INTERVAL_MS) {
-                message = "capture_imu_window requires test_run_id, sample_count 100-600, and interval_ms=50";
+                message = "capture_imu_window requires exact test_run_id, sample_count=100, and interval_ms=50";
             } else {
-                bool window_ok = publish_imu_window(command->cmd_id, command->test_run_id, "wifi",
-                                                    command->sample_count);
+                bool window_ok = publish_imu_window(command->cmd_id, command->test_run_id, "wifi");
                 status = window_ok ? "ok" : "error";
                 if (window_ok) {
                     message = "bounded real IMU window chunks and manifest uploaded over Wi-Fi";
@@ -3689,15 +3765,12 @@ static bool lte_http_execute_and_ack_raw_command(
             if (!imu_window_capture_cmd_id_valid(command->cmd_id)) {
                 status = "rejected";
                 message = "capture_imu_window cmd_id must be 1-16 safe characters";
-            } else if (!command->parameters_valid ||
-                       command->sample_count < IMU_WINDOW_SAMPLE_COUNT_MIN ||
-                       command->sample_count > IMU_WINDOW_SAMPLE_COUNT_MAX ||
-                       command->interval_ms != IMU_WINDOW_INTERVAL_MS) {
+            } else if (!command->parameters_valid || command->sample_count != IMU_WINDOW_SAMPLE_COUNT ||
+                command->interval_ms != IMU_WINDOW_INTERVAL_MS) {
                 status = "rejected";
-                message = "capture_imu_window requires test_run_id, sample_count 100-600, and interval_ms=50";
+                message = "capture_imu_window requires exact test_run_id, sample_count=100, and interval_ms=50";
             } else {
-                bool window_ok = publish_imu_window(command->cmd_id, command->test_run_id, "lte",
-                                                    command->sample_count);
+                bool window_ok = publish_imu_window(command->cmd_id, command->test_run_id, "lte");
                 status = window_ok ? "ok" : "error";
                 if (window_ok) {
                     message = "bounded real IMU window chunks and manifest uploaded";
@@ -4629,12 +4702,22 @@ static void start_mqtt(void)
 
 void app_main(void)
 {
+#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    const char *transport_configuration_error = message_hub_transport_configuration_error();
+    if (transport_configuration_error != NULL) {
+        ESP_LOGE(
+            TAG,
+            "MESSAGE_HUB_HTTPS_CONFIG_REJECTED reason=%s network_started=false payload_sent=false",
+            transport_configuration_error);
+        return;
+    }
+#endif
     ESP_LOGI(
         TAG,
 #if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED
-        "MESSAGE_HUB_BOOT device_id=%s hub=%s",
+        "MESSAGE_HUB_BOOT device_id=%s tls_host=%s tls_chain_verify=esp_crt_bundle tls_hostname_verify=true",
         CONFIG_EGOLINK_DEVICE_ID,
-        CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL);
+        CONFIG_EGOLINK_MESSAGE_HUB_EXPECTED_TLS_HOST);
 #else
         "MQTT_HEARTBEAT_BOOT device_id=%s status_topic=%s event_topic=%s",
         CONFIG_EGOLINK_DEVICE_ID,

@@ -1,10 +1,16 @@
-"""Diagnose SIM7670G LTE HTTP AT reachability through the USB AT port.
+"""Diagnose bounded SIM7670G LTE HTTPS behavior through the USB AT port.
 
 This script is for LTE-002 failure triage after USB-Free validation reports no
 fresh LTE HTTP telemetry. It opens bounded SIM7670G USB AT sessions only. It
-does not flash firmware, erase flash, enqueue Message Hub commands, place
-calls, or use bearer tokens. The default HTTP check is a public Message Hub
-`/health` GET.
+does not flash firmware, erase flash, enqueue Message Hub commands, or place
+calls. The default is the public HTTPS `/health` endpoint. A plaintext health
+probe is available only as an explicit, expiring, credential-free engineering
+fallback; it cannot POST or satisfy production TLS acceptance.
+
+The ``tls-capability`` mode is a separate zero-traffic, read-only capability
+probe. It sends only a fixed allowlist of identity, SSL command-discovery,
+certificate-list, and clock queries. It never starts HTTP, changes SSL state,
+uploads a certificate, reads a token, or sends a payload.
 """
 
 from __future__ import annotations
@@ -20,6 +26,7 @@ import re
 import subprocess
 import sys
 from typing import Any, Iterable
+from urllib.parse import urlsplit
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -34,10 +41,37 @@ from scripts.egolink_board_probe import (  # noqa: E402
 )
 
 
-DEFAULT_HUB_BASE_URL = "http://203.0.113.10:8790"
+DEFAULT_HUB_BASE_URL = "https://ego.example.invalid"
 DEFAULT_URL = f"{DEFAULT_HUB_BASE_URL}/health"
+DEFAULT_EXPECTED_HOST = "ego.example.invalid"
 DEFAULT_DEVICE_ID = "ego-link-r1-connectivity-001"
 DEFAULT_OUTPUT_DIR = Path("reports") / "field_validation" / "lte002-atdiag-http"
+MAX_BEARER_TOKEN_BYTES = 160
+MAX_PLAINTEXT_FALLBACK_SECONDS = 3600
+BEARER_TOKEN_RE = re.compile(r"[A-Za-z0-9._~+/=-]+")
+TLS_CAPABILITY_COMMANDS = (
+    "ATI",
+    "AT+CGMR",
+    "AT+CSSLCFG=?",
+    "AT+CSSLCFG?",
+    "AT+CCERTDOWN=?",
+    "AT+CCERTLIST",
+    "AT+CCLK?",
+)
+TLS_CAPABILITY_COMMAND_ALLOWLIST = frozenset(TLS_CAPABILITY_COMMANDS)
+TLS_REQUIRED_CSSLCFG_OPTIONS = (
+    "authmode",
+    "cacert",
+    "enablesni",
+    "ignorecertcn",
+    "ignorelocaltime",
+)
+SIMCOM_SIM76XX_SSL_MANUAL_URL = (
+    "https://en.simcom.com/Uploads/file/20260622/20260622103004_43058.pdf"
+)
+SIMCOM_SIM76XX_SSL_APPLICATION_NOTE_URL = (
+    "https://en.simcom.com/Uploads/file/20240611/20240611143858_59317.pdf"
+)
 
 
 @dataclass(frozen=True)
@@ -54,12 +88,40 @@ class AtStep:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    bearer_token, token_source = load_bearer_token(args.token_env, args.token_file) if args.mode == "telemetry-post-auth" else (None, None)
+    if args.mode == "tls-capability":
+        report = run_tls_capability_diagnostic(
+            sim_ports=args.sim_ports,
+            probe_all_sim_ports=args.probe_all_sim_ports,
+            output_dir=args.output_dir,
+        )
+        print(report["markdown_path"])
+        if args.json:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report["summary"]["capability"] == "present" else 2
+
+    url = resolve_url(args.mode, args.url, args.device_id)
+    try:
+        transport = validate_ingress_url(
+            url,
+            mode=args.mode,
+            expected_host=args.expected_host,
+            allow_plaintext_engineering=args.allow_plaintext_engineering,
+            plaintext_expires_at_utc=args.plaintext_expires_at_utc,
+        )
+    except ValueError as error:
+        print(json.dumps({"ok": False, "error": str(error)}), file=sys.stderr)
+        return 2
+    bearer_token, token_source = (
+        load_bearer_token(args.token_env, args.token_file)
+        if args.mode == "telemetry-post-auth"
+        else (None, None)
+    )
     report = run_diagnostic(
         sim_ports=args.sim_ports,
         probe_all_sim_ports=args.probe_all_sim_ports,
-        url=resolve_url(args.mode, args.url, args.device_id),
+        url=url,
         mode=args.mode,
+        transport=transport,
         device_id=args.device_id,
         bearer_token=bearer_token,
         token_source=token_source,
@@ -71,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     print(report["markdown_path"])
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
-    return 0 if report["summary"]["result"] == "PASS" else 2
+    return 0 if str(report["summary"]["result"]).startswith("PASS") else 2
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -90,13 +152,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--url",
-        help="HTTP URL for the SIM7670G AT check. Defaults depend on --mode.",
+        help="HTTPS URL for the SIM7670G AT check. Defaults depend on --mode.",
     )
     parser.add_argument(
         "--mode",
-        choices=("health-get", "telemetry-post-unauth", "telemetry-post-auth"),
+        choices=("tls-capability", "health-get", "telemetry-post-unauth", "telemetry-post-auth"),
         default="health-get",
-        help="Run a public /health GET, an unauthenticated telemetry POST, or a bearer-auth telemetry POST smoke.",
+        help=(
+            "Run the fixed read-only TLS capability query set, a public /health GET, "
+            "an unauthenticated telemetry POST, or a bearer-auth telemetry POST smoke."
+        ),
     )
     parser.add_argument(
         "--device-id",
@@ -118,6 +183,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--token-env", default="EGOLINK_MESSAGE_HUB_TOKEN")
     parser.add_argument("--token-file", type=Path, default=Path("server") / "runtime" / "vps_message_hub_token.txt")
+    parser.add_argument(
+        "--expected-host",
+        default=DEFAULT_EXPECTED_HOST,
+        help="Exact TLS host expected in --url; defaults to the production Message Hub host.",
+    )
+    parser.add_argument(
+        "--allow-plaintext-engineering",
+        action="store_true",
+        help="Allow only an unauthenticated /health HTTP probe within a bounded expiry window.",
+    )
+    parser.add_argument(
+        "--plaintext-expires-at-utc",
+        help="Required ISO-8601 UTC expiry for plaintext engineering health probes (maximum one hour).",
+    )
     parser.add_argument("--json", action="store_true")
     return parser.parse_args(argv)
 
@@ -128,6 +207,7 @@ def run_diagnostic(
     probe_all_sim_ports: bool,
     url: str,
     mode: str,
+    transport: dict[str, Any],
     device_id: str,
     bearer_token: str | None,
     token_source: str | None,
@@ -181,6 +261,7 @@ def run_diagnostic(
         url=url,
         mode=mode,
         include_cid=include_cid,
+        transport=transport,
     )
     payload: dict[str, Any] = {
         "project": "Ego Link P0",
@@ -190,9 +271,10 @@ def run_diagnostic(
         "host": {"platform": platform.platform(), "python": sys.version.split()[0]},
         "url": url,
         "mode": mode,
+        "transport": transport,
         "device_id": device_id,
         "token_source": token_source,
-        "auth_header_length": len(f"Authorization: Bearer {bearer_token}") if bearer_token else None,
+        "auth_configured": bearer_token is not None,
         "include_cid": include_cid,
         "payload_padding_bytes": payload_padding_bytes,
         "action_timeout_sec": action_timeout_sec,
@@ -214,6 +296,133 @@ def run_diagnostic(
     payload["json_path"] = str(json_path)
     payload["markdown_path"] = str(markdown_path)
     return payload
+
+
+def run_tls_capability_diagnostic(
+    *,
+    sim_ports: list[str],
+    probe_all_sim_ports: bool,
+    output_dir: Path,
+) -> dict[str, Any]:
+    """Run only the fixed, read-only modem TLS capability query set."""
+
+    started_at = utc_now()
+    serial_ports = discover_serial_ports()
+    candidates = choose_sim_ports(serial_ports, sim_ports, probe_all_sim_ports)
+    steps = build_tls_capability_steps()
+    probes: list[dict[str, Any]] = []
+    for port_info in candidates:
+        raw_probe = run_at_sequence(
+            port_info.port,
+            steps,
+            timeout_seconds=sequence_timeout_seconds(steps, floor=20),
+            command_allowlist=TLS_CAPABILITY_COMMAND_ALLOWLIST,
+        )
+        # Raw modem responses can contain local certificate filenames. Persist
+        # only the bounded parser output, never the raw response text.
+        probes.append(parse_tls_capability_probe(raw_probe))
+
+    selected = select_tls_capability_probe(probes)
+    capability = selected.get("capability") if selected else "unverified"
+    summary = {
+        "result": "INCOMPLETE" if capability == "present" else "FAIL",
+        "reason_code": (
+            "MODEM_TLS_CAPABILITY_PRESENT_EXACT_FIRMWARE_UNVERIFIED"
+            if capability == "present"
+            else "MODEM_TLS_CAPABILITY_MISSING"
+            if capability == "missing"
+            else "MODEM_TLS_CAPABILITY_NOT_PROBED"
+        ),
+        "capability": capability,
+        "classification": f"capability-{capability}",
+        "selected_port": selected.get("port") if selected else None,
+        "candidate_ports": [item.port for item in candidates],
+    }
+    payload: dict[str, Any] = {
+        "project": "Ego Link P0",
+        "task_id": "OPS-004B",
+        "diagnostic": "sim7670g_tls_capability_at",
+        "mode": "tls-capability",
+        "started_at": started_at,
+        "host": {"platform": platform.platform(), "python": sys.version.split()[0]},
+        "evidence_statement": (
+            "documented capability / exact firmware + negative behavior unverified"
+        ),
+        "documented_capability": {
+            "status": "documented",
+            "scope": "SIMCom SIM76XX SSL AT command manual, software 2388_SIM76XX and later",
+            "capabilities": [
+                "CA certificate storage and SSL-context binding",
+                "server authentication mode",
+                "SNI enablement",
+                "certificate common-name checking",
+                "local-time certificate validation control",
+            ],
+            "official_sources": [
+                SIMCOM_SIM76XX_SSL_MANUAL_URL,
+                SIMCOM_SIM76XX_SSL_APPLICATION_NOTE_URL,
+            ],
+        },
+        "exact_firmware": {
+            "status": "unverified",
+            "reason": "reported revision-to-2388_SIM76XX branch mapping is not established by this query-only probe",
+            "model": selected.get("model") if selected else None,
+            "revision": selected.get("revision") if selected else None,
+        },
+        "negative_behavior": {
+            "status": "unverified",
+            "reason": "zero-traffic probe does not attempt invalid CA, hostname, time, or SNI connections",
+        },
+        "probe_contract": {
+            "read_only": True,
+            "network_traffic": False,
+            "state_writes": False,
+            "certificate_upload": False,
+            "token_or_payload_access": False,
+            "allowed_commands": list(TLS_CAPABILITY_COMMANDS),
+        },
+        "candidate_ports": [item.port for item in candidates],
+        "probes": probes,
+        "summary": summary,
+    }
+    stamp = timestamp_for_path()
+    run_dir = output_dir / stamp
+    run_dir.mkdir(parents=True, exist_ok=True)
+    json_path = run_dir / "tls_capability_at_diag.json"
+    markdown_path = run_dir / "tls_capability_at_diag.md"
+    json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    markdown_path.write_text(render_tls_capability_markdown(payload), encoding="utf-8")
+    payload["json_path"] = str(json_path)
+    payload["markdown_path"] = str(markdown_path)
+    return payload
+
+
+def build_tls_capability_steps() -> list[AtStep]:
+    steps = [
+        AtStep("ATI", "ATI", read_window_ms=1400),
+        AtStep("AT+CGMR", "CGMR", read_window_ms=1400),
+        AtStep("AT+CSSLCFG=?", "CSSLCFG_TEST", read_window_ms=2400),
+        AtStep("AT+CSSLCFG?", "CSSLCFG_READ", read_window_ms=2400),
+        AtStep("AT+CCERTDOWN=?", "CCERTDOWN_TEST", read_window_ms=1800),
+        AtStep("AT+CCERTLIST", "CCERTLIST", read_window_ms=2400),
+        AtStep("AT+CCLK?", "CCLK_READ", read_window_ms=1400),
+    ]
+    return validate_tls_capability_steps(steps)
+
+
+def validate_tls_capability_steps(steps: Iterable[AtStep]) -> list[AtStep]:
+    """Fail closed if a TLS capability sequence departs from its exact contract."""
+
+    checked = list(steps)
+    commands = tuple(step.command for step in checked)
+    if commands != TLS_CAPABILITY_COMMANDS:
+        raise ValueError("tls-capability command sequence must match the fixed read-only allowlist")
+    for step in checked:
+        if step.command not in TLS_CAPABILITY_COMMAND_ALLOWLIST:
+            raise ValueError(f"tls-capability command is not allowed: {step.command}")
+        if step.data is not None or step.log_command not in (None, step.command):
+            raise ValueError("tls-capability steps cannot send data or substitute commands")
+    return checked
 
 
 def build_status_steps() -> list[AtStep]:
@@ -240,6 +449,71 @@ def resolve_url(mode: str, url: str | None, device_id: str) -> str:
     if mode in {"telemetry-post-unauth", "telemetry-post-auth"}:
         return f"{DEFAULT_HUB_BASE_URL}/api/v1/devices/{device_id}/telemetry"
     return DEFAULT_URL
+
+
+def validate_ingress_url(
+    url: str,
+    *,
+    mode: str,
+    expected_host: str = DEFAULT_EXPECTED_HOST,
+    allow_plaintext_engineering: bool = False,
+    plaintext_expires_at_utc: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Validate the non-secret transport target before opening a serial port."""
+
+    parsed = urlsplit(url)
+    if not expected_host or expected_host != expected_host.lower() or not re.fullmatch(r"[a-z0-9.-]+", expected_host):
+        raise ValueError("expected-host must be a lowercase DNS name")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("ingress URL must not contain credentials")
+    if parsed.query or parsed.fragment:
+        raise ValueError("ingress URL must not contain a query or fragment")
+    if parsed.hostname != expected_host:
+        raise ValueError("ingress URL host does not match expected-host")
+    if parsed.scheme == "https":
+        if parsed.port not in (None, 443):
+            raise ValueError("production HTTPS ingress must use port 443")
+        if mode == "telemetry-post-auth":
+            raise ValueError(
+                "authenticated modem POST is disabled until SIM7670 certificate-chain and hostname verification are implemented"
+            )
+        return {
+            "scheme": "https",
+            "expected_host": expected_host,
+            "peer_verification": "modem_hardware_unverified",
+            "production_acceptable": False,
+            "plaintext_fallback": False,
+            "plaintext_expires_at_utc": None,
+        }
+    if parsed.scheme != "http":
+        raise ValueError("ingress URL scheme must be https")
+    if not allow_plaintext_engineering:
+        raise ValueError("plaintext ingress is disabled; use the HTTPS endpoint")
+    if mode != "health-get" or parsed.path != "/health":
+        raise ValueError("plaintext fallback is limited to credential-free GET /health")
+    if not plaintext_expires_at_utc:
+        raise ValueError("plaintext engineering fallback requires an explicit UTC expiry")
+    try:
+        expires = datetime.fromisoformat(plaintext_expires_at_utc.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError("plaintext fallback expiry must be ISO-8601 UTC") from error
+    if expires.tzinfo is None or expires.utcoffset() != timezone.utc.utcoffset(expires):
+        raise ValueError("plaintext fallback expiry must include UTC timezone")
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    remaining = (expires - current.astimezone(timezone.utc)).total_seconds()
+    if remaining <= 0 or remaining > MAX_PLAINTEXT_FALLBACK_SECONDS:
+        raise ValueError("plaintext fallback expiry must be within the next 3600 seconds")
+    return {
+        "scheme": "http",
+        "expected_host": expected_host,
+        "peer_verification": "not_applicable_plaintext_engineering_only",
+        "production_acceptable": False,
+        "plaintext_fallback": True,
+        "plaintext_expires_at_utc": expires.astimezone(timezone.utc).isoformat(),
+    }
 
 
 def build_http_get_steps(url: str, *, include_cid: bool, action_timeout_sec: float) -> list[AtStep]:
@@ -355,8 +629,18 @@ def run_at_sequence(
     *,
     timeout_seconds: int,
     auth_header: str | None = None,
+    command_allowlist: frozenset[str] | None = None,
 ) -> dict[str, Any]:
-    step_rows = "@(" + ",".join(ps_step_row(item) for item in steps) + ")"
+    checked_steps = list(steps)
+    if command_allowlist is not None:
+        if auth_header is not None:
+            raise ValueError("allowlisted AT query sequences cannot receive an auth header")
+        for step in checked_steps:
+            if step.command not in command_allowlist:
+                raise ValueError(f"AT command is outside the supplied allowlist: {step.command}")
+            if step.data is not None or step.log_command not in (None, step.command):
+                raise ValueError("allowlisted AT query sequences cannot send data or substitute commands")
+    step_rows = "@(" + ",".join(ps_step_row(item) for item in checked_steps) + ")"
     script = f"""
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $ErrorActionPreference = 'Stop'
@@ -509,6 +793,106 @@ def parse_status_probe(probe: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def parse_tls_capability_probe(probe: dict[str, Any]) -> dict[str, Any]:
+    """Reduce modem responses to non-secret capability facts."""
+
+    responses = response_map(probe)
+    csslcfg_test = responses.get("CSSLCFG_TEST", "")
+    csslcfg_normalized = csslcfg_test.lower()
+    options = {
+        option: option in csslcfg_normalized
+        for option in TLS_REQUIRED_CSSLCFG_OPTIONS
+    }
+    command_results = []
+    labels = [
+        ("ATI", "ATI"),
+        ("AT+CGMR", "CGMR"),
+        ("AT+CSSLCFG=?", "CSSLCFG_TEST"),
+        ("AT+CSSLCFG?", "CSSLCFG_READ"),
+        ("AT+CCERTDOWN=?", "CCERTDOWN_TEST"),
+        ("AT+CCERTLIST", "CCERTLIST"),
+        ("AT+CCLK?", "CCLK_READ"),
+    ]
+    for command, label in labels:
+        response = responses.get(label, "")
+        command_results.append(
+            {
+                "command": command,
+                "supported": response_ok(response),
+                "error_observed": bool(re.search(r"(?:\+CME\s+ERROR|\bERROR\b)", response, re.I)),
+            }
+        )
+
+    required_api_labels = (
+        "CSSLCFG_TEST",
+        "CSSLCFG_READ",
+        "CCERTDOWN_TEST",
+        "CCERTLIST",
+        "CCLK_READ",
+    )
+    missing = [label for label in required_api_labels if not response_ok(responses.get(label, ""))]
+    missing.extend(option for option, present in options.items() if not present)
+    capability = "present" if probe.get("ok") and not missing else "missing"
+    ati = responses.get("ATI", "")
+    model = match_text(r"Model:\s*([^\r\n]+)", ati)
+    if model is None:
+        model = match_text(r"\b(SIM7670[^\r\n]*)", ati)
+    revision = match_text(r"Revision:\s*([^\r\n]+)", ati)
+    if revision is None:
+        revision = extract_cgmr_revision(responses.get("CGMR", ""))
+    cert_list_response = responses.get("CCERTLIST", "")
+    return {
+        "port": safe_identity_field(str(probe.get("port") or "")),
+        "probe_completed": bool(probe.get("ok")),
+        "probe_error": safe_identity_field(str(probe.get("error") or "")) or None,
+        "model": safe_identity_field(model),
+        "revision": safe_identity_field(revision),
+        "is_sim7670_family": bool(model and "SIM7670" in model.upper()),
+        "capability": capability,
+        "missing_or_unadvertised": sorted(set(missing)),
+        "csslcfg_options": options,
+        "certificate_list_response_present": "+CCERTLIST:" in cert_list_response.upper(),
+        "clock_query_supported": response_ok(responses.get("CCLK_READ", "")),
+        "clock_shape_recognized": bool(
+            re.search(r'\+CCLK:\s*"\d{2}/\d{2}/\d{2},\d{2}:\d{2}:\d{2}[+-]\d{2}"', responses.get("CCLK_READ", ""))
+        ),
+        "command_results": command_results,
+        "raw_responses_persisted": False,
+    }
+
+
+def extract_cgmr_revision(text: str) -> str | None:
+    for line in text.splitlines():
+        candidate = line.strip()
+        if not candidate or candidate.upper() in {"AT+CGMR", "OK", "ERROR"}:
+            continue
+        if candidate.upper().startswith("+CME ERROR"):
+            continue
+        return re.sub(r"^\+CGMR:\s*", "", candidate, flags=re.I)
+    return None
+
+
+def safe_identity_field(value: str | None) -> str | None:
+    if value is None:
+        return None
+    cleaned = " ".join(redact_sensitive(value).split())
+    cleaned = re.sub(r"\b\d{12,20}\b", "[REDACTED_IDENTIFIER]", cleaned)
+    return truncate_text(cleaned, 120) if cleaned else None
+
+
+def select_tls_capability_probe(probes: list[dict[str, Any]]) -> dict[str, Any] | None:
+    for item in probes:
+        if item.get("is_sim7670_family") and item.get("capability") == "present":
+            return item
+    for item in probes:
+        if item.get("is_sim7670_family"):
+            return item
+    for item in probes:
+        if item.get("capability") == "present":
+            return item
+    return probes[0] if probes else None
+
+
 def parse_http_probe(probe: dict[str, Any] | None, *, mode: str = "health-get") -> dict[str, Any]:
     if probe is None:
         return {}
@@ -604,12 +988,21 @@ def summarize_run(
     url: str,
     mode: str,
     include_cid: bool,
+    transport: dict[str, Any],
 ) -> dict[str, Any]:
     selected_status = selected["parsed"] if selected else {}
     http_ok = parsed_http.get("reason_code") in {"LTE_HTTP_OK", "LTE_HTTP_AUTH_GATE_REACHED"}
+    result = "FAIL"
+    reason_code = parsed_http.get("reason_code") or "LTE_HTTP_NO_AT_PORT"
+    if http_ok and transport.get("plaintext_fallback"):
+        result = "PASS_ENGINEERING_FALLBACK"
+        reason_code = "LTE_HTTP_ENGINEERING_HEALTH_OK"
+    elif http_ok and transport.get("scheme") == "https":
+        result = "INCOMPLETE"
+        reason_code = "LTE_HTTPS_PEER_VERIFICATION_UNVERIFIED"
     return {
-        "result": "PASS" if http_ok else "FAIL",
-        "reason_code": parsed_http.get("reason_code") or "LTE_HTTP_NO_AT_PORT",
+        "result": result,
+        "reason_code": reason_code,
         "url": url,
         "mode": mode,
         "include_cid": include_cid,
@@ -667,6 +1060,57 @@ def match_text(pattern: str, text: str) -> str | None:
     return ",".join(group.strip() for group in match.groups())
 
 
+def render_tls_capability_markdown(report: dict[str, Any]) -> str:
+    summary = report["summary"]
+    exact_firmware = report["exact_firmware"]
+    lines = [
+        "# OPS-004B SIM7670G TLS Capability AT Probe",
+        "",
+        f"- Generated: `{report['started_at']}`",
+        f"- Classification: `{summary['classification']}`",
+        f"- Reason: `{summary['reason_code']}`",
+        f"- Evidence statement: **{report['evidence_statement']}**",
+        f"- Selected port: `{summary['selected_port']}`",
+        f"- Model: `{exact_firmware.get('model')}`",
+        f"- Firmware revision: `{exact_firmware.get('revision')}`",
+        "",
+        "## Safety Contract",
+        "",
+        "- The probe is query-only: no HTTP action, PDP/network activation, TLS setting write, certificate upload, token access, or payload body.",
+        f"- Fixed AT allowlist: `{', '.join(report['probe_contract']['allowed_commands'])}`",
+        "- Raw AT responses and certificate filenames are not persisted in this report.",
+        "",
+        "## Observations",
+        "",
+        "| Port | Model | Revision | Capability | Missing/unadvertised | Clock shape |",
+        "|---|---|---|---|---|---:|",
+    ]
+    for item in report["probes"]:
+        lines.append(
+            f"| `{escape_table(item.get('port'))}` | `{escape_table(item.get('model'))}` | "
+            f"`{escape_table(item.get('revision'))}` | `{item.get('capability')}` | "
+            f"`{escape_table(', '.join(item.get('missing_or_unadvertised', [])) or 'none')}` | "
+            f"{item.get('clock_shape_recognized')} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Interpretation Boundary",
+            "",
+            "- SIMCom's SIM76XX SSL AT command manual documents CA binding, server authentication, SNI, common-name checking, and local-time validation controls for software `2388_SIM76XX` and later.",
+            "- An observed command surface is capability evidence only. It does not prove this exact firmware maps to that documented branch or correctly rejects an invalid CA, hostname, clock, or SNI case.",
+            "- Any live probe requires new explicit operator authorization. Negative-path TLS testing is a separate, traffic-generating task.",
+            "",
+            "## Official Sources",
+            "",
+            f"- [SIMCom SIM76XX SSL AT Command Manual]({SIMCOM_SIM76XX_SSL_MANUAL_URL})",
+            f"- [SIMCom SIM7600 Series SSL Application Note]({SIMCOM_SIM76XX_SSL_APPLICATION_NOTE_URL})",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def render_markdown_report(report: dict[str, Any]) -> str:
     summary = report["summary"]
     lines = [
@@ -678,7 +1122,9 @@ def render_markdown_report(report: dict[str, Any]) -> str:
         f"- Mode: `{report['mode']}`",
         f"- URL: `{report['url']}`",
         f"- Token source: `{report.get('token_source') or 'none'}`",
-        f"- Auth header length: `{report.get('auth_header_length') or 'none'}`",
+        f"- Auth configured: `{report.get('auth_configured', False)}`",
+        f"- TLS peer verification: `{report.get('transport', {}).get('peer_verification', 'unavailable')}`",
+        f"- Production acceptable: `{report.get('transport', {}).get('production_acceptable', False)}`",
         f"- Include CID: `{report['include_cid']}`",
         f"- Payload padding bytes: `{report.get('payload_padding_bytes', 0)}`",
         f"- Candidate ports: `{', '.join(summary['candidate_ports']) or 'none'}`",
@@ -721,9 +1167,12 @@ def render_markdown_report(report: dict[str, Any]) -> str:
     lines.append("- This is PC-side USB AT evidence, not USB-Free product runtime evidence.")
     if report["mode"] == "telemetry-post-auth":
         lines.append("- A bearer token is used only to set the SIM7670G HTTP USERDATA header; the token value is redacted from reports.")
-        lines.append("- Passing this diagnostic proves the SIM7670G module can POST to the Message Hub over its AT HTTP stack.")
+        lines.append("- A response proves only AT-stack transport. This tool cannot prove SIM7670 certificate-chain or hostname verification.")
+    elif report.get("transport", {}).get("plaintext_fallback"):
+        lines.append("- This expiring fallback sends only GET /health, with no bearer token or location payload.")
+        lines.append("- It is engineering reachability evidence and is rejected by production-style acceptance.")
     else:
-        lines.append("- Passing this diagnostic only proves the SIM7670G module can reach the public Message Hub health URL through its AT HTTP stack.")
+        lines.append("- A response proves only that the SIM7670G AT stack reached the HTTPS URL; peer verification remains unverified.")
         lines.append("- No bearer token is used or recorded by this diagnostic.")
     lines.append("")
     return "\n".join(lines)
@@ -732,7 +1181,14 @@ def render_markdown_report(report: dict[str, Any]) -> str:
 def redact_sensitive(text: str) -> str:
     text = re.sub(r"(Authorization:\s*Bearer\s+)[^\r\n\"]+", r"\1[REDACTED_SECRET]", text, flags=re.I)
     text = re.sub(r"(Bearer\s+\[REDACTED_SECRET\])[^\r\n\"]*", r"\1", text, flags=re.I)
-    return re.sub(r"(Bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[REDACTED_SECRET]", text, flags=re.I)
+    text = re.sub(r"(Bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[REDACTED_SECRET]", text, flags=re.I)
+    text = re.sub(r"(https?://)[^/@\s\"']+@", r"\1[REDACTED_SECRET]@", text, flags=re.I)
+    return re.sub(
+        r"((?:access[_-]?token|token|api[_-]?key|password|secret)=)[^&\s\"']+",
+        r"\1[REDACTED_SECRET]",
+        text,
+        flags=re.I,
+    )
 
 
 def redact_payload(value: Any) -> Any:
@@ -752,15 +1208,28 @@ def escape_table(value: Any) -> str:
 def load_bearer_token(token_env: str, token_file: Path) -> tuple[str, str]:
     token = (os.environ.get(token_env) or "").strip()
     if token:
-        return token, f"env:{token_env}"
+        return validate_bearer_token(token), f"env:{token_env}"
     if token_file.exists():
-        token = token_file.read_text(encoding="utf-8").strip()
+        with token_file.open("rb") as handle:
+            raw = handle.read(MAX_BEARER_TOKEN_BYTES + 2)
+        if len(raw) > MAX_BEARER_TOKEN_BYTES + 1:
+            raise SystemExit("telemetry-post-auth token file exceeds the bounded token size")
+        try:
+            token = raw.decode("utf-8").strip()
+        except UnicodeDecodeError as error:
+            raise SystemExit("telemetry-post-auth token file must be UTF-8") from error
         if token:
-            return token, "file"
+            return validate_bearer_token(token), "file"
     raise SystemExit(
         "telemetry-post-auth requires a bearer token; set "
         f"{token_env} or provide {token_file}"
     )
+
+
+def validate_bearer_token(token: str) -> str:
+    if len(token.encode("utf-8")) > MAX_BEARER_TOKEN_BYTES or BEARER_TOKEN_RE.fullmatch(token) is None:
+        raise SystemExit("telemetry-post-auth token has an invalid format or length")
+    return token
 
 
 def run_powershell(script: str, timeout_seconds: int, extra_env: dict[str, str] | None = None) -> str:

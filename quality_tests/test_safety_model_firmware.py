@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import unittest
 
 
@@ -21,7 +22,15 @@ class SafetyModelFirmwareTests(unittest.TestCase):
     def test_component_wraps_shared_contract_header(self) -> None:
         self.assertIn('#include "safety_model_contract.h"', self.header)
         self.assertIn('../../../../shared/embedded', self.component_cmake)
-        self.assertIn('REQUIRES safety_model', self.main_cmake)
+        requirements = re.search(
+            r"set\(EGOLINK_MAIN_REQUIREMENTS\s+(?P<body>[\s\S]+?)\s+\)",
+            self.main_cmake,
+        )
+        self.assertIsNotNone(requirements)
+        self.assertRegex(
+            requirements.group("body"), r"(?m)^\s*safety_model\s*$"
+        )
+        self.assertIn("REQUIRES ${EGOLINK_MAIN_REQUIREMENTS}", self.main_cmake)
 
     def test_required_public_api_is_exposed(self) -> None:
         self.assertIn('bool safety_model_init(void);', self.header)

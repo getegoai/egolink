@@ -70,6 +70,43 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertIn("esp_http_client", self.main_cmake)
         self.assertIn("json", self.main_cmake)
 
+    def test_message_hub_https_is_authenticated_verified_and_fail_closed(self) -> None:
+        for token in [
+            'default "https://ego.example.invalid"',
+            "select MBEDTLS_CERTIFICATE_BUNDLE",
+            "config EGOLINK_MESSAGE_HUB_EXPECTED_TLS_HOST",
+            'default "ego.example.invalid"',
+            "message_hub_transport_configuration_error",
+            'return "plaintext_or_invalid_scheme"',
+            'return "unexpected_tls_host"',
+            'return "bearer_token_missing_or_invalid"',
+            'return "sim7670_tls_peer_verification_unavailable"',
+            ".transport_type = HTTP_TRANSPORT_OVER_SSL",
+            ".crt_bundle_attach = esp_crt_bundle_attach",
+            ".skip_cert_common_name_check = false",
+            ".disable_auto_redirect = true",
+            "MESSAGE_HUB_HTTPS_CONFIG_REJECTED",
+            "network_started=false payload_sent=false",
+            "memset(auth_header, 0, sizeof(auth_header))",
+            "MESSAGE_HUB_HTTPS_AUTH_HEADER_REJECTED",
+        ]:
+            with self.subTest(token=token):
+                self.assertIn(token, self.kconfig + self.app_main)
+
+        self.assertNotIn('default "http://127.0.0.1:8790"', self.kconfig)
+        self.assertIn('CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL="https://ego.example.invalid"', self.vps_http_defaults)
+        self.assertIn('CONFIG_EGOLINK_MESSAGE_HUB_EXPECTED_TLS_HOST="ego.example.invalid"', self.vps_http_defaults)
+        self.assertIn("CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y", self.vps_http_defaults)
+        app_entry = self.app_main.split("void app_main(void)", 1)[1]
+        self.assertLess(
+            app_entry.index("message_hub_transport_configuration_error()"),
+            app_entry.index("start_wifi()"),
+        )
+        self.assertLess(
+            app_entry.index("message_hub_transport_configuration_error()"),
+            app_entry.index("xTaskCreate(lte_http_command_task"),
+        )
+
     def test_http_message_hub_posts_heartbeat_and_acks_commands(self) -> None:
         for token in [
             "#if CONFIG_EGOLINK_MESSAGE_HUB_HTTP_ENABLED",
@@ -538,6 +575,15 @@ class MqttHeartbeatFirmwareTests(unittest.TestCase):
         self.assertLess(upload.index("capture_real_imu_window(&capture)"), upload.index("IMU_WINDOW_CHUNK_POST_DONE"))
         self.assertLess(upload.index("manifest_frame_preflight_over_1200_bytes"), upload.index("IMU_WINDOW_CHUNK_POST_DONE"))
         self.assertIn("strlen(s_imu_window_frame) > IMU_WINDOW_RAW_FRAME_MAX_BYTES", upload)
+
+    def test_raw_lte_location_builder_preserves_boot_scoped_lineage(self) -> None:
+        builder = self.app_main.split(
+            "static void build_lte_location_report_kv_payload", 1
+        )[1].split("static bool lte_http_publish_raw_location_report", 1)[0]
+
+        self.assertIn('"boot_count=%" PRIu32', builder)
+        self.assertIn('"ts=uptime_ms:%" PRId64', builder)
+        self.assertNotIn("ts_uptime_us=", builder)
 
     def test_wifi_imu_window_profile_reuses_raw_parser_and_shared_publisher(self) -> None:
         for token in [

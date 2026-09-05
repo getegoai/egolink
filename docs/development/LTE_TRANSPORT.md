@@ -1,15 +1,98 @@
 ---
 document_status: authoritative
-last_verified: 2026-07-01
+last_verified: 2026-09-02
 verified_by: codex
 ---
 
 # SIM7670G LTE Transport Track
 
-The current validated USB-Free path uses Wi-Fi HTTP to the public VPS Message
-Hub. That path is the development baseline, not final product transport
-acceptance. The SIM7670G LTE track must be introduced as thin slices so that
-each failure stage is visible.
+## OPS-004 TLS Migration Boundary
+
+As of 2026-09-02, the production-style Message Hub origin is
+`https://ego.example.invalid`; a bearer token or location payload must never use
+the historical public plaintext `:8790` path. The older HTTP sections below
+remain valid evidence history, not an approved target configuration.
+
+The Wi-Fi/ESP-IDF ingress candidate verifies the URL host with ESP-TLS and the
+built-in CA bundle, rejects redirects, requires a valid runtime bearer token,
+and fails before network/sensor startup on plaintext or authority mismatch.
+SIMCom's current SIM76XX SSL AT manual documents certificate storage and
+SSL-context controls for CA trust (`CCERTDOWN`/`CSSLCFG="cacert"`), server
+authentication (`authmode`), SNI (`enableSNI`), local-time checking
+(`ignorelocaltime`) and certificate common-name checking (`ignorecertCN`). The
+manual limits that command set to software `2388_SIM76XX` and later; the
+mapping from the wearable's observed SIM7670G revision naming to that software
+branch is not established. This is therefore **documented capability / exact
+firmware + negative behavior unverified**, not hardware acceptance. See the
+[official SIM76XX SSL AT command manual](https://en.simcom.com/Uploads/file/20260622/20260622103004_43058.pdf)
+and [official SIM7600-series SSL application note](https://en.simcom.com/Uploads/file/20240611/20240611143858_59317.pdf).
+
+The present SIM7670 AT HTTP component has no integrated, reviewed
+certificate-store plus hostname-verification path. Firmware therefore fails closed with
+`sim7670_tls_peer_verification_unavailable` whenever an LTE HTTP probe or
+command-loop build is selected; it sends no credential or payload. Modem TLS
+support remains an implementation and bounded hardware-validation task, not a
+capability inferred from an `https://` URL or an HTTP 2xx response.
+
+For P0, prefer ESP-TLS over a validated modem IP bearer (PPP or RNDIS as the
+hardware path permits), so certificate-chain and hostname enforcement remain
+in the already reviewed ESP-TLS layer. Keep modem-native AT TLS as a fallback
+candidate until the exact modem firmware passes both capability and negative-
+behavior tests. This direction does not claim that an ESP-to-modem PPP/RNDIS
+path has already been integrated or hardware-verified.
+
+### OPS-004B zero-traffic capability probe
+
+The diagnostic has a separate `tls-capability` mode with an exact, read-only
+allowlist:
+
+```text
+ATI
+AT+CGMR
+AT+CSSLCFG=?
+AT+CSSLCFG?
+AT+CCERTDOWN=?
+AT+CCERTLIST
+AT+CCLK?
+```
+
+It does not run the LTE status preflight, start HTTP, activate a network
+context, write `CSSLCFG`, upload a certificate, read a bearer token, or send a
+body. It persists parsed capability facts only; raw AT responses and
+certificate filenames are discarded. A live run still requires new explicit
+operator authorization:
+
+```powershell
+python scripts/diag_lte_http_at.py --mode tls-capability --json
+```
+
+Even a `capability-present` result leaves exact-firmware mapping and negative
+behavior unverified. Production use still requires a known test CA/server and
+evidence that an invalid CA, wrong hostname, invalid clock, and missing/wrong
+SNI fail closed before any real credential or location payload is introduced.
+
+For migration diagnosis only, `scripts/diag_lte_http_at.py` defaults to an
+unauthenticated HTTPS health request. Because the tool cannot currently prove
+the modem's peer-verification settings, an HTTPS response is classified
+`INCOMPLETE`, not a secure PASS. A plaintext comparison is limited to one
+credential-free, body-free `GET /health`, requires an explicit expiry within
+one hour, and is labeled `PASS_ENGINEERING_FALLBACK`/not production-acceptable:
+
+```powershell
+$expiry = [DateTimeOffset]::UtcNow.AddMinutes(30).ToString("o")
+python scripts/diag_lte_http_at.py `
+  --url http://ego.example.invalid:8790/health `
+  --allow-plaintext-engineering `
+  --plaintext-expires-at-utc $expiry
+```
+
+Do not set a token environment variable for that comparison. It cannot POST,
+carry location data, validate OPS-004, or justify keeping public port `8790`.
+
+The historically validated USB-Free path used Wi-Fi or SIM7670 HTTP to the
+public VPS Message Hub. Those runs are development evidence, not final product
+transport acceptance. The SIM7670G TLS track must be introduced as thin slices
+so that each failure stage is visible.
 
 ## Scope
 

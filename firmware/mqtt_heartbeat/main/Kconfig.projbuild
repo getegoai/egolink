@@ -53,19 +53,37 @@ config EGOLINK_SENSOR_EVENT_INTERVAL_SEC
     range 5 3600
 
 config EGOLINK_MESSAGE_HUB_HTTP_ENABLED
-    bool "Enable HTTP VPS Message Hub transport"
+    bool "Enable HTTPS VPS Message Hub transport"
     default n
+    select MBEDTLS_CERTIFICATE_BUNDLE
     help
         Keep this disabled for the existing local MQTT smoke path. Enable it
-        for FW-001/R1 field tests that post directly to the VPS Message Hub.
+        only for a TLS-authenticated VPS Message Hub path. The legacy symbol
+        name is retained for build compatibility; plaintext base URLs fail
+        closed before network or sensor initialization.
 
 config EGOLINK_MESSAGE_HUB_BASE_URL
-    string "HTTP Message Hub base URL"
-    default "http://127.0.0.1:8790"
+    string "HTTPS Message Hub base URL"
+    default "https://ego.example.invalid"
     depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    help
+        Production-style device ingress. It must be an https URL whose
+        authority exactly matches EGOLINK_MESSAGE_HUB_EXPECTED_TLS_HOST. An
+        optional trailing slash is accepted; userinfo, explicit ports,
+        queries, fragments, and other paths are rejected.
+
+config EGOLINK_MESSAGE_HUB_EXPECTED_TLS_HOST
+    string "Expected Message Hub TLS host"
+    default "ego.example.invalid"
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    help
+        Exact DNS host expected in the HTTPS base URL. ESP-TLS verifies the
+        server certificate chain against the ESP-IDF certificate bundle and
+        verifies this URL host. Keep this value free of a scheme, port, path,
+        wildcard, or credentials.
 
 config EGOLINK_MESSAGE_HUB_BEARER_TOKEN
-    string "HTTP Message Hub bearer token"
+    string "HTTPS Message Hub bearer token"
     default ""
     depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
     help
@@ -73,7 +91,7 @@ config EGOLINK_MESSAGE_HUB_BEARER_TOKEN
         defaults, docs, or task packets.
 
 config EGOLINK_MESSAGE_HUB_COMMAND_POLL_INTERVAL_SEC
-    int "HTTP Message Hub command poll interval seconds"
+    int "HTTPS Message Hub command poll interval seconds"
     default 10
     range 2 3600
     depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
@@ -108,9 +126,9 @@ config EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
     depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED && EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
     help
         Dedicated engineering profile for polling the existing EGLK/1 raw
-        capture_imu_window command over Wi-Fi. It captures 100-600 real
-        QMI8658 samples at 50 ms (default 300), stops measurement before
-        upload, and does not start periodic heartbeat or sensor telemetry tasks.
+        capture_imu_window command over Wi-Fi. It captures exactly 100 real
+        QMI8658 samples at 50 ms, stops measurement before upload, and does
+        not start periodic heartbeat or sensor telemetry tasks.
 
 config EGOLINK_WIFI_IMU_WINDOW_POLL_MAX_ATTEMPTS
     int "Bounded Wi-Fi IMU command poll attempts"
@@ -143,5 +161,46 @@ config EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
         by uploading an explicit location_report event with fix=false and
         source_status=unverified. This is a command/telemetry scaffold only;
         it does not control SIM7670G GNSS or claim a real fix.
+
+config EGOLINK_LOC021S_MODEM_OWNER_SMOKE_PROFILE
+    bool "Build the isolated LOC-021S modem-owner smoke application"
+    default n
+    depends on EGOLINK_MESSAGE_HUB_HTTP_ENABLED
+    depends on EGOLINK_SIM7670_GNSS_ENABLED && EGOLINK_SIM7670_LTE_STATUS_ENABLED
+    depends on EGOLINK_SIM7670_LOCATION_MODEM_OWNER_ENABLED
+    depends on !EGOLINK_SIM7670_LTE_HTTP_PROBE_ENABLED
+    depends on !EGOLINK_SIM7670_LTE_HTTP_COMMAND_LOOP_ENABLED
+    depends on !EGOLINK_SIM7670_LOCATION_OBSERVATION_ENABLED
+    depends on !EGOLINK_SIM7670_D1_PERIODIC_LOCATION_ENABLED
+    depends on !EGOLINK_LTE_WIFI_FAILOVER_ENABLED
+    depends on !EGOLINK_WIFI_IMU_WINDOW_COMMAND_ENABLED
+    help
+        Selects a dedicated app_main translation unit instead of the legacy
+        heartbeat application. The profile initializes the persistent outbox
+        composition and starts exactly one boot-long LOC-021Q owner, then
+        queues at most one bounded GNSS-status request. It contains no Wi-Fi,
+        HTTP, external SOS, IMU, direct SIM7670 or UART call. The Message Hub
+        symbol is currently only a build dependency of the existing GNSS/LTE
+        driver Kconfig; this profile performs no network operation.
+
+config EGOLINK_LOC021S_GNSS_STATUS_TIMEOUT_MS
+    int "LOC-021S one-shot GNSS status timeout milliseconds"
+    default 15000
+    range 4000 120000
+    depends on EGOLINK_LOC021S_MODEM_OWNER_SMOKE_PROFILE
+    help
+        Total bounded request budget. LOC-021Q reserves its configured tail
+        for a never-cancelled GNSS power-off compensation before admitting a
+        report. This is an engineering smoke value, not a product cadence.
+
+config EGOLINK_LOC021S_OBSERVE_TIMEOUT_MS
+    int "LOC-021S bounded metadata observation window milliseconds"
+    default 30000
+    range 1000 180000
+    depends on EGOLINK_LOC021S_MODEM_OWNER_SMOKE_PROFILE
+    help
+        Maximum time app_main polls only Q's coordinate-free snapshot after
+        queuing the one request. Expiry does not stop or delete the boot-long
+        owner task and does not claim that an in-flight AT command ended.
 
 endmenu

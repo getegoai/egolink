@@ -1,0 +1,4 @@
+# OUTBOX-010C build-only partition profile. It is not the default or flashed image.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions_outbox.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions_outbox.csv"
