@@ -1,0 +1,661 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/persistent_priority_outbox_v0.schema.json",
+  "title": "OUTBOX-010 Host Reference Persistent Priority Outbox",
+  "description": "Crash/reopen semantics reference only; this contract does not claim ESP32 NVS, brownout, flash-endurance, authenticated ACK, or P0-SOS evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "generation",
+    "device_id",
+    "configuration",
+    "records",
+    "ack_tombstones",
+    "metrics",
+    "last_failure",
+    "storage_sha256"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "egolink.persistent_priority_outbox.storage.v0.1"
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "device_id": {
+      "$ref": "#/$defs/safeId"
+    },
+    "configuration": {
+      "$ref": "#/$defs/configuration"
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    },
+    "ack_tombstones": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ackTombstone"
+      }
+    },
+    "metrics": {
+      "$ref": "#/$defs/metrics"
+    },
+    "last_failure": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/failure"
+        }
+      ]
+    },
+    "storage_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "safeId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "info",
+        "normal",
+        "warning",
+        "high",
+        "critical"
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_records",
+        "reserved_critical_records",
+        "max_total_payload_bytes",
+        "max_payload_bytes",
+        "reserved_critical_payload_bytes",
+        "base_retry_ms",
+        "max_retry_ms",
+        "tombstone_capacity",
+        "configuration_sha256"
+      ],
+      "properties": {
+        "max_records": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reserved_critical_records": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_total_payload_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_payload_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "reserved_critical_payload_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "base_retry_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_retry_ms": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tombstone_capacity": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "configuration_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version",
+        "device_id",
+        "event_id",
+        "event_type",
+        "priority",
+        "source_event_time_ms",
+        "boot_count",
+        "session_id",
+        "source_sequence",
+        "payload",
+        "payload_sha256",
+        "payload_size_bytes",
+        "identity_sha256",
+        "enqueue_time_ms",
+        "attempt_count",
+        "last_attempt_time_ms",
+        "next_retry_time_ms",
+        "last_attempt_token",
+        "last_attempt_result",
+        "last_attempt_result_time_ms",
+        "last_error_code",
+        "send_state"
+      ],
+      "properties": {
+        "contract_version": {
+          "const": "egolink.persistent_priority_outbox.record.v0.1"
+        },
+        "device_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "event_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "event_type": {
+          "$ref": "#/$defs/safeId"
+        },
+        "priority": {
+          "$ref": "#/$defs/priority"
+        },
+        "source_event_time_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "boot_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "session_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "source_sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "payload": {
+          "type": "object",
+          "propertyNames": {
+            "not": {
+              "enum": [
+                "coordinate",
+                "coordinates",
+                "geojson",
+                "gps_coordinate",
+                "lat",
+                "latitude",
+                "latitude_deg",
+                "lon",
+                "long",
+                "longitude",
+                "longitude_deg",
+                "raw_location",
+                "audio",
+                "audio_bytes",
+                "audio_data",
+                "blob",
+                "data_uri",
+                "image",
+                "image_bytes",
+                "jpeg",
+                "media",
+                "media_bytes",
+                "opus",
+                "pcm",
+                "raw_audio",
+                "recording",
+                "video"
+              ]
+            }
+          }
+        },
+        "payload_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "payload_size_bytes": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "identity_sha256": {
+          "description": "SHA-256 over device_id, event_id, event_type, priority, payload_sha256, source event time, boot/session lineage and source sequence.",
+          "$ref": "#/$defs/sha256"
+        },
+        "enqueue_time_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "attempt_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_attempt_time_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "next_retry_time_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_attempt_token": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/safeId"
+            }
+          ]
+        },
+        "last_attempt_result": {
+          "type": "string",
+          "enum": [
+            "not_attempted",
+            "pending",
+            "failed",
+            "transport_accepted"
+          ]
+        },
+        "last_attempt_result_time_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "last_error_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+        },
+        "send_state": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "attempt_started",
+            "retry_wait",
+            "awaiting_positive_ack"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "event_type": {
+                "enum": [
+                  "manual_sos",
+                  "sos"
+                ]
+              }
+            },
+            "required": [
+              "event_type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "priority": {
+                "const": "critical"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "attempt_count": {
+                "const": 0
+              }
+            },
+            "required": [
+              "attempt_count"
+            ]
+          },
+          "then": {
+            "properties": {
+              "last_attempt_time_ms": {
+                "type": "null"
+              },
+              "last_attempt_token": {
+                "type": "null"
+              },
+              "last_attempt_result": {
+                "const": "not_attempted"
+              },
+              "last_attempt_result_time_ms": {
+                "type": "null"
+              },
+              "last_error_code": {
+                "type": "null"
+              },
+              "send_state": {
+                "const": "queued"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "last_attempt_result": {
+                "const": "pending"
+              }
+            },
+            "required": [
+              "last_attempt_result"
+            ]
+          },
+          "then": {
+            "properties": {
+              "attempt_count": {
+                "minimum": 1
+              },
+              "last_attempt_time_ms": {
+                "type": "integer"
+              },
+              "last_attempt_token": {
+                "$ref": "#/$defs/safeId"
+              },
+              "last_attempt_result_time_ms": {
+                "type": "null"
+              },
+              "last_error_code": {
+                "type": "null"
+              },
+              "send_state": {
+                "const": "attempt_started"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "last_attempt_result": {
+                "const": "failed"
+              }
+            },
+            "required": [
+              "last_attempt_result"
+            ]
+          },
+          "then": {
+            "properties": {
+              "attempt_count": {
+                "minimum": 1
+              },
+              "last_attempt_time_ms": {
+                "type": "integer"
+              },
+              "last_attempt_token": {
+                "$ref": "#/$defs/safeId"
+              },
+              "last_attempt_result_time_ms": {
+                "type": "integer"
+              },
+              "last_error_code": {
+                "type": "string"
+              },
+              "send_state": {
+                "const": "retry_wait"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "last_attempt_result": {
+                "const": "transport_accepted"
+              }
+            },
+            "required": [
+              "last_attempt_result"
+            ]
+          },
+          "then": {
+            "properties": {
+              "attempt_count": {
+                "minimum": 1
+              },
+              "last_attempt_time_ms": {
+                "type": "integer"
+              },
+              "last_attempt_token": {
+                "$ref": "#/$defs/safeId"
+              },
+              "last_attempt_result_time_ms": {
+                "type": "integer"
+              },
+              "last_error_code": {
+                "type": "null"
+              },
+              "send_state": {
+                "const": "awaiting_positive_ack"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ack": {
+      "description": "Bounded ACK shape used by the host reference. Authentication and binding are integration responsibilities, not implied by this object.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_version",
+        "ack_id",
+        "device_id",
+        "event_id",
+        "payload_sha256",
+        "status",
+        "ack_time_ms"
+      ],
+      "properties": {
+        "contract_version": {
+          "const": "egolink.persistent_priority_outbox.ack.v0.1"
+        },
+        "ack_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "device_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "event_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "payload_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "accepted",
+            "rejected"
+          ]
+        },
+        "ack_time_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "ackTombstone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ack_id",
+        "device_id",
+        "event_id",
+        "payload_sha256",
+        "acked_at_ms"
+      ],
+      "properties": {
+        "ack_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "device_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "event_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "payload_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "acked_at_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enqueue_count",
+        "duplicate_enqueue_count",
+        "rejected_enqueue_count",
+        "send_attempt_count",
+        "send_failure_count",
+        "transport_accept_count",
+        "ack_delete_count",
+        "duplicate_ack_count",
+        "ack_mismatch_count",
+        "full_count",
+        "priority_overflow_count",
+        "payload_overflow_count",
+        "tombstone_pruned_count",
+        "corruption_detected_count",
+        "recovery_count",
+        "last_drop_reason",
+        "last_corruption_reason",
+        "last_recovery_reason"
+      ],
+      "properties": {
+        "enqueue_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "duplicate_enqueue_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "rejected_enqueue_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "send_attempt_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "send_failure_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "transport_accept_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "ack_delete_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "duplicate_ack_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "ack_mismatch_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "full_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "priority_overflow_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "payload_overflow_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "tombstone_pruned_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "corruption_detected_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "recovery_count": {
+          "$ref": "#/$defs/nonnegativeInteger"
+        },
+        "last_drop_reason": {
+          "$ref": "#/$defs/nullableReason"
+        },
+        "last_corruption_reason": {
+          "$ref": "#/$defs/nullableReason"
+        },
+        "last_recovery_reason": {
+          "$ref": "#/$defs/nullableReason"
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason",
+        "event_id",
+        "priority",
+        "at_ms"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "event_id": {
+          "$ref": "#/$defs/safeId"
+        },
+        "priority": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/priority"
+            },
+            {
+              "const": "unknown"
+            }
+          ]
+        },
+        "at_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "nonnegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nullableReason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 512
+    }
+  }
+}

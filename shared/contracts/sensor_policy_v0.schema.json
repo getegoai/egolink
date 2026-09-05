@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/sensor_policy_v0.schema.json",
+  "title": "EgoLink Sensor Policy v0 configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "semantic_validation",
+    "config_id",
+    "provenance",
+    "stationary",
+    "moving",
+    "location_uncertain",
+    "gnss",
+    "cell",
+    "movement",
+    "location",
+    "low_battery",
+    "sos"
+  ],
+  "properties": {
+    "contract_version": {"const": "egolink.sensor_policy_config.v0.1"},
+    "semantic_validation": {"const": "egolink.sensor_policy.semantic.v0.1"},
+    "config_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "provenance": {"const": "engineering_default_unverified"},
+    "stationary": {"$ref": "#/$defs/schedule"},
+    "moving": {"$ref": "#/$defs/schedule"},
+    "location_uncertain": {"$ref": "#/$defs/schedule"},
+    "gnss": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acquisition_timeout_s",
+        "retry_backoff_s",
+        "retry_backoff_multiplier",
+        "max_retry_backoff_s"
+      ],
+      "properties": {
+        "acquisition_timeout_s": {"type": "number", "exclusiveMinimum": 0},
+        "retry_backoff_s": {"type": "number", "exclusiveMinimum": 0},
+        "retry_backoff_multiplier": {"type": "number", "minimum": 1},
+        "max_retry_backoff_s": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_timeout_s",
+        "retry_backoff_s",
+        "retry_backoff_multiplier",
+        "max_retry_backoff_s"
+      ],
+      "properties": {
+        "request_timeout_s": {"type": "number", "exclusiveMinimum": 0},
+        "retry_backoff_s": {"type": "number", "exclusiveMinimum": 0},
+        "retry_backoff_multiplier": {"type": "number", "minimum": 1},
+        "max_retry_backoff_s": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "movement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "window_s",
+        "min_samples",
+        "enter_rms_m_s2",
+        "exit_rms_m_s2",
+        "enter_windows",
+        "exit_windows",
+        "evidence_stale_after_s"
+      ],
+      "properties": {
+        "window_s": {"type": "number", "exclusiveMinimum": 0},
+        "min_samples": {"type": "integer", "minimum": 2},
+        "enter_rms_m_s2": {"type": "number", "exclusiveMinimum": 0},
+        "exit_rms_m_s2": {"type": "number", "minimum": 0},
+        "enter_windows": {"type": "integer", "minimum": 1},
+        "exit_windows": {"type": "integer", "minimum": 1},
+        "evidence_stale_after_s": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fine_max_accuracy_m",
+        "fine_max_hdop",
+        "hdop_uncertainty_multiplier_m",
+        "coarse_max_uncertainty_m",
+        "fine_freshness_s",
+        "coarse_freshness_s",
+        "prediction_horizon_s",
+        "uncertainty_growth_mps",
+        "uncertain_threshold_m",
+        "fine_initial_confidence",
+        "coarse_initial_confidence",
+        "predicted_min_confidence"
+      ],
+      "properties": {
+        "fine_max_accuracy_m": {"type": "number", "exclusiveMinimum": 0},
+        "fine_max_hdop": {"type": "number", "exclusiveMinimum": 0},
+        "hdop_uncertainty_multiplier_m": {"type": "number", "exclusiveMinimum": 0},
+        "coarse_max_uncertainty_m": {"type": "number", "exclusiveMinimum": 0},
+        "fine_freshness_s": {"type": "number", "exclusiveMinimum": 0},
+        "coarse_freshness_s": {"type": "number", "exclusiveMinimum": 0},
+        "prediction_horizon_s": {"type": "number", "exclusiveMinimum": 0},
+        "uncertainty_growth_mps": {"type": "number", "minimum": 0},
+        "uncertain_threshold_m": {"type": "number", "exclusiveMinimum": 0},
+        "fine_initial_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "coarse_initial_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "predicted_min_confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "low_battery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enter_percent",
+        "exit_percent",
+        "critical_percent",
+        "gnss_interval_s",
+        "cell_interval_s",
+        "imu_rate_hz",
+        "lte_keep_connected"
+      ],
+      "properties": {
+        "enter_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "exit_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "critical_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "gnss_interval_s": {"type": "number", "exclusiveMinimum": 0},
+        "cell_interval_s": {"type": "number", "exclusiveMinimum": 0},
+        "imu_rate_hz": {"type": "number", "minimum": 0},
+        "lte_keep_connected": {"type": "boolean"}
+      }
+    },
+    "sos": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gnss_immediate",
+        "gnss_retry_interval_s",
+        "gnss_acquisition_timeout_s",
+        "cell_interval_s",
+        "imu_rate_hz",
+        "lte_keep_connected",
+        "upload_last_trusted",
+        "start_ego_call"
+      ],
+      "properties": {
+        "gnss_immediate": {"type": "boolean"},
+        "gnss_retry_interval_s": {"type": "number", "exclusiveMinimum": 0},
+        "gnss_acquisition_timeout_s": {"type": "number", "exclusiveMinimum": 0},
+        "cell_interval_s": {"type": "number", "exclusiveMinimum": 0},
+        "imu_rate_hz": {"type": "number", "minimum": 0},
+        "lte_keep_connected": {"type": "boolean"},
+        "upload_last_trusted": {"type": "boolean"},
+        "start_ego_call": {"type": "boolean"}
+      }
+    }
+  },
+  "x-egolink-semantic-validation": {
+    "validator_id": "egolink.sensor_policy.semantic.v0.1",
+    "rules": [
+      "all numeric values are finite and all second-based durations round to at least one millisecond",
+      "gnss.max_retry_backoff_s >= gnss.retry_backoff_s",
+      "cell.max_retry_backoff_s >= cell.retry_backoff_s",
+      "movement.exit_rms_m_s2 < movement.enter_rms_m_s2",
+      "location.coarse_max_uncertainty_m >= location.fine_max_accuracy_m",
+      "location.prediction_horizon_s >= max(location.fine_freshness_s, location.coarse_freshness_s)",
+      "location.predicted_min_confidence <= min(location.fine_initial_confidence, location.coarse_initial_confidence)",
+      "low_battery.critical_percent <= low_battery.enter_percent < low_battery.exit_percent"
+    ]
+  },
+  "$defs": {
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gnss_interval_s",
+        "cell_interval_s",
+        "imu_rate_hz",
+        "lte_keep_connected"
+      ],
+      "properties": {
+        "gnss_interval_s": {"type": "number", "exclusiveMinimum": 0},
+        "cell_interval_s": {"type": "number", "exclusiveMinimum": 0},
+        "imu_rate_hz": {"type": "number", "minimum": 0},
+        "lte_keep_connected": {"type": "boolean"}
+      }
+    }
+  }
+}

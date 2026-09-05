@@ -1,0 +1,78 @@
+{
+  "contract_version": "egolink.sensor_policy_config.v0.1",
+  "semantic_validation": "egolink.sensor_policy.semantic.v0.1",
+  "config_id": "p0-sprint1-engineering-default-20260823",
+  "provenance": "engineering_default_unverified",
+  "stationary": {
+    "gnss_interval_s": 600,
+    "cell_interval_s": 300,
+    "imu_rate_hz": 1,
+    "lte_keep_connected": false
+  },
+  "moving": {
+    "gnss_interval_s": 120,
+    "cell_interval_s": 60,
+    "imu_rate_hz": 10,
+    "lte_keep_connected": true
+  },
+  "location_uncertain": {
+    "gnss_interval_s": 60,
+    "cell_interval_s": 30,
+    "imu_rate_hz": 10,
+    "lte_keep_connected": true
+  },
+  "gnss": {
+    "acquisition_timeout_s": 45,
+    "retry_backoff_s": 60,
+    "retry_backoff_multiplier": 2,
+    "max_retry_backoff_s": 900
+  },
+  "cell": {
+    "request_timeout_s": 10,
+    "retry_backoff_s": 20,
+    "retry_backoff_multiplier": 2,
+    "max_retry_backoff_s": 300
+  },
+  "movement": {
+    "window_s": 2,
+    "min_samples": 20,
+    "enter_rms_m_s2": 0.8,
+    "exit_rms_m_s2": 0.3,
+    "enter_windows": 2,
+    "exit_windows": 2,
+    "evidence_stale_after_s": 10
+  },
+  "location": {
+    "fine_max_accuracy_m": 100,
+    "fine_max_hdop": 5,
+    "hdop_uncertainty_multiplier_m": 5,
+    "coarse_max_uncertainty_m": 5000,
+    "fine_freshness_s": 30,
+    "coarse_freshness_s": 120,
+    "prediction_horizon_s": 900,
+    "uncertainty_growth_mps": 1.5,
+    "uncertain_threshold_m": 250,
+    "fine_initial_confidence": 0.95,
+    "coarse_initial_confidence": 0.65,
+    "predicted_min_confidence": 0.1
+  },
+  "low_battery": {
+    "enter_percent": 20,
+    "exit_percent": 25,
+    "critical_percent": 10,
+    "gnss_interval_s": 900,
+    "cell_interval_s": 600,
+    "imu_rate_hz": 0.5,
+    "lte_keep_connected": false
+  },
+  "sos": {
+    "gnss_immediate": true,
+    "gnss_retry_interval_s": 30,
+    "gnss_acquisition_timeout_s": 60,
+    "cell_interval_s": 15,
+    "imu_rate_hz": 20,
+    "lte_keep_connected": true,
+    "upload_last_trusted": true,
+    "start_ego_call": true
+  }
+}

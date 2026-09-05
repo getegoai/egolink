@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/sensor_policy_decision_v0.schema.json",
+  "title": "EgoLink Sensor Policy v0 decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "event_time_ms",
+    "config_id",
+    "config_hash",
+    "policy_mode",
+    "derived_mobility_state",
+    "conditions",
+    "transition",
+    "actions",
+    "runtime",
+    "next_evaluation_ms"
+  ],
+  "properties": {
+    "contract_version": {"const": "egolink.sensor_policy_decision.v0.1"},
+    "event_time_ms": {"type": "integer", "minimum": 0},
+    "config_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "config_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "policy_mode": {"$ref": "#/$defs/mode"},
+    "derived_mobility_state": {
+      "type": "string",
+      "enum": ["stable", "moving", "unknown"]
+    },
+    "next_evaluation_ms": {"type": ["integer", "null"], "minimum": 0},
+    "conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sos_active", "low_battery", "critical_battery", "location_uncertain", "moving"],
+      "properties": {
+        "sos_active": {"type": "boolean"},
+        "low_battery": {"type": "boolean"},
+        "critical_battery": {"type": "boolean"},
+        "location_uncertain": {"type": "boolean"},
+        "moving": {"type": "boolean"}
+      }
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "changed", "reason_codes"],
+      "properties": {
+        "from": {"$ref": "#/$defs/mode"},
+        "to": {"$ref": "#/$defs/mode"},
+        "changed": {"type": "boolean"},
+        "reason_codes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 128}
+        }
+      }
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["imu", "cell", "gnss", "lte", "location", "ego_call", "camera"],
+      "properties": {
+        "imu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["rate_hz"],
+          "properties": {"rate_hz": {"type": "number", "minimum": 0}}
+        },
+        "cell": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "observe_now", "interval_s", "request_timeout_s", "retry_not_before_ms"],
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["observe", "continue", "timeout", "wait_backoff", "wait_interval"]
+            },
+            "observe_now": {"type": "boolean"},
+            "interval_s": {"type": "number", "exclusiveMinimum": 0},
+            "request_timeout_s": {"type": "number", "exclusiveMinimum": 0},
+            "retry_not_before_ms": {"type": ["integer", "null"], "minimum": 0}
+          }
+        },
+        "gnss": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "acquisition_timeout_s", "retry_not_before_ms"],
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["start", "continue", "stop_timeout", "wait_backoff", "wait_interval"]
+            },
+            "acquisition_timeout_s": {"type": "number", "exclusiveMinimum": 0},
+            "retry_not_before_ms": {"type": ["integer", "null"], "minimum": 0}
+          }
+        },
+        "lte": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["keep_connected"],
+          "properties": {"keep_connected": {"type": "boolean"}}
+        },
+        "location": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["upload_now"],
+          "properties": {"upload_now": {"type": "boolean"}}
+        },
+        "ego_call": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start_now"],
+          "properties": {"start_now": {"type": "boolean"}}
+        },
+        "camera": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requested", "action"],
+          "properties": {
+            "requested": {"const": false},
+            "action": {"const": "OFF"}
+          }
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "last_evaluation_ms",
+        "low_battery_latched",
+        "rule_mobility_state",
+        "last_imu_event_ms",
+        "observed_mobility_state",
+        "last_mobility_observation_ms",
+        "movement_enter_windows",
+        "movement_exit_windows",
+        "last_gnss_attempt_ms",
+        "gnss_acquisition_started_ms",
+        "consecutive_no_fix",
+        "retry_not_before_ms",
+        "last_cell_action_ms",
+        "cell_request_started_ms",
+        "consecutive_cell_timeouts",
+        "cell_retry_not_before_ms"
+      ],
+      "properties": {
+        "mode": {"$ref": "#/$defs/mode"},
+        "last_evaluation_ms": {"type": ["integer", "null"], "minimum": 0},
+        "low_battery_latched": {"type": "boolean"},
+        "rule_mobility_state": {
+          "type": "string",
+          "enum": ["stable", "moving", "unknown"]
+        },
+        "last_imu_event_ms": {"type": ["integer", "null"], "minimum": 0},
+        "observed_mobility_state": {
+          "type": "string",
+          "enum": ["stable", "moving", "unknown"]
+        },
+        "last_mobility_observation_ms": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "movement_enter_windows": {"type": "integer", "minimum": 0},
+        "movement_exit_windows": {"type": "integer", "minimum": 0},
+        "last_gnss_attempt_ms": {"type": ["integer", "null"], "minimum": 0},
+        "gnss_acquisition_started_ms": {"type": ["integer", "null"], "minimum": 0},
+        "consecutive_no_fix": {"type": "integer", "minimum": 0},
+        "retry_not_before_ms": {"type": ["integer", "null"], "minimum": 0},
+        "last_cell_action_ms": {"type": ["integer", "null"], "minimum": 0}
+        ,
+        "cell_request_started_ms": {"type": ["integer", "null"], "minimum": 0},
+        "consecutive_cell_timeouts": {"type": "integer", "minimum": 0},
+        "cell_retry_not_before_ms": {"type": ["integer", "null"], "minimum": 0}
+      }
+    }
+  },
+  "$defs": {
+    "mode": {
+      "type": "string",
+      "enum": ["STABLE", "MOVING", "LOCATION_UNCERTAIN", "SOS", "LOW_BATTERY"]
+    }
+  }
+}

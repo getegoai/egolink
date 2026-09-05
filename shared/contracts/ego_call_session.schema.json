@@ -1,0 +1,640 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/ego_call_session.schema.json",
+  "title": "Ego Call Session Transition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "session_id",
+    "event_id",
+    "idempotency_key",
+    "sequence",
+    "event_time_utc",
+    "device_id",
+    "guardian_id",
+    "asserted_by",
+    "trigger",
+    "transition",
+    "location_belief_ref",
+    "signaling",
+    "media",
+    "privacy"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "egolink.ego_call_session.v0.1"
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "event_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "idempotency_key": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "event_time_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "guardian_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "asserted_by": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "subject_ref"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["device", "guardian", "safety_kernel", "call_control", "rtc_adapter"]
+        },
+        "subject_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "initiator",
+        "safety_event_ref"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "manual_sos",
+            "guardian_call",
+            "device_call",
+            "policy_escalation"
+          ]
+        },
+        "initiator": {
+          "type": "string",
+          "enum": [
+            "device",
+            "guardian",
+            "safety_kernel"
+          ]
+        },
+        "safety_event_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 128
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "manual_sos" } }, "required": ["type"] },
+          "then": {
+            "properties": {
+              "initiator": { "const": "device" },
+              "safety_event_ref": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "guardian_call" } }, "required": ["type"] },
+          "then": { "properties": { "initiator": { "const": "guardian" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "device_call" } }, "required": ["type"] },
+          "then": { "properties": { "initiator": { "const": "device" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "policy_escalation" } }, "required": ["type"] },
+          "then": { "properties": { "initiator": { "const": "safety_kernel" } } }
+        }
+      ]
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "reason_code"
+      ],
+      "properties": {
+        "from": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            null,
+            "requested",
+            "ringing",
+            "connected",
+            "reconnecting"
+          ]
+        },
+        "to": {
+          "type": "string",
+          "enum": [
+            "requested",
+            "ringing",
+            "connected",
+            "reconnecting",
+            "ended",
+            "failed"
+          ]
+        },
+        "reason_code": {
+          "type": "string",
+          "enum": [
+            "created",
+            "guardian_notified",
+            "media_ready",
+            "media_lost",
+            "media_recovered",
+            "local_hangup",
+            "remote_hangup",
+            "declined",
+            "no_answer",
+            "setup_timeout",
+            "reconnect_timeout",
+            "unauthorized",
+            "binding_revoked",
+            "provider_unavailable",
+            "network_unavailable",
+            "internal_error"
+          ]
+        }
+      },
+      "oneOf": [
+        { "properties": { "from": { "type": "null" }, "to": { "const": "requested" }, "reason_code": { "const": "created" } } },
+        { "properties": { "from": { "const": "requested" }, "to": { "const": "ringing" }, "reason_code": { "const": "guardian_notified" } } },
+        { "properties": { "from": { "const": "requested" }, "to": { "const": "failed" }, "reason_code": { "enum": ["setup_timeout", "unauthorized", "binding_revoked", "provider_unavailable", "network_unavailable", "internal_error"] } } },
+        { "properties": { "from": { "const": "requested" }, "to": { "const": "ended" }, "reason_code": { "enum": ["local_hangup", "remote_hangup", "declined", "no_answer"] } } },
+        { "properties": { "from": { "const": "ringing" }, "to": { "const": "connected" }, "reason_code": { "const": "media_ready" } } },
+        { "properties": { "from": { "const": "ringing" }, "to": { "const": "failed" }, "reason_code": { "enum": ["setup_timeout", "binding_revoked", "provider_unavailable", "network_unavailable", "internal_error"] } } },
+        { "properties": { "from": { "const": "ringing" }, "to": { "const": "ended" }, "reason_code": { "enum": ["local_hangup", "remote_hangup", "declined", "no_answer"] } } },
+        { "properties": { "from": { "const": "connected" }, "to": { "const": "reconnecting" }, "reason_code": { "const": "media_lost" } } },
+        { "properties": { "from": { "const": "connected" }, "to": { "const": "failed" }, "reason_code": { "enum": ["reconnect_timeout", "binding_revoked", "provider_unavailable", "network_unavailable", "internal_error"] } } },
+        { "properties": { "from": { "const": "connected" }, "to": { "const": "ended" }, "reason_code": { "enum": ["local_hangup", "remote_hangup"] } } },
+        { "properties": { "from": { "const": "reconnecting" }, "to": { "const": "connected" }, "reason_code": { "const": "media_recovered" } } },
+        { "properties": { "from": { "const": "reconnecting" }, "to": { "const": "failed" }, "reason_code": { "enum": ["reconnect_timeout", "binding_revoked", "provider_unavailable", "network_unavailable", "internal_error"] } } },
+        { "properties": { "from": { "const": "reconnecting" }, "to": { "const": "ended" }, "reason_code": { "enum": ["local_hangup", "remote_hangup"] } } }
+      ]
+    },
+    "location_belief_ref": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "belief_id",
+        "state",
+        "observed_at_utc",
+        "age_ms",
+        "radius_m"
+      ],
+      "properties": {
+        "belief_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "Fine",
+            "Coarse",
+            "Predicted",
+            "Unknown"
+          ]
+        },
+        "observed_at_utc": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$"
+        },
+        "age_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "radius_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "state": { "enum": ["Fine", "Coarse", "Predicted"] } },
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {
+              "observed_at_utc": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$"
+              },
+              "age_ms": { "type": "integer", "minimum": 0 },
+              "radius_m": { "type": "number", "minimum": 0 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "state": { "const": "Unknown" } },
+            "required": ["state"]
+          },
+          "then": {
+            "properties": {
+              "observed_at_utc": { "type": "null" },
+              "age_ms": { "type": "null" },
+              "radius_m": { "type": "null" }
+            }
+          }
+        }
+      ]
+    },
+    "signaling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "status",
+        "provider_session_ref"
+      ],
+      "properties": {
+        "mode": {
+          "const": "managed_rtc"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "not_started",
+            "pending",
+            "ready",
+            "failed",
+            "closed"
+          ]
+        },
+        "provider_session_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 128
+        }
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "direction",
+        "relay_mode"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "not_started",
+            "connecting",
+            "ready",
+            "interrupted",
+            "failed",
+            "closed"
+          ]
+        },
+        "direction": {
+          "const": "full_duplex"
+        },
+        "relay_mode": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "stun",
+            "turn",
+            "managed_unknown"
+          ]
+        }
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metadata_retention_seconds",
+        "media_recording_allowed",
+        "consent_ref"
+      ],
+      "properties": {
+        "metadata_retention_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2592000
+        },
+        "media_recording_allowed": {
+          "type": "boolean"
+        },
+        "consent_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 128
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "media_recording_allowed": {
+                "const": true
+              }
+            },
+            "required": [
+              "media_recording_allowed"
+            ]
+          },
+          "then": {
+            "properties": {
+              "consent_ref": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "transition": {
+            "properties": { "from": { "type": "null" } },
+            "required": ["from"]
+          }
+        },
+        "required": ["transition"]
+      },
+      "then": { "properties": { "sequence": { "const": 0 } } },
+      "else": { "properties": { "sequence": { "minimum": 1 } } }
+    },
+    {
+      "if": {
+        "properties": {
+          "transition": {
+            "properties": { "reason_code": { "const": "created" } },
+            "required": ["reason_code"]
+          },
+          "trigger": {
+            "properties": { "initiator": { "const": "device" } },
+            "required": ["initiator"]
+          }
+        },
+        "required": ["transition", "trigger"]
+      },
+      "then": {
+        "properties": {
+          "asserted_by": { "properties": { "role": { "const": "device" } } }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "transition": {
+            "properties": { "reason_code": { "const": "created" } },
+            "required": ["reason_code"]
+          },
+          "trigger": {
+            "properties": { "initiator": { "const": "guardian" } },
+            "required": ["initiator"]
+          }
+        },
+        "required": ["transition", "trigger"]
+      },
+      "then": {
+        "properties": {
+          "asserted_by": { "properties": { "role": { "const": "guardian" } } }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "transition": {
+            "properties": { "reason_code": { "const": "created" } },
+            "required": ["reason_code"]
+          },
+          "asserted_by": {
+            "properties": { "role": { "const": "guardian" } },
+            "required": ["role"]
+          }
+        },
+        "required": ["transition", "asserted_by"]
+      },
+      "then": {
+        "properties": { "location_belief_ref": { "type": "null" } }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "transition": {
+            "properties": { "reason_code": { "const": "created" } },
+            "required": ["reason_code"]
+          },
+          "trigger": {
+            "properties": { "initiator": { "const": "safety_kernel" } },
+            "required": ["initiator"]
+          }
+        },
+        "required": ["transition", "trigger"]
+      },
+      "then": {
+        "properties": {
+          "asserted_by": { "properties": { "role": { "const": "safety_kernel" } } }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "transition": {
+            "properties": {
+              "reason_code": {
+                "enum": [
+                  "guardian_notified",
+                  "no_answer",
+                  "setup_timeout",
+                  "unauthorized",
+                  "binding_revoked",
+                  "internal_error"
+                ]
+              }
+            },
+            "required": ["reason_code"]
+          }
+        },
+        "required": ["transition"]
+      },
+      "then": {
+        "properties": {
+          "asserted_by": { "properties": { "role": { "const": "call_control" } } }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "transition": {
+            "properties": {
+              "reason_code": {
+                "enum": [
+                  "media_ready",
+                  "media_lost",
+                  "media_recovered",
+                  "reconnect_timeout",
+                  "provider_unavailable",
+                  "network_unavailable"
+                ]
+              }
+            },
+            "required": ["reason_code"]
+          }
+        },
+        "required": ["transition"]
+      },
+      "then": {
+        "properties": {
+          "asserted_by": { "properties": { "role": { "const": "rtc_adapter" } } }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "transition": {
+            "properties": { "reason_code": { "const": "local_hangup" } },
+            "required": ["reason_code"]
+          }
+        },
+        "required": ["transition"]
+      },
+      "then": {
+        "properties": {
+          "asserted_by": { "properties": { "role": { "const": "device" } } }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "transition": {
+            "properties": {
+              "reason_code": { "enum": ["remote_hangup", "declined"] }
+            },
+            "required": ["reason_code"]
+          }
+        },
+        "required": ["transition"]
+      },
+      "then": {
+        "properties": {
+          "asserted_by": { "properties": { "role": { "const": "guardian" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "transition": { "properties": { "to": { "const": "requested" } } } } },
+      "then": {
+        "properties": {
+          "signaling": { "properties": { "status": { "const": "pending" }, "provider_session_ref": { "type": "null" } } },
+          "media": { "properties": { "status": { "const": "not_started" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "transition": { "properties": { "to": { "const": "ringing" } } } } },
+      "then": {
+        "properties": {
+          "signaling": { "properties": { "status": { "const": "ready" }, "provider_session_ref": { "type": "string", "minLength": 1 } } },
+          "media": { "properties": { "status": { "const": "connecting" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "transition": { "properties": { "to": { "const": "connected" } } } } },
+      "then": {
+        "properties": {
+          "signaling": { "properties": { "status": { "const": "ready" }, "provider_session_ref": { "type": "string", "minLength": 1 } } },
+          "media": { "properties": { "status": { "const": "ready" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "transition": { "properties": { "to": { "const": "reconnecting" } } } } },
+      "then": {
+        "properties": {
+          "signaling": { "properties": { "status": { "const": "ready" }, "provider_session_ref": { "type": "string", "minLength": 1 } } },
+          "media": { "properties": { "status": { "const": "interrupted" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "transition": { "properties": { "to": { "const": "ended" } } } } },
+      "then": {
+        "properties": {
+          "signaling": { "properties": { "status": { "const": "closed" } } },
+          "media": { "properties": { "status": { "const": "closed" } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "transition": { "properties": { "to": { "const": "failed" } } } } },
+      "then": {
+        "properties": {
+          "signaling": { "properties": { "status": { "const": "failed" } } },
+          "media": { "properties": { "status": { "const": "failed" } } }
+        }
+      }
+    }
+  ]
+}

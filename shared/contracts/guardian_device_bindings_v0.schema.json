@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/guardian_device_bindings_v0.schema.json",
+  "title": "EgoLink Guardian Device Bindings v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "bindings"],
+  "properties": {
+    "contract_version": {
+      "const": "egolink.guardian_device_bindings.v0.1"
+    },
+    "bindings": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1024,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["guardian_id", "token_sha256", "device_ids"],
+        "properties": {
+          "guardian_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+          },
+          "token_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "device_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

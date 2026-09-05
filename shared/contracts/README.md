@@ -2,6 +2,24 @@
 
 这些文件是 Ego Link 固件、PC Simulator、未来 Ego Base、模型训练代码和 P0 message hub 之间的稳定接口。
 
+## ADR-0012 Sprint 1 合同边界
+
+- `P0-LOC`、`P0-CALL`、`P0-SOS` 当前全部为 `NOT_RUN`。Schema、fixture、
+  replay 或单元测试通过，只证明对应合同/工具切片，不代表产品 Gate 通过。
+- 设备端 Location Engine v0 / Sensor Policy v0 拥有断网时仍需工作的最小
+  operational state；服务器保存版本化镜像、事件时间轴、回放、比较和更丰富的
+  derived fusion。两者的 belief/generator/config identity 不得静默互相覆盖。
+- 语义排序使用 source event time + boot-scoped monotonic + 显式 clock mapping。
+  `receive_time` / `ingest_time` 只记录传输过程，不能回填或代替缺失的事件时间；
+  顺序不明确的数据必须显式标记/排除。
+- `SOS-010` 复用 `safety_event.schema.json` 与 persistent priority outbox，不新建
+  第二套 SOS truth record。Guardian delivery/ack、Ego Call request/signaling/media
+  各自保持真实独立状态。
+- Ego Call media 不经过 Message Hub。旧 `G0-EGOCALL` 名称仅映射到当前
+  `P0-CALL` 证据族；Sprint 1 不声明 PSTN、SMS、公共应急调度或 Native VoLTE。
+- L2/AI 先消费隐私审查后的数据与 event-time replay，进入 offline/Shadow
+  comparison；Camera 仅是可选实验观测，不能产生或否决 P0 决策。
+
 | 文件 | 含义 |
 |---|---|
 | `sensor_frame.schema.json` | 设备或模拟器产生的带时间戳传感器帧 |
@@ -10,12 +28,18 @@
 | `safety_event.schema.json` | 发往 PC Simulator / Ego Base 的安全事件 |
 | `base_command.schema.json` | PC Simulator / Ego Base 下发给设备的命令 |
 | `safety_annotation.schema.json` | 数据标注与用户确认结果 |
+| `guardian_device_bindings_v0.schema.json` | P0 Guardian-to-device exact-location authorization; stores only lowercase SHA-256 token digests and never grants device ingest or general admin access. |
 | `message_hub_status.schema.json` | P0 message hub heartbeat/status envelope |
 | `message_hub_event.schema.json` | P0 message hub telemetry/event envelope, including additive `location_observation` groups |
 | `message_hub_command.schema.json` | P0 message hub downlink command envelope |
 | `message_hub_ack.schema.json` | P0 message hub command ACK envelope |
 | `message_hub_error.schema.json` | P0 message hub diagnosable error envelope |
 | `message_hub_raw_frame_record.schema.json` | P0 raw-frame storage and parse-result record; the device wire payload is not JSON |
+| `ego_call_session.schema.json` | CALL-001 append-only Ego Call session transition contract：约束身份、触发来源、状态/原因、信令/媒体状态、位置 belief 引用与隐私；不保存 RTC 密钥或精确坐标。 |
+| `location_engine_v0.schema.json` | LOC-020 device-semantic operational location-state reference contract；分离 belief、mobility、GNSS/LTE、battery、policy、last-trusted 与 action lineage，并保留与 event-time 对应的 UTC/GNSS UTC 或 boot-scoped monotonic capture evidence。合同存在不代表 device integration 或 `P0-LOC` 通过。 |
+| `location_state_envelope_v0.schema.json` | LOC-021 additive source-event ingress envelope；绑定 outbox-safe device/session、boot/sequence/observation、纳秒事件时钟、Sensor Policy identity 与 Location Engine state。`server_receive_time_ms` 只能由受信服务端适配器添加并作为传输证据，不能决定排序或 freshness。成功持久化后的 HTTP response 可携带 `persistent_priority_outbox_v0.schema.json#/$defs/ack`；其 hash 覆盖 exact request bytes，且只证明 server durable ingest。 |
+| `sensor_policy_v0.schema.json` | POLICY-010 可版本化工程配置合同；参数为未验证默认值，不是量产最优功耗/精度声明。标准 JSON Schema 之外的字段间关系由配置中必需的 `egolink.sensor_policy.semantic.v0.1` validator 标识约束，所有固件/VPS/replay consumer 必须实现同一规则。 |
+| `sensor_policy_decision_v0.schema.json` | POLICY-010 replayable decision contract；保留独立 condition flags、effective state、原因与 action lineage。 |
 | `location_fusion_sample.schema.json` | DATA-001 JSONL dataset sample contract for location fusion exports |
 | `imu_window_chunk.schema.json` | Normalized complete KV wire object for one bounded real-QMI IMU chunk over exact lowercase `lte` or `wifi`; sample bytes remain Base64 and training-disabled. |
 | `imu_window_manifest.schema.json` | Normalized complete KV wire object for a bounded real-QMI IMU window manifest over exact lowercase `lte` or `wifi`, including its privacy/quality gates. |

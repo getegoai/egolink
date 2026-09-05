@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/location_engine_v0.schema.json",
+  "title": "EgoLink Location Engine v0 internal state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "event_time_ms",
+    "last_event_type",
+    "mobility_state",
+    "gnss_state",
+    "lte_state",
+    "last_trusted_location",
+    "last_trusted_time_ms",
+    "location_belief",
+    "location_accuracy_m",
+    "location_accuracy_status",
+    "location_confidence",
+    "location_confidence_basis",
+    "location_confidence_calibrated",
+    "location_source",
+    "location_uncertainty_m",
+    "location_uncertainty_basis",
+    "battery_state",
+    "battery_percent",
+    "sensor_policy_state",
+    "sos_active",
+    "reason_codes"
+  ],
+  "properties": {
+    "contract_version": {"const": "egolink.location_engine.v0.1"},
+    "event_time_ms": {"type": "integer", "minimum": 0},
+    "last_event_type": {"type": "string", "minLength": 1, "maxLength": 64},
+    "mobility_state": {"type": "string", "enum": ["stable", "moving", "unknown"]},
+    "gnss_state": {
+      "type": "string",
+      "enum": ["idle", "acquiring", "fix", "no_fix", "fix_rejected", "error", "unavailable"]
+    },
+    "lte_state": {
+      "type": "string",
+      "enum": ["offline", "online", "limited", "unavailable", "unknown"]
+    },
+    "last_trusted_location": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "latitude_deg",
+        "longitude_deg",
+        "accuracy_m",
+        "uncertainty_at_fix_m",
+        "uncertainty_basis",
+        "source",
+        "evidence_ref"
+      ],
+      "properties": {
+        "latitude_deg": {"type": "number", "minimum": -90, "maximum": 90},
+        "longitude_deg": {"type": "number", "minimum": -180, "maximum": 180},
+        "accuracy_m": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "uncertainty_at_fix_m": {"type": "number", "exclusiveMinimum": 0},
+        "uncertainty_basis": {
+          "type": "string",
+          "enum": ["source_reported_accuracy", "hdop_rule_heuristic_v0", "reference_bound"]
+        },
+        "source": {
+          "type": "string",
+          "enum": ["gnss", "cell_reference", "wifi_reference", "known_place"]
+        },
+        "evidence_ref": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "observation_id",
+            "source_status",
+            "stream_id",
+            "sequence_id",
+            "device_run_id",
+            "boot_count",
+            "event_time_ms",
+            "event_time_source",
+            "capture_time_ns",
+            "monotonic_clock_domain_id"
+          ],
+          "properties": {
+            "observation_id": {"type": "string", "minLength": 1, "maxLength": 256},
+            "source_status": {"type": "string", "enum": ["observed", "verified"]},
+            "stream_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 256},
+            "sequence_id": {"type": ["integer", "null"], "minimum": 0},
+            "device_run_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 256},
+            "boot_count": {"type": ["integer", "null"], "minimum": 0},
+            "event_time_ms": {"type": "integer", "minimum": 0},
+            "event_time_source": {
+              "type": "string",
+              "enum": ["gnss_source_utc_ns", "timestamp_utc_ns", "timestamp_monotonic_ns"]
+            },
+            "capture_time_ns": {"type": "integer", "minimum": 0},
+            "monotonic_clock_domain_id": {
+              "type": ["string", "null"],
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "reference_id": {"type": "string", "minLength": 1, "maxLength": 256}
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {"event_time_source": {"const": "timestamp_monotonic_ns"}},
+                "required": ["event_time_source"]
+              },
+              "then": {
+                "properties": {
+                  "boot_count": {"type": "integer", "minimum": 0},
+                  "monotonic_clock_domain_id": {"type": "string", "minLength": 1, "maxLength": 256}
+                }
+              },
+              "else": {
+                "properties": {"monotonic_clock_domain_id": {"type": "null"}}
+              }
+            }
+          ]
+        }
+      }
+    },
+    "last_trusted_time_ms": {"type": ["integer", "null"], "minimum": 0},
+    "location_belief": {
+      "type": "string",
+      "enum": ["Fine", "Coarse", "Predicted", "Unknown"]
+    },
+    "location_accuracy_m": {"type": ["number", "null"], "exclusiveMinimum": 0},
+    "location_accuracy_status": {
+      "type": "string",
+      "enum": ["source_reported", "unavailable"]
+    },
+    "location_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "location_confidence_basis": {"const": "rule_heuristic_v0"},
+    "location_confidence_calibrated": {"const": false},
+    "location_source": {
+      "type": "string",
+      "enum": ["gnss", "cell_reference", "wifi_reference", "known_place", "last_trusted", "none"]
+    },
+    "location_uncertainty_m": {"type": ["number", "null"], "minimum": 0},
+    "location_uncertainty_basis": {
+      "type": "string",
+      "enum": [
+        "source_reported_accuracy",
+        "hdop_rule_heuristic_v0",
+        "reference_bound",
+        "last_trusted_age_growth_rule_v0",
+        "unavailable"
+      ]
+    },
+    "battery_state": {
+      "type": "string",
+      "enum": ["normal", "low", "critical", "charging", "unknown"]
+    },
+    "battery_percent": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+    "sensor_policy_state": {
+      "type": "string",
+      "enum": ["STABLE", "MOVING", "LOCATION_UNCERTAIN", "SOS", "LOW_BATTERY"]
+    },
+    "sos_active": {"type": "boolean"},
+    "reason_codes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 128}
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"last_trusted_location": {"type": "null"}},
+        "required": ["last_trusted_location"]
+      },
+      "then": {"properties": {"last_trusted_time_ms": {"type": "null"}}},
+      "else": {"properties": {"last_trusted_time_ms": {"type": "integer", "minimum": 0}}}
+    },
+    {
+      "if": {
+        "properties": {"location_belief": {"const": "Unknown"}},
+        "required": ["location_belief"]
+      },
+      "then": {
+        "properties": {
+          "location_accuracy_m": {"type": "null"},
+          "location_accuracy_status": {"const": "unavailable"},
+          "location_confidence": {"const": 0},
+          "location_source": {"const": "none"},
+          "location_uncertainty_m": {"type": "null"},
+          "location_uncertainty_basis": {"const": "unavailable"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"location_belief": {"const": "Predicted"}},
+        "required": ["location_belief"]
+      },
+      "then": {
+        "properties": {
+          "location_accuracy_m": {"type": "null"},
+          "location_accuracy_status": {"const": "unavailable"},
+          "location_source": {"const": "last_trusted"},
+          "location_uncertainty_m": {"type": "number", "exclusiveMinimum": 0},
+          "location_uncertainty_basis": {"const": "last_trusted_age_growth_rule_v0"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"location_belief": {"const": "Fine"}},
+        "required": ["location_belief"]
+      },
+      "then": {
+        "properties": {
+          "last_trusted_location": {"type": "object"},
+          "location_source": {"const": "gnss"},
+          "location_uncertainty_m": {"type": "number", "exclusiveMinimum": 0}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"location_belief": {"const": "Coarse"}},
+        "required": ["location_belief"]
+      },
+      "then": {
+        "properties": {
+          "last_trusted_location": {"type": "object"},
+          "location_source": {
+            "enum": ["cell_reference", "wifi_reference", "known_place"]
+          },
+          "location_uncertainty_m": {"type": "number", "exclusiveMinimum": 0}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"location_accuracy_status": {"const": "source_reported"}},
+        "required": ["location_accuracy_status"]
+      },
+      "then": {"properties": {"location_accuracy_m": {"type": "number", "exclusiveMinimum": 0}}},
+      "else": {"properties": {"location_accuracy_m": {"type": "null"}}}
+    }
+  ]
+}
