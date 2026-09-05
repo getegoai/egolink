@@ -34,6 +34,11 @@ firmware/**/sdkconfig.old
 firmware/**/sdkconfig.local
 firmware/**/sdkconfig.*.local
 firmware/camera_smoke/sdkconfig
+/firmware/audio_loop/sdkconfig
+
+# Repository-local scratch builds and analyzer output
+/tmp/
+/location_modem_arbiter.plist
 
 # Hardware smoke-test captures
 firmware/**/captures/
