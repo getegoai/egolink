@@ -133,6 +133,13 @@ GUARDIAN_LOCATION_JS = r"""(() => {
     show('sos-call-state', String(view.call_state || 'not_reported'));
   }
 
+  function renderSosUnavailable() {
+    for (const id of ['sos', 'sos-alert-state', 'sos-event-id', 'sos-source-time',
+      'sos-server-receipt', 'sos-battery', 'sos-guardian-ack', 'sos-call-state']) {
+      show(id, '不可用');
+    }
+  }
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const device = byId('device-id').value.trim();
@@ -154,12 +161,15 @@ GUARDIAN_LOCATION_JS = r"""(() => {
         credentials: 'same-origin',
         redirect: 'error',
       };
-      const [response, sosResponse] = await Promise.all([
+      const [locationOutcome, sosOutcome] = await Promise.allSettled([
         fetch(`/api/v1/devices/${encodeURIComponent(device)}/location-state/current`, options),
         fetch(`/api/v1/devices/${encodeURIComponent(device)}/safety-events/manual-sos/latest`, options),
       ]);
       token = '';
-      if (!response.ok || !sosResponse.ok) {
+      if (locationOutcome.status !== 'fulfilled') throw locationOutcome.reason;
+      const response = locationOutcome.value;
+      const sosResponse = sosOutcome.status === 'fulfilled' ? sosOutcome.value : null;
+      if (!response.ok || (sosResponse && [401, 403].includes(sosResponse.status))) {
         const responseStatus = !response.ok ? response.status : sosResponse.status;
         if (responseStatus !== 401 && responseStatus !== 403) {
           status.textContent = `Lookup failed (HTTP ${responseStatus}).`;
@@ -172,13 +182,19 @@ GUARDIAN_LOCATION_JS = r"""(() => {
             : `查询失败（HTTP ${response.status}）。`;
         return;
       }
-      const [payload, sosPayload] = await Promise.all([
-        response.json(),
-        sosResponse.json(),
-      ]);
+      const payload = await response.json();
       render(safeObject(payload.location_state));
-      renderSosAlert(safeObject(sosPayload.manual_sos_alert));
       status.textContent = '查询完成';
+      try {
+        if (!sosResponse || !sosResponse.ok) throw new Error('SOS unavailable');
+        const sosPayload = await sosResponse.json();
+        const alert = safeObject(sosPayload.manual_sos_alert);
+        if (typeof alert.available !== 'boolean') throw new Error('SOS unavailable');
+        renderSosAlert(alert);
+      } catch (_) {
+        renderSosUnavailable();
+        status.textContent = '位置查询完成；SOS 不可用。';
+      }
     } catch (_) {
       status.textContent = '网络请求失败，请稍后重试。';
     } finally {

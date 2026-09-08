@@ -438,7 +438,7 @@ def run_d1_web_api_gate(
 ) -> dict[str, Any]:
     health = fetch_json(hub_url, "/health", token=token, timeout=timeout)
     state = fetch_json(hub_url, "/api/state", token=token, timeout=timeout)
-    dashboard_html = fetch_text(hub_url, "/", token=token, timeout=timeout)
+    dashboard_html = fetch_text(hub_url, "/engineering", token=token, timeout=timeout)
     report = evaluate_d1_web_api(
         health=health,
         state=state,

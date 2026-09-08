@@ -424,7 +424,7 @@ def run_web_review_gate(
     health = fetch_json(hub_url, "/health", token=token, timeout=timeout)
     latest = fetch_json(hub_url, "/api/v1/product-demo/latest", token=token, timeout=timeout)
     state = fetch_json(hub_url, "/api/state", token=token, timeout=timeout)
-    dashboard_html = fetch_text(hub_url, "/", token=token, timeout=timeout)
+    dashboard_html = fetch_text(hub_url, "/engineering", token=token, timeout=timeout)
     report = evaluate_product_demo_web_review(
         health=health,
         latest=latest,

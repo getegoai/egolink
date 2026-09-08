@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/collection_observation.schema.json",
+  "title": "EgoLink collection observation in existing EGLK raw frame",
+  "description": "Additive raw-frame content profile. Uses ADR-0010 and sensor_time_lineage field semantics. No change to historical imu_window or product Location wire. Delivery attempts and receive/ingest times are server metadata, never part of immutable observation identity.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "contract_version",
+    "observation_id",
+    "device_id",
+    "source",
+    "stream_id",
+    "sequence_id",
+    "boot_count",
+    "monotonic_clock_domain_id",
+    "timestamp_monotonic_ns",
+    "timestamp_utc",
+    "timestamp_source",
+    "timestamp_quality",
+    "fw_version",
+    "config_id",
+    "session_id",
+    "status",
+    "payload",
+    "missing_reason"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "egolink.collection.v1"
+    },
+    "observation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "source": {
+      "enum": [
+        "gnss",
+        "lte",
+        "imu",
+        "wifi",
+        "power",
+        "device",
+        "time_anchor",
+        "source_status",
+        "session",
+        "loss",
+        "delivery"
+      ]
+    },
+    "stream_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "sequence_id": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "boot_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "monotonic_clock_domain_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "timestamp_monotonic_ns": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "timestamp_utc": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "timestamp_source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "timestamp_quality": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "fw_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "config_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "session_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 128
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "payload": {
+      "type": "object"
+    },
+    "missing_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 512
+    }
+  }
+}

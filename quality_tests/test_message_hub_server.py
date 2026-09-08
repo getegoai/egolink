@@ -1762,7 +1762,8 @@ class MessageHubHttpTests(unittest.TestCase):
             thread.start()
             base_url = f"http://127.0.0.1:{server.server_port}"
             try:
-                dashboard, _ = get_bytes(base_url, "/")
+                dashboard, _ = get_bytes(base_url, "/engineering")
+                collection_home, _ = get_bytes(base_url, "/")
                 state = get_json(base_url, "/api/state", headers={"Authorization": "Bearer secret"})
             finally:
                 server.shutdown()
@@ -1771,6 +1772,7 @@ class MessageHubHttpTests(unittest.TestCase):
 
         self.assertIn(b"public_JS_key_1234", dashboard)
         self.assertNotIn(security_code.encode(), dashboard)
+        self.assertNotIn(security_code.encode(), collection_home)
         self.assertNotIn(security_code, json.dumps(state))
 
     def test_progress_board_is_available_in_state_and_dedicated_route(self) -> None:

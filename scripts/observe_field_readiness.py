@@ -1,7 +1,7 @@
 """Observe server-side field readiness through the Message Hub Web/API.
 
 This is a read-only D2/D5 preflight and long-run observer. It polls the
-Message Hub health endpoint, `/api/state`, and Dashboard HTML, then writes a
+Message Hub health endpoint, `/api/state`, and `/engineering` Dashboard HTML, then writes a
 bounded readiness report. It does not flash firmware, open serial ports,
 enqueue commands, deploy services, train models, or claim location accuracy.
 """
@@ -39,6 +39,7 @@ REPORT_JSON = "field_readiness_report.json"
 REPORT_MARKDOWN = "field_readiness_report.md"
 STATUS_JSON = "field_readiness_status.json"
 SAMPLES_JSONL = "field_readiness_samples.jsonl"
+ENGINEERING_DASHBOARD_PATH = "/engineering"
 DASHBOARD_MARKERS = (
     "Ego Link Message Hub",
     "D1 Link Through",
@@ -103,15 +104,18 @@ def read_token(token_env: str, token_file: Path | None) -> str | None:
 
 
 def fetch_dashboard_html(base_url: str, *, token: str | None, timeout: float) -> str:
-    req = request.Request(base_url.rstrip("/") + "/", headers=auth_headers(token), method="GET")
+    req = request.Request(
+        base_url.rstrip("/") + ENGINEERING_DASHBOARD_PATH,
+        headers=auth_headers(token), method="GET",
+    )
     try:
         with request.urlopen(req, timeout=timeout) as response:
             return response.read().decode("utf-8", errors="replace")
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise FieldValidationError(f"GET / returned HTTP {exc.code}: {detail}") from exc
+        raise FieldValidationError(f"GET {ENGINEERING_DASHBOARD_PATH} returned HTTP {exc.code}: {detail}") from exc
     except error.URLError as exc:
-        raise FieldValidationError(f"GET / failed: {exc}") from exc
+        raise FieldValidationError(f"GET {ENGINEERING_DASHBOARD_PATH} failed: {exc}") from exc
 
 
 def dashboard_summary(html: str, markers: Iterable[str] = DASHBOARD_MARKERS) -> dict[str, Any]:

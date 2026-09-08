@@ -1,0 +1,505 @@
+"""Raw collection indexing in the existing Message Hub SQLite database.
+
+The immutable EGLK frame remains in raw_frames.  This module only adds its
+search index and separate receipt attempts; it does not run Location Engine.
+"""
+from __future__ import annotations
+
+import base64
+import binascii
+from datetime import datetime, timezone
+import hashlib
+import json
+from pathlib import Path
+import re
+import sqlite3
+import struct
+import time
+from typing import Any
+
+
+CONTRACT_VERSION = "egolink.collection.v1"
+CONTENT_TYPE = "application/json;profile=" + CONTRACT_VERSION
+MAX_FRAME_BYTES = 65_536
+MAX_PAGE_RECORDS = 100
+MAX_PAGE_BYTES = 2_000_000
+SOURCES = frozenset({"gnss", "lte", "imu", "wifi", "power", "device", "time_anchor", "source_status", "session", "loss", "delivery"})
+CONTEXT_SOURCES = frozenset({"time_anchor", "source_status", "session", "loss"})
+SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$")
+INT64_MAX = 9_223_372_036_854_775_807
+COLLECTION_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "shared" / "contracts" / "collection_observation.schema.json"
+
+
+class CollectionError(ValueError):
+    def __init__(self, code: str, detail: str, status: int = 422):
+        super().__init__(detail)
+        self.code, self.status = code, status
+
+
+def _json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _integer(value: Any, name: str, minimum: int = 0, maximum: int = INT64_MAX) -> int:
+    if type(value) is not int or not minimum <= value <= maximum:
+        raise CollectionError("invalid_collection_envelope", f"{name} is outside its integer range")
+    return value
+
+
+def _identifier(value: Any, name: str) -> str:
+    if not isinstance(value, str) or SAFE_ID.fullmatch(value) is None:
+        raise CollectionError("invalid_collection_envelope", f"{name} is not a bounded identifier")
+    return value
+
+
+def _utc(value: Any, name: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or len(value) > 40 or not value.endswith("Z"):
+        raise CollectionError("invalid_collection_envelope", f"{name} must be UTC with a Z suffix or null")
+    try:
+        datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError as error:
+        raise CollectionError("invalid_collection_envelope", f"{name} is not a timestamp") from error
+    return value
+
+
+def _utc_index(value: str | None) -> str | None:
+    """Normalize only the index, keeping the source timestamp bytes unchanged."""
+    if value is None:
+        return None
+    return datetime.fromisoformat(value[:-1] + "+00:00").isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise CollectionError("invalid_collection_envelope", "duplicate JSON member")
+        result[key] = value
+    return result
+
+
+def is_collection_content_type(value: Any) -> bool:
+    return isinstance(value, str) and value.replace(" ", "").lower() == CONTENT_TYPE
+
+
+def export_schema() -> dict[str, Any]:
+    try:
+        raw = COLLECTION_SCHEMA_PATH.read_bytes()
+        if not 0 < len(raw) <= 65_536:
+            raise ValueError("schema size")
+        schema = json.loads(raw.decode("utf-8"))
+        if schema["properties"]["contract_version"]["const"] != CONTRACT_VERSION:
+            raise ValueError("schema version")
+    except (OSError, ValueError, UnicodeError, KeyError, TypeError) as error:
+        raise CollectionError("collection_schema_unavailable", "the deployed collection schema is unavailable or incompatible", 503) from error
+    return {"path": "shared/contracts/collection_observation.schema.json", "sha256": hashlib.sha256(raw).hexdigest(), "document": schema}
+
+
+def decode_envelope(payload: bytes, record: dict[str, Any]) -> dict[str, Any]:
+    try:
+        value = json.loads(payload.decode("utf-8"), object_pairs_hook=_unique_object,
+                           parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite JSON")))
+    except (ValueError, UnicodeError, RecursionError) as error:
+        raise CollectionError("invalid_collection_envelope", "collection payload must be bounded valid UTF-8 JSON") from error
+    required = {"contract_version", "observation_id", "device_id", "source", "stream_id", "sequence_id", "boot_count", "monotonic_clock_domain_id", "timestamp_monotonic_ns", "timestamp_utc", "timestamp_source", "timestamp_quality", "fw_version", "config_id", "session_id", "status", "payload", "missing_reason"}
+    if not isinstance(value, dict) or not required <= value.keys():
+        raise CollectionError("invalid_collection_envelope", "collection envelope is missing required fields")
+    if value["contract_version"] != CONTRACT_VERSION:
+        raise CollectionError("invalid_collection_envelope", "unsupported collection contract")
+    for field in ("observation_id", "device_id", "stream_id", "monotonic_clock_domain_id", "config_id"):
+        _identifier(value[field], field)
+    if value["session_id"] is not None:
+        _identifier(value["session_id"], "session_id")
+    for field in ("sequence_id", "boot_count"):
+        _integer(value[field], field, maximum=4_294_967_295)
+    _integer(value["timestamp_monotonic_ns"], "timestamp_monotonic_ns", maximum=9_007_199_254_740_991)
+    _utc(value["timestamp_utc"], "timestamp_utc")
+    if not isinstance(value["source"], str) or value["source"] not in SOURCES:
+        raise CollectionError("invalid_collection_envelope", "unsupported collection source")
+    for field in ("timestamp_source", "timestamp_quality", "status", "fw_version"):
+        if not isinstance(value[field], str) or not 1 <= len(value[field]) <= 128:
+            raise CollectionError("invalid_collection_envelope", f"{field} must be a bounded string")
+    if value["missing_reason"] is not None and (not isinstance(value["missing_reason"], str) or len(value["missing_reason"]) > 512):
+        raise CollectionError("invalid_collection_envelope", "missing_reason must be bounded text or null")
+    if not isinstance(value["payload"], dict):
+        raise CollectionError("invalid_collection_envelope", "payload must be an object")
+    if value["device_id"] != record["device_id"] or value["observation_id"] != record["frame_id"] or value["sequence_id"] != record["seq"]:
+        raise CollectionError("collection_identity_mismatch", "route, frame and envelope identity must agree")
+    return value
+
+
+def inspect_source(envelope: dict[str, Any]) -> dict[str, Any]:
+    """Versioned, disposable preview.  Failure never deletes authenticated raw."""
+    source, payload = envelope["source"], envelope["payload"]
+    result: dict[str, Any] = {"parser_version": "collection-preview.v1", "status": "ok", "sample_count": 0}
+    try:
+        if source == "imu" and ("samples_b64" in payload or envelope["status"] in {"ok", "observed", "collected", "partial"}):
+            count = _integer(payload.get("sample_count"), "sample_count", 0, 200)
+            if count == 0 and envelope["status"] not in {"partial", "error", "timeout"}:
+                raise ValueError("an observed IMU block has no samples")
+            if payload.get("encoding") != "offset_us+six_i16le+base64-v1" or payload.get("sample_record_bytes") != 16:
+                raise ValueError("unsupported IMU sample encoding")
+            raw = base64.b64decode(payload["samples_b64"], validate=True)
+            if len(raw) != count * 16:
+                raise ValueError("IMU chunk length mismatch")
+            offsets = [item[0] for item in struct.iter_unpack("<I6h", raw)]
+            if any(right <= left for left, right in zip(offsets, offsets[1:])):
+                raise ValueError("IMU sample offsets are not increasing")
+            if "samples_crc32" in payload and str(payload["samples_crc32"]).upper() != f"{binascii.crc32(raw) & 0xffffffff:08X}":
+                raise ValueError("IMU chunk checksum mismatch")
+            result.update(sample_count=count, first_offset_us=offsets[0] if offsets else None, last_offset_us=offsets[-1] if offsets else None)
+        elif source in {"gnss", "lte"}:
+            attempts = payload.get("at")
+            if not isinstance(attempts, list) or len(attempts) > 12:
+                raise ValueError("modem AT attempts are missing or over limit")
+            for attempt in attempts:
+                if not isinstance(attempt, dict) or not isinstance(attempt.get("command"), str) or len(attempt["command"]) > 80 or not isinstance(attempt.get("response"), str) or len(attempt["response"].encode("utf-8")) > 1024:
+                    raise ValueError("modem raw attempt is malformed")
+                _integer(attempt.get("elapsed_ms"), "elapsed_ms", 0, 300_000)
+                outcome = attempt.get("outcome")
+                if type(outcome) is int:
+                    _integer(outcome, "AT outcome", 0, 255)
+                elif not isinstance(outcome, str) or not 1 <= len(outcome) <= 80:
+                    raise ValueError("modem attempt outcome is missing")
+            result["attempt_count"] = len(attempts)
+    except (ValueError, KeyError, TypeError, binascii.Error) as error:
+        result.update(status="parse_error", error_code="SOURCE_PAYLOAD_PARSE_ERROR", reason=str(error), sample_count=0)
+    return result
+
+
+class CollectionStore:
+    def __init__(self, hub: Any):
+        self.hub = hub
+        with hub.connection() as db:
+            db.executescript("""
+                CREATE TABLE IF NOT EXISTS collection_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL, observation_id TEXT NOT NULL,
+                    raw_frame_id INTEGER NOT NULL, payload_sha256 TEXT NOT NULL,
+                    source TEXT NOT NULL, stream_id TEXT NOT NULL,
+                    sequence_id INTEGER NOT NULL, boot_count INTEGER NOT NULL,
+                    clock_domain TEXT NOT NULL, event_monotonic_ns INTEGER NOT NULL,
+                    event_utc TEXT, session_id TEXT, fw_version TEXT NOT NULL,
+                    config_id TEXT NOT NULL, acquisition_status TEXT NOT NULL,
+                    parse_status TEXT NOT NULL, sample_count INTEGER NOT NULL,
+                    frame_bytes INTEGER NOT NULL, received_at TEXT NOT NULL,
+                    persisted_at TEXT NOT NULL, envelope_json TEXT NOT NULL,
+                    preview_json TEXT NOT NULL,
+                    UNIQUE(device_id, observation_id)
+                );
+                CREATE INDEX IF NOT EXISTS collection_device_source_time
+                    ON collection_records(device_id, source, boot_count DESC, event_monotonic_ns DESC);
+                CREATE INDEX IF NOT EXISTS collection_device_record ON collection_records(device_id, id);
+                CREATE TABLE IF NOT EXISTS collection_delivery_attempts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL, observation_id TEXT NOT NULL,
+                    payload_sha256 TEXT NOT NULL, received_at TEXT NOT NULL,
+                    claimed_actual_transport TEXT NOT NULL, result TEXT NOT NULL,
+                    conflict_raw_frame_id INTEGER
+                );
+                CREATE INDEX IF NOT EXISTS collection_delivery_record
+                    ON collection_delivery_attempts(device_id, observation_id, id);
+                CREATE TABLE IF NOT EXISTS collection_source_states (
+                    device_id TEXT NOT NULL, target_source TEXT NOT NULL,
+                    record_id INTEGER NOT NULL, boot_count INTEGER NOT NULL,
+                    event_monotonic_ns INTEGER NOT NULL, sequence_id INTEGER NOT NULL,
+                    PRIMARY KEY(device_id, target_source)
+                );
+                CREATE TABLE IF NOT EXISTS collection_annotations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL, annotation_id TEXT NOT NULL,
+                    session_id TEXT, created_at TEXT NOT NULL,
+                    payload_sha256 TEXT NOT NULL, annotation_json TEXT NOT NULL,
+                    UNIQUE(device_id, annotation_id)
+                );
+                CREATE INDEX IF NOT EXISTS collection_annotations_device
+                    ON collection_annotations(device_id, id);
+            """)
+
+    @staticmethod
+    def _insert_raw(db: sqlite3.Connection, record: dict[str, Any]) -> int:
+        raw, framing, parsed = record["raw_payload"], record.get("framing", {}), record["parse_result"]
+        cursor = db.execute("""INSERT INTO raw_frames
+            (frame_id,device_id,direction,frame_type,seq,test_run_id,fw_version,content_type,
+             payload_len,payload_crc32,raw_payload_sha256,raw_payload_b64,server_received_at,
+             parse_status,parse_error_code,parse_reason,derived_message_type,derived_message_json,record_json)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (record["frame_id"],record["device_id"],"uplink",framing.get("frame_type"),record.get("seq"),
+             record.get("test_run_id"),record.get("fw_version"),framing.get("content_type"),
+             framing.get("payload_len"),framing.get("payload_crc32"),raw["sha256"],raw["data"],
+             record["server_received_at"],parsed["status"],parsed.get("error_code"),parsed.get("reason"),
+             "collection",None,_json(record)))
+        return int(cursor.lastrowid)
+
+    def ingest(self, raw_body: bytes, record: dict[str, Any], *, transport: str) -> dict[str, Any]:
+        if len(raw_body) > MAX_FRAME_BYTES:
+            raise CollectionError("collection_body_too_large", "collection frame exceeds 64 KiB", 413)
+        if transport not in {"wifi", "lte"}:
+            raise CollectionError("invalid_collection_transport", "X-EgoLink-Transport must identify the actual sending interface")
+        if record["parse_result"].get("status") != "ok":
+            raise CollectionError("invalid_collection_frame", "collection EGLK frame did not pass length and checksum validation")
+        # Framing has already been checked by Message Hub's existing parser.
+        separator = b"\r\n\r\n" if b"\r\n\r\n" in raw_body else b"\n\n"
+        payload_bytes = raw_body.split(separator, 1)[1]
+        envelope = decode_envelope(payload_bytes, record)
+        preview = inspect_source(envelope)
+        record["parse_result"] = {"status": "ok" if preview["status"] == "ok" else "malformed", "derived_message_type": "collection", "collection_parse_status": preview["status"], "parser_version": preview["parser_version"]}
+        record["retention"] = {"privacy_class": "private_location", "redacted": False}
+        record["fw_version"], record["test_run_id"] = envelope["fw_version"], envelope["session_id"]
+        digest = hashlib.sha256(raw_body).hexdigest()
+        received, persisted = record["server_received_at"], _now()
+        conflict = False
+        with self.hub.connection() as db:
+            db.execute("PRAGMA synchronous=FULL")
+            db.execute("BEGIN IMMEDIATE")
+            existing = db.execute("SELECT * FROM collection_records WHERE device_id=? AND observation_id=?", (envelope["device_id"], envelope["observation_id"])).fetchone()
+            if existing is not None:
+                conflict = existing["payload_sha256"] != digest
+                result = "conflict" if conflict else "duplicate"
+                raw_id = self._insert_raw(db, record) if conflict else None
+                persisted = existing["persisted_at"]
+            else:
+                result = "accepted"
+                raw_id = self._insert_raw(db, record)
+                inserted = db.execute("""INSERT INTO collection_records
+                    (device_id,observation_id,raw_frame_id,payload_sha256,source,stream_id,sequence_id,boot_count,
+                    clock_domain,event_monotonic_ns,event_utc,session_id,fw_version,config_id,acquisition_status,
+                    parse_status,sample_count,frame_bytes,received_at,persisted_at,envelope_json,preview_json)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (envelope["device_id"],envelope["observation_id"],raw_id,digest,envelope["source"],envelope["stream_id"],
+                     envelope["sequence_id"],envelope["boot_count"],envelope["monotonic_clock_domain_id"],envelope["timestamp_monotonic_ns"],
+                     _utc_index(envelope["timestamp_utc"]),envelope["session_id"],envelope["fw_version"],envelope["config_id"],envelope["status"],
+                     preview["status"],preview["sample_count"],len(raw_body),received,persisted,_json(envelope),_json(preview)))
+                target = envelope["payload"].get("source")
+                if envelope["source"] == "source_status" and isinstance(target, str) and target in SOURCES | {"camera", "audio"}:
+                    db.execute("""INSERT INTO collection_source_states
+                        (device_id,target_source,record_id,boot_count,event_monotonic_ns,sequence_id) VALUES(?,?,?,?,?,?)
+                        ON CONFLICT(device_id,target_source) DO UPDATE SET
+                        record_id=excluded.record_id,boot_count=excluded.boot_count,
+                        event_monotonic_ns=excluded.event_monotonic_ns,sequence_id=excluded.sequence_id
+                        WHERE (excluded.boot_count,excluded.event_monotonic_ns,excluded.sequence_id) >
+                        (collection_source_states.boot_count,collection_source_states.event_monotonic_ns,collection_source_states.sequence_id)""",
+                        (envelope["device_id"], target, inserted.lastrowid, envelope["boot_count"], envelope["timestamp_monotonic_ns"], envelope["sequence_id"]))
+            db.execute("""INSERT INTO collection_delivery_attempts
+                (device_id,observation_id,payload_sha256,received_at,claimed_actual_transport,result,conflict_raw_frame_id)
+                VALUES(?,?,?,?,?,?,?)""", (envelope["device_id"],envelope["observation_id"],digest,received,transport,result,raw_id if conflict else None))
+        # This line is reached only after the raw frame AND index transaction committed.
+        if conflict:
+            raise CollectionError("collection_identity_conflict", "record identity already has different immutable bytes", 409)
+        ack_ms = int(time.time() * 1000)
+        return {"ok": True, "result": result, "parse_status": preview["status"], "persisted_at": persisted,
+                "delivery_ack": {"contract_version": "egolink.persistent_priority_outbox.ack.v0.1", "ack_id": "ack-" + digest,
+                "device_id": envelope["device_id"], "event_id": envelope["observation_id"], "payload_sha256": digest,
+                "status": "accepted", "ack_time_ms": ack_ms}}
+
+    def summary(self, device_id: str) -> dict[str, Any]:
+        with self.hub.connection() as db:
+            aggregates = db.execute("""SELECT source,COUNT(*) records,SUM(frame_bytes) bytes,SUM(sample_count) samples,
+                SUM(acquisition_status='no_fix') no_fix,SUM(parse_status='parse_error' OR acquisition_status IN ('error','timeout','parse_error','partial')) errors,
+                MAX(received_at) last_server_received_at FROM collection_records WHERE device_id=? GROUP BY source""", (device_id,)).fetchall()
+            sources = []
+            for aggregate in aggregates:
+                latest = db.execute("""SELECT * FROM collection_records WHERE device_id=? AND source=?
+                    ORDER BY boot_count DESC,event_monotonic_ns DESC,sequence_id DESC,id DESC LIMIT 1""", (device_id,aggregate["source"])).fetchone()
+                sources.append({**dict(aggregate), "latest": self._record_view(latest)})
+            delivery = db.execute("SELECT * FROM collection_delivery_attempts WHERE device_id=? ORDER BY id DESC LIMIT 1", (device_id,)).fetchone()
+            deliveries = db.execute("SELECT result,COUNT(*) count FROM collection_delivery_attempts WHERE device_id=? GROUP BY result", (device_id,)).fetchall()
+            state_rows = db.execute("SELECT s.target_source,c.* FROM collection_source_states s JOIN collection_records c ON c.id=s.record_id WHERE s.device_id=?", (device_id,)).fetchall()
+            sessions = db.execute("""SELECT session_id,MAX(boot_count) boot_count,COUNT(*) records
+                FROM collection_records WHERE device_id=? AND session_id IS NOT NULL
+                GROUP BY session_id ORDER BY MAX(id) DESC LIMIT 100""", (device_id,)).fetchall()
+            annotations = db.execute("SELECT annotation_json FROM collection_annotations WHERE device_id=? ORDER BY id DESC LIMIT 20", (device_id,)).fetchall()
+        return {"device_id": device_id, "server_now": _now(), "sources": sources,
+                "source_states": {row["target_source"]: self._record_view(row) for row in state_rows},
+                "last_contact": dict(delivery) if delivery else None,
+                "sessions": [dict(row) for row in sessions],
+                "recent_annotations": [json.loads(row["annotation_json"]) for row in annotations],
+                "delivery_counts": {row["result"]: row["count"] for row in deliveries},
+                "state_semantics": "last_known_by_source_event_time; current offline cache is unknown",
+                "transport_evidence": "authenticated device report; not independent network-path proof"}
+
+    def annotate(self, device_id: str, raw_body: bytes, *, operator_id: str) -> dict[str, Any]:
+        if len(raw_body) > 8192:
+            raise CollectionError("annotation_body_too_large", "annotation must be at most 8 KiB", 413)
+        try:
+            value = json.loads(raw_body.decode("utf-8"), object_pairs_hook=_unique_object)
+        except (ValueError, UnicodeError, RecursionError) as error:
+            raise CollectionError("invalid_annotation", "annotation must be valid UTF-8 JSON") from error
+        fields = {"annotation_id", "session_id", "scene", "wearing", "note", "boot_count", "timestamp_monotonic_ns"}
+        if not isinstance(value, dict) or set(value) != fields:
+            raise CollectionError("invalid_annotation", "annotation fields do not match the supported form")
+        _identifier(value["annotation_id"], "annotation_id")
+        if value["session_id"] is not None:
+            _identifier(value["session_id"], "session_id")
+        for field, bound in (("scene", 160), ("wearing", 160), ("note", 1024)):
+            if not isinstance(value[field], str) or len(value[field]) > bound:
+                raise CollectionError("invalid_annotation", f"{field} is not bounded text")
+        if not any(value[field].strip() for field in ("scene", "wearing", "note")):
+            raise CollectionError("invalid_annotation", "at least one annotation field must contain text")
+        if value["boot_count"] is not None:
+            _integer(value["boot_count"], "boot_count", maximum=4_294_967_295)
+        if value["timestamp_monotonic_ns"] is not None:
+            _integer(value["timestamp_monotonic_ns"], "timestamp_monotonic_ns", maximum=9_007_199_254_740_991)
+        if value["timestamp_monotonic_ns"] is not None and value["boot_count"] is None:
+            raise CollectionError("invalid_annotation", "a monotonic reference requires its boot reference")
+        digest = hashlib.sha256(_json(value).encode()).hexdigest()
+        annotation = {**value, "device_id": device_id, "source": "operator_annotation", "server_annotation_time": _now(),
+                      "operator_id": operator_id, "time_reference_quality": "operator_entered_unsynchronized" if value["boot_count"] is not None else "no_device_clock_reference"}
+        with self.hub.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            prior = db.execute("SELECT * FROM collection_annotations WHERE device_id=? AND annotation_id=?", (device_id, value["annotation_id"])).fetchone()
+            if prior:
+                if prior["payload_sha256"] != digest:
+                    raise CollectionError("annotation_identity_conflict", "annotation identity already contains different text", 409)
+                return {"ok": True, "result": "duplicate", "annotation": json.loads(prior["annotation_json"])}
+            if value["session_id"] is not None and not db.execute("SELECT 1 FROM collection_records WHERE device_id=? AND session_id=? LIMIT 1", (device_id, value["session_id"])).fetchone():
+                raise CollectionError("annotation_session_unknown", "the selected session has no received device record")
+            db.execute("INSERT INTO collection_annotations(device_id,annotation_id,session_id,created_at,payload_sha256,annotation_json) VALUES(?,?,?,?,?,?)", (device_id, value["annotation_id"], value["session_id"], annotation["server_annotation_time"], digest, _json(annotation)))
+        return {"ok": True, "result": "accepted", "annotation": annotation}
+
+    @staticmethod
+    def _record_view(row: sqlite3.Row) -> dict[str, Any]:
+        return {"row_id": row["id"], "envelope": json.loads(row["envelope_json"]),
+                "preview": json.loads(row["preview_json"]), "frame_bytes": row["frame_bytes"],
+                "payload_sha256": row["payload_sha256"], "server_received_at": row["received_at"], "persisted_at": row["persisted_at"]}
+
+    def page(self, device_id: str, query: dict[str, list[str]], *, raw: bool = False) -> dict[str, Any]:
+        schema = export_schema() if raw else None
+        allowed = {"source", "session_id", "from_utc", "to_utc", "page_size", "cursor"}
+        if set(query) - allowed or any(len(values) != 1 for values in query.values()):
+            raise CollectionError("invalid_collection_query", "unknown or repeated collection query", 400)
+        options = {key: values[0] for key, values in query.items()}
+        try:
+            page_size = int(options.get("page_size", "50"))
+        except ValueError as error:
+            raise CollectionError("invalid_collection_query", "page_size must be an integer", 400) from error
+        if not 1 <= page_size <= MAX_PAGE_RECORDS:
+            raise CollectionError("invalid_collection_query", "page_size must be 1-100", 400)
+        filters = {key: options.get(key) or None for key in ("source", "session_id", "from_utc", "to_utc")}
+        if filters["source"] is not None and filters["source"] not in SOURCES:
+            raise CollectionError("invalid_collection_query", "unknown source", 400)
+        if filters["session_id"] is not None:
+            _identifier(filters["session_id"], "session_id")
+        for key in ("from_utc", "to_utc"):
+            _utc(filters[key], key)
+        if filters["from_utc"] is not None and filters["to_utc"] is not None and _utc_index(filters["from_utc"]) > _utc_index(filters["to_utc"]):
+            raise CollectionError("invalid_collection_query", "from_utc is after to_utc", 400)
+        query_hash = hashlib.sha256(_json([device_id, filters, raw, schema["sha256"] if schema else None]).encode()).hexdigest()
+        after, snapshot = 0, None
+        annotation_after, annotation_snapshot, delivery_after, delivery_snapshot = 0, None, 0, None
+        if options.get("cursor"):
+            try:
+                if len(options["cursor"]) > 1024:
+                    raise ValueError("cursor over limit")
+                cursor = json.loads(base64.urlsafe_b64decode(options["cursor"]).decode())
+                if cursor["q"] != query_hash:
+                    raise ValueError("cursor filters changed")
+                after, snapshot = _integer(cursor["a"], "cursor after"), _integer(cursor["s"], "cursor snapshot")
+                if raw:
+                    annotation_after = _integer(cursor["an"], "annotation after")
+                    annotation_snapshot = _integer(cursor["sn"], "annotation snapshot")
+                    delivery_after = _integer(cursor["ad"], "delivery after")
+                    delivery_snapshot = _integer(cursor["sd"], "delivery snapshot")
+                    if annotation_after > annotation_snapshot or delivery_after > delivery_snapshot:
+                        raise ValueError("metadata cursor outside snapshot")
+                if after > snapshot:
+                    raise ValueError("cursor outside snapshot")
+            except (ValueError, KeyError, TypeError, UnicodeError) as error:
+                raise CollectionError("invalid_collection_cursor", "cursor does not match this export", 400) from error
+        with self.hub.connection() as db:
+            if snapshot is None:
+                snapshot = db.execute("SELECT COALESCE(MAX(id),0) FROM collection_records WHERE device_id=?", (device_id,)).fetchone()[0]
+                annotation_snapshot = db.execute("SELECT COALESCE(MAX(id),0) FROM collection_annotations WHERE device_id=?", (device_id,)).fetchone()[0]
+                delivery_snapshot = db.execute("SELECT COALESCE(MAX(id),0) FROM collection_delivery_attempts WHERE device_id=?", (device_id,)).fetchone()[0]
+            where, args = ["c.device_id=?", "c.id>?", "c.id<=?"], [device_id, after, snapshot]
+            normal, normal_args = [], []
+            for field, column, operator in (("source", "source", "="), ("session_id", "session_id", "="), ("from_utc", "event_utc", ">="), ("to_utc", "event_utc", "<=")):
+                if filters[field] is not None:
+                    normal.append(f"c.{column}{operator}?")
+                    normal_args.append(_utc_index(filters[field]) if field in {"from_utc", "to_utc"} else filters[field])
+            if normal:
+                expression = " AND ".join(normal)
+                if raw:
+                    # Context survives source/time filtering; raw export never loses its anchors/config/loss summaries.
+                    expression = "(" + expression + ") OR c.source IN ('time_anchor','source_status','session','loss')"
+                where.append("(" + expression + ")")
+                args.extend(normal_args)
+            rows = db.execute("SELECT c.*,r.record_json raw_record_json FROM collection_records c JOIN raw_frames r ON r.id=c.raw_frame_id WHERE " + " AND ".join(where) + " ORDER BY c.id LIMIT ?", (*args, page_size + 1)).fetchall()
+            records, byte_count = [], 0
+            for row in rows[:page_size]:
+                view = self._record_view(row)
+                if raw:
+                    view["raw_frame"] = json.loads(row["raw_record_json"])
+                size = len(_json(view).encode())
+                if records and byte_count + size > MAX_PAGE_BYTES:
+                    break
+                records.append(view)
+                byte_count += size
+            observations_done = len(records) == len(rows)
+            if records:
+                after = records[-1]["row_id"]
+            annotations, attempts = [], []
+            annotations_done = deliveries_done = not raw
+            if raw and observations_done:
+                room = page_size - len(records)
+                annotation_where = "device_id=? AND id>? AND id<=?"
+                annotation_args: list[Any] = [device_id, annotation_after, annotation_snapshot]
+                if filters["session_id"] is not None:
+                    annotation_where += " AND (session_id=? OR session_id IS NULL)"
+                    annotation_args.append(filters["session_id"])
+                annotation_rows = db.execute("SELECT * FROM collection_annotations WHERE " + annotation_where + " ORDER BY id LIMIT ?", (*annotation_args, room + 1)).fetchall()
+                for row in annotation_rows[:room]:
+                    item = json.loads(row["annotation_json"])
+                    size = len(_json(item).encode())
+                    if records or annotations:
+                        if byte_count + size > MAX_PAGE_BYTES:
+                            break
+                    annotations.append(item)
+                    annotation_after = row["id"]
+                    byte_count += size
+                annotations_done = len(annotations) == len(annotation_rows)
+                if annotations_done:
+                    room -= len(annotations)
+                    # Receipt attempts are exported separately from their immutable observation.
+                    delivery_where = ["d.device_id=?", "d.id>?", "d.id<=?", "c.id<=?"]
+                    delivery_args: list[Any] = [device_id, delivery_after, delivery_snapshot, snapshot]
+                    if normal:
+                        delivery_where.append("(" + expression + ")")
+                        delivery_args.extend(normal_args)
+                    delivery_rows = db.execute("SELECT d.* FROM collection_delivery_attempts d JOIN collection_records c ON c.device_id=d.device_id AND c.observation_id=d.observation_id WHERE " + " AND ".join(delivery_where) + " ORDER BY d.id LIMIT ?", (*delivery_args, room + 1)).fetchall()
+                    for row in delivery_rows[:room]:
+                        item = dict(row)
+                        item["transport_evidence"] = "device_reported_interface"
+                        if row["conflict_raw_frame_id"] is not None:
+                            conflict = db.execute("SELECT record_json FROM raw_frames WHERE id=?", (row["conflict_raw_frame_id"],)).fetchone()
+                            item["conflict_raw_frame"] = json.loads(conflict["record_json"])
+                        size = len(_json(item).encode())
+                        if records or annotations or attempts:
+                            if byte_count + size > MAX_PAGE_BYTES:
+                                break
+                        attempts.append(item)
+                        delivery_after = row["id"]
+                        byte_count += size
+                    deliveries_done = len(attempts) == len(delivery_rows)
+            exhausted = observations_done and annotations_done and deliveries_done
+            next_cursor = None if exhausted else base64.urlsafe_b64encode(_json({"q": query_hash, "a": after, "s": snapshot, "an": annotation_after, "sn": annotation_snapshot, "ad": delivery_after, "sd": delivery_snapshot}).encode()).decode()
+        return {"contract_version": CONTRACT_VERSION, "device_id": device_id, "filters": filters, "records": records,
+                "schema": schema,
+                "annotations": annotations, "delivery_attempts": attempts,
+                "page": {"snapshot_max_id": snapshot, "annotation_snapshot_max_id": annotation_snapshot if raw else None, "delivery_snapshot_max_id": delivery_snapshot if raw else None, "snapshot_frozen": True, "exhausted": exhausted, "next_cursor": next_cursor, "record_count": len(records), "annotation_count": len(annotations), "delivery_attempt_count": len(attempts), "bytes": byte_count},
+                "export_semantics": {"raw_unchanged": raw, "order": "durable_receive_id; event times remain in envelope", "context_included": raw, "absolute_time_unknown_records": "included unless UTC filter is specified"}}
+
+
+def jsonl_page(page: dict[str, Any]) -> bytes:
+    manifest = {"kind": "collection_export_manifest", **{key: value for key, value in page.items() if key not in {"records", "annotations", "delivery_attempts"}}}
+    lines = [_json(manifest)]
+    lines.extend(_json({"kind": "collection_record", **record}) for record in page["records"])
+    lines.extend(_json({"kind": "operator_annotation", **annotation}) for annotation in page["annotations"])
+    lines.extend(_json({"kind": "delivery_attempt", **attempt}) for attempt in page["delivery_attempts"])
+    return ("\n".join(lines) + "\n").encode("utf-8")

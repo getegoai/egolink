@@ -243,7 +243,14 @@ class D1WebApiValidationTests(unittest.TestCase):
                     },
                 ),
             )
-            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store, token="secret-token"))
+            requested_paths: list[str] = []
+
+            class RecordingHandler(message_hub.make_handler(store, token="secret-token")):
+                def do_GET(self) -> None:
+                    requested_paths.append(self.path)
+                    super().do_GET()
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), RecordingHandler)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             base_url = f"http://127.0.0.1:{server.server_port}"
@@ -270,6 +277,8 @@ class D1WebApiValidationTests(unittest.TestCase):
 
             payload = json.loads(stdout.getvalue())
             self.assertEqual(exit_code, 0)
+            self.assertIn("/engineering", requested_paths)
+            self.assertNotIn("/", requested_paths)
             self.assertEqual(payload["result"], "PASS")
             self.assertNotIn("secret-token", stdout.getvalue())
             self.assertTrue((output_dir / "d1_web_api_report.json").is_file())

@@ -31,6 +31,12 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pc_simulator import protocol
+from server.collection_store import (
+    CollectionError, CollectionStore, is_collection_content_type, jsonl_page,
+)
+from server.collection_page import (
+    COLLECTION_HTML, COLLECTION_JS, COLLECTION_CSS, COLLECTION_SECURITY_HEADERS,
+)
 from server.guardian_device_authorization import GuardianDeviceAuthorizer
 from server.guardian_location_page import (
     GUARDIAN_LOCATION_CSS,
@@ -381,6 +387,7 @@ class MessageHubStore:
         self._init_schema()
         self.location_states = LocationStateStore(self.db_path)
         self.manual_sos = ManualSosStore(self.db_path)
+        self.collection = CollectionStore(self)
 
     def connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.db_path)
@@ -1631,6 +1638,8 @@ def make_handler(
                 self.route_get()
             except MessageHubError as error:
                 self.respond_error(error)
+            except CollectionError as error:
+                self.respond_error(MessageHubError(error.code, str(error), status=error.status))
             except ManualSosValidationError:
                 self.respond_error(
                     MessageHubError(
@@ -1693,6 +1702,11 @@ def make_handler(
                     == ["safety-events", "manual-sos"]
                     and post_segments[7] == "guardian-ack"
                 )
+                is_collection_annotation = (
+                    len(post_segments) == 6
+                    and post_segments[:3] == ["api", "v1", "devices"]
+                    and post_segments[4:] == ["collection", "annotations"]
+                )
                 if (
                     (
                         post_segments == ["api", "v1", "location-states"]
@@ -1715,17 +1729,19 @@ def make_handler(
                     )
                 guardian_authorization = (
                     self.require_guardian_authorization(post_segments[3])
-                    if is_guardian_sos_ack
+                    if is_guardian_sos_ack or is_collection_annotation
                     else None
                 )
                 if (
-                    not is_guardian_sos_ack
+                    not is_guardian_sos_ack and not is_collection_annotation
                     and not authorized(self.headers.get("Authorization"), token)
                 ):
                     raise MessageHubError("unauthorized", "missing or invalid bearer token", status=401)
                 self.route_post(guardian_authorization=guardian_authorization)
             except MessageHubError as error:
                 self.respond_error(error)
+            except CollectionError as error:
+                self.respond_error(MessageHubError(error.code, str(error), status=error.status))
             except ManualSosValidationError:
                 self.respond_error(
                     MessageHubError(
@@ -1795,6 +1811,28 @@ def make_handler(
             path = parsed_url.path
             query = parse_qs(parsed_url.query, keep_blank_values=True)
             segments = split_path(path)
+            if path in {"/", "/collection", "/collection.js", "/collection.css"}:
+                if path in {"/", "/collection"}:
+                    self.respond_html(COLLECTION_HTML, headers=COLLECTION_SECURITY_HEADERS)
+                else:
+                    content, content_type = (COLLECTION_JS, "application/javascript") if path.endswith(".js") else (COLLECTION_CSS, "text/css")
+                    self.respond_bytes(content.encode("utf-8"), content_type=content_type + "; charset=utf-8", headers=COLLECTION_SECURITY_HEADERS)
+                return
+            if len(segments) == 6 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "collection":
+                self.require_guardian_authorization(segments[3])
+                headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+                if segments[5] == "summary":
+                    if query:
+                        raise CollectionError("invalid_collection_query", "summary has no query parameters", 400)
+                    self.respond_json(store.collection.summary(segments[3]), headers=headers)
+                elif segments[5] == "records":
+                    self.respond_json(store.collection.page(segments[3], query), headers=headers)
+                elif segments[5] == "export.jsonl":
+                    page = store.collection.page(segments[3], query, raw=True)
+                    self.respond_bytes(jsonl_page(page), content_type="application/x-ndjson; charset=utf-8", headers={**headers, "Content-Disposition": 'attachment; filename="egolink-collection.jsonl"'})
+                else:
+                    raise CollectionError("collection_not_found", "collection route does not exist", 404)
+                return
             is_location_state_current = (
                 len(segments) == 6
                 and segments[:3] == ["api", "v1", "devices"]
@@ -1834,7 +1872,7 @@ def make_handler(
                     "location state authentication is not configured",
                     status=503,
                 )
-            if path == "/":
+            if path == "/engineering":
                 self.respond_html(render_dashboard(amap_js_api_key=amap_api_key))
                 return
             if path == GUARDIAN_LOCATION_PATH:
@@ -2139,6 +2177,14 @@ def make_handler(
         def route_post(self, *, guardian_authorization: Any = None) -> None:
             parsed_url = urlparse(self.path)
             segments = split_path(parsed_url.path)
+            if len(segments) == 6 and segments[:3] == ["api", "v1", "devices"] and segments[4:] == ["collection", "annotations"]:
+                if guardian_authorization is None or not guardian_authorization.authorized:
+                    raise CollectionError("forbidden", "device binding is required", 403)
+                if parsed_url.query:
+                    raise CollectionError("invalid_annotation", "annotation is sent only in the request body", 400)
+                result = store.collection.annotate(segments[3], self.read_raw_body(), operator_id=guardian_authorization.guardian_id)
+                self.respond_json(result, headers={"Cache-Control": "no-store"})
+                return
             is_manual_sos_ingest = segments == [
                 "api",
                 "v1",
@@ -2210,6 +2256,17 @@ def make_handler(
             if len(segments) == 5 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "raw-ingest":
                 device_id = segments[3]
                 raw_body = self.read_raw_body()
+                collection_probe = parse_raw_frame_probe(device_id, raw_body)
+                if is_collection_content_type(collection_probe.get("content_type")) or b"profile=egolink.collection.v1" in raw_body[:4096]:
+                    if not token:
+                        raise CollectionError("collection_auth_not_configured", "collection ingest authentication is not configured", 503)
+                    initial = initial_raw_frame_record(device_id, raw_body, "uplink", utc_now())
+                    record = parse_raw_frame_record(initial, raw_body, expected_frame_type="event")
+                    if not is_collection_content_type(as_dict(record.get("framing")).get("content_type")):
+                        raise CollectionError("invalid_collection_frame", "collection content type does not match its profile")
+                    result = store.collection.ingest(raw_body, record, transport=str(self.headers.get("X-EgoLink-Transport") or ""))
+                    self.respond_json(result, headers={"Cache-Control": "no-store"})
+                    return
                 injection = store.claim_raw_post_fail_once(device_id, raw_body)
                 if injection:
                     record = store.ingest_raw_frame_injected_failure(device_id, raw_body, injection=injection)
@@ -2477,6 +2534,7 @@ def make_handler(
             headers = (
                 {"Cache-Control": "no-store"}
                 if error_path.endswith("/locations/search")
+                or "/collection/" in error_path
                 or error_path.endswith("/location-state/current")
                 or "/safety-events/manual-sos" in error_path
                 or error_path == "/api/v1/safety-events/manual-sos"
@@ -2941,6 +2999,7 @@ def parse_raw_frame_probe(device_id: str, raw_body: bytes) -> dict[str, Any]:
     result.update(
         {
             "frame_id": str(first_known(fields.get("id"), fields.get("frame-id"), initial["frame_id"])),
+            "content_type": content_type,
             "kv_payload": kv_payload,
             "test_run_id": first_known(kv_payload.get("test-run-id"), fields.get("test-run-id")),
         }
@@ -9483,6 +9542,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
   <header>
     <div>
       <h1>EgoLink 定位看板</h1>
+      <p><a href="/collection">进入采集：原始观测、各源状态与完整导出</a> · <a href="/guardian-location">家属定位</a></p>
       <span class="brand-note">设备位置、历史轨迹与外场状态</span>
     </div>
     <div class="header-actions">

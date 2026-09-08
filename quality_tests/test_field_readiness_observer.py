@@ -18,7 +18,15 @@ class FieldReadinessObserverTests(unittest.TestCase):
             tmp_path = Path(tmp)
             store = message_hub.MessageHubStore(tmp_path / "hub.db")
             self._seed_ready_device(store, "ego-link-r1-test")
-            server = ThreadingHTTPServer(("127.0.0.1", 0), message_hub.make_handler(store))
+            requested_paths: list[str] = []
+            base_handler = message_hub.make_handler(store)
+
+            class RecordingHandler(base_handler):
+                def do_GET(self) -> None:
+                    requested_paths.append(self.path)
+                    super().do_GET()
+
+            server = ThreadingHTTPServer(("127.0.0.1", 0), RecordingHandler)
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
             try:
@@ -43,6 +51,8 @@ class FieldReadinessObserverTests(unittest.TestCase):
             self.assertTrue(report["latest"]["field_ready"])
             self.assertEqual(report["latest"]["field_readiness"]["reason"], "fresh_periodic_upload")
             self.assertTrue(report["latest"]["dashboard"]["markers_present"])
+            self.assertIn("/engineering", requested_paths)
+            self.assertNotIn("/", requested_paths)
             self.assertEqual(commands, [])
             self.assertTrue((tmp_path / "report" / "field_readiness_report.json").is_file())
             self.assertTrue((tmp_path / "report" / "field_readiness_report.md").is_file())
