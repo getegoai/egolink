@@ -1,0 +1,13 @@
+menu "SOS delivery sender task"
+
+config EGOLINK_SOS_DELIVERY_SENDER_TASK_ENABLED
+    bool "Enable the independent SOS delivery sender owner"
+    default n
+    help
+        Default-off Productization Sprint 1 integration seam. When an
+        explicitly selected composition root enables it, one statically
+        allocated task runs only the split-phase sender path. It neither owns
+        GPIO nor creates credentials, a network bearer, a Call session, or a
+        second SOS/outbox contract.
+
+endmenu

@@ -12,7 +12,7 @@ depends_on:
 serves_gate: P0-SOS
 requires_hardware: true
 created: 2026-08-23
-last_updated: 2026-09-05
+last_updated: 2026-09-08
 
 context:
   - docs/architecture/adr/ADR-0014-runtime-convergence.md
@@ -33,6 +33,7 @@ allowed_paths:
   - firmware/mqtt_heartbeat/components/sos_pending_edge_journal/
   - firmware/mqtt_heartbeat/components/sos_pending_edge_journal_nvs/
   - firmware/mqtt_heartbeat/components/sos_delivery_composition/
+  - firmware/mqtt_heartbeat/components/sos_delivery_sender_task/
   - pc_simulator/sos_walking_skeleton.py
   - shared/contracts/safety_event.schema.json
   - quality_tests/test_sos_input_firmware.py
@@ -42,6 +43,7 @@ allowed_paths:
   - quality_tests/test_sos_pending_edge_journal.py
   - quality_tests/test_sos_pending_edge_journal_nvs.py
   - quality_tests/test_sos_delivery_composition.py
+  - quality_tests/test_sos_delivery_sender_task.py
   - quality_tests/test_sos_walking_skeleton.py
   - server/manual_sos_store.py
   - server/manual_sos_delivery_ack.py
@@ -986,6 +988,125 @@ coordinated after the physical LOC/CALL/outbox integrations settle.
   `settle_prepared`; BEGIN/FINISH explicitly require the recovery wrapper. The
   recovery wrapper reports these next actions distinctly instead of returning
   a generic recovery loop for every non-recovery phase.
+
+## SOS-010K Independent Sender Task/Owner (2026-09-08)
+
+This offline/default-off slice owns only the new fixed-memory
+`sos_delivery_sender_task` component, its native pthread concurrency test and
+this packet. It adds no `app_main`, GPIO, credential, bearer, server, LOC,
+CALL, outbox-contract or storage-backend binding. The product build option is
+`default n`; enabling the component alone still performs no network operation
+until a caller injects the existing composition and bounded transport seam.
+
+The sender is the sole delivery worker. It takes the integrator-provided shared
+owner only around composition prepare, exact-result settlement, recovery and
+orderly cancel. It releases that owner for the whole synchronous
+`execute_prepared` call. Consequently the input owner can journal a newly
+qualified SOS and complete feedback, urgent Location intent and Ego Call
+request while an earlier Location POST is blocked. Wake storms coalesce into a
+bounded atomic intent; the durable priority outbox remains the source of work.
+Each prepared execution receives a nonzero, boot-local, saturating task
+generation, and settlement rejects a result that does not match the active
+generation. Exhausting that 32-bit attempt space fails the worker terminally
+before another prepare instead of wrapping into a stale identity.
+The configured nonzero millisecond poll is converted once with bounded 64-bit
+arithmetic, rounded up to at least one RTOS tick and rejected if it reaches
+`portMAX_DELAY`; a sub-tick request therefore cannot become a busy loop and an
+oversized request cannot become an accidental infinite wait.
+
+Stop is cooperative and fail-closed. It never force-kills an executing
+transport callback, never cancels before a ready result is settled, and never
+turns an owner timeout or unresolved recovery into a clean stop. The component
+rejects `owner_timeout_ms > stop_timeout_ms`. `stop_timeout_ms` is a
+cooperative worker stop-scheduling, owner-wait and retry budget. It starts when
+the worker can process stop after any already-entered synchronous transport or
+composition callback returns; it neither preempts nor bounds that callback's
+wall-clock time. If stop arrived during execute, the return path establishes
+the deadline before settlement and leaves `RESULT_READY` for the budgeted stop
+path instead of first taking a normal full owner wait. Each later
+settlement/cancel owner acquisition is capped to the remaining milliseconds. A
+retry waits for the smaller of configured idle poll and remaining stop budget,
+converted to a finite nonzero tick; an expired budget is checked immediately
+without another full poll sleep. RTOS tick rounding and scheduler latency also
+remain outside a hard real-time guarantee.
+The component
+has no direct storage API. Composition settlement may delete a record only
+through the existing exact ACK rules; cancellation, malformed/truncated/non-
+exact ACK, timeout and unknown result retain the durable record. Pending SOS
+journal cleanup remains owned by the existing composition/runtime path.
+When a worker exists, its terminal snapshot means the state machine has
+published a non-running final status and will make no further owner or
+composition call. A public notify/stop call uses one atomic word whose high bit
+closes admission and whose low bits count in-flight calls; an admission CAS
+either precedes close and must drain, or observes close and cannot touch the
+task handle. The count has a fixed maximum and rejects a call at its limit.
+Stop lifecycle publication itself is a one-way `RUNNING -> STOP_REQUESTED` CAS;
+the caller never writes lifecycle or last-status afterward, so it cannot
+overwrite a worker terminal result. The worker publishes terminal
+lifecycle/status, atomically closes admission, publishes the terminal marker,
+waits for every previously admitted reference to drain, and only then
+self-deletes. This closes both stale-TaskHandle and stale-stop-publication
+windows during concurrent generation exhaustion or stop.
+The marker is still not a join or a storage-reclaim fence. The fixed sender
+context is boot-long and must not be cleared, reused or reinitialized after
+stop. The native harness, unlike the device API, explicitly joins each pthread
+before releasing scenario storage.
+
+Native pthread evidence covers input-owner progress while Location execute is
+blocked, cancel-wins and result-wins ordering, non-exact ACK retention, wake
+storm coalescing, monotonic attempt generations, and shutdown from prepared,
+executing, result-ready and distinct BEGIN/FINISH recovery-shaped states. It
+also holds the owner beyond a bounded stop deadline and verifies terminal
+failure without calling composition cancel. This is host
+concurrency evidence only. The physical button remains unwired and a real Ego
+Call, real Location upload, TLS/network operation, NVS/reboot behavior and
+device latency are outside K and remain required for `P0-SOS`. A real Ego Call
+is not exercised by this host slice; the Gate stays
+`NOT_RUN`.
+
+Focused validation:
+
+```powershell
+python -m unittest quality_tests.test_sos_delivery_sender_task -v
+python -m unittest quality_tests.test_sos_delivery_composition_split_phase -v
+python scripts/context_lint.py
+```
+
+K validation on 2026-09-08 runs the actual production sender C against a host
+pthread/FreeRTOS shim. The complete concurrency/lifecycle executable is rebuilt
+and run ten times inside the focused test; all ten runs pass. The focused suite
+collects seven tests: six pass by default and the guarded real-IDF build is
+skipped unless explicitly requested. It also strictly compiles the default-off
+source with host GCC and cross-compiles the enabled object for ESP32-S3.
+The native build lowers the internal attempt-generation ceiling to three and
+proves exactly three prepare/execute/settle cycles, terminal failure before a
+fourth prepare, balanced owner calls and no owner/composition call after the
+terminal marker. Deterministic barriers separately hold an admitted notify and
+an admitted stop inside `xTaskNotifyGive` while the worker commits terminal
+state, proving the fake task is not deleted until the public reference returns
+and the late stop caller cannot overwrite `STOPPED`. Calls made after terminal
+publication are also proven to leave the held-reference count unchanged and to
+avoid another task notification.
+A four-reference test ceiling additionally proves a fifth caller is rejected
+without incrementing notification telemetry or touching the task handle, so
+the delete barrier cannot wrap to zero. These cases run in all ten complete
+repetitions. The low tick-rate shim asserts that every actual worker wait is at
+least one finite tick, rejects a configuration that maps to `portMAX_DELAY`,
+and the source guard requires remaining stop time to be capped by the already-
+validated idle poll before tick conversion. Invalid configuration coverage
+also rejects an owner timeout larger than its stop budget. A separate execute
+barrier delivers stop while transport is blocked, denies the settlement owner,
+and proves there is exactly one remaining-budget owner attempt after execute
+returns (zero ordinary settlement calls), not a full ordinary wait followed by
+a second stop-path wait.
+
+The guarded build was then run explicitly with
+`EGOLINK_RUN_IDF_SOS_SENDER_BUILD=1`. It generated a temporary untracked
+minimal app whose `main` named `sos_delivery_sender_task` in `REQUIRES`, used
+the repository's real component graph and ESP-IDF v5.4.2 headers/CMake, enabled
+K, and completed the ESP32-S3 compile and link. The temporary directory was
+deleted after the pass. This is real component build evidence, not task runtime,
+network, device, latency or physical-SOS evidence.
 
 # Builder Prompt
 
