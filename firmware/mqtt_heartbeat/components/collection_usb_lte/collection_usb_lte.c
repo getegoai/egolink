@@ -12,7 +12,8 @@
 const char *collection_usb_lte_result_name(collection_usb_lte_result_t r)
 {
     static const char *const names[] = {"idle", "pending", "ok", "timeout", "cancelled",
-        "disconnected", "modem_error", "io_error", "overflow", "bad_state", "disabled"};
+        "disconnected", "modem_error", "io_error", "overflow", "bad_state",
+        "stale_epoch", "disabled"};
     return (unsigned)r < sizeof(names)/sizeof(names[0]) ? names[r] : "unknown";
 }
 
@@ -24,6 +25,17 @@ collection_usb_lte_result_t collection_usb_lte_begin(collection_usb_lte_operatio
 collection_usb_lte_result_t collection_usb_lte_poll(void) { return COLLECTION_USB_LTE_DISABLED; }
 void collection_usb_lte_cancel(void) {}
 esp_err_t collection_usb_lte_quiesce(void) { return ESP_ERR_NOT_SUPPORTED; }
+collection_usb_lte_result_t collection_usb_lte_service(void)
+{ return COLLECTION_USB_LTE_DISABLED; }
+collection_usb_lte_result_t collection_usb_lte_begin_for_epoch(
+    collection_usb_lte_operation_t op, uint32_t ms, uint32_t epoch)
+{ (void)op; (void)ms; (void)epoch; return COLLECTION_USB_LTE_DISABLED; }
+collection_usb_lte_result_t collection_usb_lte_poll_for_epoch(uint32_t epoch)
+{ (void)epoch; return COLLECTION_USB_LTE_DISABLED; }
+collection_usb_lte_result_t collection_usb_lte_cancel_poll_for_epoch(uint32_t epoch)
+{ (void)epoch; return COLLECTION_USB_LTE_DISABLED; }
+collection_usb_lte_result_t collection_usb_lte_quiesce_for_epoch(uint32_t epoch)
+{ (void)epoch; return COLLECTION_USB_LTE_DISABLED; }
 void collection_usb_lte_get_status(collection_usb_lte_status_t *s)
 { if (s) { memset(s, 0, sizeof(*s)); s->result = COLLECTION_USB_LTE_DISABLED; } }
 esp_netif_t *collection_usb_lte_netif(void) { return NULL; }
@@ -60,7 +72,8 @@ static struct {
     esp_netif_t *netif;
     esp_event_handler_instance_t ip_handler, lost_handler, ppp_handler;
     usb_device_match_id_t match[2];
-    bool netif_started, attempted_init;
+    bool netif_started, attempted_init, disconnect_teardown_valid;
+    uint32_t netif_connection_epoch, disconnect_teardown_epoch;
     atomic_bool cancel, disconnect_pending;
     uint8_t rx_buffer[1536];
 } usb;
@@ -69,13 +82,40 @@ static uint64_t now_ms(void) { return (uint64_t)esp_timer_get_time() / 1000; }
 static bool owner(void) { return usb.owner && usb.owner == xTaskGetCurrentTaskHandle(); }
 static bool enter_owner(void) { return owner() && xSemaphoreTake(usb.gate, 0) == pdTRUE; }
 static void leave(void) { xSemaphoreGive(usb.gate); }
-static void link_down(void)
+static esp_err_t link_down(void)
 {
     if (usb.eth && usb.netif_started) {
         esp_err_t e = iot_eth_stop(usb.eth); /* event queue, zero wait */
-        if (e == ESP_OK) usb.netif_started = false;
+        if (e == ESP_OK) {
+            usb.netif_started = false;
+            usb.netif_connection_epoch = 0;
+        }
         else usb.state.status.last_io_error = e;
+        return e;
     }
+    return ESP_OK;
+}
+static collection_usb_lte_result_t retire_disconnected_netif_locked(void)
+{
+    if (!atomic_load(&usb.disconnect_pending)) return COLLECTION_USB_LTE_OK;
+    /* disconnect_pending is asserted before the callback waits for this gate
+     * so transmit/command paths stop immediately. It cannot be drained until
+     * the callback has committed the port/epoch snapshot under this gate. */
+    if (!usb.disconnect_teardown_valid) return COLLECTION_USB_LTE_PENDING;
+    /* No new PPP start is admitted while this flag is set. The epoch tag is
+     * the lifecycle that owned the retained netif, not the currently opened
+     * CDC port, so a stale caller can retire only that old residue. */
+    if (usb.netif_started) {
+        if (usb.netif_connection_epoch != usb.disconnect_teardown_epoch) {
+            return COLLECTION_USB_LTE_BAD_STATE;
+        }
+        if (link_down() != ESP_OK) return COLLECTION_USB_LTE_IO_ERROR;
+    }
+    if (!usb.state.status.ppp_stopped) return COLLECTION_USB_LTE_PENDING;
+    usb.disconnect_teardown_epoch = 0;
+    usb.disconnect_teardown_valid = false;
+    atomic_store(&usb.disconnect_pending, false);
+    return COLLECTION_USB_LTE_OK;
 }
 static esp_err_t driver_set_mediator(iot_eth_driver_t *d, iot_eth_mediator_t *m)
 { (void)d; usb.mediator = m; return ESP_OK; }
@@ -128,10 +168,20 @@ static void usb_event(usbh_cdc_device_event_t event, usbh_cdc_device_event_data_
     (void)context;
     if (event == CDC_HOST_DEVICE_EVENT_DISCONNECTED) {
         if (data->dev_gone.dev_addr != usb.dev_addr) return;
-        atomic_store(&usb.disconnect_pending, true);
+        atomic_store(&usb.disconnect_pending, true); /* early I/O fence */
         xSemaphoreTake(usb.gate, portMAX_DELAY);
         usb.port = NULL; /* CDC closes after this callback; no stale pointer */
+        if (!usb.disconnect_teardown_valid) {
+            usb.disconnect_teardown_epoch = usb.netif_started
+                ? usb.netif_connection_epoch
+                : usb.state.status.connection_epoch;
+        }
         collection_usb_lte_state_connect(&usb.state, false);
+        usb.disconnect_teardown_valid = true;
+        /* A prior owner may have observed the early fence while waiting for
+         * this commit. Reassert it after the committed snapshot so that owner
+         * retirement is never lost across that interleaving. */
+        atomic_store(&usb.disconnect_pending, true);
         leave();
         return;
     }
@@ -152,7 +202,9 @@ static void usb_event(usbh_cdc_device_event_t event, usbh_cdc_device_event_data_
     esp_err_t e = usbh_cdc_port_open(&config, &usb.port);
     usb.state.status.last_io_error = e;
     if (e == ESP_OK) {
-        atomic_store(&usb.disconnect_pending, false);
+        /* A quick reconnect must not erase an unfinished stop of the netif
+         * retained from the disconnected lifecycle. The owner retires that
+         * residue before any new command or PPP start can be admitted. */
         collection_usb_lte_state_connect(&usb.state, true);
     } else collection_usb_lte_state_fail(&usb.state, COLLECTION_USB_LTE_IO_ERROR);
     leave();
@@ -238,14 +290,20 @@ fail:
     collection_usb_lte_state_fail(&usb.state, COLLECTION_USB_LTE_IO_ERROR);
     return e; /* retained objects, no destructive/unbounded rollback */
 }
-collection_usb_lte_result_t collection_usb_lte_begin(collection_usb_lte_operation_t op, uint32_t ms)
+static collection_usb_lte_result_t begin_locked(
+    collection_usb_lte_operation_t op, uint32_t ms)
 {
-    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
-    if (!usb.state.status.initialized) { leave(); return COLLECTION_USB_LTE_BAD_STATE; }
+    if (!usb.state.status.initialized) return COLLECTION_USB_LTE_BAD_STATE;
+    collection_usb_lte_result_t retired = retire_disconnected_netif_locked();
+    if (retired != COLLECTION_USB_LTE_OK) {
+        return retired == COLLECTION_USB_LTE_IO_ERROR
+            ? retired
+            : COLLECTION_USB_LTE_BAD_STATE;
+    }
     if (op == COLLECTION_USB_LTE_DIAL && (!usb.state.status.ppp_stopped || usb.netif_started))
-        { leave(); return COLLECTION_USB_LTE_BAD_STATE; }
+        return COLLECTION_USB_LTE_BAD_STATE;
     const char *cmd = collection_usb_lte_state_begin(&usb.state, op, now_ms(), ms);
-    if (!cmd) { leave(); return COLLECTION_USB_LTE_BAD_STATE; }
+    if (!cmd) return COLLECTION_USB_LTE_BAD_STATE;
     atomic_store(&usb.cancel, false);
     esp_err_t e = usbh_cdc_write_bytes(usb.port, (const uint8_t *)cmd, strlen(cmd), pdMS_TO_TICKS(25));
     usb.state.last_tx_ms = now_ms();
@@ -253,24 +311,24 @@ collection_usb_lte_result_t collection_usb_lte_begin(collection_usb_lte_operatio
         usb.state.status.last_io_error = e;
         collection_usb_lte_state_fail(&usb.state, COLLECTION_USB_LTE_IO_ERROR);
     }
-    collection_usb_lte_result_t result = usb.state.status.result;
-    leave();
-    return result;
+    return usb.state.status.result;
 }
-collection_usb_lte_result_t collection_usb_lte_poll(void)
+
+static collection_usb_lte_result_t poll_locked(void)
 {
-    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    collection_usb_lte_result_t retired = retire_disconnected_netif_locked();
+    if (retired != COLLECTION_USB_LTE_OK) return retired;
     if (atomic_load(&usb.cancel)) {
         usb.state.cancelled = true;
         collection_usb_lte_state_quiesce(&usb.state);
     }
-    if (atomic_load(&usb.disconnect_pending)) link_down();
     bool pending = usb.state.pending;
     collection_usb_lte_result_t r = collection_usb_lte_state_poll(&usb.state, now_ms());
     if (pending && r == COLLECTION_USB_LTE_OK && usb.state.status.data_mode) {
         esp_err_t e = iot_eth_start(usb.eth); /* no AT; posts PPP start */
         if (e == ESP_OK) {
             usb.netif_started = true;
+            usb.netif_connection_epoch = usb.state.status.connection_epoch;
             usb.state.status.ppp_stopped = false;
             usb.state.quiet = false;
             usb.state.status.quiesced = false;
@@ -288,10 +346,25 @@ collection_usb_lte_result_t collection_usb_lte_poll(void)
             usb.state.rx_size = 0;
         }
     }
-    if (usb.state.quiet) link_down();
-    r = usb.state.status.result;
+    if (usb.state.quiet && link_down() != ESP_OK) {
+        return COLLECTION_USB_LTE_IO_ERROR;
+    }
+    return usb.state.status.result;
+}
+
+collection_usb_lte_result_t collection_usb_lte_begin(collection_usb_lte_operation_t op, uint32_t ms)
+{
+    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    collection_usb_lte_result_t result = begin_locked(op, ms);
     leave();
-    return r;
+    return result;
+}
+collection_usb_lte_result_t collection_usb_lte_poll(void)
+{
+    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    collection_usb_lte_result_t result = poll_locked();
+    leave();
+    return result;
 }
 void collection_usb_lte_cancel(void) { atomic_store(&usb.cancel, true); }
 esp_err_t collection_usb_lte_quiesce(void)
@@ -299,10 +372,99 @@ esp_err_t collection_usb_lte_quiesce(void)
     atomic_store(&usb.cancel, true);
     if (!usb.gate || !enter_owner()) return ESP_ERR_INVALID_STATE;
     collection_usb_lte_state_quiesce(&usb.state);
-    link_down();
+    (void)link_down();
     esp_err_t e = usb.netif_started ? ESP_FAIL : ESP_OK;
     leave();
     return e;
+}
+
+collection_usb_lte_result_t collection_usb_lte_service(void)
+{
+    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    collection_usb_lte_result_t result = usb.state.status.initialized
+        ? retire_disconnected_netif_locked()
+        : COLLECTION_USB_LTE_BAD_STATE;
+    leave();
+    return result;
+}
+
+collection_usb_lte_result_t collection_usb_lte_begin_for_epoch(
+    collection_usb_lte_operation_t op, uint32_t ms, uint32_t expected_epoch)
+{
+    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    collection_usb_lte_result_t retired = retire_disconnected_netif_locked();
+    if (usb.state.status.connection_epoch != expected_epoch) {
+        leave();
+        return COLLECTION_USB_LTE_STALE_EPOCH;
+    }
+    if (retired != COLLECTION_USB_LTE_OK) {
+        leave();
+        return retired == COLLECTION_USB_LTE_IO_ERROR
+            ? retired
+            : COLLECTION_USB_LTE_BAD_STATE;
+    }
+    collection_usb_lte_result_t result = begin_locked(op, ms);
+    leave();
+    return result;
+}
+
+collection_usb_lte_result_t collection_usb_lte_poll_for_epoch(uint32_t expected_epoch)
+{
+    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    collection_usb_lte_result_t retired = retire_disconnected_netif_locked();
+    if (usb.state.status.connection_epoch != expected_epoch) {
+        leave();
+        return COLLECTION_USB_LTE_STALE_EPOCH;
+    }
+    if (retired != COLLECTION_USB_LTE_OK) {
+        leave();
+        return retired;
+    }
+    collection_usb_lte_result_t result = poll_locked();
+    leave();
+    return result;
+}
+
+collection_usb_lte_result_t collection_usb_lte_cancel_poll_for_epoch(
+    uint32_t expected_epoch)
+{
+    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    collection_usb_lte_result_t retired = retire_disconnected_netif_locked();
+    if (usb.state.status.connection_epoch != expected_epoch) {
+        leave();
+        return COLLECTION_USB_LTE_STALE_EPOCH;
+    }
+    if (retired != COLLECTION_USB_LTE_OK) {
+        leave();
+        return retired;
+    }
+    atomic_store(&usb.cancel, true);
+    collection_usb_lte_result_t result = poll_locked();
+    leave();
+    return result;
+}
+
+collection_usb_lte_result_t collection_usb_lte_quiesce_for_epoch(
+    uint32_t expected_epoch)
+{
+    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    collection_usb_lte_result_t retired = retire_disconnected_netif_locked();
+    if (usb.state.status.connection_epoch != expected_epoch) {
+        leave();
+        return COLLECTION_USB_LTE_STALE_EPOCH;
+    }
+    if (retired != COLLECTION_USB_LTE_OK) {
+        leave();
+        return retired;
+    }
+    atomic_store(&usb.cancel, true);
+    collection_usb_lte_state_quiesce(&usb.state);
+    (void)link_down();
+    collection_usb_lte_result_t result = usb.netif_started
+        ? COLLECTION_USB_LTE_IO_ERROR
+        : COLLECTION_USB_LTE_OK;
+    leave();
+    return result;
 }
 void collection_usb_lte_get_status(collection_usb_lte_status_t *s)
 {

@@ -338,16 +338,74 @@ The usable installer profile was
 `C:/Espressif/tools/Microsoft.v5.4.2.PowerShell_profile.ps1`; direct use of the
 generic export had pointed at a stale missing Python environment.
 
-The repository-wide verification gate passed from the same final source:
-`1716` tests passed with `12` pre-declared environment/build-evidence skips.
+The repository-wide verification gate for that slice passed from the same
+source: `1716` tests passed with `12` pre-declared environment/build-evidence
+skips.
+
+`COLLECTOR-NET-COORD-NATIVE` subsequently extracted the collector's fixed-memory
+LTE command, route-retirement and cleanup coordinator from `collection_main.c`
+without changing its modem/wire ownership. The main remains the only task that
+touches the SIM7670 UART and USB LTE connector; the extracted component owns no
+task, netif, transport, spool or ACK state. A production-C native harness now
+covers delayed admission and stale attempts, pre-DIAL failures, uncertain DIAL
+cleanup, connection-epoch changes, route-generation retirement, Wi-Fi handoff,
+UART/USB owner exclusion, graceful stop, invalid configuration, deadline
+overflow and never-dialed idle facts. Coordinator/policy/USB/HTTPS/profile
+focused validation passed `27/27`; adjacent LOC/profile validation ran 19
+tests with one existing generated-build environment skip. Repository-wide
+verification after the extraction passed `1726` tests with `12` pre-declared
+environment/build-evidence skips. Three no-flash ESP-IDF v5.4.2 profile builds
+also passed locally. Because those builds used a shared dirty workspace with
+unrelated parallel changes, their binaries and hashes are not recorded as
+final or release artifacts.
 
 The LTE opt-in collector branch is still build-unverified because no ignored
 overlay yet contains the operator-verified exact USB modem interface and
-descriptor values; a synthetic value was not substituted. Its connector and
-route policy have native execution evidence, while main-coordinator combination
-paths remain static/build-adjacent evidence only. No flash, SIM traffic, network
-operation or hardware command was performed. All P0 product Gates remain
-`NOT_RUN`.
+descriptor values; a synthetic value was not substituted. Its connector,
+route policy and coordinator combination now have native execution evidence,
+while the opt-in `collection_main.c` adapter compilation remains gated by that
+real descriptor overlay. No flash, SIM traffic, network operation or hardware
+command was performed. All P0 product Gates remain `NOT_RUN`.
+
+The coordinator follow-up closes three fail-safe boundaries without claiming a
+live LTE result. START and STOP actions are serial-numbered: exact STOP replay
+cannot refresh retirement/cleanup deadlines or regress an active teardown
+stage, while a stale/conflicting STOP reports `LTE_FAILED` for the actual owner
+attempt so policy emits the matching STOP and retains the normal retirement
+path. Attempt ID wrap from `UINT32_MAX` to `1` is covered by native execution.
+
+Cleanup connector operations are now scoped to the captured USB connection
+epoch inside the `collection_usb_lte` gate. Scoped begin, poll, cancel+poll and
+quiesce return `STALE_EPOCH` without changing command, cancel or PPP state for
+the newly connected lifecycle. The sole pre-check exception is connector-local
+retirement of a generation-tagged netif residue left by the physical
+disconnect: quick reconnect cannot erase that pending teardown, no new command
+or PPP start is admitted until the old netif stop and observed PPP DEAD, and a
+stale call can retire only that residue. The callback asserts an early I/O
+fence before waiting for the connector gate, but only a separately committed,
+gate-protected teardown fact may be drained, closing the pre-commit interleave.
+The modem owner calls an explicit connector maintenance operation every loop,
+so retirement does not depend on an old-epoch coordinator operation. A
+separate status read followed by an
+unscoped connector call is not treated as an epoch fence.
+The connection epoch remains a boot-local 32-bit counter. This slice does not
+claim an infinite stale-token lifetime across `UINT32_MAX` physical USB edges;
+fail-closed exhaustion handling remains a pre-product hardening item.
+
+Uploader retirement has one fixed cleanup deadline. If the uploader has not
+retired by that deadline, the coordinator enters boot-local `LTE_DISABLED`,
+emits no false `LTE_QUIESCED`, does not quiesce the active uploader/netif and
+keeps same-modem UART work blocked because cleanup remains unconfirmed. The
+main adapter also skips its final GNSS UART cleanup commands under that block.
+This is a bounded terminal failure and can leave stop telemetry failed; it is
+not clean shutdown evidence and does not authorize cross-epoch recovery.
+The follow-up coordinator/USB/profile regression passed 36 focused tests with
+one declared generated-build proof skipped because its optional directory was
+not provided. Context lint and diff whitespace checks passed. Incremental,
+no-flash ESP-IDF v5.4.2 builds also passed for the existing isolated default,
+Wi-Fi/no-SIM collector and LOC-live configurations. The LTE opt-in main adapter
+remains build-gated on the real operator descriptor overlay described above;
+no substitute descriptor was introduced.
 
 Privacy correction: collector Wi-Fi observations no longer emit or persist raw
 SSID/BSSID values and retain only channel/count/RSSI aggregates with

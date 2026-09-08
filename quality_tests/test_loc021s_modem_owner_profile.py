@@ -57,6 +57,7 @@ class Loc021sModemOwnerProfileTests(unittest.TestCase):
 
     def test_two_pass_dependency_union_is_explicit_and_exact(self) -> None:
         expected = {
+            "collection_network_coordinator",
             "collection_network_policy",
             "collection_record",
             "collection_spool",

@@ -11,6 +11,7 @@
 #include "sdkconfig.h"
 #include "cJSON.h"
 #include "driver/gpio.h"
+#include "collection_network_coordinator.h"
 #include "collection_network_policy.h"
 #include "collection_record.h"
 #include "collection_spool.h"
@@ -335,246 +336,97 @@ static collection_network_policy_snapshot_t policy_event(
 }
 
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
-typedef enum {
-    LTE_CONTROL_IDLE=0,LTE_CONTROL_WAIT_ADMISSION,LTE_CONTROL_PROBE,
-    LTE_CONTROL_ECHO_OFF,LTE_CONTROL_DIAL,LTE_CONTROL_WAIT_IP,
-    LTE_CONTROL_ONLINE,LTE_CONTROL_WAIT_POLICY_STOP,LTE_CONTROL_WAIT_UPLOADER,LTE_CONTROL_GUARD,
-    LTE_CONTROL_ESCAPE,LTE_CONTROL_HANGUP,LTE_CONTROL_WAIT_PPP_DEAD,LTE_CONTROL_DISABLED,
-} lte_control_stage_t;
-typedef struct {
-    lte_control_stage_t stage;
-    uint32_t attempt_id,connection_epoch;
-    uint64_t last_submit_ms,retire_deadline_ms,guard_start_ms,cleanup_deadline_ms;
-    uint32_t retire_generation;
-    bool command_submitted,dial_submitted,data_mode_entered,retire_wait_expired;
-} lte_control_t;
-typedef struct {
-    bool valid,cleanup_confirmed;
-    collection_network_event_type_t type;
-    uint32_t attempt_id;
-} lte_notice_t;
-
-static lte_notice_t lte_notice(
-    collection_network_event_type_t type,uint32_t attempt,bool confirmed)
+static collection_network_connector_result_t lte_connector_result(
+    collection_usb_lte_result_t result)
 {
-    return (lte_notice_t){.valid=true,.cleanup_confirmed=confirmed,.type=type,.attempt_id=attempt};
+    if(result==COLLECTION_USB_LTE_PENDING)return COLLECTION_NETWORK_CONNECTOR_PENDING;
+    if(result==COLLECTION_USB_LTE_OK)return COLLECTION_NETWORK_CONNECTOR_OK;
+    if(result==COLLECTION_USB_LTE_DISCONNECTED)return COLLECTION_NETWORK_CONNECTOR_DISCONNECTED;
+    if(result==COLLECTION_USB_LTE_TIMEOUT)return COLLECTION_NETWORK_CONNECTOR_TIMEOUT;
+    if(result==COLLECTION_USB_LTE_IO_ERROR)return COLLECTION_NETWORK_CONNECTOR_IO_ERROR;
+    if(result==COLLECTION_USB_LTE_OVERFLOW)return COLLECTION_NETWORK_CONNECTOR_OVERFLOW;
+    if(result==COLLECTION_USB_LTE_STALE_EPOCH)return COLLECTION_NETWORK_CONNECTOR_STALE_EPOCH;
+    return COLLECTION_NETWORK_CONNECTOR_FAILED;
 }
-static bool lte_command_stage(const lte_control_t *control)
+static collection_usb_lte_operation_t lte_connector_operation(
+    collection_network_connector_operation_t operation)
 {
-    lte_control_stage_t stage=control->stage;
-    return stage==LTE_CONTROL_PROBE||stage==LTE_CONTROL_ECHO_OFF||stage==LTE_CONTROL_DIAL||
-        (stage==LTE_CONTROL_WAIT_UPLOADER&&!control->retire_wait_expired)||
-        stage==LTE_CONTROL_GUARD||stage==LTE_CONTROL_ESCAPE||
-        stage==LTE_CONTROL_HANGUP||stage==LTE_CONTROL_WAIT_PPP_DEAD;
+    switch(operation) {
+        case COLLECTION_NETWORK_CONNECTOR_PROBE:return COLLECTION_USB_LTE_PROBE;
+        case COLLECTION_NETWORK_CONNECTOR_ECHO_OFF:return COLLECTION_USB_LTE_ECHO_OFF;
+        case COLLECTION_NETWORK_CONNECTOR_DIAL:return COLLECTION_USB_LTE_DIAL;
+        case COLLECTION_NETWORK_CONNECTOR_ESCAPE:return COLLECTION_USB_LTE_ESCAPE;
+        case COLLECTION_NETWORK_CONNECTOR_HANGUP:return COLLECTION_USB_LTE_HANGUP;
+    }
+    return COLLECTION_USB_LTE_PROBE;
 }
-static lte_notice_t lte_start_command(
-    lte_control_t *control,collection_usb_lte_operation_t operation,
-    lte_control_stage_t stage,uint64_t now)
+static collection_network_connector_result_t lte_connector_begin(
+    void *context,collection_network_connector_operation_t operation,
+    uint32_t timeout_ms,uint32_t expected_epoch)
 {
-    /* A DIAL call can reach the modem even if the USB write or CONNECT parse
-     * later fails.  From that point onward command/data mode is uncertain and
-     * teardown must use the guarded escape/hangup path. */
-    control->command_submitted=true;
-    if(operation==COLLECTION_USB_LTE_DIAL)control->dial_submitted=true;
-    collection_usb_lte_result_t result=collection_usb_lte_begin(
-        operation,CONFIG_EGOLINK_COLLECTION_LTE_COMMAND_TIMEOUT_MS);
-    control->last_submit_ms=now;atomic_store(&lte_cleanup_confirmed,false);
-    if(result==COLLECTION_USB_LTE_PENDING){control->stage=stage;return (lte_notice_t){0};}
-    control->stage=LTE_CONTROL_WAIT_POLICY_STOP;
-    return lte_notice(COLLECTION_NETWORK_EVENT_LTE_FAILED,control->attempt_id,false);
+    (void)context;
+    return lte_connector_result(collection_usb_lte_begin_for_epoch(
+        lte_connector_operation(operation),timeout_ms,expected_epoch));
 }
-static void lte_control_start(lte_control_t *control,uint32_t attempt)
+static collection_network_connector_result_t lte_connector_poll(
+    void *context,uint32_t expected_epoch)
 {
-    memset(control,0,sizeof(*control));control->attempt_id=attempt;
-    control->stage=LTE_CONTROL_WAIT_ADMISSION;
-    atomic_store(&lte_ppp_stopped,false);
-    atomic_store(&lte_hangup_required,false);
-    atomic_store(&lte_hangup_confirmed,false);
-    atomic_store(&lte_cleanup_confirmed,false);
+    (void)context;return lte_connector_result(
+        collection_usb_lte_poll_for_epoch(expected_epoch));
 }
-static lte_notice_t lte_control_admission(
-    lte_control_t *control,bool admitted,uint64_t now)
+static collection_network_connector_result_t lte_connector_cancel_poll(
+    void *context,uint32_t expected_epoch)
 {
-    if(control->stage!=LTE_CONTROL_WAIT_ADMISSION)return (lte_notice_t){0};
-    collection_usb_lte_status_t status;collection_usb_lte_get_status(&status);
-    if(!admitted||!status.usb_connected){control->stage=LTE_CONTROL_WAIT_POLICY_STOP;return lte_notice(COLLECTION_NETWORK_EVENT_LTE_FAILED,control->attempt_id,false);}
-    control->connection_epoch=status.connection_epoch;
-    return lte_start_command(control,COLLECTION_USB_LTE_PROBE,LTE_CONTROL_PROBE,now);
+    (void)context;return lte_connector_result(
+        collection_usb_lte_cancel_poll_for_epoch(expected_epoch));
 }
-static bool lte_epoch_matches(
-    const lte_control_t *control,const collection_usb_lte_status_t *status)
+static collection_network_connector_result_t lte_connector_quiesce(
+    void *context,uint32_t expected_epoch)
 {
-    return status->usb_connected&&status->connection_epoch==control->connection_epoch;
+    (void)context;return lte_connector_result(
+        collection_usb_lte_quiesce_for_epoch(expected_epoch));
 }
-static lte_notice_t lte_cleanup_failed(lte_control_t *control)
+static void lte_connector_status(
+    void *context,collection_network_connector_status_t *out)
 {
-    collection_usb_lte_status_t status;collection_usb_lte_get_status(&status);
-    atomic_store(&lte_ppp_stopped,status.ppp_stopped);
-    atomic_store(&lte_hangup_confirmed,status.hangup_confirmed);
-    atomic_store(&lte_cleanup_confirmed,false);
-    /* Never report QUIESCED.  The distinct DISABLED event can reopen a proven
-     * Wi-Fi route, but permanently blocks LTE redial and a clean STOPPED claim
-     * for this boot. */
-    control->stage=LTE_CONTROL_DISABLED;
-    return lte_notice(COLLECTION_NETWORK_EVENT_LTE_DISABLED,control->attempt_id,false);
+    (void)context;collection_usb_lte_status_t status;collection_usb_lte_get_status(&status);
+    *out=(collection_network_connector_status_t){
+        .usb_connected=status.usb_connected,.data_mode=status.data_mode,
+        .ppp_has_ip=status.ppp_has_ip,.ppp_stopped=status.ppp_stopped,
+        .hangup_confirmed=status.hangup_confirmed,
+        .connection_epoch=status.connection_epoch,
+        .result=lte_connector_result(status.result),
+    };
 }
-static lte_notice_t lte_cleanup_succeeded(lte_control_t *control)
+static collection_network_retirement_facts_t lte_retirement(void)
 {
-    collection_usb_lte_status_t status;collection_usb_lte_get_status(&status);
-    atomic_store(&lte_ppp_stopped,status.ppp_stopped);
-    atomic_store(&lte_hangup_confirmed,status.hangup_confirmed);
-    uint32_t attempt=control->attempt_id;memset(control,0,sizeof(*control));
-    control->stage=LTE_CONTROL_IDLE;atomic_store(&lte_cleanup_confirmed,true);
-    return lte_notice(COLLECTION_NETWORK_EVENT_LTE_QUIESCED,attempt,true);
+    return (collection_network_retirement_facts_t){
+        .published_generation=atomic_load(&network_route_generation),
+        .uploader_active_generation=atomic_load(&uploader_active_generation),
+        .uploader_retired_generation=atomic_load(&uploader_retired_generation),
+    };
 }
-static lte_notice_t lte_begin_quiesce(lte_control_t *control,uint64_t now)
+static void sync_lte_facts(const collection_network_coordinator_t *control)
 {
-    collection_usb_lte_status_t before;collection_usb_lte_get_status(&before);
-    if(!lte_epoch_matches(control,&before))return lte_cleanup_failed(control);
-    collection_usb_lte_cancel();(void)collection_usb_lte_poll();
-    (void)collection_usb_lte_quiesce();
-    control->cleanup_deadline_ms=now+CONFIG_EGOLINK_COLLECTION_LTE_CLEANUP_TIMEOUT_MS;
-    control->guard_start_ms=now;
-    collection_usb_lte_status_t status;collection_usb_lte_get_status(&status);
-    if(!lte_epoch_matches(control,&status))return lte_cleanup_failed(control);
-    if(control->command_submitted&&!control->dial_submitted&&
-       status.ppp_stopped&&!status.data_mode)
-        return lte_cleanup_failed(control);
-    bool needs_hangup=control->dial_submitted||control->data_mode_entered||
-        status.data_mode||!status.ppp_stopped;
-    atomic_store(&lte_hangup_required,needs_hangup);
-    if(!needs_hangup&&status.ppp_stopped)return lte_cleanup_succeeded(control);
-    control->stage=LTE_CONTROL_GUARD;
-    return (lte_notice_t){0};
-}
-static lte_notice_t lte_control_stop(
-    lte_control_t *control,uint32_t attempt,uint32_t retire_generation,uint64_t now)
-{
-    collection_usb_lte_status_t status;collection_usb_lte_get_status(&status);
-    if(control->attempt_id==attempt&&!control->command_submitted&&
-       !control->dial_submitted&&
-       !control->data_mode_entered&&
-       (control->stage==LTE_CONTROL_WAIT_ADMISSION||
-        control->stage==LTE_CONTROL_WAIT_POLICY_STOP)&&
-       status.ppp_stopped&&!status.data_mode) {
-        /* No PPP/data route ever existed, so there is no TLS/netif lease to
-         * retire and no stale +++/ATH command to send. */
-        return lte_cleanup_succeeded(control);
-    }
-    if(control->stage==LTE_CONTROL_IDLE||control->attempt_id!=attempt) {
-        if(status.ppp_stopped&&!status.data_mode)
-            return lte_notice(COLLECTION_NETWORK_EVENT_LTE_QUIESCED,attempt,true);
-        control->stage=LTE_CONTROL_DISABLED;atomic_store(&lte_cleanup_confirmed,false);
-        return (lte_notice_t){0};
-    }
-    control->retire_generation=retire_generation;
-    control->retire_deadline_ms=now+CONFIG_EGOLINK_COLLECTION_LTE_CLEANUP_TIMEOUT_MS;
-    control->stage=LTE_CONTROL_WAIT_UPLOADER;
-    return (lte_notice_t){0};
-}
-static lte_notice_t lte_control_poll(lte_control_t *control,uint64_t now)
-{
-    if(control->stage==LTE_CONTROL_IDLE||control->stage==LTE_CONTROL_WAIT_ADMISSION||
-       control->stage==LTE_CONTROL_WAIT_POLICY_STOP||control->stage==LTE_CONTROL_DISABLED)
-        return (lte_notice_t){0};
-    collection_usb_lte_status_t status;collection_usb_lte_get_status(&status);
-    if(control->stage==LTE_CONTROL_WAIT_UPLOADER) {
-        /* Follow the currently published retirement generation without
-         * extending the original bounded wait across route flaps. */
-        if(collection_network_retirement_ready(&control->retire_generation,
-           atomic_load(&network_route_generation),
-           atomic_load(&uploader_active_generation),
-           atomic_load(&uploader_retired_generation)))
-            return lte_begin_quiesce(control,now);
-        /* Never tear down a netif below a synchronous TLS request. Expiry
-         * leaves the route disabled and the policy visibly SWITCHING/STOPPING. */
-        if(now>=control->retire_deadline_ms) {
-            control->retire_wait_expired=true;
-            atomic_store(&lte_cleanup_confirmed,false);
-        }
-        return (lte_notice_t){0};
-    }
-    if(!lte_epoch_matches(control,&status)) {
-        if(control->stage==LTE_CONTROL_GUARD||control->stage==LTE_CONTROL_ESCAPE||
-           control->stage==LTE_CONTROL_HANGUP||control->stage==LTE_CONTROL_WAIT_PPP_DEAD)
-            return lte_cleanup_failed(control);
-        control->stage=LTE_CONTROL_WAIT_POLICY_STOP;
-        return lte_notice(COLLECTION_NETWORK_EVENT_LTE_FAILED,control->attempt_id,false);
-    }
-    if(control->stage==LTE_CONTROL_WAIT_IP||control->stage==LTE_CONTROL_ONLINE) {
-        if(status.ppp_has_ip) {
-            if(control->stage==LTE_CONTROL_WAIT_IP){control->stage=LTE_CONTROL_ONLINE;return lte_notice(COLLECTION_NETWORK_EVENT_LTE_READY,control->attempt_id,false);}
-            return (lte_notice_t){0};
-        }
-        if(control->stage==LTE_CONTROL_ONLINE||status.result==COLLECTION_USB_LTE_DISCONNECTED) {
-            control->stage=LTE_CONTROL_WAIT_POLICY_STOP;
-            return lte_notice(COLLECTION_NETWORK_EVENT_LTE_FAILED,control->attempt_id,false);
-        }
-        return (lte_notice_t){0};
-    }
-    if(control->stage==LTE_CONTROL_GUARD) {
-        if(now>=control->cleanup_deadline_ms)return lte_cleanup_failed(control);
-        if(now<control->guard_start_ms||now-control->guard_start_ms<1000U)return (lte_notice_t){0};
-        collection_usb_lte_result_t result=collection_usb_lte_begin(
-            COLLECTION_USB_LTE_ESCAPE,CONFIG_EGOLINK_COLLECTION_LTE_COMMAND_TIMEOUT_MS);
-        control->last_submit_ms=now;
-        if(result!=COLLECTION_USB_LTE_PENDING)return lte_cleanup_failed(control);
-        control->stage=LTE_CONTROL_ESCAPE;return (lte_notice_t){0};
-    }
-    if(control->stage==LTE_CONTROL_WAIT_PPP_DEAD) {
-        if(status.ppp_stopped&&status.hangup_confirmed)return lte_cleanup_succeeded(control);
-        if(now>=control->cleanup_deadline_ms)return lte_cleanup_failed(control);
-        return (lte_notice_t){0};
-    }
-    if((control->stage==LTE_CONTROL_ESCAPE||control->stage==LTE_CONTROL_HANGUP)&&
-       now>=control->cleanup_deadline_ms) {
-        collection_usb_lte_cancel();(void)collection_usb_lte_poll();
-        return lte_cleanup_failed(control);
-    }
-    collection_usb_lte_result_t result=collection_usb_lte_poll();
-    if(result==COLLECTION_USB_LTE_PENDING)return (lte_notice_t){0};
-    if(result!=COLLECTION_USB_LTE_OK) {
-        if(control->stage==LTE_CONTROL_ESCAPE||control->stage==LTE_CONTROL_HANGUP)
-            return lte_cleanup_failed(control);
-        control->stage=LTE_CONTROL_WAIT_POLICY_STOP;
-        return lte_notice(COLLECTION_NETWORK_EVENT_LTE_FAILED,control->attempt_id,false);
-    }
-    if(control->stage==LTE_CONTROL_PROBE)
-        return lte_start_command(control,COLLECTION_USB_LTE_ECHO_OFF,LTE_CONTROL_ECHO_OFF,now);
-    if(control->stage==LTE_CONTROL_ECHO_OFF)
-        return lte_start_command(control,COLLECTION_USB_LTE_DIAL,LTE_CONTROL_DIAL,now);
-    if(control->stage==LTE_CONTROL_DIAL){
-        control->data_mode_entered=true;atomic_store(&lte_hangup_required,true);
-        control->stage=LTE_CONTROL_WAIT_IP;return (lte_notice_t){0};
-    }
-    if(control->stage==LTE_CONTROL_ESCAPE) {
-        collection_usb_lte_result_t started=collection_usb_lte_begin(
-            COLLECTION_USB_LTE_HANGUP,CONFIG_EGOLINK_COLLECTION_LTE_COMMAND_TIMEOUT_MS);
-        control->last_submit_ms=now;
-        if(started!=COLLECTION_USB_LTE_PENDING)return lte_cleanup_failed(control);
-        control->stage=LTE_CONTROL_HANGUP;return (lte_notice_t){0};
-    }
-    if(control->stage==LTE_CONTROL_HANGUP){control->stage=LTE_CONTROL_WAIT_PPP_DEAD;return (lte_notice_t){0};}
-    return (lte_notice_t){0};
-}
-static lte_notice_t lte_apply_action(
-    lte_control_t *control,const collection_network_policy_snapshot_t *snapshot,uint64_t now)
-{
-    if(snapshot->actions&COLLECTION_NETWORK_ACTION_START_LTE)
-        lte_control_start(control,snapshot->active_lte_attempt_id);
-    if(snapshot->actions&COLLECTION_NETWORK_ACTION_STOP_LTE)
-        return lte_control_stop(control,snapshot->active_lte_attempt_id,
-            snapshot->route_generation,now);
-    return (lte_notice_t){0};
+    collection_network_coordinator_snapshot_t facts=collection_network_coordinator_snapshot(control);
+    atomic_store(&lte_ppp_stopped,facts.ppp_stopped);
+    atomic_store(&lte_hangup_required,facts.hangup_required);
+    atomic_store(&lte_hangup_confirmed,facts.hangup_confirmed);
+    atomic_store(&lte_cleanup_confirmed,facts.cleanup_confirmed);
 }
 static void lte_apply_policy_result(
-    collection_network_policy_t *policy,lte_control_t *control,
+    collection_network_policy_t *policy,collection_network_coordinator_t *control,
     collection_network_policy_snapshot_t snapshot,uint64_t now)
 {
-    lte_notice_t notice=lte_apply_action(control,&snapshot,now);
+    collection_network_retirement_facts_t retirement=lte_retirement();
+    collection_network_coordinator_notice_t notice=collection_network_coordinator_apply_policy(
+        control,&snapshot,&retirement,now);
+    sync_lte_facts(control);
     for(unsigned i=0;notice.valid&&i<3;i++) {
         snapshot=policy_event(policy,notice.type,now,notice.attempt_id);
-        notice=lte_apply_action(control,&snapshot,now);
+        retirement=lte_retirement();
+        notice=collection_network_coordinator_apply_policy(control,&snapshot,&retirement,now);
+        sync_lte_facts(control);
     }
 }
 #endif
@@ -598,8 +450,19 @@ static void modem_task(void *unused)
 
     bool usb_ready=false;
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
-    lte_control_t lte_control={0};
-    if(uart_ready&&network_stack_ready) {
+    collection_network_coordinator_t lte_control={0};
+    collection_network_connector_ops_t lte_connector={
+        .begin=lte_connector_begin,.poll=lte_connector_poll,
+        .cancel_poll=lte_connector_cancel_poll,.quiesce=lte_connector_quiesce,
+        .get_status=lte_connector_status,
+    };
+    collection_network_coordinator_config_t lte_coordinator_config={
+        .command_timeout_ms=CONFIG_EGOLINK_COLLECTION_LTE_COMMAND_TIMEOUT_MS,
+        .cleanup_timeout_ms=CONFIG_EGOLINK_COLLECTION_LTE_CLEANUP_TIMEOUT_MS,
+    };
+    bool lte_coordinator_ready=collection_network_coordinator_init(
+        &lte_control,&lte_coordinator_config,&lte_connector);
+    if(lte_coordinator_ready&&uart_ready&&network_stack_ready) {
         collection_usb_lte_config_t config={
             .vendor_id=CONFIG_EGOLINK_COLLECTION_LTE_USB_VENDOR_ID,
             .product_id=CONFIG_EGOLINK_COLLECTION_LTE_USB_PRODUCT_ID,
@@ -609,7 +472,8 @@ static void modem_task(void *unused)
         };
         usb_ready=collection_usb_lte_init(&config)==ESP_OK;
     }
-    atomic_store(&lte_ppp_stopped,usb_ready);atomic_store(&lte_cleanup_confirmed,usb_ready);
+    if(usb_ready)collection_network_coordinator_refresh_status(&lte_control);
+    sync_lte_facts(&lte_control);
 #else
     atomic_store(&lte_ppp_stopped,true);atomic_store(&lte_cleanup_confirmed,true);
 #endif
@@ -653,15 +517,19 @@ static void modem_task(void *unused)
         }
         policy_result=policy_event(&policy,COLLECTION_NETWORK_EVENT_TICK,now_ms,0);
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
+        if(usb_ready)(void)collection_usb_lte_service();
         lte_apply_policy_result(&policy,&lte_control,policy_result,now_ms);
-        lte_notice_t notice=lte_control_poll(&lte_control,now_ms);
+        collection_network_retirement_facts_t retirement=lte_retirement();
+        collection_network_coordinator_notice_t notice=collection_network_coordinator_poll(
+            &lte_control,&retirement,now_ms);
+        sync_lte_facts(&lte_control);
         if(notice.valid) {
             policy_result=policy_event(&policy,notice.type,now_ms,notice.attempt_id);
             lte_apply_policy_result(&policy,&lte_control,policy_result,now_ms);
         }
         /* A pending USB command is polled every 20 ms. Never enter a bounded
          * 4-5 second UART sensor request while its reply deadline is active. */
-        if(lte_command_stage(&lte_control)) {vTaskDelay(pdMS_TO_TICKS(20));continue;}
+        if(collection_network_coordinator_blocks_uart_work(&lte_control)) {vTaskDelay(pdMS_TO_TICKS(20));continue;}
 #endif
 
         if(uart_ready&&now>=next_cell) {
@@ -689,12 +557,15 @@ static void modem_task(void *unused)
             emit(LTE,now,r.reason&&r.commands_completed>1?"partial":query_status(&r),r.reason?"see_at_outcome_and_reason":NULL,p,false);
             next_cell=now+10000000;
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
-            notice=lte_control_admission(&lte_control,dial_admitted,(uint64_t)now_us()/1000U);
+            notice=collection_network_coordinator_admit(
+                &lte_control,policy_result.active_lte_attempt_id,
+                dial_admitted,(uint64_t)now_us()/1000U);
+            sync_lte_facts(&lte_control);
             if(notice.valid) {
                 policy_result=policy_event(&policy,notice.type,(uint64_t)now_us()/1000U,notice.attempt_id);
                 lte_apply_policy_result(&policy,&lte_control,policy_result,(uint64_t)now_us()/1000U);
             }
-            if(lte_command_stage(&lte_control)){vTaskDelay(pdMS_TO_TICKS(20));continue;}
+            if(collection_network_coordinator_blocks_uart_work(&lte_control)){vTaskDelay(pdMS_TO_TICKS(20));continue;}
 #endif
         }
         now=now_us();
@@ -725,8 +596,16 @@ static void modem_task(void *unused)
     int64_t uploader_deadline=now_us()+15000000;
     while(!atomic_load(&uploader_finished)&&now_us()<uploader_deadline) {
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
-        if(lte_control.stage==LTE_CONTROL_PROBE||lte_control.stage==LTE_CONTROL_ECHO_OFF||lte_control.stage==LTE_CONTROL_DIAL) {
-            collection_usb_lte_cancel();(void)collection_usb_lte_poll();
+        if(usb_ready)(void)collection_usb_lte_service();
+        collection_network_coordinator_notice_t cancel_notice=
+            collection_network_coordinator_cancel_setup(&lte_control);
+        sync_lte_facts(&lte_control);
+        if(cancel_notice.valid) {
+            uint64_t cancel_now=(uint64_t)now_us()/1000U;
+            policy_result=policy_event(
+                &policy,cancel_notice.type,cancel_now,cancel_notice.attempt_id);
+            lte_apply_policy_result(
+                &policy,&lte_control,policy_result,cancel_now);
         }
 #endif
         vTaskDelay(pdMS_TO_TICKS(20));
@@ -745,20 +624,31 @@ static void modem_task(void *unused)
     while(collection_network_policy_snapshot(&policy).state!=COLLECTION_NETWORK_STOPPED&&
           (uint64_t)now_us()/1000U<policy_deadline) {
         uint64_t tick=(uint64_t)now_us()/1000U;
-        lte_notice_t notice=lte_control_poll(&lte_control,tick);
+        if(usb_ready)(void)collection_usb_lte_service();
+        collection_network_retirement_facts_t retirement=lte_retirement();
+        collection_network_coordinator_notice_t notice=collection_network_coordinator_poll(
+            &lte_control,&retirement,tick);
+        sync_lte_facts(&lte_control);
         if(notice.valid) {
             policy_result=policy_event(&policy,notice.type,tick,notice.attempt_id);
             lte_apply_policy_result(&policy,&lte_control,policy_result,tick);
         }
         vTaskDelay(pdMS_TO_TICKS(20));
     }
-    collection_usb_lte_status_t final_lte;collection_usb_lte_get_status(&final_lte);
-    atomic_store(&lte_ppp_stopped,final_lte.ppp_stopped);
-    atomic_store(&lte_hangup_confirmed,final_lte.hangup_confirmed);
+    if(usb_ready) {
+        (void)collection_usb_lte_service();
+        collection_network_coordinator_refresh_status(&lte_control);
+    }
+    sync_lte_facts(&lte_control);
 #endif
 
     bool stopped=false;
-    if(uart_ready)for(unsigned i=0;i<3&&!stopped;i++) {
+    bool uart_cleanup_allowed=uart_ready;
+#if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
+    uart_cleanup_allowed=uart_cleanup_allowed&&
+        !collection_network_coordinator_blocks_uart_work(&lte_control);
+#endif
+    if(uart_cleanup_allowed)for(unsigned i=0;i<3&&!stopped;i++) {
         trace_t trace={.at=cJSON_CreateArray()};sim7670_location_bounded_result_t r;
         sim7670_location_bounded_request_t req={.timeout_ms=2000,.per_command_timeout_cap_ms=1500,.operation_token=operation++,.cancel_requested=cleanup_cancel,.trace_at=trace_at,.trace_context=&trace};
         stopped=sim7670_gnss_power_off_bounded(&req,&r)==SIM7670_LOCATION_BOUNDED_REPORT_READY;

@@ -2,6 +2,7 @@
 # are available. Keep the exact union stable here; only the application source
 # is selected later. The LOC-021S source still has no legacy runtime caller.
 set(EGOLINK_MAIN_REQUIREMENTS
+    collection_network_coordinator
     collection_network_policy
     collection_spool
     collection_record

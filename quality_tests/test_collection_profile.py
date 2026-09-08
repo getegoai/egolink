@@ -6,6 +6,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 MAIN = ROOT / "firmware/mqtt_heartbeat/main/collection_main.c"
+COORDINATOR = ROOT / "firmware/mqtt_heartbeat/components/collection_network_coordinator/collection_network_coordinator.c"
+COORDINATOR_HEADER = ROOT / "firmware/mqtt_heartbeat/components/collection_network_coordinator/include/collection_network_coordinator.h"
 KCONFIG = ROOT / "firmware/mqtt_heartbeat/main/Kconfig.projbuild"
 DEFAULTS = ROOT / "firmware/mqtt_heartbeat/sdkconfig.collection.defaults"
 
@@ -23,6 +25,8 @@ class CollectionProfileTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = MAIN.read_text(encoding="utf-8")
+        cls.coordinator = COORDINATOR.read_text(encoding="utf-8")
+        cls.coordinator_header = COORDINATOR_HEADER.read_text(encoding="utf-8")
         cls.kconfig = KCONFIG.read_text(encoding="utf-8")
         cls.defaults = DEFAULTS.read_text(encoding="utf-8")
 
@@ -73,26 +77,96 @@ class CollectionProfileTests(unittest.TestCase):
         self.assertIn("atomic_store(&network_route_generation,next.generation)", publish)
         self.assertIn("portENTER_CRITICAL(&network_mux)", publish)
         self.assertIn("portEXIT_CRITICAL(&network_mux)", publish)
-        self.assertIn("collection_network_retirement_ready", self.source)
-        self.assertIn("LTE_CONTROL_WAIT_UPLOADER", self.source)
+        self.assertIn("collection_network_retirement_ready", self.coordinator)
+        self.assertIn("COLLECTION_NETWORK_COORDINATOR_WAIT_UPLOADER", self.coordinator)
         self.assertIn(
             "atomic_store(&uploader_retired_generation,policy_result.route_generation)",
             self.source,
         )
 
     def test_cleanup_is_epoch_bound_and_failure_never_reports_quiesced(self):
-        failed = function(self.source, "lte_cleanup_failed", "lte_cleanup_succeeded")
+        failed = function(
+            self.coordinator, "cleanup_failed_observed", "cleanup_failed"
+        )
         self.assertNotIn("COLLECTION_NETWORK_EVENT_LTE_QUIESCED", failed)
-        self.assertIn("LTE_CONTROL_DISABLED", failed)
-        self.assertIn("lte_epoch_matches(control,&before)", self.source)
-        self.assertIn("lte_epoch_matches(control,&status)", self.source)
-        self.assertIn("control->guard_start_ms=now", self.source)
-        self.assertIn("control->dial_submitted||control->data_mode_entered", self.source)
-        self.assertIn("control->command_submitted=true", self.source)
-        self.assertIn("if(operation==COLLECTION_USB_LTE_DIAL)control->dial_submitted=true", self.source)
-        self.assertIn("control->attempt_id==attempt&&!control->command_submitted", self.source)
-        self.assertIn("COLLECTION_NETWORK_EVENT_LTE_DISABLED", self.source)
+        self.assertIn("COLLECTION_NETWORK_COORDINATOR_DISABLED", failed)
+        self.assertIn("epoch_matches(coordinator, &before)", self.coordinator)
+        self.assertIn("epoch_matches(coordinator, &status)", self.coordinator)
+        self.assertIn("coordinator->guard_start_ms = now_ms", self.coordinator)
+        self.assertIn("coordinator->dial_submitted ||", self.coordinator)
+        self.assertIn("coordinator->command_submitted = true", self.coordinator)
+        self.assertIn("operation == COLLECTION_NETWORK_CONNECTOR_DIAL", self.coordinator)
+        self.assertIn("coordinator->hangup_required = true", self.coordinator)
+        self.assertIn("coordinator->command_in_flight", self.coordinator)
+        self.assertIn("coordinator->last_started_attempt_id", self.coordinator)
+        self.assertIn("!coordinator->command_submitted", self.coordinator)
+        self.assertIn("COLLECTION_NETWORK_EVENT_LTE_DISABLED", self.coordinator)
+        for scoped_operation in (
+            "connector.cancel_poll(",
+            "connector.poll(",
+            "connector.quiesce(",
+            "coordinator->connection_epoch",
+            "COLLECTION_NETWORK_CONNECTOR_STALE_EPOCH",
+        ):
+            self.assertIn(scoped_operation, self.coordinator)
+        self.assertIn(
+            "stage == COLLECTION_NETWORK_COORDINATOR_DISABLED &&\n"
+            "         !coordinator->cleanup_confirmed",
+            self.coordinator,
+        )
+        self.assertIn(
+            "uart_cleanup_allowed=uart_cleanup_allowed&&\n"
+            "        !collection_network_coordinator_blocks_uart_work(&lte_control)",
+            self.source,
+        )
         self.assertEqual(self.source.count("esp_netif_sntp_deinit()"), 1)
+
+    def test_main_is_thin_owner_adapter_and_coordinator_cannot_touch_wire_or_spool(self):
+        self.assertNotIn("LTE_CONTROL_", self.source)
+        for api in (
+            "collection_network_coordinator_init",
+            "collection_network_coordinator_apply_policy",
+            "collection_network_coordinator_admit",
+            "collection_network_coordinator_poll",
+            "collection_network_coordinator_blocks_uart_work",
+            "collection_network_coordinator_cancel_setup",
+        ):
+            self.assertIn(api, self.source)
+        for scoped_connector_api in (
+            "collection_usb_lte_begin_for_epoch(",
+            "collection_usb_lte_poll_for_epoch(expected_epoch)",
+            "collection_usb_lte_cancel_poll_for_epoch(expected_epoch)",
+            "collection_usb_lte_quiesce_for_epoch(expected_epoch)",
+            "collection_usb_lte_service()",
+        ):
+            self.assertIn(scoped_connector_api, self.source)
+        for unscoped_connector_api in (
+            "collection_usb_lte_begin(",
+            "collection_usb_lte_poll(",
+            "collection_usb_lte_cancel(",
+            "collection_usb_lte_quiesce(",
+        ):
+            self.assertNotIn(unscoped_connector_api, self.source)
+        self.assertIn(
+            "if(usb_ready)collection_network_coordinator_refresh_status(&lte_control);",
+            self.source,
+        )
+        self.assertIn(
+            "if(usb_ready) {\n"
+            "        (void)collection_usb_lte_service();\n"
+            "        collection_network_coordinator_refresh_status(&lte_control);",
+            self.source,
+        )
+        for forbidden in (
+            "collection_spool_",
+            "collection_record_ack_matches",
+            "esp_http_client",
+            "esp_wifi_",
+            "collection_usb_lte_",
+            "sim7670_",
+        ):
+            self.assertNotIn(forbidden, self.coordinator)
+        self.assertIn("bool initialized", self.coordinator_header)
 
     def test_stop_telemetry_keeps_independent_completion_facts(self):
         for key in (
