@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdatomic.h>
 
 #include "location_modem_executor.h"
 #include "sim7670_gnss.h"
@@ -78,6 +79,9 @@ typedef struct {
     egolink_sim7670_driver_mode_t driver_mode;
     int32_t owner_core_id;
     uint32_t per_command_timeout_cap_ms;
+    uint32_t gnss_power_on_settle_ms;
+    /* Borrowed boot-long owner flag, observed at the existing safe boundaries. */
+    const atomic_bool *owner_stop_requested;
 } egolink_sim7670_location_modem_adapter_config_t;
 
 /* This snapshot deliberately contains no report, coordinate, cell ID or raw AT. */

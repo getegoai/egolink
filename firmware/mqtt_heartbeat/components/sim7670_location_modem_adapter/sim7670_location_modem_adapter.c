@@ -17,6 +17,8 @@ typedef struct {
     egolink_sim7670_driver_mode_t driver_mode;
     int32_t owner_core_id;
     uint32_t per_command_timeout_cap_ms;
+    uint32_t gnss_power_on_settle_ms;
+    const atomic_bool *owner_stop_requested;
     uint32_t blocker_flags;
     atomic_bool callback_active;
     uint64_t callback_calls;
@@ -463,7 +465,9 @@ static bool begin_callback(
             &internal->callback_active, false, memory_order_release);
         return false;
     }
-    if (request->cancel_requested(
+    if ((internal->owner_stop_requested != NULL &&
+         atomic_load(internal->owner_stop_requested)) ||
+        request->cancel_requested(
             request->cancel_context, request->generation, request->kind)) {
         *early_outcome = EGOLINK_MODEM_CALLBACK_COOPERATIVE_CANCELLED;
         record_outcome(internal, request->kind, *early_outcome,
@@ -536,7 +540,9 @@ static egolink_modem_callback_outcome_t finish_driver_call(
         status = EGOLINK_SIM7670_ADAPTER_DEFINITE_NO_EFFECT_FAILURE;
     } else if (driver_outcome ==
                SIM7670_LOCATION_BOUNDED_COOPERATIVE_CANCELLED) {
-        if (request->cancel_requested(
+        if ((internal->owner_stop_requested != NULL &&
+             atomic_load(internal->owner_stop_requested)) ||
+            request->cancel_requested(
                 request->cancel_context, request->generation, request->kind)) {
             outcome = EGOLINK_MODEM_CALLBACK_COOPERATIVE_CANCELLED;
             status = EGOLINK_SIM7670_ADAPTER_CANCELLED_AT_SAFE_POINT;
@@ -550,6 +556,7 @@ static egolink_modem_callback_outcome_t finish_driver_call(
 
 typedef struct {
     const egolink_location_modem_sensor_request_t *request;
+    const atomic_bool *owner_stop_requested;
 } native_cancel_bridge_t;
 
 static bool native_cancel_requested(void *context, uint32_t operation_token)
@@ -558,10 +565,12 @@ static bool native_cancel_requested(void *context, uint32_t operation_token)
         (const native_cancel_bridge_t *)context;
     return bridge != NULL && bridge->request != NULL &&
         operation_token == bridge->request->generation &&
-        bridge->request->cancel_requested(
+        ((bridge->owner_stop_requested != NULL &&
+          atomic_load(bridge->owner_stop_requested)) ||
+         bridge->request->cancel_requested(
             bridge->request->cancel_context,
             bridge->request->generation,
-            bridge->request->kind);
+            bridge->request->kind));
 }
 
 static bool native_result_contract_valid(
@@ -659,7 +668,8 @@ static egolink_modem_callback_outcome_t execute_gnss_callback(
         *completion_time_ms = entry_time_ms;
         return EGOLINK_MODEM_CALLBACK_DEFINITE_NO_EFFECT_FAILURE;
     }
-    const native_cancel_bridge_t cancel_bridge = {.request = request};
+    const native_cancel_bridge_t cancel_bridge = {
+        .request = request, .owner_stop_requested = internal->owner_stop_requested};
     const sim7670_location_bounded_request_t driver_request = {
         .timeout_ms = (uint32_t)remaining_ms,
         .per_command_timeout_cap_ms =
@@ -667,6 +677,7 @@ static egolink_modem_callback_outcome_t execute_gnss_callback(
         .cancel_requested = native_cancel_requested,
         .cancel_context = (void *)&cancel_bridge,
         .operation_token = request->generation,
+        .power_on_settle_ms = internal->gnss_power_on_settle_ms,
     };
     sim7670_location_bounded_result_t driver_result;
     const sim7670_location_bounded_outcome_t driver_outcome =
@@ -727,7 +738,8 @@ static egolink_modem_callback_outcome_t execute_lte_callback(
         *completion_time_ms = entry_time_ms;
         return EGOLINK_MODEM_CALLBACK_DEFINITE_NO_EFFECT_FAILURE;
     }
-    const native_cancel_bridge_t cancel_bridge = {.request = request};
+    const native_cancel_bridge_t cancel_bridge = {
+        .request = request, .owner_stop_requested = internal->owner_stop_requested};
     const sim7670_location_bounded_request_t driver_request = {
         .timeout_ms = (uint32_t)remaining_ms,
         .per_command_timeout_cap_ms =
@@ -766,6 +778,8 @@ void egolink_sim7670_location_modem_adapter_default_config(
             EGOLINK_SIM7670_DRIVER_CURRENT_SYNCHRONOUS_FAIL_CLOSED;
         config->owner_core_id = INT32_C(-1);
         config->per_command_timeout_cap_ms = UINT32_C(0);
+        config->gnss_power_on_settle_ms = UINT32_C(0);
+        config->owner_stop_requested = NULL;
     }
 }
 
@@ -810,6 +824,8 @@ egolink_sim7670_location_modem_adapter_init(
     internal->owner_core_id = config->owner_core_id;
     internal->per_command_timeout_cap_ms =
         config->per_command_timeout_cap_ms;
+    internal->gnss_power_on_settle_ms = config->gnss_power_on_settle_ms;
+    internal->owner_stop_requested = config->owner_stop_requested;
     internal->last_callback_outcome = EGOLINK_MODEM_CALLBACK_OUTCOME_UNKNOWN;
     internal->last_driver_outcome = SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN;
     internal->last_driver_reason =
@@ -843,7 +859,8 @@ egolink_sim7670_location_modem_adapter_init(
     if (config->driver_mode != EGOLINK_SIM7670_DRIVER_NATIVE_BOUNDED ||
         config->per_command_timeout_cap_ms == UINT32_C(0) ||
         config->per_command_timeout_cap_ms >
-            SIM7670_LOCATION_BOUNDED_COMMAND_CAP_MAX_MS) {
+            SIM7670_LOCATION_BOUNDED_COMMAND_CAP_MAX_MS ||
+        config->gnss_power_on_settle_ms > UINT32_C(60000)) {
         internal->enabled = false;
         internal->last_status = EGOLINK_SIM7670_ADAPTER_INVALID_CONFIG;
         return internal->last_status;

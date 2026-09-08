@@ -21,8 +21,10 @@ extern "C" {
  * There is intentionally no receive-time field here. The caller must provide
  * the source capture time and every boot/session/stream/observation identity
  * field. map_* validates and copies them; it never samples a clock or invents
- * a sequence. This first adapter accepts only the explicit boot-monotonic
- * capture lane. source_event_time_ms must equal source_event_time_ns /
+ * a sequence. It accepts an explicit boot-monotonic capture lane, or a UTC
+ * capture mapped by the owner with a fixed clock anchor (no monotonic domain
+ * in that lane). It does not claim receiver GNSS UTC. source_event_time_ms
+ * must equal source_event_time_ns /
  * 1,000,000.
  */
 typedef struct {
@@ -82,8 +84,9 @@ typedef struct {
 /*
  * A fix becomes only a candidate for Location Engine validation when the
  * SIM7670 report is internally consistent, coordinates are explicitly valid,
- * finite and in range, and a finite positive HDOP is present. The adapter has
- * no reported-accuracy input and therefore never manufactures one. The
+ * finite and in range. Missing/zero HDOP stays absent so the core can report
+ * FIX_REJECTED without manufacturing accuracy or reporting NO_FIX. The adapter
+ * has no reported-accuracy input and therefore never manufactures one.
  * A non-fix becomes GNSS_NO_FIX only when a complete CGNSSINFO/CGPSINFO
  * response was observed and its parser recognized the explicit empty-fix
  * grammar. Timeout, truncation and malformed responses remain GNSS_ERROR.

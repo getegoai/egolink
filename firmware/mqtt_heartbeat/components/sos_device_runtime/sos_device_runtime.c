@@ -449,6 +449,7 @@ static egolink_sos_device_runtime_status_t run_pending_edge(
     result->input_output.sos_edge = true;
     result->input_output.sos_edge_time_ms = edge_record.edge_time_ms;
 
+    bool journal_failed = false;
     if (!internal->pending_edge_durable) {
         result->journal_store_attempted = true;
         result->journal_store_status =
@@ -459,8 +460,8 @@ static egolink_sos_device_runtime_status_t run_pending_edge(
         if (!journal_store_succeeded(result->journal_store_status)) {
             increment_saturated(&internal->status.journal_store_failures);
             result->pending_edge_retained = true;
-            result->status = EGOLINK_SOS_DEVICE_RUNTIME_JOURNAL_FAILED;
-            return result->status;
+            journal_failed = true;
+            goto orchestrate_pending;
         }
         internal->pending_edge_durable = true;
     } else {
@@ -469,6 +470,7 @@ static egolink_sos_device_runtime_status_t run_pending_edge(
     consume_pending_sequence(internal);
     result->pending_edge_durable = true;
 
+orchestrate_pending:;
     const egolink_sos_event_context_t event_context = {
         .boot_count = edge_record.boot_count,
         .session_id = edge_record.session_id,
@@ -493,6 +495,15 @@ static egolink_sos_device_runtime_status_t run_pending_edge(
 
     result->durable_manual_sos_available = persistence_succeeded(
         result->orchestration.persistence_state);
+    if (journal_failed) {
+        /* Independent local/policy/contact branches were attempted using the
+         * immutable edge identity. No journal/reboot promise is invented. */
+        result->pending_edge_retained = true;
+        result->pending_edge_durable = false;
+        result->sender_wake = result->orchestration.durable_ready;
+        result->status = EGOLINK_SOS_DEVICE_RUNTIME_JOURNAL_FAILED;
+        return result->status;
+    }
     if (result->durable_manual_sos_available) {
         result->journal_clear_attempted = true;
         result->journal_clear_status =
@@ -594,6 +605,11 @@ egolink_sos_device_runtime_status_t egolink_sos_device_runtime_process_sample(
     }
 
     result->qualified_edge = true;
+    if (internal->callbacks.input_recognized != NULL) {
+        result->input_recognition = internal->callbacks.input_recognized(
+            internal->callbacks.input_recognized_context, &result->input_output)
+            ? EGOLINK_SOS_BRANCH_SUCCEEDED : EGOLINK_SOS_BRANCH_FAILED;
+    }
     increment_saturated(&internal->status.qualified_edges);
     if (internal->source_sequence_exhausted ||
         internal->next_source_sequence >

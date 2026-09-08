@@ -1,0 +1,8 @@
+# Live-only layout. RUN001 readback found non-outbox residue at 0x110000.
+# Preserve it; 0x1f4000..0x200000 was verified erased in that same readback.
+# A changed partition table alone does not provision or erase either region.
+# Name,      Type, SubType, Offset,   Size,    Flags
+nvs,         data, nvs,     0x9000,   0x6000,
+phy_init,    data, phy,     0xf000,   0x1000,
+factory,     app,  factory, 0x10000,  0x100000,
+ego_outbox,  data, 0x40,    0x1f4000, 0xC000,

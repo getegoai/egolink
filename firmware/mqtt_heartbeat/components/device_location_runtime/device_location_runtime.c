@@ -488,7 +488,8 @@ egolink_device_location_runtime_process(
         return result->status;
     }
     if (result->pipeline_status != EGOLINK_LOCATION_RUNTIME_OK_NO_PUBLISH &&
-        result->pipeline_status != EGOLINK_LOCATION_RUNTIME_OK_PUBLISHED) {
+        result->pipeline_status != EGOLINK_LOCATION_RUNTIME_OK_PUBLISHED &&
+        result->pipeline_status != EGOLINK_LOCATION_RUNTIME_LOCAL_COMMITTED_PERSISTENCE_FAILED) {
         increment_saturated(&internal->status.pipeline_failures);
         result->status =
             result->pipeline_status == EGOLINK_LOCATION_RUNTIME_RETRY_REQUIRED ||
@@ -527,7 +528,8 @@ egolink_device_location_runtime_process(
         internal, input, &result->pipeline_result);
     record_actions(internal, &result->actions);
 
-    const bool failed = any_action_failed(&result->actions);
+    const bool failed = any_action_failed(&result->actions) ||
+        result->pipeline_result.persistence_degraded;
     result->action_failure_after_commit = failed;
     result->status = failed
                          ? EGOLINK_DEVICE_LOCATION_RUNTIME_ACTION_PARTIAL_FAILURE

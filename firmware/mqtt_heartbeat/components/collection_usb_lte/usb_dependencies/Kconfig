@@ -1,0 +1,3 @@
+config EGOLINK_COLLECTION_USB_LTE_DEPENDENCIES
+    bool
+    default y

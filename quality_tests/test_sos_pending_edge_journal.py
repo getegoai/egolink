@@ -283,11 +283,13 @@ class RuntimeReference:
 
     def _drive(self, now_ms: int, *, replayed: bool) -> str:
         assert self.pending is not None
+        journal_failed = False
         if not self.pending_durable:
             if self.journal.store(self.pending) not in {"ok", "duplicate"}:
-                return "journal_failed"
-            self.pending_durable = True
-        if not self.pending_consumed:
+                journal_failed = True
+            else:
+                self.pending_durable = True
+        if self.pending_durable and not self.pending_consumed:
             if self.pending.sequence == JSON_SAFE_MAX:
                 self.sequence_exhausted = True
             else:
@@ -307,13 +309,15 @@ class RuntimeReference:
         else:
             self.outbox[event_id] = self.pending
             persistence = "committed"
-        self.callbacks.extend([event_id] * 5)
+        self.callbacks.extend([event_id] * (4 if replayed else 5))
+        if journal_failed:
+            return "journal_failed"
         if persistence in {"committed", "duplicate"}:
             if self.journal.clear(self.pending) in {"ok", "not_found"}:
                 self.pending = None
                 self.pending_durable = False
                 self.pending_consumed = False
-                return "ok"
+                return "partial" if replayed else "ok"
         return "partial"
 
     def shutdown(self) -> bool:
@@ -535,7 +539,7 @@ def _integration_harness() -> str:
             enqueue_status = EGOLINK_OUTBOX_OK;
             REQUIRE(trigger(&runtime, 10U, &result) ==
                 EGOLINK_SOS_DEVICE_RUNTIME_JOURNAL_FAILED);
-            REQUIRE(enqueue_calls == 0U && branch_calls == 0U);
+            REQUIRE(enqueue_calls == 1U && branch_calls == 5U);
             REQUIRE(result.source_sequence == 1U && !result.pending_edge_durable);
             REQUIRE(egolink_sos_device_runtime_current_status(
                 &runtime, &snapshot) ==
@@ -549,9 +553,10 @@ def _integration_harness() -> str:
 
             store_fail_before = false;
             REQUIRE(egolink_sos_device_runtime_replay_pending(
-                &runtime, 600U, &result) == EGOLINK_SOS_DEVICE_RUNTIME_OK);
+                &runtime, 600U, &result) == EGOLINK_SOS_DEVICE_RUNTIME_PARTIAL_FAILURE);
             REQUIRE(result.replayed_pending_edge && !present);
-            REQUIRE(enqueue_calls == 1U && branch_calls == 5U);
+            REQUIRE(enqueue_calls == 2U && branch_calls == 9U);
+            REQUIRE(result.orchestration.call_request == EGOLINK_SOS_BRANCH_RECOVERY_SUPPRESSED);
             REQUIRE(observed_boot == 7U && observed_sequence == 1U);
             REQUIRE(observed_edge_time == 515U && observed_now_ms == 600U);
 
@@ -582,7 +587,8 @@ def _integration_harness() -> str:
             clear_fail_before = false;
             enqueue_status = EGOLINK_OUTBOX_DUPLICATE;
             REQUIRE(egolink_sos_device_runtime_replay_pending(
-                &runtime, 10U, &result) == EGOLINK_SOS_DEVICE_RUNTIME_OK);
+                &runtime, 10U, &result) == EGOLINK_SOS_DEVICE_RUNTIME_PARTIAL_FAILURE);
+            REQUIRE(result.orchestration.call_request == EGOLINK_SOS_BRANCH_RECOVERY_SUPPRESSED);
             REQUIRE(strcmp(first_event, result.orchestration.event_id) == 0);
             REQUIRE(observed_now_ms == 10U);
             REQUIRE(observed_boot == 7U && observed_sequence == 2U);
@@ -728,7 +734,8 @@ class SosPendingEdgeJournalTests(unittest.TestCase):
         backend.store_mode = "fail_before"
         self.assertEqual("journal_failed", runtime.qualify(515, 515))
         self.assertEqual(1, runtime.next_sequence)
-        self.assertEqual([], runtime.callbacks)
+        original_id = Edge("wearable-1", 7, "boot-7", 1, 515).event_id
+        self.assertEqual([original_id] * 5, runtime.callbacks)
         self.assertEqual("pending_replay_required", runtime.qualify(900, 900))
         self.assertFalse(runtime.shutdown())
 
@@ -736,17 +743,17 @@ class SosPendingEdgeJournalTests(unittest.TestCase):
         backend.clear_mode = "fail_before"
         self.assertEqual("partial", runtime.replay(600))
         original_id = Edge("wearable-1", 7, "boot-7", 1, 515).event_id
-        self.assertEqual([original_id] * 5, runtime.callbacks)
+        self.assertEqual([original_id] * 9, runtime.callbacks)
         self.assertEqual("pending_replay_required", runtime.qualify(1000, 1000))
         self.assertTrue(runtime.shutdown())
         self.assertEqual(original_id, journal.load().event_id)
 
         backend.clear_mode = "ambiguous_commit"
-        self.assertEqual("ok", runtime.replay(700))
-        self.assertEqual([original_id] * 10, runtime.callbacks)
+        self.assertEqual("partial", runtime.replay(700))
+        self.assertEqual([original_id] * 13, runtime.callbacks)
         self.assertEqual({original_id}, set(runtime.outbox))
         self.assertIsNone(runtime.pending)
-        self.assertEqual([600, 700], runtime.outbox_now)
+        self.assertEqual([515, 600, 700], runtime.outbox_now)
 
         future_source_backend = MemoryBackend()
         future_source = RuntimeReference(
@@ -757,7 +764,7 @@ class SosPendingEdgeJournalTests(unittest.TestCase):
         )
         self.assertEqual("invalid_context", future_source.qualify(1000, 999))
         self.assertEqual([], future_source.callbacks)
-        self.assertEqual("ok", future_source.replay(1))
+        self.assertEqual("partial", future_source.replay(1))
 
     def test_executable_runtime_reference_covers_restart_and_sequence_rules(self) -> None:
         backend = MemoryBackend()
@@ -766,7 +773,7 @@ class SosPendingEdgeJournalTests(unittest.TestCase):
         self.assertEqual("ok", journal.store(old_edge))
         restarted = RuntimeReference(journal, 8, "boot-8", 1)
         self.assertEqual(1, restarted.next_sequence)
-        self.assertEqual("ok", restarted.replay(10))
+        self.assertEqual("partial", restarted.replay(10))
         self.assertEqual(old_edge.event_id, restarted.callbacks[0])
         self.assertEqual([10], restarted.outbox_now)
         self.assertEqual([10], restarted.policy_action_time)

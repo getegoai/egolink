@@ -1,0 +1,26 @@
+{
+  "idf": "5.4.2",
+  "dependencies": {
+    "espressif/iot_usbh_modem": {
+      "version": "2.2.0",
+      "archive_sha256": "1c8b70e5072afc1eec80c7079a4fbfa982387e4ecfeb4edd0f768b94715cb310"
+    },
+    "espressif/iot_usbh_cdc": {
+      "version": "3.1.0",
+      "archive_sha256": "07869f46f745bd0b6c232f4ff01e5543b08051411be135ea8f159e7081cbb175"
+    },
+    "espressif/iot_eth": {
+      "version": "1.0.0",
+      "archive_sha256": "9e55d981fb2380646ab4d75b5b7240cf1bd4c7df61bd5dc756092197c23ec52f"
+    },
+    "espressif/modem_at": {
+      "version": "0.1.0",
+      "archive_sha256": "aa112a7fe6c29637c41eaf645b435b16c65acb7c944cf2024168fc2dd20a80cc"
+    },
+    "espressif/cmake_utilities": {
+      "version": "0.5.3",
+      "archive_sha256": "802729aa7326654b8e5b4aa91d9686892aa01f8225ce18323ca37bf55047c082"
+    }
+  },
+  "note": "All registry manifests resolved to exact pins; CDC usb dependency applies only to IDF >=6.0, excluded by component IDF range."
+}

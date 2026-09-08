@@ -81,6 +81,7 @@ typedef enum {
     EGOLINK_LOCATION_RUNTIME_RETRY_REQUIRED,
     EGOLINK_LOCATION_RUNTIME_BLOCKED_RETRY_REQUIRED,
     EGOLINK_LOCATION_RUNTIME_INTERNAL_INVARIANT_FAILED,
+    EGOLINK_LOCATION_RUNTIME_LOCAL_COMMITTED_PERSISTENCE_FAILED,
 } egolink_location_runtime_status_t;
 
 typedef struct {
@@ -90,6 +91,8 @@ typedef struct {
     egolink_location_runtime_text_t stream_id;
     egolink_location_runtime_clock_domain_t clock_domain;
     egolink_location_runtime_text_t monotonic_clock_domain_id;
+    /* ADR-0014: opt-in single-source live state; legacy retry semantics stay default. */
+    bool local_progress_on_publish_failure;
 } egolink_location_runtime_owner_t;
 
 typedef struct {
@@ -120,7 +123,20 @@ typedef struct {
     char envelope[EGOLINK_LOCATION_RUNTIME_ENVELOPE_MAX_BYTES + 1U];
 } egolink_location_runtime_scratch_t;
 
-/* No location state or coordinate is returned through this result. */
+/* Coordinate-free local status; quality values are sampled at this event. */
+typedef struct {
+    bool trusted_present;
+    uint64_t trusted_time_ms;
+    uint64_t trusted_sequence;
+    egolink_location_engine_source_t source;
+    bool accuracy_present;
+    double accuracy_m;
+    bool uncertainty_present;
+    double uncertainty_m;
+    egolink_location_engine_uncertainty_basis_t uncertainty_basis;
+} egolink_location_runtime_quality_t;
+
+/* No coordinate or raw sensor report is returned through this result. */
 typedef struct {
     egolink_location_runtime_status_t status;
     egolink_location_engine_result_t engine_status;
@@ -131,6 +147,11 @@ typedef struct {
     bool publish_required;
     bool published;
     bool retry_latched;
+    bool local_committed;
+    bool persistence_degraded;
+    egolink_location_engine_gnss_state_t gnss_state;
+    egolink_location_engine_belief_t location_belief;
+    egolink_location_runtime_quality_t quality;
     uint32_t publish_reasons;
     egolink_location_policy_decision_t policy_decision;
     egolink_location_outbox_enqueue_result_t enqueue_result;
@@ -159,12 +180,16 @@ egolink_location_runtime_status_t egolink_location_runtime_pipeline_init(
  * reported DUPLICATE_INPUT without advancing engine, policy or outbox.
  * Reused identity with different content and old sequence/time fail closed.
  *
- * A publish failure latches RETRY_REQUIRED without committing either reducer
+ * By default a publish failure latches RETRY_REQUIRED without committing either reducer
  * or the input identity. Until that exact input succeeds (enqueue OK or
  * durable DUPLICATE), every different input returns BLOCKED_RETRY_REQUIRED.
  * This is a temporary backpressure boundary, not a persistent observation
  * journal. Restart recovery/replay of uncommitted observations remains caller
  * work and reboot equivalence is not claimed.
+ * An owner explicitly selecting local_progress_on_publish_failure instead
+ * commits local reducers/identity and returns LOCAL_COMMITTED_PERSISTENCE_FAILED.
+ * The lost outbound projection is not durable; no retry/recovery success is
+ * implied. Later source events can still update current local state.
  *
  * Fixed publish rule: enqueue only for a frozen-policy upload action, an
  * accepted trusted GNSS/coarse update, every SOS event, or explicit initial/

@@ -157,6 +157,21 @@ typedef struct {
     sim7670_location_cancel_probe_fn cancel_requested;
     void *cancel_context;
     uint32_t operation_token;
+    /* Optional powered acquisition dwell before the first query; zero keeps
+     * the one-shot status API. Included in timeout_ms, never a deadline extension. */
+    uint32_t power_on_settle_ms;
+    /* Session collector: receiver already powered by this same exclusive
+     * owner. Zero preserves legacy one-shot power-on behavior. */
+    bool receiver_already_powered;
+    /* Borrowed synchronous raw AT trace. Called after releasing UART mutex;
+     * callback must not issue AT or block. Captures errors as well as OK. */
+    void (*trace_at)(void *context, const char *command, const char *response,
+                     int outcome, uint64_t elapsed_ms);
+    void *trace_context;
+    /* Raw collection may continue after a terminal query ERROR or parse
+     * failure to retain other independent Cell fields. Timeouts/cancellation
+     * still stop immediately; aggregate outcome remains partial/unknown. */
+    bool continue_on_status_error;
 } sim7670_location_bounded_request_t;
 
 typedef enum {
@@ -348,6 +363,7 @@ void sim7670_lte_http_exact_result_init(
 int sim7670_http_exact_https_origin_matches_dns_host(
     const char *origin,
     const char *expected_host);
+int sim7670_http_exact_bearer_is_valid(const char *bearer_token);
 bool sim7670_lte_http_get_json(
     const char *url,
     const char *bearer_token,

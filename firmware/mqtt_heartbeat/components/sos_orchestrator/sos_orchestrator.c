@@ -437,7 +437,11 @@ egolink_sos_orchestration_status_t egolink_sos_orchestrate_edge(
         result);
     result->location_enqueue = attempt_location_enqueue(
         orchestrator, &identity, policy_snapshot);
-    result->call_request = attempt_call(orchestrator, &identity);
+    /* Recovery is not a new user call. Without a durable active-session and
+     * expiry proof an old pending input must never reopen an ended call. */
+    result->call_request = event_context->recovered_pending_edge
+        ? EGOLINK_SOS_BRANCH_RECOVERY_SUPPRESSED
+        : attempt_call(orchestrator, &identity);
 
     const bool complete = persistence_succeeded(result->persistence_state) &&
         (result->durable_ready == EGOLINK_SOS_BRANCH_SUCCEEDED ||

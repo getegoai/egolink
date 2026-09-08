@@ -26,6 +26,7 @@ typedef enum {
     EGOLINK_SIM7670_MODEM_OWNER_STARTING,
     EGOLINK_SIM7670_MODEM_OWNER_ACTIVE,
     EGOLINK_SIM7670_MODEM_OWNER_RECOVERY_REQUIRED,
+    EGOLINK_SIM7670_MODEM_OWNER_QUIESCED,
 } egolink_sim7670_modem_owner_lifecycle_t;
 
 typedef enum {
@@ -80,6 +81,14 @@ typedef struct {
     uint32_t max_commands_per_wake;
     uint64_t default_gnss_status_timeout_ms;
     uint64_t first_sequence_id;
+    /* Zero retains the legacy boot-long owner. Live profile uses finite bounds. */
+    uint32_t run_duration_ms;
+    uint32_t max_sensor_commands;
+    /* Opt-in powered dwell inside each GNSS request's existing deadline. */
+    uint32_t gnss_power_on_settle_ms;
+    /* Optional frozen SNTP anchor: UTC ms at boot-monotonic zero. Zero means
+     * unmapped monotonic evidence; never substitute server receive time. */
+    uint64_t utc_epoch_at_boot_ms;
     egolink_location_runtime_owner_t pipeline_owner;
     egolink_location_runtime_publish_intent_t sensor_publish_intent;
 } egolink_sim7670_location_modem_owner_config_t;
@@ -108,6 +117,21 @@ typedef struct {
     uint64_t power_off_unconfirmed;
     uint64_t recovery_attempts;
     uint64_t generated_capture_identities;
+    bool stop_requested;
+    bool quiesced;
+    uint64_t local_sequence;
+    uint64_t source_event_time_ms;
+    uint64_t persistence_failures;
+    uint64_t matched_ack_deletes;
+    uint64_t delivery_attempts;
+    uint64_t last_delivery_time_ms;
+    egolink_p0_delivery_runtime_status_t last_delivery_status;
+    egolink_location_outbox_enqueue_status_t last_enqueue_status;
+    egolink_outbox_status_t last_storage_status;
+    uint32_t sensor_commands;
+    egolink_location_engine_gnss_state_t gnss_state;
+    egolink_location_engine_belief_t location_belief;
+    egolink_location_runtime_quality_t quality;
     egolink_modem_executor_status_t last_executor_status;
     egolink_sim7670_location_adapter_status_t last_adapter_status;
     sim7670_location_bounded_outcome_t last_power_off_outcome;
@@ -217,6 +241,13 @@ egolink_sim7670_modem_owner_status_t
 egolink_sim7670_location_modem_owner_current_status(
     const egolink_sim7670_location_modem_owner_t *owner,
     egolink_sim7670_location_modem_owner_snapshot_t *snapshot);
+
+/* Cooperative finite-run stop: no task/UART deletion, no new dispatch; the
+ * owner finishes/settles the in-flight bound then confirms GNSS off and parks.
+ * Failed cleanup is explicit and never reported quiesced. */
+egolink_sim7670_modem_owner_status_t
+egolink_sim7670_location_modem_owner_request_stop(
+    egolink_sim7670_location_modem_owner_t *owner);
 
 /*
  * LOC-021Q is deliberately boot-long. There is no delete/deinit API: a caller

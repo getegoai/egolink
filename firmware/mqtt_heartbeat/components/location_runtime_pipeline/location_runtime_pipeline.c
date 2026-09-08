@@ -19,6 +19,7 @@ typedef struct {
 
 typedef struct {
     bool initialized;
+    bool local_progress_on_publish_failure;
     egolink_location_outbox_adapter_t *adapter;
     owned_id_t device_id;
     uint64_t boot_count;
@@ -1044,6 +1045,7 @@ egolink_location_runtime_status_t egolink_location_runtime_pipeline_init(
         secure_clear(pipeline, sizeof(*pipeline));
         return EGOLINK_LOCATION_RUNTIME_INVALID_IDENTITY;
     }
+    internal->local_progress_on_publish_failure = owner->local_progress_on_publish_failure;
     internal->adapter = adapter;
     internal->boot_count = owner->boot_count;
     internal->clock_domain = owner->clock_domain;
@@ -1251,6 +1253,10 @@ egolink_location_runtime_status_t egolink_location_runtime_pipeline_process(
                 &internal->staged_snapshot, scratch->state_json,
                 sizeof(scratch->state_json), &state_length);
         if (result->serializer_status != EGOLINK_LOCATION_ENGINE_OK) {
+            if (internal->local_progress_on_publish_failure) {
+                result->persistence_degraded = true;
+                goto commit_local;
+            }
             latch_retry(internal, &candidate_identity, fingerprint);
             clear_staging(internal);
             clear_scratch(scratch);
@@ -1313,6 +1319,10 @@ egolink_location_runtime_status_t egolink_location_runtime_pipeline_process(
         if (result->enqueue_status != EGOLINK_LOCATION_OUTBOX_ENQUEUE_OK &&
             result->enqueue_status !=
                 EGOLINK_LOCATION_OUTBOX_ENQUEUE_DUPLICATE) {
+            if (internal->local_progress_on_publish_failure) {
+                result->persistence_degraded = true;
+                goto commit_local;
+            }
             latch_retry(internal, &candidate_identity, fingerprint);
             clear_staging(internal);
             secure_clear(fingerprint, sizeof(fingerprint));
@@ -1326,19 +1336,38 @@ egolink_location_runtime_status_t egolink_location_runtime_pipeline_process(
         result->serializer_status = EGOLINK_LOCATION_ENGINE_OK;
     }
 
+commit_local:
+    result->local_committed = true;
+    result->gnss_state = internal->staged_snapshot.gnss_state;
+    result->location_belief = internal->staged_snapshot.location_belief;
+    const egolink_location_engine_snapshot_t *snapshot = &internal->staged_snapshot;
+    result->quality = (egolink_location_runtime_quality_t){
+        .trusted_present = snapshot->last_trusted_time_present,
+        .trusted_time_ms = snapshot->last_trusted_time_ms,
+        .trusted_sequence = snapshot->last_trusted_location_present
+            ? snapshot->last_trusted_location.evidence_ref.sequence_id : 0U,
+        .source = snapshot->location_source,
+        .accuracy_present = snapshot->location_accuracy_m_present,
+        .accuracy_m = snapshot->location_accuracy_m,
+        .uncertainty_present = snapshot->location_uncertainty_m_present,
+        .uncertainty_m = snapshot->location_uncertainty_m,
+        .uncertainty_basis = snapshot->location_uncertainty_basis,
+    };
     commit_identity(internal, &candidate_identity, fingerprint);
     internal->engine = internal->staged_engine;
     internal->policy = internal->staged_policy;
     clear_retry(internal);
     result->policy_evaluated = policy_evaluated;
     result->publish_required = publish;
-    result->published = publish;
+    result->published = publish && !result->persistence_degraded;
     result->publish_reasons = reasons;
     if (policy_evaluated) {
         result->policy_decision = internal->staged_decision;
     }
     result->retry_latched = false;
-    result->status = publish ? EGOLINK_LOCATION_RUNTIME_OK_PUBLISHED
+    result->status = result->persistence_degraded
+        ? EGOLINK_LOCATION_RUNTIME_LOCAL_COMMITTED_PERSISTENCE_FAILED
+        : publish ? EGOLINK_LOCATION_RUNTIME_OK_PUBLISHED
                              : EGOLINK_LOCATION_RUNTIME_OK_NO_PUBLISH;
     clear_staging(internal);
     clear_scratch(scratch);
@@ -1350,6 +1379,8 @@ const char *egolink_location_runtime_status_name(
     egolink_location_runtime_status_t status)
 {
     switch (status) {
+    case EGOLINK_LOCATION_RUNTIME_LOCAL_COMMITTED_PERSISTENCE_FAILED:
+        return "local_committed_persistence_failed";
     case EGOLINK_LOCATION_RUNTIME_OK_NO_PUBLISH:
         return "ok_no_publish";
     case EGOLINK_LOCATION_RUNTIME_OK_PUBLISHED:

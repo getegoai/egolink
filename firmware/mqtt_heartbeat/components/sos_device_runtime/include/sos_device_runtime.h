@@ -71,6 +71,10 @@ typedef bool (*egolink_sos_sender_wake_fn)(
  * through replay_pending instead.
  */
 typedef struct {
+    /* Means qualified input recognized only, never stored/delivered. Runs
+     * before any journal I/O and receives the original physical edge time. */
+    bool (*input_recognized)(void *context, const egolink_sos_input_output_t *edge);
+    void *input_recognized_context;
     egolink_sos_local_feedback_fn local_feedback;
     void *local_feedback_context;
     egolink_sos_location_enqueue_fn request_urgent_location;
@@ -104,6 +108,7 @@ typedef struct {
     egolink_sos_input_status_t input_status;
     egolink_sos_input_output_t input_output;
     bool qualified_edge;
+    egolink_sos_branch_state_t input_recognition;
     bool replayed_pending_edge;
     uint64_t source_sequence;
     bool journal_store_attempted;

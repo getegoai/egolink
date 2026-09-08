@@ -1,0 +1,37 @@
+#include "platform_i2c_bus.h"
+#include <stdbool.h>
+#include <sys/lock.h>
+
+static _lock_t install_lock;
+static struct {
+    bool installed;
+    i2c_config_t config;
+} buses[I2C_NUM_MAX];
+
+static bool same_config(const i2c_config_t *a, const i2c_config_t *b)
+{
+    return a->mode == b->mode && a->sda_io_num == b->sda_io_num &&
+        a->scl_io_num == b->scl_io_num && a->sda_pullup_en == b->sda_pullup_en &&
+        a->scl_pullup_en == b->scl_pullup_en &&
+        a->master.clk_speed == b->master.clk_speed && a->clk_flags == b->clk_flags;
+}
+
+esp_err_t platform_i2c_bus_ensure(i2c_port_t port, const i2c_config_t *config)
+{
+    if ((unsigned)port >= I2C_NUM_MAX || !config || config->mode != I2C_MODE_MASTER ||
+        !config->master.clk_speed) return ESP_ERR_INVALID_ARG;
+    _lock_acquire(&install_lock);
+    esp_err_t result;
+    if (buses[port].installed) {
+        result = same_config(&buses[port].config, config) ? ESP_OK : ESP_ERR_INVALID_STATE;
+    } else {
+        result = i2c_param_config(port, config);
+        if (result == ESP_OK) result = i2c_driver_install(port, I2C_MODE_MASTER, 0, 0, 0);
+        if (result == ESP_OK) {
+            buses[port].config = *config;
+            buses[port].installed = true;
+        }
+    }
+    _lock_release(&install_lock);
+    return result;
+}

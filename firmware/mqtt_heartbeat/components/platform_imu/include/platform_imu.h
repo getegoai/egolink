@@ -27,6 +27,11 @@ typedef struct {
     int gyro_mdps_z;
     bool sample_is_mock;
     const char *source;
+    /* Actual register counts and host read completion time; additive so the
+     * historical converted window contract remains unchanged. */
+    int16_t raw_axes[6];
+    bool raw_axes_valid;
+    int64_t read_completed_us;
 } platform_imu_sample_t;
 
 typedef struct {

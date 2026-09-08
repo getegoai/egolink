@@ -266,7 +266,7 @@ class SosOrchestratorFirmwareTests(unittest.TestCase):
         location_at = body.index(
             "result->location_enqueue = attempt_location_enqueue("
         )
-        call_at = body.index("result->call_request = attempt_call(")
+        call_at = body.index("attempt_call(orchestrator, &identity)")
         self.assertLess(enqueue_at, feedback_at)
         self.assertLess(enqueue_at, durable_at)
         self.assertLess(durable_at, feedback_at)

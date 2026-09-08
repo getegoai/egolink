@@ -57,7 +57,11 @@ class Loc021sModemOwnerProfileTests(unittest.TestCase):
 
     def test_two_pass_dependency_union_is_explicit_and_exact(self) -> None:
         expected = {
+            "collection_record",
+            "collection_spool",
             "esp_common",
+            "esp_p0_https",
+            "esp_app_format",
             "esp_event",
             "esp_http_client",
             "esp_netif",

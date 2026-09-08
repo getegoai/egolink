@@ -2,8 +2,12 @@
 # are available. Keep the exact union stable here; only the application source
 # is selected later. The LOC-021S source still has no legacy runtime caller.
 set(EGOLINK_MAIN_REQUIREMENTS
+    collection_spool
+    collection_record
     esp_common
     esp_event
+    esp_p0_https
+    esp_app_format
     esp_http_client
     esp_netif
     esp_system
@@ -27,7 +31,11 @@ set(EGOLINK_MAIN_REQUIREMENTS
     sos_outbox_adapter
 )
 
-if(CONFIG_EGOLINK_LOC021S_MODEM_OWNER_SMOKE_PROFILE)
+if(CONFIG_EGOLINK_COLLECTION_PROFILE)
+    set(EGOLINK_MAIN_SOURCES "collection_main.c")
+elseif(CONFIG_EGOLINK_LOC021_LIVE_PROFILE)
+    set(EGOLINK_MAIN_SOURCES "loc021_live_main.c")
+elseif(CONFIG_EGOLINK_LOC021S_MODEM_OWNER_SMOKE_PROFILE)
     set(EGOLINK_MAIN_SOURCES "loc021s_modem_owner_main.c")
 else()
     set(EGOLINK_MAIN_SOURCES "app_main.c")

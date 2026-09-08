@@ -1,0 +1,18 @@
+config EGOLINK_COLLECTION_USB_LTE_DEPENDENCIES
+    bool
+
+menu "Collection USB LTE"
+    config EGOLINK_COLLECTION_USB_LTE
+        bool "Enable owner-driven USB CDC PPP connector"
+        default n
+        depends on IDF_TARGET_ESP32S3 && EGOLINK_COLLECTION_USB_LTE_DEPENDENCIES
+        select LWIP_PPP_SUPPORT
+        select LWIP_PPP_NOTIFY_PHASE_SUPPORT
+        help
+            Requires the actual USB VID/PID/modem interface in the init config.
+            First add this component's usb_dependencies directory to the
+            project's EXTRA_COMPONENT_DIRS before configuring the USB profile.
+            This creates a network bearer, never an independent AT owner.
+            No SIM is required to enumerate/probe; data dialing requires the
+            operator's approved SIM/data configuration in the outer owner.
+endmenu

@@ -9,6 +9,7 @@
 #if CONFIG_EGOLINK_PLATFORM_POWER_BACKEND_MAX17048
 #include "freertos/FreeRTOS.h"
 #include "driver/i2c.h"
+#include "platform_i2c_bus.h"
 #endif
 
 #define PLATFORM_POWER_MOCK_BATTERY_PERCENT 87
@@ -52,15 +53,9 @@ static void max17048_init(void)
         .scl_pullup_en = GPIO_PULLUP_ENABLE,
         .master.clk_speed = CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_I2C_FREQ_HZ,
     };
-    esp_err_t err = i2c_param_config(MAX17048_I2C_PORT, &config);
+    esp_err_t err = platform_i2c_bus_ensure(MAX17048_I2C_PORT, &config);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "MAX17048_I2C_CONFIG_FAIL err=%d", (int)err);
-        return;
-    }
-    err = i2c_driver_install(MAX17048_I2C_PORT, I2C_MODE_MASTER, 0, 0, 0);
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
-        /* ESP_ERR_INVALID_STATE means another backend already owns the bus. */
-        ESP_LOGW(TAG, "MAX17048_I2C_INSTALL_FAIL err=%d", (int)err);
+        ESP_LOGW(TAG, "MAX17048_I2C_BUS_FAIL err=%d", (int)err);
         return;
     }
     uint16_t version = 0;

@@ -118,6 +118,8 @@ def _behavioral_harness_source() -> str:
         static char callback_order[32];
         static uint8_t pending_wire[EGOLINK_SOS_PENDING_EDGE_RECORD_BYTES];
         static bool pending_present;
+        static bool pending_failure;
+        static unsigned recognized_count;
 
         static void reset_scenario(void)
         {
@@ -158,6 +160,8 @@ def _behavioral_harness_source() -> str:
         {
             (void)context;
             REQUIRE(source != NULL && source_length == sizeof(pending_wire));
+            REQUIRE(recognized_count > 0U);
+            if (pending_failure) return EGOLINK_SOS_PENDING_EDGE_STORAGE_IO_ERROR;
             (void)memcpy(pending_wire, source, sizeof(pending_wire));
             pending_present = true;
             return EGOLINK_SOS_PENDING_EDGE_STORAGE_OK;
@@ -209,6 +213,15 @@ def _behavioral_harness_source() -> str:
             decision->policy_mode = EGOLINK_LOCATION_POLICY_SOS;
             decision->conditions.sos_active = true;
             return EGOLINK_LOCATION_POLICY_OK;
+        }
+
+        static bool recognized(void *context, const egolink_sos_input_output_t *edge)
+        {
+            (void)context;
+            REQUIRE(edge && edge->sos_edge);
+            ++recognized_count;
+            callback_order[callback_count++] = 'r';
+            return true;
         }
 
         static bool feedback(
@@ -269,6 +282,7 @@ def _behavioral_harness_source() -> str:
             config.boot_count = 7U;
             config.session_id = "boot-session-7";
             config.first_source_sequence = 1U;
+            config.callbacks.input_recognized = recognized;
             config.callbacks.local_feedback = feedback;
             config.callbacks.request_urgent_location = location;
             config.callbacks.request_call = call;
@@ -339,7 +353,7 @@ def _behavioral_harness_source() -> str:
             REQUIRE(result.status == EGOLINK_SOS_DEVICE_RUNTIME_OK);
             REQUIRE(result.qualified_edge && result.source_sequence == 1U);
             REQUIRE(result.durable_manual_sos_available);
-            REQUIRE(strcmp(callback_order, "dwfplc") == 0);
+            REQUIRE(strcmp(callback_order, "rdwfplc") == 0);
             REQUIRE(egolink_sos_device_runtime_process_sample(
                 &runtime, true, 1700U, &result) ==
                 EGOLINK_SOS_DEVICE_RUNTIME_NO_EDGE);
@@ -362,7 +376,7 @@ def _behavioral_harness_source() -> str:
                     EGOLINK_SOS_BRANCH_FAILED);
             REQUIRE(result.orchestration.call_request ==
                     EGOLINK_SOS_BRANCH_SUCCEEDED);
-            REQUIRE(strcmp(callback_order, "dwfplc") == 0);
+            REQUIRE(strcmp(callback_order, "rdwfplc") == 0);
             REQUIRE(enqueue_count == 2U);
 
             REQUIRE(egolink_sos_device_runtime_process_sample(
@@ -386,7 +400,19 @@ def _behavioral_harness_source() -> str:
                     EGOLINK_SOS_BRANCH_SUCCEEDED);
             REQUIRE(result.orchestration.call_request ==
                     EGOLINK_SOS_BRANCH_FAILED);
-            REQUIRE(strcmp(callback_order, "dfplc") == 0);
+            REQUIRE(strcmp(callback_order, "rdfplc") == 0);
+
+            /* Lost ACK/recovered input cannot reopen a call which ended. */
+            call_ok = true;
+            enqueue_status = EGOLINK_OUTBOX_DUPLICATE;
+            callback_count = 0U;
+            memset(callback_order, 0, sizeof(callback_order));
+            unsigned recognized_before = recognized_count;
+            (void)egolink_sos_device_runtime_replay_pending(&runtime, 3200U, &result);
+            REQUIRE(result.replayed_pending_edge);
+            REQUIRE(result.orchestration.call_request == EGOLINK_SOS_BRANCH_RECOVERY_SUPPRESSED);
+            REQUIRE(strchr(callback_order, 'c') == NULL);
+            REQUIRE(recognized_count == recognized_before);
 
             adapter.attempt_active = true;
             REQUIRE(egolink_sos_device_runtime_cancel(
@@ -407,6 +433,17 @@ def _behavioral_harness_source() -> str:
                 EGOLINK_SOS_DEVICE_RUNTIME_CLOSED_STATUS);
             REQUIRE(shutdown.durable_records_retained);
             REQUIRE(shutdown.pending_edge_journal_untouched);
+            memset(&runtime,0,sizeof(runtime)); reset_scenario();
+            REQUIRE(initialize(&runtime,&outbox,&adapter,&journal,&policy,false)==EGOLINK_SOS_DEVICE_RUNTIME_OK);
+            pending_failure=true;enqueue_status=EGOLINK_OUTBOX_STORAGE_ERROR;call_ok=true;
+            REQUIRE(trigger(&runtime,100U,650U,&result)==0);
+            REQUIRE(result.status==EGOLINK_SOS_DEVICE_RUNTIME_JOURNAL_FAILED);
+            REQUIRE(result.input_recognition==EGOLINK_SOS_BRANCH_SUCCEEDED);
+            REQUIRE(!result.pending_edge_durable && !result.durable_manual_sos_available);
+            REQUIRE(result.orchestration.local_feedback==EGOLINK_SOS_BRANCH_SUCCEEDED);
+            REQUIRE(result.orchestration.location_enqueue==EGOLINK_SOS_BRANCH_SUCCEEDED);
+            REQUIRE(result.orchestration.call_request==EGOLINK_SOS_BRANCH_SUCCEEDED);
+            REQUIRE(strcmp(callback_order,"rdfplc")==0);
             return 0;
         }
         """

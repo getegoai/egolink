@@ -1,0 +1,9 @@
+version: "0.1.0"
+description: "Explicitly selected EgoLink USB PPP dependencies; excluded from default builds"
+dependencies:
+  idf: ">=5.4.2,<5.5"
+  espressif/iot_usbh_modem: "==2.2.0"
+  espressif/iot_usbh_cdc: "==3.1.0"
+  espressif/iot_eth: "==1.0.0"
+  espressif/modem_at: "==0.1.0"
+  espressif/cmake_utilities: "==0.5.3"

@@ -269,6 +269,8 @@ int mainCRTStartup(void) {
     for(size_t i=0U;i<6U;++i){ (void)memset(&adapter,0,sizeof(adapter)); egolink_sim7670_p0_delivery_adapter_default_config(&config); config.enabled=true; config.base_url=bad_origins[i]; config.expected_tls_host="ego.example"; config.bearer_token="Token_1"; config.driver_post=fake_post; config.now_ms=now_ms; CHECK(egolink_sim7670_p0_delivery_adapter_init(&adapter,&config)==EGOLINK_SIM7670_P0_DELIVERY_INVALID_CONFIG,30+(int)i); }
     (void)memset(&adapter,0,sizeof(adapter)); egolink_sim7670_p0_delivery_adapter_default_config(&config); config.enabled=true; config.base_url="https://ego.example"; config.expected_tls_host="ego.example"; config.bearer_token="<runtime-token>"; config.driver_post=fake_post; config.now_ms=now_ms;
     CHECK(egolink_sim7670_p0_delivery_adapter_init(&adapter,&config)==EGOLINK_SIM7670_P0_DELIVERY_INVALID_CONFIG,40);
+    /* An invalid init retains its initialized diagnostic object; isolate the timing case. */
+    (void)memset(&adapter,0,sizeof(adapter));
     config.bearer_token="Token_1"; config.max_callback_duration_ms=25000U;
     CHECK(egolink_sim7670_p0_delivery_adapter_init(&adapter,&config)==EGOLINK_SIM7670_P0_DELIVERY_INVALID_CONFIG,41);
 

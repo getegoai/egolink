@@ -9,6 +9,7 @@
 
 #if CONFIG_EGOLINK_PLATFORM_IMU_BACKEND_QMI8658
 #include "driver/i2c.h"
+#include "platform_i2c_bus.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #endif
@@ -196,15 +197,7 @@ static esp_err_t qmi8658_i2c_init(void)
         .clk_flags = 0,
     };
 
-    esp_err_t err = i2c_param_config(QMI8658_I2C_PORT, &config);
-    if (err != ESP_OK) {
-        return err;
-    }
-    err = i2c_driver_install(QMI8658_I2C_PORT, I2C_MODE_MASTER, 0, 0, 0);
-    if (err == ESP_ERR_INVALID_STATE) {
-        return ESP_OK;
-    }
-    return err;
+    return platform_i2c_bus_ensure(QMI8658_I2C_PORT, &config);
 }
 
 #if CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS
@@ -455,6 +448,9 @@ static bool platform_imu_read_qmi8658(platform_imu_sample_t *sample)
         .gyro_mdps_z = qmi8658_gyro_raw_to_mdps(gz),
         .sample_is_mock = false,
         .source = PLATFORM_IMU_SOURCE_QMI8658,
+        .raw_axes = {ax, ay, az, gx, gy, gz},
+        .raw_axes_valid = true,
+        .read_completed_us = esp_timer_get_time(),
     };
     return true;
 }

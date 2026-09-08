@@ -1,5 +1,26 @@
 menu "Ego Link MQTT Heartbeat"
 
+config EGOLINK_COLLECTION_PROFILE
+    bool "Asynchronous raw collection engineering entry"
+    default n
+
+config EGOLINK_COLLECTION_RUN_SECONDS
+    int "Collection session seconds (0: local continuous session)"
+    range 0 86400
+    default 300
+    depends on EGOLINK_COLLECTION_PROFILE
+
+config EGOLINK_COLLECTION_GNSS_INTERVAL_MS
+    int "Independent GNSS query interval ms"
+    range 1000 60000
+    default 5000
+    depends on EGOLINK_COLLECTION_PROFILE
+
+config EGOLINK_COLLECTION_NO_SIM
+    bool "No-SIM bench configuration (distinct from field SIM configuration)"
+    default y
+    depends on EGOLINK_COLLECTION_PROFILE
+
 config EGOLINK_WIFI_SSID
     string "Wi-Fi SSID"
     default ""
@@ -161,6 +182,16 @@ config EGOLINK_GNSS_LOCATION_SCAFFOLD_ENABLED
         by uploading an explicit location_report event with fix=false and
         source_status=unverified. This is a command/telemetry scaffold only;
         it does not control SIM7670G GNSS or claim a real fix.
+
+config EGOLINK_LOC021_LIVE_PROFILE
+    bool "Bounded single-source GNSS to Guardian via verified Wi-Fi HTTPS"
+    default n
+    depends on EGOLINK_SIM7670_LOCATION_MODEM_OWNER_ENABLED
+    depends on !EGOLINK_LOC021S_MODEM_OWNER_SMOKE_PROFILE
+    help
+        Explicit engineering entry, 180 seconds, at most four GNSS commands,
+        six HTTPS attempts and 32 outbox slot writes. Requires ignored Wi-Fi
+        and bearer configuration. No physical SOS/IMU ingress or SIM traffic.
 
 config EGOLINK_LOC021S_MODEM_OWNER_SMOKE_PROFILE
     bool "Build the isolated LOC-021S modem-owner smoke application"

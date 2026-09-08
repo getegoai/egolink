@@ -66,6 +66,28 @@ typedef struct {
         EGOLINK_SIM7670_LOCATION_MODEM_OWNER_TASK_STACK_BYTES];
     TaskHandle_t task_handle;
 
+    atomic_bool stop_requested;
+    atomic_bool quiesced;
+    uint64_t utc_epoch_at_boot_ms;
+    uint32_t run_duration_ms;
+    uint32_t max_sensor_commands;
+    uint32_t gnss_power_on_settle_ms;
+    uint32_t sensor_commands;
+    uint64_t run_started_ms;
+    uint64_t gnss_capture_ms;
+    bool gnss_capture_valid;
+    uint64_t local_sequence;
+    uint64_t source_event_time_ms;
+    uint64_t persistence_failures;
+    uint64_t matched_ack_deletes;
+    uint64_t delivery_attempts;
+    uint64_t last_delivery_time_ms;
+    egolink_p0_delivery_runtime_status_t last_delivery_status;
+    egolink_location_outbox_enqueue_status_t last_enqueue_status;
+    egolink_outbox_status_t last_storage_status;
+    egolink_location_runtime_quality_t quality;
+    egolink_location_engine_gnss_state_t gnss_state;
+    egolink_location_engine_belief_t location_belief;
     atomic_bool execution_active;
     atomic_bool gnss_off_confirmed;
     atomic_bool cleanup_recovery_required;
@@ -381,6 +403,22 @@ static egolink_modem_callback_outcome_t execute_gnss_with_power_off(
         return EGOLINK_MODEM_CALLBACK_DEFINITE_NO_EFFECT_FAILURE;
     }
 
+    egolink_location_modem_sensor_request_t bounded_request = *request;
+    const uint64_t live_timeout_cap_ms =
+        UINT64_C(12000) + internal->gnss_power_on_settle_ms;
+    if (internal->run_duration_ms != 0U &&
+        bounded_request.timeout_ms > live_timeout_cap_ms)
+        bounded_request.timeout_ms = live_timeout_cap_ms;
+    request = &bounded_request;
+    internal->gnss_capture_valid = false;
+    if (atomic_load(&internal->stop_requested) ||
+        (internal->max_sensor_commands != 0U &&
+         internal->sensor_commands >= internal->max_sensor_commands)) {
+        return EGOLINK_MODEM_CALLBACK_DEFINITE_NO_EFFECT_FAILURE;
+    }
+    taskENTER_CRITICAL(&internal->metadata_lock);
+    ++internal->sensor_commands;
+    taskEXIT_CRITICAL(&internal->metadata_lock);
     uint32_t remaining_ms = UINT32_C(0);
     if (!remaining_before_deadline_ms(request, &remaining_ms) ||
         remaining_ms <= internal->gnss_power_off_timeout_ms) {
@@ -425,6 +463,8 @@ static egolink_modem_callback_outcome_t execute_gnss_with_power_off(
         return EGOLINK_MODEM_CALLBACK_OUTCOME_UNKNOWN;
     }
     if (acquisition_outcome == EGOLINK_MODEM_CALLBACK_REPORT_AVAILABLE) {
+        internal->gnss_capture_ms = acquisition_completion_ms;
+        internal->gnss_capture_valid = true;
         return acquisition_outcome;
     }
     sim7670_gnss_report_init(report);
@@ -471,12 +511,19 @@ static bool build_capture_identity(
     }
     const int written = snprintf(
         observation_id, EGOLINK_LOCATION_RUNTIME_ID_CAPACITY,
-        "locq-%" PRIu64, sequence_id);
+        /* The server deduplicates observation_id across device boots. */
+        "locq-%" PRIu64 "-%" PRIu64,
+        internal->pipeline_owner.boot_count, sequence_id);
     if (written <= 0 ||
         (size_t)written >= EGOLINK_LOCATION_RUNTIME_ID_CAPACITY) {
         return false;
     }
 
+    if (internal->utc_epoch_at_boot_ms != 0U) {
+        if (completion_time_ms > EGOLINK_LOCATION_RUNTIME_INT64_MAX / UINT64_C(1000000) -
+                internal->utc_epoch_at_boot_ms) return false;
+        completion_time_ms += internal->utc_epoch_at_boot_ms;
+    }
     (void)memset(identity, 0, sizeof(*identity));
     identity->device_id = text_view(internal->device_id);
     identity->boot_count = internal->pipeline_owner.boot_count;
@@ -487,9 +534,9 @@ static bool build_capture_identity(
     identity->source_event_time_ms = completion_time_ms;
     identity->source_event_time_ns =
         completion_time_ms * UINT64_C(1000000);
-    identity->source_event_time_source =
-        EGOLINK_LOCATION_TIME_TIMESTAMP_MONOTONIC_NS;
-    identity->monotonic_clock_domain_id =
+    identity->source_event_time_source = internal->utc_epoch_at_boot_ms != 0U
+        ? EGOLINK_LOCATION_TIME_TIMESTAMP_UTC_NS : EGOLINK_LOCATION_TIME_TIMESTAMP_MONOTONIC_NS;
+    if (internal->utc_epoch_at_boot_ms == 0U) identity->monotonic_clock_domain_id =
         text_view(internal->monotonic_clock_domain_id);
     identity->publish_intent = internal->sensor_publish_intent;
 
@@ -565,7 +612,13 @@ static owner_drive_result_t settle_ready_command(
         execute_result->callback_outcome ==
             EGOLINK_MODEM_CALLBACK_REPORT_AVAILABLE) {
         if (!build_capture_identity(
-                internal, execute_result->completion_time_ms, &identity,
+                internal,
+                internal->gnss_capture_valid &&
+                    (execute_result->kind == EGOLINK_MODEM_COMMAND_GNSS_ACQUIRE ||
+                     execute_result->kind == EGOLINK_MODEM_COMMAND_GNSS_STATUS ||
+                     execute_result->kind == EGOLINK_MODEM_COMMAND_SOS_URGENT_GNSS_ACQUIRE)
+                    ? internal->gnss_capture_ms : execute_result->completion_time_ms,
+                &identity,
                 observation_id)) {
             record_status(
                 internal, EGOLINK_SIM7670_MODEM_OWNER_IDENTITY_EXHAUSTED);
@@ -584,6 +637,27 @@ static owner_drive_result_t settle_ready_command(
     record_executor_status(internal, settle_status);
     taskENTER_CRITICAL(&internal->metadata_lock);
     increment_saturated(&internal->settled_commands);
+    if (settle_result.observation_committed && identity_pointer != NULL) {
+        const egolink_location_runtime_result_t *local =
+            &settle_result.process_result.device_result.pipeline_result;
+        internal->local_sequence = identity.sequence_id;
+        internal->source_event_time_ms = identity.source_event_time_ms;
+        internal->gnss_state = local->gnss_state;
+        internal->location_belief = local->location_belief;
+        internal->quality = local->quality;
+        internal->last_enqueue_status = local->enqueue_status;
+        internal->last_storage_status = local->enqueue_result.outbox_status;
+        if (local->persistence_degraded) ++internal->persistence_failures;
+    }
+    if (settle_result.p0_result.deleted_after_server_durable_ingest_ack)
+        ++internal->matched_ack_deletes;
+    /* post_called describes the API call that entered the transport. Settle
+     * does not call POST again, so take this flag from the execute result. */
+    if (execute_result != NULL && execute_result->p0_result.post_called) {
+        ++internal->delivery_attempts;
+        internal->last_delivery_time_ms = settle_now_ms;
+        internal->last_delivery_status = settle_result.p0_result.status;
+    }
     taskEXIT_CRITICAL(&internal->metadata_lock);
 
     if (identity_pointer == NULL && execute_result != NULL &&
@@ -724,7 +798,26 @@ static void owner_task_main(void *context)
         signal_startup_once(internal);
     }
 
+    (void)monotonic_now_ms(&internal->run_started_ms);
     for (;;) {
+        uint64_t live_now_ms = 0U;
+        if (internal->run_duration_ms != 0U &&
+            (!monotonic_now_ms(&live_now_ms) || live_now_ms < internal->run_started_ms ||
+             live_now_ms - internal->run_started_ms >= internal->run_duration_ms)) {
+            atomic_store(&internal->stop_requested, true);
+        }
+        if (atomic_load(&internal->stop_requested)) {
+            bool off = atomic_load(&internal->gnss_off_confirmed);
+            for (unsigned attempt = 0; !off && attempt < 3U; ++attempt) {
+                off = run_gnss_power_off(internal, true, internal->gnss_power_off_timeout_ms);
+            }
+            if (off) {
+                atomic_store(&internal->quiesced, true);
+                set_lifecycle(internal, EGOLINK_SIM7670_MODEM_OWNER_QUIESCED,
+                              EGOLINK_SIM7670_MODEM_OWNER_OK);
+            }
+            for (;;) (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        }
         if (atomic_load_explicit(
                 &internal->fatal_recovery_required,
                 memory_order_acquire)) {
@@ -756,7 +849,7 @@ static void owner_task_main(void *context)
 
         owner_drive_result_t drive_result = OWNER_DRIVE_IDLE;
         for (uint32_t index = UINT32_C(0);
-             index < internal->max_commands_per_wake; ++index) {
+             index < internal->max_commands_per_wake && !atomic_load(&internal->stop_requested); ++index) {
             drive_result = drive_one_command(internal);
             if (drive_result != OWNER_DRIVE_PROGRESS) {
                 break;
@@ -804,6 +897,7 @@ static bool valid_enabled_config(
         config->gnss_power_off_timeout_ms > UINT32_C(0) &&
         config->gnss_power_off_timeout_ms <=
             SIM7670_LOCATION_BOUNDED_TIMEOUT_MAX_MS &&
+        config->gnss_power_on_settle_ms <= UINT32_C(60000) &&
         config->max_commands_per_wake > UINT32_C(0) &&
         config->max_commands_per_wake <=
             EGOLINK_SIM7670_LOCATION_MODEM_OWNER_MAX_COMMANDS_PER_WAKE &&
@@ -874,6 +968,8 @@ egolink_sim7670_location_modem_owner_init(
     internal->lifecycle = EGOLINK_SIM7670_MODEM_OWNER_DISABLED;
     internal->last_status = EGOLINK_SIM7670_MODEM_OWNER_DISABLED_STATUS;
     portMUX_INITIALIZE(&internal->metadata_lock);
+    atomic_init(&internal->stop_requested, false);
+    atomic_init(&internal->quiesced, false);
     atomic_init(&internal->execution_active, false);
     atomic_init(&internal->gnss_off_confirmed, false);
     atomic_init(&internal->cleanup_recovery_required, false);
@@ -903,6 +999,13 @@ egolink_sim7670_location_modem_owner_init(
         return internal->last_status;
     }
 
+    if (config->utc_epoch_at_boot_ms > EGOLINK_LOCATION_RUNTIME_INT64_MAX / UINT64_C(1000000))
+        return EGOLINK_SIM7670_MODEM_OWNER_INVALID_CONFIG;
+    internal->utc_epoch_at_boot_ms = config->utc_epoch_at_boot_ms;
+    internal->run_duration_ms = config->run_duration_ms;
+    internal->max_sensor_commands = config->max_sensor_commands;
+    internal->gnss_power_on_settle_ms = config->gnss_power_on_settle_ms;
+    internal->pipeline_owner.local_progress_on_publish_failure = config->pipeline_owner.local_progress_on_publish_failure;
     internal->task_priority = config->task_priority;
     internal->startup_wait_timeout_ms = config->startup_wait_timeout_ms;
     internal->owner_lock_timeout_ms = config->owner_lock_timeout_ms;
@@ -920,12 +1023,18 @@ egolink_sim7670_location_modem_owner_init(
     internal->sensor_publish_intent = config->sensor_publish_intent;
     internal->pipeline_owner.device_id = text_view(internal->device_id);
     internal->pipeline_owner.boot_count = config->pipeline_owner.boot_count;
+    internal->pipeline_owner.local_progress_on_publish_failure =
+        config->pipeline_owner.local_progress_on_publish_failure;
     internal->pipeline_owner.session_id = text_view(internal->session_id);
     internal->pipeline_owner.stream_id = text_view(internal->stream_id);
     internal->pipeline_owner.clock_domain =
         EGOLINK_LOCATION_RUNTIME_CLOCK_BOOT_MONOTONIC;
     internal->pipeline_owner.monotonic_clock_domain_id =
         text_view(internal->monotonic_clock_domain_id);
+    if (internal->utc_epoch_at_boot_ms != 0U) {
+        internal->pipeline_owner.clock_domain = EGOLINK_LOCATION_RUNTIME_CLOCK_UTC;
+        internal->pipeline_owner.monotonic_clock_domain_id = (egolink_location_runtime_text_t){0};
+    }
     internal->shared_outbox = shared_outbox;
     internal->location_adapter = location_adapter;
     internal->delivery_runtime = delivery_runtime;
@@ -943,6 +1052,8 @@ egolink_sim7670_location_modem_owner_init(
     egolink_sim7670_location_modem_adapter_bounded_config(
         &adapter_config, internal->owner_core_id,
         internal->per_command_timeout_cap_ms);
+    adapter_config.gnss_power_on_settle_ms = internal->gnss_power_on_settle_ms;
+    adapter_config.owner_stop_requested = &internal->stop_requested;
     internal->last_adapter_status =
         egolink_sim7670_location_modem_adapter_init(
             &internal->modem_adapter, &adapter_config);
@@ -1017,6 +1128,7 @@ egolink_sim7670_location_modem_owner_start(
         internal->start_claimed = true;
     }
     taskEXIT_CRITICAL(&internal->metadata_lock);
+    if (atomic_load(&internal->stop_requested)) return EGOLINK_SIM7670_MODEM_OWNER_NOT_STARTED;
     if (!internal->enabled ||
         lifecycle == EGOLINK_SIM7670_MODEM_OWNER_DISABLED) {
         return EGOLINK_SIM7670_MODEM_OWNER_DISABLED_STATUS;
@@ -1080,6 +1192,7 @@ static egolink_sim7670_modem_owner_status_t external_gate(
     lifecycle = internal->lifecycle;
     task_created = internal->task_created;
     taskEXIT_CRITICAL(&internal->metadata_lock);
+    if (atomic_load(&internal->stop_requested)) return EGOLINK_SIM7670_MODEM_OWNER_NOT_STARTED;
     if (!internal->enabled ||
         lifecycle == EGOLINK_SIM7670_MODEM_OWNER_DISABLED) {
         return EGOLINK_SIM7670_MODEM_OWNER_DISABLED_STATUS;
@@ -1350,6 +1463,21 @@ egolink_sim7670_location_modem_owner_current_status(
     snapshot->initialized = true;
     snapshot->enabled = internal->enabled;
     snapshot->task_created = internal->task_created;
+    snapshot->stop_requested = atomic_load(&internal->stop_requested);
+    snapshot->quiesced = atomic_load(&internal->quiesced);
+    snapshot->local_sequence = internal->local_sequence;
+    snapshot->source_event_time_ms = internal->source_event_time_ms;
+    snapshot->quality = internal->quality;
+    snapshot->last_enqueue_status = internal->last_enqueue_status;
+    snapshot->last_storage_status = internal->last_storage_status;
+    snapshot->delivery_attempts = internal->delivery_attempts;
+    snapshot->last_delivery_time_ms = internal->last_delivery_time_ms;
+    snapshot->last_delivery_status = internal->last_delivery_status;
+    snapshot->persistence_failures = internal->persistence_failures;
+    snapshot->matched_ack_deletes = internal->matched_ack_deletes;
+    snapshot->sensor_commands = internal->sensor_commands;
+    snapshot->gnss_state = internal->gnss_state;
+    snapshot->location_belief = internal->location_belief;
     snapshot->uart_initialized = internal->uart_initialized;
     snapshot->exclusive_owner_confirmed =
         internal->exclusive_owner_confirmed;
@@ -1443,4 +1571,16 @@ const char *egolink_sim7670_modem_owner_status_name(
         return "sos_signal_partial";
     default: return "unknown";
     }
+}
+
+egolink_sim7670_modem_owner_status_t
+egolink_sim7670_location_modem_owner_request_stop(
+    egolink_sim7670_location_modem_owner_t *owner)
+{
+    if (owner == NULL || !valid_magic(internal_of(owner)))
+        return EGOLINK_SIM7670_MODEM_OWNER_INVALID_ARGUMENT;
+    sim7670_location_modem_owner_internal_t *internal = internal_of(owner);
+    atomic_store(&internal->stop_requested, true);
+    notify_owner_task(internal);
+    return EGOLINK_SIM7670_MODEM_OWNER_OK;
 }

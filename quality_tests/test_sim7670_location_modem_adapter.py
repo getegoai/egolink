@@ -273,7 +273,11 @@ class Sim7670LocationModemAdapterTests(unittest.TestCase):
         )
         self.assertIn('"AT+CGNSSPWR=0", "OK"', power_off)
         self.assertIn("bounded_begin(", power_off)
-        self.assertIn("sim7670_send_at_complete_bounded(", power_off)
+        self.assertIn("traced_at(request,", power_off)
+        trace = _function(self.sim_source,
+            "static sim7670_bounded_at_status_t traced_at(",
+            "static sim7670_location_bounded_reason_t bounded_reason_from_at(")
+        self.assertEqual(1, trace.count("sim7670_send_at_complete_bounded("))
         self.assertIn("SIM7670_LOCATION_BOUNDED_REPORT_READY", power_off)
         self.assertIn("sim7670_at_backend_current_task_is_allowed", power_off)
         self.assertNotIn("sim7670_gnss_init()", power_off)

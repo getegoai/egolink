@@ -102,12 +102,15 @@ static bool valid_identity(
         identity->source_event_time_ns > EGOLINK_LOCATION_RUNTIME_INT64_MAX ||
         identity->source_event_time_ns / UINT64_C(1000000) !=
             identity->source_event_time_ms ||
-        identity->source_event_time_source !=
-            EGOLINK_LOCATION_TIME_TIMESTAMP_MONOTONIC_NS ||
         !valid_publish_intent(identity->publish_intent)) {
         return false;
     }
-    return safe_runtime_text(identity->monotonic_clock_domain_id);
+    if (identity->source_event_time_source == EGOLINK_LOCATION_TIME_TIMESTAMP_UTC_NS) {
+        return identity->monotonic_clock_domain_id.data == NULL &&
+            identity->monotonic_clock_domain_id.length == 0U;
+    }
+    return identity->source_event_time_source == EGOLINK_LOCATION_TIME_TIMESTAMP_MONOTONIC_NS &&
+        safe_runtime_text(identity->monotonic_clock_domain_id);
 }
 
 static void bind_lineage_clock(
@@ -115,6 +118,11 @@ static void bind_lineage_clock(
     const egolink_location_hardware_identity_t *identity,
     egolink_location_hardware_mapped_input_t *mapped)
 {
+    if (identity->source_event_time_source == EGOLINK_LOCATION_TIME_TIMESTAMP_UTC_NS) {
+        lineage->timestamp_utc_ns_present = true;
+        lineage->timestamp_utc_ns = identity->source_event_time_ns;
+        return;
+    }
     lineage->timestamp_monotonic_ns_present = true;
     lineage->timestamp_monotonic_ns = identity->source_event_time_ns;
     lineage->monotonic_clock_domain_id_present = true;
@@ -133,8 +141,9 @@ static bool prepare_base(
         !copy_runtime_text(mapped->stream_id, identity->stream_id) ||
         !copy_runtime_text(mapped->observation_id,
                            identity->observation_id) ||
-        !copy_runtime_text(mapped->monotonic_clock_domain_id,
-                           identity->monotonic_clock_domain_id)) {
+        (identity->source_event_time_source == EGOLINK_LOCATION_TIME_TIMESTAMP_MONOTONIC_NS &&
+         !copy_runtime_text(mapped->monotonic_clock_domain_id,
+                            identity->monotonic_clock_domain_id))) {
         clear_mapped(mapped);
         return false;
     }
@@ -152,8 +161,9 @@ static bool prepare_base(
     mapped->input.identity.event_time_ns = identity->source_event_time_ns;
     mapped->input.identity.event_time_source =
         identity->source_event_time_source;
-    mapped->input.identity.monotonic_clock_domain_id =
-        owned_runtime_text(mapped->monotonic_clock_domain_id);
+    if (identity->source_event_time_source == EGOLINK_LOCATION_TIME_TIMESTAMP_MONOTONIC_NS)
+        mapped->input.identity.monotonic_clock_domain_id =
+            owned_runtime_text(mapped->monotonic_clock_domain_id);
     mapped->input.publish_intent = identity->publish_intent;
 
     egolink_location_engine_lineage_t *lineage =
@@ -431,18 +441,13 @@ egolink_location_hardware_map_gnss(
         !isfinite(report->lat) || !isfinite(report->lon) ||
         report->lat < -90.0 || report->lat > 90.0 ||
         report->lon < -180.0 || report->lon > 180.0 ||
-        !valid_optional_gnss_measurements(report)) {
+        !valid_optional_gnss_measurements(report) ||
+        (report->hdop_valid && (!isfinite(report->hdop) || report->hdop < 0.0))) {
         clear_mapped(mapped);
         return EGOLINK_LOCATION_HARDWARE_MAP_INVALID_REPORT;
     }
-    if (!report->hdop_valid) {
-        clear_mapped(mapped);
-        return EGOLINK_LOCATION_HARDWARE_MAP_FIX_QUALITY_UNAVAILABLE;
-    }
-    if (!isfinite(report->hdop) || report->hdop <= 0.0) {
-        clear_mapped(mapped);
-        return EGOLINK_LOCATION_HARDWARE_MAP_INVALID_REPORT;
-    }
+    /* Receiver fix and quality availability are independent. The existing
+     * reducer retains a rejected-quality candidate without inventing accuracy. */
     mapped->origin =
         EGOLINK_LOCATION_HARDWARE_ORIGIN_GNSS_FIX_CANDIDATE;
     mapped->input.observation.type = EGOLINK_LOCATION_ENGINE_EVENT_GNSS_FIX;
@@ -450,7 +455,7 @@ egolink_location_hardware_map_gnss(
     mapped->input.observation.latitude_deg = report->lat;
     mapped->input.observation.longitude_deg_present = true;
     mapped->input.observation.longitude_deg = report->lon;
-    mapped->input.observation.hdop_present = true;
+    mapped->input.observation.hdop_present = report->hdop_valid && report->hdop > 0.0;
     mapped->input.observation.hdop = report->hdop;
     return EGOLINK_LOCATION_HARDWARE_MAP_OK;
 }

@@ -1856,6 +1856,8 @@ static bool bounded_request_valid(
         request->per_command_timeout_cap_ms > UINT32_C(0) &&
         request->per_command_timeout_cap_ms <=
             SIM7670_LOCATION_BOUNDED_COMMAND_CAP_MAX_MS &&
+        request->power_on_settle_ms <= UINT32_C(60000) &&
+        request->power_on_settle_ms < request->timeout_ms &&
         request->cancel_requested != NULL &&
         request->operation_token != UINT32_C(0);
 }
@@ -2072,6 +2074,23 @@ static sim7670_bounded_at_status_t sim7670_send_at_complete_bounded(
     return status;
 }
 
+static sim7670_bounded_at_status_t traced_at(
+    const sim7670_location_bounded_request_t *request,
+    const char *command, const char *expect, int64_t deadline,
+    uint32_t cap, char *response, size_t capacity,
+    sim7670_location_bounded_result_t *result)
+{
+    const int64_t started = bounded_now_us();
+    sim7670_bounded_at_status_t status = sim7670_send_at_complete_bounded(
+        command, expect, deadline, cap, response, capacity, result);
+    if (request->trace_at) {
+        const int64_t ended = bounded_now_us();
+        request->trace_at(request->trace_context, command, response, (int)status,
+            ended >= started ? (uint64_t)(ended - started) / 1000U : 0U);
+    }
+    return status;
+}
+
 static sim7670_location_bounded_reason_t bounded_reason_from_at(
     sim7670_bounded_at_status_t status)
 {
@@ -2183,6 +2202,45 @@ static bool bounded_cancel_at_boundary(
     return true;
 }
 
+#if CONFIG_EGOLINK_SIM7670_GNSS_ENABLED && CONFIG_EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
+static bool bounded_gnss_settle(
+    const sim7670_location_bounded_request_t *request,
+    sim7670_location_bounded_result_t *result,
+    int64_t start_us,
+    int64_t deadline_us)
+{
+    if (request->power_on_settle_ms == 0U) return true;
+    int64_t previous_us = bounded_now_us();
+    const int64_t duration_us =
+        (int64_t)request->power_on_settle_ms * INT64_C(1000);
+    if (previous_us < start_us || previous_us >= deadline_us ||
+        duration_us >= deadline_us - previous_us) {
+        bounded_finish(result, start_us, deadline_us,
+            SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN,
+            SIM7670_LOCATION_BOUNDED_REASON_DEADLINE_EXPIRED);
+        return false;
+    }
+    const int64_t settle_deadline_us = previous_us + duration_us;
+    for (;;) {
+        if (bounded_cancel_at_boundary(request, result, start_us, deadline_us))
+            return false;
+        const int64_t now_us = bounded_now_us();
+        if (now_us < previous_us || now_us >= deadline_us) {
+            bounded_finish(result, start_us, deadline_us,
+                SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN,
+                SIM7670_LOCATION_BOUNDED_REASON_DEADLINE_EXPIRED);
+            return false;
+        }
+        if (now_us >= settle_deadline_us) return true;
+        previous_us = now_us;
+        const TickType_t ticks = bounded_wait_ticks_floor(
+            now_us, settle_deadline_us, UINT32_C(100));
+        if (ticks != 0) vTaskDelay(ticks);
+        else taskYIELD();
+    }
+}
+#endif
+
 static bool bounded_at_or_finish_unknown(
     sim7670_bounded_at_status_t status,
     sim7670_location_bounded_result_t *result,
@@ -2218,13 +2276,13 @@ static bool bounded_lte_query_one(
     }
     evidence->attempted = true;
     const sim7670_bounded_at_status_t at_status =
-        sim7670_send_at_complete_bounded(
+        traced_at(request,
             command, expected_prefix, deadline_us,
             request->per_command_timeout_cap_ms, response, response_size,
             result);
     if (!bounded_at_or_finish_unknown(
             at_status, result, start_us, deadline_us)) {
-        return false;
+        return request->continue_on_status_error && at_status==SIM7670_BOUNDED_AT_TERMINAL_ERROR;
     }
     evidence->response_observed = true;
     update_lte_raw(report, command, response);
@@ -2234,7 +2292,7 @@ static bool bounded_lte_query_one(
             result, start_us, deadline_us,
             SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN,
             SIM7670_LOCATION_BOUNDED_REASON_PARSE_INVALID);
-        return false;
+        return request->continue_on_status_error;
     }
     return true;
 }
@@ -2256,6 +2314,13 @@ sim7670_gnss_request_location_bounded(
             SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
         return result->outcome;
     }
+#if !CONFIG_EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
+    if (request->power_on_settle_ms != 0U) {
+        result->outcome = SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
+        result->reason = SIM7670_LOCATION_BOUNDED_REASON_INVALID_ARGUMENT;
+        return result->outcome;
+    }
+#endif
 #if !CONFIG_EGOLINK_SIM7670_GNSS_ENABLED
     result->outcome = SIM7670_LOCATION_BOUNDED_DEFINITE_NO_EFFECT_FAILURE;
     result->reason = SIM7670_LOCATION_BOUNDED_REASON_DRIVER_DISABLED;
@@ -2283,7 +2348,7 @@ sim7670_gnss_request_location_bounded(
 
     char response[AT_RESPONSE_BUFFER_SIZE];
     sim7670_bounded_at_status_t at_status =
-        sim7670_send_at_complete_bounded(
+        traced_at(request,
             "AT", "OK", deadline_us,
             request->per_command_timeout_cap_ms, response, sizeof(response),
             result);
@@ -2298,7 +2363,8 @@ sim7670_gnss_request_location_bounded(
     }
 
 #if CONFIG_EGOLINK_SIM7670_GNSS_POWER_ON_BEFORE_QUERY
-    at_status = sim7670_send_at_complete_bounded(
+    if (!request->receiver_already_powered) {
+    at_status = traced_at(request,
         "AT+CGNSSPWR=1", "OK", deadline_us,
         request->per_command_timeout_cap_ms, response, sizeof(response),
         result);
@@ -2308,10 +2374,16 @@ sim7670_gnss_request_location_bounded(
             request, result, start_us, deadline_us)) {
         return result->outcome;
     }
+    /* Keep the same owner and powered receiver while acquiring. No result is
+     * emitted until the actual query below completes after this bounded dwell. */
+    if (!bounded_gnss_settle(request, result, start_us, deadline_us)) {
+        return result->outcome;
+    }
+    }
 #endif
 
     report->cgnssinfo_query.attempted = true;
-    at_status = sim7670_send_at_complete_bounded(
+    at_status = traced_at(request,
         "AT+CGNSSINFO", "+CGNSSINFO:", deadline_us,
         request->per_command_timeout_cap_ms, response, sizeof(response),
         result);
@@ -2337,7 +2409,7 @@ sim7670_gnss_request_location_bounded(
             return result->outcome;
         }
         report->cgpsinfo_query.attempted = true;
-        at_status = sim7670_send_at_complete_bounded(
+        at_status = traced_at(request,
             "AT+CGPSINFO", "+CGPSINFO:", deadline_us,
             request->per_command_timeout_cap_ms, response, sizeof(response),
             result);
@@ -2426,7 +2498,7 @@ sim7670_location_bounded_outcome_t sim7670_gnss_power_off_bounded(
     }
     char response[AT_RESPONSE_BUFFER_SIZE];
     const sim7670_bounded_at_status_t at_status =
-        sim7670_send_at_complete_bounded(
+        traced_at(request,
             "AT+CGNSSPWR=0", "OK", deadline_us,
             request->per_command_timeout_cap_ms, response, sizeof(response),
             result);
@@ -2486,7 +2558,7 @@ sim7670_location_bounded_outcome_t sim7670_lte_query_status_bounded(
 
     char response[AT_RESPONSE_BUFFER_SIZE];
     const sim7670_bounded_at_status_t at_status =
-        sim7670_send_at_complete_bounded(
+        traced_at(request,
             "AT", "OK", deadline_us,
             request->per_command_timeout_cap_ms, response, sizeof(response),
             result);
@@ -2496,6 +2568,7 @@ sim7670_location_bounded_outcome_t sim7670_lte_query_status_bounded(
     }
     report->at_ok = true;
     update_lte_raw(report, "AT", response);
+    result->reason = SIM7670_LOCATION_BOUNDED_REASON_NONE;
 
     if (!bounded_lte_query_one(
             request, result, start_us, deadline_us, report,
@@ -2540,10 +2613,11 @@ sim7670_location_bounded_outcome_t sim7670_lte_query_status_bounded(
             request, result, start_us, deadline_us)) {
         return result->outcome;
     }
+    const sim7670_location_bounded_reason_t aggregate_reason=result->reason;
     bounded_finish(
         result, start_us, deadline_us,
-        SIM7670_LOCATION_BOUNDED_REPORT_READY,
-        SIM7670_LOCATION_BOUNDED_REASON_NONE);
+        aggregate_reason==SIM7670_LOCATION_BOUNDED_REASON_NONE ? SIM7670_LOCATION_BOUNDED_REPORT_READY : SIM7670_LOCATION_BOUNDED_OUTCOME_UNKNOWN,
+        aggregate_reason);
     return result->outcome;
 #endif
 }
