@@ -11,6 +11,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 from pc_simulator import ego_call_authenticated_relay as relay
 from pc_simulator import ego_call_media_io as media_io
@@ -1094,6 +1095,32 @@ class EgoCallOperatorControlTests(unittest.TestCase):
         self.assertEqual(socket_factory.calls, [])
         self.assertFalse(raised.exception.metadata["authentication_decision_fabricated"])
         self.assertFalse(raised.exception.metadata["network_attempted"])
+
+    def test_windows_interface_index_is_strict_and_optional(self) -> None:
+        valid = _host_tls_config()
+        with patch.object(control.sys, "platform", "win32"):
+            for index in (None, 1, 19, 0xFFFFFF):
+                replace(valid, windows_ipv4_interface_index=index).validate()
+            for index in (0, -1, 0x1000000, True, False, 1.0, "19"):
+                with self.subTest(index=index), self.assertRaises(control.HostControlError):
+                    replace(valid, windows_ipv4_interface_index=index).validate()
+        with patch.object(control.sys, "platform", "linux"):
+            valid.validate()  # unconfigured behavior stays portable
+            with self.assertRaises(control.HostControlError):
+                _host_tls_fakes(config=replace(valid, windows_ipv4_interface_index=1))
+
+    def test_windows_interface_pin_is_revalidated_before_socket_open(self) -> None:
+        with patch.object(control.sys, "platform", "win32"):
+            connector, _, _, _, factory, authenticator = _host_tls_fakes(
+                config=replace(_host_tls_config(), windows_ipv4_interface_index=1)
+            )
+        with patch.object(control.sys, "platform", "linux"):
+            with self.assertRaises(control.HostTlsConnectorBlocked) as raised:
+                connector.open_verified(_host_tls_request())
+        self.assertEqual(raised.exception.reason_code, "host_tls_preconnect_rejected")
+        self.assertEqual(factory.calls, [])
+        self.assertEqual(authenticator.calls, 0)
+        self.assertFalse(connector.audit()["numeric_connect_attempted"])
 
     def test_host_tls_fake_success_uses_numeric_route_sni_ca_tls_and_alpn(self) -> None:
         (

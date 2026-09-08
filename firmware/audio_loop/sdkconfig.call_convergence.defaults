@@ -1,0 +1,3 @@
+# Append AFTER sdkconfig.call020_device_owner.defaults for the bounded
+# runtime-convergence CALL smoke. Build-only; no authorization to flash/run.
+CONFIG_EGOLINK_CALL020_DEVICE_OWNER_MEDIA_SECONDS=15

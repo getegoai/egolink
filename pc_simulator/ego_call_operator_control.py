@@ -33,8 +33,10 @@ import ipaddress
 import json
 import re
 import secrets
+import select
 import socket as socket_module
 import ssl as ssl_module
+import sys
 import threading
 import time
 from dataclasses import dataclass
@@ -75,6 +77,10 @@ WORKER_NAMES = ("audio_capture", "usb_uplink", "usb_downlink", "audio_output")
 CONTROL_CLEANUP_ATTEMPTS = 2
 HOST_TLS_CLEANUP_ATTEMPTS = 2
 MAX_CA_PEM_BYTES = 262_144
+# Windows SDK ws2ipdef.h: IP_UNICAST_IF = 31. Some Python builds omit it.
+# https://learn.microsoft.com/en-us/windows/win32/winsock/ipproto-ip-socket-options
+# Set a four-byte network-order index; getsockopt returns a host-order DWORD.
+_WINDOWS_IP_UNICAST_IF = 31
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9._:-]+$")
 _DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 
@@ -687,10 +693,13 @@ class TlsOpenRequest:
     identity: EndpointIdentity
     expected_alpn: str
     connect_timeout_ms: int
+    role: str = "device"
 
     def validate(self) -> None:
         _identifier(self.run_id, label="TLS request run_id")
         self.identity.validate()
+        if self.role not in {"device", "guardian"}:
+            raise HostControlError("TLS request role must be device or guardian")
         if self.expected_alpn != DEFAULT_ALPN:
             raise HostControlError("TLS request ALPN mismatch")
         _bounded_int(
@@ -718,10 +727,10 @@ class VerifiedTlsOpenResult:
         binding = self.authentication_decision.binding
         expected = (
             request.identity.session_id,
-            "device",
-            request.identity.device_id,
-            request.identity.guardian_id,
-            request.identity.uplink_clock_id,
+            request.role,
+            request.identity.device_id if request.role == "device" else request.identity.guardian_id,
+            request.identity.guardian_id if request.role == "device" else request.identity.device_id,
+            request.identity.uplink_clock_id if request.role == "device" else request.identity.downlink_clock_id,
         )
         actual = (
             binding.session_id,
@@ -794,6 +803,28 @@ def _exact_tls_hostname(value: object) -> str:
     return value
 
 
+def _validate_windows_ipv4_interface_index(interface_index: int | None) -> None:
+    if interface_index is None:
+        return
+    _bounded_int(interface_index, label="Windows IPv4 interface index",
+                 minimum=1, maximum=0xFFFFFF)
+    if sys.platform != "win32":
+        raise HostControlError("Windows IPv4 interface pin requires Windows")
+
+
+def _pin_windows_ipv4_interface(raw_socket: Any, interface_index: int | None) -> bool:
+    """Apply the optional exact Windows egress constraint before bind/connect."""
+    _validate_windows_ipv4_interface_index(interface_index)
+    if interface_index is None:
+        return False
+    raw_socket.setsockopt(socket_module.IPPROTO_IP, _WINDOWS_IP_UNICAST_IF,
+                          interface_index.to_bytes(4, "big"))
+    actual = raw_socket.getsockopt(socket_module.IPPROTO_IP, _WINDOWS_IP_UNICAST_IF)
+    if type(actual) is not int or actual != interface_index:
+        raise HostControlError("Windows IPv4 interface readback mismatch")
+    return True
+
+
 @dataclass(frozen=True)
 class HostTlsConnectorConfig:
     """Exact, caller-owned TLS route and trust input; disabled by default."""
@@ -813,12 +844,14 @@ class HostTlsConnectorConfig:
     write_timeout_ms: int = 20
     authentication_timeout_ms: int = 1_000
     max_auth_window_ns: int = DEFAULT_AUTH_WINDOW_NS
+    windows_ipv4_interface_index: int | None = None
 
     def validate(self) -> None:
         if type(self.enabled) is not bool:
             raise HostControlError("host TLS enabled must be an explicit boolean")
         _exact_ipv4(self.peer_ipv4, label="TLS peer")
         _exact_ipv4(self.source_ipv4, label="TLS source bind")
+        _validate_windows_ipv4_interface_index(self.windows_ipv4_interface_index)
         _exact_tls_hostname(self.tls_hostname)
         _bounded_int(self.peer_port, label="TLS peer port", minimum=1, maximum=65535)
         if self.expected_alpn != DEFAULT_ALPN:
@@ -893,10 +926,13 @@ class HostTlsPeerEvidence:
     tls_version: str
     peer_certificate_sha256: str
     captured_at_monotonic_ns: int
+    role: str = "device"
 
     def validate(self) -> None:
         _identifier(self.run_id, label="TLS evidence run_id")
         self.identity.validate()
+        if self.role not in {"device", "guardian"}:
+            raise HostControlError("TLS evidence role must be device or guardian")
         _identifier(self.connection_id, label="TLS evidence connection_id")
         _exact_ipv4(self.peer_ipv4, label="TLS evidence peer")
         _exact_tls_hostname(self.tls_hostname)
@@ -952,7 +988,13 @@ class HostTlsConnectorBlocked(HostControlError):
 
 
 class _OwnedHostTlsSocket:
-    """Small SSLSocket facade implementing CALL-020J's injected socket API."""
+    """Bounded native TLS facade with serialized OpenSSL access.
+
+    Native SSL calls run nonblocking under one lock; readiness waits happen
+    outside it so the other media direction can progress. Concurrent blocking
+    calls on one SSLSocket can corrupt OpenSSL record state. Test doubles keep
+    their existing finite-timeout contract.
+    """
 
     def __init__(self, tls_socket: object, *, connection_id: str) -> None:
         self.connection_id = _identifier(
@@ -960,6 +1002,14 @@ class _OwnedHostTlsSocket:
         )
         self._socket: object | None = tls_socket
         self._lifecycle_lock = threading.Lock()
+        self._ssl_lock = threading.Lock()
+        self._native = isinstance(tls_socket, ssl_module.SSLSocket)
+        self._native_timeout = None
+        if self._native:
+            self._native_timeout = tls_socket.gettimeout()
+            if self._native_timeout is None or self._native_timeout <= 0:
+                raise HostControlError("native TLS facade requires a finite timeout")
+            tls_socket.setblocking(False)
 
     def _active(self) -> object:
         with self._lifecycle_lock:
@@ -969,12 +1019,41 @@ class _OwnedHostTlsSocket:
         return current
 
     def recv_into(self, target: memoryview, size: int) -> int:
-        return self._active().recv_into(target, size)
+        return self._io("recv_into", target, size)
 
     def send(self, source: memoryview) -> int:
-        return self._active().send(source)
+        return self._io("send", source)
+
+    def _io(self, operation: str, *args: object) -> int:
+        if not self._native:
+            return getattr(self._active(), operation)(*args)
+        deadline = time.monotonic() + self._native_timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not self._ssl_lock.acquire(timeout=remaining):
+                raise TimeoutError("native TLS I/O deadline")
+            try:
+                current = self._active()
+                try:
+                    return getattr(current, operation)(*args)
+                except ssl_module.SSLWantReadError:
+                    want_read = True
+                except ssl_module.SSLWantWriteError:
+                    want_read = False
+            finally:
+                self._ssl_lock.release()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("native TLS readiness deadline")
+            ready = select.select([current] if want_read else [],
+                                  [] if want_read else [current], [], remaining)
+            if not ready[0] and not ready[1]:
+                raise TimeoutError("native TLS readiness deadline")
 
     def gettimeout(self) -> float | None:
+        if self._native:
+            self._active()
+            return self._native_timeout
         return self._active().gettimeout()
 
     def selected_alpn_protocol(self) -> str | None:
@@ -1066,6 +1145,7 @@ class DefaultOffHostTlsConnector:
         self._socket_created = False
         self._source_bound = False
         self._source_binding_verified = False
+        self._windows_ipv4_interface_verified = False
         self._numeric_connect_attempted = False
         self._numeric_peer_verified = False
         self._handshake_attempted = False
@@ -1172,10 +1252,10 @@ class DefaultOffHostTlsConnector:
         binding = decision.binding
         expected = (
             request.identity.session_id,
-            "device",
-            request.identity.device_id,
-            request.identity.guardian_id,
-            request.identity.uplink_clock_id,
+            request.role,
+            request.identity.device_id if request.role == "device" else request.identity.guardian_id,
+            request.identity.guardian_id if request.role == "device" else request.identity.device_id,
+            request.identity.uplink_clock_id if request.role == "device" else request.identity.downlink_clock_id,
             connection_id,
         )
         actual = (
@@ -1205,7 +1285,8 @@ class DefaultOffHostTlsConnector:
             callback = getattr(
                 self._authenticator, "authorize_connected_session", None
             )
-            if not callable(callback):
+            stream_callback = getattr(self._authenticator, "authorize_tls_stream", None)
+            if not callable(callback) and not callable(stream_callback):
                 raise HostTlsConnectorBlocked(
                     "external_session_authenticator_missing",
                     network_attempted=False,
@@ -1284,6 +1365,12 @@ class DefaultOffHostTlsConnector:
                     cap_ms=config.tcp_connect_timeout_ms,
                 )
             )
+            if config.windows_ipv4_interface_index is not None:
+                reason = "windows_ipv4_interface_pin_failed"
+                self._windows_ipv4_interface_verified = _pin_windows_ipv4_interface(
+                    raw_socket, config.windows_ipv4_interface_index
+                )
+            reason = "host_tls_socket_create_failed"
             raw_socket.bind((config.source_ipv4, 0))
             self._source_bound = True
             reason = "numeric_tls_connect_failed"
@@ -1377,6 +1464,7 @@ class DefaultOffHostTlsConnector:
                 tls_version=negotiated_version,
                 peer_certificate_sha256=hashlib.sha256(peer_certificate).hexdigest(),
                 captured_at_monotonic_ns=captured_ns,
+                role=request.role,
             )
             evidence.validate()
 
@@ -1387,10 +1475,17 @@ class DefaultOffHostTlsConnector:
                 cap_ms=config.authentication_timeout_ms,
             )
             self._authentication_callback_calls += 1
-            decision = self._authenticator.authorize_connected_session(
-                evidence=evidence,
-                timeout_ms=authentication_timeout_ms,
-            )
+            if callable(stream_callback):
+                decision = stream_callback(
+                    evidence=evidence,
+                    tls_socket=owned_socket,
+                    timeout_ms=authentication_timeout_ms,
+                )
+            else:
+                decision = callback(
+                    evidence=evidence,
+                    timeout_ms=authentication_timeout_ms,
+                )
             auth_end_ns = _clock_now(self._clock)
             if (
                 auth_end_ns < auth_start_ns
@@ -1408,7 +1503,8 @@ class DefaultOffHostTlsConnector:
                 handshake_complete=True,
                 certificate_chain_verified=True,
                 peer_identity_verified=True,
-                peer_identity=request.identity.device_id,
+                peer_identity=(request.identity.device_id if request.role == "device"
+                               else request.identity.guardian_id),
                 selected_alpn=negotiated_alpn,
                 tls_version=negotiated_version,
                 connection_id=connection_id,
@@ -1441,6 +1537,8 @@ class DefaultOffHostTlsConnector:
                 "default_enabled": False,
                 "exact_numeric_peer_configured": True,
                 "exact_source_ipv4_bind_configured": True,
+                "windows_ipv4_interface_configured": self._config.windows_ipv4_interface_index is not None,
+                "windows_ipv4_interface_verified": self._windows_ipv4_interface_verified,
                 "exact_tls_hostname_and_sni_configured": True,
                 "caller_ca_source_count": 1,
                 "minimum_tls_version": "TLSv1.2",
