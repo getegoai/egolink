@@ -36,7 +36,7 @@ context:
 
 allowed_paths:
   - docs/CONTEXT_INDEX.md
-  - docs/tasks/active/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md
+  - docs/tasks/done/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md
   - docs/architecture/adr/ADR-0007-gnss-denied-personal-location-memory.md
   - docs/development/LOCATION_ENGINE.md
   - docs/roadmap/V1_PRODUCT_PLAN.md
@@ -81,7 +81,7 @@ matrix without silently depending on production Wi-Fi.
 
 ```powershell
 python scripts/context_lint.py
-git diff --check -- docs/CONTEXT_INDEX.md docs/tasks/active/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md docs/architecture/adr/ADR-0007-gnss-denied-personal-location-memory.md docs/development/LOCATION_ENGINE.md docs/roadmap/V1_PRODUCT_PLAN.md docs/product/V1_PRO_FORM_FACTOR_BASELINE.md
+git diff --check -- docs/CONTEXT_INDEX.md docs/tasks/done/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md docs/architecture/adr/ADR-0007-gnss-denied-personal-location-memory.md docs/development/LOCATION_ENGINE.md docs/roadmap/V1_PRODUCT_PLAN.md docs/product/V1_PRO_FORM_FACTOR_BASELINE.md
 ```
 
 # Hardware Validation
@@ -118,7 +118,7 @@ path for every RF test.
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md in
+Read docs/tasks/done/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md in
 D:\pywork\egolink. Load only AGENTS.md, docs/CONTEXT_INDEX.md, this packet,
 and its context entries. Freeze only the GNSS-denied product strategy, its
 rule-first/approved-model boundary, the production radio boundary, and the RF

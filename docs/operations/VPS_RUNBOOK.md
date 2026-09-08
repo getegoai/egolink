@@ -10,9 +10,14 @@ source_task: OPS-002, OPS-004-static-candidate
 Production host: `203.0.113.10` (Rocky Linux 9.8), service
 `egolink-message-hub` on port `8790`. This VPS is a real production service:
 devices may post to it continuously; treat every change as a production
-change. OPS-004's tracked target binds `8790` to loopback and exposes only the
-Nginx HTTPS origin. That target has not been deployed by the static task; first
-observe the live listener/firewall state.
+change. The separately authorized 2026-09-05
+[convergence run 001](../development/RUNTIME_CONVERGENCE_20260905_RUN001.md)
+deployed the current Location/Guardian code and loopback-only `8790` listener
+behind Nginx HTTPS. The deployed virtual host adds a Location-only restriction
+keeping SOS routes closed. Initial external checks passed; later SSH/HTTPS
+timeouts left the stability window incomplete. Reobserve the live state before
+continuing; this does not grant full OPS-004 or device acceptance. The protected
+change snapshot is `/var/backups/egolink/convergence-20260905-001`.
 
 ## 1. Access
 
@@ -291,10 +296,13 @@ records in the bounded outbox. Roll back to a build that leaves this transport
 disabled, not to a build that sends bearer credentials or location over
 plaintext. Service continuity is subordinate to this privacy boundary.
 
-## 9. Manual SOS Server Candidate (Not Deployed)
+## 9. Manual SOS Server Candidate (Not Publicly Enabled)
 
-SOS-010D adds a loopback-tested application candidate; it is not evidence of a
-VPS deployment or a device-to-server run. Its exact boundaries are:
+SOS-010D adds a loopback-tested application candidate. Run 001 installed its
+shared code as a dependency of the current server, but explicitly denies its
+public routes in Nginx; no SOS ingest or device-to-server SOS run occurred.
+Do not remove that restriction until the privacy/retention rollout below is
+reviewed and authorized. Its exact candidate boundaries are:
 
 - `POST /api/v1/safety-events/manual-sos` requires the configured device-
   ingest bearer token. It accepts at most 1024 exact UTF-8 JSON bytes and only

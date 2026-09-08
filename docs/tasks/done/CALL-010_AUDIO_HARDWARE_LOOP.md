@@ -1,25 +1,25 @@
 ---
 id: CALL-010
 title: Wearable audio I/O and simultaneous-loop bring-up
-status: active
+status: accepted_for_transition
 priority: critical
 lane: B
-execution_state: accepted_for_transition
+execution_state: completed
 depends_on:
   - CALL-001
 serves_gate: P0-CALL
 requires_hardware: true
 created: 2026-08-23
-last_updated: 2026-09-02
+last_updated: 2026-09-05
 
 context:
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
   - docs/current/ACTIVE_BUILD.md
   - docs/hardware/BOARD_MATRIX.md
-  - docs/tasks/active/CALL-001_EGO_CALL_ARCHITECTURE_AND_PC_LOOP.md
+  - docs/tasks/done/CALL-001_EGO_CALL_ARCHITECTURE_AND_PC_LOOP.md
 
 allowed_paths:
-  - docs/tasks/active/CALL-010_AUDIO_HARDWARE_LOOP.md
+  - docs/tasks/done/CALL-010_AUDIO_HARDWARE_LOOP.md
   - docs/development/EGO_CALL.md
   - docs/current/STATUS.md
   - docs/current/ACTIVE_BUILD.md
@@ -239,9 +239,9 @@ drive or flash/run attempt still requires new explicit operator intent.
   limitations. Attempt 008's initialization diagnostic remains part of the
   retained run even though the unflashed post-run candidate addresses the
   identified first-open cause. The runs therefore cannot close the
-  simultaneous-I/O or chirp/delay acceptance items. CALL-010 remains active but
-  is `accepted_for_transition`: its basic audio endpoints no longer block
-  CALL-020. `P0-CALL` remains `NOT_RUN`.
+  simultaneous-I/O or chirp/delay acceptance items. CALL-010 is closed at its
+  `accepted_for_transition` boundary: its basic audio endpoints no longer block
+  CALL-020, while `P0-CALL` remains `NOT_RUN`.
 
 - Post-run gain/topology audit: volume `12` mapped to `-44 dB` through the
   pinned default curve and, after its declared gain compensation, to the
@@ -257,46 +257,30 @@ drive or flash/run attempt still requires new explicit operator intent.
   showing visible acoustic openings; the photos do not verify the internal
   speaker assembly or `P5/P6` contact.
 
-# Immediate Next Slice
+# Closed Handoff
 
 The basic speaker endpoint is now operator-confirmed working clearly and
 normally under the bounded run-008 stimulus, so the conditional P5/P6/PA/codec
 hardware trace is no longer the active branch. The input response and speaker
-output are sufficient to transition the mainline to CALL-020. CALL-010's
-remaining, non-transition-blocking closure work is narrowed to:
+output are sufficient to transition the mainline to CALL-020. The unresolved
+items are retained, but no longer keep this completed transition packet active:
 
-1. implement and statically verify real application-level simultaneous RX/TX
-   queues with explicit DMA underrun/overrun accounting;
-2. define a measurable known-chirp/local-loop delay method that does not retain
-   ordinary raw audio;
-3. obtain separate operator authorization before flashing/running the offline
-   TX-prearm candidate or performing any further microphone/speaker exercise;
-4. retain the run-008 strict `FAIL_OR_INCOMPLETE` result until a new authorized
-   runtime shows that the initialization diagnostic is absent;
-5. let CALL-020 own LTE-data/VPS/browser voice-chain proof, while the separate
-   downstream acceptance tasks retain RTC/product-call and `P0-CALL` closure.
+1. `CALL-020` owns real application-level simultaneous RX/TX queues, explicit
+   DMA underrun/overrun accounting, the development-path chirp/latency method,
+   initialization diagnostics and LTE-data/VPS/Guardian voice-chain proof.
+2. `CALL-021` owns the PC/USB-free integrated RTC and audio path.
+3. `P0-RELEASE-010` G5 owns calibrated SPL, echo, enclosure and product
+   water/acoustic acceptance. A new run may supersede the retained run-008
+   strict result only with separately authorized hardware evidence.
 
-These are planned follow-ups only. No new hardware action is authorized by this
-packet update.
+This routing authorizes no new hardware action.
 
-# Builder Prompt
+# Closure Rule
 
 ```text
-Read docs/tasks/active/CALL-010_AUDIO_HARDWARE_LOOP.md in D:\pywork\egolink.
-Load only AGENTS.md, docs/CONTEXT_INDEX.md, and this packet's context. Continue
-only in the allowed paths. Preserve the isolated target, bounded execution,
-no-raw-audio rule and fail-closed mute/PA-off behavior. Attempt 008 now has an
-operator-confirmed clear/normal speaker-output PASS, while its strict result
-remains `FAIL_OR_INCOMPLETE` because of the retained initialization diagnostic.
-The offline TX-prearm change is not hardware evidence and needs separate
-operator authorization before any run. Treat CALL-010 as
-`accepted_for_transition`: the basic input/output endpoints unlock CALL-020,
-while real application-level concurrent RX/TX design, explicit DMA
-underrun/overrun accounting and a measurable known-chirp/local-loop delay method
-remain CALL-010 closure work. Keep exact physical PCB revision and internal
-endpoint mapping unknown until verified.
-Run every listed validation command and return changed files and exact output.
-Do not flash, capture microphones, drive the speaker or issue hardware
-commands without a new explicit operator authorization. Do not claim CALL-010
-completion, P0-CALL, measured SPL or product acoustics.
+Do not dispatch CALL-010 again. Use CALL-020, CALL-021 or the G5 product-
+assurance row according to the handoff above. Preserve the no-raw-audio and
+fail-closed mute/PA-off rules; no flash, capture or speaker drive is authorized
+by this historical packet. The retained development-board evidence does not
+claim P0-CALL, measured SPL or product acoustics.
 ```

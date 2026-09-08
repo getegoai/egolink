@@ -1,14 +1,42 @@
 ---
 document_status: authoritative
+decision_updated: 2026-09-05
 last_verified: 2026-08-23
 verified_by: codex
 ---
 
 # Ego Link P0 Walking Skeleton Roadmap
 
-This roadmap is the near-term USB-Free, VPS Message-First route for P0
-development. The broader P0-to-product migration remains in
+This roadmap retains the near-term USB-Free/VPS evidence lineage and now
+prioritizes bounded runtime convergence for P0 development. The broader P0-to-product migration remains in
 `../roadmap/P0_TO_PRODUCT_MIGRATION.md`.
+
+## 2026-09-05 Runtime-to-Product Sequence
+
+[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) and
+[P0-CONVERGENCE-20260905](../tasks/active/P0-CONVERGENCE-20260905.md) govern
+current implementation order. These are engineering stages, not new P0 Gates:
+
+| Stage | Runnable outcome and evidence |
+|---|---|
+| B0 bounded runtime | Real GNSS/Cell source -> device Location -> authenticated secure transport -> bound Guardian; source/age/uncertainty and exact ACK; real CALL in parallel with route, teardown and memory evidence. |
+| B1 physical safety/recovery | Qualified physical SOS with recognized/stored/received/noticed/human-ACK distinction; storage/queue failure, exact ACK, outage/reboot and ended-call non-resurrection. |
+| F0 powered carry prototype | Known placement/antenna/reference and consent, no PC device-runtime dependency, early measured power and honest no-fix/weak-network cases. |
+| F1 capability campaigns | Existing FIELD-020, CALL-021 and SOS-010 campaigns on representative HW-022; no short bench proof replaces their full acceptance. |
+| Release | Existing P0-RELEASE-010 combines all three P0 capabilities, OPS-004, OUTBOX, PWR-020, HW-022, compliance and RF/acoustic/water/security/privacy/NPI assurance. |
+
+Independent S smoke and finite current-boot/single-source live Location do not
+wait for T0/T1. The original concurrent ingress/checkpoint/tombstone/no-output
+replay commitments remain pending until implemented or explicitly replaced by
+a behaviorally proven equivalent. Local state and qualified-input feedback
+cannot silently stop when persistence fails; durability and delivery remain
+separate claims. TLS and certificate/hostname verification stay mandatory.
+
+Embedded-bearer risk reduction and power/RF/Guardian reachability work may start
+before final HW-022; final PC/USB-free CALL acceptance still depends on it.
+Hardware/SIM/media/external notices remain bound to explicit experiment scopes.
+All three P0 Gates remain `NOT_RUN`; decision edits create no runtime evidence.
+The dated R/D/KR and Sprint 1 sections below preserve prior planning and evidence.
 
 ## 2026-08-23 Productization Sprint 1 Rebase
 

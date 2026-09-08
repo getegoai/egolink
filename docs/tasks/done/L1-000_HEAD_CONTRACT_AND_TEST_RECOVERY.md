@@ -16,7 +16,7 @@ context:
   - docs/hardware/BOARD_MATRIX.md
 
 allowed_paths:
-  - docs/tasks/active/L1-000_HEAD_CONTRACT_AND_TEST_RECOVERY.md
+  - docs/tasks/done/L1-000_HEAD_CONTRACT_AND_TEST_RECOVERY.md
   - firmware/mqtt_heartbeat/main/app_main.c
   - firmware/mqtt_heartbeat/main/Kconfig.projbuild
   - server/message_hub.py
@@ -86,7 +86,7 @@ git diff --check
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/L1-000_HEAD_CONTRACT_AND_TEST_RECOVERY.md in
+Read docs/tasks/done/L1-000_HEAD_CONTRACT_AND_TEST_RECOVERY.md in
 D:\pywork\egolink. Load only AGENTS.md, docs/CONTEXT_INDEX.md, and the files
 listed in this packet's context. This is Lane A; do only this task, obey
 allowed_paths and out_of_scope. Restore the frozen exact-100 IMU-window

@@ -20,7 +20,7 @@ context:
   - docs/tasks/active/CALL-021_EMBEDDED_LTE_RTC_MEDIA.md
 
 allowed_paths:
-  - docs/tasks/active/HW-020_PRODUCT_ARCHITECTURE_FREEZE.md
+  - docs/tasks/done/HW-020_PRODUCT_ARCHITECTURE_FREEZE.md
   - docs/hardware/P0_PRODUCT_ARCHITECTURE.md
   - docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md
   - docs/product/MASS_PRODUCTION_REQUIREMENTS.md
@@ -69,7 +69,7 @@ git diff --check
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/HW-020_PRODUCT_ARCHITECTURE_FREEZE.md in
+Read docs/tasks/done/HW-020_PRODUCT_ARCHITECTURE_FREEZE.md in
 D:\pywork\egolink. Load only AGENTS.md, docs/CONTEXT_INDEX.md, and this packet's
 context. Independently review the P0 interface baseline against official named
 candidate evidence. Keep audio core, camera optional, Native VoLTE reserve and

@@ -3,6 +3,7 @@ id: D1-001
 title: D1 link-through baseline
 status: accepted_for_transition
 priority: high
+execution_state: completed
 requires_hardware: true
 serves_demo: D1
 created: 2026-07-04

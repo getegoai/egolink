@@ -101,9 +101,13 @@ WebSocket, and exact AMap coordinate-conversion requests fail with `426` and
 never reach the upstream. The tracked OPS-004 deployment path refuses
 non-loopback Message Hub bindings.
 
-OPS-004 is currently a static, not-deployed candidate. Before its separately
-authorized migration, the live binding and firewall state of port `8790` must
-be observed rather than inferred. The target configuration has no public
+The authorized 2026-09-05 [convergence run 001](RUNTIME_CONVERGENCE_20260905_RUN001.md)
+deployed the current Location/Guardian service, loopback listener and HTTPS
+virtual host, with an additional Location-only restriction keeping SOS public
+routes closed. Initial TLS/authorization/plaintext-rejection checks passed;
+subsequent connection timeouts left the stability window incomplete. This is
+not full OPS-004 acceptance: device TLS, renewal, provider rendering and final
+network stability remain unverified. The target configuration has no public
 plaintext compatibility endpoint. A legacy device that cannot verify TLS
 must retain its queued record and report transport unavailable; it must not
 send a bearer credential or location payload over plaintext.
@@ -300,7 +304,7 @@ must treat any `window.truncated=true` collection as incomplete evidence.
 The KR-008 product-demo path uses a separate no-hardware Web review gate:
 
 ```powershell
-python scripts/validate_product_demo_web_review.py --hub-url http://203.0.113.10:8790 --review-id <review-id> --output-dir reports/product_demo_web_review/<review-id> --json
+python scripts/validate_product_demo_web_review.py --hub-url https://ego.example.invalid --review-id <review-id> --output-dir reports/product_demo_web_review/<review-id> --json
 ```
 
 The gate checks Message Hub health, `/api/v1/product-demo/latest`,

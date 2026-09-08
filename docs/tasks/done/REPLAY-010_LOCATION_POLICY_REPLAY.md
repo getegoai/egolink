@@ -18,11 +18,11 @@ context:
   - docs/development/UNIFIED_TIMESTAMP.md
   - docs/development/FIELD_SESSION_SCHEMA.md
   - docs/development/LOCATION_DATASET.md
-  - docs/tasks/active/LOC-020_LOCATION_ENGINE_V0.md
-  - docs/tasks/active/POLICY-010_SENSOR_POLICY_V0.md
+  - docs/tasks/done/LOC-020_LOCATION_ENGINE_V0.md
+  - docs/tasks/done/POLICY-010_SENSOR_POLICY_V0.md
 
 allowed_paths:
-  - docs/tasks/active/REPLAY-010_LOCATION_POLICY_REPLAY.md
+  - docs/tasks/done/REPLAY-010_LOCATION_POLICY_REPLAY.md
   - pc_simulator/location_policy_replay.py
   - tools/run_location_policy_replay.py
   - quality_tests/test_location_policy_replay.py
@@ -86,7 +86,7 @@ git diff --check
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/REPLAY-010_LOCATION_POLICY_REPLAY.md in
+Read docs/tasks/done/REPLAY-010_LOCATION_POLICY_REPLAY.md in
 D:\pywork\egolink. Load only AGENTS.md, docs/CONTEXT_INDEX.md, and this packet's
 context. Work only inside allowed_paths. Correct the real FT-001B coverage
 failure, prevent replay/policy output from copying or inventing coordinates,

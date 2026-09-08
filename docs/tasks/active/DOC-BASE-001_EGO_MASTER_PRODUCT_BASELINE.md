@@ -26,7 +26,7 @@ context:
   - docs/architecture/adr/ADR-0008-egolink-core-product-direction-reset.md
   - docs/development/LOCATION_ENGINE.md
   - docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md
-  - docs/tasks/active/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md
+  - docs/tasks/done/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md
   - docs/roadmap/V1_PRODUCT_PLAN.md
   - docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md
   - docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md
@@ -52,7 +52,7 @@ allowed_paths:
   - docs/architecture/adr/ADR-0007-gnss-denied-personal-location-memory.md
   - docs/development/LOCATION_ENGINE.md
   - docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md
-  - docs/tasks/active/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md
+  - docs/tasks/done/LOC-006_GNSS_DENIED_HYBRID_LOCATION_STRATEGY.md
   - docs/roadmap/V1_PRODUCT_PLAN.md
   - docs/hardware/V1_PRO_EVT_PROCUREMENT_BASELINE.md
   - docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md

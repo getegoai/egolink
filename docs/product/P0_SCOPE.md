@@ -1,5 +1,6 @@
 ---
 document_status: authoritative
+decision_updated: 2026-09-05
 last_verified: 2026-08-23
 verified_by: codex
 ---
@@ -21,7 +22,10 @@ P0 uses a dual-development-board plus PC Development Bridge integration architec
 
 - `wearable_node`: ESP32-S3-Touch-AMOLED-2.06, responsible for QMI8658 IMU, audio path validation, screen, touch, speaker, and user interaction.
 - `connectivity_node`: Waveshare ESP32-S3-SIM7670G-4G, responsible for SIM7670G 4G, GNSS, camera, TF/cache capability validation, and communication expansion.
-- PC Development Bridge: serial bridge, event bus, ContextRouter/Safety Kernel host, recording, replay, time sync, and debug dashboard.
+- PC Development Bridge: serial bridge, event bus, historical ContextRouter/
+  Safety Kernel reference, recording, replay, time sync and debug dashboard.
+  Device operational Location/Safety behavior is owned by the device under
+  ADR-0012; the PC reference is not a product runtime dependency.
 
 The final P0 product target is not two ESP32 development boards. Product A0
 converges the verified requirements into one screenless EgoCore architecture.
@@ -38,13 +42,34 @@ converges the verified requirements into one screenless EgoCore architecture.
   voice PoC, then a PC/USB-free embedded media path on one independently
   powered integrated prototype; the bridge is learning evidence, not Gate
   completion;
-- `P0-SOS`: physical button -> local durable event/feedback -> location
-  priority -> guardian notification -> Ego Call;
+- `P0-SOS`: qualified physical button -> recognized-input feedback and durable
+  event attempt -> independent location priority, Guardian notification and Ego
+  Call; queue/storage degradation remains explicit;
 - minimal Guardian surface needed to see location/SOS/call truth, without
   requiring polished consumer UI;
 - versioned messages, explicit real/mock/source labels, privacy boundaries,
   quality inspection, and replay;
 - parallel product A0 audio/power/RF/antenna/BOM and China pre-compliance work.
+
+## Bounded runtime convergence
+
+[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) permits an
+explicitly selected current-boot/single-source live Location profile reusing
+LOC-021 A-S and concrete authenticated secure transport. It is separate from
+legacy and the original offline S image. T0/T1 are not global prerequisites for
+this finite engineering proof or independent S smoke; concurrent SOS/IMU
+ordering, checkpoint, exact tombstone and no-output replay commitments still
+apply before that product composition is enabled or recovery is claimed.
+
+Real bidirectional CALL and an embedded-bearer probe may proceed before final
+HW-022; CALL-021 product acceptance still requires independently powered
+representative hardware without PC/USB media/control. Physical SOS/recovery
+integration follows the Location and CALL seams. Queue/storage failure must not
+silently freeze local state or suppress recognized-input feedback; stored and
+delivered claims remain evidence-bound. No HTTP downgrade, disabled certificate
+validation, new sensor or production pin/BOM change is implied. All three P0
+Gates retain `NOT_RUN`; hardware, SIM traffic, recording and external notices
+require a valid bounded experiment authorization.
 
 ## Out Of Scope
 

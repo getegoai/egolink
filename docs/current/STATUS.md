@@ -1,8 +1,40 @@
 ---
 document_status: authoritative
-last_verified: 2026-09-04
+last_verified: 2026-09-06
 verified_by: founder/codex
 ---
+
+## 2026-09-06 Actual asynchronous collector bench
+
+The current task now delivers raw collection to the existing authenticated VPS.
+Actual export: 23,365 six-axis samples, 234 GNSS no-fix queries, 117 partial Cell
+observations, power/Wi-Fi/health; 1,999 unique records, 2,806,197 raw-frame bytes.
+Wi-Fi TLS reuse and reboot backlog delivery worked; the queue repeatedly reached
+zero while sampling. Full cache evicted 41 records with retained loss summaries;
+15 IMU read failures, timing gaps and five unavailable power readings are retained.
+Collector image `1d67d231...c9ab6f25` is stopped and retained; FW-007 is fallback.
+See the [current task](../tasks/active/P0-CONVERGENCE-20260905.md) for evidence and limits.
+Not ready for field handoff: collector 4G policy/path, portable power/local stop
+and complete outage/carry scenario remain; all three product Gates stay NOT_RUN.
+
+## 2026-09-05 Accepted Direction
+
+ADR-0014 is accepted; [P0-CONVERGENCE-20260905](../tasks/active/P0-CONVERGENCE-20260905.md) is active.
+Priority: reuse LOC-021 A-S for real Location -> secure authenticated transport -> Guardian.
+Concrete bidirectional CALL/embedded bearer advances in parallel; physical SOS/recovery follows.
+T0/T1 do not block S smoke or bounded single-source live; concurrent/recovery promises remain.
+Local state/input feedback, storage and delivery have independent truthful outcomes.
+Code/build/native delivery is in [the report](../development/RUNTIME_CONVERGENCE_20260905.md).
+[Bench evidence](../development/RUNTIME_CONVERGENCE_20260905_RUN001.md): runs 005-007
+executed four real no-SIM Wi-Fi HTTPS boots and delivered 16 no-fix states with
+matched durable ACKs; SQLite and bound Guardian API agree on device event time/identity.
+Run 006 verified distinct IDs across reboot and corrected actual delivery counters.
+Run 007 exercised four 30-second powered GNSS dwells, then query/off/upload; still no fix.
+Actual FW-007 was restored at 10:48:12 UTC; verified writes, 30.166 s smoke, COM3 closed.
+Legacy/live builds and native behavior pass; final regression 1644 passed / four scoped skips.
+Next: confirm GNSS antenna/sky placement and obtain a real fix; no new per-image approval loop.
+CALL host duplex exists; embedded IDF log ABI/RESULT, real audio and physical SOS remain open.
+`P0-LOC=NOT_RUN`, `P0-CALL=NOT_RUN`, `P0-SOS=NOT_RUN`; field/product acceptance is unchanged.
 
 ## Latest Development Evidence
 
@@ -3047,9 +3079,12 @@ Stage 0：单智能体、单任务、低风险迭代开发模式。2026-06-24 �
 - DEMO-001：Demo-first 最小安全循环完成。新增 `pc_simulator/minimal_safety_demo.py` 和 `scripts/run_minimal_safety_demo.py`，可在没有 AMOLED 触摸和真实 GNSS 的情况下先跑通核心产品闭环：`motion_event -> ask_user -> user_confirmation -> request_location -> command_ack -> location_report -> safety_event`。Demo 会写入 event log、session recording 和 quality report；`user_confirmation` / `command_ack` 已进入 session recorder，`imu_motion` 可被 session replay 重新喂给规则路由。该 Demo 是产品体验原型，不声明真实报警、真实拨号、AMOLED 屏幕触摸或 SIM7670G 板载 GNSS ACK 已完成。
 - 模型上下文 v0.2 已纳入：新增 `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md` 和 `docs/modeling/NEXT_STEP_M1_DATA_FOUNDATION.md`，明确 M0 是规则基线，下一阶段先做 M1 数据基础，不直接训练神经网络。
 
-## 当前建议任务
+## 2026-06-27 历史建议任务（已失效）
 
-当前没有 `status: active` 的任务包。`DEMO-001` 和 `DEMO-004` 已移动到 `docs/tasks/done/`。下一步先完成 control-plane baseline 的提交/远端/分支策略确认；完成后再进入 DEMO-005 real GNSS fix evidence。上一条指向 DEMO-002 AMOLED 屏幕/触摸确认的建议已被后续 DEMO-004 完成状态取代。
+以下内容是 2026-06-27 快照，不描述当前 WIP；当前任务以本文顶部、
+`docs/tasks/TASK_TREE.md` 和 `docs/tasks/active/` 为准。当时没有
+`status: active` 的任务包，DEMO-001/004 已进入 `done/`，其后续建议均已
+被当前 P0 收敛路线取代。
 
 ## 后续任务路线
 

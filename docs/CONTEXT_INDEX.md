@@ -1,5 +1,6 @@
 ---
 document_status: authoritative
+decision_updated: 2026-09-05
 last_verified: 2026-09-03
 verified_by: founder/codex
 ---
@@ -21,7 +22,10 @@ Always load:
   (latest accepted first-launch priority and communications decision)
 - `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md`
   (sellable P0 Gates, device Location Engine/Sensor Policy and scope freeze)
-- `docs/current/FIRST_LAUNCH_EXECUTION.md` (current four-lane execution and
+- `docs/architecture/adr/ADR-0014-runtime-convergence.md` (accepted bounded
+  runtime convergence, local degradation, event time and scoped recovery)
+- `docs/tasks/active/P0-CONVERGENCE-20260905.md` (current implementation packet)
+- `docs/current/FIRST_LAUNCH_EXECUTION.md` (current parallel execution and
   integration order)
 - `docs/CONTEXT_INDEX.md`
 - `docs/product/PRODUCT_CHARTER.md`
@@ -36,6 +40,7 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 
 | Task type | Required context | Optional context |
 |---|---|---|
+| Runtime convergence, single-source live Location or degraded SOS | `docs/architecture/adr/ADR-0014-runtime-convergence.md`, `docs/tasks/active/P0-CONVERGENCE-20260905.md`, `docs/current/FIRST_LAUNCH_EXECUTION.md`, affected module AGENTS | `docs/archive/reviews/20260905_input_snapshots/README.md` (migration lineage only) |
 | Project/product direction or system roles | `docs/product/NORTH_STAR.md`, `docs/product/EGO_MASTER_CONTEXT.md`, `docs/architecture/adr/ADR-0008-egolink-core-product-direction-reset.md`, `docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md` | `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`, `docs/product/MASS_PRODUCTION_REQUIREMENTS.md` |
 | First-launch execution, cross-lane planning, or reprioritization | `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md`, `docs/development/DIRECTOR_WORKFLOW.md` | `docs/roadmap/V1_PRODUCT_PLAN.md`, current packet in each affected lane |
 | P0 scope or current development promise | `docs/product/PRODUCT_CHARTER.md`, `docs/product/P0_SCOPE.md` | `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`, `docs/product/EGO_MASTER_CONTEXT.md` |
@@ -51,7 +56,7 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 | Firmware change | `firmware/AGENTS.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/BOARD_MATRIX.md` | Named firmware README only |
 | Hardware validation | `firmware/AGENTS.md`, `docs/hardware/BOARD_MATRIX.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/validation/` | Named evidence report |
 | Current sales-product hardware selection or procurement | `docs/product/EGO_MASTER_CONTEXT.md`, `docs/architecture/adr/ADR-0008-egolink-core-product-direction-reset.md`, `docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md`, `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`, `docs/hardware/P0_PRODUCT_ARCHITECTURE.md`, `docs/hardware/P0_INTEGRATED_PROTOTYPE_DESIGN.md`, the current HW-021/HW-022 packet | `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md`, `docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md`; `hardware/p0_a0/` is a conditional design-input pack, not a fabrication release; ADR-0005/0006 and `V1_PRO_EVT_PROCUREMENT_BASELINE.md` are superseded history only |
-| China pre-compliance, product classification, or A0 launch readiness | `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md`, `docs/product/EGO_MASTER_CONTEXT.md`, `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`, `docs/tasks/active/COMPLIANCE-010_CHINA_PRECOMPLIANCE.md` | `docs/tasks/active/PROD-002_CHINA_PRECOMPLIANCE_AND_A0_INPUTS.md` (legacy intake only), `docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md`, `docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md` |
+| China pre-compliance, product classification, or A0 launch readiness | `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md`, `docs/product/EGO_MASTER_CONTEXT.md`, `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`, `docs/tasks/active/COMPLIANCE-010_CHINA_PRECOMPLIANCE.md` | `docs/tasks/done/PROD-002_CHINA_PRECOMPLIANCE_AND_A0_INPUTS.md` (superseded legacy intake only), `docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md`, `docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md` |
 | Current sales-product enclosure, PCB envelope or industrial design | `docs/product/EGO_MASTER_CONTEXT.md`, `docs/architecture/adr/ADR-0008-egolink-core-product-direction-reset.md` | `docs/product/MASS_PRODUCTION_REQUIREMENTS.md`; `V1_PRO_FORM_FACTOR_BASELINE.md` and its SVG are superseded history only |
 | PC simulator or bridge | `pc_simulator/AGENTS.md`, `docs/architecture/SYSTEM_OVERVIEW.md`, `shared/contracts/` | Named runtime fixture |
 | Model or Safety Companion | `model_lab/AGENTS.md`, `docs/modeling/SAFETY_COMPANION_MODEL_CONTEXT.md`, `docs/safety/SAFETY_CONTRACT.md`, `shared/contracts/` | `docs/modeling/MODEL_ARCHITECTURE.md` |
@@ -101,6 +106,16 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
   replays it. It partially supersedes ADR-0004's server-only live ownership
   and refines ADR-0003/ADR-0011 without weakening their evidence, privacy or
   product-assurance boundaries.
+- ADR-0014 accepts runtime convergence: first reuse LOC-021 A-S for bounded
+  real-device Location -> verified authenticated secure transport -> Guardian;
+  advance real bidirectional CALL and embedded-bearer validation in parallel,
+  then join physical SOS and recovery. T0/T1 do not block isolated S smoke or
+  finite single-source live proof. Original concurrent-ingress and recovery
+  promises remain until their invariants or a reviewed equivalent pass.
+  Local state/recognized-input feedback must expose storage failure separately
+  from durable/received claims; strict ACK, single modem ownership, true source
+  event time and no resurrection of ended calls remain mandatory. ADR-0013
+  stays proposed. Decision dates are independent from `last_verified`.
 - `P0-LOC`, `P0-CALL`, and `P0-SOS` all require `PASS` for the sellable P0.
   Their current states are all `NOT_RUN`; no current schema, build, replay,
   PC bridge or development-board smoke advances them. Legacy `G0-EGOCALL`

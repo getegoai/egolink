@@ -1,9 +1,32 @@
 ---
 document_status: authoritative
+decision_updated: 2026-09-05
 last_verified: 2026-08-23
 verified_by: codex
 owner: founder
 ---
+
+## 2026-09-05 Founder Runtime-Convergence Update
+
+[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) accepts the
+founder-directed implementation unit: reuse LOC-021 A-S to deliver bounded
+real-device Location -> authenticated secure transport -> bound Guardian.
+Real bidirectional CALL and embedded-bearer validation proceed in parallel;
+physical SOS and recovery follow through the existing shared seams.
+
+An isolated S smoke or finite current-boot/single-source live profile does not
+wait for T0/T1. The original concurrent SOS/IMU ordering and recovery promises
+remain required for that product composition or an explicitly reviewed and
+behaviorally proven equivalent. No new global framework displaces the shortest
+missing runtime seam. Local state and input-recognition feedback continue with
+explicit queue/storage degradation; stored, received and human-noticed claims
+still require their own evidence. Secure transport never downgrades to HTTP or
+disables certificate/hostname verification to meet a schedule.
+
+This is a decision update, not new `last_verified` hardware evidence. All three
+P0 Gates remain `NOT_RUN`. Source, build, native concurrency, hardware, network,
+field and product evidence are reported separately. The active packet is
+[P0-CONVERGENCE-20260905](../tasks/active/P0-CONVERGENCE-20260905.md).
 
 ## 2026-08-23 Founder First-Launch Update
 
@@ -215,6 +238,10 @@ ADR / 专项 authority（实现边界）→ roadmap / task packet（执行）。
 ACTIVE_BUILD 和 BOARD_MATRIX 反映现状；machine-readable contracts 控制协议。
 
 ## 变更记录
+
+- 2026-09-05 Founder accepted ADR-0014: runnable Location first, concrete CALL
+  in parallel, then physical SOS/recovery; scoped T0/T1 and local-failure
+  invariants; original product Gates and hardware evidence unchanged.
 
 - 2026-08-23 创始人进一步冻结 Productization Sprint 1：规则 Safety Kernel 的
   首发责任收敛到实体 SOS、定位升级、低电/离线诚实状态和持久事件；异常候选、

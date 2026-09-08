@@ -1,13 +1,34 @@
 ---
 document_status: authoritative
+decision_updated: 2026-09-05
 last_verified: 2026-09-04
 verified_by: founder/codex
-decision_adr: ../architecture/adr/ADR-0012-p0-productization-sprint-1.md
+decision_adr: ../architecture/adr/ADR-0014-runtime-convergence.md
 ---
 
 # EgoLink Productization Sprint 1 Execution Baseline
 
-## 2026-09-04 Current Convergence
+## 2026-09-05 Accepted Runtime Convergence
+
+[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) is accepted;
+[P0-CONVERGENCE-20260905](../tasks/active/P0-CONVERGENCE-20260905.md) is the
+active implementation packet. Reuse LOC-021 A-S to deliver one bounded real
+device Location -> authenticated secure transport -> bound Guardian slice.
+Advance concrete bidirectional CALL and embedded-bearer validation in parallel,
+then connect physical SOS and recovery. Local state and input recognition must
+show storage/queue degradation independently from durable/delivered state.
+
+T0/T1 do not globally block S smoke or a finite current-boot/single-source live
+profile. The original concurrent SOS/IMU product and recovery commitments stay
+in force until their WAL/checkpoint/tombstone/no-output replay invariants or a
+reviewed equivalent pass. Keep one modem owner, actual source-event time,
+strict ACK matching and no recovered re-trigger of expired/ended calls.
+
+This section changes direction only. The dated results below are prior
+source/build evidence, not new hardware verification. All three Gates remain
+`NOT_RUN`; real I/O still needs a valid bounded operator scope.
+
+## 2026-09-04 Prior Offline Convergence
 
 The offline Location boundary has advanced through `LOC-021Q/R/S`. Q provides
 the exact single modem owner and bounded cleanup/power-off recovery; R connects
@@ -164,7 +185,9 @@ source-event time; server receive time does not replace the source clock. With
 the additive SOS server slice, root verification of the combined Message Hub,
 location, Guardian and SOS boundary passes `194/194`.
 
-This remains offline/build evidence. The immediate correctness slice is
+This remains offline/build evidence. The immediate delivery slice is the
+selected bounded runtime under P0-CONVERGENCE-20260905 with concrete secure
+transport and a bound Guardian consumer. Concurrent product recovery retains
 `LOC-021T0`: a fixed-capacity durable ingress WAL ordered by source occurrence
 time, with per-producer inclusive watermarks and sequence allocation only when
 the head can be sealed. A shared RAM counter is insufficient because a later-
@@ -175,10 +198,11 @@ state has a persistent checkpoint, or an equivalent full-replay path includes
 an exact outbox tombstone probe and no-output replay. Applied records must stay
 retained until that checkpoint proves safe compaction.
 
-This revises the earlier broad journal deferral: T is not required for a
-separately authorized bounded modem-only S smoke, but it is required before the
-concurrent SOS/IMU product profile can make crash-safe ordering claims. Secure
-device-to-Message-Hub transport and the live/reboot run remain separate work.
+T is not required for a separately authorized bounded modem-only S smoke or
+the finite current-boot/single-source live profile. Its original guarantees or
+a reviewed, behaviorally proven equivalent are required before the concurrent
+SOS/IMU product profile can claim crash-safe ordering. Secure transport is the
+current delivery seam; live/reboot evidence remains separately scoped.
 Only an accepted live LOC boundary permits FIELD-020 product claims.
 `P0-LOC` remains `NOT_RUN`.
 
@@ -254,8 +278,12 @@ CALL-020 and HW-022.
 SOS-010 A-J now covers isolated host semantics, dormant physical long-press
 input, transport-free device orchestration, strict durable server ingest/ACK,
 bound-Guardian latest-alert read and an independent human acknowledgement. The
-device ordering is durable critical enqueue before feedback, SOS policy,
-urgent location and an independent call attempt. E validates exact persisted
+prior device composition orders durable critical enqueue before feedback, SOS
+policy, urgent location and an independent call attempt. ADR-0014 now requires
+immediate recognized-input feedback and explicit storage-failure degradation;
+that feedback cannot assert storage or delivery success. Runtime migration
+requires executable behavior tests before any physical activation. E validates
+exact persisted
 payload/response identity and deletes only on an accepted/duplicate durable
 ACK; malformed 2xx responses retry. F/G add a default-off sampled-input owner
 and a fixed 320-byte pending-edge journal that persists a qualified edge before
@@ -316,24 +344,31 @@ battery/charging, intended users and child-product questions.
 
 ## Immediate Execution Order
 
-1. In parallel, implement LOC-021T0's durable source-occurrence ordered ingress
-   WAL and its persistent-watermark tests; close CALL authentication, real
-   TLS/route, RESULT/post-stop telemetry and runtime-memory evidence around the
-   R lifecycle; and confirm the OPS-004 exact-board/live-authorization
-   boundary. Do not wait for L2 or unrelated lanes.
-2. Continue HW-021, OPS-004, OUTBOX device/server integration and the
-   conditional COMPLIANCE-010 inquiry independently at their own authorization
-   boundaries.
-3. With fresh operator intent, the isolated S profile may run a bounded
-   modem-owner/GNSS cleanup smoke without waiting for T. Secure Location
-   device-to-Message-Hub ingest, CALL media over a verified SIM/LTE route, and
-   physical SOS delivery/call state each remain separate authorized slices.
-   Feed measured CALL budgets into HW-021/HW-022.
-4. Run FIELD-020 after the live LOC-021 boundary without waiting for L2. Build
-   and bring up HW-022, then run CALL-021 without PC/USB media/control and
-   complete physical SOS composition against LOC/CALL/outbox.
-5. Run PWR-020 and the representative-day loop, freeze objective Gate Criteria
-   v0 before final acceptance runs, then execute P0-RELEASE-010.
+1. Trace and reuse the LOC-021 A-S entry, single modem owner, mapper, reducer,
+   policy, emitter, outbox, exact ACK and bound Guardian chain. Implement only
+   its shortest missing concrete secure-transport/runtime seams in a selected
+   bounded live profile; build legacy and live with pinned IDF and execute
+   native failure/concurrency behavior. Never finish with a fake transport.
+2. In parallel, close real CALL authentication/TLS/route and Guardian endpoints,
+   teardown/RESULT limits and runtime-memory measurements. Evaluate the exact
+   embedded bearer before final HW-022 without creating a second modem owner;
+   final CALL-021 still requires representative PC/USB-free hardware.
+3. Use an existing valid experiment scope only when it covers exact operations.
+   Otherwise complete independent code work and return one merged request with
+   image/recovery identity, endpoints, participants, attempt/time/write/traffic
+   budgets, stop rules and restoration conditions. No per-command approval
+   loop and no additional generic offline wrappers.
+4. Join physical SOS recognition, independent stored/received/noticed/human-ACK
+   state and authorized call attempt. Exercise queue/storage failure, missing
+   GNSS, exact/late ACK, outage and recovery; historical replay must not produce
+   physical effects or reopen an expired/ended call. The original concurrent
+   T0/T1 and checkpoint obligations remain pending until proven or explicitly
+   replaced by equivalent tested invariants.
+5. Continue HW-021, OUTBOX, OPS-004, early power/RF/Guardian reachability and
+   COMPLIANCE-010 independently within their authorizations. FIELD-020 follows
+   live Location; HW-022/CALL-021 and PWR-020 provide representative evidence.
+   Freeze objective Gate criteria and converge all capability and assurance
+   evidence in P0-RELEASE-010. All current P0 Gates remain `NOT_RUN`.
 
 ## Stop-the-Line Conditions
 

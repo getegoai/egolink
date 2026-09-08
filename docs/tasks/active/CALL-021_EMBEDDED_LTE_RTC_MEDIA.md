@@ -18,7 +18,7 @@ context:
   - docs/development/EGO_CALL.md
   - docs/hardware/P0_PRODUCT_ARCHITECTURE.md
   - docs/tasks/active/HW-022_INTEGRATED_PROTOTYPE_BUILD.md
-  - docs/tasks/active/CALL-010_AUDIO_HARDWARE_LOOP.md
+  - docs/tasks/done/CALL-010_AUDIO_HARDWARE_LOOP.md
   - docs/tasks/active/CALL-020_LTE_DATA_VOICE_POC.md
 
 allowed_paths:

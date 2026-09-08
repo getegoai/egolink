@@ -17,7 +17,7 @@ context:
   - docs/architecture/adr/ADR-0004-p0-rule-location-and-transitional-vps-memory.md
 
 allowed_paths:
-  - docs/tasks/active/LOC-020_LOCATION_ENGINE_V0.md
+  - docs/tasks/done/LOC-020_LOCATION_ENGINE_V0.md
   - docs/development/LOCATION_ENGINE.md
   - pc_simulator/location_engine_v0.py
   - shared/contracts/location_engine_v0.schema.json
@@ -86,7 +86,7 @@ does not pass `P0-LOC`; FIELD-020 and representative-product gates remain.
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/LOC-020_LOCATION_ENGINE_V0.md in D:\pywork\egolink.
+Read docs/tasks/done/LOC-020_LOCATION_ENGINE_V0.md in D:\pywork\egolink.
 Load only AGENTS.md, docs/CONTEXT_INDEX.md, and this packet's context. Work only
 inside allowed_paths. Independently review capture-time/boot lineage binding,
 transactional rejection, GNSS quality conflicts, schema-valid evidence output,

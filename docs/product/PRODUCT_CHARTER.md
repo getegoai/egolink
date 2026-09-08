@@ -1,5 +1,6 @@
 ---
 document_status: authoritative
+decision_updated: 2026-09-05
 last_verified: 2026-08-23
 verified_by: codex
 ---
@@ -38,9 +39,10 @@ P0 must pass all three user-facing capability Gates:
   current explainable location, update age, source, confidence and uncertainty;
 - `P0-CALL`: the guardian can call the device and the device can initiate a
   stable two-way full-duplex Ego Call over LTE data;
-- `P0-SOS`: a long physical-button press immediately starts local feedback,
-  durable SOS recording, location escalation, guardian notification and Ego
-  Call with honest delivery/session state.
+- `P0-SOS`: a qualified long physical-button press immediately signals input
+  recognition, attempts durable SOS recording, location escalation, Guardian
+  notification and Ego Call with independent honest storage/delivery/session
+  states. Storage failure must be visible and cannot silence local help.
 
 The minimum first-generation user story is therefore: know where the device
 is, speak in either direction, and press SOS to establish location plus human
@@ -51,6 +53,24 @@ Product-demo and field-test evidence must obey
 by default, no unredacted private coordinates in current docs or generated
 summaries, no raw Wi-Fi BSSID retention, and no training use without explicit
 consent and privacy review.
+
+## Current implementation unit
+
+[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) and
+[P0-CONVERGENCE-20260905](../tasks/active/P0-CONVERGENCE-20260905.md) prioritize
+bounded device Location -> authenticated secure transport -> Guardian, with
+real bidirectional CALL/embedded-bearer work in parallel, then physical SOS and
+recovery. T0/T1 do not globally block isolated S or finite single-source live
+proof; concurrent-ingress/reboot commitments remain required for the product.
+
+Local state advances independently from outbound persistence failure, with
+explicit degradation. Recognized input, stored event, server receipt, terminal
+notice and human acknowledgement are never interchangeable. Healthy storage must durably retain the original SOS event; storage failure
+counts as reliability degradation and cannot pass the normal durable-event
+acceptance. Normal delivery keeps write-before-send and exact authenticated ACK.
+Recovery does not reopen
+ended calls. These decisions do not advance `P0-LOC`, `P0-CALL` or `P0-SOS`
+from `NOT_RUN`, and do not authorize real hardware/network experiments.
 
 ## Non-Claims
 

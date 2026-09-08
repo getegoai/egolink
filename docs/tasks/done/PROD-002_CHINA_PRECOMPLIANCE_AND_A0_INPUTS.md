@@ -18,7 +18,7 @@ context:
   - docs/roadmap/V1_PRODUCT_PLAN.md
 
 allowed_paths:
-  - docs/tasks/active/PROD-002_CHINA_PRECOMPLIANCE_AND_A0_INPUTS.md
+  - docs/tasks/done/PROD-002_CHINA_PRECOMPLIANCE_AND_A0_INPUTS.md
   - docs/product/MASS_PRODUCTION_REQUIREMENTS.md
   - docs/product/MASS_PRODUCTION_FOUNDER_DECISION_SHEET.md
   - docs/hardware/HARDWARE_EVALUATION_AND_PROCUREMENT_PLAN.md

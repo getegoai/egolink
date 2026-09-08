@@ -1,10 +1,139 @@
 ---
 document_status: authoritative
-last_verified: 2026-09-04
+decision_updated: 2026-09-05
+last_verified: 2026-09-06
 verified_by: codex
 ---
 
 # Active Build
+
+## Current actual collector image - 2026-09-06
+
+COM3 / CH343 `5B91047400`, connectivity MAC `02:00:00:00:00:03`: collector app
+985,984 B / `1d67d2319f30d89ce794f0b7e1b3051130163a3d7b8ce92764f8c0bcc9ab6f25`.
+Run 006 stopped normally at 07:32:47 UTC, COM3 closed; new image/cache retained.
+Wi-Fi-only 300-second bench profile, real QMI8658 and MAX17048, no media; no field claim.
+Evidence index: `reports/board_validation/COLLECTION-20260906-006/README.md`.
+
+## Previous bench state - 2026-09-05
+
+**At the end of 2026-09-05: actual FW-007 restored at 10:48:12 UTC**, app 985,168 B /
+`a9894a86834aa6517e5947f011b50a8af223656d74fcfb68f911ee39efa36c7d`;
+all three transfer hashes verified, 30.166 s descriptor smoke, COM3 closed.
+Connectivity MAC `02:00:00:00:00:03`, CH343 `5B91047400`, no SIM; wearable untouched.
+Run 007 actually flashed app 992,784 B /
+`99d51d25f0e0ed21dd12c20fee7f80463dd40a2540504a19a2314a34bc52bc0b`
+from `tmp/convergence_live_gnss_dwell_build/`: one epoch-11 boot, four 30-second
+powered dwells/no-fix states, four HTTPS attempts/matched ACKs, 16 slot writes,
+confirmed off/quiescence. Source/build/run/restore identities are under
+`reports/board_validation/P0-CONVERGENCE-20260905-007/`. Legacy remains 896,240 B /
+`523e2d86a1c665200e18b6ad098d55be601ae27c4c31798425d9fe01a751eb05`.
+Runs 005-007 total 16 verified real no-fix timeline rows; bound Guardian API
+shows unavailable position and correct state identity/age. No field/product Gate.
+
+## 2026-09-05 Runtime-Convergence Direction
+
+[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) and the
+[active packet](../tasks/active/P0-CONVERGENCE-20260905.md) select a separate
+bounded live Location profile using existing LOC-021 A-S components and a real
+authenticated, certificate-verified transport. Legacy and original offline S
+remain distinct build selections. The integrator records new source/config/
+image identities only after actual builds; no candidate is a flashed image.
+
+The FW-007 hardware identity below has a 2026-09-05 readback correction;
+UI-001 remains untouched. Ports must be reidentified within an authorized run.
+This direction edit changes no hardware `last_verified` date, deployment or
+P0 Gate. T0/T1 are scoped to their concurrent/recovery commitments and do not
+block a finite single-source live profile or independent S smoke.
+
+2026-09-05 candidate builds now actually pass on IDF 5.4.2: legacy 896,240 B,
+full live 988,992 B (59,584 B / 5.7% factory space free), original S 385,856 B,
+CALL 15-second owner 284,976 B. The original live artifact was subsequently
+flashed once and failed initialization as recorded below; the other artifacts
+remain build evidence. [Delivery/experiment report](../development/RUNTIME_CONVERGENCE_20260905.md)
+records source/config/image identities and native evidence separately.
+The initial FW-007 historical-hash discrepancy was resolved through one actual
+readback and an operator-approved recovery amendment, detailed below. The older
+recorded hash is retained as a conflicting historical claim, not silently replaced.
+
+At 2026-09-05 06:15:54 UTC, the subsequently authorized
+[run 001](../development/RUNTIME_CONVERGENCE_20260905_RUN001.md) deployed the
+current Location/Guardian server bytes to `ego.example.invalid`, with exact per-file
+hashes in its evidence manifest. The service now binds `127.0.0.1:8790` and
+public access uses verified HTTPS; the test Guardian is bound to `ego-link-001`.
+SOS public routes remain closed. At that deployment the Location timeline had zero rows; runs 005-007
+subsequently verified 16 real no-fix records. Later per-socket interface-19 pinning passed verified TLS health and SSH
+source/service checks at 07:07/07:13 UTC; it does not repair the earlier incomplete
+stability window. PnP/SetupAPI identify CH343 COM3 despite its WMI omission.
+
+At 07:19:45 UTC the authorized original live image (988,992 B, SHA-256
+`8a0e6eff29868a1f9ba22e74026b42de3656e64ad5710c69f88342ac03601a87`)
+booted on connectivity MAC `02:00:00:00:00:03`, without SIM. Wi-Fi/UTC succeeded;
+outbox initialization failed before modem start. At 07:26:32 UTC restoration
+completed: actual FW-007 application 985,168 B, SHA-256
+`a9894a86834aa6517e5947f011b50a8af223656d74fcfb68f911ee39efa36c7d`,
+descriptor `fw007-e9ca7a4`, with bootloader/partition bytes from the same verified
+readback. All three writes verified; 30.17 s startup smoke observed the expected
+descriptor and no captured fatal marker. COM3 is closed; NVS was not erased.
+
+The partition correction (subsequently flashed in run 002) at `tmp/convergence_live_partition_fix_build/`
+is 990,224 B, SHA-256
+`97af7f2fdee31d5fb8fb9efcd6da856e9ce9c7e4f843acb3e90e99cb5a1713d1`.
+Its live-only `partitions_loc021_live.csv` moves the outbox to
+`0x1f4000..0x200000`, proven erased in the single preflash readback, preserving
+the occupied `0x110000..0x11c000` region. Factory/NVS/PHY geometry stays the same;
+legacy and original S retain their layouts. Native execution of the actual
+partition/core against the saved flash reproduces corruption at the old address
+without writes and succeeds at the new address in RAM only. Legacy rebuild
+also passes. This is no new GNSS, delivery, recovery-endurance or product Gate.
+
+Run 002 subsequently flashed the partition correction once on COM3. At
+07:54:36 UTC both slots were valid, with two writes at `0x1f4000`; a real
+StackOverflowHook then stopped progress after failed network preflight.
+The actual FW-007 restore completed at 07:55:46 UTC with transfer hashes and
+30.175-second descriptor smoke verified. No new GNSS/POST/ACK is established.
+The stack correction (subsequently flashed in run 003) at `tmp/convergence_live_stack_fix_build/` is
+990,752 B, SHA-256 `52816255ab96b99831d03129c2a49a9128949de33884f61452742c27ee3fe913`.
+It selects an 8192-byte live main stack, records actual stack watermarks and
+network stages, and allows one 30-second SNTP wait inside the 300-second host
+boundary. The partition and normal legacy profile are unchanged. Exact run-002
+results and decoded backtrace are in
+`reports/board_validation/P0-CONVERGENCE-20260905-002/`.
+
+Run 003 used the explicitly approved stack image once on COM3, without SIM.
+At 08:10:35 UTC Wi-Fi/SNTP, both outbox mirrors and Q initialization passed;
+minimum free main stack was 4424 bytes. Startup then returned 23, GNSS power-off
+unconfirmed. No sensor/POST/ACK acceptance followed. At the 300-second host
+deadline the MCU was held in ROM; the approved conditional second boot was not
+used because networking had succeeded. **Run-003 recovery: actual FW-007 restored
+at 08:18:11 UTC**, all three writes verified and 30.176 s descriptor smoke passed;
+COM3 closed. Evidence: `reports/board_validation/P0-CONVERGENCE-20260905-003/`.
+
+The diagnostic image (subsequently flashed in run 004) at `tmp/convergence_live_stop_fix_build/` is
+991,456 B, SHA-256 `139cdbc98f57ca07405ed989b9b6dabbf7217fcceda9de4789570d4f94f8c4fd`.
+It calls Q's existing bounded cooperative stop on startup failure and logs the
+power-off outcome/reason before and after cleanup. It does not accept an
+unconfirmed shutdown as quiesced. Legacy and live builds pass; source/config/
+image identities are in `tmp/convergence_live_stop_fix_manifest.json`.
+Guardian page source `9a1ab2d5ce488c880c47f0e680a890c867ee9bac19c71900e91ddfabe3147c1a`
+was subsequently **deployed at 09:13:07 UTC** after network recovery. External
+certificate-verified HTTPS returned its exact tested JavaScript bytes with
+`Cache-Control: no-store`; source/service/health preflight passed at 09:13:47 UTC.
+
+Run 004 captured epoch 7 on the same no-SIM COM3 node: first power-off failed
+with outcome 3/reason 11 (AT_TERMINAL_ERROR); the second confirmed off. Q reported
+exclusive UART ownership and `quiesced=1`; capture ended at 11.125 s / 7112 bytes.
+No sensor input was requested by this diagnostic startup-failure path.
+**Run-004 recovery: actual FW-007 restored at 09:15:47 UTC**, all three writes
+verified, 30.182 s descriptor smoke passed, COM3 closed. Evidence root:
+`reports/board_validation/P0-CONVERGENCE-20260905-004/`.
+
+The recovery-wait image (subsequently flashed in run 005) at `tmp/convergence_live_recovery_wait_build/` is
+991,872 B, SHA-256 `aabff0890cbacd1526411ec785276114a2547af607711320a88781db17d92e24`.
+Live main now observes Q's existing same-owner startup recovery for at most
+10 s, requires ACTIVE plus confirmed GNSS off, and otherwise stops as before.
+It does not restart Q or reinterpret AT ERROR as success. Legacy/live builds
+pass; run 005 subsequently verified this recovery and four real no-fix uploads.
 
 ## 2026-09-04 LOC-021Q/R/S / CALL-020R Offline Owner Checkpoint
 
@@ -54,10 +183,10 @@ booted, and no board, UART, USB-media, SIM, TLS, network or other external I/O
 ran. All three product Gates remain `P0-LOC=NOT_RUN`, `P0-CALL=NOT_RUN` and
 `P0-SOS=NOT_RUN`.
 
-The next Location slice is LOC-021T0's durable ordered-ingress WAL. LOC-021T1 wiring of
-concurrent product ingress remains blocked on persistent K checkpoint,
-outbox-tombstone and no-output-replay guarantees; secure transport and an
-explicitly authorized live run follow. CALL still requires authentication, a
+At this 2026-09-04 checkpoint, the queued next Location slice was LOC-021T0.
+ADR-0014 now prioritizes bounded single-source secure runtime delivery.
+LOC-021T1 concurrent product ingress still requires the persistent K checkpoint,
+outbox-tombstone and no-output-replay guarantees or a reviewed proven equivalent. CALL still requires authentication, a
 real verified TLS/SIM route, RESULT/post-stop telemetry, live media evidence
 and measured heap/stack behavior.
 
@@ -383,9 +512,9 @@ The merged repository suite passes `929/929`; the P0-focused integration set
 passes `132/132`; `context_lint` and `git diff --check` pass. These results do
 not replace the `current board` entries below and are not evidence for IMU
 continuous capture, GNSS fix/accuracy, RTC media, device audio, TLS modem
-transport, battery, or product behavior. The connectivity node remains on the
-recorded FW-007 image until a separately authorized build/flash/run records a
-new image identity and evidence path. All three P0 capability Gates remain
+transport, battery, or product behavior. At this 2026-08-23 checkpoint the
+connectivity node still ran FW-007; the 2026-09-06 current-image section above
+supersedes that historical mirror. All three P0 capability Gates remain
 `NOT_RUN`.
 
 ## Host
@@ -399,7 +528,7 @@ new image identity and evidence path. All three P0 capability Gates remain
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG `COM8` observed 2026-09-02; MAC `02:00:00:00:00:01` | UI-001 field-friendly D1 status sidecar is currently flashed after the bounded CALL-010 override was reversed. The `659120`-byte application has SHA-256 `11D72868...A23139`; the latest run-008 bounded restore observed `hello`, `display_ready`, `status_rendered` and `ask_user_rendered`. It retains the cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt and QMI8658 engineering sampler. |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-16 | FW-007 LTE-to-Wi-Fi failover image `0.1.0-fw007-lte-wifi-failover` (application descriptor `fw007-e9ca7a4`, app SHA-256 `8F3508C6...9283799`) is currently flashed on ESP32-S3 QFN56 revision v0.2, MAC `02:00:00:00:00:03`. One COM3 three-region flash passed hash verification without targeting or erasing the NVS partition; normal boot diagnostics retained and updated their existing NVS `boot_count`. The SIM-absent startup run observed one-way Wi-Fi takeover in about 4 minutes 50 seconds and a Wi-Fi command ACK. A second run established stable LTE before physical SIM removal, then observed threshold count three and the `lte_http_poll_failures` transition to `wifi_active`; the first Wi-Fi server message arrived 46.837 seconds after operator confirmation, in the same boot with forward sequence continuity. Post-takeover serial and VPS windows retained Wi-Fi heartbeats/sensor/location uploads without a duplicate LTE owner, offline transition, panic, brownout, or reset. Automatic Wi-Fi-to-LTE failback, durable offline queueing, LTE recovery, USB-free endurance, and long-run reliability remain unverified/not implemented in this slice. |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-16 | Collector app `1d67d231...c9ab6f25` is the current retained image after run 006 stopped normally; it is a Wi-Fi-only 300-second bench profile, not field/LTE/product evidence. FW-007 `0.1.0-fw007-lte-wifi-failover` is the verified rollback fallback; its historical failover evidence and limitations remain recorded below. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 

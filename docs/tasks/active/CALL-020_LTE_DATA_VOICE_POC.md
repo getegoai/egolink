@@ -18,7 +18,7 @@ context:
   - docs/hardware/BOARD_MATRIX.md
   - docs/development/EGO_CALL.md
   - docs/development/LTE_TRANSPORT.md
-  - docs/tasks/active/CALL-010_AUDIO_HARDWARE_LOOP.md
+  - docs/tasks/done/CALL-010_AUDIO_HARDWARE_LOOP.md
 
 allowed_paths:
   - docs/architecture/adr/ADR-0013-call020-single-usb-phase-handoff.md

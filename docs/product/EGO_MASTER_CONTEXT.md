@@ -1,5 +1,6 @@
 ---
 document_status: authoritative
+decision_updated: 2026-09-05
 last_verified: 2026-08-23
 verified_by: codex
 owner: founder
@@ -8,6 +9,7 @@ authority_scope: current_sales_product_direction_and_system_product_baseline
 decision_adr: ../architecture/adr/ADR-0008-egolink-core-product-direction-reset.md
 priority_decision_adr: ../architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md
 sprint_decision_adr: ../architecture/adr/ADR-0012-p0-productization-sprint-1.md
+runtime_decision_adr: ../architecture/adr/ADR-0014-runtime-convergence.md
 ---
 
 # PROJECT EGO — MASTER PRODUCT CONTEXT
@@ -51,6 +53,38 @@ sprint_decision_adr: ../architecture/adr/ADR-0012-p0-productization-sprint-1.md
 4. 遵循“学习现状 → 提出问题 → 确认边界 → 计划 → 实现 → 留证”的开发闭环。不得跳过 active task packet、GitHub Flow、验收标准和证据记录直接修改主线；worktree 仅在并行工作确有需要时使用。
 5. Ego 的首要原则是：**安全闭环优先、本地优先、隐私优先、断网可降级、设计资产可控、失败可解释、模型可回滚。**
 6. 云端服务可以承担受控的转发、紧急暂存或经授权的增强计算，但不得成为人工 SOS、本地定位尝试和本地事件缓存的单点依赖。无网络时，本地检测、用户反馈、定位尝试和有界缓存继续；远程告警、数据交付或通话必须明确显示为 `pending`/`failed` 并按策略重试，绝不假装已经送达。
+
+---
+
+## 0.1 Runtime convergence decision (2026-09-05)
+
+[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) changes current
+execution order and scoped local-failure behavior, while v2.2 sales-product
+requirements, screenless EgoCore, people-first scope and release Gates remain.
+The desktop HDMI/HID Master Context supplied in this review is historical; its
+filename does not replace this authority.
+
+First deliver real-device Location through authenticated, certificate-verified
+secure transport to the bound Guardian using LOC-021 A-S. Advance real
+bidirectional CALL and embedded-bearer feasibility in parallel, then physical
+SOS and recovery. Single-source/current-boot experiments and isolated S smoke
+need not wait for the concurrent T0/T1 design; its ordering/checkpoint/replay
+promises remain in force for concurrent product activation.
+
+Operational Location state, persisted recovery state, outbound pending bytes
+and confirmed server state have separate truth. Queue/storage failure cannot
+silently stop local aging, policy or recognized-input feedback. SOS input
+recognized, stored, server received, terminal noticed and human acknowledged
+are separate outcomes. Failed storage triggers explicit degradation and only
+identity-valid, authorized, secure best-effort help; it never earns durability
+or delivery credit. Recovery may resume pending alert delivery with stable
+identity but must not re-open an expired or explicitly ended call. One modem
+owner, strict exact ACK and real source-event time remain mandatory.
+
+Decision adoption creates no new hardware `last_verified` evidence and grants
+no flash, SIM, recording or external-notification authorization. Independent
+code/tests/builds proceed; unmet live authority is resolved by one exact,
+budgeted experiment request with stop and recovery conditions.
 
 ---
 

@@ -12,18 +12,20 @@ depends_on:
 serves_gate: P0-LOC
 requires_hardware: true
 created: 2026-08-23
-last_updated: 2026-09-04
+last_updated: 2026-09-05
 
 context:
+  - docs/architecture/adr/ADR-0014-runtime-convergence.md
+  - docs/tasks/active/P0-CONVERGENCE-20260905.md
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
   - docs/current/FIRST_LAUNCH_EXECUTION.md
   - docs/current/ACTIVE_BUILD.md
   - docs/hardware/BOARD_MATRIX.md
   - docs/development/LOCATION_ENGINE.md
   - docs/development/VPS_MESSAGE_HUB.md
-  - docs/tasks/active/LOC-020_LOCATION_ENGINE_V0.md
-  - docs/tasks/active/POLICY-010_SENSOR_POLICY_V0.md
-  - docs/tasks/active/REPLAY-010_LOCATION_POLICY_REPLAY.md
+  - docs/tasks/done/LOC-020_LOCATION_ENGINE_V0.md
+  - docs/tasks/done/POLICY-010_SENSOR_POLICY_V0.md
+  - docs/tasks/done/REPLAY-010_LOCATION_POLICY_REPLAY.md
 
 allowed_paths:
   - docs/tasks/active/LOC-021_DEVICE_LOCATION_INTEGRATION.md
@@ -46,6 +48,30 @@ out_of_scope:
   - flashing, device commands, network changes or field runs without explicit
     operator intent
 ---
+
+# Current Runtime Dispatch (2026-09-05)
+
+[ADR-0014](../../architecture/adr/ADR-0014-runtime-convergence.md) and
+[P0-CONVERGENCE-20260905](P0-CONVERGENCE-20260905.md) now prioritize a selected
+finite current-boot/single-source live Location -> authenticated secure
+transport -> bound Guardian slice, reusing A-S. The old isolated S profile
+remains an independent modem smoke; neither path waits globally for T0/T1.
+A real connector, exact complete ACK, one modem owner and source-event time are
+required. Local Location state/policy/aging and outbound durability have
+independent status: queue-full or failed storage cannot silently freeze local
+progress, and failed persistence cannot be called stored or delivered.
+
+The original concurrent SOS/IMU product bridge and reboot-equivalence promises
+below remain pending. Enabling them requires their original ordered WAL,
+persistent K checkpoint or equivalent full replay, exact tombstone and
+no-output replay guarantees, or a reviewed behaviorally proven replacement.
+A finite single-source slice does not satisfy or waive them. Historical replay
+has no physical/call side effects; service recovery only resumes pending
+identity-stable delivery and cannot resurrect expired/ended calls.
+
+These are current implementation requirements, not new execution evidence.
+All prior results retain their dates; `P0-LOC=NOT_RUN`. Hardware and live
+network actions still require a valid bounded operator experiment scope.
 
 # Goal
 
@@ -137,9 +163,14 @@ reliability work. P/Q/S use the same `esp_timer` millisecond time domain.
 Hardware execution, VPS deployment, and network traffic still require
 separately reviewed scope and explicit operator intent.
 
-# LOC-021T Ordered Ingress Boundary (planned 2026-09-04)
+# LOC-021T Concurrent Product Ingress Commitment (planned 2026-09-04)
 
-The next product correctness slice is not a shared RAM sequence allocator. It
+The following is the retained concurrent-product design and fault-test bar.
+ADR-0014 removes its global scheduling priority over bounded single-source
+live proof, not its ordering/recovery promises. Any equivalent replacement
+must record the migration and execute the same scoped fault invariants.
+
+The retained T design uses more than a shared RAM sequence allocator: it
 is a persistent ingress WAL between mapped sensor/SOS producers and the single
 Q/O/K drain. Records are ordered by source occurrence time, not callback
 completion or handling time. A later-arriving qualified SOS edge may describe
@@ -170,8 +201,9 @@ an already server-ACKed Location envelope can collide with the outbox tombstone
 on replay. Physical compaction therefore requires either a persistent K
 checkpoint covering the exact record hash/sequence, or a proven equivalent
 full-replay path with exact outbox-tombstone query and no-output replay. This
-is a T1 correctness blocker, not a documentation waiver. T0 can proceed now,
-and neither T0 nor T1 blocks a separately authorized modem-only S smoke.
+is a T1 correctness blocker, not a documentation waiver. T0 remains scoped
+recovery work; neither T0 nor T1 blocks a separately authorized modem-only S
+smoke or finite current-boot/single-source secure live profile.
 
 Required T0/T1 fault tests include: out-of-arrival-order SOS-before-sensor
 sealing; stopped and invalid watermarks; exact duplicate versus identity

@@ -12,9 +12,11 @@ depends_on:
 serves_gate: P0-SOS
 requires_hardware: true
 created: 2026-08-23
-last_updated: 2026-09-02
+last_updated: 2026-09-05
 
 context:
+  - docs/architecture/adr/ADR-0014-runtime-convergence.md
+  - docs/tasks/active/P0-CONVERGENCE-20260905.md
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
   - docs/safety/SAFETY_CONTRACT.md
   - docs/architecture/adr/ADR-0010-asynchronous-observation-timeline-and-store-forward.md
@@ -60,6 +62,31 @@ out_of_scope:
   - physical SOS or P0-SOS acceptance claims from component/host-only evidence
 ---
 
+# Current Runtime Migration (2026-09-05)
+
+[ADR-0014](../../architecture/adr/ADR-0014-runtime-convergence.md) refines the
+old enqueue-before-all-feedback interpretation. A qualified physical edge
+immediately receives honest input-recognition feedback, distinct from durable
+recording, server receipt, terminal notice and human acknowledgement. Attempt
+the critical journal promptly; failed storage or queue saturation must expose
+degradation and preserve an explicit bounded local/best-effort help policy.
+It cannot disable recognition, local Location/SOS policy or independently
+permitted contact. No degraded path bypasses identity, authorization or TLS;
+no failed write is represented as durable.
+
+Pending-event recovery preserves original event identity and strict ACK
+settlement. Replay for analysis performs no physical/call action; service
+recovery resumes only still-pending authorized delivery and never reopens an
+expired or explicitly ended call. Prior at-least-once callback behavior must
+be migrated with executable tests before activation; historical test/build
+results below do not validate this changed behavior.
+
+The integrator owns shared LOC/CALL/outbox seams through
+[P0-CONVERGENCE-20260905](P0-CONVERGENCE-20260905.md). Physical integration
+follows the real Location and CALL paths; retained concurrent T0/T1/recovery
+promises remain in force. This task grants no physical input, flash, SIM,
+recording or external-notification authorization. `P0-SOS=NOT_RUN`.
+
 # Goal
 
 Compose the existing physical-button safety event, Location Engine/Sensor
@@ -68,12 +95,16 @@ product loop.
 
 # Acceptance
 
-- [ ] Long press writes the durable local safety event and starts local
-      feedback before fallible remote work.
+- [ ] Qualified long press immediately signals recognized input, separately
+      attempts durable recording and exposes storage failure before any
+      stored/delivered claim; independent local help remains explicit. Healthy
+      storage must durably retain the original event; a failed write cannot
+      pass durability acceptance.
 - [ ] Last trusted belief uploads immediately; GNSS/LTE enter SOS policy.
 - [ ] Guardian sees device, belief age/confidence/uncertainty, battery and
       independent alert/call state; Ego Call is requested immediately.
-- [ ] Offline/reboot evidence proves queued replay and idempotent ACK deletion.
+- [ ] Offline/reboot evidence proves queued replay and idempotent exact ACK
+      deletion without re-triggering an expired or explicitly ended call.
 - [ ] Camera and AI cannot veto or fabricate success.
 
 # Dispatch Boundary

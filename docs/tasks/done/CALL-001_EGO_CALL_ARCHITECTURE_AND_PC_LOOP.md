@@ -15,7 +15,7 @@ context:
   - docs/product/EGO_MASTER_CONTEXT.md
 
 allowed_paths:
-  - docs/tasks/active/CALL-001_EGO_CALL_ARCHITECTURE_AND_PC_LOOP.md
+  - docs/tasks/done/CALL-001_EGO_CALL_ARCHITECTURE_AND_PC_LOOP.md
   - docs/development/EGO_CALL.md
   - shared/contracts/README.md
   - shared/contracts/ego_call_session.schema.json
@@ -83,7 +83,7 @@ git diff --check
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/CALL-001_EGO_CALL_ARCHITECTURE_AND_PC_LOOP.md in
+Read docs/tasks/done/CALL-001_EGO_CALL_ARCHITECTURE_AND_PC_LOOP.md in
 D:\pywork\egolink. Load only AGENTS.md, docs/CONTEXT_INDEX.md, and the files
 listed in this packet's context. This is Lane B; do only this task, obey
 allowed_paths and out_of_scope. Treat the accepted Ego Call schema as the

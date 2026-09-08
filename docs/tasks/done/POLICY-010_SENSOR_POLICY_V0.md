@@ -16,10 +16,10 @@ context:
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
   - docs/architecture/adr/ADR-0003-low-power-location-state-machine.md
   - docs/development/LOCATION_ENGINE.md
-  - docs/tasks/active/LOC-020_LOCATION_ENGINE_V0.md
+  - docs/tasks/done/LOC-020_LOCATION_ENGINE_V0.md
 
 allowed_paths:
-  - docs/tasks/active/POLICY-010_SENSOR_POLICY_V0.md
+  - docs/tasks/done/POLICY-010_SENSOR_POLICY_V0.md
   - docs/development/LOCATION_ENGINE.md
   - pc_simulator/sensor_policy_v0.py
   - shared/config/sensor_policy_v0.json
@@ -88,7 +88,7 @@ git diff --check
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/POLICY-010_SENSOR_POLICY_V0.md in D:\pywork\egolink.
+Read docs/tasks/done/POLICY-010_SENSOR_POLICY_V0.md in D:\pywork\egolink.
 Load only AGENTS.md, docs/CONTEXT_INDEX.md, and this packet's context. Work only
 inside allowed_paths. Independently review policy event-time atomicity,
 freshness/horizon/mobility wake deadlines, bounded retry cleanup, critical

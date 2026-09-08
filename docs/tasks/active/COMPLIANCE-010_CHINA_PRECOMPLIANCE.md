@@ -19,8 +19,8 @@ context:
   - docs/product/MASS_PRODUCTION_REQUIREMENTS.md
   - docs/hardware/P0_PRODUCT_ARCHITECTURE.md
   - docs/compliance/README.md
-  - docs/tasks/active/HW-020_PRODUCT_ARCHITECTURE_FREEZE.md
-  - docs/tasks/active/PROD-002_CHINA_PRECOMPLIANCE_AND_A0_INPUTS.md
+  - docs/tasks/done/HW-020_PRODUCT_ARCHITECTURE_FREEZE.md
+  - docs/tasks/done/PROD-002_CHINA_PRECOMPLIANCE_AND_A0_INPUTS.md
 
 allowed_paths:
   - docs/tasks/active/COMPLIANCE-010_CHINA_PRECOMPLIANCE.md
