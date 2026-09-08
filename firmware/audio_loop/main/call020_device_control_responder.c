@@ -108,6 +108,18 @@ static responder_internal_t *internal_of(
     return (responder_internal_t *)responder;
 }
 
+static void retain_close_boundary_measurement(
+    responder_internal_t *internal,
+    const call020_operator_runner_metadata_t *runner)
+{
+    if (internal != NULL && runner != NULL &&
+        !internal->metadata.close_boundary_measurement.valid &&
+        runner->close_boundary_measurement.valid) {
+        internal->metadata.close_boundary_measurement =
+            runner->close_boundary_measurement;
+    }
+}
+
 static const responder_internal_t *const_internal_of(
     const call020_device_control_responder_t *responder)
 {
@@ -484,8 +496,7 @@ static bool capture_telemetry(
     size_t free_bytes = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
     size_t minimum_bytes =
         heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
-    if (free_bytes == 0U || minimum_bytes == 0U ||
-        minimum_bytes > free_bytes || free_bytes > UINT32_MAX ||
+    if (minimum_bytes > free_bytes || free_bytes > UINT32_MAX ||
         minimum_bytes > UINT32_MAX) {
         return false;
     }
@@ -1274,6 +1285,9 @@ esp_err_t call020_device_control_responder_finish_media_local(
         esp_err_t runner_close_result = call020_operator_runner_close();
         esp_err_t metadata_result = call020_operator_runner_get_metadata(
             &runner_metadata);
+        if (metadata_result == ESP_OK) {
+            retain_close_boundary_measurement(internal, &runner_metadata);
+        }
         bool runner_closed = metadata_result == ESP_OK &&
             runner_metadata.state == CALL020_OPERATOR_CLOSED &&
             runner_metadata.resources_closed &&

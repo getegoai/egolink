@@ -116,6 +116,37 @@ class Call020DeviceControlResponderContractTests(unittest.TestCase):
             self.assertIn(token, self.wire_c + self.source)
         self.assertNotIn("worker_stack_high_watermark_bytes\\\":[[", self.wire_c)
 
+        capture = re.search(
+            r"static bool capture_telemetry\((?P<body>.*?)"
+            r"\n}\n\nstatic bool request_allowed",
+            self.source,
+            re.S,
+        )
+        self.assertIsNotNone(capture)
+        capture_body = capture.group("body")
+        self.assertNotIn("free_bytes == 0U", capture_body)
+        self.assertNotIn("minimum_bytes == 0U", capture_body)
+        self.assertIn("minimum_bytes > free_bytes", capture_body)
+        self.assertIn("return true", capture_body)
+        for encoder in (
+            "call020_control_wire_encode_prepare_ack",
+            "call020_control_wire_encode_telemetry_unavailable_ack",
+        ):
+            encoder_body = re.search(
+                rf"{encoder}\((?P<body>.*?)(?:\n}}\n\n|\Z)",
+                self.wire_c,
+                re.S,
+            )
+            self.assertIsNotNone(encoder_body)
+            self.assertNotIn(
+                "telemetry->free_internal_heap_bytes == 0U",
+                encoder_body.group("body"),
+            )
+            self.assertNotIn(
+                "telemetry->minimum_free_internal_heap_bytes == 0U",
+                encoder_body.group("body"),
+            )
+
     def test_default_off_inert_link_profile_and_exclusive_console(self) -> None:
         self.assertIn('"call020_device_control_wire.c"', self.cmake)
         self.assertIn('"call020_device_control_responder.c"', self.cmake)
@@ -551,6 +582,42 @@ class Call020DeviceControlResponderContractTests(unittest.TestCase):
             self.assertIn(token, self.wire_c + self.source)
         self.assertIn("RESULT", self.readme)
         self.assertIn("disabled/unverified", self.readme)
+
+    def test_local_close_boundary_measurement_propagates_once_without_result(
+        self,
+    ) -> None:
+        retain = re.search(
+            r"static void retain_close_boundary_measurement\((?P<body>.*?)"
+            r"\n}\n\nstatic const responder_internal_t",
+            self.source,
+            re.S,
+        )
+        self.assertIsNotNone(retain)
+        body = retain.group("body")
+        self.assertIn("!internal->metadata.close_boundary_measurement.valid", body)
+        self.assertIn("runner->close_boundary_measurement.valid", body)
+        self.assertIn("runner->close_boundary_measurement", body)
+
+        finish = re.search(
+            r"call020_device_control_responder_finish_media_local\("
+            r"(?P<body>.*?)\n}\n\nesp_err_t "
+            r"call020_device_control_responder_get_metadata",
+            self.source,
+            re.S,
+        )
+        self.assertIsNotNone(finish)
+        finish_body = finish.group("body")
+        close_at = finish_body.index("call020_operator_runner_close()")
+        metadata_at = finish_body.index(
+            "call020_operator_runner_get_metadata(", close_at
+        )
+        retain_at = finish_body.index("retain_close_boundary_measurement", metadata_at)
+        self.assertLess(close_at, metadata_at)
+        self.assertLess(metadata_at, retain_at)
+        self.assertIn("close_boundary_measurement", self.header)
+        self.assertIn("post_stop_telemetry_supported = false", self.source)
+        self.assertIn("result_phase_enabled = false", self.source)
+        self.assertNotIn("RESULT_READY", self.wire_h + self.wire_c + self.source)
 
     def test_no_logging_recording_network_or_identifier_metadata(self) -> None:
         lowered = self.source.lower()

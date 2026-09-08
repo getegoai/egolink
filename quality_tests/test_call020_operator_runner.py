@@ -301,6 +301,81 @@ class Call020OperatorRunnerStaticTests(unittest.TestCase):
         self.assertIn("return &s_retained_api;", source)
         self.assertIn("call020_operator_runner_retained_entry", header)
 
+    def test_close_boundary_measurement_is_truthful_sticky_and_strictly_gated(
+        self,
+    ) -> None:
+        source = SOURCE.read_text(encoding="utf-8")
+        header = HEADER.read_text(encoding="utf-8")
+
+        for token in (
+            "call020_operator_close_boundary_runtime_measurement_t",
+            "bool valid",
+            "captured_at_monotonic_ns",
+            "close_boundary_pre_idle_reclamation_free_internal_heap_bytes",
+            "boot_minimum_free_internal_heap_bytes",
+            "worker_terminal_boundary_sampled_mask",
+            "worker_terminal_boundary_stack_high_watermark_bytes",
+            "pre-Idle-reclamation",
+            "not a final post-stop heap measurement",
+            "This is not",
+            "a wire RESULT",
+        ):
+            self.assertIn(token, header)
+
+        gates = re.search(
+            r"static bool close_boundary_measurement_prerequisites_met\("
+            r"(?P<body>.*?)\n}\n\nstatic void capture_close_boundary_measurement",
+            source,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(gates)
+        for token in (
+            "metadata->state == CALL020_OPERATOR_CLOSED",
+            "metadata->resources_closed",
+            "metadata->composition.state == CALL020_WEARABLE_CLOSED",
+            "workers_created ==",
+            "workers_finished ==",
+            "CALL020_WEARABLE_ALL_WORKERS_TERMINAL_BOUNDARY_SAMPLED_MASK",
+            "pa_off_verified",
+            "codec_muted_verified",
+        ):
+            self.assertIn(token, gates.group("body"))
+
+        capture = re.search(
+            r"static void capture_close_boundary_measurement\((?P<body>.*?)"
+            r"\n}\n\nconst char \*call020_operator_runner_version",
+            source,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(capture)
+        body = capture.group("body")
+        self.assertIn("metadata->close_boundary_measurement.valid", body)
+        self.assertIn("esp_timer_get_time()", body)
+        self.assertIn("heap_caps_get_free_size(MALLOC_CAP_INTERNAL)", body)
+        self.assertIn("heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL)", body)
+        self.assertIn("INT64_MAX / UINT64_C(1000)", body)
+        self.assertIn("minimum_bytes > free_bytes", body)
+        self.assertNotIn("free_bytes == 0U", body)
+        self.assertNotIn("minimum_bytes == 0U", body)
+        self.assertLess(
+            body.index("measurement.valid = true"),
+            body.index("metadata->close_boundary_measurement = measurement"),
+        )
+
+        close = function_body(
+            source,
+            "call020_operator_runner_close",
+            "call020_operator_runner_get_descriptor",
+        )
+        self.assertLess(
+            close.index("final_metadata.resources_closed = true"),
+            close.index("capture_close_boundary_measurement(&final_metadata)"),
+        )
+        self.assertLess(
+            close.index("capture_close_boundary_measurement(&final_metadata)"),
+            close.index("secure_zero(&s_runner"),
+        )
+
     def test_all_configured_lengths_and_waits_are_bounded(self) -> None:
         source = SOURCE.read_text(encoding="utf-8")
 

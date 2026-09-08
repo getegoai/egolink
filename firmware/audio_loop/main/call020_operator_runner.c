@@ -8,9 +8,12 @@
 
 #include "call020_operator_runner.h"
 
+#include <limits.h>
 #include <string.h>
 
+#include "esp_heap_caps.h"
 #include "esp_random.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/portmacro.h"
 #include "sdkconfig.h"
@@ -324,6 +327,63 @@ static void copy_composition_metadata(void)
     }
 }
 
+static bool close_boundary_measurement_prerequisites_met(
+    const call020_operator_runner_metadata_t *metadata)
+{
+    return metadata != NULL &&
+        metadata->state == CALL020_OPERATOR_CLOSED &&
+        metadata->resources_closed &&
+        metadata->composition.state == CALL020_WEARABLE_CLOSED &&
+        metadata->composition.workers_created ==
+            CALL020_WEARABLE_WORKER_COUNT &&
+        metadata->composition.workers_finished ==
+            CALL020_WEARABLE_WORKER_COUNT &&
+        metadata->composition.worker_terminal_boundary_sampled_mask ==
+            CALL020_WEARABLE_ALL_WORKERS_TERMINAL_BOUNDARY_SAMPLED_MASK &&
+        metadata->composition.pa_off_verified &&
+        metadata->composition.codec_muted_verified;
+}
+
+static void capture_close_boundary_measurement(
+    call020_operator_runner_metadata_t *metadata)
+{
+    if (metadata == NULL || metadata->close_boundary_measurement.valid ||
+        !close_boundary_measurement_prerequisites_met(metadata)) {
+        return;
+    }
+
+    int64_t captured_us = esp_timer_get_time();
+    size_t free_bytes = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
+    size_t minimum_bytes =
+        heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+    if (captured_us < 0 ||
+        (uint64_t)captured_us > (uint64_t)INT64_MAX / UINT64_C(1000) ||
+        minimum_bytes > free_bytes || free_bytes > UINT32_MAX ||
+        minimum_bytes > UINT32_MAX) {
+        return;
+    }
+
+    call020_operator_close_boundary_runtime_measurement_t measurement = {0};
+    measurement.captured_at_monotonic_ns =
+        (uint64_t)captured_us * UINT64_C(1000);
+    measurement
+        .close_boundary_pre_idle_reclamation_free_internal_heap_bytes =
+        (uint32_t)free_bytes;
+    measurement.boot_minimum_free_internal_heap_bytes =
+        (uint32_t)minimum_bytes;
+    measurement.worker_terminal_boundary_sampled_mask =
+        metadata->composition.worker_terminal_boundary_sampled_mask;
+    memcpy(
+        measurement.worker_terminal_boundary_stack_high_watermark_bytes,
+        metadata->composition
+            .worker_terminal_boundary_stack_high_watermark_bytes,
+        sizeof(
+            measurement
+                .worker_terminal_boundary_stack_high_watermark_bytes));
+    measurement.valid = true;
+    metadata->close_boundary_measurement = measurement;
+}
+
 const char *call020_operator_runner_version(void)
 {
     return CALL020_OPERATOR_RUNNER_VERSION;
@@ -584,6 +644,7 @@ esp_err_t call020_operator_runner_close(void)
     final_metadata.composition_installed = false;
     final_metadata.first_error = preserve_first_error(
         final_metadata.first_error, result);
+    capture_close_boundary_measurement(&final_metadata);
     secure_zero(&s_runner, sizeof(s_runner));
     s_runner.metadata = final_metadata;
     return result;

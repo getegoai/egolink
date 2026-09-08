@@ -35,6 +35,17 @@ extern "C" {
 #define CALL020_WEARABLE_TASK_STACK_BYTES UINT32_C(4096)
 #define CALL020_WEARABLE_TASK_PRIORITY UINT32_C(5)
 #define CALL020_WEARABLE_FRAME_INTERVAL_US UINT64_C(20000)
+#define CALL020_WEARABLE_WORKER_COUNT UINT32_C(4)
+#define CALL020_WEARABLE_ALL_WORKERS_TERMINAL_BOUNDARY_SAMPLED_MASK \
+    UINT32_C(0x0f)
+
+/* Fixed order used by local close-boundary runtime measurement metadata. */
+typedef enum {
+    CALL020_WEARABLE_WORKER_AUDIO_CAPTURE = 0,
+    CALL020_WEARABLE_WORKER_USB_UPLINK,
+    CALL020_WEARABLE_WORKER_USB_DOWNLINK,
+    CALL020_WEARABLE_WORKER_AUDIO_OUTPUT,
+} call020_wearable_worker_t;
 
 typedef enum {
     CALL020_WEARABLE_IDENTITY_UNSPECIFIED = 0,
@@ -126,6 +137,15 @@ typedef struct {
     bool usb_driver_lifetime_owned_by_caller;
     uint32_t workers_created;
     uint32_t workers_finished;
+    /*
+     * Each sample is taken at the worker's terminal boundary, immediately
+     * before it publishes completion and self-deletes. The tiny done/delete
+     * tail is intentionally excluded. A sampled bit distinguishes a measured
+     * zero from a missing sample.
+     */
+    uint32_t worker_terminal_boundary_sampled_mask;
+    uint32_t worker_terminal_boundary_stack_high_watermark_bytes[
+        CALL020_WEARABLE_WORKER_COUNT];
 } call020_wearable_composition_metadata_t;
 
 /*

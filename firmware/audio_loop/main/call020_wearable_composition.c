@@ -83,6 +83,16 @@ _Static_assert(
     CONFIG_EGOLINK_CALL020_OUTPUT_VOLUME >= 1 &&
         CONFIG_EGOLINK_CALL020_OUTPUT_VOLUME <= CALL020_OUTPUT_VOLUME_MAX,
     "CALL-020F output volume must remain within the reviewed 1..85 bound");
+_Static_assert(
+    CALL020_WEARABLE_WORKER_AUDIO_OUTPUT + 1 ==
+        CALL020_WEARABLE_WORKER_COUNT &&
+        ((UINT32_C(1) << CALL020_WEARABLE_WORKER_COUNT) - UINT32_C(1)) ==
+            CALL020_WEARABLE_ALL_WORKERS_TERMINAL_BOUNDARY_SAMPLED_MASK,
+    "CALL-020 terminal-boundary worker slots and mask must remain aligned");
+_Static_assert(
+    sizeof(UBaseType_t) <= sizeof(uint32_t) &&
+        sizeof(StackType_t) <= UINT32_MAX,
+    "CALL-020 stack watermark conversion requires bounded IDF scalar types");
 
 static void secure_zero(void *memory, size_t bytes)
 {
@@ -580,10 +590,40 @@ static TickType_t queue_poll_ticks(void)
     return ticks == 0 ? 1 : ticks;
 }
 
-static void finish_worker(
-    call020_wearable_composition_t *composition, EventBits_t done_bit)
+static bool stack_units_to_bytes(
+    UBaseType_t stack_units, uint32_t *stack_bytes)
 {
+    if (stack_bytes == NULL) {
+        return false;
+    }
+    uint32_t bounded_units = (uint32_t)stack_units;
+    uint32_t bytes_per_unit = (uint32_t)sizeof(StackType_t);
+    return !__builtin_mul_overflow(
+        bounded_units, bytes_per_unit, stack_bytes);
+}
+
+static void finish_worker(
+    call020_wearable_composition_t *composition,
+    call020_wearable_worker_t worker,
+    EventBits_t done_bit)
+{
+    uint32_t stack_bytes = 0U;
+    uint32_t worker_slot = (uint32_t)worker;
+    bool sampled = worker_slot < CALL020_WEARABLE_WORKER_COUNT &&
+        stack_units_to_bytes(
+            uxTaskGetStackHighWaterMark(NULL), &stack_bytes);
     portENTER_CRITICAL(&composition->lock);
+    if (sampled) {
+        uint32_t sampled_bit = UINT32_C(1) << worker_slot;
+        if ((composition->metadata.worker_terminal_boundary_sampled_mask &
+                sampled_bit) == 0U) {
+            composition->metadata
+                .worker_terminal_boundary_stack_high_watermark_bytes[
+                worker_slot] = stack_bytes;
+            composition->metadata.worker_terminal_boundary_sampled_mask |=
+                sampled_bit;
+        }
+    }
     composition->metadata.workers_finished++;
     portEXIT_CRITICAL(&composition->lock);
     xEventGroupSetBits(composition->worker_events, done_bit);
@@ -728,7 +768,10 @@ static void audio_capture_worker(void *argument)
     secure_zero(
         &composition->capture_scratch,
         sizeof(composition->capture_scratch));
-    finish_worker(composition, AUDIO_CAPTURE_DONE_BIT);
+    finish_worker(
+        composition,
+        CALL020_WEARABLE_WORKER_AUDIO_CAPTURE,
+        AUDIO_CAPTURE_DONE_BIT);
 }
 
 static void usb_uplink_worker(void *argument)
@@ -826,7 +869,10 @@ static void usb_uplink_worker(void *argument)
     secure_zero(
         &composition->uplink_scratch,
         sizeof(composition->uplink_scratch));
-    finish_worker(composition, USB_UPLINK_DONE_BIT);
+    finish_worker(
+        composition,
+        CALL020_WEARABLE_WORKER_USB_UPLINK,
+        USB_UPLINK_DONE_BIT);
 }
 
 static void usb_downlink_worker(void *argument)
@@ -912,7 +958,10 @@ static void usb_downlink_worker(void *argument)
     secure_zero(
         &composition->usb_rx_scratch,
         sizeof(composition->usb_rx_scratch));
-    finish_worker(composition, USB_DOWNLINK_DONE_BIT);
+    finish_worker(
+        composition,
+        CALL020_WEARABLE_WORKER_USB_DOWNLINK,
+        USB_DOWNLINK_DONE_BIT);
 }
 
 static esp_err_t bounded_audio_write(
@@ -1061,7 +1110,10 @@ static void audio_output_worker(void *argument)
             CALL020_WEARABLE_TERMINAL_OUTPUT_SAFETY,
             safe_result);
     }
-    finish_worker(composition, AUDIO_OUTPUT_DONE_BIT);
+    finish_worker(
+        composition,
+        CALL020_WEARABLE_WORKER_AUDIO_OUTPUT,
+        AUDIO_OUTPUT_DONE_BIT);
 }
 
 static bool create_worker(

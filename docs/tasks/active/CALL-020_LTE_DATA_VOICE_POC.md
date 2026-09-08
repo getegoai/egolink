@@ -10,7 +10,7 @@ depends_on:
 serves_gate: P0-CALL
 requires_hardware: true
 created: 2026-08-23
-last_updated: 2026-09-04
+last_updated: 2026-09-08
 
 context:
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
@@ -904,12 +904,14 @@ telemetry so a telemetry failure closes the global runner. The dedicated build
 uses the inert boot stub, disables application/bootloader console and logs, and
 does not instantiate or call Q from `app_main`.
 
-Post-stop four-worker watermarks are unavailable. A telemetry request therefore
-receives `accepted=false` with an empty worker set and then fails closed; this is
-not successful telemetry. RESULT, post-media CONTROL, automatic runtime join,
-remote cleanup proof and physical-board behavior remain disabled/unverified.
-Q tests are source-contract/boundary-model checks plus ESP32-S3 compile/link;
-the USB pump has not executed and no board, port, network or audio path ran.
+At the CALL-020Q boundary, post-stop four-worker watermarks were unavailable. A
+telemetry request therefore received `accepted=false` with an empty worker set
+and then failed closed; this was not successful telemetry. CALL-020S-A below
+adds only local close-boundary measurement and deliberately does not change that
+wire behavior. RESULT, post-media CONTROL, automatic runtime join, remote
+cleanup proof and physical-board behavior remain disabled/unverified. Q tests
+are source-contract/boundary-model checks plus ESP32-S3 compile/link; the USB
+pump has not executed and no board, port, network or audio path ran.
 
 ## CALL-020R Default-off device lifecycle owner
 
@@ -970,6 +972,45 @@ x86 target is available; otherwise it is ESP32-S3 cross-compiled without an
 execution claim. Fresh ESP-IDF 5.4.2 default and R-profile builds compile/link
 the final source but do not boot it. No USB, audio, board, modem or network path
 was accessed.
+
+## CALL-020S-A Local close-boundary runtime measurement
+
+CALL-020S-A closes only the device-internal measurement seam needed before a
+future authorized runtime. Each of the four wearable workers samples its own
+FreeRTOS stack high-water mark at its terminal boundary, immediately before it
+publishes completion and self-deletes. The tiny completion-publication/delete
+tail is therefore outside that sample. A fixed worker slot and a separate
+sampled-bit mask preserve the distinction between a valid measured zero and a
+missing sample. Stack units are converted to bytes with a checked
+`StackType_t` multiplication.
+
+The runner creates a local snapshot only after it is `CLOSED`, its resources
+are closed, the composition is `CLOSED`, exactly four workers were created and
+finished, all four sample bits are present, PA-off is verified and codec mute
+is verified. The snapshot adds monotonic capture time, close-boundary current
+internal heap and boot-minimum internal heap. Because workers publish done
+before self-delete and FreeRTOS Idle reclamation is not proven complete, the
+current-heap value is explicitly a close-boundary, pre-Idle-reclamation sample;
+it is not a final post-stop heap value. The boot-minimum value remains useful as
+the allocator's lifetime minimum. Measured heap zero is valid; the snapshot's
+`valid` bit, not its numeric fields, distinguishes presence from absence. A
+failed or incomplete observation remains invalid. Once a valid snapshot exists,
+responder and owner cleanup retries retain the first valid value rather than
+replacing or fabricating it.
+
+The same zero-value truth rule applies to the existing pre-start heap capture.
+That structure has no field-level validity bit, so the capture function's
+successful boolean result and the resulting response kind are its presence
+indicator; prepare and telemetry-unavailable encoders do not reinterpret a
+measured numeric zero as missing.
+
+This metadata remains entirely device-local. `result_phase_enabled=false`,
+post-stop wire telemetry remains unsupported, and START ACK is still the last
+CONTROL write. There is no post-MEDIA write, RESULT frame, remote cleanup
+acknowledgement, physical-driver attestation, board-runtime measurement or
+P0-CALL gate claim. Focused tests and two fresh ESP32-S3 builds are offline
+source/compile evidence only; no firmware was flashed and no serial, USB,
+audio, SIM, modem, TLS or network boundary was opened.
 
 Offline slice acceptance:
 
@@ -1158,6 +1199,13 @@ Offline slice acceptance:
       retry loop with bounded backoff. Reinitialization is rejected before any
       context clear, and exact responder error/reason diagnostics survive
       eventual cleanup.
+- [x] CALL-020S-A samples all four worker stack high-water marks at each
+      terminal boundary with an explicit presence mask and checked byte
+      conversion, then captures local monotonic, pre-Idle-reclamation current
+      heap and boot-minimum heap metadata only after the complete closed/safe
+      gate. Numeric zero remains a valid sample. First-valid metadata is sticky
+      across responder/owner cleanup retries; RESULT and all post-MEDIA writes
+      remain disabled.
 
 # Acceptance
 
@@ -1223,10 +1271,10 @@ idf.py -B build_call020g_runner_final -D "SDKCONFIG=$PWD/build_call020g_runner_f
 Pop-Location
 ```
 
-The CALL-020R focused checks and build-only profiles are:
+The CALL-020R/CALL-020S-A focused checks and build-only profiles are:
 
 ```powershell
-python -m unittest quality_tests.test_call020_device_control_owner quality_tests.test_call020_device_control_responder -v
+python -m unittest quality_tests.test_call020_wearable_composition quality_tests.test_call020_operator_runner quality_tests.test_call020_device_control_responder quality_tests.test_call020_device_control_owner -v
 Push-Location firmware/audio_loop
 idf.py -B build_call020r_default -D "SDKCONFIG=$PWD/build_call020r_default/sdkconfig" -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults" build
 idf.py -B build_call020r_owner -D "SDKCONFIG=$PWD/build_call020r_owner/sdkconfig" -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.call020_device_owner.defaults" build
@@ -1498,6 +1546,21 @@ no production credentials may enter the repository.
   only. Neither image was flashed or booted; no
   serial, USB, audio, board, SIM, modem, TLS or network action occurred, and
   `P0-CALL` remains `NOT_RUN`.
+- Local close-boundary measurement result: CALL-020S-A focused composition,
+  runner, responder and owner checks passed `67/67` on 2026-09-08; the complete
+  CALL test discovery passed `339` tests with one environment skip. Fresh
+  ESP-IDF v5.4.2 default and owner-profile ESP32-S3 builds passed from
+  `tmp/call020sa_default_20260908_d` and
+  `tmp/call020sa_owner_20260908_d`. The default binary is 195,440 bytes
+  (`0x2fb70`), leaves `81%` of the smallest app partition free, and has SHA-256
+  `4C4566B53C5D32FDBCEC18155C0579CAD15E8451C089BF7528A9864CC95F5074`.
+  The owner-profile binary is 285,232 bytes (`0x45a30`), leaves `73%` free, and
+  has SHA-256
+  `F8CCC07E5A58BB5695CE02254EE7D7EC10AD19BF86CE7E51BD972A8834106D12`.
+  The default config keeps the CALL-020 media core unset; the dedicated config
+  selects wearable composition, operator runner, responder and owner. This is
+  local source/compile evidence only: neither image was flashed or booted, no
+  hardware/network boundary ran, and `P0-CALL` remains `NOT_RUN`.
 - Post-fix independent review on 2026-09-04 found and closed the
   CONTROL-to-MEDIA return-boundary race: `MEDIA_STARTED` now takes ownership
   precedence over the owner's post-serve CONTROL deadline/clock check. An exact
@@ -1641,7 +1704,10 @@ no production credentials may enter the repository.
   matching deployed TLS listener/connector and handshake, PKI/external
   authenticator, a real connected socket satisfying J's finite-timeout and
   prompt-cancel contract, plus the verified interface-name/source-IP route,
-  are not implemented/proved. CALL-020H provides bounded ROM-prefix/EGLM
+  are not implemented/proved. CALL-020S-A now provides the local close-boundary
+  measurement path, but actual on-board heap/stack values, post-Idle-reclamation
+  heap and scheduling margins remain unmeasured. CALL-020H provides bounded
+  ROM-prefix/EGLM
   resynchronization behind a caller-injected offline serial seam, but has not
   opened or proven the physical path. CALL-020I now provides the process-local
   matching admission/forwarding core, but has not performed a TLS handshake or
@@ -1662,8 +1728,8 @@ no production credentials may enter the repository.
   opened or proven either live transport and deliberately has no control
   trigger, socket connector or TLS handshake.
   A reviewed trigger/control seam, connector/reconnect proof, deployed TLS
-  transport plus external authenticator, verified SIM route and runtime
-  heap/stack watermarks remain mandatory
+  transport plus external authenticator, verified SIM route and on-board
+  runtime heap/stack evidence remain mandatory
   before hardware execution. The first IRAM window
   is nearly full, but IDF places the rest of `.iram0.text` in shared executable
   D/IRAM and reports 251,057 bytes remaining; therefore the single displayed

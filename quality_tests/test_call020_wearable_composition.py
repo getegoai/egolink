@@ -117,6 +117,60 @@ class Call020WearableCompositionStaticTests(unittest.TestCase):
         self.assertIn("No core mutex is held over", header)
         self.assertNotIn("SemaphoreHandle_t", header)
 
+    def test_each_worker_captures_a_truthful_terminal_boundary_stack_sample(
+        self,
+    ) -> None:
+        source = SOURCE.read_text(encoding="utf-8")
+        header = HEADER.read_text(encoding="utf-8")
+
+        for token in (
+            "CALL020_WEARABLE_WORKER_COUNT UINT32_C(4)",
+            "CALL020_WEARABLE_ALL_WORKERS_TERMINAL_BOUNDARY_SAMPLED_MASK",
+            "CALL020_WEARABLE_WORKER_AUDIO_CAPTURE",
+            "CALL020_WEARABLE_WORKER_USB_UPLINK",
+            "CALL020_WEARABLE_WORKER_USB_DOWNLINK",
+            "CALL020_WEARABLE_WORKER_AUDIO_OUTPUT",
+            "uint32_t worker_terminal_boundary_sampled_mask",
+            "worker_terminal_boundary_stack_high_watermark_bytes",
+            "before it publishes completion and self-deletes",
+            "The tiny done/delete",
+            "tail is intentionally excluded",
+        ):
+            self.assertIn(token, header)
+
+        finish = re.search(
+            r"static void finish_worker\((?P<body>.*?)"
+            r"\n}\n\nstatic void wait_for_start",
+            source,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(finish)
+        body = finish.group("body")
+        sample = body.index("uxTaskGetStackHighWaterMark(NULL)")
+        latch = body.index("worker_terminal_boundary_stack_high_watermark_bytes")
+        done = body.index("xEventGroupSetBits")
+        delete = body.index("vTaskDelete(NULL)")
+        self.assertLess(sample, latch)
+        self.assertLess(latch, done)
+        self.assertLess(done, delete)
+        self.assertIn("worker_terminal_boundary_sampled_mask &", body)
+        self.assertIn("worker_terminal_boundary_sampled_mask |=", body)
+        self.assertNotIn("stack_bytes > 0", body)
+
+        conversion = re.search(
+            r"static bool stack_units_to_bytes\((?P<body>.*?)"
+            r"\n}\n\nstatic void finish_worker",
+            source,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(conversion)
+        conversion_body = conversion.group("body")
+        self.assertIn("sizeof(StackType_t)", conversion_body)
+        self.assertIn("(uint32_t)stack_units", conversion_body)
+        self.assertIn("__builtin_mul_overflow", conversion_body)
+        self.assertIn("stack_bytes", conversion_body)
+        self.assertIn("sizeof(UBaseType_t) <= sizeof(uint32_t)", source)
+
     def test_complete_wire_size_is_identity_derived_and_read_in_one_exact_call(self) -> None:
         source = SOURCE.read_text(encoding="utf-8")
         header = HEADER.read_text(encoding="utf-8")

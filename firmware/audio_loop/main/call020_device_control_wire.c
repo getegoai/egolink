@@ -386,8 +386,6 @@ call020_control_wire_result_t call020_control_wire_encode_prepare_ack(
         !valid_identifier(descriptor->downlink_clock_id, UINT32_C(40)) ||
         descriptor->nonce_bits < UINT32_C(128) ||
         telemetry->captured_at_monotonic_ns > INT64_MAX ||
-        telemetry->free_internal_heap_bytes == 0U ||
-        telemetry->minimum_free_internal_heap_bytes == 0U ||
         telemetry->minimum_free_internal_heap_bytes >
             telemetry->free_internal_heap_bytes) {
         return CALL020_CONTROL_WIRE_INVALID_ARGUMENT;
@@ -484,8 +482,6 @@ call020_control_wire_encode_telemetry_unavailable_ack(
         !valid_identifier(
             request->operation_id, sizeof(request->operation_id)) ||
         telemetry->captured_at_monotonic_ns > INT64_MAX ||
-        telemetry->free_internal_heap_bytes == 0U ||
-        telemetry->minimum_free_internal_heap_bytes == 0U ||
         telemetry->minimum_free_internal_heap_bytes >
             telemetry->free_internal_heap_bytes) {
         return CALL020_CONTROL_WIRE_INVALID_ARGUMENT;

@@ -72,6 +72,9 @@ typedef struct {
     bool emitted_post_start_control;
     bool result_phase_enabled;
     bool raw_audio_logged_or_persisted;
+    /* Local-only close-boundary data; no post-MEDIA wire write is implied. */
+    call020_operator_close_boundary_runtime_measurement_t
+        close_boundary_measurement;
 } call020_device_control_owner_metadata_t;
 
 const char *call020_device_control_owner_version(void);

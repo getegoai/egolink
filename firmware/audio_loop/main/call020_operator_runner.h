@@ -82,6 +82,24 @@ typedef struct {
     call020_wearable_identity_provenance_t provenance;
 } call020_operator_session_descriptor_t;
 
+/*
+ * Local-only close-boundary measurement. The current heap sample is taken
+ * after runner/composition resources report CLOSED, but before the Idle task
+ * is guaranteed to reclaim storage for self-deleted workers. It is therefore
+ * explicitly pre-Idle-reclamation, not a final post-stop heap measurement.
+ * The boot-minimum heap remains the allocator's lifetime minimum. This is not
+ * a wire RESULT and does not attest remote cleanup or physical driver closure.
+ */
+typedef struct {
+    bool valid;
+    uint64_t captured_at_monotonic_ns;
+    uint32_t close_boundary_pre_idle_reclamation_free_internal_heap_bytes;
+    uint32_t boot_minimum_free_internal_heap_bytes;
+    uint32_t worker_terminal_boundary_sampled_mask;
+    uint32_t worker_terminal_boundary_stack_high_watermark_bytes[
+        CALL020_WEARABLE_WORKER_COUNT];
+} call020_operator_close_boundary_runtime_measurement_t;
+
 typedef struct {
     call020_operator_runner_state_t state;
     esp_err_t first_error;
@@ -104,6 +122,8 @@ typedef struct {
     bool usb_driver_uninstalled_by_runner;
     uint64_t usb_driver_lease_generation;
     call020_wearable_composition_metadata_t composition;
+    call020_operator_close_boundary_runtime_measurement_t
+        close_boundary_measurement;
 } call020_operator_runner_metadata_t;
 
 const char *call020_operator_runner_version(void);

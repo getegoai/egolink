@@ -209,6 +209,11 @@ static bool copy_responder_state(bool require_media_termination)
         responder.device_runtime_termination_proven;
     s_owner.metadata.physical_driver_close_confirmed =
         responder.physical_driver_close_confirmed;
+    if (!s_owner.metadata.close_boundary_measurement.valid &&
+        responder.close_boundary_measurement.valid) {
+        s_owner.metadata.close_boundary_measurement =
+            responder.close_boundary_measurement;
+    }
     if (responder.media_workers_quiescent) {
         s_owner.metadata.all_four_workers_terminal = true;
     }

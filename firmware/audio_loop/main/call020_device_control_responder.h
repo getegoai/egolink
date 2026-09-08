@@ -118,6 +118,9 @@ typedef struct {
     bool identifiers_or_payload_logged;
     bool device_runtime_termination_proven;
     bool remote_cleanup_acknowledged_after_media;
+    /* Local-only close-boundary data; RESULT and wire support remain false. */
+    call020_operator_close_boundary_runtime_measurement_t
+        close_boundary_measurement;
 } call020_device_control_responder_metadata_t;
 
 /* Opaque caller-owned storage; no heap allocation and no global singleton. */

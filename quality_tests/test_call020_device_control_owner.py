@@ -71,6 +71,32 @@ static uint32_t fake_finish_calls;
 static uint32_t fake_delay_calls;
 static uint32_t fake_abort_calls;
 
+static void set_fake_close_boundary_measurement(uint32_t seed) {
+    fake_responder_metadata.close_boundary_measurement.valid = true;
+    fake_responder_metadata.close_boundary_measurement.captured_at_monotonic_ns =
+        (uint64_t)seed * UINT64_C(1000);
+    fake_responder_metadata.close_boundary_measurement
+        .close_boundary_pre_idle_reclamation_free_internal_heap_bytes =
+        seed == UINT32_C(100) ? 0U : UINT32_C(50000) + seed;
+    fake_responder_metadata.close_boundary_measurement
+        .boot_minimum_free_internal_heap_bytes =
+        seed == UINT32_C(100) ? 0U : UINT32_C(40000) + seed;
+    fake_responder_metadata.close_boundary_measurement
+        .worker_terminal_boundary_sampled_mask =
+        UINT32_C(0x0f);
+    fake_responder_metadata.close_boundary_measurement
+        .worker_terminal_boundary_stack_high_watermark_bytes[0] = 0U;
+    fake_responder_metadata.close_boundary_measurement
+        .worker_terminal_boundary_stack_high_watermark_bytes[1] =
+        seed + UINT32_C(1);
+    fake_responder_metadata.close_boundary_measurement
+        .worker_terminal_boundary_stack_high_watermark_bytes[2] =
+        seed + UINT32_C(2);
+    fake_responder_metadata.close_boundary_measurement
+        .worker_terminal_boundary_stack_high_watermark_bytes[3] =
+        seed + UINT32_C(3);
+}
+
 void *memset(void *destination, int value, size_t bytes) {
     unsigned char *cursor = (unsigned char *)destination;
     while (bytes-- > 0U) {
@@ -151,6 +177,7 @@ esp_err_t call020_device_control_responder_finish_media_local(
 #endif
 #if FAILURE_STAGE >= 3
         fake_responder_metadata.media_runner_resources_closed = true;
+        set_fake_close_boundary_measurement(UINT32_C(100));
 #endif
 #if FAILURE_STAGE >= 4
         fake_responder_metadata.media_driver_lease_returned = true;
@@ -165,6 +192,7 @@ esp_err_t call020_device_control_responder_finish_media_local(
     fake_responder_metadata.media_driver_lease_returned = true;
     fake_responder_metadata.physical_driver_close_confirmed = true;
     fake_responder_metadata.device_runtime_termination_proven = true;
+    set_fake_close_boundary_measurement(UINT32_C(200));
     return ESP_OK;
 }
 
@@ -224,6 +252,35 @@ int mainCRTStartup(void) {
     if (metadata.responder_first_error != FAILURE_CODE ||
         metadata.responder_terminal_reason !=
             CALL020_DEVICE_CONTROL_TERMINAL_LOCAL_CLEANUP) return 18;
+    if (!metadata.close_boundary_measurement.valid ||
+        metadata.close_boundary_measurement
+                .worker_terminal_boundary_sampled_mask != UINT32_C(0x0f) ||
+        metadata.close_boundary_measurement
+                .worker_terminal_boundary_stack_high_watermark_bytes[0] !=
+            0U) return 21;
+#if FAILURE_STAGE >= 3
+    if (metadata.close_boundary_measurement.captured_at_monotonic_ns !=
+            UINT64_C(100000) ||
+        metadata.close_boundary_measurement
+                .close_boundary_pre_idle_reclamation_free_internal_heap_bytes !=
+            0U ||
+        metadata.close_boundary_measurement
+                .boot_minimum_free_internal_heap_bytes != 0U ||
+        metadata.close_boundary_measurement
+                .worker_terminal_boundary_stack_high_watermark_bytes[1] !=
+            UINT32_C(101)) return 22;
+#else
+    if (metadata.close_boundary_measurement.captured_at_monotonic_ns !=
+            UINT64_C(200000) ||
+        metadata.close_boundary_measurement
+                .close_boundary_pre_idle_reclamation_free_internal_heap_bytes !=
+            UINT32_C(50200) ||
+        metadata.close_boundary_measurement
+                .boot_minimum_free_internal_heap_bytes != UINT32_C(40200) ||
+        metadata.close_boundary_measurement
+                .worker_terminal_boundary_stack_high_watermark_bytes[1] !=
+            UINT32_C(201)) return 22;
+#endif
     if (call020_device_control_owner_init(&config) != ESP_ERR_INVALID_STATE) {
         return 19;
     }
@@ -468,6 +525,41 @@ class Call020DeviceControlOwnerContractTests(unittest.TestCase):
         self.assertIn("result_phase_enabled = false", self.source)
         self.assertIn(".result_phase_enabled = false", self.boot)
 
+    def test_close_boundary_measurement_is_local_and_sticky_across_cleanup_retry(
+        self,
+    ) -> None:
+        copy = re.search(
+            r"static bool copy_responder_state\((?P<body>.*?)"
+            r"\n}\n\nstatic void cleanup_recovery_backoff",
+            self.source,
+            re.S,
+        )
+        self.assertIsNotNone(copy)
+        body = copy.group("body")
+        self.assertIn("!s_owner.metadata.close_boundary_measurement.valid", body)
+        self.assertIn("responder.close_boundary_measurement.valid", body)
+        self.assertIn(
+            "s_owner.metadata.close_boundary_measurement =\n"
+            "            responder.close_boundary_measurement",
+            body,
+        )
+        self.assertIn("close_boundary_measurement", self.header)
+
+        finish = re.search(
+            r"static esp_err_t finish_media\(.*?(?P<body>.*?)"
+            r"\n}\n\nconst char \*call020_device_control_owner_version",
+            self.source,
+            re.S,
+        )
+        self.assertIsNotNone(finish)
+        for forbidden in (
+            "usb_serial_jtag_write_bytes",
+            "write_exact_and_drain",
+            "reclaim_for_result",
+            "RESULT_READY",
+        ):
+            self.assertNotIn(forbidden, finish.group("body"))
+
     def test_no_authentication_or_product_claim_is_smuggled_in(self) -> None:
         combined = self.header + self.source + self.boot
         lowered = combined.lower()
@@ -529,6 +621,14 @@ typedef struct {
 } call020_device_control_responder_config_t;
 typedef struct { uint64_t words[4]; } call020_device_control_responder_t;
 typedef struct {
+    bool valid;
+    uint64_t captured_at_monotonic_ns;
+    uint32_t close_boundary_pre_idle_reclamation_free_internal_heap_bytes;
+    uint32_t boot_minimum_free_internal_heap_bytes;
+    uint32_t worker_terminal_boundary_sampled_mask;
+    uint32_t worker_terminal_boundary_stack_high_watermark_bytes[4];
+} call020_operator_close_boundary_runtime_measurement_t;
+typedef struct {
     call020_device_control_state_t state;
     call020_device_control_terminal_reason_t terminal_reason;
     esp_err_t first_error;
@@ -540,6 +640,8 @@ typedef struct {
     bool media_driver_lease_returned;
     bool physical_driver_close_confirmed;
     bool device_runtime_termination_proven;
+    call020_operator_close_boundary_runtime_measurement_t
+        close_boundary_measurement;
 } call020_device_control_responder_metadata_t;
 typedef enum {
     CALL020_OPERATOR_DORMANT = 0,
