@@ -1,0 +1,196 @@
+{
+  "document_status": "historical_migration_evidence",
+  "review_date": "2026-09-05",
+  "repository_head": "72c7a1ed199fa6bc522defff0d77a0aa3e77034d",
+  "branch": "a0/first-real-field-session",
+  "root_agents_sha256": "58e2e5ccd095f273e0202d5009c618c813982d11ec43d104c92f9df05e08b6c1",
+  "root_agents_modified": false,
+  "source_snapshots": [
+    {
+      "source_id": "S1",
+      "source_snapshot": "AGENTS.md.source",
+      "sha256": "76fcd243d794d6b68dfedcf9d39d1baaa5884bee6fcde31354814f0a3bbc519e",
+      "bytes": 1493,
+      "intended_repository_path": "docs/AGENTS.md",
+      "base_matches_repository": true
+    },
+    {
+      "source_id": "S2",
+      "source_snapshot": "ACTIVE_BUILD.md.source",
+      "sha256": "d1e27683b51519eea570b480e286fb2800377bb749ac85d58de3c3733fd1950a",
+      "bytes": 87945,
+      "intended_repository_path": "docs/current/ACTIVE_BUILD.md",
+      "base_matches_repository": true
+    },
+    {
+      "source_id": "S3",
+      "source_snapshot": "ROADMAP_EGOLINK_P0.md.source",
+      "sha256": "904ff9397bb1c6ad8b508c360eaf91d8c8d47060fbe7ff73a9010ba9789e74bf",
+      "bytes": 26336,
+      "intended_repository_path": "docs/current/ROADMAP_EGOLINK_P0.md",
+      "base_matches_repository": true
+    },
+    {
+      "source_id": "S4",
+      "source_snapshot": "STATUS.md.source",
+      "sha256": "b078d1b11fdd4e4b93edafba7af3aec6e40aa3dd66b49d54c07130c9e9f31e3a",
+      "bytes": 337938,
+      "intended_repository_path": "docs/current/STATUS.md",
+      "base_matches_repository": true
+    },
+    {
+      "source_id": "S5",
+      "source_snapshot": "TASK_TREE.md.source",
+      "sha256": "3f6eb8e8dcea2058e17aa4f6d1e504a3fd404e7e5de015e75b52a9ca6796e609",
+      "bytes": 98510,
+      "intended_repository_path": "docs/tasks/TASK_TREE.md",
+      "base_matches_repository": true
+    },
+    {
+      "source_id": "S6",
+      "source_snapshot": "EGO_MASTER_CONTEXT.md.source",
+      "sha256": "49cd982971f057bcda2a67056efb59df02eb086cb7369eb00c57632e62815a34",
+      "bytes": 4258,
+      "intended_repository_path": null,
+      "base_matches_repository": false
+    }
+  ],
+  "repository_originals": [
+    {
+      "repository_path": "docs/AGENTS.md",
+      "snapshot": "AGENTS.md.source",
+      "sha256": "76fcd243d794d6b68dfedcf9d39d1baaa5884bee6fcde31354814f0a3bbc519e",
+      "bytes": 1493
+    },
+    {
+      "repository_path": "docs/CONTEXT_INDEX.md",
+      "snapshot": "docs__CONTEXT_INDEX.md.repository.source",
+      "sha256": "9343e27559de0e6e9684c52913eaba56beb582721f4c86d15539340f0818cbad",
+      "bytes": 14741
+    },
+    {
+      "repository_path": "docs/product/NORTH_STAR.md",
+      "snapshot": "docs__product__NORTH_STAR.md.repository.source",
+      "sha256": "afbb4660df6cb3f40d61896204120402afd6d555a8913d4ccc2d555af6ea3420",
+      "bytes": 14074
+    },
+    {
+      "repository_path": "docs/product/EGO_MASTER_CONTEXT.md",
+      "snapshot": "docs__product__EGO_MASTER_CONTEXT.md.repository.source",
+      "sha256": "8466cf864bff09e62a4da01d506a91951046143aff1b06875fa6d382231307c0",
+      "bytes": 40122
+    },
+    {
+      "repository_path": "docs/product/PRODUCT_CHARTER.md",
+      "snapshot": "docs__product__PRODUCT_CHARTER.md.repository.source",
+      "sha256": "2236c89f21ec22ee9efa07697efe32b75851cfd7035fdefbc3c83028442d9561",
+      "bytes": 2851
+    },
+    {
+      "repository_path": "docs/product/P0_SCOPE.md",
+      "snapshot": "docs__product__P0_SCOPE.md.repository.source",
+      "sha256": "c69a92549f322a67139ff7a52bce6868e7407869387c322001631e81d8c973a4",
+      "bytes": 3625
+    },
+    {
+      "repository_path": "docs/current/FIRST_LAUNCH_EXECUTION.md",
+      "snapshot": "docs__current__FIRST_LAUNCH_EXECUTION.md.repository.source",
+      "sha256": "941bbbaf0ea2dcc4348e6acc47d4ac1e5f75027973219132eb8a23d13306f605",
+      "bytes": 21204
+    },
+    {
+      "repository_path": "docs/current/ACTIVE_BUILD.md",
+      "snapshot": "ACTIVE_BUILD.md.source",
+      "sha256": "d1e27683b51519eea570b480e286fb2800377bb749ac85d58de3c3733fd1950a",
+      "bytes": 87945
+    },
+    {
+      "repository_path": "docs/current/ROADMAP_EGOLINK_P0.md",
+      "snapshot": "ROADMAP_EGOLINK_P0.md.source",
+      "sha256": "904ff9397bb1c6ad8b508c360eaf91d8c8d47060fbe7ff73a9010ba9789e74bf",
+      "bytes": 26336
+    },
+    {
+      "repository_path": "docs/current/STATUS.md",
+      "snapshot": "STATUS.md.source",
+      "sha256": "b078d1b11fdd4e4b93edafba7af3aec6e40aa3dd66b49d54c07130c9e9f31e3a",
+      "bytes": 337938
+    },
+    {
+      "repository_path": "docs/tasks/TASK_TREE.md",
+      "snapshot": "TASK_TREE.md.source",
+      "sha256": "3f6eb8e8dcea2058e17aa4f6d1e504a3fd404e7e5de015e75b52a9ca6796e609",
+      "bytes": 98510
+    },
+    {
+      "repository_path": "docs/tasks/active/LOC-021_DEVICE_LOCATION_INTEGRATION.md",
+      "snapshot": "docs__tasks__active__LOC-021_DEVICE_LOCATION_INTEGRATION.md.repository.source",
+      "sha256": "862e6d248629d1b608a232998edf095299e6b8673f59c88afecafb22950a5190",
+      "bytes": 71309
+    },
+    {
+      "repository_path": "docs/tasks/active/SOS-010_SOS_WALKING_SKELETON.md",
+      "snapshot": "docs__tasks__active__SOS-010_SOS_WALKING_SKELETON.md.repository.source",
+      "sha256": "29e7f0652dfaf5e483c25630e76451e22540ae579790548efd1a6b8fcbced4f9",
+      "bytes": 64071
+    },
+    {
+      "repository_path": "docs/architecture/adr/README.md",
+      "snapshot": "docs__architecture__adr__README.md.repository.source",
+      "sha256": "dafed0a608d4b635175babbff27efb900251bce0d182e445fc76ac8b26da4c6d",
+      "bytes": 492
+    }
+  ],
+  "adr_assignment": "docs/architecture/adr/ADR-0014-runtime-convergence.md",
+  "candidate_hashes_verified": true,
+  "gate_states": {
+    "P0-LOC": "NOT_RUN",
+    "P0-CALL": "NOT_RUN",
+    "P0-SOS": "NOT_RUN"
+  },
+  "semantic_actions": {
+    "docs/AGENTS.md": "Semantic merge of candidate scope/evidence/operational rules; keep root authority and operative historical preservation rules.",
+    "docs/current/ACTIVE_BUILD.md": "Keep all recorded image identities and prior failures; add distinct selected-live-profile direction and correct T0 global sequencing.",
+    "docs/current/ROADMAP_EGOLINK_P0.md": "Add bounded-runtime, physical-safety/recovery, carry and campaign outcomes; retain existing R/D/KR lineage and release scope.",
+    "docs/current/STATUS.md": "Retain complete dated evidence history; add only nine lines of accepted direction, no new verification result.",
+    "docs/tasks/TASK_TREE.md": "Keep task IDs/history; update current WIP and execution order to concrete Location/CALL then SOS.",
+    "docs/product/EGO_MASTER_CONTEXT.md": "Retain current EgoLink v2.2 product authority; uploaded desktop S6 is historical only; add ADR0014 runtime interpretation.",
+    "docs/product/NORTH_STAR.md": "Founder-authorized dated direction and changelog; preserve last_verified and all product commitments.",
+    "docs/product/PRODUCT_CHARTER.md": "Clarify independent recognized/stored/delivered outcomes and bounded live implementation unit without Gate changes.",
+    "docs/product/P0_SCOPE.md": "Clarify device-owned local runtime, single-source live scope and retained concurrent recovery promises.",
+    "docs/CONTEXT_INDEX.md": "Route current context to accepted ADR0014 and active convergence packet; maintain specialized fact ownership.",
+    "docs/current/FIRST_LAUNCH_EXECUTION.md": "Replace immediate order and narrow global T0/T1 dependency; retain prior dated evidence and final campaigns.",
+    "docs/tasks/active/LOC-021_DEVICE_LOCATION_INTEGRATION.md": "Dispatch bounded real Location; explicitly retain original T0/T1 ordering/checkpoint/tombstone/no-output replay commitments.",
+    "docs/tasks/active/SOS-010_SOS_WALKING_SKELETON.md": "Record recognized-input and storage-failure migration and no replayed ended-call effect; prior slices stay historical evidence.",
+    "docs/architecture/adr/README.md": "Index accepted ADR0014; ADR0013 remains proposed."
+  },
+  "additional_files": {
+    "docs/architecture/adr/ADR-0014-runtime-convergence.md": "Candidate ADR allocated unused 0014; accepted founder decision, implementation still in progress.",
+    "docs/tasks/active/P0-CONVERGENCE-20260905.md": "Candidate promoted to active scoped execution packet with real context/allowed_paths/validation; no runtime authorization."
+  },
+  "conflicts": [
+    {
+      "input": "S6 EGO_MASTER_CONTEXT.md",
+      "resolution": "Existing authority and prior ADR0008 migration establish this as desktop Ego history; never replace current EgoLink v2.2 authority.",
+      "unresolved": false
+    },
+    {
+      "input": "Candidate global T0/T1 reprioritization vs existing concurrent product design",
+      "resolution": "Bounded S/single-source live does not wait; original concurrent ordering/recovery invariants remain pending until proven or an explicitly reviewed equivalent.",
+      "unresolved": false
+    },
+    {
+      "input": "ADR0012 section6 and prior SOS local-feedback-after-durability interpretation",
+      "resolution": "ADR0014 explicitly separates recognized input from durable/remote outcomes; executable behavior regression required before activation.",
+      "unresolved": false
+    }
+  ],
+  "validation": {
+    "context_lint": "PASS on 2026-09-05; initial missing nonexistent config path and new ADR date metadata corrected",
+    "docs_diff_check": "PASS",
+    "immutable_snapshots_and_original_hashes": "PASS: 6 source snapshots and 14 repository-original mappings",
+    "last_verified_dates": "PASS: all existing values unchanged",
+    "root_AGENTS_and_ADR0013": "PASS: root hash unchanged; ADR0013 stays proposed",
+    "source_behavior_tests_builds_hardware_network": "Not executed by the documentation migration executor; integrator reports separately"
+  }
+}

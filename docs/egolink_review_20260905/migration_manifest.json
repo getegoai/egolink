@@ -1,0 +1,147 @@
+{
+  "schema": "egolink.review_bundle.v1",
+  "review_date": "2026-09-05",
+  "evidence_as_of": "2026-09-04",
+  "scope": "documentation_review_and_revision_candidates",
+  "repository_read": false,
+  "firmware_changed": false,
+  "hardware_exercised": false,
+  "vps_deployed": false,
+  "source_snapshots": [
+    {
+      "source_id": "S1",
+      "uploaded_filename": "AGENTS.md",
+      "intended_repository_path": "docs/AGENTS.md",
+      "snapshot": "candidate/docs/archive/reviews/20260905_input_snapshots/AGENTS.md.source",
+      "sha256": "76fcd243d794d6b68dfedcf9d39d1baaa5884bee6fcde31354814f0a3bbc519e",
+      "bytes": 1493,
+      "lines": 25,
+      "path_verified_in_repository": false
+    },
+    {
+      "source_id": "S2",
+      "uploaded_filename": "ACTIVE_BUILD.md",
+      "intended_repository_path": "docs/current/ACTIVE_BUILD.md",
+      "snapshot": "candidate/docs/archive/reviews/20260905_input_snapshots/ACTIVE_BUILD.md.source",
+      "sha256": "d1e27683b51519eea570b480e286fb2800377bb749ac85d58de3c3733fd1950a",
+      "bytes": 87945,
+      "lines": 1315,
+      "path_verified_in_repository": false
+    },
+    {
+      "source_id": "S3",
+      "uploaded_filename": "ROADMAP_EGOLINK_P0.md",
+      "intended_repository_path": "docs/current/ROADMAP_EGOLINK_P0.md",
+      "snapshot": "candidate/docs/archive/reviews/20260905_input_snapshots/ROADMAP_EGOLINK_P0.md.source",
+      "sha256": "904ff9397bb1c6ad8b508c360eaf91d8c8d47060fbe7ff73a9010ba9789e74bf",
+      "bytes": 26336,
+      "lines": 630,
+      "path_verified_in_repository": false
+    },
+    {
+      "source_id": "S4",
+      "uploaded_filename": "STATUS.md",
+      "intended_repository_path": "docs/current/STATUS.md",
+      "snapshot": "candidate/docs/archive/reviews/20260905_input_snapshots/STATUS.md.source",
+      "sha256": "b078d1b11fdd4e4b93edafba7af3aec6e40aa3dd66b49d54c07130c9e9f31e3a",
+      "bytes": 337938,
+      "lines": 3276,
+      "path_verified_in_repository": false
+    },
+    {
+      "source_id": "S5",
+      "uploaded_filename": "TASK_TREE.md",
+      "intended_repository_path": "docs/tasks/TASK_TREE.md",
+      "snapshot": "candidate/docs/archive/reviews/20260905_input_snapshots/TASK_TREE.md.source",
+      "sha256": "3f6eb8e8dcea2058e17aa4f6d1e504a3fd404e7e5de015e75b52a9ca6796e609",
+      "bytes": 98510,
+      "lines": 1612,
+      "path_verified_in_repository": false
+    },
+    {
+      "source_id": "S6",
+      "uploaded_filename": "EGO_MASTER_CONTEXT.md",
+      "intended_repository_path": null,
+      "snapshot": "candidate/docs/archive/reviews/20260905_input_snapshots/EGO_MASTER_CONTEXT.md.source",
+      "sha256": "49cd982971f057bcda2a67056efb59df02eb086cb7369eb00c57632e62815a34",
+      "bytes": 4258,
+      "lines": 75,
+      "path_verified_in_repository": false
+    }
+  ],
+  "replacement_files": [
+    {
+      "source_id": "S1",
+      "target": "docs/AGENTS.md",
+      "candidate": "candidate/docs/AGENTS.md",
+      "expected_uploaded_base_sha256": "76fcd243d794d6b68dfedcf9d39d1baaa5884bee6fcde31354814f0a3bbc519e",
+      "candidate_sha256": "abcd81d57f69f1bb734d0e960adc4bddaf850cbbc1ad5f579412262b0cd92eb2",
+      "application_mode": "read_router_then_semantic_merge_if_current_differs",
+      "authority_after_write": "proposed_until_repository_review"
+    },
+    {
+      "source_id": "S2",
+      "target": "docs/current/ACTIVE_BUILD.md",
+      "candidate": "candidate/docs/current/ACTIVE_BUILD.md",
+      "expected_uploaded_base_sha256": "d1e27683b51519eea570b480e286fb2800377bb749ac85d58de3c3733fd1950a",
+      "candidate_sha256": "25e26d98e38a31bc09d1a4381a8d362cd158a422ba1cb50b5c4f0bbfb7d4e844",
+      "application_mode": "read_router_then_semantic_merge_if_current_differs",
+      "authority_after_write": "proposed_until_repository_review"
+    },
+    {
+      "source_id": "S3",
+      "target": "docs/current/ROADMAP_EGOLINK_P0.md",
+      "candidate": "candidate/docs/current/ROADMAP_EGOLINK_P0.md",
+      "expected_uploaded_base_sha256": "904ff9397bb1c6ad8b508c360eaf91d8c8d47060fbe7ff73a9010ba9789e74bf",
+      "candidate_sha256": "00bc2a105015c104ca560bb90f76979376ed1de31a570dfcd3920390ed211a03",
+      "application_mode": "read_router_then_semantic_merge_if_current_differs",
+      "authority_after_write": "proposed_until_repository_review"
+    },
+    {
+      "source_id": "S4",
+      "target": "docs/current/STATUS.md",
+      "candidate": "candidate/docs/current/STATUS.md",
+      "expected_uploaded_base_sha256": "b078d1b11fdd4e4b93edafba7af3aec6e40aa3dd66b49d54c07130c9e9f31e3a",
+      "candidate_sha256": "07ffccadf7217e467443eabc5657f9b6d8a2179771fbaa7a0dca2b17f2a3c085",
+      "application_mode": "read_router_then_semantic_merge_if_current_differs",
+      "authority_after_write": "proposed_until_repository_review"
+    },
+    {
+      "source_id": "S5",
+      "target": "docs/tasks/TASK_TREE.md",
+      "candidate": "candidate/docs/tasks/TASK_TREE.md",
+      "expected_uploaded_base_sha256": "3f6eb8e8dcea2058e17aa4f6d1e504a3fd404e7e5de015e75b52a9ca6796e609",
+      "candidate_sha256": "2fc644c3611cc0a8abf734144fb80a489e5125ed048a2af84d39b98520c20b9d",
+      "application_mode": "read_router_then_semantic_merge_if_current_differs",
+      "authority_after_write": "proposed_until_repository_review"
+    }
+  ],
+  "additional_candidates": [
+    {
+      "target_candidate": "docs/architecture/adr/ADR-DRAFT-20260905-runtime-convergence.md",
+      "candidate": "candidate/docs/architecture/adr/ADR-DRAFT-20260905-runtime-convergence.md",
+      "sha256": "67fef9c5e62d72d159d74391ad3a34dc48dc267a9ec2fb4ea51a3cc56a6f0fb8",
+      "must_check_path_or_id_collision": true
+    },
+    {
+      "target_candidate": "docs/tasks/active/P0-CONVERGENCE-20260905.md",
+      "candidate": "candidate/docs/tasks/active/P0-CONVERGENCE-20260905.md",
+      "sha256": "21c1a66a57bcb5b9ee4baec5b5d781e7158add76eed584bf779ce7e32e5b0ab4",
+      "must_check_path_or_id_collision": true
+    }
+  ],
+  "not_provided_but_must_reconcile": [
+    "AGENTS.md (repository root)",
+    "docs/CONTEXT_INDEX.md",
+    "docs/product/PRODUCT_CHARTER.md",
+    "docs/product/NORTH_STAR.md",
+    "docs/current/FIRST_LAUNCH_EXECUTION.md",
+    "docs/hardware/BOARD_MATRIX.md",
+    "relevant architecture ADRs and active task packets"
+  ],
+  "gate_states_retained": {
+    "P0-LOC": "NOT_RUN",
+    "P0-CALL": "NOT_RUN",
+    "P0-SOS": "NOT_RUN"
+  }
+}

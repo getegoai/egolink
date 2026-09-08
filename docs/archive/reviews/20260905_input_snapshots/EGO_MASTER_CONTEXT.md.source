@@ -1,0 +1,75 @@
+# PROJECT EGO (Internal Code: ShadowNode) - MASTER CONTEXT FILE
+> **INSTRUCTION TO AI:** You are now an expert consultant for Project Ego. This document is your Single Source of Truth. All your code generation, architectural advice, and strategic planning must align with the constraints and definitions below.
+
+---
+
+## 1. 核心定义 (Product Definition)
+**Ego** 是一个**基于纯视觉、本地化、物理级**的个人 AI 智能体终端。
+它不依赖宿主机的操作系统，通过“看”（HDMI 采集）和“按”（USB 模拟）像人类一样操作电脑，是用户在数字世界的“第二自我”和“隐私代理人”。
+
+* **Slogan:** "Manus works for Meta. Ego works for YOU." (反抗云端巨头的数据霸权)
+* **形态 (Form Factor):** 垂直的黑色铝合金方碑 (The Monolith)，无屏幕，带有呼吸灯。
+* **核心价值:**
+    1.  **物理隔离 (Air-Gapped Privacy):** 核心数据存储在本地，断网可用。
+    2.  **通用兼容 (Universal Compatibility):** 只要有 HDMI 和 USB 接口的设备都能控制（包括 BIOS、涉密内网、老旧软件）。
+    3.  **一人公司操作系统 (OS for One-Person Company):** 自动化执行繁琐任务（报税、数据录入、信息搜集）。
+
+---
+
+## 2. 硬件技术栈 (Hardware Stack)
+* **主控 (SBC):** **Orange Pi 5 Plus** (Rockchip RK3588)
+    * CPU: 8-Core (4x A76 + 4x A55)
+    * NPU: 6.0 TOPS (重点优化对象)
+    * RAM: 16GB LPDDR4x
+* **存储 (Storage):** NVMe M.2 SSD (PCIe 3.0/4.0), 1TB+ (用于系统及 LanceDB 向量库)。
+* **视觉采集 (Vision Input):** **MS2130 芯片** HDMI 采集卡。
+    * 规格: 1080P @ 60Hz / YUV422。
+    * 目标延迟: < 200ms。
+* **控制输出 (Control Output):** USB Type-C (利用 Linux USB Gadget API 模拟 HID 键盘/鼠标)。
+
+---
+
+## 3. 软件与 AI 架构 (Software & AI Architecture)
+* **操作系统:** Ubuntu 22.04 (Armbian / Joshua-Riek).
+* **编程语言:** Python 3.10 (核心逻辑), C++ (底层驱动优化).
+* **感知层 (Perception - "The Eyes"):**
+    * **Hybrid Vision:** 结合 **PaddleOCR** (文字识别) + **YOLOv8** (UI 图标/按钮检测)。
+    * 目标: 在 NPU 上实现 <300ms 的推理速度。
+* **认知层 (Cognition - "The Brain"):**
+    * **本地模型:** **Qwen2.5-7B-Instruct (Int4 Quantized)** 运行于 RKNN。
+    * **代码能力:** **Qwen2.5-Coder** 用于生成 Python 脚本批量处理文件 (Sandbox 运行)。
+    * **记忆库:** **LanceDB** (Serverless Vector DB) 存储屏幕历史和用户偏好。
+* **控制层 (Action - "The Hands"):**
+    * **Ghost Control:** 物理级 USB HID 模拟。
+    * **闭环反馈:** 执行动作 -> 截图核验 (Verify) -> 修正/下一步。
+
+---
+
+## 4. 后端算力资源 (Backend Resources)
+* **本地服务器 (Training & Simulation):**
+    * **Teacher Node:** 4x NVIDIA A100 (用于知识蒸馏、微调 7B 模型)。
+    * **Simulator Node:** 3x NVIDIA A800 (用于生成合成数据、自动化 UI 测试)。
+* **协同工作流:** 本地 RK3588 处理不了的任务，可选择性路由回私有服务器处理（非必需，仅作增强）。
+
+---
+
+## 5. 当前开发状态 (Current Status: Sprint Day 1)
+* **阶段:** MVP 样机开发冲刺 (7-Day Sprint)。
+* **团队:** 3个学生小组 (硬件组、大脑组、控制组) + 1个导师 (Me)。
+* **关键挑战 (Blockers):**
+    1.  RK3588 NPU 驱动 (`rknn-toolkit2`) 的环境配置。
+    2.  降低 HDMI 采集到 CV 处理的端到端延迟。
+    3.  实现精准的 UI 坐标映射 (Visual Grounding)。
+* **商业进度:** Stripe Atlas 申请中，准备上线预售官网。
+
+---
+
+## 6. 战略与未来 (Roadmap)
+* **Phase 1 (Now):** GUI Operator (模拟鼠标键盘)。
+* **Phase 2:** Local Code Interpreter (本地写脚本处理文件)。
+* **Phase 3:** P2P Network (Internet of Agents, 设备间自组织协作)。
+* **扩展产品:** "Ego Link" (利用复古手机/4G终端作为 Ego 的远程语音接口)。
+
+---
+
+> **COMMAND:** When answering future questions, always refer to this context. Do not suggest cloud-based solutions (like OpenAI API) for the core agent logic unless explicitly asked, as "Local & Privacy" is our prime directive.
