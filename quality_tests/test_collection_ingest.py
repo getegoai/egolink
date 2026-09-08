@@ -14,6 +14,8 @@ import threading
 import unittest
 from urllib import error, parse, request
 
+from jsonschema import Draft202012Validator
+
 from server import message_hub
 from server.collection_store import CollectionError, CONTENT_TYPE
 from server.guardian_device_authorization import GuardianDeviceAuthorizer, token_sha256
@@ -33,6 +35,25 @@ def envelope(sequence=1, source="gnss", **changes):
         "fw_version": "test-collector", "config_id": "test-config-v1", "session_id": "test-session",
         "status": "no_fix", "payload": {"at": [{"command": "AT+CGNSSINFO", "response": "+CGNSSINFO: ,,,,,,,,\r\nOK\r\n", "outcome": "no_fix", "elapsed_ms": 13}], "parsed": None},
         "missing_reason": "indoor_no_fix",
+    }
+    value.update(changes)
+    return value
+
+
+def wifi_scan_payload(**changes):
+    value = {
+        "channel_summary": [
+            {"channel": 1, "ap_count": 2, "strongest_rssi": -41},
+            {"channel": 11, "ap_count": 1, "strongest_rssi": -67},
+        ],
+        "scan_result": 0,
+        "total_seen": 3,
+        "truncated": False,
+        "sampled_ap_count": 3,
+        "identifiers_retained": False,
+        "privacy_reason": "raw_wifi_identifiers_disabled",
+        "connected": True,
+        "disconnect_reason": 0,
     }
     value.update(changes)
     return value
@@ -89,6 +110,11 @@ class CollectionIngestTests(unittest.TestCase):
         raw = frame(value)
         return self.store.collection.ingest(raw, raw_record(raw), transport=transport)
 
+    def table_counts(self):
+        with self.store.connection() as db:
+            return tuple(db.execute("SELECT COUNT(*) FROM " + table).fetchone()[0]
+                         for table in ("raw_frames", "collection_records", "collection_delivery_attempts"))
+
     def test_collection_is_main_entry_and_engineering_view_remains_available(self):
         with running_hub(self.store) as base:
             root_status, root, headers = http(base, "/")
@@ -123,6 +149,150 @@ class CollectionIngestTests(unittest.TestCase):
             summary = json.loads(output)
             self.assertEqual(summary["sources"][0]["no_fix"], 1)
             self.assertIsNone(summary["sources"][0]["latest"]["envelope"]["timestamp_utc"])
+
+    def test_wifi_privacy_guard_rejects_top_nested_case_and_raw_ap_variants_before_writes(self):
+        prohibited = (
+            {"ssid": "private-network-name"},
+            {"metadata": {"BsSiD": "00:11:22:33:44:55"}},
+            {"samples": [{"MaC": "00:11:22:33:44:55"}]},
+            {"RaW_scan": "private-scan-bytes"},
+            {"APs": [{"identifier": "opaque-private-id", "rssi": -42}]},
+        )
+        details = set()
+        for sequence, payload in enumerate(prohibited, 20):
+            with self.subTest(payload=next(iter(payload))):
+                with self.assertRaises(CollectionError) as raised:
+                    self.ingest(envelope(sequence, source="wifi", status="observed", payload=payload, missing_reason=None))
+                self.assertEqual(raised.exception.code, "collection_privacy_policy_rejected")
+                self.assertEqual(raised.exception.status, 422)
+                details.add(str(raised.exception))
+        self.assertEqual(details, {"Wi-Fi collection payload violates the privacy admission policy"})
+        renamed_top_level = envelope(29, source="wifi", status="observed",
+                                     payload=wifi_scan_payload(), missing_reason=None)
+        renamed_top_level["wifi_bssid"] = "00:11:22:33:44:55"
+        with self.assertRaises(CollectionError) as raised:
+            self.store.collection.ingest(frame(renamed_top_level), raw_record(frame(renamed_top_level)), transport="wifi")
+        self.assertEqual(raised.exception.code, "collection_privacy_policy_rejected")
+        self.assertEqual(self.table_counts(), (0, 0, 0))
+
+    def test_wifi_privacy_http_rejection_has_no_echo_ack_rows_or_delivery_attempt(self):
+        private_value = "operator-private-network"
+        value = envelope(30, source="wifi", status="observed",
+                         payload={"nested": {"SSID": private_value}}, missing_reason=None)
+        with running_hub(self.store) as base:
+            code, body, _ = http(base, f"/api/v1/devices/{DEVICE}/raw-ingest",
+                                 body=frame(value), token=UPLOAD_TOKEN, transport="wifi")
+        response = json.loads(body)
+        self.assertEqual(code, 422, body)
+        self.assertEqual(response, {
+            "ok": False,
+            "error": "collection_privacy_policy_rejected",
+            "detail": "Wi-Fi collection payload violates the privacy admission policy",
+        })
+        self.assertNotIn(private_value, body.decode())
+        self.assertNotIn("delivery_ack", response)
+        self.assertEqual(self.table_counts(), (0, 0, 0))
+
+    def test_wifi_privacy_rejection_precedes_existing_identity_conflict(self):
+        accepted = envelope(40, source="wifi", status="connected",
+                            payload={"phase": "link_event", "connected": True}, missing_reason=None)
+        self.ingest(accepted)
+        conflicting_private = {**accepted, "payload": {"BSSID": "00:11:22:33:44:55"}}
+        with running_hub(self.store) as base:
+            code, body, _ = http(base, f"/api/v1/devices/{DEVICE}/raw-ingest",
+                                 body=frame(conflicting_private), token=UPLOAD_TOKEN, transport="lte")
+        response = json.loads(body)
+        self.assertEqual(code, 422, body)
+        self.assertEqual(response["error"], "collection_privacy_policy_rejected")
+        self.assertNotIn("delivery_ack", response)
+        self.assertEqual(self.table_counts(), (1, 1, 1))
+
+    def test_complete_identifier_free_wifi_scan_shape_is_accepted_exactly(self):
+        value = envelope(45, source="wifi", status="observed",
+                         payload=wifi_scan_payload(), missing_reason=None)
+        raw = frame(value)
+        result = self.store.collection.ingest(raw, raw_record(raw), transport="wifi")
+        self.assertEqual(result["result"], "accepted")
+        self.assertEqual(result["delivery_ack"]["payload_sha256"], hashlib.sha256(raw).hexdigest())
+        with self.store.connection() as db:
+            stored = base64.b64decode(db.execute("SELECT raw_payload_b64 FROM raw_frames").fetchone()[0])
+        self.assertEqual(stored, raw)
+
+    def test_wifi_scan_shape_rejects_retention_true_extra_keys_and_bad_channel_items(self):
+        invalid_payloads = (
+            wifi_scan_payload(identifiers_retained=True),
+            wifi_scan_payload(privacy_reason="identifier_policy_unknown"),
+            wifi_scan_payload(unexpected_aggregate=1),
+            wifi_scan_payload(channel_summary=[{"channel": 1, "ap_count": 1, "strongest_rssi": -41, "average_rssi": -50}], sampled_ap_count=1, total_seen=1),
+            wifi_scan_payload(channel_summary=[{"channel": 15, "ap_count": 1, "strongest_rssi": -41}], sampled_ap_count=1, total_seen=1),
+            wifi_scan_payload(channel_summary=[{"channel": 1, "ap_count": 1, "strongest_rssi": -128}], sampled_ap_count=1, total_seen=1),
+            wifi_scan_payload(channel_summary=[
+                {"channel": 1, "ap_count": 1, "strongest_rssi": -41},
+                {"channel": 1, "ap_count": 2, "strongest_rssi": -52},
+            ], sampled_ap_count=3, total_seen=3),
+        )
+        for sequence, payload in enumerate(invalid_payloads, 46):
+            with self.subTest(sequence=sequence):
+                with self.assertRaises(CollectionError) as raised:
+                    self.ingest(envelope(sequence, source="wifi", status="observed",
+                                         payload=payload, missing_reason=None))
+                self.assertEqual(raised.exception.code, "collection_privacy_policy_rejected")
+        self.assertEqual(self.table_counts(), (0, 0, 0))
+
+    def test_privacy_guard_preserves_exact_raw_first_for_allowed_wifi_and_nonwifi(self):
+        values = (
+            (envelope(50, source="wifi", status="observed", missing_reason=None,
+                      payload=wifi_scan_payload()), "wifi"),
+            (envelope(51), "lte"),
+        )
+        raw_frames = []
+        for value, transport in values:
+            raw = frame(value)
+            raw_frames.append(raw)
+            result = self.store.collection.ingest(raw, raw_record(raw), transport=transport)
+            self.assertEqual(result["result"], "accepted")
+            self.assertEqual(result["delivery_ack"]["payload_sha256"], hashlib.sha256(raw).hexdigest())
+        with self.store.connection() as db:
+            stored = [base64.b64decode(row[0]) for row in
+                      db.execute("SELECT raw_payload_b64 FROM raw_frames ORDER BY id")]
+        self.assertEqual(stored, raw_frames)
+        self.assertEqual(self.table_counts(), (2, 2, 2))
+
+    def test_wifi_schema_enforces_privacy_shape_and_leaves_nonwifi_additive(self):
+        schema_path = Path(__file__).resolve().parents[1] / "shared/contracts/collection_observation.schema.json"
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+        validator = Draft202012Validator(schema)
+        legal = envelope(60, source="wifi", status="connected",
+                         payload={"phase": "link_event", "connected": True}, missing_reason=None)
+        self.assertEqual(list(validator.iter_errors(legal)), [])
+        complete_scan = envelope(66, source="wifi", status="observed",
+                                 payload=wifi_scan_payload(), missing_reason=None)
+        self.assertEqual(list(validator.iter_errors(complete_scan)), [])
+        for invalid in (
+            envelope(61, source="wifi", payload={"bssid": "00:11:22:33:44:55"}),
+            envelope(62, source="wifi", payload={"nested": {"SSID": "private"}}),
+            {**envelope(63, source="wifi", payload={"connected": True}), "MaC": "00:11:22:33:44:55"},
+            {**envelope(72, source="wifi", payload=wifi_scan_payload()), "wifi_bssid": "00:11:22:33:44:55"},
+            envelope(64, source="wifi", payload={"aps": [{"rssi": -40}]}),
+            envelope(67, source="wifi", payload=wifi_scan_payload(identifiers_retained=True)),
+            envelope(71, source="wifi", payload=wifi_scan_payload(privacy_reason="identifier_policy_unknown")),
+            envelope(68, source="wifi", payload=wifi_scan_payload(extra_field=False)),
+            envelope(69, source="wifi", payload=wifi_scan_payload(
+                channel_summary=[{"channel": 0, "ap_count": 1, "strongest_rssi": -50}],
+                sampled_ap_count=1, total_seen=1)),
+            envelope(70, source="wifi", payload=wifi_scan_payload(
+                channel_summary=[{"channel": 6, "ap_count": 1, "strongest_rssi": -50, "extra": 1}],
+                sampled_ap_count=1, total_seen=1)),
+            envelope(73, source="wifi", payload=wifi_scan_payload(
+                channel_summary=[
+                    {"channel": 6, "ap_count": 1, "strongest_rssi": -50},
+                    {"channel": 6, "ap_count": 2, "strongest_rssi": -60},
+                ], sampled_ap_count=3, total_seen=3)),
+        ):
+            self.assertTrue(list(validator.iter_errors(invalid)))
+        nonwifi = envelope(65, source="device", status="observed", payload={"raw_diagnostic": "preserved"})
+        self.assertEqual(list(validator.iter_errors(nonwifi)), [])
 
     def test_concurrent_retry_and_network_change_preserve_identity_and_one_raw_copy(self):
         value, raw = envelope(), frame(envelope())

@@ -33,6 +33,7 @@ class CollectionHttpsNativeTests(unittest.TestCase):
 
     def test_fixed_device_route_headers_and_actual_sdk_interface_binding(self):
         self.assertTrue(self.result["fixed_route_headers_interface"])
+        self.assertTrue(self.result["ppp_interface_binding"])
 
     def test_complete_real_server_ack_round_trips_through_the_native_matcher(self):
         self.assertTrue(self.result["complete_server_ack"])

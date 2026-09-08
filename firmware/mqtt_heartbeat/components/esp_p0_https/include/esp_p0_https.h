@@ -29,7 +29,9 @@ egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_post(
     egolink_p0_delivery_post_result_t *result);
 
 /* Collection uses the same bounded certificate/hostname verified implementation,
- * a fixed per-device raw-ingest path and a named actual Wi-Fi interface. */
+ * a fixed per-device raw-ingest path and a named actual Wi-Fi or PPP interface.
+ * Only strict st<digits>/pp<digits> names are admitted; the implementation
+ * derives the transport header from that family and binds the socket to it. */
 egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_post_collection(
     egolink_esp_p0_https_t *context, const char *device_id, const char *interface_name,
     const egolink_p0_delivery_post_request_t *request,

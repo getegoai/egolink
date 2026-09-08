@@ -21,6 +21,80 @@ config EGOLINK_COLLECTION_NO_SIM
     default y
     depends on EGOLINK_COLLECTION_PROFILE
 
+config EGOLINK_COLLECTION_LTE_PPP_ENABLED
+    bool "Enable collector Wi-Fi-priority USB LTE/PPP fallback"
+    default n
+    depends on EGOLINK_COLLECTION_PROFILE && !EGOLINK_COLLECTION_NO_SIM
+    depends on EGOLINK_COLLECTION_USB_LTE
+    help
+        Explicit engineering opt-in. The existing collection modem task remains
+        the only AT/PPP control owner; the uploader consumes only the selected
+        netif and route generation. This option requires an operator-verified
+        USB descriptor and a preconfigured, observed PDP CID 1/APN. Firmware
+        never guesses or writes an APN. It does not authorize SIM traffic.
+
+config EGOLINK_COLLECTION_LTE_USB_DESCRIPTOR_VERIFIED
+    bool "Operator verified exact USB LTE descriptor and modem interface"
+    default n
+    depends on EGOLINK_COLLECTION_LTE_PPP_ENABLED
+    help
+        Set only in ignored local configuration after recording the actual USB
+        VID, PID, and CDC modem interface. A board or modem model name is not
+        descriptor evidence. Enabled builds fail closed while this is false.
+
+config EGOLINK_COLLECTION_LTE_USB_VENDOR_ID
+    hex "USB LTE vendor ID"
+    range 0x0000 0xffff
+    default 0x0000
+    depends on EGOLINK_COLLECTION_LTE_PPP_ENABLED
+
+config EGOLINK_COLLECTION_LTE_USB_PRODUCT_ID
+    hex "USB LTE product ID"
+    range 0x0000 0xffff
+    default 0x0000
+    depends on EGOLINK_COLLECTION_LTE_PPP_ENABLED
+
+config EGOLINK_COLLECTION_LTE_USB_MODEM_INTERFACE
+    int "USB CDC modem interface number"
+    range -1 255
+    default -1
+    depends on EGOLINK_COLLECTION_LTE_PPP_ENABLED
+
+config EGOLINK_COLLECTION_LTE_USB_HOST_ALREADY_INSTALLED
+    bool "USB host driver is already installed by the selected image"
+    default n
+    depends on EGOLINK_COLLECTION_LTE_PPP_ENABLED
+
+config EGOLINK_COLLECTION_LTE_COMMAND_TIMEOUT_MS
+    int "USB LTE command response timeout ms"
+    range 100 10000
+    default 5000
+    depends on EGOLINK_COLLECTION_LTE_PPP_ENABLED
+
+config EGOLINK_COLLECTION_LTE_ATTEMPT_TIMEOUT_MS
+    int "Complete LTE attempt timeout ms"
+    range 5000 120000
+    default 45000
+    depends on EGOLINK_COLLECTION_LTE_PPP_ENABLED
+
+config EGOLINK_COLLECTION_LTE_RETRY_INITIAL_MS
+    int "Initial LTE retry backoff ms"
+    range 1000 300000
+    default 5000
+    depends on EGOLINK_COLLECTION_LTE_PPP_ENABLED
+
+config EGOLINK_COLLECTION_LTE_RETRY_MAX_MS
+    int "Maximum LTE retry backoff ms"
+    range 1000 300000
+    default 60000
+    depends on EGOLINK_COLLECTION_LTE_PPP_ENABLED
+
+config EGOLINK_COLLECTION_LTE_CLEANUP_TIMEOUT_MS
+    int "LTE quiesce, escape, hangup, and PPP-dead timeout ms"
+    range 3000 30000
+    default 15000
+    depends on EGOLINK_COLLECTION_LTE_PPP_ENABLED
+
 config EGOLINK_WIFI_SSID
     string "Wi-Fi SSID"
     default ""

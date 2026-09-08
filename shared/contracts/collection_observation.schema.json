@@ -2,7 +2,196 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ego.local/contracts/collection_observation.schema.json",
   "title": "EgoLink collection observation in existing EGLK raw frame",
-  "description": "Additive raw-frame content profile. Uses ADR-0010 and sensor_time_lineage field semantics. No change to historical imu_window or product Location wire. Delivery attempts and receive/ingest times are server metadata, never part of immutable observation identity.",
+  "description": "Raw-frame collection profile. The base envelope remains additive for non-Wi-Fi sources; Wi-Fi is intentionally restricted to exact identifier-free link/aggregate shapes by the 2026-09-08 privacy migration. Uses ADR-0010 and sensor_time_lineage field semantics. No change to historical imu_window or product Location wire. Delivery attempts and receive/ingest times are server metadata, never part of immutable observation identity.",
+  "$defs": {
+    "wifiPrivacySafeValue": {
+      "anyOf": [
+        {
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/wifiPrivacySafeValue"
+          }
+        },
+        {
+          "$ref": "#/$defs/wifiPrivacySafeObject"
+        }
+      ]
+    },
+    "wifiPrivacySafeObject": {
+      "type": "object",
+      "propertyNames": {
+        "not": {
+          "pattern": "^([sS][sS][iI][dD]|[bB][sS][sS][iI][dD]|[mM][aA][cC]|[rR][aA][wW]_.*|[aA][pP][sS]?|[aA][cC][cC][eE][sS][sS][_-]?[pP][oO][iI][nN][tT][sS]?|[nN][eE][tT][wW][oO][rR][kK][sS]?|[sS][tT][aA][tT][iI][oO][nN][sS]?|[sS][cC][aA][nN][_-]?[rR][eE][sS][uU][lL][tT][sS])$"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/wifiPrivacySafeValue"
+      }
+    },
+    "wifiChannelSummaryItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "channel",
+        "ap_count",
+        "strongest_rssi"
+      ],
+      "properties": {
+        "channel": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 14
+        },
+        "ap_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "strongest_rssi": {
+          "type": "integer",
+          "minimum": -127,
+          "maximum": 0
+        }
+      }
+    },
+    "wifiLinkEventPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "connected"
+      ],
+      "properties": {
+        "phase": {
+          "const": "link_event"
+        },
+        "connected": {
+          "type": "boolean"
+        },
+        "disconnect_reason": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "connected": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "disconnect_reason"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "disconnect_reason"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "wifiScanSummaryPayload": {
+      "type": "object",
+      "description": "Exact identifier-free Wi-Fi scan summary. Raw SSID, BSSID, MAC, AP lists, and raw_* fields are not admitted.",
+      "additionalProperties": false,
+      "required": [
+        "channel_summary",
+        "scan_result",
+        "total_seen",
+        "truncated",
+        "sampled_ap_count",
+        "identifiers_retained",
+        "privacy_reason",
+        "connected",
+        "disconnect_reason"
+      ],
+      "properties": {
+        "channel_summary": {
+          "description": "At most one aggregate item per channel. The ingest guard additionally verifies that ap_count sums to sampled_ap_count and does not exceed total_seen.",
+          "type": "array",
+          "maxItems": 14,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/wifiChannelSummaryItem"
+          },
+          "allOf": [
+            {"not": {"contains": {"properties": {"channel": {"const": 1}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 2}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 3}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 4}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 5}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 6}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 7}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 8}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 9}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 10}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 11}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 12}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 13}}, "required": ["channel"]}, "minContains": 2}},
+            {"not": {"contains": {"properties": {"channel": {"const": 14}}, "required": ["channel"]}, "minContains": 2}}
+          ]
+        },
+        "scan_result": {
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 2147483647
+        },
+        "total_seen": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "sampled_ap_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16
+        },
+        "identifiers_retained": {
+          "const": false
+        },
+        "privacy_reason": {
+          "const": "raw_wifi_identifiers_disabled"
+        },
+        "connected": {
+          "type": "boolean"
+        },
+        "disconnect_reason": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      }
+    },
+    "wifiAggregatePayload": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/wifiLinkEventPayload"
+        },
+        {
+          "$ref": "#/$defs/wifiScanSummaryPayload"
+        }
+      ]
+    }
+  },
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -127,5 +316,57 @@
       ],
       "maxLength": 512
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "const": "wifi"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "then": {
+        "allOf": [
+          {
+            "propertyNames": {
+              "enum": [
+                "contract_version",
+                "observation_id",
+                "device_id",
+                "source",
+                "stream_id",
+                "sequence_id",
+                "boot_count",
+                "monotonic_clock_domain_id",
+                "timestamp_monotonic_ns",
+                "timestamp_utc",
+                "timestamp_source",
+                "timestamp_quality",
+                "fw_version",
+                "config_id",
+                "session_id",
+                "status",
+                "payload",
+                "missing_reason"
+              ]
+            }
+          },
+          {
+            "$ref": "#/$defs/wifiPrivacySafeObject"
+          },
+          {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/wifiAggregatePayload"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
 }

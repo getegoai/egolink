@@ -155,6 +155,25 @@ void egolink_esp_p0_https_close(egolink_esp_p0_https_t *context)
 }
 
 #if CONFIG_EGOLINK_COLLECTION_PROFILE
+/* esp_netif_get_netif_impl_name() returns lwIP's short implementation name.
+ * Accept only the two route families composed by the collector. The prefix is
+ * also the fail-closed transport label; callers cannot claim Wi-Fi on PPP. */
+static const char *collection_interface_transport(const char *name)
+{
+    if (!name) return NULL;
+    size_t length = strlen(name);
+    if (length < 3U || length > 5U) return NULL;
+    const char *transport = NULL;
+    if (name[0] == 's' && name[1] == 't') transport = "wifi";
+    else if (name[0] == 'p' && name[1] == 'p') transport = "lte";
+    else return NULL;
+    for (const char *p = name + 2; *p; ++p)
+        if (*p < '0' || *p > '9') return NULL;
+    return transport;
+}
+#endif
+
+#if CONFIG_EGOLINK_COLLECTION_PROFILE
 static unsigned char lower_ascii(unsigned char c)
 {
     return c >= 'A' && c <= 'Z' ? (unsigned char)(c + ('a' - 'A')) : c;
@@ -201,6 +220,10 @@ static egolink_p0_delivery_post_outcome_t post_exact(
     egolink_p0_delivery_post_result_t *result, const char *interface_name, bool collection)
 {
     egolink_esp_p0_https_t *c = context;
+    const char *collection_transport = NULL;
+#if CONFIG_EGOLINK_COLLECTION_PROFILE
+    if (collection) collection_transport = collection_interface_transport(interface_name);
+#endif
     if (!result) {
         egolink_esp_p0_https_close(c);
         return EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED;
@@ -210,6 +233,7 @@ static egolink_p0_delivery_post_outcome_t post_exact(
     if (!egolink_esp_p0_https_config_valid(c) || !r || !r->body || !r->response ||
         !r->path || !r->body_length || r->body_length > EGOLINK_OUTBOX_MAX_PAYLOAD_BYTES ||
         !r->response_capacity || r->response_capacity > EGOLINK_P0_DELIVERY_RUNTIME_RESPONSE_BYTES ||
+        (collection && !collection_transport) ||
         !(collection || (r->route == EGOLINK_P0_OUTBOX_ROUTE_LOCATION_STATE &&
            strcmp(r->path, EGOLINK_P0_OUTBOX_LOCATION_ENDPOINT_PATH) == 0) ||
           (r->route == EGOLINK_P0_OUTBOX_ROUTE_MANUAL_SOS &&
@@ -323,7 +347,7 @@ static egolink_p0_delivery_post_outcome_t post_exact(
     if (!client) goto finish;
     if (esp_http_client_set_header(client, "Authorization", authorization) != ESP_OK ||
         esp_http_client_set_header(client, "Content-Type", collection ? "application/octet-stream" : "application/json") != ESP_OK ||
-        (collection && esp_http_client_set_header(client, "X-EgoLink-Transport", "wifi") != ESP_OK) ||
+        (collection && esp_http_client_set_header(client, "X-EgoLink-Transport", collection_transport) != ESP_OK) ||
         (reuse && esp_http_client_set_header(client, "Connection", "keep-alive") != ESP_OK) ||
         !remaining(client, deadline, r) ||
         esp_http_client_open(client, (int)r->body_length) != ESP_OK) goto finish;
@@ -403,16 +427,11 @@ egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_post_collection(
     const egolink_p0_delivery_post_request_t *r, egolink_p0_delivery_post_result_t *result)
 {
     if (result) memset(result,0,sizeof(*result));
-    if (!r || !device_id || !*device_id || strlen(device_id) > 64U || !interface_name ||
-        strncmp(interface_name,"st",2)!=0 || interface_name[2]<'0' || interface_name[2]>'9' || strlen(interface_name)>5) {
+    if (!r || !device_id || !*device_id || strlen(device_id) > 64U ||
+        !collection_interface_transport(interface_name)) {
         egolink_esp_p0_https_close(context);
         return EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED;
     }
-    for(const char *p=interface_name+2;*p;++p)
-        if(*p<'0'||*p>'9') {
-            egolink_esp_p0_https_close(context);
-            return EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED;
-        }
     for (const char *p=device_id; *p; ++p)
         if (!((*p>='a'&&*p<='z')||(*p>='A'&&*p<='Z')||(*p>='0'&&*p<='9')||*p=='-'||*p=='_')) {
             egolink_esp_p0_https_close(context);

@@ -6,7 +6,7 @@ priority: critical
 execution_state: wifi_raw_collector_bench_verified_field_network_pending
 owner: codex_integrator
 created: 2026-09-05
-last_updated: 2026-09-06
+last_updated: 2026-09-08
 serves_gate: P0-LOC
 requires_hardware: true
 runtime_authorization: founder_continuous_collector_wifi_bench_20260906
@@ -46,7 +46,7 @@ allowed_paths:
   - firmware/audio_loop/sdkconfig.call_convergence.defaults # reviewed 15-second limit only
   - pc_simulator/ # concrete CALL connector and matching runtime only
   - server/ # minimum authenticated ingest, ACK and bound Guardian projection only
-  - shared/contracts/ # integrator-reviewed additive compatibility changes only
+  - shared/contracts/ # additive changes plus the named 2026-09-08 privacy-breaking Wi-Fi restriction
   - quality_tests/
   - scripts/ # native validation, existing build and bounded experiment tooling only
   - docs/ # named runtime-convergence authority, packet, evidence and experiment updates
@@ -301,3 +301,69 @@ Continuous same-scope work is authorized; historical per-image proposals do not
 require renewed approval. Next is real-fix validation after antenna/placement
 confirmation; CALL/physical SOS and original concurrent recovery remain open.
 All three product Gates remain NOT_RUN. No further offline framework is needed.
+
+## 2026-09-08 collector network-policy code slice
+
+The collector now has an offline-testable Wi-Fi-priority route policy and an
+explicitly opt-in USB LTE/PPP integration path. LTE admission requires the
+observed SIM/registration/attachment state, an already configured CID 1/APN,
+and an operator-verified USB descriptor; the firmware neither invents nor
+writes APN settings. Loss of both routes leaves sensing and the append spool
+running. Route, netif and generation are published as one snapshot. A route
+generation change cancels the synchronous upload, retires its TLS connection,
+and retains the pinned spool head unless the exact complete ACK matches.
+LTE-to-Wi-Fi handoff publishes an offline generation until the uploader has
+retired it and PPP DEAD/hangup are confirmed. Cleanup remains bound to the
+original USB connection epoch; an unconfirmed cleanup emits no false
+`LTE_QUIESCED`, disables LTE redial for the rest of that boot, and leaves stop
+telemetry failed rather than claiming `STOPPED`.
+
+The default tracked collector remains Wi-Fi/no-SIM and does not enable this LTE
+path. Executable native and focused server coverage for policy
+timeout/backoff/stale attempts, route flaps and retirement generations, strict
+Wi-Fi/PPP interface binding, transport headers, cancellation/connection
+retirement, aggregate-only Wi-Fi collection, privacy admission, USB connector
+behavior, single-owner cleanup and independent stop facts passed locally
+(52 core focused tests). An expanded 70-test regression covering the adjacent
+LOC-021S and convergence paths also passed, with its one declared generated-
+build proof skipped because that optional build-directory input was not set.
+Clean ESP-IDF v5.4.2 builds from the final source also passed without flashing
+for default (`896240` bytes, SHA-256
+`78CE43F3FB749F7241DE70F6F3CA2EB08155A046C3B0F6AE7119D05E60D2EDBE`),
+Wi-Fi/no-SIM collector (`990624` bytes, SHA-256
+`D189EB7301759F22BE6F69C3E4C6564AC00BA8F1216770331186CA57A8FFDE4A`),
+and LOC live (`993504` bytes, SHA-256
+`DDF873865C12797183B05C1F8534B9C0839A919ED6FACDC40AA5086C8DA9EAF4`).
+The usable installer profile was
+`C:/Espressif/tools/Microsoft.v5.4.2.PowerShell_profile.ps1`; direct use of the
+generic export had pointed at a stale missing Python environment.
+
+The repository-wide verification gate passed from the same final source:
+`1716` tests passed with `12` pre-declared environment/build-evidence skips.
+
+The LTE opt-in collector branch is still build-unverified because no ignored
+overlay yet contains the operator-verified exact USB modem interface and
+descriptor values; a synthetic value was not substituted. Its connector and
+route policy have native execution evidence, while main-coordinator combination
+paths remain static/build-adjacent evidence only. No flash, SIM traffic, network
+operation or hardware command was performed. All P0 product Gates remain
+`NOT_RUN`.
+
+Privacy correction: collector Wi-Fi observations no longer emit or persist raw
+SSID/BSSID values and retain only channel/count/RSSI aggregates with
+`identifiers_retained=false` and an explicit reason. Data captured on 2026-09-06
+predates this correction and requires a separate retention/deletion review
+before reuse or distribution. This change did not delete or rewrite any report,
+database, exported record or remote data.
+
+This Wi-Fi privacy correction is deliberately **breaking**, not an additive
+wire migration. The previous collector emitted `payload.aps[].bssid`; the new
+server rejects that shape before opening a database transaction. A rejected old
+record remains at the durable spool head because only a complete exact success
+ACK may delete it, so an old backlog would block later upload. Therefore neither
+the server guard nor a new collector image is deployable until the operator has
+verified that the device spool is empty, or separately authorizes a bounded
+local privacy purge with explicit loss accounting. The code does not turn a
+privacy rejection into a positive ACK and does not silently discard queued
+bytes. Existing server/report copies remain subject to the separate retention
+decision above.

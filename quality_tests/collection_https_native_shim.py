@@ -337,7 +337,7 @@ static int reuse_cases(void){
         if(reason==3)config.attempts=config.max_attempts;
         if(reason==4)config.origin="http://ego.example";
         egolink_p0_delivery_post_outcome_t outcome=egolink_esp_p0_https_post_collection(&config,
-            reason==5?"../bad":"collector_test-001",reason==6?"pp1":"st1",&request,&result);
+            reason==5?"../bad":"collector_test-001",reason==6?"ap1":"st1",&request,&result);
         CHECK(outcome!=EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE && !config.connection_state);
         CHECK(opens==1 && inner_connects==1 && client_cleanups==1 && destroys==2 && result.response_length==0);
     }
@@ -408,7 +408,7 @@ int main(void){
     reset(GOOD);config=configuration();
     egolink_p0_delivery_post_outcome_t empty_interface=egolink_esp_p0_https_post_collection(&config,"collector_test-001","",&request,&result);
     bool empty_interface_rejected=empty_interface!=EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE && opens==0 && bind_step==0;
-    const char *invalid_interfaces[]={"st","pp1","ap1","eth0","st1x","st1234","st-1","st1\n"};
+    const char *invalid_interfaces[]={"st","pp","ap1","eth0","st1x","st1234","pp-1","pp1\n"};
     for(unsigned i=0;i<sizeof(invalid_interfaces)/sizeof(invalid_interfaces[0]);i++){
         reset(GOOD);config=configuration();memset(&result,0x41,sizeof(result));
         CHECK(egolink_esp_p0_https_post_collection(&config,"collector_test-001",invalid_interfaces[i],&request,&result)==EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED);
@@ -416,8 +416,11 @@ int main(void){
     }
     reset(GOOD);config=configuration();
     CHECK(egolink_esp_p0_https_post_collection(&config,"collector_test-001",NULL,&request,&result)==EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED && opens==0);
+    reset(GOOD);config=configuration();
+    CHECK(egolink_esp_p0_https_post_collection(&config,"collector_test-001","pp1",&request,&result)==EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE);
+    CHECK(!strcmp(bound_interface,"pp1") && !strcmp(network,"lte") && inner_connects==1);
     CHECK(reuse_cases()==0);
-    printf("{\"reuse_two_requests_one_tls\":true,\"reuse_request_bounds_and_lifetimes\":true,\"reuse_uncertain_write_exact_retry\":true,\"reuse_fault_retirements\":10,\"reuse_identity_changes\":5,\"reuse_age_and_count_limits\":true,\"reuse_preflight_retirements\":7,\"fixed_route_headers_interface\":true,\"complete_server_ack\":true,\"fault_cases\":15,\"ascii_id_rejections\":%u,\"clock_tls_guard\":true,\"tls_origin_and_hostname_guards\":true,\"tls_failure_classification\":true,\"interface_rejections\":8,\"early_rejection_clears_result\":true,\"empty_interface_rejected\":%s}\n",
+    printf("{\"reuse_two_requests_one_tls\":true,\"reuse_request_bounds_and_lifetimes\":true,\"reuse_uncertain_write_exact_retry\":true,\"reuse_fault_retirements\":10,\"reuse_identity_changes\":5,\"reuse_age_and_count_limits\":true,\"reuse_preflight_retirements\":7,\"fixed_route_headers_interface\":true,\"complete_server_ack\":true,\"fault_cases\":15,\"ascii_id_rejections\":%u,\"clock_tls_guard\":true,\"tls_origin_and_hostname_guards\":true,\"tls_failure_classification\":true,\"interface_rejections\":8,\"early_rejection_clears_result\":true,\"empty_interface_rejected\":%s,\"ppp_interface_binding\":true}\n",
         (unsigned)(sizeof(invalid_ids)/sizeof(invalid_ids[0])),empty_interface_rejected?"true":"false");
     return 0;
 }

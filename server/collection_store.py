@@ -28,6 +28,13 @@ CONTEXT_SOURCES = frozenset({"time_anchor", "source_status", "session", "loss"})
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$")
 INT64_MAX = 9_223_372_036_854_775_807
 COLLECTION_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "shared" / "contracts" / "collection_observation.schema.json"
+COLLECTION_PRIVACY_REJECTION_DETAIL = "Wi-Fi collection payload violates the privacy admission policy"
+_WIFI_RAW_IDENTIFIER_KEYS = frozenset({"ssid", "bssid", "mac"})
+_WIFI_AP_STRUCTURE_KEYS = frozenset({"ap", "aps", "accesspoint", "accesspoints", "network", "networks", "station", "stations", "scanresults"})
+_WIFI_LINK_EVENT_FIELDS = frozenset({"phase", "connected"})
+_WIFI_SCAN_SUMMARY_FIELDS = frozenset({"channel_summary", "scan_result", "total_seen", "truncated", "sampled_ap_count", "identifiers_retained", "privacy_reason", "connected", "disconnect_reason"})
+_WIFI_CHANNEL_SUMMARY_FIELDS = frozenset({"channel", "ap_count", "strongest_rssi"})
+COLLECTION_ENVELOPE_FIELDS = frozenset({"contract_version", "observation_id", "device_id", "source", "stream_id", "sequence_id", "boot_count", "monotonic_clock_domain_id", "timestamp_monotonic_ns", "timestamp_utc", "timestamp_source", "timestamp_quality", "fw_version", "config_id", "session_id", "status", "payload", "missing_reason"})
 
 
 class CollectionError(ValueError):
@@ -107,8 +114,7 @@ def decode_envelope(payload: bytes, record: dict[str, Any]) -> dict[str, Any]:
                            parse_constant=lambda _: (_ for _ in ()).throw(ValueError("nonfinite JSON")))
     except (ValueError, UnicodeError, RecursionError) as error:
         raise CollectionError("invalid_collection_envelope", "collection payload must be bounded valid UTF-8 JSON") from error
-    required = {"contract_version", "observation_id", "device_id", "source", "stream_id", "sequence_id", "boot_count", "monotonic_clock_domain_id", "timestamp_monotonic_ns", "timestamp_utc", "timestamp_source", "timestamp_quality", "fw_version", "config_id", "session_id", "status", "payload", "missing_reason"}
-    if not isinstance(value, dict) or not required <= value.keys():
+    if not isinstance(value, dict) or not COLLECTION_ENVELOPE_FIELDS <= value.keys():
         raise CollectionError("invalid_collection_envelope", "collection envelope is missing required fields")
     if value["contract_version"] != CONTRACT_VERSION:
         raise CollectionError("invalid_collection_envelope", "unsupported collection contract")
@@ -132,6 +138,70 @@ def decode_envelope(payload: bytes, record: dict[str, Any]) -> dict[str, Any]:
     if value["device_id"] != record["device_id"] or value["observation_id"] != record["frame_id"] or value["sequence_id"] != record["seq"]:
         raise CollectionError("collection_identity_mismatch", "route, frame and envelope identity must agree")
     return value
+
+
+def enforce_collection_privacy(envelope: dict[str, Any]) -> None:
+    """Reject raw Wi-Fi identifiers before opening the durable store transaction."""
+    if envelope["source"] != "wifi":
+        return
+
+    def reject() -> None:
+        # The response deliberately does not identify the rejected key or value.
+        raise CollectionError("collection_privacy_policy_rejected", COLLECTION_PRIVACY_REJECTION_DETAIL)
+
+    # Additive envelope fields remain available to other sources.  Wi-Fi is
+    # intentionally fail-closed so an identifier cannot bypass the payload
+    # shape by moving into a renamed top-level extension field.
+    if envelope.keys() != COLLECTION_ENVELOPE_FIELDS:
+        reject()
+    pending: list[Any] = [envelope]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                folded = key.casefold()
+                compact = re.sub(r"[_-]", "", folded)
+                if folded in _WIFI_RAW_IDENTIFIER_KEYS or folded.startswith(("raw_", "raw-")) or compact in _WIFI_AP_STRUCTURE_KEYS:
+                    reject()
+                pending.append(nested)
+        elif isinstance(value, list):
+            pending.extend(value)
+    payload = envelope["payload"]
+    if payload.get("phase") == "link_event":
+        expected = _WIFI_LINK_EVENT_FIELDS | ({"disconnect_reason"} if payload.get("connected") is False else set())
+        if payload.keys() != expected or type(payload["connected"]) is not bool:
+            reject()
+        if "disconnect_reason" in payload and (type(payload["disconnect_reason"]) is not int or not 0 <= payload["disconnect_reason"] <= 65_535):
+            reject()
+        return
+
+    if payload.keys() != _WIFI_SCAN_SUMMARY_FIELDS:
+        reject()
+    if (type(payload["scan_result"]) is not int or not -2_147_483_648 <= payload["scan_result"] <= 2_147_483_647
+            or type(payload["total_seen"]) is not int or not 0 <= payload["total_seen"] <= 65_535
+            or type(payload["truncated"]) is not bool
+            or type(payload["sampled_ap_count"]) is not int or not 0 <= payload["sampled_ap_count"] <= 16
+            or payload["identifiers_retained"] is not False
+            or payload["privacy_reason"] != "raw_wifi_identifiers_disabled"
+            or type(payload["connected"]) is not bool
+            or type(payload["disconnect_reason"]) is not int or not 0 <= payload["disconnect_reason"] <= 65_535):
+        reject()
+    channels = payload["channel_summary"]
+    if not isinstance(channels, list) or len(channels) > 14:
+        reject()
+    seen_channels: set[int] = set()
+    sampled = 0
+    for channel in channels:
+        if (not isinstance(channel, dict) or channel.keys() != _WIFI_CHANNEL_SUMMARY_FIELDS
+                or type(channel["channel"]) is not int or not 1 <= channel["channel"] <= 14
+                or type(channel["ap_count"]) is not int or not 1 <= channel["ap_count"] <= 16
+                or type(channel["strongest_rssi"]) is not int or not -127 <= channel["strongest_rssi"] <= 0
+                or channel["channel"] in seen_channels):
+            reject()
+        seen_channels.add(channel["channel"])
+        sampled += channel["ap_count"]
+    if sampled != payload["sampled_ap_count"] or sampled > payload["total_seen"]:
+        reject()
 
 
 def inspect_source(envelope: dict[str, Any]) -> dict[str, Any]:
@@ -248,6 +318,7 @@ class CollectionStore:
         separator = b"\r\n\r\n" if b"\r\n\r\n" in raw_body else b"\n\n"
         payload_bytes = raw_body.split(separator, 1)[1]
         envelope = decode_envelope(payload_bytes, record)
+        enforce_collection_privacy(envelope)
         preview = inspect_source(envelope)
         record["parse_result"] = {"status": "ok" if preview["status"] == "ok" else "malformed", "derived_message_type": "collection", "collection_parse_status": preview["status"], "parser_version": preview["parser_version"]}
         record["retention"] = {"privacy_class": "private_location", "redacted": False}
