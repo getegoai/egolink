@@ -646,6 +646,8 @@ def _check_runtime_delivery_is_metadata_gated_fair_and_release_safe():
     assert "photo_control_capture_journal_allows_new_command(&pending_capture)" in source
     assert "PHOTO_CAPTURE_SETTLE_RETRY_INITIAL_MS 1000U" in source
     assert "PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS 60000U" in source
+    assert "COLLECTION_UPLOAD_TASK_STACK_BYTES 20480U" in source
+    assert 'xTaskCreate(uploader_task,"collection_upload",\n        COLLECTION_UPLOAD_TASK_STACK_BYTES' in source
     assert "photo_capture_settle_retry_due" in source
     assert "photo_capture_settle_retry_schedule" in source
     assert "photo_capture_settle_retry_reset" in source

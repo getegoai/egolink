@@ -125,6 +125,7 @@ _Static_assert(sizeof(CONFIG_EGOLINK_FW_VERSION)<=
 #define PHOTO_FAIR_UPLOAD_INTERVAL_US 30000000LL
 #define PHOTO_CAPTURE_SETTLE_RETRY_INITIAL_MS 1000U
 #define PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS 60000U
+#define COLLECTION_UPLOAD_TASK_STACK_BYTES 20480U
 static const char *TAG="collection";
 typedef struct { size_t length; unsigned source,seq,loss_version; bool metadata; char bytes[COLLECTION_FRAME_CAPACITY]; } queued_t;
 static QueueHandle_t ingress, ram_fallback;
@@ -3249,7 +3250,8 @@ void app_main(void)
     BaseType_t store_created=xTaskCreate(storage_task,"collection_store",6144,NULL,4,NULL);
     BaseType_t imu_created=xTaskCreatePinnedToCore(imu_task,"collection_imu",6144,NULL,6,NULL,1);
     BaseType_t modem_created=xTaskCreate(modem_task,"collection_modem",12288,NULL,4,NULL);
-    BaseType_t upload_created=xTaskCreate(uploader_task,"collection_upload",12288,NULL,3,NULL);
+    BaseType_t upload_created=xTaskCreate(uploader_task,"collection_upload",
+        COLLECTION_UPLOAD_TASK_STACK_BYTES,NULL,3,NULL);
     BaseType_t wifi_created=wifi_started?xTaskCreate(wifi_task,"collection_wifi",6144,NULL,3,NULL):pdFAIL;
     if(store_created!=pdPASS)atomic_store(&writer_stopped,true);
     if(imu_created!=pdPASS)atomic_store(&imu_finished,true);
