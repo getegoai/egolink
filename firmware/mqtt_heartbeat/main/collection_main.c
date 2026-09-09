@@ -50,6 +50,12 @@
 #ifndef CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
 #define CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE 0
 #endif
+#ifndef CONFIG_EGOLINK_COLLECTION_NO_SIM
+#define CONFIG_EGOLINK_COLLECTION_NO_SIM 0
+#endif
+#ifndef CONFIG_EGOLINK_COLLECTION_LTE_USB_HOST_ALREADY_INSTALLED
+#define CONFIG_EGOLINK_COLLECTION_LTE_USB_HOST_ALREADY_INSTALLED 0
+#endif
 
 #if !CONFIG_EGOLINK_COLLECTION_PROFILE
 #error "Dedicated collector source requires its profile"
@@ -121,6 +127,27 @@ _Static_assert(sizeof(CONFIG_EGOLINK_FW_VERSION)<=
 #endif
 #define MEDIA_PARTITION_ADDRESS 0x600000U
 #define MEDIA_PARTITION_SIZE 0x900000U
+#define COLLECTION_IMU_SAMPLE_INTERVAL_MS 50U
+#define COLLECTION_IMU_SAMPLE_INTERVAL_US \
+    (COLLECTION_IMU_SAMPLE_INTERVAL_MS * 1000U)
+#define COLLECTION_IMU_SAMPLE_BYTES 16U
+#define COLLECTION_IMU_BINARY_CAPACITY \
+    (CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES * COLLECTION_IMU_SAMPLE_BYTES)
+#define COLLECTION_IMU_BASE64_CAPACITY \
+    ((((COLLECTION_IMU_BINARY_CAPACITY + 2U) / 3U) * 4U) + 1U)
+/* Bound the non-sample JSON, EGLK header, IDs and future integer growth. */
+#define COLLECTION_IMU_FRAME_NON_SAMPLE_BUDGET 1600U
+#if CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES > 20
+#define COLLECTION_IMU_TASK_STACK_BYTES 10240U
+#else
+#define COLLECTION_IMU_TASK_STACK_BYTES 6144U
+#endif
+_Static_assert(CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES >= 20 &&
+    CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES <= 100,
+    "IMU collection chunk is outside the reviewed bound");
+_Static_assert(COLLECTION_IMU_BASE64_CAPACITY +
+    COLLECTION_IMU_FRAME_NON_SAMPLE_BUDGET <= COLLECTION_FRAME_CAPACITY,
+    "IMU collection block can exceed the bounded EGLK frame");
 #define PHOTO_ORDINARY_UPLOAD_BUDGET 8U
 #define PHOTO_FAIR_UPLOAD_INTERVAL_US 30000000LL
 #define PHOTO_METADATA_ORDINARY_ACK_BUDGET 4U
@@ -1156,7 +1183,8 @@ static void imu_task(void *unused)
 #endif
     bool running=platform_imu_init() && platform_imu_capture_begin();
     source_status(IMU,running?"running":"unavailable",running?NULL:"qmi8658_probe_or_start_failed");
-    uint8_t binary[20*16];unsigned count=0,failures=0,missed=0;int64_t first=0;
+    uint8_t binary[COLLECTION_IMU_BINARY_CAPACITY];
+    unsigned count=0,failures=0,missed=0;int64_t first=0;
     TickType_t tick=xTaskGetTickCount();
     while(running && !atomic_load(&stopping)) {
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
@@ -1165,20 +1193,24 @@ static void imu_task(void *unused)
         platform_imu_sample_t sample;
         if(platform_imu_sample_real(&sample) && !sample.sample_is_mock && sample.raw_axes_valid) {
             if(!count) first=sample.read_completed_us;
-            uint32_t offset=(uint32_t)(sample.read_completed_us-first);uint8_t *b=binary+count*16;
+            uint32_t offset=(uint32_t)(sample.read_completed_us-first);
+            uint8_t *b=binary+count*COLLECTION_IMU_SAMPLE_BYTES;
             for(unsigned i=0;i<4;i++) b[i]=(uint8_t)(offset>>(i*8));
             for(unsigned i=0;i<6;i++) {uint16_t v=(uint16_t)sample.raw_axes[i];b[4+i*2]=(uint8_t)v;b[5+i*2]=(uint8_t)(v>>8);}
             ++count;
         } else ++failures;
-        if(count==20 || failures>=20 || (atomic_load(&stopping)&&count)) {
-            char base64[432];size_t bytes=0;
-            mbedtls_base64_encode((unsigned char*)base64,sizeof(base64),&bytes,binary,count*16);base64[bytes]=0;
+        if(count==CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES ||
+           failures>=CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES ||
+           (atomic_load(&stopping)&&count)) {
+            char base64[COLLECTION_IMU_BASE64_CAPACITY];size_t bytes=0;
+            mbedtls_base64_encode((unsigned char*)base64,sizeof(base64),&bytes,
+                binary,count*COLLECTION_IMU_SAMPLE_BYTES);base64[bytes]=0;
             cJSON *p=cJSON_CreateObject();
             cJSON_AddStringToObject(p,"encoding","offset_us+six_i16le+base64-v1");
             cJSON_AddStringToObject(p,"samples_b64",base64);
             cJSON_AddNumberToObject(p,"sample_count",count);
-            cJSON_AddNumberToObject(p,"sample_record_bytes",16);
-            cJSON_AddNumberToObject(p,"requested_interval_us",50000);
+            cJSON_AddNumberToObject(p,"sample_record_bytes",COLLECTION_IMU_SAMPLE_BYTES);
+            cJSON_AddNumberToObject(p,"requested_interval_us",COLLECTION_IMU_SAMPLE_INTERVAL_US);
             cJSON_AddNumberToObject(p,"accel_full_scale_mg",4000);
             cJSON_AddNumberToObject(p,"gyro_full_scale_mdps",512000);
             cJSON_AddNumberToObject(p,"raw_divisor",32768);
@@ -1189,14 +1221,16 @@ static void imu_task(void *unused)
             emit(IMU,count?first:now_us(),failures?"partial":"observed",failures?"i2c_read_failure":NULL,p,false);
             count=failures=missed=0;
         }
-        if(xTaskDelayUntil(&tick,pdMS_TO_TICKS(50))!=pdTRUE) {++missed;tick=xTaskGetTickCount();}
+        if(xTaskDelayUntil(&tick,pdMS_TO_TICKS(COLLECTION_IMU_SAMPLE_INTERVAL_MS))!=pdTRUE) {++missed;tick=xTaskGetTickCount();}
     }
     /* Preserve the final short block with the same raw encoding. */
     if(count) {
-        char b64[432];size_t n=0;mbedtls_base64_encode((unsigned char*)b64,sizeof(b64),&n,binary,count*16);b64[n]=0;
+        char b64[COLLECTION_IMU_BASE64_CAPACITY];size_t n=0;
+        mbedtls_base64_encode((unsigned char*)b64,sizeof(b64),&n,binary,
+            count*COLLECTION_IMU_SAMPLE_BYTES);b64[n]=0;
         cJSON *p=cJSON_CreateObject();cJSON_AddStringToObject(p,"encoding","offset_us+six_i16le+base64-v1");
         cJSON_AddStringToObject(p,"samples_b64",b64);cJSON_AddNumberToObject(p,"sample_count",count);
-        cJSON_AddNumberToObject(p,"sample_record_bytes",16);cJSON_AddNumberToObject(p,"requested_interval_us",50000);
+        cJSON_AddNumberToObject(p,"sample_record_bytes",COLLECTION_IMU_SAMPLE_BYTES);cJSON_AddNumberToObject(p,"requested_interval_us",COLLECTION_IMU_SAMPLE_INTERVAL_US);
         cJSON_AddNumberToObject(p,"accel_full_scale_mg",4000);cJSON_AddNumberToObject(p,"gyro_full_scale_mdps",512000);cJSON_AddNumberToObject(p,"raw_divisor",32768);
         cJSON_AddNumberToObject(p,"ctrl2",0x13);cJSON_AddNumberToObject(p,"ctrl3",0x55);
         cJSON_AddStringToObject(p,"axis_mount","unverified");
@@ -1477,7 +1511,7 @@ static void modem_task(void *unused)
             cJSON_AddBoolToObject(p,"registration_valid",l.cereg_query.parse_valid);cJSON_AddBoolToObject(p,"attachment_valid",l.cgatt_query.parse_valid);
             cJSON_AddBoolToObject(p,"apn_query_valid",l.cgdcont_query.parse_valid);cJSON_AddBoolToObject(p,"ppp_dial_admitted",dial_admitted);
             emit(LTE,now,r.reason&&r.commands_completed>1?"partial":query_status(&r),r.reason?"see_at_outcome_and_reason":NULL,p,false);
-            next_cell=now+10000000;
+            next_cell=now+(int64_t)CONFIG_EGOLINK_COLLECTION_LTE_INTERVAL_MS*1000LL;
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
             notice=collection_network_coordinator_admit(
                 &lte_control,policy_result.active_lte_attempt_id,
@@ -1742,7 +1776,11 @@ static void wifi_task(void *unused)
 #endif
         int64_t now=now_us();
         if(!atomic_load(&wifi_ready)&&now>=next_connect){(void)esp_wifi_connect();next_connect=now+10000000;}
-        if(now>=next_scan){scan_wifi();next_scan=now_us()+45000000;}
+        if(now>=next_scan){
+            scan_wifi();
+            next_scan=now_us()+
+                (int64_t)CONFIG_EGOLINK_COLLECTION_WIFI_SCAN_INTERVAL_MS*1000LL;
+        }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
     int64_t deadline=now_us()+15000000;
@@ -3335,7 +3373,15 @@ void app_main(void)
     bool button_ready=gpio_config(&button)==ESP_OK;
     ESP_LOGI(TAG,"LOCAL_STOP gpio=0 input_ready=%d initial_level=%d hold_ms=1000",button_ready,button_ready?gpio_get_level(0):-1);
     cJSON *p=cJSON_CreateObject();cJSON_AddStringToObject(p,"state","started");cJSON_AddStringToObject(p,"config_id",CONFIG_ID);
-    cJSON_AddNumberToObject(p,"imu_sample_interval_us",50000);cJSON_AddNumberToObject(p,"imu_chunk_samples",20);cJSON_AddNumberToObject(p,"gnss_interval_ms",CONFIG_EGOLINK_COLLECTION_GNSS_INTERVAL_MS);
+    cJSON_AddStringToObject(p,"collection_rate_profile_version","collection-rate-v1");
+    cJSON_AddNumberToObject(p,"imu_sample_interval_us",COLLECTION_IMU_SAMPLE_INTERVAL_US);
+    cJSON_AddNumberToObject(p,"imu_chunk_samples",CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES);
+    cJSON_AddNumberToObject(p,"imu_task_stack_bytes",COLLECTION_IMU_TASK_STACK_BYTES);
+    cJSON_AddNumberToObject(p,"gnss_interval_ms",CONFIG_EGOLINK_COLLECTION_GNSS_INTERVAL_MS);
+    cJSON_AddNumberToObject(p,"lte_interval_ms",CONFIG_EGOLINK_COLLECTION_LTE_INTERVAL_MS);
+    cJSON_AddNumberToObject(p,"health_interval_ms",CONFIG_EGOLINK_COLLECTION_HEALTH_INTERVAL_MS);
+    cJSON_AddNumberToObject(p,"wifi_scan_interval_ms",CONFIG_EGOLINK_COLLECTION_WIFI_SCAN_INTERVAL_MS);
+    cJSON_AddNumberToObject(p,"wifi_initial_scan_delay_ms",3000);
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
     cJSON_AddBoolToObject(p,"camera_profile_requested",true);
     cJSON_AddBoolToObject(p,"camera_runtime_compiled",true);
@@ -3374,7 +3420,8 @@ void app_main(void)
     photo_emit_source_status("runtime_start_or_reboot_restore");
 #endif
     BaseType_t store_created=xTaskCreate(storage_task,"collection_store",6144,NULL,4,NULL);
-    BaseType_t imu_created=xTaskCreatePinnedToCore(imu_task,"collection_imu",6144,NULL,6,NULL,1);
+    BaseType_t imu_created=xTaskCreatePinnedToCore(imu_task,"collection_imu",
+        COLLECTION_IMU_TASK_STACK_BYTES,NULL,6,NULL,1);
     BaseType_t modem_created=xTaskCreate(modem_task,"collection_modem",12288,NULL,4,NULL);
     BaseType_t upload_created=xTaskCreate(uploader_task,"collection_upload",
         COLLECTION_UPLOAD_TASK_STACK_BYTES,NULL,3,NULL);
@@ -3398,7 +3445,11 @@ void app_main(void)
     }
     int64_t next_health=0,button_down=0;
     while(!atomic_load(&stopping)) {
-        if(now_us()>=next_health){health();next_health=now_us()+10000000;}
+        if(now_us()>=next_health){
+            health();
+            next_health=now_us()+
+                (int64_t)CONFIG_EGOLINK_COLLECTION_HEALTH_INTERVAL_MS*1000LL;
+        }
         if(CONFIG_EGOLINK_COLLECTION_RUN_SECONDS && now_us()-session_start_us>=CONFIG_EGOLINK_COLLECTION_RUN_SECONDS*1000000LL) atomic_store(&stopping,true);
         if(button_ready&&gpio_get_level(0)==0) {
             if(!button_down)button_down=now_us();

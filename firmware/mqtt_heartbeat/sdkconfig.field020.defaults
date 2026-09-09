@@ -1,0 +1,10 @@
+# FIELD-020 rate-only overlay. Apply after sdkconfig.defaults,
+# sdkconfig.collection.defaults and any selected camera profile.
+# It contains no credentials, device identity, LTE descriptor, capture
+# authorization, or hardware-capability claim.
+CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SAMPLE_INTERVAL_MS=50
+CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES=100
+CONFIG_EGOLINK_COLLECTION_GNSS_INTERVAL_MS=15000
+CONFIG_EGOLINK_COLLECTION_LTE_INTERVAL_MS=30000
+CONFIG_EGOLINK_COLLECTION_HEALTH_INTERVAL_MS=30000
+CONFIG_EGOLINK_COLLECTION_WIFI_SCAN_INTERVAL_MS=45000

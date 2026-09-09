@@ -69,6 +69,37 @@ config EGOLINK_COLLECTION_GNSS_INTERVAL_MS
     default 5000
     depends on EGOLINK_COLLECTION_PROFILE
 
+config EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES
+    int "Raw IMU samples per collection record"
+    range 20 100
+    default 20
+    depends on EGOLINK_COLLECTION_PROFILE
+    help
+        Changes only the number of consecutive raw 16-byte samples carried by
+        one collection record. It does not decimate or resample the 50 ms IMU
+        stream. Keep the legacy default for existing bench/camera profiles;
+        FIELD-020 may select the bounded 100-sample block.
+
+config EGOLINK_COLLECTION_LTE_INTERVAL_MS
+    int "Independent LTE/cell observation interval ms"
+    range 1000 600000
+    default 10000
+    depends on EGOLINK_COLLECTION_PROFILE
+
+config EGOLINK_COLLECTION_HEALTH_INTERVAL_MS
+    int "Power and device-health observation interval ms"
+    range 1000 600000
+    default 10000
+    depends on EGOLINK_COLLECTION_PROFILE
+
+config EGOLINK_COLLECTION_WIFI_SCAN_INTERVAL_MS
+    int "Wi-Fi observation scan interval ms"
+    range 5000 600000
+    default 45000
+    depends on EGOLINK_COLLECTION_PROFILE
+    help
+        Controls scans after the existing bounded three-second startup scan.
+
 config EGOLINK_COLLECTION_NO_SIM
     bool "No-SIM bench configuration (distinct from field SIM configuration)"
     default y
