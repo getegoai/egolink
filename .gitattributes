@@ -14,6 +14,7 @@
 *.lock text eol=lf
 *.sh text eol=lf
 *.txt text eol=lf
+*.source binary
 CMakeLists.txt text eol=lf
 sdkconfig text eol=lf
 sdkconfig.defaults text eol=lf

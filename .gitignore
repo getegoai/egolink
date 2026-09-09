@@ -24,6 +24,7 @@ htmlcov/
 pc_simulator/runtime/
 server/runtime/
 reports/
+/.local_backups/
 
 # ESP-IDF generated output
 firmware/**/build/
