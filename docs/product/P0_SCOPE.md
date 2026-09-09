@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-05
+decision_updated: 2026-09-09
 last_verified: 2026-08-23
 verified_by: codex
 ---
@@ -18,14 +18,19 @@ validation.
 
 ## Current Evidence Architecture
 
-P0 uses a dual-development-board plus PC Development Bridge integration architecture.
+Under [ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md),
+the current A-line evidence architecture uses one identified Waveshare
+ESP32-S3-SIM7670G-4G connectivity node plus only its necessary existing
+external IMU, Camera, power source and LTE/GNSS antennas. It owns GNSS, Cell/
+LTE, IMU and available power observations, Location Engine/Sensor Policy,
+bounded persistent collection, actual Wi-Fi/LTE uplink with controlled route
+transition, and authorized still capture/upload.
 
-- `wearable_node`: ESP32-S3-Touch-AMOLED-2.06, responsible for QMI8658 IMU, audio path validation, screen, touch, speaker, and user interaction.
-- `connectivity_node`: Waveshare ESP32-S3-SIM7670G-4G, responsible for SIM7670G 4G, GNSS, camera, TF/cache capability validation, and communication expansion.
-- PC Development Bridge: serial bridge, event bus, historical ContextRouter/
-  Safety Kernel reference, recording, replay, time sync and debug dashboard.
-  Device operational Location/Safety behavior is owned by the device under
-  ADR-0012; the PC reference is not a product runtime dependency.
+The ESP32-S3-Touch-AMOLED-2.06 remains a later Ego Call/B-line bench asset. It
+does not supply A-line IMU, display, power, storage or forwarding and is not
+part of this field acceptance. A PC may build, configure and review evidence,
+but cannot be a field runtime or forwarding dependency. Existing dual-board
+and PC-bridge results remain historical evidence rather than current topology.
 
 The final P0 product target is not two ESP32 development boards. Product A0
 converges the verified requirements into one screenless EgoCore architecture.
@@ -38,6 +43,12 @@ converges the verified requirements into one screenless EgoCore architecture.
   `LOCATION_UNCERTAIN`, `SOS`, and `LOW_BATTERY` policy modes;
 - field timeline recording, deterministic policy replay and configuration
   comparison;
+- current-candidate ordinary-observation upload over actual Wi-Fi and LTE,
+  including a controlled transition with exact pending/ACK/duplicate/loss truth;
+- current milestone Camera closure on that same connectivity node: one
+  authorized expiring Web capture and default-off bounded local timed capture,
+  separate JPEG/metadata persistence, real-LTE upload, durable VPS verification
+  and existing-Web preview/export with explicit failure and backlog state;
 - `P0-CALL`: microphone/speaker hardware loop, a bounded PC-bridged LTE-data
   voice PoC, then a PC/USB-free embedded media path on one independently
   powered integrated prototype; the bridge is learning evidence, not Gate
@@ -53,6 +64,14 @@ converges the verified requirements into one screenless EgoCore architecture.
 
 ## Bounded runtime convergence
 
+[ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md)
+now controls the immediate evidence order: combined single-board Location/raw
+collection/Camera, Web one-shot LTE proof, timed persistence/recovery, a short
+independently powered carry test and then FIELD-020. CALL-020, CALL-021 and full
+physical SOS are paused for this milestone, while their final Gate obligations
+remain. Camera is a milestone requirement, not a new product Gate or decision
+source.
+
 [ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) permits an
 explicitly selected current-boot/single-source live Location profile reusing
 LOC-021 A-S and concrete authenticated secure transport. It is separate from
@@ -61,10 +80,10 @@ this finite engineering proof or independent S smoke; concurrent SOS/IMU
 ordering, checkpoint, exact tombstone and no-output replay commitments still
 apply before that product composition is enabled or recovery is claimed.
 
-Real bidirectional CALL and an embedded-bearer probe may proceed before final
-HW-022; CALL-021 product acceptance still requires independently powered
-representative hardware without PC/USB media/control. Physical SOS/recovery
-integration follows the Location and CALL seams. Queue/storage failure must not
+When the paused B line resumes, CALL-021 product acceptance still requires
+independently powered representative hardware without PC/USB media/control,
+and physical SOS/recovery integrates through the retained Location and CALL
+seams. Queue/storage failure must not
 silently freeze local state or suppress recognized-input feedback; stored and
 delivered claims remain evidence-bound. No HTTP downgrade, disabled certificate
 validation, new sensor or production pin/BOM change is implied. All three P0
@@ -76,13 +95,14 @@ require a valid bounded experiment authorization.
 - Formal Ego Base implementation.
 - Learned multi-source location fusion on the P0 critical path.
 - General state understanding, fall/anomaly model release, camera AI, visual
-  decision loops, AI voice, recording or continuous media capture.
+  decision loops, AI voice, audio recording, video streaming or continuous
+  media capture.
 - Polished complete App, contact-management UX or multi-party calling before
   the minimum Guardian client and real voice path work.
 - PSTN, public SIP gateway, SMS dispatch or native VoLTE release behavior.
-- Adding new sensors merely to expand P0 scope; camera is limited to stable
-  power control, one authorized still and truthful trigger/time metadata when
-  separately exercised.
+- Adding new sensors merely to expand P0 scope; unbounded, unconsented,
+  publicly stored or training-enabled Camera collection remains prohibited.
+  The current milestone permits only its named manual/timed still boundary.
 - Claiming production enclosure, power, RF, waterproofing, acoustics,
   compliance, BOM or ergonomics before representative evidence exists.
 - Board-to-board UART as a current P0 requirement.

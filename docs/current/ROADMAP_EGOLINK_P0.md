@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-05
+decision_updated: 2026-09-09
 last_verified: 2026-08-23
 verified_by: codex
 ---
@@ -8,14 +8,35 @@ verified_by: codex
 # Ego Link P0 Walking Skeleton Roadmap
 
 This roadmap retains the near-term USB-Free/VPS evidence lineage and now
-prioritizes bounded runtime convergence for P0 development. The broader P0-to-product migration remains in
+prioritizes the bounded single-board Camera-to-field milestone. The broader P0-to-product migration remains in
 `../roadmap/P0_TO_PRODUCT_MIGRATION.md`.
 
-## 2026-09-05 Runtime-to-Product Sequence
+## 2026-09-09 Single-Board Camera-to-Field Sequence
+
+[ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md)
+governs current execution. These are engineering stages, not new P0 Gates:
+
+| Stage | Runnable outcome and evidence |
+|---|---|
+| S0 exact single-board audit | Identify connectivity board/revision, current and recovery images, Camera/external-IMU/power/antenna/storage topology and all pin/bus/memory conflicts; AMOLED absent from A-line runtime. |
+| S1 combined capture | One candidate continues honest GNSS/Cell/IMU/power/Location collection while producing a current JPEG through the reused Camera driver and releasing resources after completion/failure. |
+| S2 real Wi-Fi/LTE and manual closure | The same candidate uploads ordinary observations over actual Wi-Fi and LTE, survives a controlled transition with exact backlog/ACK truth, and then carries an authorized Web command -> current JPEG -> persistent local save -> real-LTE upload -> VPS integrity/persistence -> authorized Web preview. |
+| S3 timed persistence | Default-off bounded local schedule, delivered configuration truth, offline quota, restart recovery of the same files/IDs, corruption/full accounting and no catch-up recapture. |
+| S4 powered joint short run | Independently powered connectivity board plus necessary peripherals, no AMOLED/PC forwarding, with sensor progress, controlled network transition and bounded resource/storage growth during Camera work. |
+| S5 FIELD-020 | Representative-day Location/raw/photo timeline, declared scenarios, failures, loss, power and authorized query/export evidence. |
+
+HW-021, applicable reliability/power work and COMPLIANCE-010 continue in
+parallel. CALL-020, CALL-021 and full SOS-010 are paused for this milestone and
+return later to the unchanged three-Gate product convergence. Camera is a
+milestone deliverable, not a fourth product Gate or a visual-decision source.
+No stage above is complete merely because TCAM-001 or the 2026-09-06 collector
+passed separately; all three P0 Gates remain `NOT_RUN`.
+
+## 2026-09-05 Prior Runtime-to-Product Sequence
 
 [ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) and
-[P0-CONVERGENCE-20260905](../tasks/active/P0-CONVERGENCE-20260905.md) govern
-current implementation order. These are engineering stages, not new P0 Gates:
+[P0-CONVERGENCE-20260905](../tasks/active/P0-CONVERGENCE-20260905.md) governed
+the prior implementation order. These are engineering stages, not new P0 Gates:
 
 | Stage | Runnable outcome and evidence |
 |---|---|
@@ -68,9 +89,10 @@ FIELD-020 + SOS-010 + OUTBOX-010 + OPS-004 + PWR-020 + HW-022
     -> P0-RELEASE-010
 ```
 
-`FIELD-020` and `SOS-010` proceed independently after their own prerequisites
-and meet only at `P0-RELEASE-010`; field work is not a serial prerequisite for
-SOS. `HW-020` is completed only as an interface baseline. `HW-021` owns the
+Under that 2026-08-23 plan, `FIELD-020` and `SOS-010` were independent after
+their own prerequisites and met only at `P0-RELEASE-010`; field work was not a
+serial prerequisite for SOS. ADR-0015 now pauses SOS-010. `HW-020` is completed
+only as an interface baseline. `HW-021` owns the
 exact buildable integrated design, `HW-022` owns the physical independently
 powered prototype, and `CALL-021` depends on both real `CALL-020` evidence and
 that prototype.
@@ -80,11 +102,12 @@ Current task state is deliberately narrower than Gate state:
 - `LOC-020`, `POLICY-010`, `REPLAY-010`, and `HW-020` are accepted for
   transition as reference/interface work; `LOC-021` and `HW-021` are in
   progress.
-- `CALL-010` is in progress but its hardware run is operator-gated;
-  `CALL-020` has in-progress offline trace tooling but no real LTE-media run.
+- `CALL-010` is accepted for transition based on its bounded endpoint evidence;
+  the broader CALL lane, including `CALL-020` and `CALL-021`, is paused by the
+  2026-09-09 scope decision and has no real LTE-media acceptance run.
 - `OUTBOX-010` has an in-progress host reference; product persistence,
-  `OPS-004`, `HW-022`, `CALL-021`, `FIELD-020`, `SOS-010`, `PWR-020`, and the
-  final release review remain incomplete or queued.
+  `OPS-004`, `HW-022`, `FIELD-020`, `PWR-020`, and the final release review
+  remain incomplete or queued; `CALL-021` and `SOS-010` are explicitly paused.
 - No item above changes `P0-LOC`, `P0-CALL`, or `P0-SOS` from `NOT_RUN`.
 
 Device Location Engine v0 and Sensor Policy v0 own the minimum state needed

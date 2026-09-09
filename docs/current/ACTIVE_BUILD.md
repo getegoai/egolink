@@ -1,11 +1,61 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-05
-last_verified: 2026-09-06
+decision_updated: 2026-09-09
+last_verified: 2026-09-09
 verified_by: codex
 ---
 
 # Active Build
+
+## 2026-09-09 current hardware state
+
+The identified connectivity board is intentionally held in the ESP32-S3 ROM
+bootloader on CH343 `COM3` after the authorized bounded legacy-spool cleanup.
+The retained 2026-09-06 collector application and NVS were not erased, but the
+`ego_collection` partition at `[0x122000,0x1F4000)` was privately backed up,
+selectively erased and completely read back as `0xFF`. `ego_outbox` was outside
+the operation. Do not reset this board into the legacy collector before a
+reviewed replacement candidate is ready, because that image can recreate the
+old Wi-Fi observation format. Exact identity, hashes and state are in
+[the cleanup evidence](../hardware/PRIVACY_WIFI_SPOOL_PURGE_20260909.md).
+
+No Camera/Location/LTE joint candidate has been flashed. AMOLED is excluded
+from this A-line milestone and its UI/CALL image is unchanged; any separate USB
+attachment is irrelevant to and unused by the A-line runtime.
+
+## 2026-09-09 Camera integration — offline build checkpoint
+
+The single-board Camera source slice has passed two independent source reviews
+with no remaining merge blocker. It adds the opt-in Camera collector entry,
+OV5640 QVGA/JPEG capture path, durable command/timer/capture journals, the
+dedicated fixed-slot `ego_media` store, metadata-before-JPEG delivery, exact
+server ACK matching, retention cleanup and reboot recovery while retaining one
+network/uploader owner. Focused Camera/media/control/delivery/HTTPS execution
+passes `26/26`; repository verification passes `1,776` tests with `13`
+environment-guarded skips.
+
+Three ESP-IDF 5.4.2 no-flash profiles were rebuilt and size-checked:
+
+| Profile | Defaults | App bytes / partition | Free | SHA-256 |
+|---|---|---:|---:|---|
+| default | `sdkconfig.defaults` | 896,240 / 1 MiB | `0x25310` (15%) | `D59B8337FC6280FB17D848D415505D5AEE9835164EEFE4936C008548FC0D4A36` |
+| legacy collector | `sdkconfig.defaults;sdkconfig.collection.defaults` | 991,504 / 1 MiB | `0xDEF0` (5%) | `F36C567D6C211BC84D41548407068A6E813F71EE3A9B371980541A2DF3299B91` |
+| Camera collector | `sdkconfig.defaults;sdkconfig.collection.defaults;sdkconfig.camera_collection.defaults` | 1,029,616 / 3 MiB | `0x204A10` (67%) | `E3640BE2D82C56DF79EE8F32E3CE62BC2CA27ACD122EE2756C9BF1F11EF5E016` |
+
+The Camera partition profile places `factory` at `0x200000..0x500000`,
+`ego_collection` at `0x500000..0x600000`, `ego_media` at
+`0x600000..0xF00000`, and `ego_outbox` at `0xF00000..0xF0C000`. This is build
+geometry, not permission to erase or flash. Before the first use, the entire
+future media range must be privately read, backed up and confirmed dedicated;
+initialization then deliberately scrubs non-valid slots inside that exact
+partition.
+
+This build is intentionally not a live candidate: it still has `NO_SIM=y`, LTE
+PPP disabled and `EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED=n`. The last Gate
+prevents capture until OV5640, QMI8658A and MAX17048 coexistence is physically
+verified. Camera deinit is only a software standby boundary because the present
+pin map has no PWDN; the raw JPEG partition is not encrypted. No image here was
+flashed, no photo was captured, and no LTE/VPS/field evidence was produced.
 
 ## Current actual collector image - 2026-09-06
 
@@ -434,10 +484,10 @@ concurrent RX/TX, or a measured local-loop delay. Physical PCB revision remains
 unknown, and run 008 retains its initialization diagnostic even though an
 unflashed offline candidate addresses its identified cause. Together with run
 007's spoken-stimulus/input-metric response, the basic development-board audio
-endpoints are sufficient to unlock CALL-020. CALL-010 remains active with
-`accepted_for_transition`; simultaneous I/O and measurable local-loop delay
-remain non-transition-blocking closure work. `P0-CALL` and all other P0
-capability Gates remain `NOT_RUN`.
+endpoints leave CALL-010 `accepted_for_transition`; CALL-020 and the broader
+CALL lane are paused under the 2026-09-09 scope decision. Simultaneous I/O and
+measurable local-loop delay remain unresolved, non-transition-blocking closure
+work. `P0-CALL` and all other P0 capability Gates remain `NOT_RUN`.
 Detailed evidence is under
 `reports/board_validation/CALL-010-20260902-006/` and
 `reports/board_validation/CALL-010-20260902-007/`, with the staged output and

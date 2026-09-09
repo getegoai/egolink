@@ -1,5 +1,7 @@
 # Ego Link 状态记录
 
+> **历史快照（2026-06-24）：** 本文不再维护，其中“当前固件”“4G 板 IMU 未验证”“双板”等表述只代表当时状态。请勿据此判断 2026-09-09 的当前范围或实机就绪度；最新状态见 [`docs/current/STATUS.md`](current/STATUS.md)，最新板级证据边界见 [`docs/hardware/BOARD_MATRIX.md`](hardware/BOARD_MATRIX.md)。
+
 更新时间：2026-06-24
 
 ## 当前阶段

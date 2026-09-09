@@ -1,5 +1,7 @@
 # Ego Link M1 Hardware Sensor Matrix
 
+> **历史基线提示（2026-09-09）：** 本文主体冻结于 2026-06-24，包含当时的双板候选与阶段性“未验证”判断，不再作为当前运行拓扑或最新硬件状态的权威来源。当前 A 线采用单 4G 主板，后续 D2-006/D2-008 已留下该板外接 QMI8658A 的实采证据；最新事实与未测边界以 [`docs/current/STATUS.md`](../current/STATUS.md) 和 [`docs/hardware/BOARD_MATRIX.md`](../hardware/BOARD_MATRIX.md) 为准。历史证据不得自动升级为当前联合固件或正式产品验收。
+
 > Status supplement: TIMU-009C-B1 temporary fixture static capture and
 > TIMU-009C-B2 labeled fixture repeatability capture are included in this
 > matrix. Both are partial hardware-observed IMU evidence only; formal IMU

@@ -1,10 +1,12 @@
 ---
 document_status: authoritative
+decision_updated: 2026-09-09
 last_verified: 2026-08-23
 verified_by: codex
 owner: founder
 decision_adr: ../architecture/adr/ADR-0010-asynchronous-observation-timeline-and-store-forward.md
 productization_adr: ../architecture/adr/ADR-0012-p0-productization-sprint-1.md
+current_milestone_adr: ../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md
 ---
 
 # Ego Link A线当前阶段记忆与执行基线
@@ -14,6 +16,21 @@ productization_adr: ../architecture/adr/ADR-0012-p0-productization-sprint-1.md
 > 日期：2026-08-17（2026-08-18 经创始人再次确认）
 > 状态：当前有效阶段性基线
 > 架构决策：[ADR-0010](../architecture/adr/ADR-0010-asynchronous-observation-timeline-and-store-forward.md)
+
+## 2026-09-09 单 4G 板 Camera 采集里程碑
+
+[ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md)
+是当前 A 线执行覆盖。只使用已识别的 SIM7670G connectivity node 及其必要的
+既有外接 IMU、Camera、电源和天线，完成异步 Location/原始采集、断网持久
+缓存、普通观测真实 Wi-Fi/LTE 上报与受控切换、授权静态图真实 LTE 上传、
+VPS 保存和 Web 查看，再进入 FIELD-020。AMOLED、板间桥接和 PC 转发不参与
+本轮运行或验收。
+
+Camera 由 optional 提升为本里程碑交付，但仍不是 P0 产品 Gate、视觉 AI 或
+Location/SOS 决策源。手动和默认关闭的设备定时采集共用一条有界路径；照片
+二进制、轻量元数据、命令、采集、保存和上传状态分别记真。ADR-0010 的异步
+事件时间和 Store-and-Forward 原则继续适用。CALL 与完整 SOS 暂停，C 线继续。
+本段没有增加任何实机、LTE、Camera 或 Field 证据。
 
 ## 2026-08-23 Productization Sprint 1 集成说明
 
@@ -37,14 +54,14 @@ L2-001 单独实证。
 
 ## 1. 当前总体状态
 
-Ego Link 已具备真实外出测试基础：
+Ego Link 已具备若干真实外测前置证据，但当前单板联合外测尚未就绪：
 
 - GNSS 可采集并上报，但室内/遮挡环境出现 `no_fix` 属正常情况；
 - LTE 可采集原始蜂窝观测并上报；
 - 六轴 IMU 已接入，已有有界高频窗口采集验证；
-- 开发板 Camera 仅为可选实验观测源；是否采集由单独授权、功耗与隐私任务决定，
-  不阻塞 Sprint 1；
-- Audio 暂未接入，不阻塞当前 A线；
+- 开发板 Camera 是当前单板采集里程碑交付源；真实采集仍由命名授权、功耗、
+  存储和隐私边界控制，且不参与 Location/SOS 决策；
+- Audio 已有独立台架证据但 CALL 线当前暂停，不属于本轮 A 线；
 - Web AI Control Plane 已部署并作为研发事实中枢使用；
 - 当前阶段仍为 `A-R0 — AI Data & Evaluation Platform`；
 - A-R0 Gate 必须由真实 Field Evidence 驱动，不能因工具代码完成而提前标 PASS。
@@ -69,7 +86,7 @@ Where am I?
 IMU       高频连续/窗口采样
 GNSS      按GNSS自身更新与功耗策略
 LTE       数秒～数十秒或事件触发
-Camera    自动低频JPEG snapshot / 后续事件触发
+Camera    默认关闭；本里程碑仅手动/设备定时的有界 JPEG snapshot
 Audio     后续短窗口/事件触发
 ```
 
@@ -238,10 +255,10 @@ Device
 
 ## 7. Camera 与外场自动化原则
 
-Sprint 1 覆盖规则：Camera 不在 P0 关键链，也不默认自动采集。若单独实验任务获
-授权，只允许带 `event_time`、`trigger_reason` 和清晰隐私/电源状态的一张 still；
-不得用 Camera 结果产生或否决 Location/SOS 决策。以下内容保留为数据研究方向，
-不是当前固件或首发验收要求。
+产品覆盖规则：Camera 仍不构成第四个 P0 Gate，也不默认自动采集。当前
+ADR-0015 里程碑必须完成授权 Web 单次拍照和默认关闭的设备本地定时静态图，
+并带 `event_time`、时间质量、触发来源及清晰隐私/电源/保存/上传状态。不得用
+Camera 结果产生或否决 Location/SOS 决策；以下视觉理解仍只是数据研究方向。
 
 Field Dataset Protocol 长期采用：
 
@@ -259,14 +276,14 @@ Naturalistic Session 理想操作：
 
 测试过程中尽量零操作。
 
-Camera 后续实验阶段：
+Camera 当前采集阶段：
 
-- 不要求测试人员手动拍照；
-- 经明确授权后评估低频 JPEG snapshot；
+- 先用现有 Web 受控命令取得一张真实 LTE 端到端 JPEG；
+- 再复用同一入口评估默认关闭、带结束边界的低频 JPEG snapshot；
 - `neck_forward` 可作为正式 `mount_state`；
 - 不使用持续视频作为默认采集方式；
-- 如果自动 Camera 需要明显 firmware 重构，当前可暂缓；
-- Camera 缺失不阻塞首个 GNSS blackout 实验。
+- 只修复实际联合固件、总线、内存、存储和任务冲突，不扩大为视觉框架；
+- Camera 缺失不否决定位结果，但会阻塞本次 Camera-inclusive field milestone。
 
 Camera 能力演进：
 
@@ -340,7 +357,7 @@ LTE location baseline = unavailable
   连续覆盖，连续 120–180 秒采集已移交非阻塞的 L2-001；
 - VPS 中真实 IMU 样本仍需可靠有界导出；
 - LTE 只有原始观测，暂无粗位置映射；
-- Camera 自动采集当前可暂缓。
+- Camera 自动采集对历史 FT-001B 可选，但对 ADR-0015 当前里程碑仍待完成。
 
 因此：
 
@@ -376,7 +393,8 @@ EXP-A1-000 不再是当前 P0-LOC 的串行许可门；其硬件等待不能阻�
 
 LTE 是 opportunistic source。
 
-Camera 是 optional source。
+Camera 在该历史 FT-001B 范围内是 optional source；ADR-0015 已将基础
+Camera 链路提升为当前单板外测里程碑交付，二者不得混淆。
 
 人工事件标记不是前置条件。
 
@@ -438,14 +456,14 @@ IMU position baseline = unavailable
 
 不得以下列工作替代 LOC-021/FIELD-020 的真实 `P0-LOC` 证据或擅自晋级
 learned estimator。FT-001B/EXP-A1-000 的等待不是新增基础设施的理由，也不
-禁止 CALL/SOS、TLS/持久队列、确定性 Safety Kernel、A0/合规等独立 lane 按
-各自 task 推进：
+禁止仍获当前排期的 TLS/持久队列、确定性 Safety Kernel、A0/合规等独立 lane
+按各自 task 推进；ADR-0015 已明确暂停 CALL 与完整 SOS，恢复须另有排期：
 
-- 扩展新的 Control Plane 功能；
+- 重做 Control Plane；当前只允许现有设备页所需的最小 Camera 控件；
 - 继续设计复杂 Schema；
 - 要求多传感器硬同步；
 - 建生产级 IMU 校准体系；
-- 为 Camera 大规模重构 firmware；
+- 为 Camera 建设视觉 AI 或进行无关的大规模 firmware 重构；
 - 为 LTE 先建设完整基站位置数据库；
 - 训练复杂定位神经网络；
 - 上 Transformer；
@@ -492,9 +510,9 @@ learned estimator。FT-001B/EXP-A1-000 的等待不是新增基础设施的理�
 
 当前最重要的 A 线里程碑是：
 
-> **把 LOC-020/POLICY-010/REPLAY-010 的 device-semantic reference 收敛为
-> 一个 review boundary，随后通过 LOC-021 建立 device operational state、server
-> event-time mirror 和 Guardian view，再由 FIELD-020 形成代表性证据。**
+> **在一块现有 4G connectivity node 上同时运行 Location、GNSS/Cell/IMU/
+> power 原始采集和 Camera；完成 Web 单次拍照、设备定时采集、断网/重启
+> 持久补传、真实 LTE→VPS→Web 闭环与独立供电短测，再进入 FIELD-020。**
 
 旧 FT-001B/EXP-A1-000 数据可在独立硬件窗口继续产生并进入这一证据链，但不
 阻塞已有依赖的 Sprint 1 切片。AI 模型只在数据质量、Replay 与 offline/Shadow

@@ -1,11 +1,70 @@
 {
-  "generated_at": "2026-08-11 09:03 UTC",
+  "generated_at": "2026-09-09 08:26 UTC",
   "git": {
-    "branch": "d2/gnss-imu-field-seed",
-    "head": "9add4ce docs(web): record live dashboard validation [D2-D5]"
+    "branch": "a0/first-real-field-session",
+    "head": "f15bb6852 fix(progress): emit repository-relative task paths"
   },
-  "current_focus": "FIELD-011 台架闭环已通过：同一镜像完成一次操作员确认的静止 QMI8658 LTE 窗口和 LTE/GNSS 状态上报。下一步是在独立供电、固定携带位置下完成户外 GNSS 与三次正常步行窗口，再进入 D2 指标和 D5 标注。",
+  "current_focus": "单 4G 主板 Camera/Location 联合源码与离线构建已通过审计；当前不代表实机通过。下一步先私密备份并确认 0x600000..0xF00000 专用于照片，再验证 OV5640 与 QMI8658/MAX17048 共总线，生成启用 SIM/LTE 的具名本地候选，完成部署/刷写后执行真实 LTE 单拍、断网重启补传和独立供电短测，最后进入 FIELD-020。",
   "milestones": [
+    {
+      "id": "A-CAMERA",
+      "title": "Single-board Location and Camera Closure",
+      "done": 0,
+      "total": 2,
+      "tasks": [
+        {
+          "id": "P0-CONVERGENCE-20260905",
+          "label": "joint source and live closure",
+          "state": "in_progress"
+        },
+        {
+          "id": "FIELD-020",
+          "label": "representative field dataset",
+          "state": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "C-PRODUCT",
+      "title": "Hardware and Pre-compliance",
+      "done": 0,
+      "total": 2,
+      "tasks": [
+        {
+          "id": "HW-021",
+          "label": "integrated hardware architecture",
+          "state": "in_progress"
+        },
+        {
+          "id": "COMPLIANCE-010",
+          "label": "China pre-compliance",
+          "state": "in_progress"
+        }
+      ]
+    },
+    {
+      "id": "DEFERRED-P0",
+      "title": "Paused Call and SOS Gates",
+      "done": 0,
+      "total": 3,
+      "tasks": [
+        {
+          "id": "CALL-020",
+          "label": "LTE data voice PoC",
+          "state": "paused"
+        },
+        {
+          "id": "CALL-021",
+          "label": "embedded RTC media",
+          "state": "paused"
+        },
+        {
+          "id": "SOS-010",
+          "label": "physical SOS closure",
+          "state": "paused"
+        }
+      ]
+    },
     {
       "id": "RELEASE",
       "title": "Engineering Alpha Release Gate",
@@ -37,13 +96,13 @@
     {
       "id": "D1",
       "title": "Link-Through Regression",
-      "done": 0,
+      "done": 1,
       "total": 2,
       "tasks": [
         {
           "id": "D1-001",
           "label": "4G link-through",
-          "state": "in_progress"
+          "state": "done"
         },
         {
           "id": "PWR-001",
@@ -154,13 +213,58 @@
   ],
   "active_tasks": [
     {
-      "id": "D1-001",
-      "title": "D1 link-through baseline",
+      "id": "A0-001",
+      "title": "IMU six-face calibration pipeline",
       "state": "in_progress",
-      "packet_status": "accepted_for_transition",
-      "priority": "high",
-      "date": "2026-07-09",
-      "path": "D:/pywork/egolink/docs/tasks/active/D1-001_D1_LINK_THROUGH_BASELINE.md"
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-08-17",
+      "path": "docs/tasks/active/A0-001_IMU_CALIBRATION_PIPELINE.md"
+    },
+    {
+      "id": "A0-002",
+      "title": "Unified sensor timestamp and time-lineage validation",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-08-17",
+      "path": "docs/tasks/active/A0-002_UNIFIED_TIMESTAMP.md"
+    },
+    {
+      "id": "A0-003",
+      "title": "Standard Field Session schema and sealed package validation",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-08-17",
+      "path": "docs/tasks/active/A0-003_FIELD_SESSION_SCHEMA.md"
+    },
+    {
+      "id": "CALL-020",
+      "title": "PC-bridged LTE-data RTC media PoC",
+      "state": "paused",
+      "packet_status": "paused",
+      "priority": "critical",
+      "date": "2026-09-09",
+      "path": "docs/tasks/active/CALL-020_LTE_DATA_VOICE_POC.md"
+    },
+    {
+      "id": "CALL-021",
+      "title": "Embedded LTE-data RTC media",
+      "state": "paused",
+      "packet_status": "paused",
+      "priority": "critical",
+      "date": "2026-09-09",
+      "path": "docs/tasks/active/CALL-021_EMBEDDED_LTE_RTC_MEDIA.md"
+    },
+    {
+      "id": "COMPLIANCE-010",
+      "title": "China P0 pre-compliance and classification",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-08-23",
+      "path": "docs/tasks/active/COMPLIANCE-010_CHINA_PRECOMPLIANCE.md"
     },
     {
       "id": "D2-001",
@@ -169,34 +273,7 @@
       "packet_status": "active",
       "priority": "high",
       "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/active/D2-001_LOCATION_ACCURACY_BASELINE.md"
-    },
-    {
-      "id": "D2-006",
-      "title": "QMI8658 external-module hardware identity probe",
-      "state": "in_progress",
-      "packet_status": "active",
-      "priority": "high",
-      "date": "2026-08-10",
-      "path": "D:/pywork/egolink/docs/tasks/active/D2-006_QMI8658_HARDWARE_IDENTITY_PROBE.md"
-    },
-    {
-      "id": "D2-007",
-      "title": "QMI8658 bounded window capture and LTE uplink",
-      "state": "in_progress",
-      "packet_status": "active",
-      "priority": "high",
-      "date": "2026-08-10",
-      "path": "D:/pywork/egolink/docs/tasks/active/D2-007_QMI8658_BOUNDED_LTE_WINDOW_UPLINK.md"
-    },
-    {
-      "id": "D2-008",
-      "title": "Wi-Fi QMI8658 sensor telemetry smoke",
-      "state": "in_progress",
-      "packet_status": "active",
-      "priority": "high",
-      "date": "2026-08-11",
-      "path": "D:/pywork/egolink/docs/tasks/active/D2-008_WIFI_QMI8658_SENSOR_SMOKE.md"
+      "path": "docs/tasks/active/D2-001_LOCATION_ACCURACY_BASELINE.md"
     },
     {
       "id": "D5-001",
@@ -205,7 +282,16 @@
       "packet_status": "active",
       "priority": "high",
       "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/active/D5-001_LOCATION_DATA_FLYWHEEL_MAINLINE.md"
+      "path": "docs/tasks/active/D5-001_LOCATION_DATA_FLYWHEEL_MAINLINE.md"
+    },
+    {
+      "id": "DOC-BASE-001",
+      "title": "Establish the current Ego product-direction baseline",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-14",
+      "path": "docs/tasks/active/DOC-BASE-001_EGO_MASTER_PRODUCT_BASELINE.md"
     },
     {
       "id": "FIELD-003",
@@ -214,7 +300,7 @@
       "packet_status": "active",
       "priority": "high",
       "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md"
+      "path": "docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md"
     },
     {
       "id": "FIELD-004",
@@ -223,7 +309,7 @@
       "packet_status": "continuous_regression",
       "priority": "high",
       "date": "2026-07-09",
-      "path": "D:/pywork/egolink/docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md"
+      "path": "docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md"
     },
     {
       "id": "FIELD-011",
@@ -232,7 +318,88 @@
       "packet_status": "active",
       "priority": "high",
       "date": "2026-08-11",
-      "path": "D:/pywork/egolink/docs/tasks/active/FIELD-011_GNSS_IMU_LTE_JOINT_FIELD_SEED.md"
+      "path": "docs/tasks/active/FIELD-011_GNSS_IMU_LTE_JOINT_FIELD_SEED.md"
+    },
+    {
+      "id": "FIELD-020",
+      "title": "P0-LOC representative field dataset",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-09-09",
+      "path": "docs/tasks/active/FIELD-020_L1_FIELD_DATASET.md"
+    },
+    {
+      "id": "FT-001B",
+      "title": "First replayable asynchronous L1 GNSS and IMU field session",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-08-23",
+      "path": "docs/tasks/active/FT-001B_FIRST_REPLAYABLE_ASYNC_GNSS_IMU_SESSION.md"
+    },
+    {
+      "id": "FW-005",
+      "title": "SIM7670 GNSS coordinate and response correctness",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-12",
+      "path": "docs/tasks/active/FW-005_SIM7670_GNSS_COORDINATE_RESPONSE_CORRECTNESS.md"
+    },
+    {
+      "id": "FW-006",
+      "title": "Deploy the FW-005 GNSS correctness image to the connectivity node",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-12",
+      "path": "docs/tasks/active/FW-006_GNSS_CORRECTNESS_HARDWARE_UPDATE.md"
+    },
+    {
+      "id": "FW-007",
+      "title": "Bounded LTE to Wi-Fi engineering failover",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-16",
+      "path": "docs/tasks/active/FW-007_LTE_WIFI_FAILOVER.md"
+    },
+    {
+      "id": "HW-021",
+      "title": "Exact integrated P0 prototype design and down-select",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-09-09",
+      "path": "docs/tasks/active/HW-021_EXACT_INTEGRATED_PROTOTYPE_DESIGN.md"
+    },
+    {
+      "id": "HW-022",
+      "title": "Integrated P0 prototype build and bring-up",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-08-23",
+      "path": "docs/tasks/active/HW-022_INTEGRATED_PROTOTYPE_BUILD.md"
+    },
+    {
+      "id": "L2-001",
+      "title": "Continuous IMU mobility capture, persistent spool and replay",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "medium",
+      "date": "2026-08-23",
+      "path": "docs/tasks/active/L2-001_CONTINUOUS_IMU_MOBILITY_CAPTURE.md"
+    },
+    {
+      "id": "LOC-021",
+      "title": "Device, Message Hub and Guardian Location integration",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-09-05",
+      "path": "docs/tasks/active/LOC-021_DEVICE_LOCATION_INTEGRATION.md"
     },
     {
       "id": "MODEL-001",
@@ -240,8 +407,62 @@
       "state": "paused",
       "packet_status": "paused",
       "priority": "high",
-      "date": "2026-07-04",
-      "path": "D:/pywork/egolink/docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md"
+      "date": "2026-08-23",
+      "path": "docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md"
+    },
+    {
+      "id": "OPS-002",
+      "title": "Official ego.example.invalid HTTPS entry and always-visible AMap canvas",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-12",
+      "path": "docs/tasks/active/OPS-002_EGO_DOMAIN_HTTPS.md"
+    },
+    {
+      "id": "OPS-003",
+      "title": "Suppress AMap coordinate-convert access logs",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-15",
+      "path": "docs/tasks/active/OPS-003_AMAP_COORDINATE_LOG_PRIVACY.md"
+    },
+    {
+      "id": "OPS-004",
+      "title": "Migrate device ingress from plaintext HTTP to TLS",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-09-02",
+      "path": "docs/tasks/active/OPS-004_DEVICE_HTTPS_INGRESS.md"
+    },
+    {
+      "id": "OUTBOX-010",
+      "title": "Persistent priority outbox",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-09-03",
+      "path": "docs/tasks/active/OUTBOX-010_PERSISTENT_PRIORITY_OUTBOX.md"
+    },
+    {
+      "id": "P0-CONVERGENCE-20260905",
+      "title": "Single-board Location and Camera field closure",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-09-09",
+      "path": "docs/tasks/active/P0-CONVERGENCE-20260905.md"
+    },
+    {
+      "id": "P0-RELEASE-010",
+      "title": "Saleable P0 release criteria and evidence review",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-08-23",
+      "path": "docs/tasks/active/P0-RELEASE-010_SALEABLE_P0_REVIEW.md"
     },
     {
       "id": "PROD-001",
@@ -249,8 +470,8 @@
       "state": "paused",
       "packet_status": "paused",
       "priority": "high",
-      "date": "2026-07-04",
-      "path": "D:/pywork/egolink/docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md"
+      "date": "2026-08-23",
+      "path": "docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md"
     },
     {
       "id": "PWR-001",
@@ -259,90 +480,143 @@
       "packet_status": "active",
       "priority": "high",
       "date": "2026-07-09",
-      "path": "D:/pywork/egolink/docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md"
+      "path": "docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md"
+    },
+    {
+      "id": "PWR-020",
+      "title": "Integrated P0 power and 48-hour guard matrix",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "critical",
+      "date": "2026-08-23",
+      "path": "docs/tasks/active/PWR-020_P0_48H_POWER_MATRIX.md"
+    },
+    {
+      "id": "SOS-010",
+      "title": "Physical SOS walking skeleton",
+      "state": "paused",
+      "packet_status": "paused",
+      "priority": "critical",
+      "date": "2026-09-09",
+      "path": "docs/tasks/active/SOS-010_SOS_WALKING_SKELETON.md"
+    },
+    {
+      "id": "WEB-004",
+      "title": "AMap live location view with runtime-only credentials",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-15",
+      "path": "docs/tasks/active/WEB-004_AMAP_LIVE_LOCATION_MAP.md"
+    },
+    {
+      "id": "WEB-005",
+      "title": "Manual Dashboard refresh and selected trusted trajectory",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-15",
+      "path": "docs/tasks/active/WEB-005_MANUAL_REFRESH_TRAJECTORY_SELECTION.md"
+    },
+    {
+      "id": "WEB-006",
+      "title": "Paginated searchable all-location history",
+      "state": "in_progress",
+      "packet_status": "active",
+      "priority": "high",
+      "date": "2026-08-15",
+      "path": "docs/tasks/active/WEB-006_PAGINATED_LOCATION_HISTORY.md"
     }
   ],
   "recent_done": [
     {
-      "id": "D2-009",
-      "title": "QMI8658 bounded Wi-Fi window uplink",
-      "state": "done",
-      "packet_status": "completed",
-      "priority": "high",
-      "date": "2026-08-11",
-      "path": "D:/pywork/egolink/docs/tasks/done/D2-009_QMI8658_BOUNDED_WIFI_WINDOW_UPLINK.md"
-    },
-    {
-      "id": "D5-002",
-      "title": "QMI8658 labelled multi-window dataset seed",
+      "id": "D2-006",
+      "title": "QMI8658 external-module hardware identity probe",
       "state": "done",
       "packet_status": "done",
       "priority": "high",
-      "date": "2026-08-11",
-      "path": "D:/pywork/egolink/docs/tasks/done/D5-002_QMI8658_LABELED_MULTI_WINDOW_SEED.md"
+      "date": "2026-09-09",
+      "path": "docs/tasks/done/D2-006_QMI8658_HARDWARE_IDENTITY_PROBE.md"
     },
     {
-      "id": "WEB-003",
-      "title": "Founder Dashboard clarity and field-first hierarchy",
+      "id": "D2-007",
+      "title": "QMI8658 bounded window capture and LTE uplink",
+      "state": "done",
+      "packet_status": "superseded",
+      "priority": "high",
+      "date": "2026-09-09",
+      "path": "docs/tasks/done/D2-007_QMI8658_BOUNDED_LTE_WINDOW_UPLINK.md"
+    },
+    {
+      "id": "D2-008",
+      "title": "Wi-Fi QMI8658 sensor telemetry smoke",
       "state": "done",
       "packet_status": "done",
       "priority": "high",
-      "date": "2026-08-11",
-      "path": "D:/pywork/egolink/docs/tasks/done/WEB-003_FOUNDER_DASHBOARD_CLARITY.md"
+      "date": "2026-09-09",
+      "path": "docs/tasks/done/D2-008_WIFI_QMI8658_SENSOR_SMOKE.md"
     },
     {
-      "id": "D2-002",
-      "title": "D2 reference-point field-run automation",
+      "id": "CALL-010",
+      "title": "Wearable audio I/O and simultaneous-loop bring-up",
       "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/done/D2-002_REFERENCE_FIELD_RUN_AUTOMATION.md"
+      "packet_status": "accepted_for_transition",
+      "priority": "critical",
+      "date": "2026-09-05",
+      "path": "docs/tasks/done/CALL-010_AUDIO_HARDWARE_LOOP.md"
     },
     {
-      "id": "D2-003",
-      "title": "Bounded device and time-window field export",
+      "id": "CALL-001",
+      "title": "Freeze Ego Call minimum architecture and PC loop",
       "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/done/D2-003_BOUNDED_FIELD_WINDOW_EXPORT.md"
+      "packet_status": "accepted_for_transition",
+      "priority": "critical",
+      "date": "2026-08-23",
+      "path": "docs/tasks/done/CALL-001_EGO_CALL_ARCHITECTURE_AND_PC_LOOP.md"
     },
     {
-      "id": "D2-004",
-      "title": "Historical VPS baseline and P0 location rule freeze",
+      "id": "HW-020",
+      "title": "P0 A0 architecture baseline and candidate constraints",
       "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/done/D2-004_HISTORICAL_VPS_BASELINE_AND_P0_RULE_FREEZE.md"
+      "packet_status": "accepted_for_transition",
+      "priority": "critical",
+      "date": "2026-08-23",
+      "path": "docs/tasks/done/HW-020_PRODUCT_ARCHITECTURE_FREEZE.md"
     },
     {
-      "id": "D2-005",
-      "title": "QMI8658 4G-board configuration and motion-data readiness",
+      "id": "L1-000",
+      "title": "Restore contract-consistent green L1 engineering baseline",
       "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/done/D2-005_QMI8658_MOTION_DATA_READINESS.md"
+      "packet_status": "accepted_for_transition",
+      "priority": "critical",
+      "date": "2026-08-23",
+      "path": "docs/tasks/done/L1-000_HEAD_CONTRACT_AND_TEST_RECOVERY.md"
     },
     {
-      "id": "MAP-001",
-      "title": "D2/D5 map evidence view",
+      "id": "LOC-020",
+      "title": "Location Engine v0",
       "state": "done",
-      "packet_status": "done",
-      "priority": "high",
-      "date": "2026-07-11",
-      "path": "D:/pywork/egolink/docs/tasks/done/MAP-001_D2_D5_MAP_EVIDENCE_VIEW.md"
+      "packet_status": "accepted_for_transition",
+      "priority": "critical",
+      "date": "2026-08-23",
+      "path": "docs/tasks/done/LOC-020_LOCATION_ENGINE_V0.md"
     }
   ],
   "operator_asks": [
-    "户外联测：把开发板和传感器固定在一个明确携带位置，使用稳定移动电源，并在开阔处等待 GNSS。",
-    "开始前记录携带位置、方向和时间；准备好后再创建三次正常步行六轴窗口，任一异常即停止。",
-    "v0.4 PCB、芯片和外壳设计继续并行迭代，不阻塞当前开发板的数据采集闭环。",
-    "在具名证据完成前，不宣称定位精度、模型效果、续航、量产或正式安全能力。"
+    "保持当前 4G 板处于 ROM bootloader；首次 Camera 候选刷写前，允许并完成 0x600000..0xF00000 的私密预读备份和专用区确认。",
+    "核对实物 OV5640/排线方向、外接 QMI8658A/MAX17048 接线、SIM、LTE/GNSS 天线和独立电源；共享 I2C 未实测前不得打开 verified Gate。",
+    "下一次实机阶段一次性确认 VPS 部署、精确 COM3 刷写、SIM 流量、允许拍摄的测试场景/人员、授权查看者与保留截止；不采音频、不公开照片。",
+    "先完成真实 LTE 单拍和离线重启同文件补传，再做单板短程携带；现场 blocker 清零后才启动 FIELD-020。",
+    "在具名现场证据完成前，不宣称 Camera 外测就绪、定位精度、续航、量产或任何 P0 Gate 通过。"
   ],
   "assignees": {
+    "P0-CONVERGENCE-20260905": "codex + founder bounded hardware run",
+    "FIELD-020": "founder field run + codex evidence closure",
+    "HW-021": "codex hardware lane",
+    "COMPLIANCE-010": "codex + qualified labs/advisers",
+    "CALL-020": "paused",
+    "CALL-021": "paused",
+    "SOS-010": "paused",
     "REL-012": "codex",
     "ENG-007": "codex",
     "ENG-008": "codex",
@@ -408,9 +682,9 @@
     }
   ],
   "counts": {
-    "active": 10,
-    "paused": 2,
-    "open_total": 12,
-    "done_total": 148
+    "active": 30,
+    "paused": 5,
+    "open_total": 35,
+    "done_total": 162
   }
 }

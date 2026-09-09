@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-05
+decision_updated: 2026-09-09
 last_verified: 2026-08-23
 verified_by: codex
 ---
@@ -56,12 +56,23 @@ consent and privacy review.
 
 ## Current implementation unit
 
-[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) and
-[P0-CONVERGENCE-20260905](../tasks/active/P0-CONVERGENCE-20260905.md) prioritize
-bounded device Location -> authenticated secure transport -> Guardian, with
-real bidirectional CALL/embedded-bearer work in parallel, then physical SOS and
-recovery. T0/T1 do not globally block isolated S or finite single-source live
-proof; concurrent-ingress/reboot commitments remain required for the product.
+[ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md)
+and [P0-CONVERGENCE-20260905](../tasks/active/P0-CONVERGENCE-20260905.md)
+currently prioritize one independently operating SIM7670G connectivity board:
+Location and raw observations, bounded persistent backlog, authorized still
+capture, actual Wi-Fi/LTE ordinary-observation upload and controlled transition,
+real-LTE photo upload, durable VPS storage and existing-Web viewing, followed by
+FIELD-020. AMOLED and board-to-board forwarding are not dependencies of this
+A-line evidence run. CALL-020, CALL-021 and full physical SOS are paused for
+separate follow-up; their evidence and product obligations remain.
+
+Camera is a delivery requirement for this engineering milestone, not a fourth
+sellable-P0 Gate and not a Camera-AI or Camera-dependent safety promise.
+[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) still governs
+the retained local-failure, timing, ownership and recovery invariants where the
+newer decision does not replace execution order. T0/T1 do not globally block
+isolated S or finite single-source live proof; concurrent-ingress/reboot
+commitments remain required for the product.
 
 Local state advances independently from outbound persistence failure, with
 explicit degradation. Recognized input, stored event, server receipt, terminal

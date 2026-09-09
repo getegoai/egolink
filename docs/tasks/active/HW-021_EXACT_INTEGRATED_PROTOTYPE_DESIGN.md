@@ -10,12 +10,16 @@ depends_on:
 serves_gate: P0-LOC/P0-CALL/P0-SOS
 requires_hardware: false
 created: 2026-08-23
-last_updated: 2026-08-23
+last_updated: 2026-09-09
 
 context:
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
+  - docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md
   - docs/hardware/P0_PRODUCT_ARCHITECTURE.md
+  - docs/hardware/BOARD_MATRIX.md
+  - docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md
   - docs/product/MASS_PRODUCTION_REQUIREMENTS.md
+  - docs/tasks/active/P0-CONVERGENCE-20260905.md
   - docs/tasks/active/CALL-020_LTE_DATA_VOICE_POC.md
   - docs/tasks/active/COMPLIANCE-010_CHINA_PRECOMPLIANCE.md
 
@@ -37,12 +41,18 @@ prototype design with exact part/revision identities and explicit evidence.
 
 # Acceptance
 
-- [ ] Exact MCU, Cat.1/GNSS modem, IMU, audio codec/frontend, amp, microphones,
-      speaker, persistent storage, SIM, charger/protection/gauge, battery,
-      USB-C/debug and antenna candidates are named with official evidence.
+- [ ] Exact MCU, Cat.1/GNSS modem, IMU, Camera, audio codec/frontend, amp,
+      microphones, speaker, persistent storage, SIM, charger/protection/gauge,
+      battery, USB-C/debug and antenna candidates are named with official
+      evidence.
 - [ ] MCU-to-modem data bearer, full-duplex audio clocks/data, reset/wake,
-      storage, SOS, power rails and test points have owned interfaces and
-      bounded budgets; every unknown remains marked `unknown`/`unverified`.
+      Camera data/control/power, storage, SOS, power rails and test points have
+      owned interfaces and bounded budgets; every unknown remains marked
+      `unknown`/`unverified`.
+- [ ] Camera pin/bus conflicts, standby/PWDN or power-cut capability, lens/FOV
+      and mounting direction, enclosure opening/sealing, JPEG RAM/storage and
+      LTE-upload budgets are explicit design inputs rather than inferred from
+      a development-board smoke.
 - [ ] The design can absorb CALL-020 codec/bitrate/traffic/jitter measurements
       and COMPLIANCE-010 constraints without pretending those inputs already
       exist; unresolved choices are conditional release blockers.
@@ -52,7 +62,10 @@ prototype design with exact part/revision identities and explicit evidence.
 
 # Dispatch Boundary
 
-This task can start immediately in parallel with CALL-020 and COMPLIANCE-010.
+This task continues immediately in parallel with the A-line Camera milestone
+and COMPLIANCE-010. CALL-020 is paused; its unknown media inputs remain
+conditional fields and do not block unrelated Camera, RF, power, storage or
+mechanical work. They still block final audio/bearer release closure.
 Before creating design-source files, confirm the exact `hardware/p0_a0/`
 structure and add its local instructions if needed. Web/vendor facts require
 primary official sources; purchasing and fabrication require separate founder
@@ -76,29 +89,49 @@ identities, CALL-020 measured inputs, final support parts, calculations,
 schematic/BOM/layout and independent reviews remain open. The task therefore
 stays `active` / `in_progress`.
 
+## 2026-09-09 Camera Design-Input Overlay
+
+ADR-0015 makes Camera a required input to this design track while leaving
+visual inference outside the first-release Gate path. Reuse of the historical
+OV5640/QVGA camera-smoke route proves only that three JPEGs were captured on one
+development setup; it neither selects a production Camera nor proves current
+combined-firmware, pin, power, storage, LTE or enclosure behavior.
+
+A line must feed C the exact observed Camera module/revision and wiring,
+resolution and JPEG-size distribution, initialization/capture/save/upload
+latencies, heap/PSRAM/task watermarks, persistent-storage growth and measured
+power/standby behavior where available. C must resolve the Camera-versus-IMU/
+gauge bus and pin ownership, controllable power state, lens direction and FOV,
+window/occlusion/sealing, thermal/RF coupling, storage quota and uplink budget.
+Unmeasured values remain `unknown`/`unverified`; a development OV5640 does not
+silently become the product BOM choice.
+
 # Blocking Decisions
 
 1. Obtain SIMCom first-party evidence for the exact GNSS-enabled SIM7670G order
    code, HW/KDL revision, firmware, hardware-design manual and errata. Resolve
    the manufacturer's conflicting public sleep-current values; use neither in
    a budget meanwhile.
-2. Feed measured CALL-020 codec/bitrate/frame/jitter/gap/reconnect/overhead
-   results into the worksheet and prove the selected bearer on MCU + modem
-   without a PC. UART+RTS/CTS is only a continuity hypothesis; USB ECM/RNDIS is
-   only a conditional alternative.
-3. Decide carry form, enclosure envelope, battery target and operator/channel;
+2. When CALL resumes, feed measured codec/bitrate/frame/jitter/gap/reconnect/
+   overhead results into the worksheet and prove the selected bearer on MCU +
+   modem without a PC. Until then those fields stay unknown; UART+RTS/CTS and
+   USB ECM/RNDIS remain conditional alternatives rather than frozen choices.
+3. Resolve Camera/IMU/gauge interface ownership and obtain the measured A-line
+   Camera resource, persistence, transfer, power and mechanical inputs listed
+   above. Select a production Camera only through the normal evidence review.
+4. Decide carry form, enclosure envelope, battery target and operator/channel;
    then obtain an exact battery-pack revision with pulse, impedance, NTC,
    protection and certification evidence.
-4. Close audio clock/gain/speaker/acoustic/privacy behavior, outbox allocation
+5. Close audio clock/gain/speaker/acoustic/privacy behavior, outbox allocation
    and authenticated ACK semantics, rail/burst/thermal calculations, RF/body-
    loading constraints and missing support-part identities through independent
    review.
-5. Receive the qualified COMPLIANCE-010 response before RF/layout or release
+6. Receive the qualified COMPLIANCE-010 response before RF/layout or release
    assumptions are frozen.
-6. Record an explicit PICO-versus-WROOM A0 decision. The C0.1 WROOM candidates
+7. Record an explicit PICO-versus-WROOM A0 decision. The C0.1 WROOM candidates
    do not silently supersede the Master Context's PICO engineering starting
    point.
-7. Obtain comparable exact-SKU evidence and record an explicit modem decision;
+8. Obtain comparable exact-SKU evidence and record an explicit modem decision;
    SIM7670G continuity cannot silently supersede the Master Context's still-
    unverified `ML307A-GSLN` lead or the China operator/compliance requirements.
 

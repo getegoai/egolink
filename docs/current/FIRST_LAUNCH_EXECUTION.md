@@ -1,22 +1,44 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-05
+decision_updated: 2026-09-09
 last_verified: 2026-09-04
 verified_by: founder/codex
-decision_adr: ../architecture/adr/ADR-0014-runtime-convergence.md
+decision_adr: ../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md
 ---
 
 # EgoLink Productization Sprint 1 Execution Baseline
 
-## 2026-09-05 Accepted Runtime Convergence
+## 2026-09-09 Accepted Single-Board Camera Milestone
 
-[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) is accepted;
-[P0-CONVERGENCE-20260905](../tasks/active/P0-CONVERGENCE-20260905.md) is the
-active implementation packet. Reuse LOC-021 A-S to deliver one bounded real
-device Location -> authenticated secure transport -> bound Guardian slice.
-Advance concrete bidirectional CALL and embedded-bearer validation in parallel,
-then connect physical SOS and recovery. Local state and input recognition must
-show storage/queue degradation independently from durable/delivered state.
+[ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md)
+is the current execution decision. A line now uses only the identified
+SIM7670G connectivity board plus the necessary existing Camera, external IMU,
+power source and antennas. It must close combined Location/raw collection,
+bounded offline persistence, ordinary-observation upload over actual Wi-Fi and
+LTE with a controlled route transition, an authorized Web one-shot JPEG over
+real LTE, default-off local timed capture and recovery before a short
+independent-power carry run and FIELD-020. AMOLED, board-to-board forwarding
+and PC runtime are not part of this acceptance.
+
+CALL-020, CALL-021 and full physical SOS are paused for this milestone. Their
+source, evidence and final `P0-CALL`/`P0-SOS` obligations remain. HW-021 and
+COMPLIANCE-010 continue. Camera is required here but is not a fourth product
+Gate, Camera AI or a Location/SOS decision source.
+
+The scope decision itself creates no Camera or field evidence. The application
+partition retains the prior collector build; a separate bounded 2026-09-09
+legacy-data backup/purge result does not prove combined Camera, real-LTE photo
+upload, persistent photo recovery or field behavior. All three product Gates
+remain `NOT_RUN`.
+
+## 2026-09-05 Prior Accepted Runtime Convergence
+
+[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) remains an
+accepted prior decision; [P0-CONVERGENCE-20260905](../tasks/active/P0-CONVERGENCE-20260905.md)
+is now repurposed by ADR-0015. The 2026-09-05 order reused LOC-021 A-S for one
+bounded real-device Location -> authenticated secure transport -> bound
+Guardian slice, advanced CALL in parallel, and then connected physical SOS and
+recovery. Its local storage/queue and truthful-delivery invariants remain.
 
 T0/T1 do not globally block S smoke or a finite current-boot/single-source live
 profile. The original concurrent SOS/IMU product and recovery commitments stay
@@ -100,38 +122,46 @@ Camera and AI cannot veto, fabricate or delay this loop.
 
 ## Sprint 1 Scope Freeze
 
-In scope now:
+In scope for the current milestone:
 
 - deterministic device-operational Location Engine v0;
 - configurable Sensor Policy v0 and event-time Replay;
-- exact-board microphone/speaker bring-up, LTE-data media and embedded RTC path;
-- durable physical SOS composition and minimum Guardian surface;
-- representative field/power/RF/acoustic evidence;
+- one connectivity-board asynchronous GNSS/Cell/IMU/power collection runtime;
+- bounded still capture with separate metadata/file persistence, real-LTE
+  upload, VPS verification and minimum Web control/preview/export;
+- independent-power joint short testing and representative FIELD-020 evidence;
 - A0 interface architecture and qualified China pre-compliance input.
 
 Not on the critical path:
 
 - new sensors, learned multi-source fusion or coordinate regression;
 - anomaly/danger models, camera AI, broad context understanding;
-- polished/full App, contacts, multiparty calls, recording or AI voice;
+- CALL-020/CALL-021 and full physical SOS until this milestone closes;
+- polished/full App, contacts, multiparty calls, audio recording, continuous
+  video or AI voice;
 - PSTN/SMS/public emergency dispatch or Native VoLTE as launch dependencies.
 
-Native VoLTE remains `G0V-VOLTE-RESERVE`. Camera may only be a manually
-authorized experimental still source with trigger reason and event time.
+Native VoLTE remains `G0V-VOLTE-RESERVE`. Camera collection is limited to the
+named authorized manual/timed still session with source event time, explicit
+retention and no training/decision use.
 
 ## Current Dependency Graph
 
 ```text
-LOC-020 -> POLICY-010 -> REPLAY-010 -> LOC-021 -> FIELD-020 ----+
-                                             |                  |
-CALL-001 -> CALL-010 -> CALL-020 ------+      +-> SOS-010 -------+-> release
-HW-020 -> HW-021 ----------------------+-> HW-022 -> CALL-021 --^
-OUTBOX-010 ----------------------------------------------------^
+single-board audit
+-> combined collector + Camera
+-> actual Wi-Fi/LTE ordinary upload + controlled transition
+-> Web one-shot JPEG over real LTE
+-> local timed capture + persistent recovery
+-> independent-power joint short run
+-> FIELD-020
 
-HW-022 + LOC-021 + CALL-021 + SOS-010 -> PWR-020
+parallel: HW-021 + COMPLIANCE-010 + applicable reliability/power work
+paused:   CALL-020 -> CALL-021; full SOS-010
 
-FIELD-020 + SOS-010 + OUTBOX-010 + OPS-004 + PWR-020 + HW-022
-    + COMPLIANCE-010 + acoustic/RF/water/security/privacy/NPI evidence
+later product convergence:
+FIELD-020 + CALL-021 + SOS-010 + OUTBOX-010 + OPS-004 + PWR-020
+    + HW-022 + COMPLIANCE-010 + acoustic/RF/water/security/privacy/NPI
     -> P0-RELEASE-010
 ```
 
@@ -139,12 +169,21 @@ LOC-020/POLICY-010/REPLAY-010 were implemented and accepted sequentially as one
 PC reference boundary; their completion now permits LOC-021 dispatch but is not
 hardware or P0-LOC evidence.
 
-The arrows above describe product-evidence dependencies, not a rule that every
-offline host slice must wait. LOC, CALL and SOS adapters may be developed and
-tested in parallel against frozen contracts; only their physical/live
-composition and Gate claims must wait for the named upstream evidence.
+The current arrows govern A-line execution. The later product convergence
+retains, but does not presently schedule, the paused CALL/SOS campaigns.
 
 ## Lane A — Reliable Location
+
+### Current single-board Camera slice
+
+P0-CONVERGENCE now owns the shortest joint path on `connectivity-node-001`:
+verify the actual Camera/IMU/battery/modem/storage topology, integrate the
+historically observed OV5640 path into the current collector, then prove one
+authorized Web capture and one bounded local timed session with persistent
+offline/restart recovery. GNSS, Cell/LTE, IMU and power must continue with
+truthful source time and failure state while Camera capture/upload runs. The
+same candidate then receives a short independent-power carry test before
+FIELD-020. An isolated `camera_smoke` flash does not complete this slice.
 
 ### Accepted PC reference boundary
 
@@ -211,7 +250,12 @@ indoor, mall, underground, walking, vehicle, stationary and bag-carried
 conditions. L2-001 continuous IMU and later GNSS Reliability/Mobility models
 remain queued behind LOC-021 and cannot block this work.
 
-## Lane B — Ego Call and SOS
+## Lane B — Ego Call and SOS (paused for the current milestone)
+
+ADR-0015 pauses CALL-020, CALL-021 and full physical SOS work until the
+single-board Camera field milestone closes or the founder explicitly resumes
+the lane. The following evidence is retained unchanged; pause is neither
+completion nor cancellation of the final product Gates.
 
 `CALL-001` is accepted control/replay evidence, not media evidence. The current
 boards split capabilities: the wearable board has accepted-for-transition
@@ -344,31 +388,30 @@ battery/charging, intended users and child-product questions.
 
 ## Immediate Execution Order
 
-1. Trace and reuse the LOC-021 A-S entry, single modem owner, mapper, reducer,
-   policy, emitter, outbox, exact ACK and bound Guardian chain. Implement only
-   its shortest missing concrete secure-transport/runtime seams in a selected
-   bounded live profile; build legacy and live with pinned IDF and execute
-   native failure/concurrency behavior. Never finish with a fake transport.
-2. In parallel, close real CALL authentication/TLS/route and Guardian endpoints,
-   teardown/RESULT limits and runtime-memory measurements. Evaluate the exact
-   embedded bearer before final HW-022 without creating a second modem owner;
-   final CALL-021 still requires representative PC/USB-free hardware.
-3. Use an existing valid experiment scope only when it covers exact operations.
-   Otherwise complete independent code work and return one merged request with
-   image/recovery identity, endpoints, participants, attempt/time/write/traffic
-   budgets, stop rules and restoration conditions. No per-command approval
-   loop and no additional generic offline wrappers.
-4. Join physical SOS recognition, independent stored/received/noticed/human-ACK
-   state and authorized call attempt. Exercise queue/storage failure, missing
-   GNSS, exact/late ACK, outage and recovery; historical replay must not produce
-   physical effects or reopen an expired/ended call. The original concurrent
-   T0/T1 and checkpoint obligations remain pending until proven or explicitly
-   replaced by equivalent tested invariants.
-5. Continue HW-021, OUTBOX, OPS-004, early power/RF/Guardian reachability and
-   COMPLIANCE-010 independently within their authorizations. FIELD-020 follows
-   live Location; HW-022/CALL-021 and PWR-020 provide representative evidence.
-   Freeze objective Gate criteria and converge all capability and assurance
-   evidence in P0-RELEASE-010. All current P0 Gates remain `NOT_RUN`.
+1. Reidentify the single connectivity node, Camera, external IMU, power,
+   antennas, active/recovery images, pin/bus ownership and actually persistent
+   photo medium. Keep every unknown explicit.
+2. Integrate one bounded Camera capture path into the current collector image;
+   preserve Location/network/raw sensing and release resources after success or
+   failure. Build and execute focused coexistence/resource regressions.
+3. On that same candidate, prove ordinary-observation upload over actual Wi-Fi
+   and actual LTE plus a controlled transition. Retain exact IDs and pending
+   bytes until exact durable ACK; expose route, retry, duplicate and loss truth.
+4. Reuse the authenticated command/ACK surface for one expiring Web capture.
+   Prove device receipt, current JPEG creation, reliable local save, real-LTE
+   upload, VPS integrity/persistence and authorized Web preview as separate
+   states.
+5. Reuse the same path for default-off local timed capture with an interval and
+   bounded session end. Prove pending stop/config truth, offline quota, restart
+   recovery of the same IDs/files, corruption/full behavior and no catch-up
+   recapture of missed intervals.
+6. Run one independently powered single-board joint short test with AMOLED and
+   PC forwarding absent. Confirm GNSS/LTE/IMU/power progress and bounded memory/
+   task/storage growth during Camera work, including the reviewed network
+   transition, then dispatch FIELD-020.
+7. Continue HW-021, applicable reliability/power work and COMPLIANCE-010 in
+   parallel. Keep CALL-020/CALL-021/full SOS paused and retain all final release
+   dependencies. All current P0 Gates remain `NOT_RUN`.
 
 ## Stop-the-Line Conditions
 
@@ -382,6 +425,13 @@ battery/charging, intended users and child-product questions.
   passing build rather than official and measured evidence.
 
 ## Current Evidence Boundary
+
+The 2026-09-09 scope decision is not new execution evidence. The actual retained
+connectivity image is still the 2026-09-06 Wi-Fi-only collector, and TCAM-001 is
+a separate 2026-06-23 camera-smoke result. No current combined image, verified
+photo persistence medium, same-candidate Wi-Fi/LTE transition, LTE photo upload,
+Web preview, independent-power joint run or Camera-inclusive FIELD-020 result
+exists yet.
 
 CALL-010 now has accepted-for-transition basic development-board input/output
 endpoint evidence: the spoken-input metric response and clear/normal overall

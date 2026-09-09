@@ -1,5 +1,6 @@
 ---
 document_status: authoritative
+decision_updated: 2026-09-09
 last_verified: 2026-08-23
 verified_by: codex
 ---
@@ -43,7 +44,35 @@ a media proxy. Sprint 1 excludes PSTN, SMS, public emergency dispatch and
 native VoLTE as launch dependencies. Native VoLTE remains a separately
 measured A0 migration reserve.
 
-## Current Development Evidence Topology
+## Current A-Line Evidence Topology
+
+[ADR-0015](adr/ADR-0015-single-4g-board-camera-field-milestone.md) makes the
+current A-line milestone a single-connectivity-board evidence run:
+
+```text
+connectivity-node-001
+  ESP32-S3-SIM7670G-4G
+  GNSS / Cell-LTE / external QMI8658A / available power
+  historically observed OV5640 candidate
+  bounded ordinary-observation and JPEG persistence
+        |
+        +-> actual Wi-Fi and LTE upload + controlled route transition
+        +-> authenticated command / exact ACK
+        +-> durable private VPS photo + observation storage
+        +-> authorized existing Web control / preview / query / export
+```
+
+This diagram is the current responsibility and acceptance boundary, not a claim
+that the combined firmware has been flashed or run. The Camera and external IMU
+must be reidentified and their shared pin/bus/resource behavior verified on the
+actual assembly. The one-shot photo proof must use real LTE; ordinary
+observations must also traverse actual Wi-Fi and LTE and survive a controlled
+transition with honest pending, retry, duplicate and loss accounting. AMOLED,
+board-to-board forwarding and PC runtime/forwarding are not part of this A-line
+run. CALL-020, CALL-021 and full physical SOS are paused, while their source and
+final product obligations remain.
+
+## Retained Historical Dual-Board/PC Evidence Topology
 
 ```text
 wearable_node
@@ -65,11 +94,12 @@ PC Development Bridge
   debug dashboard
 ```
 
-This dual-board/PC topology is a development evidence vehicle, not the target
-product architecture. Board names do not prove audio, sustained LTE voice,
-camera, battery, RF, enclosure or product behavior. `CALL-020` may explicitly
-use a PC/USB media bridge for a bounded PoC; that result is at most
-`pc_side_verified` and cannot pass `P0-CALL`.
+This dual-board/PC topology is retained historical development evidence, not
+the current A-line or target product architecture. Board names do not prove
+audio, sustained LTE voice, camera, battery, RF, enclosure or product behavior.
+If the paused CALL lane later resumes, `CALL-020` may use a PC/USB media bridge
+only under its own reviewed scope; that result is at most `pc_side_verified`
+and cannot pass `P0-CALL`.
 
 ## Architectural Principles
 
@@ -104,4 +134,5 @@ The historical motion-candidate/AMOLED/PC loop remains reusable engineering
 evidence. It is not a substitute for, or a blocker ahead of, the three P0
 capability Gates.
 
-See `docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md` for detailed dual-board bridge design.
+See `docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md` for the retained
+historical dual-board bridge design; it does not override ADR-0015.

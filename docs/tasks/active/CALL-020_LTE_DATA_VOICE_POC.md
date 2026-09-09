@@ -1,19 +1,20 @@
 ---
 id: CALL-020
 title: PC-bridged LTE-data RTC media PoC
-status: active
+status: paused
 priority: critical
 lane: B
-execution_state: in_progress
+execution_state: paused_by_founder_20260909
 depends_on:
   - CALL-010
 serves_gate: P0-CALL
 requires_hardware: true
 created: 2026-08-23
-last_updated: 2026-09-08
+last_updated: 2026-09-09
 
 context:
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
+  - docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md
   - docs/current/ACTIVE_BUILD.md
   - docs/hardware/BOARD_MATRIX.md
   - docs/development/EGO_CALL.md
@@ -97,6 +98,14 @@ wearable-node-001 audio
 The current boards split audio and cellular capability and have no verified
 real-time board-to-board link. This task therefore proves LTE-data media and
 weak-network behavior without pretending the bridge is the product.
+
+# 2026-09-09 Pause Boundary
+
+ADR-0015 pauses CALL-020 for separate research while the single-4G-board
+Location/Camera field milestone runs. Preserve every implementation and dated
+result below. This is not completion, cancellation of `P0-CALL`, permission to
+delete CALL assets, or evidence that any live media requirement passed. Resume
+only through an explicit scheduling decision and its own bounded experiment.
 
 # Goal
 

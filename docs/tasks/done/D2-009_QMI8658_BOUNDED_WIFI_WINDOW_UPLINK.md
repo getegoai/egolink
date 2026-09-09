@@ -22,8 +22,8 @@ context:
   - docs/development/DATA_FLYWHEEL_PIPELINE.md
   - docs/development/DIRECTOR_WORKFLOW.md
   - docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md
-  - docs/tasks/active/D2-007_QMI8658_BOUNDED_LTE_WINDOW_UPLINK.md
-  - docs/tasks/active/D2-008_WIFI_QMI8658_SENSOR_SMOKE.md
+  - docs/tasks/done/D2-007_QMI8658_BOUNDED_LTE_WINDOW_UPLINK.md
+  - docs/tasks/done/D2-008_WIFI_QMI8658_SENSOR_SMOKE.md
   - firmware/AGENTS.md
   - firmware/mqtt_heartbeat/main/app_main.c
   - firmware/mqtt_heartbeat/main/Kconfig.projbuild

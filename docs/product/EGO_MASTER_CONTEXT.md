@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-05
+decision_updated: 2026-09-09
 last_verified: 2026-08-23
 verified_by: codex
 owner: founder
@@ -10,6 +10,7 @@ decision_adr: ../architecture/adr/ADR-0008-egolink-core-product-direction-reset.
 priority_decision_adr: ../architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md
 sprint_decision_adr: ../architecture/adr/ADR-0012-p0-productization-sprint-1.md
 runtime_decision_adr: ../architecture/adr/ADR-0014-runtime-convergence.md
+current_milestone_adr: ../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md
 ---
 
 # PROJECT EGO — MASTER PRODUCT CONTEXT
@@ -56,18 +57,41 @@ runtime_decision_adr: ../architecture/adr/ADR-0014-runtime-convergence.md
 
 ---
 
-## 0.1 Runtime convergence decision (2026-09-05)
+## 0.2 Single-board Camera field milestone (2026-09-09)
 
-[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) changes current
-execution order and scoped local-failure behavior, while v2.2 sales-product
+[ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md)
+replaces only the current engineering order. The A-line evidence vehicle is one
+identified SIM7670G connectivity board with the necessary existing external
+IMU, Camera, power source and antennas. It must close asynchronous Location/raw
+collection, bounded persistent backlog, actual Wi-Fi/LTE ordinary-observation
+upload and controlled transition, authorized still capture, real-LTE photo
+upload, durable VPS storage and existing-Web viewing before FIELD-020. AMOLED
+and board-to-board forwarding are not part of that run.
+
+CALL-020, CALL-021 and full physical SOS are paused for this milestone without
+removing their source, evidence or sellable-product obligations. C-line
+hardware and compliance work continues, including Camera interface, power,
+storage, optical and sealing inputs. Camera is required for this engineering
+milestone but is not a fourth product Gate, a Camera-AI release dependency or
+a source that can improve, veto or delay Location/SOS truth.
+
+This decision adds no hardware `last_verified` evidence and changes none of the
+three `NOT_RUN` P0 Gate states. The 2026-09-05 section below remains the prior
+runtime-convergence decision and still governs its retained safety, timing,
+ownership and recovery invariants where ADR-0015 does not replace scheduling.
+
+## 0.1 Prior runtime convergence decision (2026-09-05)
+
+[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) changed the
+then-current execution order and scoped local-failure behavior, while v2.2 sales-product
 requirements, screenless EgoCore, people-first scope and release Gates remain.
 The desktop HDMI/HID Master Context supplied in this review is historical; its
 filename does not replace this authority.
 
-First deliver real-device Location through authenticated, certificate-verified
-secure transport to the bound Guardian using LOC-021 A-S. Advance real
-bidirectional CALL and embedded-bearer feasibility in parallel, then physical
-SOS and recovery. Single-source/current-boot experiments and isolated S smoke
+Its order first delivered real-device Location through authenticated,
+certificate-verified secure transport to the bound Guardian using LOC-021 A-S,
+with real bidirectional CALL and embedded-bearer feasibility in parallel, then
+physical SOS and recovery. Single-source/current-boot experiments and isolated S smoke
 need not wait for the concurrent T0/T1 design; its ordering/checkpoint/replay
 promises remain in force for concurrent product activation.
 
@@ -249,12 +273,17 @@ FIFO/中断和有界高率窗口，不代表持续高率常开采样。首发只
 ### 4.4 环境图像
 
 事件摄像头是 A0 并行证据与后续能力兼容路径，不是首发软件放行阻塞项。
-Sprint 1 只允许显式授权命令或 field-test 手动触发的一张静态图：
+ADR-0015 将它提升为当前单 4G 板采集里程碑的明确交付，但没有建立第四个
+P0 Gate。该里程碑允许显式授权的 Web 单次拍照，以及默认关闭、带间隔和会话
+结束边界的设备本地定时静态图采集：
 
 - 默认不连续录像；
-- Observation 必须记录 event time 与 `trigger_reason`，当前仅允许
-  `manual_field_test` 或 `gnss_no_fix_experiment`；
-- 原始媒体不进入普通日志或默认长期保留；
+- Observation 必须记录 event time、时间质量与 `trigger_reason`；本轮只允许
+  授权的 Web 手动或设备定时 field-test 来源，不扩展为事件理解策略；
+- 原始媒体不进入普通日志或默认长期保留；只有命名授权会话、访问控制、保留
+  期限和删除路径同时成立时，才可进入独立的有界照片存储；
+- 命令接受、实际拍摄、本地可靠保存、等待上传和 VPS 验证保存必须分别记真；
+- 断网恢复补传同一照片及其原始时间/身份，不补拍已经错过的历史时刻；
 - 摄像头故障时，定位、通话、SOS、IMU 和声音安全能力必须继续运行。
 
 SOS 自动拍摄、异常声音/运动触发、短序列和本地关键帧选择均属于 L2/L3，需
@@ -455,9 +484,10 @@ EgoSkin 不得覆盖 RF 禁区；含金属、碳纤维或导电填料的打印�
 - USB-Free LTE→VPS 薄链路、命令/ACK、位置报告/观测、Web/API/export 和有界真实 IMU 窗口已经有命名工程证据；这些证据只适用于记录的开发板、镜像和场景；
 - reboot-aware 与 USB-Free 行为有实证；重连和 store-forward 目前只验证了有界重试/故障注入与证据形状，真实 modem reconnect recovery 和耐久持久缓存仍未通过产品门；
 - 历史固件曾观察到一次真实 firmware-side GNSS fix，但当前 FW-006 的坐标修正和完整响应处理尚未在固定坐标硬件响应上验证；产品天线、遮挡恢复、精度、多源融合和长稳仍未验收；
-- 当前按多线并行执行：L1/D2/D5 位置证据、Ego Call/SOS、R3 重连与功耗、A0
-  硬件/Native VoLTE reserve、隐私与中国 pre-compliance，以及使用真实观测的
-  bounded L2/L3 研究分别推进；阻塞只沿依赖关系传播；
+- 当前按 ADR-0015 执行：A 线先完成单 4G 板的 L1/D2/D5 位置与原始采集、
+  Camera 持久保存/LTE/VPS/Web 闭环及 FIELD-020；CALL 与完整 SOS 暂停并保留；
+  R3 重连/功耗、A0 硬件/Native VoLTE reserve、隐私与中国 pre-compliance
+  继续并行；阻塞只沿依赖关系传播；
 - 普通开发遵循 active task packet、GitHub Flow 和证据门；冻结器件、结构、PCB、协议和发布门的变更才需要 ADR/ECN、批次和复测范围。
 
 现有开发板证据不能替代自定义 A0 PCB、准确 `ML307A-GSLN`、BMI270 或最终整机门禁；相反，新产品候选器件也不能改写开发板已验证事实。

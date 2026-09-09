@@ -1,12 +1,12 @@
 ---
 id: D2-006
 title: QMI8658 external-module hardware identity probe
-status: active
+status: done
 priority: high
 requires_hardware: true
 serves_demo: D2
 created: 2026-08-10
-last_updated: 2026-08-10
+last_updated: 2026-09-09
 
 context:
   - docs/product/NORTH_STAR.md
@@ -24,7 +24,7 @@ allowed_paths:
   - docs/current/ACTIVE_BUILD.md
   - docs/hardware/BOARD_MATRIX.md
   - docs/hardware/QMI8658_4G_MODULE_INTEGRATION.md
-  - docs/tasks/active/D2-006_QMI8658_HARDWARE_IDENTITY_PROBE.md
+  - docs/tasks/done/D2-006_QMI8658_HARDWARE_IDENTITY_PROBE.md
   - reports/board_validation/
 
 out_of_scope:
@@ -109,6 +109,10 @@ git diff --check
 
 # Completion Evidence
 
+Administrative closure: moved from `active` to `done` on 2026-09-09 because
+all acceptance items and the recorded bounded hardware result had already
+completed on 2026-08-10. This does not extend the original evidence scope.
+
 - Changed files: this task packet, `docs/current/ACTIVE_BUILD.md`,
   `docs/hardware/BOARD_MATRIX.md`, and
   `docs/hardware/QMI8658_4G_MODULE_INTEGRATION.md`.
@@ -129,10 +133,9 @@ git diff --check
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/D2-006_QMI8658_HARDWARE_IDENTITY_PROBE.md in
-D:\pywork\egolink. Load only AGENTS.md, docs/CONTEXT_INDEX.md, firmware/AGENTS.md,
-this packet, and its context entries. Execute only the bounded COM3 probe;
-obey allowed_paths and out_of_scope. Run validation commands and return changed
-files, build/hash, flash/capture evidence paths, and remaining risks. Do not
-update docs/current/STATUS.md or move the packet to done/.
+Read docs/tasks/done/D2-006_QMI8658_HARDWARE_IDENTITY_PROBE.md in
+D:\pywork\egolink. This is a completed historical packet: do not rerun its
+obsolete bounded COM3 probe. Use the current active milestone packet instead.
+The old execution boundary and builder instructions retained above are
+provenance only and grant no current hardware authorization.
 ```

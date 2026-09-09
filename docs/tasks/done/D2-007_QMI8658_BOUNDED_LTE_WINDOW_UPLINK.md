@@ -1,12 +1,12 @@
 ---
 id: D2-007
 title: QMI8658 bounded window capture and LTE uplink
-status: active
+status: superseded
 priority: high
 requires_hardware: true
 serves_demo: D2
 created: 2026-08-10
-last_updated: 2026-08-10
+last_updated: 2026-09-09
 
 context:
   - docs/AGENTS.md
@@ -24,7 +24,7 @@ context:
   - docs/development/DIRECTOR_WORKFLOW.md
   - docs/architecture/adr/ADR-0001-usb-free-vps-message-hub.md
   - docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md
-  - docs/tasks/active/D2-006_QMI8658_HARDWARE_IDENTITY_PROBE.md
+  - docs/tasks/done/D2-006_QMI8658_HARDWARE_IDENTITY_PROBE.md
   - docs/tasks/active/D5-001_LOCATION_DATA_FLYWHEEL_MAINLINE.md
   - reports/board_validation/20260810-qmi8658-probe/qmi8658_probe_report.md
   - firmware/AGENTS.md
@@ -45,7 +45,7 @@ context:
   - quality_tests/test_imu_window_export.py
 
 allowed_paths:
-  - docs/tasks/active/D2-007_QMI8658_BOUNDED_LTE_WINDOW_UPLINK.md
+  - docs/tasks/done/D2-007_QMI8658_BOUNDED_LTE_WINDOW_UPLINK.md
   - docs/development/PROTOCOL.md
   - docs/current/ACTIVE_BUILD.md
   - docs/hardware/BOARD_MATRIX.md
@@ -215,6 +215,11 @@ powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
 
 # Completion Evidence
 
+Administrative closure: moved from `active` to `done` as `superseded` on
+2026-09-09. The recorded 2026-08-10 attempt remains an honest failure, while
+the later FIELD-011 path supplied the bounded LTE/QMI window evidence this
+packet did not obtain. Do not rerun this obsolete image or command packet.
+
 - Build-only implementation changed the task/protocol, QMI capture lifecycle,
   LTE command firmware, Message Hub validation, IMU wire schemas/index, explicit
   exporter, configuration generator, and focused tests listed in
@@ -261,8 +266,9 @@ powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
   during exit/cleanup and is recorded as a run deviation.
 - The stale pending command was safely marked `timeout` with no fabricated ACK.
   The one read-only exporter run scanned zero frames and returned `ok=false`,
-  zero valid windows, and an empty JSONL artifact. The task therefore remains
-  active; its end-to-end hardware acceptance is not met.
+  zero valid windows, and an empty JSONL artifact. This historical attempt did
+  not meet its end-to-end acceptance; it was superseded rather than changed to
+  PASS retroactively.
 - Remaining risks: on-device cadence and HTTP behavior under the combined
   image, the cause of the current SIM-not-ready state, future link-map growth,
   mounting axes, calibration, durability, power, durable retry, and dataset
@@ -273,13 +279,6 @@ powershell -ExecutionPolicy Bypass -File scripts\prepare_fw001_hw_config.ps1 `
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/D2-007_QMI8658_BOUNDED_LTE_WINDOW_UPLINK.md in
-D:\pywork\egolink. Load only AGENTS.md, docs/CONTEXT_INDEX.md, firmware/AGENTS.md,
-quality_tests/AGENTS.md, this packet, and its context entries. Implement only
-the build-only bounded real-IMU capture, small raw-frame upload, safe server
-metadata, and explicit offline export described here. Obey allowed_paths and
-out_of_scope. Run all validation commands and report changed files, image/hash,
-size, evidence paths, and remaining risks. Do not flash hardware, send device
-commands, deploy the server, update docs/current/STATUS.md, or move the packet
-to done/ without a separate operator-authorized hardware phase.
+This builder prompt is retired. Preserve the failed evidence and use the
+current active milestone packet; do not flash or rerun this obsolete image.
 ```

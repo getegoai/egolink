@@ -1,18 +1,39 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-05
+decision_updated: 2026-09-09
 last_verified: 2026-08-23
 verified_by: codex
 owner: founder
 ---
 
-## 2026-09-05 Founder Runtime-Convergence Update
+## 2026-09-09 Founder Single-Board Camera Milestone Update
 
-[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) accepts the
-founder-directed implementation unit: reuse LOC-021 A-S to deliver bounded
-real-device Location -> authenticated secure transport -> bound Guardian.
-Real bidirectional CALL and embedded-bearer validation proceed in parallel;
-physical SOS and recovery follow through the existing shared seams.
+[ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md)
+narrows the current A-line milestone to one identified SIM7670G connectivity
+board plus its necessary Camera, existing external IMU, power source and
+antennas. It must collect Location/raw observations, retain an honest bounded
+offline backlog, upload ordinary observations over actual Wi-Fi and LTE with a
+controlled transition, capture authorized JPEG stills and deliver them over
+real LTE to durable VPS storage and the existing Web surface before FIELD-020.
+
+AMOLED and board-to-board forwarding are not A-line dependencies. CALL-020,
+CALL-021 and full physical SOS are paused for this milestone; their code,
+evidence and final product obligations remain. Hardware architecture and China
+pre-compliance continue independently. Camera is a required milestone output,
+not a fourth sellable-P0 Gate, a visual-AI launch dependency or a Location/SOS
+decision source.
+
+This direction creates no new hardware, network, image or field evidence. The
+three product Gates remain `NOT_RUN`, and the final first-launch promise remains
+Reliable Location + Ego Call + physical SOS.
+
+## 2026-09-05 Prior Founder Runtime-Convergence Update
+
+[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) recorded the
+prior founder-directed implementation unit: reuse LOC-021 A-S to deliver
+bounded real-device Location -> authenticated secure transport -> bound
+Guardian. At that point real bidirectional CALL and embedded-bearer validation
+were scheduled in parallel, followed by physical SOS and recovery.
 
 An isolated S smoke or finite current-boot/single-source live profile does not
 wait for T0/T1. The original concurrent SOS/IMU ordering and recovery promises
@@ -70,10 +91,11 @@ the launch path: physical SOS, local feedback, location attempt, user outcome,
 durable event recording, and honest `pending`/`failed` delivery state cannot be
 deferred or vetoed by AI.
 
-Execution is multi-lane. Location evidence, Ego Call/SOS, reliability and
-power, A0 hardware, privacy/compliance, and bounded AI/data work advance in
-parallel. A blocked external or hardware dependency blocks only its dependent
-lane; it is not permission to stop independent work.
+The 2026-08-23 execution model was multi-lane: Location evidence, Ego Call/SOS,
+reliability and power, A0 hardware, privacy/compliance, and bounded AI/data work
+could advance in parallel. The latest accepted ADR controls which independent
+lanes are actually scheduled; ADR-0015 currently pauses CALL and full SOS while
+the single-board Camera milestone, A0 hardware and compliance continue.
 
 ## 2026-08-14 Founder Product-Baseline Update
 
@@ -168,9 +190,10 @@ authority 分工处理，不得用本文件覆盖实机证据、协议或 accept
 独立非阻塞实验中推进，不能成为进入定位、通话或 SOS 工作的串行前置条件。
 
 每完成一个 Demo：打 tag（v0.D.x）→ 一页 demo 报告（含指标对比上一版）→
-创始人验收。`才进入下一级` 只约束同一证据依赖链，不要求不同工作线串行等待；
-D2/D5、Ego Call/SOS、可靠性/功耗、产品 A0 和合规工作可以并行。指标定义一旦
-建立（D2）就逐版本追踪，不许断。
+创始人验收。`才进入下一级` 只约束同一证据依赖链，不要求不同工作线天然串行；
+实际并行项仍服从最新 accepted ADR。ADR-0015 当前暂停 Ego Call/完整 SOS，
+D2/D5、可靠性/功耗、产品 A0 和合规继续按各自依赖推进。指标定义一旦建立
+（D2）就逐版本追踪，不许断。
 
 ## 3. 防漂移规则（对执行者的硬约束）
 
@@ -223,8 +246,9 @@ D2/D5、Ego Call/SOS、可靠性/功耗、产品 A0 和合规工作可以并行�
 - **当前主开发板 = 4G 板（ESP32-S3-SIM7670G）**，继续作为 D1-D5
   软件、通信、定位和数据证据车；它没有产品屏幕，其他能力只能按
   `ACTIVE_BUILD.md` 和 `BOARD_MATRIX.md` 的逐项 verified/observed/unknown
-  状态描述，禁止笼统声称“其余功能都有”。AMOLED 板保留为并行交互与数据
-  采集资产，不阻塞主线；最终销售产品走 ADR-0008 的独立定制 PCB 路径，
+  状态描述，禁止笼统声称“其余功能都有”。AMOLED 板保留为后续交互、CALL
+  与台架数据资产，不参与当前 A 线单板里程碑；最终销售产品走 ADR-0008
+  的独立定制 PCB 路径，
   不能把两块开发板能力直接相加当作量产证据。
 - **省电是定位功能的一部分，不是后补优化**：采用 PWR-002 决策的 L0-L4
   状态机——传感器占空比采样、GNSS 按需脉冲（移动/事件才开）、LTE 批量
@@ -238,6 +262,11 @@ ADR / 专项 authority（实现边界）→ roadmap / task packet（执行）。
 ACTIVE_BUILD 和 BOARD_MATRIX 反映现状；machine-readable contracts 控制协议。
 
 ## 变更记录
+
+- 2026-09-09 Founder accepted ADR-0015: current A-line evidence moves to one
+  4G board with bounded Camera capture/persistence/LTE/VPS/Web closure before
+  FIELD-020; AMOLED/CALL/full SOS are outside this milestone, while the final
+  three P0 Gates and parallel hardware/compliance work remain unchanged.
 
 - 2026-09-05 Founder accepted ADR-0014: runnable Location first, concrete CALL
   in parallel, then physical SOS/recovery; scoped T0/T1 and local-failure

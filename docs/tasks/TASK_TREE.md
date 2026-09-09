@@ -1,37 +1,41 @@
 ---
 document_status: current_task_tree
-generated_at: 2026-09-04
-decision_updated: 2026-09-05
+generated_at: 2026-09-09
+decision_updated: 2026-09-09
 generated_by: codex
 ---
 
 # EGOLINK Task Tree
 
-## 2026-09-05 Current Runtime Outcome
+## 2026-09-09 Current Runtime Outcome
 
-[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) is accepted.
-[P0-CONVERGENCE-20260905](active/P0-CONVERGENCE-20260905.md) is the active
-implementation packet; code delivery, executable native behavior and legacy +
-live-profile builds precede the bounded hardware/network experiment.
+[ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md)
+is accepted and narrows the current execution milestone. The A-line target is
+one ESP32-S3-SIM7670G-4G main board plus its necessary camera, external IMU,
+battery and antennas, operating without a PC. Camera capture, durable local
+save, actual Wi-Fi/LTE ordinary upload and controlled transition, recovery
+upload, VPS persistence and private Web viewing are required before
+`FIELD-020`. This is a milestone change, not new live-I/O authority.
 
 | Lane | Next consumer and outcome | Existing assets |
 |---|---|---|
-| A mainline | Real device Location -> authenticated secure transport -> bound Guardian, with explicit stale/storage/ACK truth | LOC-021 A-S, OPS-004, OUTBOX-010 |
-| B parallel | Concrete authorized bidirectional CALL and embedded-bearer proof; route, teardown and memory measurements | completed CALL-010 transition, CALL-020 A-R, HW-021 |
-| C following integration | Physical SOS recognition, durable delivery and independent call outcome; failed storage and scoped recovery | SOS-010 A-J and A/B seams |
+| A current mainline | Joint GNSS/LTE/IMU/Camera firmware -> private photo/data persistence -> offline/reboot recovery -> single-board field evidence | P0-CONVERGENCE, Location assets, camera-smoke evidence, FIELD-020 |
+| B paused | Preserve CALL-010 evidence and AMOLED bench assets; do not make them an A-line runtime, power or field dependency | CALL-020/CALL-021 paused |
+| C parallel | Feed measured camera/interface/storage/power facts into the integrated hardware and compliance design | HW-021, COMPLIANCE-010 |
 
 Completed and accepted-for-transition packets now live under `done/`; paused
 MODEL-001 and PROD-001 remain inactive references and are excluded from current
 WIP. PROD-002 is a superseded lineage packet; COMPLIANCE-010 is its sole active
 successor.
 
-One integrator owns shared state machines/contracts; at most two builders own
-non-overlapping files. T0/T1 are not global blockers for S smoke or finite
-single-source live work; original concurrent-ingress and recovery guarantees
-remain required until proven or replaced by an accepted tested equivalent.
-Gate states remain `NOT_RUN`; the new direction itself supplies no test or
-hardware result. Dated offline records and the older task inventory remain
-traceable below and in the immutable review archive.
+The joint Camera/backend source slice now passes independent review, focused
+execution, three no-flash ESP-IDF profiles and the full repository suite. It
+preserves one network owner and bounds photo work beside ordinary observations.
+This is offline evidence only: the Camera profile still has no SIM/LTE runtime
+and its shared-I2C Gate is closed. Historical Camera/IMU smokes do not prove the
+joint image or LTE photo transport. Gate states remain `NOT_RUN`; dated offline
+records and the older task inventory remain traceable below and in the
+immutable review archive.
 
 ## 2026-09-04 Prior Offline Delta
 
@@ -65,7 +69,7 @@ this checkpoint. `CALL-010` remains `accepted_for_transition`; `P0-LOC`,
 
 The parallel execution tree and order at the top are current. The long task
 inventory below is retained for engineering lineage; it does not override
-active packets, `FIRST_LAUNCH_EXECUTION.md`, ADR-0012 or ADR-0014.
+active packets, `FIRST_LAUNCH_EXECUTION.md`, ADR-0012, ADR-0014 or ADR-0015.
 
 ## Root Objective
 
@@ -88,33 +92,27 @@ not advance a Gate.
 ## Current Parallel Execution Tree
 
 ```text
-First launch: Reliable Location + Ego Call + physical SOS
-|- Lane A - P0-LOC Location Engine and field truth
-|  |- LOC-020 + POLICY-010 + REPLAY-010 accepted      PC reference boundary
-|  |- LOC-021 device/server/Guardian integration      offline A-S
-|  |  |- P0-CONVERGENCE secure single-source live     current mainline implementation
-|  |  |- S isolated modem-only smoke profile          default-off; bounded run ready
-|  |  `- T0 ordered-ingress WAL -> T1 product bridge  persistence/replay work pending
-|  |- concurrent SOS/IMU product ingress              not wired into S
-|  |- FIELD-020 representative campaign               after live LOC integration
-|  `- L2 data/replay/estimators                        queued non-blocking
-|- Lane B - Ego Call and SOS
-|  |- CALL-010 exact-board basic audio endpoints       done; accepted for transition
-|  |- CALL-020 bounded PC-bridged LTE voice PoC        offline A-R; auth/TLS/route/live pending
-|  |- embedded bearer feasibility                     parallel now; no second modem owner
-|  |- CALL-021 PC-free product acceptance              after CALL-020 + HW-022
-|  `- SOS-010 physical composition                     offline A-J; physical/live pending
-|- Lane C - reliability, security, and power
-|  |- OPS-004 authenticated Message Hub ingress        separate secure integration
-|  |- OUTBOX-010 persistent priority outbox            G/H offline ready; T1 replay work pending
-|  |- PWR-001 development-board baseline               evidence queue
-|  `- PWR-020 integrated 48-hour power matrix          after product loop
-|- Lane D - A0 and China launch readiness
-|  |- HW-020 P0 A0 interface baseline                  accepted for transition
-|  |- HW-021 exact parts/design engineering pack       in progress; C0.1 blockers open
-|  |- HW-022 integrated prototype build/bring-up       after HW-021 + CALL-020
-|  `- COMPLIANCE-010 qualified China opinion           ready for authorization
-`- Release - P0-RELEASE-010 capability + assurance     final convergence
+Current milestone: single 4G board Location + raw collection + Camera loop
+|- A1 joint firmware
+|  |- preserve GNSS/LTE/external IMU collection and one network owner
+|  |- integrate OV5640 candidate through the verified camera profile
+|  |- actual Wi-Fi/LTE ordinary upload -> controlled route transition
+|  |- Web one-shot command -> durable JPEG -> metadata -> bounded upload
+|  `- local timed capture -> quota -> reboot recovery -> no catch-up
+|- A2 private VPS/Web path
+|  |- existing authenticated command/ACK channel
+|  |- private JPEG persistence, checksum and retention
+|  `- bound Guardian preview/query/export with truthful intermediate states
+|- A3 evidence
+|  |- PC-free single-board short joint run
+|  `- FIELD-020 representative day after concrete blockers close
+|- C parallel
+|  |- HW-021 camera pins/power/optics/sealing/storage/resource input
+|  `- COMPLIANCE-010 remains independent
+`- Deferred product convergence
+   |- CALL-010 evidence retained; CALL-020/CALL-021 paused
+   |- SOS-010 paused
+   `- P0-LOC/P0-CALL/P0-SOS remain NOT_RUN
 ```
 
 `PROD-002` is retained only as the legacy pre-compliance intake; its active
@@ -125,24 +123,18 @@ still require a green integration boundary before the next builder starts.
 
 ## Current Recommended Execution Order
 
-1. Execute P0-CONVERGENCE-20260905: inspect the real LOC-021 A-S call chain,
-   connect only the missing real driver/secure connector and bound Guardian
-   seam, execute native failure/concurrency tests and build legacy + live.
-2. Advance concrete CALL authentication/TLS/Guardian endpoints and embedded
-   bearer in parallel, with one modem owner and measurable cleanup/memory.
-   Do not expand generic bridge layers without a named runtime consumer.
-3. Use only an existing valid exact experiment scope, or finish independent
-   code work and return one bounded request with traffic/write/time limits,
-   stop rules and recovery images. S and finite single-source live work do not
-   wait for T0/T1; neither is a concurrent/reboot acceptance claim.
-4. Join physical SOS and recovery, including recognized-input feedback during
-   storage failure, strict ACK settlement and no resurrection of ended calls.
-   Admit concurrent T1 only with the original checkpoint/tombstone/no-output
-   replay guarantees or a reviewed, behaviorally proven equivalent.
-5. Continue HW-021/OPS-004/OUTBOX/power/RF/Guardian reachability/compliance within
-   their scopes. FIELD-020 follows live LOC; representative HW-022/CALL-021,
-   SOS and PWR-020 campaigns feed P0-RELEASE-010. Existing campaign requirements
-   and all three `NOT_RUN` P0 Gate states remain unchanged.
+1. Privately pre-read/back up and confirm `0x600000..0xF00000` as the dedicated
+   media range; physically verify the OV5640/QMI8658A/MAX17048 shared-I2C path.
+2. Generate one ignored run configuration that enables the actual SIM/LTE and
+   only the hardware choices just verified, then rebuild and bind its hash to
+   a named Camera/privacy session.
+3. After one consolidated authorization, deploy/flash the unique candidate;
+   prove ordinary observations over actual Wi-Fi and LTE plus a controlled
+   transition, then execute Web -> real LTE -> this-run JPEG evidence, offline/
+   reboot recovery checks and a PC-free short carry test.
+4. Run `FIELD-020` only after those concrete blockers close. Continue HW-021
+   and compliance inputs in parallel; keep CALL and SOS paused and all three
+   P0 Gate states `NOT_RUN`.
 
 ## 2026-09-04 Prior Offline Slice Evidence
 
@@ -696,8 +688,8 @@ Recent D2 completion:
   - Adds the phone-sized local-only manifest capture page linked from the
     Dashboard; real reference measurements remain pending.
 
-Current active packets (2026-07-09, per founder D1 transition and D2/D5
-mainline update):
+Historical active-packet snapshot (2026-07-09, retained for D1/D2/D5 lineage;
+not the 2026-09-09 current queue):
 
 - `D1-001` D1 link-through baseline accepted for transition -
   `docs/tasks/done/D1-001_D1_LINK_THROUGH_BASELINE.md`

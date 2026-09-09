@@ -1,10 +1,10 @@
 ---
 id: SOS-010
 title: Physical SOS walking skeleton
-status: active
+status: paused
 priority: critical
 lane: B
-execution_state: in_progress
+execution_state: paused_by_founder_20260909
 depends_on:
   - LOC-021
   - CALL-021
@@ -12,10 +12,11 @@ depends_on:
 serves_gate: P0-SOS
 requires_hardware: true
 created: 2026-08-23
-last_updated: 2026-09-08
+last_updated: 2026-09-09
 
 context:
   - docs/architecture/adr/ADR-0014-runtime-convergence.md
+  - docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md
   - docs/tasks/active/P0-CONVERGENCE-20260905.md
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
   - docs/safety/SAFETY_CONTRACT.md
@@ -88,6 +89,13 @@ The integrator owns shared LOC/CALL/outbox seams through
 follows the real Location and CALL paths; retained concurrent T0/T1/recovery
 promises remain in force. This task grants no physical input, flash, SIM,
 recording or external-notification authorization. `P0-SOS=NOT_RUN`.
+
+# 2026-09-09 Pause Boundary
+
+ADR-0015 places full physical SOS outside the current A-line single-board
+Camera milestone. Preserve every A-K implementation and dated result below.
+This pause is not `P0-SOS` completion and does not remove its final dependency
+on real Location, CALL, durable delivery and representative product evidence.
 
 # Goal
 

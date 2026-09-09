@@ -1,5 +1,6 @@
 ---
 document_status: authoritative
+decision_updated: 2026-09-09
 last_verified: 2026-08-23
 verified_by: codex
 ---
@@ -7,14 +8,39 @@ verified_by: codex
 # Ego Link 从 P0 到产品形态迁移路线
 
 > 状态：P0 到首发产品的当前迁移路线
-> 更新日期：2026-08-23
-> 相关架构：`docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md`
+> 更新日期：2026-09-09
+> 当前执行架构：`docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md`
 
-## 2026-08-23 首发与调度重基线
+## 2026-09-09 单 4G 板 Camera 里程碑覆盖
+
+ADR-0015 只替换当前工程排期，不改变最终首发的三项产品 Gate。当前先在一块
+`connectivity-node-001` 上完成 Location/原始采集、普通观测真实 Wi-Fi/LTE
+上报与受控切换、默认关闭的有界 Camera 采集、断网/重启持久补传、真实 LTE
+照片上传、VPS 私有保存/Web 查看和独立供电短测，再进入 FIELD-020。
+
+```text
+single-board audit
+-> combined Location/GNSS/Cell/IMU/power/Camera candidate
+-> actual Wi-Fi and LTE ordinary upload + controlled transition
+-> authorized Web one-shot JPEG over real LTE
+-> timed offline/reboot persistence
+-> independent-power short carry
+-> FIELD-020
+
+parallel: HW-021 + COMPLIANCE-010 + applicable reliability/power work
+paused:   CALL-020 -> CALL-021; full SOS-010
+later:    P0-LOC + P0-CALL + P0-SOS + assurance -> P0-RELEASE-010
+```
+
+该覆盖不产生新的实机证据。AMOLED、双板转发和 PC runtime/forwarding 不属于
+本轮 A 线运行或验收；CALL 与完整 SOS 仅暂停，最终义务保留。Camera 是本轮
+里程碑交付，不是第四个 P0 Gate，也不进入 Location/SOS 决策。
+
+## 2026-08-23 先前首发与调度重基线
 
 [ADR-0011](../architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md)
 、[ADR-0012](../architecture/adr/ADR-0012-p0-productization-sprint-1.md)
-和 [FIRST_LAUNCH_EXECUTION.md](../current/FIRST_LAUNCH_EXECUTION.md) 控制当前
+和 [FIRST_LAUNCH_EXECUTION.md](../current/FIRST_LAUNCH_EXECUTION.md) 曾控制当时
 迁移顺序：首发闭环是 `Reliable Location + Ego Call + SOS`，由四条独立 lane
 并行推进，而不是等待下方 P0-A → P4 全部串行完成。最低 Rule Policy/Safety
 Kernel 仍必须在端侧确定性工作；MotionNet/AudioGate、事件相机和高级上下文理解
@@ -33,7 +59,7 @@ ADR-0012 进一步冻结当前三项产品能力 Gate：`P0-LOC`、`P0-CALL`、`
 time。旧 `G0-EGOCALL` 仅作为历史证据族名称，当前放行名称为 `P0-CALL`；旧
 `PROD-002` 仅保留为合规 intake，执行后继为 `COMPLIANCE-010`。
 
-当前依赖链是：
+2026-08-23 当时的依赖链是：
 
 ```text
 LOC-020 -> POLICY-010 -> REPLAY-010 -> LOC-021 -> FIELD-020 ----+
@@ -56,20 +82,22 @@ FIELD-020 + SOS-010 + OUTBOX-010 + OPS-004 + PWR-020 + HW-022
 证据代替。`COMPLIANCE-010` 在 HW-020 之后独立启动，并在最终 release review
 汇合，而不是等待 PCB 完成后才开始。
 
-当前状态：LOC/POLICY/REPLAY 与 HW-020 已完成参考/接口边界并获准进入下一步；
+截至 2026-08-23 的状态：LOC/POLICY/REPLAY 与 HW-020 已完成参考/接口边界并获准进入下一步；
 LOC-021、CALL-010、CALL-020 的离线准备、OUTBOX-010 主机参考和 HW-021 正在推进；
 FIELD-020、OPS-004、HW-022、CALL-021、SOS-010、PWR-020 与最终 release review
 仍未完成。所有这些工程状态均不改变三个 P0 Gate 的 `NOT_RUN`。
 
-Sprint 1 不构建 PSTN、SMS、公共应急调度或 Native VoLTE；Camera 仅可作为带
-授权、事件时间和触发原因的可选实验观测。AI 先做数据质量、事件时间回放、离线
-对比和 Shadow Mode，不进入 P0 决策链。
+该基线下 Sprint 1 不构建 PSTN、SMS、公共应急调度或 Native VoLTE；Camera
+当时仅是带授权、事件时间和触发原因的可选实验观测。ADR-0015 已把基础 Camera
+闭环提升为当前工程里程碑交付，但仍不进入 P0 决策链。AI 先做数据质量、事件
+时间回放、离线对比和 Shadow Mode。
 
 ## 1. 长期方向
 
 Ego Link 长期定位不变：它是 EGO 的随身感知节点、安全前哨和 4G 交互入口。复杂能力最终与本地 Ego Base 协同完成。
 
-当前双开发板 + PC 中继只服务于 P0 集成验证，不代表最终产品结构。PC 不能被固化为正式 Ego Base，SIM7670G 开发板也不能被固化为最终主控。
+历史双开发板 + PC 中继只保留为 P0 集成验证资产，不代表当前 A 线或最终产品
+结构。PC 不能被固化为正式 Ego Base，SIM7670G 开发板也不能被固化为最终主控。
 
 最终产品目标是：
 

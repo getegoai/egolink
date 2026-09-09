@@ -1,5 +1,12 @@
 # Ego Link 硬件平台决策上下文
 
+> **2026-09-09 当前执行覆盖：** ADR-0015 将本轮 A 线改为单一
+> ESP32-S3-SIM7670G-4G connectivity node，加必要 Camera、既有外接 IMU、
+> 电源和天线；AMOLED、双板转发与 PC runtime/forwarding 不参与本轮验收。
+> 本文的双板/AMOLED“当前”表述仅保留为历史开发架构，不能覆盖 ADR-0015、
+> `ACTIVE_BUILD.md` 或 `BOARD_MATRIX.md`。它也不证明当前 Camera 实物、接线、
+> 联合固件、Wi-Fi/LTE 切换或现场行为。
+
 > 版本：v0.3  
 > 决策日期：2026-06-22  
 > 状态：开发基线已确定，量产平台尚未冻结  

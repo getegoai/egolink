@@ -1,7 +1,53 @@
 {
-  "current_focus": "FIELD-011 台架闭环已通过：同一镜像完成一次操作员确认的静止 QMI8658 LTE 窗口和 LTE/GNSS 状态上报。下一步是在独立供电、固定携带位置下完成户外 GNSS 与三次正常步行窗口，再进入 D2 指标和 D5 标注。",
+  "current_focus": "单 4G 主板 Camera/Location 联合源码与离线构建已通过审计；当前不代表实机通过。下一步先私密备份并确认 0x600000..0xF00000 专用于照片，再验证 OV5640 与 QMI8658/MAX17048 共总线，生成启用 SIM/LTE 的具名本地候选，完成部署/刷写后执行真实 LTE 单拍、断网重启补传和独立供电短测，最后进入 FIELD-020。",
   "recent_done_limit": 8,
   "milestones": [
+    {
+      "id": "A-CAMERA",
+      "title": "Single-board Location and Camera Closure",
+      "tasks": [
+        {
+          "id": "P0-CONVERGENCE-20260905",
+          "label": "joint source and live closure"
+        },
+        {
+          "id": "FIELD-020",
+          "label": "representative field dataset"
+        }
+      ]
+    },
+    {
+      "id": "C-PRODUCT",
+      "title": "Hardware and Pre-compliance",
+      "tasks": [
+        {
+          "id": "HW-021",
+          "label": "integrated hardware architecture"
+        },
+        {
+          "id": "COMPLIANCE-010",
+          "label": "China pre-compliance"
+        }
+      ]
+    },
+    {
+      "id": "DEFERRED-P0",
+      "title": "Paused Call and SOS Gates",
+      "tasks": [
+        {
+          "id": "CALL-020",
+          "label": "LTE data voice PoC"
+        },
+        {
+          "id": "CALL-021",
+          "label": "embedded RTC media"
+        },
+        {
+          "id": "SOS-010",
+          "label": "physical SOS closure"
+        }
+      ]
+    },
     {
       "id": "RELEASE",
       "title": "Engineering Alpha Release Gate",
@@ -118,6 +164,13 @@
     }
   ],
   "assignees": {
+    "P0-CONVERGENCE-20260905": "codex + founder bounded hardware run",
+    "FIELD-020": "founder field run + codex evidence closure",
+    "HW-021": "codex hardware lane",
+    "COMPLIANCE-010": "codex + qualified labs/advisers",
+    "CALL-020": "paused",
+    "CALL-021": "paused",
+    "SOS-010": "paused",
     "REL-012": "codex",
     "ENG-007": "codex",
     "ENG-008": "codex",
@@ -141,9 +194,10 @@
     "PRIVACY-LOC-001": "planned"
   },
   "operator_asks": [
-    "户外联测：把开发板和传感器固定在一个明确携带位置，使用稳定移动电源，并在开阔处等待 GNSS。",
-    "开始前记录携带位置、方向和时间；准备好后再创建三次正常步行六轴窗口，任一异常即停止。",
-    "v0.4 PCB、芯片和外壳设计继续并行迭代，不阻塞当前开发板的数据采集闭环。",
-    "在具名证据完成前，不宣称定位精度、模型效果、续航、量产或正式安全能力。"
+    "保持当前 4G 板处于 ROM bootloader；首次 Camera 候选刷写前，允许并完成 0x600000..0xF00000 的私密预读备份和专用区确认。",
+    "核对实物 OV5640/排线方向、外接 QMI8658A/MAX17048 接线、SIM、LTE/GNSS 天线和独立电源；共享 I2C 未实测前不得打开 verified Gate。",
+    "下一次实机阶段一次性确认 VPS 部署、精确 COM3 刷写、SIM 流量、允许拍摄的测试场景/人员、授权查看者与保留截止；不采音频、不公开照片。",
+    "先完成真实 LTE 单拍和离线重启同文件补传，再做单板短程携带；现场 blocker 清零后才启动 FIELD-020。",
+    "在具名现场证据完成前，不宣称 Camera 外测就绪、定位精度、续航、量产或任何 P0 Gate 通过。"
   ]
 }

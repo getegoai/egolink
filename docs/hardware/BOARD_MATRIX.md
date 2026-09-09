@@ -1,12 +1,24 @@
 ---
 document_status: authoritative
-last_verified: 2026-09-06
+last_verified: 2026-09-09
 verified_by: codex
 ---
 
 # Board Matrix
 
 All unknown fields must remain explicit. Do not infer hardware capability from product names.
+
+## 2026-09-09 bounded cleanup state
+
+`connectivity-node-001` was reidentified as ESP32-S3 rev v0.2, MAC
+`02:00:00:00:00:03`, 16 MiB physical flash, through CH343 `COM3` serial
+`5B91047400`. Its `ego_collection` partition was backed up, selectively erased
+and fully read back empty under the founder's cleanup authorization. The
+application, NVS and `ego_outbox` were not targeted. The board is deliberately
+held in the ROM bootloader pending a reviewed single-board Camera candidate;
+this operation adds no Camera, LTE, GNSS or IMU capability evidence. AMOLED is
+not part of the current A-line setup. See
+[PRIVACY_WIFI_SPOOL_PURGE_20260909](PRIVACY_WIFI_SPOOL_PURGE_20260909.md).
 
 ## 2026-09-06 current collector state
 

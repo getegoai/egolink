@@ -1,12 +1,12 @@
 ---
 id: D2-008
 title: Wi-Fi QMI8658 sensor telemetry smoke
-status: active
+status: done
 priority: high
 requires_hardware: true
 serves_demo: D2
 created: 2026-08-11
-last_updated: 2026-08-11
+last_updated: 2026-09-09
 
 context:
   - docs/AGENTS.md
@@ -17,7 +17,7 @@ context:
   - docs/development/DEV_FLOW.md
   - docs/development/VPS_MESSAGE_HUB.md
   - docs/development/DIRECTOR_WORKFLOW.md
-  - docs/tasks/active/D2-007_QMI8658_BOUNDED_LTE_WINDOW_UPLINK.md
+  - docs/tasks/done/D2-007_QMI8658_BOUNDED_LTE_WINDOW_UPLINK.md
   - reports/board_validation/20260810-d2007-imu-lte/d2_007_hardware_report.md
   - firmware/AGENTS.md
   - firmware/mqtt_heartbeat/main/app_main.c
@@ -25,7 +25,7 @@ context:
   - quality_tests/AGENTS.md
 
 allowed_paths:
-  - docs/tasks/active/D2-008_WIFI_QMI8658_SENSOR_SMOKE.md
+  - docs/tasks/done/D2-008_WIFI_QMI8658_SENSOR_SMOKE.md
   - docs/current/ACTIVE_BUILD.md
   - docs/hardware/BOARD_MATRIX.md
   - docs/hardware/QMI8658_4G_MODULE_INTEGRATION.md
@@ -74,6 +74,11 @@ git diff --check
 
 # Evidence
 
+Administrative closure: moved from `active` to `done` on 2026-09-09 because
+the bounded Wi-Fi smoke result had already completed on 2026-08-11. This does
+not promote it to LTE, continuous collection or field evidence, and it must not
+be rerun after the 2026-09-09 legacy Wi-Fi cleanup.
+
 - Hardware report:
   `reports/board_validation/20260811-d2008-wifi-imu/d2_008_wifi_imu_report.md`.
 - ESP-IDF 5.4.2 build and the single COM3 flash passed. Application SHA-256:
@@ -96,11 +101,6 @@ git diff --check
 # Builder Prompt
 
 ```text
-Read docs/tasks/active/D2-008_WIFI_QMI8658_SENSOR_SMOKE.md in
-D:\pywork\egolink. Use only its context and allowed paths. Reuse the existing
-Wi-Fi HTTP sensor_sample path without source/protocol/server changes. Build,
-flash COM3 once, observe at most 120 seconds, retain at least five real QMI8658
-samples as evidence, then stop continuous uploads by leaving the ESP32 in ROM
-download mode. Never print or commit Wi-Fi or token secrets. Do not update
-STATUS.md or move the packet to done/.
+This builder prompt is retired. Do not rerun the legacy Wi-Fi smoke or flash
+its image. Use the current active milestone packet and current privacy rules.
 ```

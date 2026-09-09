@@ -1,12 +1,19 @@
 # Ego Link Safety Companion 模型子系统上下文
 
+> **2026-09-09 当前执行覆盖：** 本文保留长期模型设计和 2026-06-24
+> 双板/PC Bridge 集成假设，但 [ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md)
+> 已将本轮 A 线改为单一 SIM7670G connectivity board 的 Location、原始采集和
+> Camera 闭环。AMOLED、板间/PC 转发、CALL、完整 SOS 和模型决策均不参与本轮
+> 运行或验收。下文把双板形态称为“当前”的段落是历史上下文，不证明
+> 2026-09-09 联合固件、硬件接线、网络切换或现场能力。
+
 > 文档状态：v0.2  
 > 适用仓库：EGOLINK  
 > 适用阶段：Safety Companion M0—M6  
 > 目标读者：Codex、模型开发者、固件开发者、PC Simulator / Ego Base 开发者  
 > 本文是模型子系统的长期上下文。具体字段定义以 `shared/contracts/**` 为准，具体阶段任务以 `docs/modeling/INTEGRATION_TASKS.md` 和后续里程碑文档为准。
 >
-> 2026-06-24 更新：当前 P0 模型与安全闭环运行在 **双开发板 + PC Development Bridge** 形态中。`wearable_node` 负责 IMU、音频和用户交互；`connectivity_node` 负责 4G、GNSS、摄像头和通信能力；PC Bridge 当前运行规则版 ContextRouter、Safety Kernel、记录和回放。PC 不是正式 Ego Base，ContextRouter 会在 P1 逐步迁回可穿戴主节点。
+> 2026-06-24 历史更新：当时的 P0 模型与安全闭环运行在 **双开发板 + PC Development Bridge** 形态中。`wearable_node` 负责 IMU、音频和用户交互；`connectivity_node` 负责 4G、GNSS、摄像头和通信能力；PC Bridge 当时运行规则版 ContextRouter、Safety Kernel、记录和回放。PC 不是正式 Ego Base，ContextRouter 会在 P1 逐步迁回可穿戴主节点。
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-05
+decision_updated: 2026-09-09
 last_verified: 2026-09-03
 verified_by: founder/codex
 ---
@@ -24,6 +24,9 @@ Always load:
   (sellable P0 Gates, device Location Engine/Sensor Policy and scope freeze)
 - `docs/architecture/adr/ADR-0014-runtime-convergence.md` (accepted bounded
   runtime convergence, local degradation, event time and scoped recovery)
+- `docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md`
+  (current single-connectivity-board A-line and Camera collection milestone;
+  CALL/SOS retained but paused for this milestone)
 - `docs/tasks/active/P0-CONVERGENCE-20260905.md` (current implementation packet)
 - `docs/current/FIRST_LAUNCH_EXECUTION.md` (current parallel execution and
   integration order)
@@ -41,13 +44,14 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 | Task type | Required context | Optional context |
 |---|---|---|
 | Runtime convergence, single-source live Location or degraded SOS | `docs/architecture/adr/ADR-0014-runtime-convergence.md`, `docs/tasks/active/P0-CONVERGENCE-20260905.md`, `docs/current/FIRST_LAUNCH_EXECUTION.md`, affected module AGENTS | `docs/archive/reviews/20260905_input_snapshots/README.md` (migration lineage only) |
+| Single-4G-board field collection, Camera capture/upload or 2026-09-09 A-line milestone | `docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md`, `docs/architecture/SYSTEM_OVERVIEW.md`, `docs/tasks/active/P0-CONVERGENCE-20260905.md`, `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/current/EGO_LINK_AI_CURRENT_CONTEXT.md`, `docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md`, affected module AGENTS | `docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md`, `docs/tasks/active/FIELD-020_L1_FIELD_DATASET.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/BOARD_MATRIX.md`, `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md` |
 | Project/product direction or system roles | `docs/product/NORTH_STAR.md`, `docs/product/EGO_MASTER_CONTEXT.md`, `docs/architecture/adr/ADR-0008-egolink-core-product-direction-reset.md`, `docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md` | `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`, `docs/product/MASS_PRODUCTION_REQUIREMENTS.md` |
 | First-launch execution, cross-lane planning, or reprioritization | `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md`, `docs/development/DIRECTOR_WORKFLOW.md` | `docs/roadmap/V1_PRODUCT_PLAN.md`, current packet in each affected lane |
 | P0 scope or current development promise | `docs/product/PRODUCT_CHARTER.md`, `docs/product/P0_SCOPE.md` | `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`, `docs/product/EGO_MASTER_CONTEXT.md` |
 | P0 development flow or task planning | `docs/development/DEV_FLOW.md`, `docs/current/ROADMAP_EGOLINK_P0.md` | `docs/development/VPS_MESSAGE_HUB.md`, `docs/development/FIELD_TEST.md`, `docs/development/LOCATION_ENGINE.md`, `docs/development/LOCATION_DATASET.md`, `docs/development/LTE_TRANSPORT.md` |
 | Current status or acceptance | `docs/current/STATUS.md`, `docs/current/ACTIVE_BUILD.md` | `docs/current/KEY_RELEASES.md`, `docs/generated/CONTEXT_MIGRATION_REPORT.md` |
 | Key release or release gate | `docs/current/KEY_RELEASES.md`, `docs/current/STATUS.md`, `docs/current/ACTIVE_BUILD.md`, `docs/tasks/active/P0-RELEASE-010_SALEABLE_P0_REVIEW.md` | `docs/current/key_releases/`, `docs/tasks/done/`, named release gate report under `reports/key_releases/` |
-| Dual-board / PC Bridge architecture | `docs/architecture/SYSTEM_OVERVIEW.md`, `docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md` | `docs/architecture/adr/` |
+| Historical dual-board / PC Bridge architecture | `docs/architecture/SYSTEM_OVERVIEW.md`, `docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md`, `docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md` | `docs/hardware/双板开发架构.md`, `docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md`, `docs/architecture/adr/`; both hardware documents are historical for the current A-line topology |
 | VPS message hub or USB-Free field testing | `docs/development/DEV_FLOW.md`, `docs/development/VPS_MESSAGE_HUB.md`, `docs/development/PROTOCOL.md`, `docs/development/FIELD_TEST.md`, `docs/architecture/adr/ADR-0001-usb-free-vps-message-hub.md` | `docs/current/ROADMAP_EGOLINK_P0.md`, `docs/development/LOCATION_ENGINE.md`, `docs/development/LTE_TRANSPORT.md` |
 | Location Engine, Sensor Policy, replay, fusion or dataset planning | `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md`, `docs/development/LOCATION_ENGINE.md`, `docs/development/LOCATION_DATASET.md`, `docs/development/LOCATION_FUSION_ALGORITHM.md`, `docs/architecture/adr/ADR-0004-p0-rule-location-and-transitional-vps-memory.md`, `shared/contracts/` | `docs/architecture/adr/ADR-0003-low-power-location-state-machine.md`, `docs/architecture/adr/ADR-0007-gnss-denied-personal-location-memory.md`, `docs/development/PROTOCOL.md`, current LOC/POLICY/REPLAY packet |
 | A-line AI, data platform, multisource localization or state understanding | `docs/current/EGO_LINK_AI_CURRENT_CONTEXT.md`, `docs/architecture/adr/ADR-0010-asynchronous-observation-timeline-and-store-forward.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md` | `docs/current/EGO_LINK_A_LINE_AI_CONTEXT.md`, `docs/architecture/adr/ADR-0009-ai-v0-1-belief-estimation-baseline.md`, `docs/development/UNIFIED_TIMESTAMP.md`, `docs/development/FIELD_SESSION_SCHEMA.md`, `docs/development/LOCATION_ENGINE.md`, `docs/development/LOCATION_DATASET.md`, `shared/contracts/`; Sprint 1 AI is data/replay first and non-blocking |
@@ -116,6 +120,16 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
   from durable/received claims; strict ACK, single modem ownership, true source
   event time and no resurrection of ended calls remain mandatory. ADR-0013
   stays proposed. Decision dates are independent from `last_verified`.
+- ADR-0015 replaces only the current engineering schedule and A-line evidence
+  vehicle: use one identified SIM7670G connectivity board plus necessary
+  Camera/IMU/power/antennas, close bounded still capture/persistence/LTE/VPS/Web
+  and then run FIELD-020. AMOLED and board-to-board forwarding are not A-line
+  dependencies. CALL-020, CALL-021 and full physical SOS are paused for this
+  milestone without deleting evidence or changing the final `P0-CALL` and
+  `P0-SOS` obligations. Camera is a milestone deliverable, not a fourth product
+  Gate or a Location/SOS decision source. ADR-0010 asynchronous event time and
+  Store-and-Forward, explicit image consent/retention, one modem owner and exact
+  ACK truth remain mandatory.
 - `P0-LOC`, `P0-CALL`, and `P0-SOS` all require `PASS` for the sellable P0.
   Their current states are all `NOT_RUN`; no current schema, build, replay,
   PC bridge or development-board smoke advances them. Legacy `G0-EGOCALL`

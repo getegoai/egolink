@@ -1,20 +1,21 @@
 ---
 id: CALL-021
 title: Embedded LTE-data RTC media
-status: active
+status: paused
 priority: critical
 lane: B
-execution_state: queued
+execution_state: paused_by_founder_20260909
 depends_on:
   - CALL-020
   - HW-022
 serves_gate: P0-CALL
 requires_hardware: true
 created: 2026-08-23
-last_updated: 2026-08-23
+last_updated: 2026-09-09
 
 context:
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
+  - docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md
   - docs/development/EGO_CALL.md
   - docs/hardware/P0_PRODUCT_ARCHITECTURE.md
   - docs/tasks/active/HW-022_INTEGRATED_PROTOTYPE_BUILD.md
@@ -29,6 +30,12 @@ out_of_scope:
   - PSTN, Native VoLTE, recording, multi-party calling, AI voice or polished App UI
   - interpreting PC bridge or USB media as embedded evidence
 ---
+
+# 2026-09-09 Pause Boundary
+
+ADR-0015 pauses CALL-021 with CALL-020 while the single-4G-board Location/
+Camera field milestone runs. The embedded product requirement and all final
+`P0-CALL` acceptance remain unchanged; no source or evidence is deleted.
 
 # Goal
 
