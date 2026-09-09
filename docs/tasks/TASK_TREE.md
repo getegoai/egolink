@@ -29,8 +29,10 @@ WIP. PROD-002 is a superseded lineage packet; COMPLIANCE-010 is its sole active
 successor.
 
 The joint Camera/backend source slice now passes independent review, focused
-execution, three no-flash ESP-IDF profiles and the full repository suite. It
-preserves one network owner and bounds photo work beside ordinary observations.
+execution, three no-flash ESP-IDF profiles and the full repository suite. The
+final firmware review closed a photo-store/health serialization gap and added
+runtime resource-watermark telemetry. It preserves one network owner and bounds
+photo work beside ordinary observations.
 This is offline evidence only: the Camera profile still has no SIM/LTE runtime
 and its shared-I2C Gate is closed. Historical Camera/IMU smokes do not prove the
 joint image or LTE photo transport. Gate states remain `NOT_RUN`; dated offline
@@ -123,15 +125,17 @@ still require a green integration boundary before the next builder starts.
 
 ## Current Recommended Execution Order
 
-1. Privately pre-read/back up and confirm `0x600000..0xF00000` as the dedicated
-   media range; physically verify the OV5640/QMI8658A/MAX17048 shared-I2C path.
+1. Media-range ownership preflight is complete. Physically verify the
+   OV5640/QMI8658A/MAX17048 shared-I2C path while the board remains in ROM
+   bootloader until a reviewed candidate is ready. Remove the TF card, keep its
+   driver disabled, and leave GPIO39-42 free of external JTAG for this test.
 2. Generate one ignored run configuration that enables the actual SIM/LTE and
    only the hardware choices just verified, then rebuild and bind its hash to
    a named Camera/privacy session.
 3. After one consolidated authorization, deploy/flash the unique candidate;
-   prove ordinary observations over actual Wi-Fi and LTE plus a controlled
-   transition, then execute Web -> real LTE -> this-run JPEG evidence, offline/
-   reboot recovery checks and a PC-free short carry test.
+   first execute Web -> real LTE -> this-run JPEG evidence while observing
+   ordinary GNSS/LTE/IMU progress. Then prove timed offline/reboot recovery, the
+   controlled Wi-Fi/LTE transition and a PC-free short carry test.
 4. Run `FIELD-020` only after those concrete blockers close. Continue HW-021
    and compliance inputs in parallel; keep CALL and SOS paused and all three
    P0 Gate states `NOT_RUN`.

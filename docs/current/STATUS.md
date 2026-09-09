@@ -17,9 +17,9 @@ LTE/GNSS antennas. The milestone outcome is:
 ```text
 asynchronous GNSS/LTE/IMU/raw collection
 + bounded persistent ordinary and JPEG backlogs
-+ ordinary observations over actual Wi-Fi and LTE with a controlled transition
 + authorized Web one-shot still capture over real LTE
 + default-off local timed capture with outage/restart recovery
++ ordinary observations over actual Wi-Fi and LTE with a controlled transition
 + durable VPS storage, private Web preview and export
 -> independently powered joint short run
 -> FIELD-020 representative day
@@ -39,6 +39,11 @@ sellable-P0 Gate and is not a Location/SOS decision source.
 - The old `ego_collection` partition was backed up, selectively erased and
   completely read back as empty. The application, NVS and `ego_outbox` were
   outside that operation.
+- The proposed Camera media range `[0x600000,0xF00000)` was subsequently read
+  in full into a private ignored backup. All 9,437,184 bytes were `0xFF`, and
+  a subsequent `verify_flash` readback returned `verify OK`; the current
+  observed occupancy permits reserving it for `ego_media` without displacing
+  observed retained data.
 - AMOLED is excluded from A-line runtime and acceptance; its retained UI/CALL
   image is unchanged. Any separate USB attachment is not used by this runtime.
 - No combined Location/Camera candidate has been flashed. No new SIM traffic,
@@ -47,6 +52,10 @@ sellable-P0 Gate and is not a Location/SOS decision source.
 Exact active-image history and board capability boundaries are in
 [ACTIVE_BUILD](ACTIVE_BUILD.md) and the
 [board matrix](../hardware/BOARD_MATRIX.md).
+
+The storage preflight is recorded in
+[CAMERA-MEDIA-001](../hardware/CAMERA_MEDIA_RANGE_PREFLIGHT_20260909.md). It
+involved no flash write and leaves the board in ROM bootloader.
 
 ## Verified evidence that may be inherited
 
@@ -85,8 +94,10 @@ historical project data. Exact ranges, counts and hashes are recorded in
   durable timer/command/capture journals, a separate fixed-slot JPEG store,
   metadata-before-media delivery, strict command/content ACK matching,
   retention cleanup, reboot recovery and fair ordinary/photo upload scheduling.
-  Independent source review found no remaining merge blocker, and default,
-  legacy-collector and Camera-collector no-flash builds pass.
+  Final source review found and closed an owner-layer serialization gap between
+  photo-store mutation and health telemetry, and added internal/DMA heap plus
+  per-task stack-watermark telemetry. Default, legacy-collector and
+  Camera-collector no-flash builds pass; this remains offline evidence.
 - The local VPS/Web source slice now contains Guardian-bound capture sessions,
   one-shot/timer controls, immutable Camera metadata, private JPEG storage,
   integrity-verified content ACK, retention tombstones/retry, preview and
@@ -109,13 +120,17 @@ all three Gates must eventually pass.
 
 ## Blocking facts before the next live run
 
-1. Before selecting the new partition table, privately read and back up
-   `0x600000..0xF00000`, then explicitly confirm that this exact range may be
-   dedicated to `ego_media`; the reviewed runtime scrubs every non-valid media
-   slot in that range and must not encounter unowned data.
-2. Reconfirm the physical OV5640, cable/orientation, external QMI8658A and
+1. Reconfirm the physical OV5640, cable/orientation, external QMI8658A and
    MAX17048 wiring, 16 MiB flash, SIM, LTE/GNSS antennas and independent power.
-   Prove shared-I2C coexistence before enabling its fail-closed build Gate.
+   The static candidate uses I2C0 GPIO15/16 at 100 kHz with OV5640 `0x3C`,
+   MAX17048 `0x36` and QMI8658A `0x6A`; the distinct addresses do not prove
+   electrical or runtime coexistence. Keep the TF card physically removed and
+   its driver disabled because Camera PCLK and TF card-detect share GPIO46;
+   do not attach external GPIO JTAG on GPIO39-42.
+2. Prove shared-I2C and internal-DRAM Camera operation before enabling its
+   fail-closed build Gate. Record Camera/IMU/power continuity, internal and DMA
+   heap watermarks, largest DMA block, task stack watermarks, UART errors,
+   resets, brownouts and watchdog outcomes before/during/after capture.
 3. Create one ignored, named live configuration that enables the actual SIM/LTE
    path and only the verified Camera/I2C choices; rebuild and bind its exact
    binary hash to the experiment scope.
@@ -127,19 +142,20 @@ all three Gates must eventually pass.
 
 ## Immediate execution order
 
-1. Complete the private media-range pre-read/backup and physical shared-I2C
-   coexistence check; keep the board in ROM bootloader until both are resolved.
+1. Complete the physical OV5640/QMI8658A/MAX17048 shared-I2C coexistence check;
+   keep the board in ROM bootloader until the fail-closed hardware Gate can be
+   resolved honestly.
 2. Produce the ignored SIM/LTE-enabled run configuration and exact candidate
    build without weakening TLS, route ownership, retention or Camera gates.
 3. Deploy the reviewed VPS/Web candidate and flash the exact combined firmware
    only under the bounded operator/privacy scope.
-4. Prove ordinary observations from that same candidate over actual Wi-Fi and
-   actual LTE, then exercise a controlled route transition with exact ACK,
-   retry, duplicate/loss and retained-spool accounting.
-5. Prove Web request -> device receive -> real JPEG -> persistent local save ->
-   real LTE upload -> VPS verification -> private Web preview.
-6. Prove default-off timed enable/disable, full outage capture, reboot and
+4. First prove Web request -> device receive -> real JPEG -> persistent local
+   save -> real LTE upload -> VPS verification -> private Web preview, while
+   confirming GNSS/LTE/IMU and ordinary observations continue.
+5. Prove default-off timed enable/disable, full outage capture, reboot and
    same-file recovery without catch-up recapture.
+6. Exercise the controlled Wi-Fi/LTE route transition with exact ACK, retry,
+   duplicate/loss and retained-spool accounting.
 7. Run the independently powered coexistence short test, then FIELD-020.
 
 ## Parallel and paused lanes
@@ -156,18 +172,29 @@ all three Gates must eventually pass.
 
 - `python scripts/context_lint.py`: PASS after the 2026-09-09 scope and cleanup
   reconciliation.
-- `scripts/verify.ps1`: PASS, 1,776 tests, 13 environment-guarded skips. A skip
+- `scripts/verify.ps1`: PASS, 1,777 tests, 13 environment-guarded skips. A skip
   is not hardware evidence.
-- Focused Camera/media/control/delivery/HTTPS tests: PASS, 26/26.
+- Focused Camera/media/control/delivery/HTTPS suite: PASS, 46/46; the narrow
+  Camera platform review subset, including the new mutex/resource contract,
+  passes 27/27.
+- Camera media-range hardware preflight: PASS for storage ownership only;
+  `[0x600000,0xF00000)` read as 9,437,184 bytes of `0xFF`, SHA-256
+  `BE1C8C26FAAE3AE3606606C9641F017A873F52A7833C9CF65142EF0E2405CE8A`,
+  and the subsequent `verify_flash` readback returned `verify OK`. No write
+  occurred.
 - ESP-IDF 5.4.2 no-flash builds: default `896,240 B`, SHA-256
-  `D59B8337FC6280FB17D848D415505D5AEE9835164EEFE4936C008548FC0D4A36`;
-  legacy collector `991,504 B`, SHA-256
-  `F36C567D6C211BC84D41548407068A6E813F71EE3A9B371980541A2DF3299B91`;
-  Camera collector `1,029,616 B`, SHA-256
-  `E3640BE2D82C56DF79EE8F32E3CE62BC2CA27ACD122EE2756C9BF1F11EF5E016`.
-  The Camera app uses a 3 MiB partition with `0x204A10` bytes (67%) free.
-- Backend source review and firmware source review both report zero remaining
-  merge blockers. Deployment, flashing, browser decode, real Camera capture,
+  `730BEFF6C0859BC2319AE76850C0B69B913A238C352B2FA9E69DC243D5E33C97`;
+  legacy collector `991,568 B`, SHA-256
+  `E0ABEF606BD6135BA6B64180A00886237830FD5C46B679EFF7EAD02D76B64DFC`;
+  Camera collector `1,030,816 B`, SHA-256
+  `69E9FB4A243908C0C158E2707C4BDCE90AA1FCCA24699CC767EF0F15FDDF36D0`.
+  The Camera app uses a 3 MiB partition with `0x204560` bytes (67%) free.
+  These checkpoint binaries embed application version
+  `v0.1.0-120-g3acbc8c03-dirty`; no binary was flashed.
+- Backend and firmware source reviews report no remaining known merge blocker;
+  the last firmware review specifically closed photo-store/health serialization
+  and made runtime resource watermarks observable. Deployment, flashing,
+  browser decode, real Camera capture,
   real LTE transfer, outage/reboot recovery, independent power and FIELD-020
   remain `NOT_RUN`.
 

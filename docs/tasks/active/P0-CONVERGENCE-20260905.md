@@ -3,7 +3,7 @@ id: P0-CONVERGENCE-20260905
 title: Single-board Location and Camera field closure
 status: active
 priority: critical
-execution_state: legacy_cleanup_verified_camera_integration_pending
+execution_state: media_range_preflight_verified_camera_hardware_pending
 owner: codex_integrator
 created: 2026-09-05
 last_updated: 2026-09-09
@@ -32,6 +32,7 @@ context:
   - docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md
   - docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md
   - docs/hardware/PRIVACY_WIFI_SPOOL_PURGE_20260909.md
+  - docs/hardware/CAMERA_MEDIA_RANGE_PREFLIGHT_20260909.md
   - docs/tasks/active/LOC-021_DEVICE_LOCATION_INTEGRATION.md
   - docs/tasks/active/FIELD-020_L1_FIELD_DATASET.md
   - docs/tasks/active/OUTBOX-010_PERSISTENT_PRIORITY_OUTBOX.md
@@ -98,26 +99,26 @@ a milestone delivery, not a fourth Gate or a Location/SOS decision source.
 2. Reuse the proven JPEG driver/settings in the collector. Capture and upload
    are bounded and release their software resources after success or failure;
    GNSS/network/sensor progress and resource watermarks remain observable.
-3. Prove ordinary-observation delivery from this candidate over actual Wi-Fi
-   and actual LTE, then perform one controlled route transition. Preserve the
-   original record identity/event time, retain pending bytes until exact durable
-   ACK and expose unavailable-route, retry, duplicate and loss accounting.
-4. Reuse the authenticated command/ACK path for one expiring Web request. Bind
+3. Reuse the authenticated command/ACK path for one expiring Web request. Bind
    command ID and observation/photo ID while distinguishing accepted,
    received, capture attempted, saved, pending upload, VPS verified/persisted
-   and Web-visible states. Retry cannot cause unbounded recapture.
-5. Add a default-off local timed configuration with explicit interval and
+   and Web-visible states. Prove Web -> actual LTE -> this-run JPEG first; retry
+   cannot cause unbounded recapture.
+4. Add a default-off local timed configuration with explicit interval and
    session end. Browser disconnect does not cancel a delivered configuration;
    undelivered stop remains pending. Restart semantics are explicit and missed
    intervals are not recaptured later.
-6. Store JPEG bytes separately from lightweight metadata and ordinary
+5. Store JPEG bytes separately from lightweight metadata and ordinary
    telemetry. Require a complete persistent file plus integrity value before
    local success and complete VPS durability before upload ACK. Set explicit
    photo byte/count quota, ordinary-observation reserve, corruption/full/loss
    accounting and same-ID restart recovery.
-7. Run the authorized one-shot LTE closure, offline/restart timed recovery and
-   independently powered joint short test including the reviewed Wi-Fi/LTE
-   transition, then dispatch FIELD-020.
+6. During the first one-shot prove that ordinary GNSS/LTE/IMU observations keep
+   progressing. Then perform one controlled Wi-Fi/LTE route transition while
+   preserving original identity/time, pending bytes until exact durable ACK,
+   and unavailable-route/retry/duplicate/loss accounting.
+7. Run offline/restart timed recovery and the independently powered joint short
+   test, then dispatch FIELD-020.
 
 Every photo retains device/session/photo identity, source capture time and
 quality, server receive time, trigger source, command/config version, outcome,
@@ -144,8 +145,10 @@ for exact scope, hashes, recovery location and resulting bootloader state.
 
 ### Offline source/build checkpoint — 2026-09-09
 
-The Camera/VPS/Web implementation slice is now source-complete for review and
-has zero remaining merge blockers in independent backend and firmware audits.
+The Camera/VPS/Web implementation slice is source-complete for the next live
+gate. Final firmware review found and closed a photo-store/health telemetry
+serialization gap and added runtime internal/DMA heap and task-stack watermarks;
+no known source merge blocker remains after the recorded validation.
 The selected source contains one-shot and durable timer control, capture
 journaling, a fixed-slot persistent JPEG store, metadata-before-media upload,
 strict command/content ACK identity, retention deletion, reboot settlement and
@@ -153,19 +156,40 @@ ordinary/photo upload fairness. The server contains Guardian-bound control,
 private persistence, integrity checking, status-separated preview/export and
 failed-purge tombstones. This is not deployment or hardware evidence.
 
-Focused Camera/media/control/delivery/HTTPS execution passes `26/26` and the
-full repository suite passes `1,776` tests with `13` environment-guarded skips.
-ESP-IDF 5.4.2 no-flash builds pass for default (`896,240 B`), legacy collector
-(`991,504 B`) and Camera collector (`1,029,616 B`); exact hashes and partition
+Focused Camera/media/control/delivery/HTTPS execution passes `46/46` (the
+narrow platform review subset passes `27/27`) and the full repository suite
+passes `1,777` tests with `13` environment-guarded skips. ESP-IDF 5.4.2
+no-flash builds pass for default (`896,240 B`), legacy collector (`991,568 B`)
+and Camera collector (`1,030,816 B`); exact hashes and partition
 headroom are recorded in `docs/current/ACTIVE_BUILD.md`.
 
 The produced Camera profile intentionally remains `NO_SIM=y`, LTE PPP off and
 shared-I2C verification off. It therefore cannot produce the required real LTE
-JPEG. Before any candidate flash, privately back up and confirm
-`0x600000..0xF00000` as the dedicated media range; then prove OV5640/QMI8658A/
-MAX17048 coexistence, generate a named ignored live config, deploy/flash under
-one bounded authorization and run the live sequence in the Acceptance table.
-The board remains in ROM bootloader and every product Gate remains `NOT_RUN`.
+JPEG.
+
+Its static bus map is I2C0 GPIO15/16 at 100 kHz with OV5640 `0x3C`, MAX17048
+`0x36` and QMI8658A `0x6A`; distinct addresses are not joint hardware evidence.
+The current Camera path uses internal DRAM and legacy shared-I2C0, whereas the
+historical camera smoke used PSRAM and `sccb-ng` on logical port 1. The first
+joint run must therefore keep the TF card physically removed and its driver
+disabled (Camera PCLK and TF detect share GPIO46), leave GPIO39-42 free of
+external JTAG, and record sensor continuity plus internal/DMA heap, largest DMA
+block and task-stack watermarks before/during/after capture. Any missing
+resource evidence, I2C/sensor interruption, UART overflow, reset, brownout or
+watchdog event leaves the shared-I2C gate closed.
+
+### Media-range preflight — 2026-09-09
+
+The exact future `ego_media` range `[0x600000,0xF00000)` was read in full into
+a private ignored backup. Its 9,437,184 bytes are all `0xFF`, SHA-256
+`BE1C8C26FAAE3AE3606606C9641F017A873F52A7833C9CF65142EF0E2405CE8A`,
+and a subsequent `verify_flash` readback returned `verify OK`. No write occurred;
+the board remains in ROM bootloader. This passes only the current
+observed-occupancy check for media-range ownership.
+
+Next prove OV5640/QMI8658A/MAX17048 coexistence, generate a named ignored live
+config, deploy/flash under one bounded authorization and run the live sequence
+in the Acceptance table. Every product Gate remains `NOT_RUN`.
 
 ## Prior execution adjustment — founder instruction 2026-09-06
 

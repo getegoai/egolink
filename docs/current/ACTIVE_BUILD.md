@@ -25,30 +25,40 @@ attachment is irrelevant to and unused by the A-line runtime.
 
 ## 2026-09-09 Camera integration — offline build checkpoint
 
-The single-board Camera source slice has passed two independent source reviews
-with no remaining merge blocker. It adds the opt-in Camera collector entry,
-OV5640 QVGA/JPEG capture path, durable command/timer/capture journals, the
-dedicated fixed-slot `ego_media` store, metadata-before-JPEG delivery, exact
-server ACK matching, retention cleanup and reboot recovery while retaining one
-network/uploader owner. Focused Camera/media/control/delivery/HTTPS execution
-passes `26/26`; repository verification passes `1,776` tests with `13`
-environment-guarded skips.
+The single-board Camera source slice has passed final source review with no
+remaining known merge blocker. That review found and closed an owner-layer
+serialization gap between photo-store mutation and health telemetry, and added
+internal/DMA heap plus per-task stack-watermark telemetry. The slice includes
+the opt-in Camera collector entry, OV5640 QVGA/JPEG capture, durable
+command/timer/capture journals, the dedicated fixed-slot `ego_media` store,
+metadata-before-JPEG delivery, exact server ACK matching, retention cleanup and
+reboot recovery while retaining one network/uploader owner. Final focused and
+repository validation counts are recorded below.
 
 Three ESP-IDF 5.4.2 no-flash profiles were rebuilt and size-checked:
 
 | Profile | Defaults | App bytes / partition | Free | SHA-256 |
 |---|---|---:|---:|---|
-| default | `sdkconfig.defaults` | 896,240 / 1 MiB | `0x25310` (15%) | `D59B8337FC6280FB17D848D415505D5AEE9835164EEFE4936C008548FC0D4A36` |
-| legacy collector | `sdkconfig.defaults;sdkconfig.collection.defaults` | 991,504 / 1 MiB | `0xDEF0` (5%) | `F36C567D6C211BC84D41548407068A6E813F71EE3A9B371980541A2DF3299B91` |
-| Camera collector | `sdkconfig.defaults;sdkconfig.collection.defaults;sdkconfig.camera_collection.defaults` | 1,029,616 / 3 MiB | `0x204A10` (67%) | `E3640BE2D82C56DF79EE8F32E3CE62BC2CA27ACD122EE2756C9BF1F11EF5E016` |
+| default | `sdkconfig.defaults` | 896,240 / 1 MiB | `0x25310` (15%) | `730BEFF6C0859BC2319AE76850C0B69B913A238C352B2FA9E69DC243D5E33C97` |
+| legacy collector | `sdkconfig.defaults;sdkconfig.collection.defaults` | 991,568 / 1 MiB | `0xDEB0` (5%) | `E0ABEF606BD6135BA6B64180A00886237830FD5C46B679EFF7EAD02D76B64DFC` |
+| Camera collector | `sdkconfig.defaults;sdkconfig.collection.defaults;sdkconfig.camera_collection.defaults` | 1,030,816 / 3 MiB | `0x204560` (67%) | `69E9FB4A243908C0C158E2707C4BDCE90AA1FCCA24699CC767EF0F15FDDF36D0` |
+
+All three checkpoint binaries embed application version
+`v0.1.0-120-g3acbc8c03-dirty`: firmware source is commit `3acbc8c03`, while
+the uncommitted changes at build time were the accompanying evidence/status
+documents. They are no-flash review artifacts, not the named live candidate.
 
 The Camera partition profile places `factory` at `0x200000..0x500000`,
 `ego_collection` at `0x500000..0x600000`, `ego_media` at
 `0x600000..0xF00000`, and `ego_outbox` at `0xF00000..0xF0C000`. This is build
-geometry, not permission to erase or flash. Before the first use, the entire
-future media range must be privately read, backed up and confirmed dedicated;
-initialization then deliberately scrubs non-valid slots inside that exact
-partition.
+geometry, not permission to erase or flash. The full future media range was
+privately read on 2026-09-09: all 9,437,184 bytes were `0xFF`, SHA-256
+`BE1C8C26FAAE3AE3606606C9641F017A873F52A7833C9CF65142EF0E2405CE8A`,
+and a subsequent `verify_flash` readback returned `verify OK`. The current
+observed-occupancy check therefore passes; initialization will still
+deliberately scrub non-valid slots only inside that exact partition after an
+authorized flash. See
+[CAMERA-MEDIA-001](../hardware/CAMERA_MEDIA_RANGE_PREFLIGHT_20260909.md).
 
 This build is intentionally not a live candidate: it still has `NO_SIM=y`, LTE
 PPP disabled and `EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED=n`. The last Gate
@@ -56,6 +66,17 @@ prevents capture until OV5640, QMI8658A and MAX17048 coexistence is physically
 verified. Camera deinit is only a software standby boundary because the present
 pin map has no PWDN; the raw JPEG partition is not encrypted. No image here was
 flashed, no photo was captured, and no LTE/VPS/field evidence was produced.
+
+The current static map puts OV5640 `0x3C`, MAX17048 `0x36` and QMI8658A `0x6A`
+on I2C0 GPIO15/16 at 100 kHz; the addresses are distinct, but electrical and
+runtime coexistence are unverified. This candidate uses an internal-DRAM frame
+buffer and legacy shared-I2C0. The 2026-06-23 camera smoke instead used PSRAM
+and `sccb-ng` on logical port 1, so it does not prove current memory or bus
+coexistence. Camera PCLK and TF card-detect both use GPIO46: remove the TF card,
+keep the TF driver disabled, and do not attach external GPIO JTAG on GPIO39-42
+during the joint test. Static ELF headroom is not runtime memory evidence; live
+acceptance must retain pre/during/post capture internal/DMA heap, largest DMA
+block, task-stack watermarks, sensor continuity and reset/UART/watchdog status.
 
 ## Current actual collector image - 2026-09-06
 

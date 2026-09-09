@@ -1,8 +1,8 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-09-09 08:26 UTC
-- 分支: `a0/first-real-field-session` @ f15bb6852 fix(progress): emit repository-relative task paths
-- 当前焦点: 单 4G 主板 Camera/Location 联合源码与离线构建已通过审计；当前不代表实机通过。下一步先私密备份并确认 0x600000..0xF00000 专用于照片，再验证 OV5640 与 QMI8658/MAX17048 共总线，生成启用 SIM/LTE 的具名本地候选，完成部署/刷写后执行真实 LTE 单拍、断网重启补传和独立供电短测，最后进入 FIELD-020。
+- 生成时间: 2026-09-09 09:24 UTC
+- 分支: `a0/first-real-field-session` @ 3acbc8c03 fix(firmware): serialize camera media telemetry [A]
+- 当前焦点: 单 4G 主板 Camera/Location 联合源码与离线构建已通过审计，0x600000..0xF00000 媒体区的私密实机预读与板上校验也已完成；当前仍不代表 Camera 实机通过。下一步验证 OV5640 与 QMI8658/MAX17048 共享 I2C，生成启用 SIM/LTE 的具名本地候选，完成部署/刷写后执行真实 LTE 单拍、断网重启补传和独立供电短测，最后进入 FIELD-020。
 - 已完成任务总数: 162，进行中: 30，暂停: 5
 
 ## 里程碑
@@ -16,7 +16,7 @@
 | D1 Link-Through Regression | 1/2 | ✅4G link-through ⏳power baseline |
 | D2 Location Accuracy Baseline | 8/10 | ⏳location baseline tooling ⏳reference-point field run ✅no-key evidence map ✅server readiness observer ✅reference field automation ✅bounded field export ✅mobile reference capture ✅local reference overlay ✅historical VPS baseline and rule freeze ✅QMI configuration and motion readiness |
 | D5 Location Data Flywheel | 0/2 | ⏳location data flywheel 📋location model loop |
-| PRODUCT Product Alpha Gaps | 1/3 | 📋call/SMS verification ✅long power baseline 📋location data policy |
+| PRODUCT Product Alpha Gaps | 1/3 | 📋call/SMS verification ✅low-power location policy decision 📋location data policy |
 
 图例: ✅完成 ⏳进行中 ⏸暂停 📋计划中
 
@@ -75,8 +75,8 @@
 
 ## 等待创始人处理
 
-- [ ] 保持当前 4G 板处于 ROM bootloader；首次 Camera 候选刷写前，允许并完成 0x600000..0xF00000 的私密预读备份和专用区确认。
-- [ ] 核对实物 OV5640/排线方向、外接 QMI8658A/MAX17048 接线、SIM、LTE/GNSS 天线和独立电源；共享 I2C 未实测前不得打开 verified Gate。
+- [ ] 保持当前 4G 板处于 ROM bootloader；核对 OV5640/排线与 QMI8658A/MAX17048 接线。联合台架时物理移除 TF 卡、禁用 TF 驱动，GPIO39-42 不接外部 JTAG；共享 I2C 与内部 DRAM 资源水位通过后才打开 verified Gate。
+- [ ] 准备 SIM、LTE/GNSS 天线和独立电源；共享 I2C 未实测前不得生成或刷写声称可用的现场候选。
 - [ ] 下一次实机阶段一次性确认 VPS 部署、精确 COM3 刷写、SIM 流量、允许拍摄的测试场景/人员、授权查看者与保留截止；不采音频、不公开照片。
 - [ ] 先完成真实 LTE 单拍和离线重启同文件补传，再做单板短程携带；现场 blocker 清零后才启动 FIELD-020。
 - [ ] 在具名现场证据完成前，不宣称 Camera 外测就绪、定位精度、续航、量产或任何 P0 Gate 通过。

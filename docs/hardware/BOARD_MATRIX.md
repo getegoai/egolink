@@ -20,6 +20,27 @@ this operation adds no Camera, LTE, GNSS or IMU capability evidence. AMOLED is
 not part of the current A-line setup. See
 [PRIVACY_WIFI_SPOOL_PURGE_20260909](PRIVACY_WIFI_SPOOL_PURGE_20260909.md).
 
+## 2026-09-09 Camera media-range preflight
+
+The same identified board's proposed `[0x600000,0xF00000)` `ego_media` range
+was read in full to a private ignored backup. All 9,437,184 bytes were `0xFF`,
+and a subsequent `verify_flash` comparison matched the saved digest. This
+passes storage ownership only: no write occurred, the board remains in ROM
+bootloader, and Camera/shared-I2C/runtime/LTE evidence is unchanged. See
+[CAMERA-MEDIA-001](CAMERA_MEDIA_RANGE_PREFLIGHT_20260909.md).
+
+## Current Camera integration constraints
+
+The reviewed no-flash candidate places OV5640 `0x3C`, MAX17048 `0x36` and
+QMI8658A `0x6A` on I2C0 GPIO15/16 at 100 kHz. These distinct addresses establish
+only static compatibility; joint electrical and runtime behavior is unverified.
+The candidate uses an internal-DRAM framebuffer and legacy shared-I2C0, unlike
+the historical PSRAM/`sccb-ng` Camera smoke. Camera PCLK and the board's TF
+card-detect path both use GPIO46, so the first joint test requires the TF card
+physically removed and its driver disabled. GPIO39-42 must also remain free of
+external JTAG. Runtime resource watermarks and QMI8658A/MAX17048 continuity are
+acceptance evidence, not facts inferred from the successful isolated smoke.
+
 ## 2026-09-06 current collector state
 
 The connectivity node currently retains collector app 985,984 B, SHA-256

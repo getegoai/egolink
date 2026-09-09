@@ -1,7 +1,7 @@
 ---
 document_status: authoritative
 decision_updated: 2026-09-09
-last_verified: 2026-09-03
+last_verified: 2026-09-09
 verified_by: founder/codex
 ---
 
@@ -44,7 +44,7 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 | Task type | Required context | Optional context |
 |---|---|---|
 | Runtime convergence, single-source live Location or degraded SOS | `docs/architecture/adr/ADR-0014-runtime-convergence.md`, `docs/tasks/active/P0-CONVERGENCE-20260905.md`, `docs/current/FIRST_LAUNCH_EXECUTION.md`, affected module AGENTS | `docs/archive/reviews/20260905_input_snapshots/README.md` (migration lineage only) |
-| Single-4G-board field collection, Camera capture/upload or 2026-09-09 A-line milestone | `docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md`, `docs/architecture/SYSTEM_OVERVIEW.md`, `docs/tasks/active/P0-CONVERGENCE-20260905.md`, `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/current/EGO_LINK_AI_CURRENT_CONTEXT.md`, `docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md`, affected module AGENTS | `docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md`, `docs/tasks/active/FIELD-020_L1_FIELD_DATASET.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/BOARD_MATRIX.md`, `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md` |
+| Single-4G-board field collection, Camera capture/upload or 2026-09-09 A-line milestone | `docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md`, `docs/architecture/SYSTEM_OVERVIEW.md`, `docs/tasks/active/P0-CONVERGENCE-20260905.md`, `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/current/EGO_LINK_AI_CURRENT_CONTEXT.md`, `docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md`, affected module AGENTS | `docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md`, `docs/hardware/CAMERA_MEDIA_RANGE_PREFLIGHT_20260909.md`, `docs/tasks/active/FIELD-020_L1_FIELD_DATASET.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/BOARD_MATRIX.md`, `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md` |
 | Project/product direction or system roles | `docs/product/NORTH_STAR.md`, `docs/product/EGO_MASTER_CONTEXT.md`, `docs/architecture/adr/ADR-0008-egolink-core-product-direction-reset.md`, `docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md` | `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`, `docs/product/MASS_PRODUCTION_REQUIREMENTS.md` |
 | First-launch execution, cross-lane planning, or reprioritization | `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md`, `docs/development/DIRECTOR_WORKFLOW.md` | `docs/roadmap/V1_PRODUCT_PLAN.md`, current packet in each affected lane |
 | P0 scope or current development promise | `docs/product/PRODUCT_CHARTER.md`, `docs/product/P0_SCOPE.md` | `docs/roadmap/P0_TO_PRODUCT_MIGRATION.md`, `docs/product/EGO_MASTER_CONTEXT.md` |
