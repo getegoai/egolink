@@ -632,7 +632,12 @@ def _check_legacy_collection_profile_and_4k_record_spool_remain_unchanged():
 
 def _check_runtime_delivery_is_metadata_gated_fair_and_release_safe():
     source = (FIRMWARE / "main" / "collection_main.c").read_text(encoding="utf-8")
-    assert 'PHOTO_METADATA_ACK_NVS_KEY "photo_meta_ack_v1"' in source
+    assert 'PHOTO_ACK_SEQUENCE_NVS_KEY "photo_ack_v1"' in source
+    assert 'PHOTO_METADATA_ACK_NVS_KEY "photo_meta_v1"' in source
+    nvs_keys = re.findall(r'#define PHOTO_[A-Z_]+_NVS_KEY "([^"]+)"', source)
+    assert len(nvs_keys) == 5
+    assert all(0 < len(key) <= 15 for key in nvs_keys)
+    assert source.count("<=NVS_KEY_NAME_MAX_SIZE") == 5
     assert "photo_record_metadata_acked(record.source_seq)" in source
     assert "metadata_identity>photo_metadata_ack_watermark" in source
     assert "PHOTO_ORDINARY_UPLOAD_BUDGET 8U" in source

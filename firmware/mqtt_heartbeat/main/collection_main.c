@@ -318,8 +318,18 @@ static bool flash_erase(void *ctx,size_t offset,size_t length)
 #define PHOTO_TIMER_NVS_KEY "photo_timer_v1"
 #define PHOTO_JOURNAL_NVS_KEY "photo_cmd_v1"
 #define PHOTO_CAPTURE_JOURNAL_NVS_KEY "photo_cap_v1"
-#define PHOTO_ACK_SEQUENCE_NVS_KEY "photo_ack_seq_v1"
-#define PHOTO_METADATA_ACK_NVS_KEY "photo_meta_ack_v1"
+#define PHOTO_ACK_SEQUENCE_NVS_KEY "photo_ack_v1"
+#define PHOTO_METADATA_ACK_NVS_KEY "photo_meta_v1"
+_Static_assert(sizeof(PHOTO_TIMER_NVS_KEY)<=NVS_KEY_NAME_MAX_SIZE,
+    "photo timer NVS key exceeds the IDF limit");
+_Static_assert(sizeof(PHOTO_JOURNAL_NVS_KEY)<=NVS_KEY_NAME_MAX_SIZE,
+    "photo command NVS key exceeds the IDF limit");
+_Static_assert(sizeof(PHOTO_CAPTURE_JOURNAL_NVS_KEY)<=NVS_KEY_NAME_MAX_SIZE,
+    "photo capture NVS key exceeds the IDF limit");
+_Static_assert(sizeof(PHOTO_ACK_SEQUENCE_NVS_KEY)<=NVS_KEY_NAME_MAX_SIZE,
+    "photo ACK sequence NVS key exceeds the IDF limit");
+_Static_assert(sizeof(PHOTO_METADATA_ACK_NVS_KEY)<=NVS_KEY_NAME_MAX_SIZE,
+    "photo metadata ACK NVS key exceeds the IDF limit");
 static bool photo_nvs_load(const char *key,uint8_t *blob,size_t capacity,
                            size_t *bytes,bool *missing)
 {
