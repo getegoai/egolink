@@ -1924,10 +1924,14 @@ static sim7670_bounded_at_status_t sim7670_send_at_complete_bounded(
     uint32_t command_cap_ms,
     char *response,
     size_t response_size,
+    size_t *response_bytes,
     sim7670_location_bounded_result_t *result)
 {
+    if (response_bytes != NULL) {
+        *response_bytes = 0U;
+    }
     if (command == NULL || expect == NULL || response == NULL ||
-        response_size == 0U || result == NULL) {
+        response_size == 0U || response_bytes == NULL || result == NULL) {
         return SIM7670_BOUNDED_AT_IO_ERROR;
     }
     response[0] = '\0';
@@ -2061,6 +2065,7 @@ static sim7670_bounded_at_status_t sim7670_send_at_complete_bounded(
         }
     }
     xSemaphoreGive(s_uart_mutex);
+    *response_bytes = length;
     now_us = bounded_now_us();
     if (now_us < INT64_C(0) || now_us > request_deadline_us) {
         return SIM7670_BOUNDED_AT_DEADLINE;
@@ -2081,12 +2086,14 @@ static sim7670_bounded_at_status_t traced_at(
     sim7670_location_bounded_result_t *result)
 {
     const int64_t started = bounded_now_us();
+    size_t response_bytes = 0U;
     sim7670_bounded_at_status_t status = sim7670_send_at_complete_bounded(
-        command, expect, deadline, cap, response, capacity, result);
+        command, expect, deadline, cap, response, capacity, &response_bytes, result);
     if (request->trace_at) {
         const int64_t ended = bounded_now_us();
-        request->trace_at(request->trace_context, command, response, (int)status,
-            ended >= started ? (uint64_t)(ended - started) / 1000U : 0U);
+        request->trace_at(request->trace_context, command, response, response_bytes,
+            (int)status, ended >= started ?
+            (uint64_t)(ended - started) / 1000U : 0U);
     }
     return status;
 }

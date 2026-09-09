@@ -4,6 +4,41 @@
 #include <math.h>
 #include "mbedtls/sha256.h"
 
+bool collection_record_ascii_xhh(const uint8_t *input, size_t input_length,
+    char *output, size_t output_capacity, size_t *output_length,
+    bool *truncated)
+{
+    static const char hex[]="0123456789ABCDEF";
+    if(!output || output_capacity==0U || !output_length || !truncated ||
+       (!input && input_length!=0U)) return false;
+    size_t used=0U;
+    *output_length=0U;
+    *truncated=false;
+    output[0]='\0';
+    for(size_t index=0U;index<input_length;index++) {
+        const uint8_t byte=input[index];
+        const bool literal=(byte>=(uint8_t)' ' && byte<=(uint8_t)'~' &&
+                            byte!=(uint8_t)'\\') ||
+                           byte==(uint8_t)'\r' || byte==(uint8_t)'\n' ||
+                           byte==(uint8_t)'\t';
+        const size_t width=literal?1U:4U;
+        if(width>=output_capacity-used) {
+            *truncated=true;
+            break;
+        }
+        if(literal) output[used++]=(char)byte;
+        else {
+            output[used++]='\\';
+            output[used++]='x';
+            output[used++]=hex[byte>>4];
+            output[used++]=hex[byte&UINT8_C(0x0F)];
+        }
+    }
+    output[used]='\0';
+    *output_length=used;
+    return true;
+}
+
 static uint32_t crc32(const unsigned char *p, size_t n)
 {
     uint32_t c=~0U;

@@ -1214,10 +1214,21 @@ static void imu_task(void *unused)
     atomic_store(&imu_stopped,stopped);atomic_store(&imu_finished,true);ESP_LOGI(TAG,"IMU stopped=%d",stopped);vTaskDelete(NULL);
 }
 typedef struct { cJSON *at; bool powered; } trace_t;
-static void trace_at(void *context,const char *command,const char *response,int outcome,uint64_t elapsed)
+#define COLLECTION_AT_RESPONSE_ASCII_CAPACITY 1025U
+static void trace_at(void *context,const char *command,const char *response,
+    size_t response_bytes,int outcome,uint64_t elapsed)
 {
+    char encoded[COLLECTION_AT_RESPONSE_ASCII_CAPACITY];size_t encoded_bytes=0U;
+    bool truncated=true;
+    const bool encoded_ok=collection_record_ascii_xhh((const uint8_t *)response,
+        response_bytes,encoded,sizeof(encoded),&encoded_bytes,&truncated);
+    if(!encoded_ok) { encoded[0]='\0';encoded_bytes=0U;truncated=true; }
+    (void)encoded_bytes;
     trace_t *t=context;cJSON *a=cJSON_CreateObject();
-    cJSON_AddStringToObject(a,"command",command);cJSON_AddStringToObject(a,"response",response);
+    cJSON_AddStringToObject(a,"command",command);cJSON_AddStringToObject(a,"response",encoded);
+    cJSON_AddStringToObject(a,"response_encoding",COLLECTION_RECORD_ASCII_XHH_ENCODING);
+    cJSON_AddNumberToObject(a,"response_bytes",response_bytes);
+    cJSON_AddBoolToObject(a,"response_truncated",truncated);
     cJSON_AddNumberToObject(a,"outcome",outcome);cJSON_AddNumberToObject(a,"elapsed_ms",elapsed);
     cJSON_AddItemToArray(t->at,a);
     if(!strcmp(command,"AT+CGNSSPWR=1") && outcome==0) t->powered=true;

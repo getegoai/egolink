@@ -13,6 +13,17 @@ HARNESS = r'''
 #define CHECK(x) do{if(!(x)){fprintf(stderr,"line %d: %s\n",__LINE__,#x);return 1;}}while(0)
 int main(void){
  char frame[4000],id[129],sha[65];unsigned char hash[32];
+ const uint8_t raw_response[]={0xF8,'A','T','\\','\r','\n',0x00};
+ char encoded[64];size_t encoded_length=0;bool encoded_truncated=true;
+ CHECK(collection_record_ascii_xhh(raw_response,sizeof(raw_response),encoded,
+  sizeof(encoded),&encoded_length,&encoded_truncated));
+ CHECK(!encoded_truncated);
+ CHECK(encoded_length==strlen("\\xF8AT\\x5C\r\n\\x00"));
+ CHECK(!memcmp(encoded,"\\xF8AT\\x5C\r\n\\x00",encoded_length+1));
+ char short_encoded[4];encoded_length=99;encoded_truncated=false;
+ CHECK(collection_record_ascii_xhh(raw_response,1,short_encoded,
+  sizeof(short_encoded),&encoded_length,&encoded_truncated));
+ CHECK(encoded_truncated&&encoded_length==0&&!strcmp(short_encoded,""));
  cJSON *o=cJSON_Parse("{\"observation_id\":\"col-b1-imu-1\",\"sequence_id\":1,\"payload\":{\"raw\":\"ERROR\\r\\n\"}}");
  size_t length=collection_record_frame(o,frame,sizeof(frame));CHECK(length);
  CHECK(collection_record_identity(frame,length,id,sizeof(id))&&!strcmp(id,"col-b1-imu-1"));
@@ -34,7 +45,7 @@ int main(void){
  cJSON_ReplaceItemInObject(a,"status",cJSON_CreateString("rejected"));b=cJSON_PrintUnformatted(r);
  CHECK(!collection_record_ack_matches(frame,length,"d1",b,strlen(b)));cJSON_free(b);cJSON_Delete(r);
  CHECK(!collection_record_ack_matches(frame,length,"d1","{\"ok\":true}",11));
- cJSON_Delete(o);puts("{\"frame_and_exact_ack\":true,\"all_truncations_rejected\":true}");return 0;
+ cJSON_Delete(o);puts("{\"frame_and_exact_ack\":true,\"all_truncations_rejected\":true,\"binary_response_ascii_xhh\":true}");return 0;
 }
 '''
 

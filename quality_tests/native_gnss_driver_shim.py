@@ -172,9 +172,10 @@ static sim7670_location_bounded_request_t request(uint32_t timeout,uint32_t sett
   .cancel_requested=cancel,.operation_token=7,.power_on_settle_ms=settle};return r;
 }
 static unsigned traces;static int trace_outcome;static char trace_response[1024];
-static void raw_trace(void *ctx,const char *command,const char *raw,int outcome,uint64_t elapsed){
+static void raw_trace(void *ctx,const char *command,const char *raw,size_t raw_bytes,int outcome,uint64_t elapsed){
  (void)ctx;(void)command;(void)elapsed;++traces;trace_outcome=outcome;
- snprintf(trace_response,sizeof(trace_response),"%s",raw);
+ size_t n=raw_bytes<sizeof(trace_response)-1?raw_bytes:sizeof(trace_response)-1;
+ memcpy(trace_response,raw,n);trace_response[n]='\0';
 }
 static int run_cases(void){
  CHECK(sim7670_at_backend_init_exclusive_current_task()==ESP_OK);

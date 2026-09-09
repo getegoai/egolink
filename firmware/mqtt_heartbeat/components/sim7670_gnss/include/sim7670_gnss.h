@@ -164,9 +164,10 @@ typedef struct {
      * owner. Zero preserves legacy one-shot power-on behavior. */
     bool receiver_already_powered;
     /* Borrowed synchronous raw AT trace. Called after releasing UART mutex;
-     * callback must not issue AT or block. Captures errors as well as OK. */
+     * callback must not issue AT or block. response_bytes is authoritative so
+     * arbitrary response octets do not depend on C-string termination. */
     void (*trace_at)(void *context, const char *command, const char *response,
-                     int outcome, uint64_t elapsed_ms);
+                     size_t response_bytes, int outcome, uint64_t elapsed_ms);
     void *trace_context;
     /* Raw collection may continue after a terminal query ERROR or parse
      * failure to retain other independent Cell fields. Timeouts/cancellation
