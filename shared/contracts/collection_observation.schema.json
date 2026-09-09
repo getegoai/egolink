@@ -622,6 +622,10 @@
       "minLength": 1,
       "maxLength": 128
     },
+    "firmware_elf_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "config_id": {
       "type": "string",
       "minLength": 1,
@@ -680,6 +684,7 @@
                 "timestamp_source",
                 "timestamp_quality",
                 "fw_version",
+                "firmware_elf_sha256",
                 "config_id",
                 "session_id",
                 "status",

@@ -37,6 +37,9 @@ _WIFI_LINK_EVENT_FIELDS = frozenset({"phase", "connected"})
 _WIFI_SCAN_SUMMARY_FIELDS = frozenset({"channel_summary", "scan_result", "total_seen", "truncated", "sampled_ap_count", "identifiers_retained", "privacy_reason", "connected", "disconnect_reason"})
 _WIFI_CHANNEL_SUMMARY_FIELDS = frozenset({"channel", "ap_count", "strongest_rssi"})
 COLLECTION_ENVELOPE_FIELDS = frozenset({"contract_version", "observation_id", "device_id", "source", "stream_id", "sequence_id", "boot_count", "monotonic_clock_domain_id", "timestamp_monotonic_ns", "timestamp_utc", "timestamp_source", "timestamp_quality", "fw_version", "config_id", "session_id", "status", "payload", "missing_reason"})
+COLLECTION_OPTIONAL_PROVENANCE_FIELDS = frozenset({"firmware_elf_sha256"})
+COLLECTION_WIFI_ENVELOPE_FIELDS = COLLECTION_ENVELOPE_FIELDS | COLLECTION_OPTIONAL_PROVENANCE_FIELDS
+FIRMWARE_ELF_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 CAMERA_SOURCE_STATUS_FIELDS = frozenset({
     "source", "component", "camera_runtime_compiled", "driver_preflight_ready",
     "capture_trigger_wired", "media_store_ready", "command_id",
@@ -144,6 +147,16 @@ def decode_envelope(payload: bytes, record: dict[str, Any]) -> dict[str, Any]:
     for field in ("timestamp_source", "timestamp_quality", "status", "fw_version"):
         if not isinstance(value[field], str) or not 1 <= len(value[field]) <= 128:
             raise CollectionError("invalid_collection_envelope", f"{field} must be a bounded string")
+    if "firmware_elf_sha256" in value:
+        firmware_elf_sha256 = value["firmware_elf_sha256"]
+        if (
+            not isinstance(firmware_elf_sha256, str)
+            or FIRMWARE_ELF_SHA256.fullmatch(firmware_elf_sha256) is None
+        ):
+            raise CollectionError(
+                "invalid_collection_envelope",
+                "firmware_elf_sha256 must be a lowercase SHA-256 hex digest",
+            )
     if value["missing_reason"] is not None and (not isinstance(value["missing_reason"], str) or len(value["missing_reason"]) > 512):
         raise CollectionError("invalid_collection_envelope", "missing_reason must be bounded text or null")
     if not isinstance(value["payload"], dict):
@@ -165,7 +178,7 @@ def enforce_collection_privacy(envelope: dict[str, Any]) -> None:
     # Additive envelope fields remain available to other sources.  Wi-Fi is
     # intentionally fail-closed so an identifier cannot bypass the payload
     # shape by moving into a renamed top-level extension field.
-    if envelope.keys() != COLLECTION_ENVELOPE_FIELDS:
+    if not envelope.keys() <= COLLECTION_WIFI_ENVELOPE_FIELDS:
         reject()
     pending: list[Any] = [envelope]
     while pending:

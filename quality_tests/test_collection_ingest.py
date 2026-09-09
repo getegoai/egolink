@@ -24,6 +24,7 @@ from server.guardian_device_authorization import GuardianDeviceAuthorizer, token
 DEVICE = "collection-test-001"
 PROJECT_TOKEN = "test-project-token-not-a-real-credential"
 UPLOAD_TOKEN = "test-device-token-not-a-real-credential"
+FIRMWARE_ELF_SHA256 = "ab" * 32
 
 
 def envelope(sequence=1, source="gnss", **changes):
@@ -218,6 +219,36 @@ class CollectionIngestTests(unittest.TestCase):
             stored = base64.b64decode(db.execute("SELECT raw_payload_b64 FROM raw_frames").fetchone()[0])
         self.assertEqual(stored, raw)
 
+    def test_bounded_firmware_provenance_is_allowed_without_opening_wifi_extensions(self):
+        value = envelope(45, source="wifi", status="observed",
+                         payload=wifi_scan_payload(), missing_reason=None)
+        value["firmware_elf_sha256"] = FIRMWARE_ELF_SHA256
+        raw = frame(value)
+        result = self.store.collection.ingest(raw, raw_record(raw), transport="wifi")
+        self.assertEqual(result["result"], "accepted")
+
+        unknown = envelope(46, source="wifi", status="observed",
+                           payload=wifi_scan_payload(), missing_reason=None)
+        unknown["firmware_elf_sha256"] = FIRMWARE_ELF_SHA256
+        unknown["provenance_note"] = "not-allowlisted"
+        unknown_raw = frame(unknown)
+        with self.assertRaises(CollectionError) as raised:
+            self.store.collection.ingest(
+                unknown_raw, raw_record(unknown_raw), transport="wifi"
+            )
+        self.assertEqual(raised.exception.code, "collection_privacy_policy_rejected")
+
+        malformed = envelope(47, source="wifi", status="observed",
+                             payload=wifi_scan_payload(), missing_reason=None)
+        malformed["firmware_elf_sha256"] = "AB" * 32
+        malformed_raw = frame(malformed)
+        with self.assertRaises(CollectionError) as raised:
+            self.store.collection.ingest(
+                malformed_raw, raw_record(malformed_raw), transport="wifi"
+            )
+        self.assertEqual(raised.exception.code, "invalid_collection_envelope")
+        self.assertEqual(self.table_counts(), (1, 1, 1))
+
     def test_wifi_scan_shape_rejects_retention_true_extra_keys_and_bad_channel_items(self):
         invalid_payloads = (
             wifi_scan_payload(identifiers_retained=True),
@@ -269,6 +300,10 @@ class CollectionIngestTests(unittest.TestCase):
         complete_scan = envelope(66, source="wifi", status="observed",
                                  payload=wifi_scan_payload(), missing_reason=None)
         self.assertEqual(list(validator.iter_errors(complete_scan)), [])
+        firmware_provenance = envelope(74, source="wifi", status="observed",
+                                       payload=wifi_scan_payload(), missing_reason=None)
+        firmware_provenance["firmware_elf_sha256"] = FIRMWARE_ELF_SHA256
+        self.assertEqual(list(validator.iter_errors(firmware_provenance)), [])
         for invalid in (
             envelope(61, source="wifi", payload={"bssid": "00:11:22:33:44:55"}),
             envelope(62, source="wifi", payload={"nested": {"SSID": "private"}}),
@@ -289,6 +324,8 @@ class CollectionIngestTests(unittest.TestCase):
                     {"channel": 6, "ap_count": 1, "strongest_rssi": -50},
                     {"channel": 6, "ap_count": 2, "strongest_rssi": -60},
                 ], sampled_ap_count=3, total_seen=3)),
+            {**firmware_provenance, "firmware_elf_sha256": "AB" * 32},
+            {**firmware_provenance, "provenance_note": "not-allowlisted"},
         ):
             self.assertTrue(list(validator.iter_errors(invalid)))
         nonwifi = envelope(65, source="device", status="observed", payload={"raw_diagnostic": "preserved"})
