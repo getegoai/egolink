@@ -190,6 +190,338 @@
           "$ref": "#/$defs/wifiScanSummaryPayload"
         }
       ]
+    },
+    "cameraTimerState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "config_version",
+        "enabled",
+        "interval_seconds",
+        "session_expires_at_unix_ms",
+        "max_photos",
+        "captured_count",
+        "state_reason",
+        "trusted_utc"
+      ],
+      "properties": {
+        "config_version": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+        },
+        "enabled": {"type": "boolean"},
+        "interval_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400
+        },
+        "session_expires_at_unix_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "max_photos": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "captured_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "state_reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "trusted_utc": {"type": "boolean"}
+      }
+    },
+    "cameraSourceStatusPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "component",
+        "camera_runtime_compiled",
+        "driver_preflight_ready",
+        "capture_trigger_wired",
+        "media_store_ready",
+        "command_id",
+        "authorization_session_id",
+        "source_event_utc",
+        "source_event_monotonic_ms",
+        "event_reason",
+        "timer_state"
+      ],
+      "properties": {
+        "source": {"const": "camera"},
+        "component": {"const": "photo_control"},
+        "camera_runtime_compiled": {"type": "boolean"},
+        "driver_preflight_ready": {"type": "boolean"},
+        "capture_trigger_wired": {"type": "boolean"},
+        "media_store_ready": {"type": "boolean"},
+        "command_id": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+        },
+        "authorization_session_id": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+        },
+        "source_event_utc": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "source_event_monotonic_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "event_reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "timer_state": {
+          "$ref": "#/$defs/cameraTimerState"
+        }
+      }
+    },
+    "cameraLocationRef": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "observation_id",
+        "event_utc",
+        "timestamp_quality"
+      ],
+      "properties": {
+        "observation_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:@-]{1,128}$"
+        },
+        "event_utc": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "timestamp_quality": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "cameraObservationPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "photo_id",
+        "trigger_reason",
+        "command_id",
+        "config_version",
+        "capture_result",
+        "local_save_status",
+        "device_upload_status",
+        "media_type",
+        "width",
+        "height",
+        "byte_length",
+        "sha256",
+        "storage_kind",
+        "camera_model",
+        "driver_profile",
+        "location_ref",
+        "authorization_session_id",
+        "retention_expires_at",
+        "training_allowed"
+      ],
+      "properties": {
+        "photo_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:@-]{1,128}$"
+        },
+        "trigger_reason": {
+          "enum": [
+            "web_manual",
+            "device_timer"
+          ]
+        },
+        "command_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:@-]{1,128}$"
+        },
+        "config_version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:@-]{1,128}$"
+        },
+        "capture_result": {
+          "enum": [
+            "captured",
+            "capture_failed",
+            "not_attempted",
+            "outcome_unknown"
+          ]
+        },
+        "local_save_status": {
+          "enum": [
+            "saved",
+            "save_failed",
+            "not_attempted",
+            "unknown"
+          ]
+        },
+        "device_upload_status": {
+          "enum": [
+            "pending",
+            "uploading",
+            "uploaded",
+            "not_ready"
+          ]
+        },
+        "media_type": {
+          "enum": [
+            "image/jpeg",
+            null
+          ]
+        },
+        "width": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "height": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "byte_length": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 4,
+          "maximum": 65536
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "storage_kind": {
+          "enum": [
+            "persistent",
+            "none"
+          ]
+        },
+        "camera_model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "driver_profile": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "location_ref": {
+          "$ref": "#/$defs/cameraLocationRef"
+        },
+        "authorization_session_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:@-]{1,128}$"
+        },
+        "retention_expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "training_allowed": {
+          "const": false
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "capture_result": {
+                "const": "captured"
+              },
+              "local_save_status": {
+                "const": "saved"
+              }
+            },
+            "required": [
+              "capture_result",
+              "local_save_status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "media_type": {
+                "const": "image/jpeg"
+              },
+              "width": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              },
+              "byte_length": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string"
+              },
+              "storage_kind": {
+                "const": "persistent"
+              },
+              "device_upload_status": {
+                "not": {
+                  "const": "not_ready"
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "media_type": {
+                "const": null
+              },
+              "width": {
+                "const": null
+              },
+              "height": {
+                "const": null
+              },
+              "byte_length": {
+                "const": null
+              },
+              "sha256": {
+                "const": null
+              },
+              "storage_kind": {
+                "const": "none"
+              },
+              "device_upload_status": {
+                "const": "not_ready"
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "type": "object",
@@ -233,6 +565,7 @@
         "lte",
         "imu",
         "wifi",
+        "camera",
         "power",
         "device",
         "time_anchor",
@@ -362,6 +695,178 @@
             "properties": {
               "payload": {
                 "$ref": "#/$defs/wifiAggregatePayload"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "const": "source_status"
+          },
+          "payload": {
+            "type": "object",
+            "properties": {
+              "source": {
+                "const": "camera"
+              }
+            },
+            "required": ["source"]
+          }
+        },
+        "required": ["source", "payload"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/cameraSourceStatusPayload"
+          }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "status": {"const": "observed"},
+              "missing_reason": {"const": null}
+            }
+          },
+          {
+            "properties": {
+              "status": {"const": "unavailable"},
+              "missing_reason": {"type": "string", "minLength": 1}
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "const": "camera"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "then": {
+        "$comment": "Camera observations are admitted only inside an explicit authorized capture session; the server additionally verifies command/config/time/location causality.",
+        "required": [
+          "session_id"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+          },
+          "payload": {
+            "$ref": "#/$defs/cameraObservationPayload"
+          }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "status": {
+                "const": "captured"
+              },
+              "missing_reason": {
+                "const": null
+              },
+              "payload": {
+                "properties": {
+                  "capture_result": {
+                    "const": "captured"
+                  },
+                  "local_save_status": {
+                    "const": "saved"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "status": {
+                "const": "save_failed"
+              },
+              "missing_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "payload": {
+                "properties": {
+                  "capture_result": {
+                    "const": "captured"
+                  },
+                  "local_save_status": {
+                    "const": "save_failed"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "status": {
+                "const": "capture_failed"
+              },
+              "missing_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "payload": {
+                "properties": {
+                  "capture_result": {
+                    "const": "capture_failed"
+                  },
+                  "local_save_status": {
+                    "const": "not_attempted"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "status": {
+                "const": "not_attempted"
+              },
+              "missing_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "payload": {
+                "properties": {
+                  "capture_result": {
+                    "const": "not_attempted"
+                  },
+                  "local_save_status": {
+                    "const": "not_attempted"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "status": {
+                "const": "outcome_unknown"
+              },
+              "missing_reason": {
+                "const": "capture_outcome_unknown_after_reboot"
+              },
+              "payload": {
+                "properties": {
+                  "capture_result": {
+                    "const": "outcome_unknown"
+                  },
+                  "local_save_status": {
+                    "const": "unknown"
+                  }
+                }
               }
             }
           }

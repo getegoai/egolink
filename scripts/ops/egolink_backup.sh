@@ -3,6 +3,7 @@
 # Installed at /usr/local/bin/egolink-backup.sh; cron daily 03:30 CST.
 # Evidence/task: OPS-001. Restore procedure: docs/operations/VPS_RUNBOOK.md.
 set -euo pipefail
+umask 077
 
 BACKUP_ROOT=/var/backups/egolink
 DB=/var/lib/egolink-message-hub/message_hub.db
@@ -13,7 +14,6 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
 mkdir -p "$BACKUP_ROOT"
-
 if command -v sqlite3 >/dev/null 2>&1; then
   sqlite3 "$DB" ".backup '$WORK/message_hub.db'"
 else
@@ -26,9 +26,12 @@ dst.close(); src.close()
 PY
 fi
 
-tar -czf "$BACKUP_ROOT/egolink-$STAMP.tar.gz" \
-  -C "$WORK" message_hub.db \
-  -C / "${REPORTS#/}"
+TAR_INPUTS=(-C "$WORK" message_hub.db -C / "${REPORTS#/}")
+# private JPEG bytes deliberately stay out of this fixed 14-day archive. Each
+# photo has an individual authorization deadline which the live store enforces;
+# copying it here would silently extend that retention. A future photo backup
+# must provide per-object lifecycle deletion before it may be enabled.
+tar -czf "$BACKUP_ROOT/egolink-$STAMP.tar.gz" "${TAR_INPUTS[@]}"
 
 find "$BACKUP_ROOT" -name 'egolink-*.tar.gz' -mtime +"$KEEP_DAYS" -delete
 

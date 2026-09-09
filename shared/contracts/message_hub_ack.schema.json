@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ego.local/contracts/message_hub_ack.schema.json",
   "title": "Ego Link P0 Message Hub ACK",
+  "$comment": "Device-to-server ACK input. Server-owned acceptance outcome fields are carried only by the ack.raw HTTP response contract.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -52,15 +53,98 @@
       "type": "string",
       "enum": [
         "ok",
+        "applied",
         "error",
         "rejected",
         "timeout",
         "pending",
+        "in_progress",
         "mock_only"
       ]
+    },
+    "timer_state": {
+      "$ref": "#/$defs/timer_state"
     },
     "message": {
       "type": "string"
     }
-  }
+  },
+  "$defs": {
+    "timer_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "config_version",
+        "enabled",
+        "interval_seconds",
+        "session_expires_at_unix_ms",
+        "max_photos",
+        "captured_count",
+        "state_reason",
+        "trusted_utc"
+      ],
+      "properties": {
+        "config_version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "interval_seconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 86400
+        },
+        "session_expires_at_unix_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "max_photos": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "captured_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "state_reason": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "trusted_utc": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "not": {
+        "anyOf": [
+          {"required": ["server_disposition"]},
+          {"required": ["accepted_ack_sha256"]},
+          {"required": ["posted_ack_sha256"]},
+          {"required": ["command_ack"]}
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "timer_state"
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "const": "applied"
+          }
+        }
+      }
+    }
+  ]
 }

@@ -67,6 +67,13 @@ from server.manual_sos_store import (
     ManualSosStoreError,
     ManualSosValidationError,
 )
+from server.photo_store import (
+    DEFAULT_DEVICE_QUOTA_BYTES,
+    DEFAULT_MAX_PHOTO_BYTES,
+    PHOTO_CONTROL_COMMANDS,
+    PhotoStore,
+    PhotoStoreError,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -171,6 +178,23 @@ IMU_WINDOW_CAPTURE_CMD_ID_MAX = 16
 IMU_WINDOW_FW_VERSION_MAX = 32
 IMU_WINDOW_TEST_RUN_ID_MAX = 32
 IMU_WINDOW_TRANSPORT_TYPES = frozenset({"lte", "wifi"})
+COMMAND_NONTERMINAL_STATUSES = frozenset({"pending", "in_progress"})
+ACK_NONTERMINAL_STATUSES = frozenset({"pending", "in_progress"})
+ACK_TERMINAL_STATUSES = frozenset(
+    {"ok", "applied", "error", "rejected", "timeout", "mock_only"}
+)
+PHOTO_TIMER_ACK_FIELDS = frozenset(
+    {
+        "config_version",
+        "enabled",
+        "interval_seconds",
+        "session_expires_at_unix_ms",
+        "max_photos",
+        "captured_count",
+        "state_reason",
+        "trusted_utc",
+    }
+)
 IMU_WINDOW_COMMON_KEYS = {
     "event-type",
     "priority",
@@ -379,7 +403,14 @@ def amap_request_is_same_origin(headers: Mapping[str, str]) -> bool:
 
 
 class MessageHubStore:
-    def __init__(self, db_path: Path) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        *,
+        photo_root: Path | None = None,
+        photo_max_bytes: int = DEFAULT_MAX_PHOTO_BYTES,
+        photo_device_quota_bytes: int = DEFAULT_DEVICE_QUOTA_BYTES,
+    ) -> None:
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._raw_post_fail_once_seen: set[str] = set()
@@ -387,6 +418,12 @@ class MessageHubStore:
         self._init_schema()
         self.location_states = LocationStateStore(self.db_path)
         self.manual_sos = ManualSosStore(self.db_path)
+        self.photos = PhotoStore(
+            self,
+            photo_root if photo_root is not None else self.db_path.parent / "photos",
+            max_photo_bytes=photo_max_bytes,
+            device_quota_bytes=photo_device_quota_bytes,
+        )
         self.collection = CollectionStore(self)
 
     def connect(self) -> sqlite3.Connection:
@@ -549,6 +586,21 @@ class MessageHubStore:
         return self.get_device(device_id)
 
     def ingest(self, device_id: str, endpoint_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._ingest(
+            device_id,
+            endpoint_type,
+            payload,
+        )
+
+    def _ingest(
+        self,
+        device_id: str,
+        endpoint_type: str,
+        payload: dict[str, Any],
+        *,
+        ack_identity_sha256: str | None = None,
+        ack_outcome: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         message = normalize_message(self, device_id, endpoint_type, payload)
         server_received_at = utc_now()
         message["server_received_at"] = server_received_at
@@ -604,7 +656,15 @@ class MessageHubStore:
                 if event_type in {"location_report", "location_observation"}:
                     self._record_location_memory(db, device_id, message, server_received_at)
             elif message_type == "ack":
-                self._record_ack(db, device_id, message, server_received_at, message_json)
+                recorded_outcome = self._record_ack(
+                    db,
+                    device_id,
+                    message,
+                    server_received_at,
+                    ack_identity_sha256=ack_identity_sha256,
+                )
+                if ack_outcome is not None:
+                    ack_outcome.update(recorded_outcome)
             elif message_type == "error":
                 self._record_error(db, device_id, message, server_received_at, message_json)
         return message
@@ -615,34 +675,263 @@ class MessageHubStore:
         device_id: str,
         message: dict[str, Any],
         server_received_at: str,
-        message_json: str,
-    ) -> None:
+        *,
+        ack_identity_sha256: str | None = None,
+    ) -> dict[str, Any]:
+        reserved_ack_fields = {
+            "server_disposition",
+            "accepted_ack_sha256",
+            "posted_ack_sha256",
+            "command_ack",
+        }
+        if reserved_ack_fields.intersection(message):
+            raise MessageHubError(
+                "ack_reserved_field",
+                "ACK contains a server-owned result field",
+            )
+        posted_ack_sha256 = (
+            ack_identity_sha256
+            if isinstance(ack_identity_sha256, str)
+            and re.fullmatch(r"[0-9a-f]{64}", ack_identity_sha256)
+            else None
+        )
+
+        def outcome(
+            disposition: str,
+            command_status: str,
+            accepted_ack_sha256: str | None = None,
+        ) -> dict[str, Any]:
+            return {
+                "disposition": disposition,
+                "command_status": command_status,
+                "posted_ack_sha256": posted_ack_sha256,
+                "accepted_ack_sha256": accepted_ack_sha256,
+            }
+
         cmd_id = require_text(message, "cmd_id")
-        status = require_text(message, "status")
+        ack_status = require_text(message, "status")
+        if ack_status not in ACK_NONTERMINAL_STATUSES | ACK_TERMINAL_STATUSES:
+            raise MessageHubError("invalid_ack_status", "ACK status is unsupported")
         command_row_value = db.execute(
-            "SELECT payload_json FROM commands WHERE device_id = ? AND cmd_id = ?",
+            "SELECT status, payload_json, ack_json FROM commands "
+            "WHERE device_id = ? AND cmd_id = ?",
             (device_id, cmd_id),
         ).fetchone()
-        if command_row_value is not None:
-            try:
-                command = json.loads(str(command_row_value["payload_json"]))
-            except (TypeError, ValueError, json.JSONDecodeError) as error:
-                raise MessageHubError("command_record_invalid", "command record is invalid") from error
-            if command.get("cmd") == "capture_imu_window" and message.get("test_run_id") != command.get(
-                "test_run_id"
+        # Unknown and late ACKs remain immutable message records, but cannot
+        # create or rewrite command state.  This is deliberately a no-op here:
+        # ingest() inserted the message before calling _record_ack().
+        if command_row_value is None:
+            return outcome("unknown_command_ignored", "unknown")
+        try:
+            command = json.loads(str(command_row_value["payload_json"]))
+        except (TypeError, ValueError, json.JSONDecodeError) as error:
+            raise MessageHubError("command_record_invalid", "command record is invalid") from error
+
+        command_status = str(command_row_value["status"] or "")
+        try:
+            prior_ack = json.loads(str(command_row_value["ack_json"] or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            prior_ack = {}
+        prior_ack_sha256 = prior_ack.get("accepted_ack_sha256")
+        if not (
+            isinstance(prior_ack_sha256, str)
+            and re.fullmatch(r"[0-9a-f]{64}", prior_ack_sha256)
+        ):
+            prior_ack_sha256 = None
+        has_timer_state = "timer_state" in message
+        if ack_status != "applied" and has_timer_state:
+            raise MessageHubError(
+                "photo_timer_ack_state_invalid",
+                "only an applied timer ACK may report timer_state",
+            )
+        if command.get("cmd") != "configure_photo_timer" and has_timer_state:
+            raise MessageHubError(
+                "photo_timer_ack_state_invalid",
+                "timer_state is only valid for configure_photo_timer",
+            )
+        self._assert_photo_ack_consistency(
+            db,
+            device_id,
+            command,
+            ack_status,
+        )
+        expires_at_unix_ms = command.get("expires_at_unix_ms")
+        if (
+            command_status in COMMAND_NONTERMINAL_STATUSES
+            and type(expires_at_unix_ms) is int
+            and expires_at_unix_ms <= int(time.time() * 1000)
+        ):
+            command_status = "expired"
+            db.execute(
+                "UPDATE commands SET status = 'expired', updated_at = ? "
+                "WHERE device_id = ? AND cmd_id = ? "
+                "AND status IN ('pending', 'in_progress')",
+                (server_received_at, device_id, cmd_id),
+            )
+
+        if command_status not in COMMAND_NONTERMINAL_STATUSES:
+            if (
+                posted_ack_sha256 is not None
+                and posted_ack_sha256 == prior_ack_sha256
             ):
-                raise MessageHubError(
-                    "imu_ack_test_run_mismatch",
-                    "capture_imu_window ACK test_run_id does not match its command",
+                return outcome(
+                    "idempotent_already_applied",
+                    command_status,
+                    prior_ack_sha256,
                 )
+            if (
+                command_status == "applied"
+                and ack_status == "applied"
+                and command.get("cmd") == "configure_photo_timer"
+            ):
+                try:
+                    validate_photo_timer_ack(
+                        command,
+                        message,
+                        prior_timer_state=as_dict(prior_ack.get("timer_state")),
+                    )
+                except MessageHubError:
+                    # A conflicting terminal refresh is retained in messages,
+                    # while the last accepted effective state remains intact.
+                    return outcome(
+                        "conflict_ignored",
+                        command_status,
+                        prior_ack_sha256,
+                    )
+                if not photo_timer_ack_refresh_is_monotonic(prior_ack, message):
+                    return outcome(
+                        "conflict_ignored",
+                        command_status,
+                        prior_ack_sha256,
+                    )
+                stored_ack = dict(message)
+                stored_ack["server_disposition"] = "terminal_state_refresh_applied"
+                stored_ack["accepted_ack_sha256"] = posted_ack_sha256
+                db.execute(
+                    """
+                    UPDATE commands
+                    SET updated_at = ?, ack_json = ?
+                    WHERE device_id = ? AND cmd_id = ? AND status = 'applied'
+                    """,
+                    (
+                        server_received_at,
+                        dumps(stored_ack),
+                        device_id,
+                        cmd_id,
+                    ),
+                )
+                return outcome(
+                    "refresh_applied",
+                    command_status,
+                    posted_ack_sha256,
+                )
+            return outcome(
+                "terminal_ack_ignored",
+                command_status,
+                prior_ack_sha256,
+            )
+
+        if command.get("cmd") == "capture_imu_window" and message.get("test_run_id") != command.get(
+            "test_run_id"
+        ):
+            raise MessageHubError(
+                "imu_ack_test_run_mismatch",
+                "capture_imu_window ACK test_run_id does not match its command",
+            )
+        if command.get("cmd") == "configure_photo_timer" and ack_status == "applied":
+            validate_photo_timer_ack(command, message)
+
+        next_status = (
+            command_status
+            if ack_status in ACK_NONTERMINAL_STATUSES
+            else ack_status
+        )
+        stored_ack = dict(message)
+        stored_ack["server_disposition"] = (
+            "nonterminal_ack_recorded"
+            if ack_status in ACK_NONTERMINAL_STATUSES
+            else "terminal_ack_applied"
+        )
+        stored_ack["accepted_ack_sha256"] = posted_ack_sha256
+        stored_ack_json = dumps(stored_ack)
+        accepted_at = (
+            server_received_at
+            if ack_status in ACK_TERMINAL_STATUSES
+            else None
+        )
         db.execute(
             """
             UPDATE commands
             SET status = ?, updated_at = ?, ack_at = ?, ack_json = ?
             WHERE device_id = ? AND cmd_id = ?
+              AND status IN ('pending', 'in_progress')
             """,
-            (status, server_received_at, server_received_at, message_json, device_id, cmd_id),
+            (
+                next_status,
+                server_received_at,
+                accepted_at,
+                stored_ack_json,
+                device_id,
+                cmd_id,
+            ),
         )
+        return outcome(
+            "nonterminal_recorded"
+            if ack_status in ACK_NONTERMINAL_STATUSES
+            else "newly_applied",
+            next_status,
+            posted_ack_sha256,
+        )
+
+    @staticmethod
+    def _assert_photo_ack_consistency(
+        db: sqlite3.Connection,
+        device_id: str,
+        command: dict[str, Any],
+        ack_status: str,
+    ) -> None:
+        """Prevent cross-queue arrival order from creating terminal lies."""
+
+        command_kind = command.get("cmd")
+        if (
+            command_kind not in PHOTO_CONTROL_COMMANDS
+            or ack_status in ACK_NONTERMINAL_STATUSES
+        ):
+            return
+        allowed_terminal = (
+            {"ok", "error"}
+            if command_kind == "capture_photo_once"
+            else {"applied", "error"}
+        )
+        if ack_status not in allowed_terminal:
+            raise MessageHubError(
+                "photo_command_ack_status_invalid",
+                "terminal ACK status is invalid for this photo command",
+                status=409,
+            )
+        cmd_id = command.get("cmd_id")
+        rows = db.execute(
+            "SELECT capture_result,local_save_status FROM photo_records "
+            "WHERE device_id=? AND command_id=? ORDER BY id",
+            (device_id, cmd_id),
+        ).fetchall()
+        if not rows:
+            return
+        if command_kind == "configure_photo_timer":
+            consistent = ack_status == "applied"
+        else:
+            durable = all(
+                row["capture_result"] == "captured"
+                and row["local_save_status"] == "saved"
+                for row in rows
+            )
+            consistent = ack_status == ("ok" if durable else "error")
+        if not consistent:
+            raise MessageHubError(
+                "photo_command_ack_conflict",
+                "terminal photo ACK contradicts an already persisted outcome",
+                status=409,
+            )
 
     def _record_error(
         self,
@@ -717,19 +1006,57 @@ class MessageHubStore:
             ).fetchone()
         return int(row["max_seq"]) + 1
 
-    def create_command(self, device_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def create_command(
+        self,
+        device_id: str,
+        payload: dict[str, Any],
+        *,
+        photo_control_guardian_id: str | None = None,
+    ) -> dict[str, Any]:
         cmd = str(payload.get("cmd") or payload.get("type") or "")
         if not cmd:
             raise MessageHubError("missing_command", "command must include cmd")
+        if cmd in PHOTO_CONTROL_COMMANDS:
+            if photo_control_guardian_id is None:
+                raise MessageHubError(
+                    "photo_control_requires_guardian_binding",
+                    "photo control requires the Guardian-bound photo route",
+                    status=403,
+                )
+            try:
+                self.photos.validate_control_command(
+                    device_id,
+                    payload,
+                    guardian_id=photo_control_guardian_id,
+                )
+            except PhotoStoreError as error:
+                raise MessageHubError(error.code, str(error), status=error.status) from error
+        expires_at_unix_ms = payload.get("expires_at_unix_ms")
+        if expires_at_unix_ms is not None and (
+            type(expires_at_unix_ms) is not int
+            or not 0 < expires_at_unix_ms <= 9_007_199_254_740_991
+        ):
+            raise MessageHubError(
+                "invalid_command_expiry",
+                "expires_at_unix_ms must be a positive bounded integer",
+            )
         now = utc_now()
-        with self.connection() as db:
-            next_id = int(db.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM commands").fetchone()["next_id"])
-        cmd_id = str(payload.get("cmd_id") or f"cmd-{next_id:06d}")
+        now_unix_ms = int(time.time() * 1000)
+        requested_cmd_id = payload.get("cmd_id")
+        if requested_cmd_id is not None and (
+            not isinstance(requested_cmd_id, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}", requested_cmd_id)
+            is None
+        ):
+            raise MessageHubError(
+                "invalid_command_id", "cmd_id must be a bounded identifier"
+            )
         if cmd == "capture_imu_window":
             test_run_id = str(payload.get("test_run_id") or "")
             parameters = payload.get("payload")
-            if not re.fullmatch(
-                rf"[A-Za-z0-9._:-]{{1,{IMU_WINDOW_CAPTURE_CMD_ID_MAX}}}", cmd_id
+            if requested_cmd_id is not None and not re.fullmatch(
+                rf"[A-Za-z0-9._:-]{{1,{IMU_WINDOW_CAPTURE_CMD_ID_MAX}}}",
+                requested_cmd_id,
             ):
                 raise MessageHubError(
                     "invalid_imu_capture_cmd_id",
@@ -742,42 +1069,127 @@ class MessageHubStore:
                     "invalid_imu_capture_test_run",
                     "capture_imu_window requires a bounded test_run_id",
                 )
-            if not isinstance(parameters, dict) or set(parameters) != {"sample_count", "interval_ms"} or type(
-                parameters.get("sample_count")
-            ) is not int or type(parameters.get("interval_ms")) is not int or parameters.get(
-                "sample_count"
-            ) != IMU_WINDOW_SAMPLE_COUNT or parameters.get("interval_ms") != IMU_WINDOW_INTERVAL_US // 1000:
+            if (
+                not isinstance(parameters, dict)
+                or set(parameters) != {"sample_count", "interval_ms"}
+                or type(parameters.get("sample_count")) is not int
+                or type(parameters.get("interval_ms")) is not int
+                or parameters.get("sample_count") != IMU_WINDOW_SAMPLE_COUNT
+                or parameters.get("interval_ms")
+                != IMU_WINDOW_INTERVAL_US // 1000
+            ):
                 raise MessageHubError(
                     "invalid_imu_capture_parameters",
                     "capture_imu_window requires sample_count=100 and interval_ms=50",
                 )
-        command = dict(payload)
-        command.update(
-            {
-                "protocol_version": protocol.PROTOCOL_VERSION,
-                "message_type": "command",
-                "device_id": device_id,
-                "cmd_id": cmd_id,
-                "cmd": cmd,
-                "created_at": now if cmd == "capture_imu_window" else str(payload.get("created_at") or now),
-            }
-        )
-        command_json = dumps(command)
-        with self.connection() as db:
+        db = self.connect()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            if requested_cmd_id is None:
+                next_id = int(
+                    db.execute(
+                        "SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM commands"
+                    ).fetchone()["next_id"]
+                )
+                cmd_id = f"cmd-{next_id:06d}"
+            else:
+                cmd_id = requested_cmd_id
+            existing = db.execute(
+                "SELECT * FROM commands WHERE cmd_id=?", (cmd_id,)
+            ).fetchone()
+            existing_command = None
+            if existing is not None and existing["device_id"] == device_id:
+                try:
+                    existing_command = json.loads(existing["payload_json"])
+                except (TypeError, ValueError, json.JSONDecodeError) as error:
+                    raise MessageHubError(
+                        "command_record_invalid", "command record is invalid"
+                    ) from error
+            created_at = (
+                str(existing_command["created_at"])
+                if existing_command is not None
+                and (cmd == "capture_imu_window" or "created_at" not in payload)
+                else now
+                if cmd == "capture_imu_window"
+                else str(payload.get("created_at") or now)
+            )
+            command = dict(payload)
+            command.update(
+                {
+                    "protocol_version": protocol.PROTOCOL_VERSION,
+                    "message_type": "command",
+                    "device_id": device_id,
+                    "cmd_id": cmd_id,
+                    "cmd": cmd,
+                    "created_at": created_at,
+                }
+            )
+            command_json = dumps(command)
+            if existing is not None:
+                if existing["device_id"] != device_id or existing["payload_json"] != command_json:
+                    raise MessageHubError(
+                        "command_identity_conflict",
+                        "cmd_id already has different immutable command content",
+                        status=409,
+                    )
+                db.commit()
+                return command_row(existing)
+            initial_status = (
+                "expired"
+                if expires_at_unix_ms is not None
+                and expires_at_unix_ms <= now_unix_ms
+                else "pending"
+            )
             db.execute(
                 """
                 INSERT INTO commands (
                     cmd_id, device_id, cmd, status, created_at, updated_at,
                     payload_json, ack_json
                 )
-                VALUES (?, ?, ?, 'pending', ?, ?, ?, NULL)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
                 """,
-                (cmd_id, device_id, cmd, command["created_at"], now, command_json),
+                (
+                    cmd_id,
+                    device_id,
+                    cmd,
+                    initial_status,
+                    command["created_at"],
+                    now,
+                    command_json,
+                ),
             )
-        return command_with_status(command, "pending")
+            db.commit()
+            return command_with_status(command, initial_status)
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
 
     def poll_commands(self, device_id: str) -> list[dict[str, Any]]:
-        return self.list_commands(device_id, statuses={"pending"})
+        now_unix_ms = int(time.time() * 1000)
+        with self.connection() as db:
+            pending = db.execute(
+                "SELECT * FROM commands WHERE device_id=? AND status='pending' "
+                "ORDER BY id ASC",
+                (device_id,),
+            ).fetchall()
+            available: list[dict[str, Any]] = []
+            for row in pending:
+                try:
+                    expiry = json.loads(row["payload_json"]).get(
+                        "expires_at_unix_ms"
+                    )
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    expiry = None
+                if type(expiry) is int and expiry <= now_unix_ms:
+                    db.execute(
+                        "UPDATE commands SET status='expired',updated_at=? WHERE id=?",
+                        (utc_now(), row["id"]),
+                    )
+                    continue
+                available.append(command_row(row))
+        return available
 
     def list_commands(self, device_id: str, statuses: set[str] | None = None) -> list[dict[str, Any]]:
         sql = "SELECT * FROM commands WHERE device_id = ?"
@@ -1119,7 +1531,20 @@ class MessageHubStore:
         endpoint = derived_endpoint(derived_message.get("message_type"))
         if record["parse_result"]["status"] == "ok" and endpoint:
             try:
-                self.ingest(device_id, endpoint, derived_message)
+                ack_outcome: dict[str, Any] = {}
+                self._ingest(
+                    device_id,
+                    endpoint,
+                    derived_message,
+                    ack_identity_sha256=(
+                        str(as_dict(record.get("raw_payload")).get("sha256"))
+                        if endpoint == "ack"
+                        else None
+                    ),
+                    ack_outcome=ack_outcome if endpoint == "ack" else None,
+                )
+                if ack_outcome:
+                    record["command_ack"] = ack_outcome
             except MessageHubError as error:
                 record["parse_result"].update(
                     {
@@ -1542,6 +1967,134 @@ class MessageHubStore:
         }
 
 
+def validate_photo_timer_ack(
+    command: dict[str, Any],
+    message: dict[str, Any],
+    *,
+    prior_timer_state: dict[str, Any] | None = None,
+) -> None:
+    """Validate the device's applied timer state against immutable command input."""
+
+    timer_state = message.get("timer_state")
+    if not isinstance(timer_state, dict) or set(timer_state) != PHOTO_TIMER_ACK_FIELDS:
+        raise MessageHubError(
+            "photo_timer_ack_state_invalid",
+            "configure_photo_timer applied ACK requires one complete timer_state object",
+        )
+
+    config_version = timer_state.get("config_version")
+    enabled = timer_state.get("enabled")
+    interval_seconds = timer_state.get("interval_seconds")
+    session_expires_at_unix_ms = timer_state.get("session_expires_at_unix_ms")
+    max_photos = timer_state.get("max_photos")
+    captured_count = timer_state.get("captured_count")
+    state_reason = timer_state.get("state_reason")
+    trusted_utc = timer_state.get("trusted_utc")
+    if (
+        not isinstance(config_version, str)
+        or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}", config_version)
+        is None
+        or type(enabled) is not bool
+        or type(interval_seconds) is not int
+        or not 60 <= interval_seconds <= 86_400
+        or type(session_expires_at_unix_ms) is not int
+        or not 0 < session_expires_at_unix_ms <= 9_007_199_254_740_991
+        or type(max_photos) is not int
+        or not 1 <= max_photos <= 1000
+        or type(captured_count) is not int
+        or not 0 <= captured_count <= max_photos
+        or not isinstance(state_reason, str)
+        or re.fullmatch(r"[a-z][a-z0-9_]{0,63}", state_reason) is None
+        or type(trusted_utc) is not bool
+    ):
+        raise MessageHubError(
+            "photo_timer_ack_state_invalid",
+            "configure_photo_timer ACK timer_state has invalid types or bounds",
+        )
+
+    command_payload = command.get("payload")
+    if not isinstance(command_payload, dict):
+        raise MessageHubError(
+            "command_record_invalid",
+            "configure_photo_timer command payload is invalid",
+        )
+    expected = {
+        "config_version": command_payload.get("config_version"),
+        "interval_seconds": command_payload.get("interval_seconds"),
+        "session_expires_at_unix_ms": command_payload.get(
+            "session_expires_at_unix_ms"
+        ),
+        "max_photos": command_payload.get("max_photos"),
+    }
+    for field, expected_value in expected.items():
+        actual_value = timer_state[field]
+        if type(actual_value) is not type(expected_value) or actual_value != expected_value:
+            raise MessageHubError(
+                "photo_timer_ack_state_mismatch",
+                f"configure_photo_timer ACK timer_state.{field} does not match its command",
+                status=409,
+            )
+
+    requested_enabled = command_payload.get("enabled")
+    if prior_timer_state is None:
+        enabled_matches = (
+            type(enabled) is type(requested_enabled) and enabled == requested_enabled
+        )
+    else:
+        prior_enabled = prior_timer_state.get("enabled")
+        enabled_matches = (
+            requested_enabled is False
+            and enabled is False
+            or requested_enabled is True
+            and type(prior_enabled) is bool
+            and not (prior_enabled is False and enabled is True)
+        )
+    if not enabled_matches:
+        raise MessageHubError(
+            "photo_timer_ack_state_mismatch",
+            "configure_photo_timer ACK timer_state.enabled conflicts with its command or prior effective state",
+            status=409,
+        )
+
+
+def photo_timer_ack_refresh_is_monotonic(
+    prior_ack: dict[str, Any],
+    candidate_ack: dict[str, Any],
+) -> bool:
+    """Accept only newer, non-regressing effective timer-state refreshes."""
+
+    prior_timer = as_dict(prior_ack.get("timer_state"))
+    candidate_timer = as_dict(candidate_ack.get("timer_state"))
+    prior_count = prior_timer.get("captured_count")
+    candidate_count = candidate_timer.get("captured_count")
+    if (
+        type(prior_count) is not int
+        or type(candidate_count) is not int
+        or candidate_count < prior_count
+    ):
+        return False
+
+    prior_boot = prior_ack.get("boot_count")
+    candidate_boot = candidate_ack.get("boot_count")
+    prior_seq = prior_ack.get("seq")
+    candidate_seq = candidate_ack.get("seq")
+    if type(prior_boot) is int and type(candidate_boot) is int:
+        if candidate_boot < prior_boot:
+            return False
+        if candidate_boot > prior_boot:
+            return True
+    if type(prior_seq) is int and type(candidate_seq) is int:
+        return candidate_seq > prior_seq
+
+    prior_ts = parse_iso_timestamp(prior_ack.get("ts"))
+    candidate_ts = parse_iso_timestamp(candidate_ack.get("ts"))
+    return (
+        prior_ts is not None
+        and candidate_ts is not None
+        and candidate_ts > prior_ts
+    )
+
+
 def normalize_message(
     store: MessageHubStore,
     device_id: str,
@@ -1640,6 +2193,8 @@ def make_handler(
                 self.respond_error(error)
             except CollectionError as error:
                 self.respond_error(MessageHubError(error.code, str(error), status=error.status))
+            except PhotoStoreError as error:
+                self.respond_error(MessageHubError(error.code, str(error), status=error.status))
             except ManualSosValidationError:
                 self.respond_error(
                     MessageHubError(
@@ -1707,33 +2262,61 @@ def make_handler(
                     and post_segments[:3] == ["api", "v1", "devices"]
                     and post_segments[4:] == ["collection", "annotations"]
                 )
+                is_photo_session_authorization = (
+                    len(post_segments) == 6
+                    and post_segments[:3] == ["api", "v1", "devices"]
+                    and post_segments[4:] == ["photos", "sessions"]
+                )
+                is_photo_content_ingest = (
+                    len(post_segments) == 7
+                    and post_segments[:3] == ["api", "v1", "devices"]
+                    and post_segments[4] == "photos"
+                    and post_segments[6] == "content"
+                )
+                is_photo_control = (
+                    len(post_segments) == 7
+                    and post_segments[:3] == ["api", "v1", "devices"]
+                    and post_segments[4:6] == ["photos", "commands"]
+                    and post_segments[6] in {"capture", "timer"}
+                )
                 if (
                     (
                         post_segments == ["api", "v1", "location-states"]
                         or is_manual_sos_ingest
+                        or is_photo_content_ingest
                     )
                     and not token
                 ):
                     raise MessageHubError(
                         (
-                            "manual_sos_ingest_auth_not_configured"
-                            if is_manual_sos_ingest
-                            else "location_state_auth_not_configured"
-                        ),
-                        (
-                            "manual SOS ingest authentication is not configured"
-                            if is_manual_sos_ingest
-                            else "location state authentication is not configured"
-                        ),
+                        "manual_sos_ingest_auth_not_configured"
+                        if is_manual_sos_ingest
+                        else "photo_ingest_auth_not_configured"
+                        if is_photo_content_ingest
+                        else "location_state_auth_not_configured"
+                    ),
+                    (
+                        "manual SOS ingest authentication is not configured"
+                        if is_manual_sos_ingest
+                        else "photo ingest authentication is not configured"
+                        if is_photo_content_ingest
+                        else "location state authentication is not configured"
+                    ),
                         status=503,
                     )
                 guardian_authorization = (
                     self.require_guardian_authorization(post_segments[3])
-                    if is_guardian_sos_ack or is_collection_annotation
+                    if is_guardian_sos_ack
+                    or is_collection_annotation
+                    or is_photo_session_authorization
+                    or is_photo_control
                     else None
                 )
                 if (
-                    not is_guardian_sos_ack and not is_collection_annotation
+                    not is_guardian_sos_ack
+                    and not is_collection_annotation
+                    and not is_photo_session_authorization
+                    and not is_photo_control
                     and not authorized(self.headers.get("Authorization"), token)
                 ):
                     raise MessageHubError("unauthorized", "missing or invalid bearer token", status=401)
@@ -1741,6 +2324,8 @@ def make_handler(
             except MessageHubError as error:
                 self.respond_error(error)
             except CollectionError as error:
+                self.respond_error(MessageHubError(error.code, str(error), status=error.status))
+            except PhotoStoreError as error:
                 self.respond_error(MessageHubError(error.code, str(error), status=error.status))
             except ManualSosValidationError:
                 self.respond_error(
@@ -1832,6 +2417,90 @@ def make_handler(
                     self.respond_bytes(jsonl_page(page), content_type="application/x-ndjson; charset=utf-8", headers={**headers, "Content-Disposition": 'attachment; filename="egolink-collection.jsonl"'})
                 else:
                     raise CollectionError("collection_not_found", "collection route does not exist", 404)
+                return
+            is_photo_route = (
+                len(segments) in {5, 6, 7}
+                and segments[:3] == ["api", "v1", "devices"]
+                and segments[4] == "photos"
+            )
+            if is_photo_route:
+                self.require_guardian_authorization(segments[3])
+                headers = {
+                    "Cache-Control": "no-store",
+                    "X-Content-Type-Options": "nosniff",
+                }
+                if len(segments) == 5:
+                    self.respond_json(
+                        store.photos.list(segments[3], query), headers=headers
+                    )
+                elif len(segments) == 6:
+                    if segments[5] == "commands":
+                        if query:
+                            raise PhotoStoreError(
+                                "invalid_photo_query",
+                                "photo command status has no query parameters",
+                                400,
+                            )
+                        store.poll_commands(segments[3])
+                        commands = [
+                            command
+                            for command in store.list_commands(segments[3])
+                            if command.get("cmd") in PHOTO_CONTROL_COMMANDS
+                        ]
+                        self.respond_json(
+                            {
+                                "commands": commands,
+                                "camera_runtime_state": store.collection.latest_source_state(
+                                    segments[3], "camera"
+                                ),
+                            },
+                            headers=headers,
+                        )
+                    elif segments[5] == "export.json":
+                        exported = store.photos.export_all(segments[3], query)
+                        exported["exported_at"] = utc_now()
+                        exported["scope"] = "private_photo_metadata_and_collection_observation"
+                        self.respond_json(
+                            exported,
+                            headers={
+                                **headers,
+                                "Content-Disposition": (
+                                    'attachment; filename="egolink-photo-observations.json"'
+                                ),
+                            },
+                        )
+                    elif query:
+                        raise PhotoStoreError(
+                            "invalid_photo_query",
+                            "photo metadata has no query parameters",
+                            400,
+                        )
+                    else:
+                        self.respond_json(
+                            {"photo": store.photos.metadata(segments[3], segments[5])},
+                            headers=headers,
+                        )
+                elif segments[6] == "content":
+                    if query:
+                        raise PhotoStoreError(
+                            "invalid_photo_query",
+                            "photo content has no query parameters",
+                            400,
+                        )
+                    body, photo = store.photos.content(segments[3], segments[5])
+                    self.respond_bytes(
+                        body,
+                        content_type="image/jpeg",
+                        headers={
+                            **headers,
+                            "Content-Security-Policy": "default-src 'none'; sandbox",
+                            "X-Content-SHA256": str(photo["content"]["sha256"]),
+                        },
+                    )
+                else:
+                    raise PhotoStoreError(
+                        "photo_not_found", "photo route does not exist", 404
+                    )
                 return
             is_location_state_current = (
                 len(segments) == 6
@@ -2177,6 +2846,106 @@ def make_handler(
         def route_post(self, *, guardian_authorization: Any = None) -> None:
             parsed_url = urlparse(self.path)
             segments = split_path(parsed_url.path)
+            if (
+                len(segments) == 6
+                and segments[:3] == ["api", "v1", "devices"]
+                and segments[4:] == ["photos", "sessions"]
+            ):
+                if guardian_authorization is None or not guardian_authorization.authorized:
+                    raise PhotoStoreError(
+                        "forbidden", "Guardian device binding is required", 403
+                    )
+                if parsed_url.query:
+                    raise PhotoStoreError(
+                        "invalid_photo_query",
+                        "photo authorization has no query parameters",
+                        400,
+                    )
+                result = store.photos.authorize_session(
+                    segments[3],
+                    self.read_json_body(),
+                    guardian_id=guardian_authorization.guardian_id,
+                )
+                self.respond_json(
+                    result,
+                    headers={
+                        "Cache-Control": "no-store",
+                        "X-Content-Type-Options": "nosniff",
+                    },
+                )
+                return
+            if (
+                len(segments) == 7
+                and segments[:3] == ["api", "v1", "devices"]
+                and segments[4:6] == ["photos", "commands"]
+                and segments[6] in {"capture", "timer"}
+            ):
+                if guardian_authorization is None or not guardian_authorization.authorized:
+                    raise PhotoStoreError(
+                        "forbidden", "Guardian device binding is required", 403
+                    )
+                if parsed_url.query:
+                    raise PhotoStoreError(
+                        "invalid_photo_query",
+                        "photo control has no query parameters",
+                        400,
+                    )
+                requested = self.read_json_body()
+                command = {
+                    "cmd": (
+                        "capture_photo_once"
+                        if segments[6] == "capture"
+                        else "configure_photo_timer"
+                    ),
+                    **requested,
+                }
+                result = store.create_command(
+                    segments[3],
+                    command,
+                    photo_control_guardian_id=guardian_authorization.guardian_id,
+                )
+                self.respond_json(
+                    {"ok": True, "command": result},
+                    headers={
+                        "Cache-Control": "no-store",
+                        "X-Content-Type-Options": "nosniff",
+                    },
+                )
+                return
+            if (
+                len(segments) == 7
+                and segments[:3] == ["api", "v1", "devices"]
+                and segments[4] == "photos"
+                and segments[6] == "content"
+            ):
+                if parsed_url.query:
+                    raise PhotoStoreError(
+                        "invalid_photo_query",
+                        "photo content upload has no query parameters",
+                        400,
+                    )
+                try:
+                    body, claimed_sha256, transport = self.read_photo_body()
+                except PhotoStoreError as error:
+                    store.photos.record_rejected_upload(
+                        segments[3], segments[5], error_code=error.code
+                    )
+                    raise
+                result = store.photos.store_content(
+                    segments[3],
+                    segments[5],
+                    body,
+                    claimed_sha256=claimed_sha256,
+                    transport=transport,
+                )
+                self.respond_json(
+                    result,
+                    headers={
+                        "Cache-Control": "no-store",
+                        "X-Content-Type-Options": "nosniff",
+                    },
+                )
+                return
             if len(segments) == 6 and segments[:3] == ["api", "v1", "devices"] and segments[4:] == ["collection", "annotations"]:
                 if guardian_authorization is None or not guardian_authorization.authorized:
                     raise CollectionError("forbidden", "device binding is required", 403)
@@ -2328,7 +3097,14 @@ def make_handler(
                         status=422,
                     )
                     return
-                self.respond_json({"ok": True, "raw_frame": redact_raw_frame_record(record)})
+                self.respond_json(
+                    {
+                        "ok": True,
+                        "raw_frame": redact_raw_frame_record(record),
+                        "command_ack": as_dict(record.get("command_ack")),
+                    },
+                    headers={"Cache-Control": "no-store"},
+                )
                 return
             if segments == ["api", "v1", "location-states"]:
                 raw_body = self.read_raw_body()
@@ -2400,6 +3176,54 @@ def make_handler(
             if not isinstance(value, dict):
                 raise MessageHubError("invalid_json", "request body must be a JSON object")
             return value
+
+        def read_photo_body(self) -> tuple[bytes, str, str]:
+            if self.headers.get("Transfer-Encoding") is not None:
+                raise PhotoStoreError(
+                    "invalid_photo_length",
+                    "photo upload requires one bounded Content-Length",
+                )
+            lengths = self.headers.get_all("Content-Length") or []
+            if (
+                len(lengths) != 1
+                or not lengths[0].strip().isdigit()
+                or len(lengths[0].strip()) > len(str(store.photos.max_photo_bytes))
+            ):
+                raise PhotoStoreError(
+                    "invalid_photo_length",
+                    "photo upload requires one bounded Content-Length",
+                )
+            length = int(lengths[0].strip())
+            if length < 4:
+                raise PhotoStoreError(
+                    "invalid_photo_length", "photo content is too short"
+                )
+            if length > store.photos.max_photo_bytes:
+                raise PhotoStoreError(
+                    "photo_body_too_large",
+                    "photo content exceeds its configured limit",
+                    413,
+                )
+            media_type = str(self.headers.get("Content-Type") or "").split(
+                ";", 1
+            )[0].strip().lower()
+            if media_type != "image/jpeg":
+                raise PhotoStoreError(
+                    "photo_content_type_required",
+                    "photo upload requires image/jpeg",
+                    415,
+                )
+            claimed_sha256 = str(
+                self.headers.get("X-Content-SHA256") or ""
+            ).strip()
+            transport = str(self.headers.get("X-EgoLink-Transport") or "").strip()
+            body = self.rfile.read(length)
+            if len(body) != length:
+                raise PhotoStoreError(
+                    "incomplete_photo_body",
+                    "photo upload ended before Content-Length",
+                )
+            return body, claimed_sha256, transport
 
         def read_manual_sos_body(self) -> bytes:
             if self.headers.get("Transfer-Encoding") is not None:
@@ -2531,10 +3355,19 @@ def make_handler(
 
         def respond_error(self, error: MessageHubError) -> None:
             error_path = urlparse(self.path).path
+            private_headers = (
+                {
+                    "Cache-Control": "no-store",
+                    "X-Content-Type-Options": "nosniff",
+                }
+                if "/photos" in error_path
+                else {"Cache-Control": "no-store"}
+            )
             headers = (
-                {"Cache-Control": "no-store"}
+                private_headers
                 if error_path.endswith("/locations/search")
                 or "/collection/" in error_path
+                or "/photos" in error_path
                 or error_path.endswith("/location-state/current")
                 or "/safety-events/manual-sos" in error_path
                 or error_path == "/api/v1/safety-events/manual-sos"
@@ -3789,6 +4622,7 @@ def derive_raw_frame_message(
         cmd_id = first_known(expected_cmd_id, kv_payload.get("cmd-id"), kv_payload.get("cmd_id"), record["frame_id"])
         transport_type = kv_payload.get("transport-type")
         reliability = raw_reliability_from_kv(kv_payload)
+        timer_state = raw_timer_state_from_kv(kv_payload)
         lte_http = compact_dict(
             {
                 "phase": kv_payload.get("lte-http-phase"),
@@ -3819,6 +4653,7 @@ def derive_raw_frame_message(
                 "lte_http": lte_http or None,
                 "command": command_obs or None,
                 "reliability": reliability or None,
+                "timer_state": timer_state,
             }
         )
     if frame_type == "command":
@@ -3953,6 +4788,50 @@ def derive_raw_frame_message(
     return {}
 
 
+def raw_timer_state_from_kv(kv_payload: dict[str, str]) -> dict[str, Any] | None:
+    """Build a typed timer state only when at least one timer field is present.
+
+    Invalid integer/boolean spellings are intentionally retained as strings so
+    the command-aware validator rejects the ACK instead of silently coercing it.
+    """
+
+    keys = {
+        "config_version": "timer-config-version",
+        "enabled": "timer-enabled",
+        "interval_seconds": "timer-interval-seconds",
+        "session_expires_at_unix_ms": "timer-session-expires-at-unix-ms",
+        "max_photos": "timer-max-photos",
+        "captured_count": "timer-captured-count",
+        "state_reason": "timer-state-reason",
+        "trusted_utc": "timer-trusted-utc",
+    }
+    if not any(raw_key in kv_payload for raw_key in keys.values()):
+        return None
+
+    timer_state: dict[str, Any] = {}
+    for field, raw_key in keys.items():
+        if raw_key not in kv_payload:
+            continue
+        raw_value = kv_payload[raw_key]
+        if field in {"enabled", "trusted_utc"}:
+            timer_state[field] = parse_bool_or_text(raw_value)
+        elif field in {
+            "interval_seconds",
+            "session_expires_at_unix_ms",
+            "max_photos",
+            "captured_count",
+        }:
+            text = str(raw_value).strip()
+            timer_state[field] = (
+                int(text, 10)
+                if re.fullmatch(r"(?:0|[1-9][0-9]*)", text)
+                else raw_value
+            )
+        else:
+            timer_state[field] = raw_value
+    return timer_state
+
+
 def raw_command_payload(kv_payload: dict[str, str]) -> dict[str, Any]:
     reserved = {
         "cmd",
@@ -4074,9 +4953,17 @@ def build_raw_command_frame(device_id: str, command: dict[str, Any] | None) -> b
     payload = as_dict(command.get("payload"))
     for key, value in payload.items():
         if isinstance(value, (str, int, float, bool)):
-            payload_lines.append(f"{key}={value}")
+            encoded = str(value).lower() if isinstance(value, bool) else str(value)
+            payload_lines.append(f"{key}={encoded}")
     if command.get("test_run_id"):
         payload_lines.append(f"test_run_id={command['test_run_id']}")
+    if (
+        type(command.get("expires_at_unix_ms")) is int
+        and "expires_at_unix_ms" not in payload
+    ):
+        payload_lines.append(
+            f"expires_at_unix_ms={command['expires_at_unix_ms']}"
+        )
     return build_raw_frame(
         "command",
         str(command["cmd_id"]),
@@ -9392,6 +10279,23 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     .operation-card h3 { margin-bottom: 8px; }
     .operation-card details { margin-top: 8px; }
     .operation-card details > summary { color: var(--blue); cursor: pointer; font-size: 13px; font-weight: 600; }
+    .photo-grid { padding: 16px; display: grid; grid-template-columns: minmax(320px, 0.8fr) minmax(420px, 1.2fr); gap: 12px; align-items: start; }
+    .photo-controls { display: grid; gap: 10px; }
+    .photo-field { display: grid; gap: 5px; min-width: 0; }
+    .photo-field label { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .photo-field input { width: 100%; min-width: 0; }
+    .photo-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .photo-note { color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+    .photo-status { border-left: 4px solid var(--blue); border-radius: 8px; padding: 9px 10px; background: #eef5ff; color: var(--ink-soft); font-size: 13px; overflow-wrap: anywhere; }
+    .photo-status.warn { border-color: var(--amber); background: #fff8eb; }
+    .photo-status.bad { border-color: var(--red); background: #fff1eb; }
+    .photo-preview { margin-top: 10px; min-height: 180px; display: grid; place-items: center; overflow: hidden; border: 1px solid #d8dde6; border-radius: 10px; background: #f5f6f8; }
+    .photo-preview img { display: block; max-width: 100%; max-height: 420px; object-fit: contain; }
+    .photo-list { display: grid; gap: 8px; margin-top: 10px; max-height: 340px; overflow-y: auto; }
+    .photo-list-item { width: 100%; min-height: 0; padding: 9px; border: 1px solid #e3e7ee; border-radius: 8px; background: #fff; color: var(--text); font-size: 12px; text-align: left; cursor: pointer; }
+    .photo-list-item:hover, .photo-list-item:focus-visible { border-color: var(--blue); }
+    .photo-list-item strong, .photo-list-item span { display: block; overflow-wrap: anywhere; }
+    .photo-list-item span { margin-top: 3px; color: var(--muted); }
     .field-evidence-grid { padding: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
     .evidence-panel { min-width: 0; border: 1px solid #d8dde6; border-radius: 8px; padding: 12px; background: #fff; }
     .evidence-panel h3 { margin-bottom: 10px; }
@@ -9532,7 +10436,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     .map-waiting { z-index: 1; color: var(--muted); font-size: 13px; font-weight: 600; border: 1px solid #c8d0dc; border-radius: 999px; padding: 6px 10px; background: rgba(255,255,255,0.82); }
     .map-caption { position: absolute; left: 10px; right: 10px; bottom: 8px; z-index: 1; color: var(--ink-soft); font-size: 12px; text-align: center; background: rgba(255, 255, 255, 0.88); border: 1px solid #d8dde6; border-radius: 6px; padding: 5px 6px; }
     @media (max-width: 1080px) { .location-map-grid { grid-template-columns: 1fr; } .trajectory-panel { min-height: 0; } }
-    @media (max-width: 980px) { .dashboard-grid, .d1-overview, .progress-layout, .field-operations-grid, .field-evidence-grid, .details-grid { grid-template-columns: 1fr; } .details-grid .wide { grid-column: auto; } .d1-summary-pane { order: 1; } .d1-map-pane { order: 2; } .d1-primary-row { grid-template-columns: 1fr; } .history-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 980px) { .dashboard-grid, .d1-overview, .progress-layout, .field-operations-grid, .field-evidence-grid, .photo-grid, .details-grid { grid-template-columns: 1fr; } .details-grid .wide { grid-column: auto; } .d1-summary-pane { order: 1; } .d1-map-pane { order: 2; } .d1-primary-row { grid-template-columns: 1fr; } .history-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 760px) { .evidence-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 560px) { header { position: static; } .dashboard-shell { padding: 10px; } .d1-grid, .evidence-lanes, .trajectory-summary-grid, .history-filter-grid { grid-template-columns: 1fr; } .metric { grid-template-columns: 112px minmax(0, 1fr); } input { width: min(100%, 280px); } select { width: 100%; min-width: 0; } button, select { min-height: 44px; } #amapLiveMap { min-height: 360px; } .location-map-grid { padding: 10px; } .location-history-browser { margin: 0 10px 10px; } .map-legend { left: 10px; right: auto; } .header-actions { width: 100%; justify-content: space-between; } .section-head { align-items: flex-start; flex-direction: column; } .section-actions, .device-picker { width: 100%; justify-content: flex-start; } .map-import-status { max-width: 100%; text-align: left; } .dashboard-details > summary { align-items: flex-start; } }
   </style>
@@ -9681,6 +10585,72 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
             <h3>当前测试批次</h3>
             <div id="runContext"><span class="empty">正在等待测试批次</span></div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="photoOperations" class="focus-panel" aria-labelledby="photoOperationsTitle">
+      <div class="section-head">
+        <div>
+          <h2 id="photoOperationsTitle">摄像头采集</h2>
+          <span class="section-kicker">授权会话内单次拍照、私有预览与关联观测导出</span>
+        </div>
+        <div class="section-actions">
+          <button id="refreshPhotos" class="secondary" type="button">刷新照片</button>
+          <button id="exportPhotos" class="secondary" type="button" disabled>导出当前结果</button>
+        </div>
+      </div>
+      <div class="photo-grid">
+        <div class="operation-card photo-controls">
+          <h3>采集控制</h3>
+          <div class="photo-field">
+            <label for="photoGuardianTokenInput">Guardian 照片控制令牌（仅本浏览器会话）</label>
+            <input id="photoGuardianTokenInput" type="password" autocomplete="off" placeholder="不使用设备上传令牌" />
+          </div>
+          <div class="photo-actions">
+            <button id="savePhotoGuardianToken" class="secondary" type="button">保存照片授权</button>
+          </div>
+          <div class="photo-field">
+            <label for="photoRetentionDeadline">照片保留截止时间（必填）</label>
+            <input id="photoRetentionDeadline" type="datetime-local" step="1" />
+          </div>
+          <div class="photo-actions">
+            <button id="capturePhotoOnce" type="button">拍一张</button>
+          </div>
+          <div id="photoCommandStatus" class="photo-status warn" role="status" aria-live="polite">选择设备并明确保留截止时间后，可提交一次有时效的拍照请求。</div>
+          <div class="photo-field">
+            <label for="photoTimerEnabled">定时采集</label>
+            <select id="photoTimerEnabled">
+              <option value="disabled" selected>关闭</option>
+              <option value="enabled">开启</option>
+            </select>
+          </div>
+          <div class="photo-field">
+            <label for="photoTimerInterval">采集间隔（秒）</label>
+            <input id="photoTimerInterval" type="number" min="60" step="60" value="300" disabled />
+          </div>
+          <div class="photo-field">
+            <label for="photoTimerMaxPhotos">本会话最多照片数</label>
+            <input id="photoTimerMaxPhotos" type="number" min="1" max="1000" step="1" value="288" disabled />
+          </div>
+          <div class="photo-actions">
+            <button id="applyPhotoTimer" class="secondary" type="button">提交定时配置</button>
+          </div>
+          <div id="photoTimerStatus" class="photo-status warn">实际设备状态：未报告；提交后先显示“待设备执行”，只有收到 ACK 才显示设备回执。重启后的持久化、可信 UTC 重新计时与不补拍语义只依据设备 ACK 和后续实际照片，不由页面推断。</div>
+          <div class="photo-note">隐私边界：每次采集先建立绑定当前设备的授权会话；训练用途固定关闭。保留期限到期后删除 JPEG，仅保留审计元数据。</div>
+        </div>
+        <div class="operation-card">
+          <h3>最近照片与采集结果</h3>
+          <div class="photo-actions">
+            <div class="photo-field" style="flex:1 1 260px">
+              <label for="photoSessionFilter">采集会话（留空查看当前设备全部）</label>
+              <input id="photoSessionFilter" autocomplete="off" placeholder="authorization_session_id" />
+            </div>
+          </div>
+          <div id="photoActualStatus" class="photo-status warn">尚未查询；拍照请求已发送、设备已拍摄和服务端已保存是三个不同状态。</div>
+          <div id="photoPreview" class="photo-preview"><span class="empty">暂无可预览照片</span></div>
+          <div id="photoPreviewMeta" class="photo-note">尚无照片元数据</div>
+          <div id="photoList" class="photo-list"><span class="empty">选择设备后加载照片</span></div>
         </div>
       </div>
     </section>
@@ -9868,12 +10838,23 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       const token = currentToken();
       return token ? { Authorization: `Bearer ${token}` } : {};
     }
+    function photoGuardianToken() {
+      return sessionStorage.getItem('egolinkPhotoGuardianToken') || '';
+    }
+    function photoAuthHeaders() {
+      const token = photoGuardianToken();
+      return token ? {Authorization: `Bearer ${token}`} : {};
+    }
     const D2_MAP_REVIEW_KEY = 'egolink.d2.map_review.v1';
     const D2_MAP_REVIEW_DISABLED_KEY = 'egolink.d2.map_review.disabled.v1';
     const D2_CAPTURE_KEY = 'egolink.d2.reference_capture.v1';
     const D2_MANIFEST_MAX_BYTES = 262144;
     const D2_REFERENCE_POINT_LIMIT = 16;
     const DASHBOARD_DEVICE_KEY = 'egolink.dashboard.device.v1';
+    const PHOTO_COMMAND_TTL_MS = 2 * 60 * 1000;
+    const PHOTO_CONFIG_VERSION = 'photo-control-v0.1';
+    const PHOTO_TIMER_DEFAULT_INTERVAL_SECONDS = 300;
+    const PHOTO_TIMER_DEFAULT_MAX_PHOTOS = 288;
     const AMAP_JS_API_KEY = '__AMAP_JS_API_KEY__';
     const AMAP_JS_API_CALLBACK = '__egolinkAmapJsApiReady';
     const AMAP_JS_API_SCRIPT_ID = 'egolink-amap-js-api';
@@ -9900,6 +10881,11 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
     const trajectorySelectionByDevice = new Map();
     const locationHistoryByDevice = new Map();
     let locationHistoryActiveDeviceId = '';
+    let photoRequestGeneration = 0;
+    let photoPreviewGeneration = 0;
+    let photoPreviewObjectUrl = '';
+    let currentPhotoExport = null;
+    let currentPhotoSession = null;
     function selectDashboardDevice(devices, currentRun = {}, preferredDeviceId = selectedDashboardDeviceId) {
       const available = Array.isArray(devices)
         ? devices.filter(device => device && device.device_id)
@@ -10078,6 +11064,449 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         lastSuccessfulDashboardState.devices || [],
         lastSuccessfulDashboardState.current_run || {},
       );
+    }
+    function setPhotoStatus(element, message, state = '') {
+      element.textContent = message;
+      element.className = `photo-status ${state}`.trim();
+    }
+    function photoControlId(prefix) {
+      const random = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2, 14);
+      return `${prefix}-${Date.now().toString(36)}-${random}`.slice(0, 128);
+    }
+    function photoRetention() {
+      const raw = photoRetentionDeadline.value;
+      if (!raw) throw new Error('请先明确照片保留截止时间');
+      const parsed = new Date(raw);
+      const expiresAtUnixMs = parsed.getTime();
+      if (!Number.isFinite(expiresAtUnixMs) || expiresAtUnixMs <= Date.now() + 60_000) {
+        throw new Error('照片保留截止时间必须至少在 1 分钟以后');
+      }
+      return {retention_expires_at: parsed.toISOString(), expires_at_unix_ms: expiresAtUnixMs};
+    }
+    async function photoJson(url, options = {}) {
+      const response = await fetch(url, {
+        ...options,
+        headers: {...photoAuthHeaders(), ...(options.headers || {})},
+        cache: 'no-store',
+      });
+      let body = {};
+      try {
+        body = await response.json();
+      } catch (_error) {
+        body = {};
+      }
+      if (!response.ok) {
+        const error = new Error(body.detail || body.error || `HTTP ${response.status}`);
+        error.code = body.error || `http_${response.status}`;
+        throw error;
+      }
+      return body;
+    }
+    async function authorizePhotoSession(deviceId, retention) {
+      const session = {
+        authorization_session_id: photoControlId('photo-session'),
+        retention_expires_at: retention.retention_expires_at,
+        training_allowed: false,
+      };
+      const result = await photoJson(
+        `/api/v1/devices/${encodeURIComponent(deviceId)}/photos/sessions`,
+        {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(session),
+        },
+      );
+      currentPhotoSession = result.authorization_session || session;
+      photoSessionFilter.value = session.authorization_session_id;
+      return session;
+    }
+    function photoCommandState(command) {
+      if (!command) return {text: '尚无服务端照片指令', state: 'warn', applied: false};
+      const status = String(command.status || 'unknown').toLowerCase();
+      const ack = command.ack && typeof command.ack === 'object' ? command.ack : {};
+      const ackStatus = String(ack.status || '').toLowerCase();
+      if (status === 'pending') {
+        return {text: `指令 ${command.cmd_id} 已持久化，待设备执行；尚未 ACK`, state: 'warn', applied: false};
+      }
+      if (status === 'expired') {
+        return {text: `指令 ${command.cmd_id} 已过期，不能视为设备已执行`, state: 'bad', applied: false};
+      }
+      const verifiedApplied = status === 'applied'
+        && ackStatus === 'applied'
+        && ['terminal_ack_applied', 'terminal_state_refresh_applied'].includes(ack.server_disposition);
+      if (verifiedApplied) {
+        return {text: `指令 ${command.cmd_id} 已收到设备 ACK：applied`, state: 'ok', applied: true};
+      }
+      if (status === 'applied' || ackStatus === 'applied' || ack.apply_status === 'applied') {
+        return {text: `指令 ${command.cmd_id} 的 applied 记录不完整，不作为已生效事实`, state: 'warn', applied: false};
+      }
+      if (['error', 'failed', 'rejected'].includes(status) || ['error', 'failed', 'rejected'].includes(ackStatus)) {
+        return {text: `指令 ${command.cmd_id} 返回错误：${ack.error_code || ackStatus || status}`, state: 'bad', applied: false};
+      }
+      return {text: `指令 ${command.cmd_id} 已收到 ACK：${ackStatus || status}；回执未明确 applied`, state: 'warn', applied: false};
+    }
+    function clearPhotoPreview() {
+      photoPreviewGeneration += 1;
+      if (photoPreviewObjectUrl) {
+        URL.revokeObjectURL(photoPreviewObjectUrl);
+        photoPreviewObjectUrl = '';
+      }
+      photoPreview.innerHTML = '<span class="empty">暂无可预览照片</span>';
+      photoPreviewMeta.textContent = '尚无照片元数据';
+    }
+    function renderPhotoList(data, commands, cameraRuntimeState) {
+      const photos = Array.isArray(data.photos) ? data.photos : [];
+      const captureCommand = commands.find(command => command.cmd === 'capture_photo_once');
+      const latestTimerCommand = commands.find(command => command.cmd === 'configure_photo_timer');
+      const latestAppliedTimerCommand = commands.find(command =>
+        command.cmd === 'configure_photo_timer' && photoCommandState(command).applied
+      );
+      const captureState = photoCommandState(captureCommand);
+      setPhotoStatus(photoCommandStatus, captureState.text, captureState.state);
+      const timerState = photoCommandState(latestTimerCommand);
+      const appliedTimerState = photoCommandState(latestAppliedTimerCommand);
+      const runtimeEnvelope = cameraRuntimeState && cameraRuntimeState.envelope && typeof cameraRuntimeState.envelope === 'object'
+        ? cameraRuntimeState.envelope : {};
+      const runtimePayload = runtimeEnvelope.payload && typeof runtimeEnvelope.payload === 'object'
+        ? runtimeEnvelope.payload : {};
+      const runtimeTimerCandidate = runtimePayload.timer_state && typeof runtimePayload.timer_state === 'object'
+        ? runtimePayload.timer_state : null;
+      const runtimeTimerKeys = runtimeTimerCandidate ? Object.keys(runtimeTimerCandidate).sort() : [];
+      const expectedRuntimeTimerKeys = [
+        'captured_count', 'config_version', 'enabled', 'interval_seconds',
+        'max_photos', 'session_expires_at_unix_ms', 'state_reason', 'trusted_utc',
+      ];
+      const runtimeTimer = runtimeTimerCandidate
+        && JSON.stringify(runtimeTimerKeys) === JSON.stringify(expectedRuntimeTimerKeys)
+        && typeof runtimeTimerCandidate.config_version === 'string'
+        && /^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$/.test(runtimeTimerCandidate.config_version || '')
+        && typeof runtimeTimerCandidate.enabled === 'boolean'
+        && Number.isInteger(runtimeTimerCandidate.interval_seconds)
+        && runtimeTimerCandidate.interval_seconds >= 60
+        && runtimeTimerCandidate.interval_seconds <= 86400
+        && Number.isSafeInteger(runtimeTimerCandidate.session_expires_at_unix_ms)
+        && runtimeTimerCandidate.session_expires_at_unix_ms > 0
+        && Number.isInteger(runtimeTimerCandidate.max_photos)
+        && runtimeTimerCandidate.max_photos >= 1
+        && runtimeTimerCandidate.max_photos <= 1000
+        && Number.isInteger(runtimeTimerCandidate.captured_count)
+        && runtimeTimerCandidate.captured_count >= 0
+        && runtimeTimerCandidate.captured_count <= runtimeTimerCandidate.max_photos
+        && typeof runtimeTimerCandidate.state_reason === 'string'
+        && /^[a-z][a-z0-9_]{0,63}$/.test(runtimeTimerCandidate.state_reason)
+        && typeof runtimeTimerCandidate.trusted_utc === 'boolean'
+        ? runtimeTimerCandidate : null;
+      const ackTimer = appliedTimerState.applied && latestAppliedTimerCommand
+        && latestAppliedTimerCommand.ack
+        && typeof latestAppliedTimerCommand.ack.timer_state === 'object'
+        ? latestAppliedTimerCommand.ack.timer_state : null;
+      const runtimeReceivedAt = cameraRuntimeState && cameraRuntimeState.server_received_at;
+      const runtimeAfterAck = runtimeReceivedAt && latestAppliedTimerCommand
+        && latestAppliedTimerCommand.updated_at
+        && Number.isFinite(Date.parse(runtimeReceivedAt))
+        && Number.isFinite(Date.parse(latestAppliedTimerCommand.updated_at))
+        && Date.parse(runtimeReceivedAt) >= Date.parse(latestAppliedTimerCommand.updated_at);
+      const runtimeMatchesApplied = Boolean(
+        runtimeTimer && ackTimer && runtimeEnvelope.status === 'observed'
+        && runtimeTimer.config_version === ackTimer.config_version
+        && runtimeTimer.captured_count >= ackTimer.captured_count
+        && runtimeAfterAck
+      );
+      const reportedTimer = runtimeMatchesApplied ? runtimeTimer : ackTimer;
+      const reportedAt = runtimeMatchesApplied
+        ? (runtimeEnvelope.timestamp_utc || cameraRuntimeState.server_received_at)
+        : latestAppliedTimerCommand && latestAppliedTimerCommand.updated_at;
+      const reportedSessionDeadlineDate = reportedTimer
+        ? new Date(reportedTimer.session_expires_at_unix_ms) : null;
+      const reportedSessionDeadline = reportedSessionDeadlineDate
+        && Number.isFinite(reportedSessionDeadlineDate.getTime())
+        ? reportedSessionDeadlineDate.toISOString() : null;
+      const reportedSessionExpired = Boolean(
+        reportedTimer && reportedTimer.enabled
+        && Date.now() >= reportedTimer.session_expires_at_unix_ms
+      );
+      const staleRuntimeNote = runtimeTimer && !runtimeMatchesApplied
+        ? ` 设备另有一条未绑定到最新 verified applied 指令的历史状态（配置 ${runtimeTimer.config_version || '未知'}），不作为当前生效事实。`
+        : '';
+      const actualTimerBase = reportedTimer
+        ? `设备最近报告 ${formatDashboardDateTime(reportedAt)}：定时采集${reportedTimer.enabled ? '开启' : '关闭'}，配置 ${reportedTimer.config_version || '未知'}，间隔 ${reportedTimer.interval_seconds || '未知'} 秒，会话截止 ${formatDashboardDateTime(reportedSessionDeadline)}，已拍 ${reportedTimer.captured_count ?? '未知'} / ${reportedTimer.max_photos ?? '未知'}，原因 ${reportedTimer.state_reason || '未报告'}，可信 UTC ${reportedTimer.trusted_utc === true ? '是' : '否'}。${reportedSessionExpired ? ' 最后报告为开启，但授权会话截止已过；等待设备状态确认，不能视为当前仍在采集。' : ''}`
+        : appliedTimerState.applied
+          ? `设备曾 ACK applied，但未回报可核验的 timer_state；不能据请求参数推断当前仍生效。`
+          : `${timerState.text}。设备实际配置仍为未报告。`;
+      const pendingTimerNote = latestTimerCommand && latestAppliedTimerCommand
+        && latestTimerCommand.cmd_id !== latestAppliedTimerCommand.cmd_id
+        ? ` 最新定时请求：${timerState.text}。在设备 ACK 前，上述已验证实际配置仍然有效。`
+        : '';
+      const actualTimer = `${actualTimerBase}${staleRuntimeNote}${pendingTimerNote}`;
+      const actualTimerState = reportedTimer
+        ? (reportedTimer.state_reason === 'state_error' ? 'bad' :
+          reportedSessionExpired ? 'warn' : reportedTimer.enabled ? 'ok' : 'warn')
+        : timerState.state;
+      setPhotoStatus(photoTimerStatus, actualTimer, actualTimerState);
+      exportPhotos.disabled = !photos.length;
+      photoList.innerHTML = photos.map(photo => {
+        const content = photo.content || {};
+        const backfillLabel = photo.backfill && photo.backfill.is_backfill ? ' · 延迟补传' : '';
+        return `<button type="button" class="photo-list-item" data-photo-id="${escapeHtml(photo.photo_id)}">
+          <strong>${escapeHtml(photo.photo_id)} · ${escapeHtml(photo.capture_result)}</strong>
+          <span>拍摄 ${escapeHtml(formatDashboardDateTime(photo.event_utc))} · 接收 ${escapeHtml(formatDashboardDateTime(photo.server_received_at))}${backfillLabel} · ${escapeHtml(photo.trigger_reason)} · server ${escapeHtml(content.status || 'unknown')}</span>
+        </button>`;
+      }).join('') || '<span class="empty">当前设备/会话尚无照片观测</span>';
+      photoList.querySelectorAll('[data-photo-id]').forEach(button => {
+        button.addEventListener('click', () => void loadPhotoPreview(button.dataset.photoId));
+      });
+      const latest = photos[0];
+      if (!latest) {
+        setPhotoStatus(
+          photoActualStatus,
+          captureCommand && captureCommand.status === 'pending'
+            ? '拍照命令待设备执行；尚未收到本会话的拍照结果。'
+            : '尚无真实照片观测；不会用历史图片或静态示例代替。',
+          'warn',
+        );
+        clearPhotoPreview();
+        return;
+      }
+      const content = latest.content || {};
+      const uploadAttempts = latest.upload_attempts || {};
+      const aggregate = data.aggregate || {};
+      const pendingUploads = Number(aggregate.pending_content_count || 0);
+      const corruptContent = Number(aggregate.corrupt_content_count || 0);
+      let statusText = `最近收到结果 ${latest.capture_result}；拍摄 ${formatDashboardDateTime(latest.event_utc)}；服务端接收 ${formatDashboardDateTime(latest.server_received_at)}；设备保存 ${latest.local_save_status}；服务端内容 ${content.status || 'unknown'}；本筛选范围待上传 ${pendingUploads}，损坏待同 ID 修复 ${corruptContent}。`;
+      let statusClass = content.status === 'stored' ? 'ok' : 'warn';
+      if (latest.capture_result === 'capture_failed' || latest.local_save_status === 'save_failed'
+          || latest.capture_result === 'outcome_unknown' || latest.local_save_status === 'unknown') statusClass = 'bad';
+      if (latest.capture_result === 'outcome_unknown') statusText += ' 设备在拍摄事务中重启，无法证明当时是否完成拍摄或保存；该结果不会伪装成未尝试或成功。';
+      if (content.status === 'stored') statusText += ` JPEG 已按 ${content.verification_scope || '未报告范围'} 校验并持久保存；浏览器成功解码仍是独立实机验收事实。`;
+      else if (content.status === 'pending') statusText += ' 元数据已到达，JPEG 仍待上传。';
+      else if (content.status === 'not_expected') statusText += ' 本次未形成可上传 JPEG，不计入待传。';
+      else if (content.status === 'expired' && content.purge_state === 'complete') statusText += ' 保留期限已到，JPEG 删除已完成。';
+      else if (content.status === 'expired') {
+        statusText += ` 保留期限已到且访问已撤销；物理删除状态 ${content.purge_state || '未报告'}，后台将继续重试。`;
+        statusClass = 'bad';
+      }
+      else if (content.status === 'corrupt') {
+        statusText += ' 已存内容校验失败，等待同一可信照片有界修复。';
+        statusClass = 'bad';
+      }
+      if (uploadAttempts.last_error_code) statusText += ` 最近上传失败 ${uploadAttempts.last_error_code}（${formatDashboardDateTime(uploadAttempts.last_attempt_at)}）。`;
+      if (latest.backfill && latest.backfill.is_backfill) statusText += ` 这是延迟补传，接收比拍摄晚 ${latest.backfill.age_seconds} 秒，不代表当前位置或刚刚拍摄。`;
+      setPhotoStatus(photoActualStatus, statusText, statusClass);
+      if (content.status === 'stored') void loadPhotoPreview(latest.photo_id);
+      else clearPhotoPreview();
+    }
+    async function loadPhotoPreview(photoId) {
+      const selectedDevice = selectedDashboardDevice();
+      if (!selectedDevice || !photoId) return;
+      const generation = photoRequestGeneration;
+      const previewGeneration = ++photoPreviewGeneration;
+      try {
+        const response = await fetch(
+          `/api/v1/devices/${encodeURIComponent(selectedDevice.device_id)}/photos/${encodeURIComponent(photoId)}/content`,
+          {headers: photoAuthHeaders(), cache: 'no-store'},
+        );
+        if (!response.ok) throw new Error(`照片预览 HTTP ${response.status}`);
+        const blob = await response.blob();
+        if (generation !== photoRequestGeneration || previewGeneration !== photoPreviewGeneration) return;
+        const objectUrl = URL.createObjectURL(blob);
+        const image = document.createElement('img');
+        image.src = objectUrl;
+        image.alt = `照片 ${photoId}`;
+        try {
+          await image.decode();
+        } catch (_) {
+          URL.revokeObjectURL(objectUrl);
+          throw new Error('照片字节已取得，但浏览器无法解码 JPEG');
+        }
+        if (generation !== photoRequestGeneration || previewGeneration !== photoPreviewGeneration) {
+          URL.revokeObjectURL(objectUrl);
+          return;
+        }
+        clearPhotoPreview();
+        photoPreviewObjectUrl = objectUrl;
+        photoPreview.innerHTML = '';
+        photoPreview.appendChild(image);
+        const metadata = currentPhotoExport && Array.isArray(currentPhotoExport.photos)
+          ? currentPhotoExport.photos.find(photo => photo.photo_id === photoId) : null;
+        photoPreviewMeta.textContent = metadata
+          ? `${photoId} · 拍摄 ${formatDashboardDateTime(metadata.event_utc)} · ${metadata.trigger_reason} · ${blob.size} bytes · 浏览器已解码 · 仅授权会话内预览`
+          : `${photoId} · ${blob.size} bytes · 浏览器已解码 · 仅授权会话内预览`;
+      } catch (error) {
+        if (generation !== photoRequestGeneration || previewGeneration !== photoPreviewGeneration) return;
+        clearPhotoPreview();
+        const detail = error instanceof Error ? error.message : '照片预览失败';
+        photoPreviewMeta.textContent = detail;
+        setPhotoStatus(photoActualStatus, `服务端照片预览失败：${detail}`, 'bad');
+      }
+    }
+    async function loadPhotosForSelectedDevice() {
+      const selectedDevice = selectedDashboardDevice();
+      const generation = ++photoRequestGeneration;
+      clearPhotoPreview();
+      if (!selectedDevice) {
+        photoList.innerHTML = '<span class="empty">请先选择设备</span>';
+        setPhotoStatus(photoActualStatus, '尚未选择设备', 'warn');
+        return;
+      }
+      const sessionId = photoSessionFilter.value.trim();
+      if (sessionId && !/^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$/.test(sessionId)) {
+        setPhotoStatus(photoActualStatus, '采集会话标识格式无效', 'bad');
+        return;
+      }
+      setPhotoStatus(photoActualStatus, '正在查询私有照片元数据…', 'warn');
+      try {
+        const query = new URLSearchParams({limit: '50'});
+        if (sessionId) query.set('session_id', sessionId);
+        const prefix = `/api/v1/devices/${encodeURIComponent(selectedDevice.device_id)}/photos`;
+        const [data, commandData] = await Promise.all([
+          photoJson(`${prefix}?${query.toString()}`),
+          photoJson(`${prefix}/commands`),
+        ]);
+        if (generation !== photoRequestGeneration) return;
+        currentPhotoExport = data;
+        renderPhotoList(
+          data,
+          Array.isArray(commandData.commands) ? commandData.commands : [],
+          commandData.camera_runtime_state || null,
+        );
+      } catch (error) {
+        if (generation !== photoRequestGeneration) return;
+        currentPhotoExport = null;
+        exportPhotos.disabled = true;
+        photoList.innerHTML = '<span class="empty">照片查询失败</span>';
+        setPhotoStatus(
+          photoActualStatus,
+          `照片查询失败：${error && error.code ? error.code : error}`,
+          'bad',
+        );
+      }
+    }
+    async function submitCapturePhotoOnce() {
+      const selectedDevice = selectedDashboardDevice();
+      if (!selectedDevice) {
+        setPhotoStatus(photoCommandStatus, '请先选择设备', 'bad');
+        return;
+      }
+      capturePhotoOnce.disabled = true;
+      try {
+        const retention = photoRetention();
+        setPhotoStatus(photoCommandStatus, '正在建立本次 Guardian 授权会话…', 'warn');
+        const session = await authorizePhotoSession(selectedDevice.device_id, retention);
+        const issuedAt = Date.now();
+        const result = await photoJson(
+          `/api/v1/devices/${encodeURIComponent(selectedDevice.device_id)}/photos/commands/capture`,
+          {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              cmd_id: photoControlId('capture-photo'),
+              expires_at_unix_ms: Math.min(issuedAt + PHOTO_COMMAND_TTL_MS, retention.expires_at_unix_ms),
+              payload: {
+                authorization_session_id: session.authorization_session_id,
+                retention_expires_at: retention.retention_expires_at,
+                training_allowed: false,
+                trigger_reason: 'web_manual',
+              },
+            }),
+          },
+        );
+        const state = photoCommandState(result.command);
+        setPhotoStatus(photoCommandStatus, state.text, state.state);
+        await loadPhotosForSelectedDevice();
+      } catch (error) {
+        setPhotoStatus(
+          photoCommandStatus,
+          `拍照请求未入队：${error instanceof Error ? error.message : error}`,
+          'bad',
+        );
+      } finally {
+        capturePhotoOnce.disabled = false;
+      }
+    }
+    async function submitPhotoTimer() {
+      const selectedDevice = selectedDashboardDevice();
+      if (!selectedDevice) {
+        setPhotoStatus(photoTimerStatus, '请先选择设备', 'bad');
+        return;
+      }
+      applyPhotoTimer.disabled = true;
+      try {
+        const retention = photoRetention();
+        const enabled = photoTimerEnabled.value === 'enabled';
+        const intervalSeconds = Number(photoTimerInterval.value || PHOTO_TIMER_DEFAULT_INTERVAL_SECONDS);
+        const maxPhotos = Number(photoTimerMaxPhotos.value || PHOTO_TIMER_DEFAULT_MAX_PHOTOS);
+        if (!Number.isInteger(intervalSeconds) || intervalSeconds < 60 || intervalSeconds > 86400) {
+          throw new Error('定时间隔必须是 60–86400 秒的整数');
+        }
+        if (!Number.isInteger(maxPhotos) || maxPhotos < 1 || maxPhotos > 1000) {
+          throw new Error('照片上限必须是 1–1000 的整数');
+        }
+        setPhotoStatus(photoTimerStatus, '正在建立本次 Guardian 授权会话…', 'warn');
+        const session = await authorizePhotoSession(selectedDevice.device_id, retention);
+        const issuedAt = Date.now();
+        const result = await photoJson(
+          `/api/v1/devices/${encodeURIComponent(selectedDevice.device_id)}/photos/commands/timer`,
+          {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+              cmd_id: photoControlId('photo-timer'),
+              expires_at_unix_ms: Math.min(issuedAt + PHOTO_COMMAND_TTL_MS, retention.expires_at_unix_ms),
+              payload: {
+                authorization_session_id: session.authorization_session_id,
+                config_version: `${PHOTO_CONFIG_VERSION}-${issuedAt.toString(36)}`,
+                enabled,
+                interval_seconds: intervalSeconds,
+                session_expires_at_unix_ms: retention.expires_at_unix_ms,
+                retention_expires_at: retention.retention_expires_at,
+                max_photos: maxPhotos,
+                training_allowed: false,
+              },
+            }),
+          },
+        );
+        const state = photoCommandState(result.command);
+        const prefix = enabled ? '开启配置' : '停止配置';
+        setPhotoStatus(photoTimerStatus, `${prefix}：${state.text}`, state.state);
+        await loadPhotosForSelectedDevice();
+      } catch (error) {
+        setPhotoStatus(
+          photoTimerStatus,
+          `定时配置未入队：${error instanceof Error ? error.message : error}`,
+          'bad',
+        );
+      } finally {
+        applyPhotoTimer.disabled = false;
+      }
+    }
+    async function exportCurrentPhotos() {
+      const selectedDevice = selectedDashboardDevice();
+      if (!selectedDevice) return;
+      exportPhotos.disabled = true;
+      try {
+        const query = new URLSearchParams();
+        const sessionId = photoSessionFilter.value.trim();
+        if (sessionId) query.set('session_id', sessionId);
+        const response = await fetch(
+          `/api/v1/devices/${encodeURIComponent(selectedDevice.device_id)}/photos/export.json?${query.toString()}`,
+          {headers: photoAuthHeaders(), cache: 'no-store'},
+        );
+        if (!response.ok) throw new Error(`导出 HTTP ${response.status}`);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `egolink-${selectedDevice.device_id}-photo-observations.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        setPhotoStatus(photoActualStatus, '已完整导出当前设备/会话的照片元数据与关联 collection observation；不包含 JPEG。', 'ok');
+      } catch (error) {
+        setPhotoStatus(photoActualStatus, `照片导出失败：${error}`, 'bad');
+      } finally {
+        exportPhotos.disabled = !(currentPhotoExport && currentPhotoExport.photos && currentPhotoExport.photos.length);
+      }
     }
     function localDateTimeValue(isoValue) {
       const parsed = new Date(isoValue || '');
@@ -10373,6 +11802,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
         lastSuccessfulDashboardState.raw_frames || [],
       );
       renderAmapForSelectedDevice(selectedDevice);
+      void loadPhotosForSelectedDevice();
       if (selectedDevice) {
         const historyState = locationHistoryStateForDevice(selectedDevice.device_id);
         if (!historyState.loaded && !historyState.loading) {
@@ -10384,13 +11814,46 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
       renderSelectedDevicePanels();
     }
     tokenInput.value = currentToken();
+    photoGuardianTokenInput.value = photoGuardianToken();
     saveToken.addEventListener('click', () => {
       localStorage.setItem('egolinkHubToken', tokenInput.value.trim());
       refresh();
     });
+    savePhotoGuardianToken.addEventListener('click', () => {
+      const value = photoGuardianTokenInput.value.trim();
+      if (value) sessionStorage.setItem('egolinkPhotoGuardianToken', value);
+      else sessionStorage.removeItem('egolinkPhotoGuardianToken');
+      setPhotoStatus(
+        photoCommandStatus,
+        value
+          ? 'Guardian 照片授权已保存到当前浏览器会话；尚未发送设备命令。'
+          : 'Guardian 照片授权已从当前浏览器会话清除。',
+        value ? 'ok' : 'warn',
+      );
+      void loadPhotosForSelectedDevice();
+    });
     refreshDashboard.addEventListener('click', refresh);
+    refreshPhotos.addEventListener('click', () => void loadPhotosForSelectedDevice());
+    capturePhotoOnce.addEventListener('click', () => void submitCapturePhotoOnce());
+    applyPhotoTimer.addEventListener('click', () => void submitPhotoTimer());
+    exportPhotos.addEventListener('click', () => void exportCurrentPhotos());
+    photoTimerEnabled.addEventListener('change', () => {
+      const enabled = photoTimerEnabled.value === 'enabled';
+      photoTimerInterval.disabled = !enabled;
+      photoTimerMaxPhotos.disabled = !enabled;
+      setPhotoStatus(
+        photoTimerStatus,
+        enabled
+          ? '页面拟提交开启配置；设备实际状态仍为未报告，需提交并等待 ACK。'
+          : '页面拟提交停止配置；在设备 ACK applied 前不能声称已经停止。',
+        'warn',
+      );
+    });
+    photoSessionFilter.addEventListener('change', () => void loadPhotosForSelectedDevice());
     deviceSelector.addEventListener('change', () => {
       selectedDashboardDeviceId = deviceSelector.value;
+      photoSessionFilter.value = '';
+      currentPhotoSession = null;
       if (selectedDashboardDeviceId) {
         localStorage.setItem(DASHBOARD_DEVICE_KEY, selectedDashboardDeviceId);
       } else {
@@ -12556,6 +14019,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--port", type=int, default=8790)
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     parser.add_argument(
+        "--photo-root",
+        type=Path,
+        default=(
+            Path(os.environ["EGOLINK_PHOTO_ROOT"])
+            if os.environ.get("EGOLINK_PHOTO_ROOT")
+            else None
+        ),
+        help=(
+            "Private photo directory (default: a non-public photos directory "
+            "beside the SQLite database)."
+        ),
+    )
+    parser.add_argument(
         "--token-env",
         default="EGOLINK_MESSAGE_HUB_TOKEN",
         help="Environment variable containing the optional bearer token.",
@@ -12573,7 +14049,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    store = MessageHubStore(args.db)
+    store = MessageHubStore(args.db, photo_root=args.photo_root)
     token = os.environ.get(args.token_env) or None
     guardian_bindings_path = os.environ.get(args.guardian_bindings_env) or None
     guardian_authorizer = (
@@ -12591,6 +14067,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(f"Ego Link Message Hub running at http://{args.host}:{args.port}")
     print(f"SQLite database: {args.db}")
+    print(f"Private photo root: {store.photos.root}")
     if token:
         print("Bearer token authentication: enabled")
     else:
@@ -12599,12 +14076,14 @@ def main(argv: list[str] | None = None) -> int:
         print("Guardian-device binding authorization: enabled")
     else:
         print("Guardian-device binding authorization: disabled")
+    store.photos.start_retention_maintenance()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nStopped.")
     finally:
         server.server_close()
+        store.photos.stop_retention_maintenance()
     return 0
 
 

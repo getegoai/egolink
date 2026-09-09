@@ -16,6 +16,7 @@ MESSAGE_HUB_SCHEMAS = {
 }
 
 RAW_FRAME_SCHEMA = "message_hub_raw_frame_record.schema.json"
+ACK_RAW_RESPONSE_SCHEMA = "message_hub_ack_raw_response.schema.json"
 
 
 class MessageHubContractTests(unittest.TestCase):
@@ -144,6 +145,32 @@ class MessageHubContractTests(unittest.TestCase):
         self.assertIn("partial", parse_statuses)
         self.assertIn("checksum_failed", parse_statuses)
         self.assertIn("malformed", parse_statuses)
+
+    def test_raw_ack_acceptance_response_has_identity_bound_fields(self) -> None:
+        schema = self.load_schema(ACK_RAW_RESPONSE_SCHEMA)
+        self.assertEqual(
+            schema["$schema"], "https://json-schema.org/draft/2020-12/schema"
+        )
+        self.assertTrue(schema["$id"].endswith(ACK_RAW_RESPONSE_SCHEMA))
+        self.assertEqual(set(schema["required"]), {"ok", "raw_frame", "command_ack"})
+        outcome = schema["properties"]["command_ack"]
+        self.assertEqual(
+            set(outcome["required"]),
+            {
+                "disposition",
+                "command_status",
+                "posted_ack_sha256",
+                "accepted_ack_sha256",
+            },
+        )
+        self.assertTrue(
+            {
+                "newly_applied",
+                "refresh_applied",
+                "idempotent_already_applied",
+                "conflict_ignored",
+            }.issubset(outcome["properties"]["disposition"]["enum"])
+        )
 
 
 if __name__ == "__main__":

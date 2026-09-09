@@ -41,8 +41,136 @@
       "type": "string",
       "minLength": 1
     },
+    "expires_at_unix_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
     "payload": {
       "type": "object"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "cmd": {
+            "const": "capture_photo_once"
+          }
+        },
+        "required": [
+          "cmd"
+        ]
+      },
+      "then": {
+        "required": [
+          "device_id",
+          "created_at",
+          "expires_at_unix_ms",
+          "payload"
+        ],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "authorization_session_id",
+              "retention_expires_at",
+              "training_allowed",
+              "trigger_reason"
+            ],
+            "properties": {
+              "authorization_session_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+              },
+              "retention_expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "training_allowed": {
+                "const": false
+              },
+              "trigger_reason": {
+                "const": "web_manual"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cmd": {
+            "const": "configure_photo_timer"
+          }
+        },
+        "required": [
+          "cmd"
+        ]
+      },
+      "then": {
+        "$comment": "The device persists this configuration, restarts its interval only with trusted UTC before session expiry, and never backfills missed capture points.",
+        "required": [
+          "device_id",
+          "created_at",
+          "expires_at_unix_ms",
+          "payload"
+        ],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "authorization_session_id",
+              "config_version",
+              "enabled",
+              "interval_seconds",
+              "session_expires_at_unix_ms",
+              "retention_expires_at",
+              "max_photos",
+              "training_allowed"
+            ],
+            "properties": {
+              "authorization_session_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+              },
+              "config_version": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "interval_seconds": {
+                "type": "integer",
+                "minimum": 60,
+                "maximum": 86400,
+                "default": 300
+              },
+              "session_expires_at_unix_ms": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "retention_expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "max_photos": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "training_allowed": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-last_verified: 2026-08-10
+last_verified: 2026-09-09
 verified_by: codex
 ---
 
@@ -13,6 +13,7 @@ path. Machine-readable schemas live in `../../shared/contracts/`:
 - `message_hub_event.schema.json`
 - `message_hub_command.schema.json`
 - `message_hub_ack.schema.json`
+- `message_hub_ack_raw_response.schema.json`
 - `message_hub_error.schema.json`
 - `message_hub_raw_frame_record.schema.json`
 - `imu_window_chunk.schema.json`
@@ -99,6 +100,21 @@ Raw-frame ingest may derive existing Message Hub objects:
 Failed parse is not data loss. A frame with `parse_result.status=partial`,
 `checksum_failed`, `unsupported`, or `malformed` must still be queryable in
 test-run evidence by frame ID, timestamp, device ID, and byte/hash metadata.
+
+### Raw ACK acceptance identity
+
+`POST .../commands/{cmd_id}/ack.raw` separates valid parsing from actual
+command-state acceptance. Its response follows
+`message_hub_ack_raw_response.schema.json` and includes a server-owned
+`command_ack` result. A device may clear a persisted terminal timer ACK only
+for `newly_applied`, `refresh_applied`, or `idempotent_already_applied`, when
+the returned command status is the expected terminal state and both returned
+hashes equal the SHA-256 of the exact raw frame bytes posted. A parsed but
+conflicting, stale, terminally ignored, or unknown-command ACK is not accepted.
+
+The input ACK contract rejects server-owned result fields. `ack_at` records
+the first accepted terminal transition; a later monotonic timer-state refresh
+may update the current ACK view but must not move that causal boundary.
 
 ### PROTO-003 Bounded IMU Window Profile
 

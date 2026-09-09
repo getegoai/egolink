@@ -17,13 +17,15 @@ import struct
 import time
 from typing import Any
 
+from server.photo_store import PhotoStoreError
+
 
 CONTRACT_VERSION = "egolink.collection.v1"
 CONTENT_TYPE = "application/json;profile=" + CONTRACT_VERSION
 MAX_FRAME_BYTES = 65_536
 MAX_PAGE_RECORDS = 100
 MAX_PAGE_BYTES = 2_000_000
-SOURCES = frozenset({"gnss", "lte", "imu", "wifi", "power", "device", "time_anchor", "source_status", "session", "loss", "delivery"})
+SOURCES = frozenset({"gnss", "lte", "imu", "wifi", "camera", "power", "device", "time_anchor", "source_status", "session", "loss", "delivery"})
 CONTEXT_SOURCES = frozenset({"time_anchor", "source_status", "session", "loss"})
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$")
 INT64_MAX = 9_223_372_036_854_775_807
@@ -35,6 +37,17 @@ _WIFI_LINK_EVENT_FIELDS = frozenset({"phase", "connected"})
 _WIFI_SCAN_SUMMARY_FIELDS = frozenset({"channel_summary", "scan_result", "total_seen", "truncated", "sampled_ap_count", "identifiers_retained", "privacy_reason", "connected", "disconnect_reason"})
 _WIFI_CHANNEL_SUMMARY_FIELDS = frozenset({"channel", "ap_count", "strongest_rssi"})
 COLLECTION_ENVELOPE_FIELDS = frozenset({"contract_version", "observation_id", "device_id", "source", "stream_id", "sequence_id", "boot_count", "monotonic_clock_domain_id", "timestamp_monotonic_ns", "timestamp_utc", "timestamp_source", "timestamp_quality", "fw_version", "config_id", "session_id", "status", "payload", "missing_reason"})
+CAMERA_SOURCE_STATUS_FIELDS = frozenset({
+    "source", "component", "camera_runtime_compiled", "driver_preflight_ready",
+    "capture_trigger_wired", "media_store_ready", "command_id",
+    "authorization_session_id", "source_event_utc", "source_event_monotonic_ms",
+    "event_reason", "timer_state",
+})
+CAMERA_TIMER_STATE_FIELDS = frozenset({
+    "config_version", "enabled", "interval_seconds",
+    "session_expires_at_unix_ms", "max_photos", "captured_count",
+    "state_reason", "trusted_utc",
+})
 
 
 class CollectionError(ValueError):
@@ -204,6 +217,94 @@ def enforce_collection_privacy(envelope: dict[str, Any]) -> None:
         reject()
 
 
+def validate_camera_source_status(envelope: dict[str, Any]) -> dict[str, Any]:
+    """Validate the exact camera runtime-state shape before it can be indexed."""
+
+    payload = envelope["payload"]
+    if set(payload) != CAMERA_SOURCE_STATUS_FIELDS:
+        raise ValueError("camera source_status payload shape is invalid")
+    if payload["source"] != "camera" or payload["component"] != "photo_control":
+        raise ValueError("camera source_status identity is invalid")
+    for field in (
+        "camera_runtime_compiled",
+        "driver_preflight_ready",
+        "capture_trigger_wired",
+        "media_store_ready",
+    ):
+        if type(payload[field]) is not bool:
+            raise ValueError(f"camera source_status {field} must be boolean")
+    if envelope["status"] not in {"observed", "unavailable"}:
+        raise ValueError("camera source_status top-level status is invalid")
+    if (envelope["status"] == "observed") != (envelope["missing_reason"] is None):
+        raise ValueError("camera source_status availability and reason disagree")
+    _utc(payload["source_event_utc"], "source_event_utc")
+    _integer(
+        payload["source_event_monotonic_ms"],
+        "source_event_monotonic_ms",
+        maximum=9_007_199_254_740_991,
+    )
+    if (
+        not isinstance(payload["event_reason"], str)
+        or re.fullmatch(r"[a-z][a-z0-9_]{0,63}", payload["event_reason"]) is None
+    ):
+        raise ValueError("camera source_status event_reason is invalid")
+    timer = payload["timer_state"]
+    if not isinstance(timer, dict) or set(timer) != CAMERA_TIMER_STATE_FIELDS:
+        raise ValueError("camera source_status timer_state shape is invalid")
+    if type(timer["enabled"]) is not bool or type(timer["trusted_utc"]) is not bool:
+        raise ValueError("camera source_status timer booleans are invalid")
+    if timer["trusted_utc"] != (payload["source_event_utc"] is not None):
+        raise ValueError("camera source_status UTC trust fields disagree")
+    if (
+        not isinstance(timer["state_reason"], str)
+        or re.fullmatch(r"[a-z][a-z0-9_]{0,63}", timer["state_reason"]) is None
+    ):
+        raise ValueError("camera source_status timer state_reason is invalid")
+    _integer(timer["interval_seconds"], "camera timer interval_seconds", 0, 86_400)
+    _integer(
+        timer["session_expires_at_unix_ms"],
+        "camera timer session_expires_at_unix_ms",
+        0,
+        9_007_199_254_740_991,
+    )
+    _integer(timer["max_photos"], "camera timer max_photos", 0, 1000)
+    _integer(timer["captured_count"], "camera timer captured_count", 0, 1000)
+    config_version = timer["config_version"]
+    if config_version is None:
+        if (
+            payload["command_id"] is not None
+            or payload["authorization_session_id"] is not None
+            or timer["enabled"]
+            or timer["interval_seconds"] != 0
+            or timer["session_expires_at_unix_ms"] != 0
+            or timer["max_photos"] != 0
+            or timer["captured_count"] != 0
+        ):
+            raise ValueError("unconfigured camera timer state is inconsistent")
+        return timer
+    _identifier(config_version, "camera timer config_version")
+    _identifier(payload["command_id"], "camera source_status command_id")
+    _identifier(
+        payload["authorization_session_id"],
+        "camera source_status authorization_session_id",
+    )
+    _integer(timer["interval_seconds"], "camera timer interval_seconds", 60, 86_400)
+    _integer(
+        timer["session_expires_at_unix_ms"],
+        "camera timer session_expires_at_unix_ms",
+        1,
+        9_007_199_254_740_991,
+    )
+    _integer(timer["max_photos"], "camera timer max_photos", 1, 1000)
+    _integer(
+        timer["captured_count"],
+        "camera timer captured_count",
+        0,
+        timer["max_photos"],
+    )
+    return timer
+
+
 def inspect_source(envelope: dict[str, Any]) -> dict[str, Any]:
     """Versioned, disposable preview.  Failure never deletes authenticated raw."""
     source, payload = envelope["source"], envelope["payload"]
@@ -238,6 +339,15 @@ def inspect_source(envelope: dict[str, Any]) -> dict[str, Any]:
                 elif not isinstance(outcome, str) or not 1 <= len(outcome) <= 80:
                     raise ValueError("modem attempt outcome is missing")
             result["attempt_count"] = len(attempts)
+        elif source == "camera":
+            result.update(
+                sample_count=1 if payload.get("capture_result") == "captured" else 0,
+                photo_id=payload.get("photo_id"),
+                capture_result=payload.get("capture_result"),
+                local_save_status=payload.get("local_save_status"),
+                device_upload_status=payload.get("device_upload_status"),
+                byte_length=payload.get("byte_length"),
+            )
     except (ValueError, KeyError, TypeError, binascii.Error) as error:
         result.update(status="parse_error", error_code="SOURCE_PAYLOAD_PARSE_ERROR", reason=str(error), sample_count=0)
     return result
@@ -307,6 +417,68 @@ class CollectionStore:
              "collection",None,_json(record)))
         return int(cursor.lastrowid)
 
+    @staticmethod
+    def _assert_camera_source_status_binding(
+        db: sqlite3.Connection,
+        envelope: dict[str, Any],
+        timer: dict[str, Any],
+    ) -> None:
+        """Bind a configured camera runtime state to the latest applied timer."""
+
+        if timer["config_version"] is None:
+            return
+        payload = envelope["payload"]
+        command_row = db.execute(
+            "SELECT * FROM commands WHERE device_id=? AND cmd_id=?",
+            (envelope["device_id"], payload["command_id"]),
+        ).fetchone()
+        latest_applied = db.execute(
+            """SELECT id,cmd_id FROM commands
+               WHERE device_id=? AND cmd='configure_photo_timer' AND status='applied'
+               ORDER BY id DESC LIMIT 1""",
+            (envelope["device_id"],),
+        ).fetchone()
+        if (
+            command_row is None
+            or latest_applied is None
+            or command_row["id"] != latest_applied["id"]
+            or command_row["status"] != "applied"
+            or command_row["cmd"] != "configure_photo_timer"
+            or not command_row["ack_json"]
+        ):
+            raise ValueError("camera source_status is not bound to the latest applied timer")
+        try:
+            command = json.loads(command_row["payload_json"])
+            command_payload = command["payload"]
+            ack = json.loads(command_row["ack_json"])
+            ack_timer = ack["timer_state"]
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            raise ValueError("camera source_status timer evidence is unreadable") from error
+        immutable = {
+            "config_version": command_payload.get("config_version"),
+            "interval_seconds": command_payload.get("interval_seconds"),
+            "session_expires_at_unix_ms": command_payload.get(
+                "session_expires_at_unix_ms"
+            ),
+            "max_photos": command_payload.get("max_photos"),
+        }
+        if (
+            ack.get("status") != "applied"
+            or ack.get("server_disposition")
+            not in {"terminal_ack_applied", "terminal_state_refresh_applied"}
+            or not isinstance(ack_timer, dict)
+            or any(timer[field] != value for field, value in immutable.items())
+            or payload["authorization_session_id"]
+            != command_payload.get("authorization_session_id")
+            or any(ack_timer.get(field) != value for field, value in immutable.items())
+            or type(ack_timer.get("enabled")) is not bool
+            or type(ack_timer.get("captured_count")) is not int
+            or timer["captured_count"] < ack_timer["captured_count"]
+            or (ack_timer["enabled"] is False and timer["enabled"] is True)
+            or (command_payload.get("enabled") is False and timer["enabled"] is True)
+        ):
+            raise ValueError("camera source_status conflicts with verified timer state")
+
     def ingest(self, raw_body: bytes, record: dict[str, Any], *, transport: str) -> dict[str, Any]:
         if len(raw_body) > MAX_FRAME_BYTES:
             raise CollectionError("collection_body_too_large", "collection frame exceeds 64 KiB", 413)
@@ -319,17 +491,83 @@ class CollectionStore:
         payload_bytes = raw_body.split(separator, 1)[1]
         envelope = decode_envelope(payload_bytes, record)
         enforce_collection_privacy(envelope)
+        camera_metadata = None
+        if envelope["source"] == "camera":
+            try:
+                camera_metadata = self.hub.photos.validate_metadata(envelope)
+            except PhotoStoreError as error:
+                raise CollectionError(error.code, str(error), error.status) from error
+        camera_status_timer = None
+        camera_status_shape_error = None
+        if (
+            envelope["source"] == "source_status"
+            and envelope["payload"].get("source") == "camera"
+        ):
+            try:
+                camera_status_timer = validate_camera_source_status(envelope)
+            except (ValueError, CollectionError) as error:
+                camera_status_shape_error = str(error)
         preview = inspect_source(envelope)
+        if camera_status_shape_error is not None:
+            preview.update(
+                status="parse_error",
+                error_code="CAMERA_SOURCE_STATUS_INVALID",
+                reason=camera_status_shape_error,
+                sample_count=0,
+            )
         record["parse_result"] = {"status": "ok" if preview["status"] == "ok" else "malformed", "derived_message_type": "collection", "collection_parse_status": preview["status"], "parser_version": preview["parser_version"]}
-        record["retention"] = {"privacy_class": "private_location", "redacted": False}
+        record["retention"] = {
+            "privacy_class": (
+                "private_image_metadata"
+                if envelope["source"] == "camera"
+                else "private_location"
+            ),
+            "redacted": False,
+        }
         record["fw_version"], record["test_run_id"] = envelope["fw_version"], envelope["session_id"]
         digest = hashlib.sha256(raw_body).hexdigest()
-        received, persisted = record["server_received_at"], _now()
+        received = record["server_received_at"]
+        if camera_metadata is not None:
+            camera_metadata["server_received_at"] = received
+            camera_metadata["collection_claimed_transport"] = transport
+            camera_metadata["collection_delivery_result"] = "accepted"
         conflict = False
         with self.hub.connection() as db:
             db.execute("PRAGMA synchronous=FULL")
             db.execute("BEGIN IMMEDIATE")
+            # This is the persistence-transaction timestamp, taken only after
+            # SQLite grants the write lock.  It must never predate an arbitrary
+            # lock wait while being presented as persistence evidence.
+            persisted = _now()
+            if camera_metadata is not None:
+                camera_metadata["server_persisted_at"] = persisted
+            if camera_status_timer is not None and camera_status_shape_error is None:
+                try:
+                    self._assert_camera_source_status_binding(
+                        db, envelope, camera_status_timer
+                    )
+                except (ValueError, sqlite3.Error) as error:
+                    preview.update(
+                        status="parse_error",
+                        error_code="CAMERA_SOURCE_STATUS_UNBOUND",
+                        reason=str(error),
+                        sample_count=0,
+                    )
+                    record["parse_result"] = {
+                        "status": "malformed",
+                        "derived_message_type": "collection",
+                        "collection_parse_status": preview["status"],
+                        "parser_version": preview["parser_version"],
+                    }
             existing = db.execute("SELECT * FROM collection_records WHERE device_id=? AND observation_id=?", (envelope["device_id"], envelope["observation_id"])).fetchone()
+            existing_photo = None
+            if camera_metadata is not None:
+                try:
+                    existing_photo = self.hub.photos.assert_metadata_identity(db, camera_metadata)
+                    if existing_photo is None:
+                        self.hub.photos.assert_authorized_session(db, camera_metadata)
+                except PhotoStoreError as error:
+                    raise CollectionError(error.code, str(error), error.status) from error
             if existing is not None:
                 conflict = existing["payload_sha256"] != digest
                 result = "conflict" if conflict else "duplicate"
@@ -348,7 +586,12 @@ class CollectionStore:
                      _utc_index(envelope["timestamp_utc"]),envelope["session_id"],envelope["fw_version"],envelope["config_id"],envelope["status"],
                      preview["status"],preview["sample_count"],len(raw_body),received,persisted,_json(envelope),_json(preview)))
                 target = envelope["payload"].get("source")
-                if envelope["source"] == "source_status" and isinstance(target, str) and target in SOURCES | {"camera", "audio"}:
+                if (
+                    envelope["source"] == "source_status"
+                    and preview["status"] == "ok"
+                    and isinstance(target, str)
+                    and target in SOURCES | {"camera", "audio"}
+                ):
                     db.execute("""INSERT INTO collection_source_states
                         (device_id,target_source,record_id,boot_count,event_monotonic_ns,sequence_id) VALUES(?,?,?,?,?,?)
                         ON CONFLICT(device_id,target_source) DO UPDATE SET
@@ -357,6 +600,9 @@ class CollectionStore:
                         WHERE (excluded.boot_count,excluded.event_monotonic_ns,excluded.sequence_id) >
                         (collection_source_states.boot_count,collection_source_states.event_monotonic_ns,collection_source_states.sequence_id)""",
                         (envelope["device_id"], target, inserted.lastrowid, envelope["boot_count"], envelope["timestamp_monotonic_ns"], envelope["sequence_id"]))
+            if camera_metadata is not None and existing_photo is None and not conflict:
+                collection_record_id = int(existing["id"] if existing is not None else inserted.lastrowid)
+                self.hub.photos.insert_metadata(db, camera_metadata, collection_record_id)
             db.execute("""INSERT INTO collection_delivery_attempts
                 (device_id,observation_id,payload_sha256,received_at,claimed_actual_transport,result,conflict_raw_frame_id)
                 VALUES(?,?,?,?,?,?,?)""", (envelope["device_id"],envelope["observation_id"],digest,received,transport,result,raw_id if conflict else None))
@@ -394,6 +640,20 @@ class CollectionStore:
                 "delivery_counts": {row["result"]: row["count"] for row in deliveries},
                 "state_semantics": "last_known_by_source_event_time; current offline cache is unknown",
                 "transport_evidence": "authenticated device report; not independent network-path proof"}
+
+    def latest_source_state(
+        self, device_id: str, target_source: str
+    ) -> dict[str, Any] | None:
+        if target_source not in SOURCES | {"camera", "audio"}:
+            raise CollectionError("invalid_collection_source", "unknown source", 400)
+        with self.hub.connection() as db:
+            row = db.execute(
+                """SELECT c.* FROM collection_source_states s
+                   JOIN collection_records c ON c.id=s.record_id
+                   WHERE s.device_id=? AND s.target_source=?""",
+                (device_id, target_source),
+            ).fetchone()
+        return self._record_view(row) if row is not None else None
 
     def annotate(self, device_id: str, raw_body: bytes, *, operator_id: str) -> dict[str, Any]:
         if len(raw_body) > 8192:
