@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 import unittest
 from pathlib import Path
 
@@ -132,13 +133,75 @@ def _check_runtime_delivery_is_metadata_gated_fair_and_release_safe():
     upload = source[source.index("static bool photo_upload_one"):source.index(
         "static void photo_schedule_upload_retry"
     )]
-    assert upload.count("photo_media_store_release(&media_store,&record)") == 2
+    assert upload.count("photo_media_release_locked(&record)") == 2
     assert upload.index("if(server_verified)") < upload.rindex(
-        "photo_media_store_release(&media_store,&record)"
+        "photo_media_release_locked(&record)"
     )
     assert "posted.http_status_code>=200U&&posted.http_status_code<300U&&" in upload
     assert "photo_delivery_content_ack_response_matches" in upload
     assert "const bool success=" not in source
+
+
+def _check_media_store_access_is_single_mutex_serialized_and_observable():
+    source = (FIRMWARE / "main" / "collection_main.c").read_text(encoding="utf-8")
+    wrapper_names = (
+        "photo_media_init_locked",
+        "photo_media_stats_locked",
+        "photo_media_find_locked",
+        "photo_media_peek_locked",
+        "photo_media_read_locked",
+        "photo_media_release_locked",
+        "photo_media_capture_store_locked",
+    )
+    wrapper_start = source.index("static photo_media_store_result_t photo_media_init_locked")
+    wrapper_end = source.index("static void photo_stack_hwm_observe")
+    raw_calls = tuple(re.finditer(
+        r"\bphoto_media_store_(?:init|get_stats|find|peek_committed|read|release|"
+        r"prepare_with_expiry|write|commit)\s*\(",
+        source,
+    ))
+    assert raw_calls
+    assert all(wrapper_start <= call.start() < wrapper_end for call in raw_calls)
+
+    for index, name in enumerate(wrapper_names):
+        start = source.index(f"{name}(", wrapper_start)
+        end = (source.index(f"{wrapper_names[index + 1]}(", start)
+               if index + 1 < len(wrapper_names) else wrapper_end)
+        body = source[start:end]
+        assert body.count("photo_media_lock()") == 1
+        assert body.count("photo_media_unlock()") == 1
+        wrapped_calls = tuple(re.finditer(
+            r"\bphoto_media_store_(?:init|get_stats|find|peek_committed|read|release|"
+            r"prepare_with_expiry|write|commit)\s*\(",
+            body,
+        ))
+        assert wrapped_calls
+        assert body.index("photo_media_lock()") < wrapped_calls[0].start()
+        assert wrapped_calls[-1].end() < body.index("photo_media_unlock()")
+
+    assert "static SemaphoreHandle_t media_store_mutex;" in source
+    assert "media_store_mutex=xSemaphoreCreateMutex();" in source
+    assert "allocation_failed=allocation_failed||!media_store_mutex;" in source
+    assert "vSemaphoreDelete(media_store_mutex);media_store_mutex=NULL;" in source
+    assert "media_stats_valid=photo_media_stats_locked(&media);" in source
+    assert "outcome->store_result=photo_media_capture_store_locked" in source
+    assert source.count("outcome->store_result=photo_media_find_locked") == 2
+    assert source.count("photo_media_peek_locked(*scan_cursor") == 2
+    assert "store=photo_media_read_locked(&record,0U,jpeg,record.payload_bytes);" in source
+
+    for api, field in (
+        ("heap_caps_get_free_size(MALLOC_CAP_INTERNAL)", "internal_free_bytes"),
+        ("heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL)", "internal_min_free_bytes"),
+        ("heap_caps_get_free_size(MALLOC_CAP_DMA)", "dma_free_bytes"),
+        ("heap_caps_get_largest_free_block(MALLOC_CAP_DMA)", "dma_largest_free_block_bytes"),
+    ):
+        assert api in source
+        assert f'"{field}"' in source
+    assert "uxTaskGetStackHighWaterMark2(NULL)" in source
+    assert "sizeof(StackType_t)" in source
+    assert '"task_stack_high_watermark_bytes"' in source
+    for task in ("main", "store", "imu", "modem", "upload", "wifi"):
+        assert f'photo_add_stack_hwm(stack_hwm,"{task}"' in source
 
 
 class CameraCollectionPlatformTests(unittest.TestCase):
@@ -156,3 +219,6 @@ class CameraCollectionPlatformTests(unittest.TestCase):
 
     def test_runtime_delivery_is_metadata_gated_fair_and_release_safe(self):
         _check_runtime_delivery_is_metadata_gated_fair_and_release_safe()
+
+    def test_media_store_access_is_single_mutex_serialized_and_observable(self):
+        _check_media_store_access_is_single_mutex_serialized_and_observable()

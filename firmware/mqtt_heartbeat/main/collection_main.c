@@ -2,6 +2,7 @@
  * Sensor tasks never perform network I/O. Only modem_task owns the AT backend.
  * The spool mutex is never held during HTTP. No Location acceptance prerequisite. */
 #include <inttypes.h>
+#include <limits.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +19,7 @@
 #include "collection_usb_lte.h"
 #include "esp_app_desc.h"
 #include "esp_event.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_netif_sntp.h"
@@ -118,6 +120,7 @@ static atomic_bool spool_ready;
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
 static photo_media_store_t media_store;
 static const esp_partition_t *media_partition;
+static SemaphoreHandle_t media_store_mutex;
 static atomic_bool media_store_ready;
 static atomic_bool photo_control_state_ready;
 static atomic_uint photo_capture_attempts,photo_capture_saved,photo_capture_failures;
@@ -129,6 +132,12 @@ static photo_control_timer_t photo_timer;
 static photo_control_journal_t photo_journal;
 static photo_control_capture_journal_t photo_capture_journal;
 static portMUX_TYPE photo_state_mux=portMUX_INITIALIZER_UNLOCKED;
+static atomic_uint photo_main_stack_hwm_bytes;
+static atomic_uint photo_store_stack_hwm_bytes;
+static atomic_uint photo_imu_stack_hwm_bytes;
+static atomic_uint photo_modem_stack_hwm_bytes;
+static atomic_uint photo_upload_stack_hwm_bytes;
+static atomic_uint photo_wifi_stack_hwm_bytes;
 #endif
 static atomic_bool stopping, imu_stopped, modem_stopped, writer_stopped, wifi_ready;
 static atomic_bool imu_finished,modem_finished,uploader_finished,wifi_finished,wifi_cleanup_confirmed;
@@ -536,6 +545,121 @@ static void photo_store_observe_result(photo_media_store_result_t result)
     if(photo_store_result_fatal(result))atomic_store(&media_store_ready,false);
 }
 
+/* photo_media_store deliberately has no internal synchronization.  Keep every
+ * call behind this one owner-layer mutex; in particular, health() runs on the
+ * main task while capture/recovery/delivery run on the uploader task. */
+static bool photo_media_lock(void)
+{
+    return media_store_mutex&&
+        xSemaphoreTake(media_store_mutex,portMAX_DELAY)==pdTRUE;
+}
+
+static void photo_media_unlock(void)
+{
+    xSemaphoreGive(media_store_mutex);
+}
+
+static photo_media_store_result_t photo_media_init_locked(
+    const photo_media_store_config_t *config,photo_media_store_stats_t *stats)
+{
+    if(!photo_media_lock())return PHOTO_MEDIA_STORE_IO_ERROR;
+    photo_media_store_result_t result=photo_media_store_init(&media_store,config);
+    if(stats)photo_media_store_get_stats(&media_store,stats);
+    photo_media_unlock();
+    return result;
+}
+
+static bool photo_media_stats_locked(photo_media_store_stats_t *stats)
+{
+    if(!stats||!photo_media_lock())return false;
+    photo_media_store_get_stats(&media_store,stats);
+    photo_media_unlock();
+    return true;
+}
+
+static photo_media_store_result_t photo_media_find_locked(
+    const char *photo_id,photo_media_store_record_t *record)
+{
+    if(!photo_media_lock())return PHOTO_MEDIA_STORE_IO_ERROR;
+    photo_media_store_result_t result=photo_media_store_find(&media_store,
+        photo_id,record);
+    photo_media_unlock();
+    return result;
+}
+
+static photo_media_store_result_t photo_media_peek_locked(
+    uint32_t start_slot,photo_media_store_record_t *record)
+{
+    if(!photo_media_lock())return PHOTO_MEDIA_STORE_IO_ERROR;
+    photo_media_store_result_t result=photo_media_store_peek_committed(
+        &media_store,start_slot,record);
+    photo_media_unlock();
+    return result;
+}
+
+static photo_media_store_result_t photo_media_read_locked(
+    const photo_media_store_record_t *record,size_t offset,void *output,
+    size_t length)
+{
+    if(!photo_media_lock())return PHOTO_MEDIA_STORE_IO_ERROR;
+    photo_media_store_result_t result=photo_media_store_read(&media_store,
+        record,offset,output,length);
+    photo_media_unlock();
+    return result;
+}
+
+static photo_media_store_result_t photo_media_release_locked(
+    const photo_media_store_record_t *record)
+{
+    if(!photo_media_lock())return PHOTO_MEDIA_STORE_IO_ERROR;
+    photo_media_store_result_t result=photo_media_store_release(&media_store,
+        record);
+    photo_media_unlock();
+    return result;
+}
+
+static photo_media_store_result_t photo_media_capture_store_locked(
+    photo_capture_outcome_t *outcome,const uint8_t *jpeg,size_t jpeg_bytes,
+    const platform_camera_capture_result_t *metadata,bool *prepared)
+{
+    if(prepared)*prepared=false;
+    if(!outcome||!jpeg||!metadata||!photo_media_lock())
+        return PHOTO_MEDIA_STORE_IO_ERROR;
+    photo_media_store_result_t result=photo_media_store_prepare_with_expiry(
+        &media_store,outcome->intent.photo_id,jpeg_bytes,metadata->sha256,
+        outcome->intent.retention_expires_at_unix_ms,outcome->event_utc_ms,
+        outcome->event_monotonic_ns,outcome->intent.capture_boot_count,
+        outcome->intent.capture_sequence_id,metadata->width,metadata->height,
+        &outcome->record);
+    if(result==PHOTO_MEDIA_STORE_OK){
+        if(prepared)*prepared=true;
+        result=photo_media_store_write(&media_store,&outcome->record,0U,jpeg,
+            jpeg_bytes);
+        if(result==PHOTO_MEDIA_STORE_OK)
+            result=photo_media_store_commit(&media_store,&outcome->record);
+    }
+    photo_media_unlock();
+    return result;
+}
+
+static void photo_stack_hwm_observe(atomic_uint *minimum_bytes)
+{
+    if(!minimum_bytes)return;
+    const unsigned current=(unsigned)uxTaskGetStackHighWaterMark2(NULL)*
+        (unsigned)sizeof(StackType_t);
+    unsigned previous=atomic_load(minimum_bytes);
+    while(current<previous&&
+          !atomic_compare_exchange_weak(minimum_bytes,&previous,current)){}
+}
+
+static void photo_add_stack_hwm(cJSON *object,const char *name,
+                                const atomic_uint *minimum_bytes)
+{
+    const unsigned value=atomic_load(minimum_bytes);
+    if(value==UINT_MAX)cJSON_AddNullToObject(object,name);
+    else cJSON_AddNumberToObject(object,name,value);
+}
+
 static bool photo_append_direct_frame(unsigned source,const char *frame,
                                       size_t length,uint32_t capture_boot_count,
                                       uint32_t capture_sequence_id)
@@ -662,22 +786,14 @@ static bool photo_frame_to_media(void *opaque,const uint8_t *jpeg,size_t jpeg_by
         outcome->failure_reason="capture_started_after_retention_expiry";
         return false;
     }
-    outcome->store_result=photo_media_store_prepare_with_expiry(&media_store,
-        outcome->intent.photo_id,jpeg_bytes,metadata->sha256,
-        outcome->intent.retention_expires_at_unix_ms,outcome->event_utc_ms,
-        outcome->event_monotonic_ns,outcome->intent.capture_boot_count,
-        outcome->intent.capture_sequence_id,metadata->width,metadata->height,
-        &outcome->record);
+    bool prepared=false;
+    outcome->store_result=photo_media_capture_store_locked(outcome,jpeg,
+        jpeg_bytes,metadata,&prepared);
     photo_store_observe_result(outcome->store_result);
-    if(outcome->store_result!=PHOTO_MEDIA_STORE_OK){
+    if(!prepared){
         outcome->failure_reason=photo_media_store_result_name(outcome->store_result);
         return false;
     }
-    outcome->store_result=photo_media_store_write(&media_store,&outcome->record,0U,
-        jpeg,jpeg_bytes);
-    if(outcome->store_result==PHOTO_MEDIA_STORE_OK)
-        outcome->store_result=photo_media_store_commit(&media_store,&outcome->record);
-    photo_store_observe_result(outcome->store_result);
     outcome->media_saved=outcome->store_result==PHOTO_MEDIA_STORE_OK||
         outcome->store_result==PHOTO_MEDIA_STORE_ALREADY_COMMITTED;
     if(!outcome->media_saved)
@@ -759,7 +875,7 @@ static bool photo_execute_capture(const photo_capture_intent_t *intent,
         outcome->failure_reason="photo_media_store_unavailable";
         return false;
     }
-    outcome->store_result=photo_media_store_find(&media_store,intent->photo_id,
+    outcome->store_result=photo_media_find_locked(intent->photo_id,
         &outcome->record);
     photo_store_observe_result(outcome->store_result);
     if(outcome->store_result==PHOTO_MEDIA_STORE_OK){
@@ -825,7 +941,13 @@ static void photo_journal_fill(photo_control_journal_t *journal,
 static void storage_task(void *unused)
 {
     (void)unused;queued_t *q;
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    photo_stack_hwm_observe(&photo_store_stack_hwm_bytes);
+#endif
     while(!atomic_load(&stopping)||!atomic_load(&main_finished)||!atomic_load(&imu_finished)||!atomic_load(&modem_finished)||!atomic_load(&uploader_finished)||uxQueueMessagesWaiting(ingress)) {
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+        photo_stack_hwm_observe(&photo_store_stack_hwm_bytes);
+#endif
         if(xQueueReceive(ingress,&q,pdMS_TO_TICKS(100))!=pdTRUE) continue;
         collection_spool_result_t result=COLLECTION_SPOOL_IO_ERROR;
         xSemaphoreTake(spool_mutex,portMAX_DELAY);
@@ -839,6 +961,9 @@ static void storage_task(void *unused)
             else { note_drop(q->source,q->seq,q->length,DROP_RAM_FULL);free(q); }
         }
     }
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    photo_stack_hwm_observe(&photo_store_stack_hwm_bytes);
+#endif
     atomic_store(&writer_stopped,true);vTaskDelete(NULL);
 }
 static void source_status(unsigned source,const char *status,const char *reason)
@@ -867,11 +992,17 @@ static void loss_summary(void)
 static void imu_task(void *unused)
 {
     (void)unused;
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    photo_stack_hwm_observe(&photo_imu_stack_hwm_bytes);
+#endif
     bool running=platform_imu_init() && platform_imu_capture_begin();
     source_status(IMU,running?"running":"unavailable",running?NULL:"qmi8658_probe_or_start_failed");
     uint8_t binary[20*16];unsigned count=0,failures=0,missed=0;int64_t first=0;
     TickType_t tick=xTaskGetTickCount();
     while(running && !atomic_load(&stopping)) {
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+        photo_stack_hwm_observe(&photo_imu_stack_hwm_bytes);
+#endif
         platform_imu_sample_t sample;
         if(platform_imu_sample_real(&sample) && !sample.sample_is_mock && sample.raw_axes_valid) {
             if(!count) first=sample.read_completed_us;
@@ -918,6 +1049,9 @@ static void imu_task(void *unused)
     /* A failed begin can leave the real measurement circuit enabled. */
     bool stopped=last.backend!=PLATFORM_IMU_BACKEND_QMI8658 || platform_imu_capture_end();
     source_status(IMU,stopped?"stopped":"error",stopped?NULL:"stop_failed");
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    photo_stack_hwm_observe(&photo_imu_stack_hwm_bytes);
+#endif
     atomic_store(&imu_stopped,stopped);atomic_store(&imu_finished,true);ESP_LOGI(TAG,"IMU stopped=%d",stopped);vTaskDelete(NULL);
 }
 typedef struct { cJSON *at; bool powered; } trace_t;
@@ -1045,6 +1179,9 @@ static void lte_apply_policy_result(
 static void modem_task(void *unused)
 {
     (void)unused;
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    photo_stack_hwm_observe(&photo_modem_stack_hwm_bytes);
+#endif
     bool uart_ready=sim7670_at_backend_init_exclusive_current_task()==ESP_OK;
     if(!uart_ready){source_status(GNSS,"error","exclusive_modem_init_failed");source_status(LTE,"error","exclusive_modem_init_failed");}
     uint32_t operation=1;bool powered=false;
@@ -1117,6 +1254,9 @@ static void modem_task(void *unused)
 
     int64_t next_gnss=0,next_cell=0;
     while(!atomic_load(&stopping)) {
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+        photo_stack_hwm_observe(&photo_modem_stack_hwm_bytes);
+#endif
         int64_t now=now_us();uint64_t now_ms=(uint64_t)now/1000U;
         bool current_wifi=atomic_load(&wifi_ready);
         if(current_wifi!=previous_wifi) {
@@ -1288,6 +1428,9 @@ static void modem_task(void *unused)
         (!atomic_load(&lte_hangup_required)||atomic_load(&lte_hangup_confirmed));
     bool all_stopped=stopped&&lte_stopped&&uploader_stopped_first;
     atomic_store(&modem_stopped,all_stopped);atomic_store(&modem_finished,true);
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    photo_stack_hwm_observe(&photo_modem_stack_hwm_bytes);
+#endif
     ESP_LOGI(TAG,"MODEM stopped=%d exclusive_owner=%d uploader_first=%d gnss_off=%d ppp_dead=%d hangup_required=%d hangup_ok=%d cleanup_ok=%d",
         all_stopped,uart_ready,uploader_stopped_first,stopped,atomic_load(&lte_ppp_stopped),
         atomic_load(&lte_hangup_required),atomic_load(&lte_hangup_confirmed),atomic_load(&lte_cleanup_confirmed));
@@ -1420,7 +1563,13 @@ static void scan_wifi(void)
 static void wifi_task(void *unused)
 {
     (void)unused;int64_t next_connect=0,next_scan=3000000;
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    photo_stack_hwm_observe(&photo_wifi_stack_hwm_bytes);
+#endif
     while(!atomic_load(&stopping)) {
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+        photo_stack_hwm_observe(&photo_wifi_stack_hwm_bytes);
+#endif
         int64_t now=now_us();
         if(!atomic_load(&wifi_ready)&&now>=next_connect){(void)esp_wifi_connect();next_connect=now+10000000;}
         if(now>=next_scan){scan_wifi();next_scan=now_us()+45000000;}
@@ -1432,6 +1581,9 @@ static void wifi_task(void *unused)
         atomic_store(&wifi_cleanup_confirmed,wifi_cleanup());
     else
         atomic_store(&wifi_cleanup_confirmed,false);
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    photo_stack_hwm_observe(&photo_wifi_stack_hwm_bytes);
+#endif
     atomic_store(&wifi_finished,true);vTaskDelete(NULL);
 }
 static bool boot_identity(void)
@@ -1480,12 +1632,19 @@ static void health(void)
     cJSON_AddBoolToObject(p,"lte_ppp_opt_in",CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
     photo_media_store_stats_t media={0};
-    if(atomic_load(&media_store_ready))photo_media_store_get_stats(&media_store,&media);
+    bool media_stats_valid=false;
+    if(atomic_load(&media_store_ready)){
+        media_stats_valid=photo_media_stats_locked(&media);
+        if(!media_stats_valid)
+            photo_store_observe_result(PHOTO_MEDIA_STORE_IO_ERROR);
+    }
+    photo_stack_hwm_observe(&photo_main_stack_hwm_bytes);
     photo_control_timer_t timer;photo_timer_snapshot(&timer);
     uint64_t ignored_utc=0U;const bool photo_utc_trusted=photo_wall_clock(&ignored_utc);
     cJSON *camera=cJSON_AddObjectToObject(p,"camera_runtime");
     cJSON_AddBoolToObject(camera,"control_state_ready",atomic_load(&photo_control_state_ready));
     cJSON_AddBoolToObject(camera,"media_store_ready",atomic_load(&media_store_ready));
+    cJSON_AddBoolToObject(camera,"media_store_stats_valid",media_stats_valid);
     cJSON_AddNumberToObject(camera,"committed_photos",media.committed_slots);
     cJSON_AddNumberToObject(camera,"committed_payload_bytes",(double)media.committed_payload_bytes);
     cJSON_AddNumberToObject(camera,"reconciled_owned_slots",
@@ -1499,6 +1658,23 @@ static void health(void)
     cJSON_AddNumberToObject(camera,"command_polls",atomic_load(&photo_command_polls));
     cJSON_AddNumberToObject(camera,"command_parse_failures",atomic_load(&photo_command_parse_failures));
     cJSON_AddNumberToObject(camera,"command_acks",atomic_load(&photo_command_acks));
+    cJSON *resources=cJSON_AddObjectToObject(camera,"resources");
+    cJSON_AddNumberToObject(resources,"internal_free_bytes",
+        (double)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    cJSON_AddNumberToObject(resources,"internal_min_free_bytes",
+        (double)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
+    cJSON_AddNumberToObject(resources,"dma_free_bytes",
+        (double)heap_caps_get_free_size(MALLOC_CAP_DMA));
+    cJSON_AddNumberToObject(resources,"dma_largest_free_block_bytes",
+        (double)heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
+    cJSON *stack_hwm=cJSON_AddObjectToObject(resources,
+        "task_stack_high_watermark_bytes");
+    photo_add_stack_hwm(stack_hwm,"main",&photo_main_stack_hwm_bytes);
+    photo_add_stack_hwm(stack_hwm,"store",&photo_store_stack_hwm_bytes);
+    photo_add_stack_hwm(stack_hwm,"imu",&photo_imu_stack_hwm_bytes);
+    photo_add_stack_hwm(stack_hwm,"modem",&photo_modem_stack_hwm_bytes);
+    photo_add_stack_hwm(stack_hwm,"upload",&photo_upload_stack_hwm_bytes);
+    photo_add_stack_hwm(stack_hwm,"wifi",&photo_wifi_stack_hwm_bytes);
     cJSON *timer_state=cJSON_AddObjectToObject(camera,"timer_state");
     if(timer.config_version[0])cJSON_AddStringToObject(timer_state,"config_version",timer.config_version);
     else cJSON_AddNullToObject(timer_state,"config_version");
@@ -1801,7 +1977,7 @@ static bool photo_capture_restore_outcome(
     outcome->camera.attempted=journal->attempted;
     outcome->camera.frame_acquired=journal->frame_acquired;
     outcome->failure_reason=journal->failure_reason;
-    outcome->store_result=photo_media_store_find(&media_store,journal->photo_id,
+    outcome->store_result=photo_media_find_locked(journal->photo_id,
         &outcome->record);
     photo_store_observe_result(outcome->store_result);
     if(outcome->store_result==PHOTO_MEDIA_STORE_OK){
@@ -1858,8 +2034,8 @@ static bool photo_release_capture_for_retention(
 {
     if(!journal||!atomic_load(&media_store_ready))return false;
     photo_media_store_record_t record;
-    photo_media_store_result_t result=photo_media_store_find(&media_store,
-        journal->photo_id,&record);
+    photo_media_store_result_t result=photo_media_find_locked(journal->photo_id,
+        &record);
     photo_store_observe_result(result);
     if(result==PHOTO_MEDIA_STORE_NOT_FOUND){
         photo_emit_source_status("photo_retention_media_already_absent");
@@ -1873,7 +2049,7 @@ static bool photo_release_capture_for_retention(
         photo_emit_source_status(failure_reason);
         return false;
     }
-    result=photo_media_store_release(&media_store,&record);
+    result=photo_media_release_locked(&record);
     photo_store_observe_result(result);
     if(result!=PHOTO_MEDIA_STORE_OK){
         photo_emit_source_status(failure_reason);
@@ -2305,16 +2481,20 @@ static bool photo_release_one_expired(uint32_t *scan_cursor)
     if(!scan_cursor||!atomic_load(&media_store_ready))return false;
     uint64_t utc_ms=0U;if(!photo_wall_clock(&utc_ms))return false;
     photo_media_store_record_t record;
-    photo_media_store_result_t store=photo_media_store_peek_committed(
-        &media_store,*scan_cursor,&record);
+    photo_media_store_result_t store=photo_media_peek_locked(*scan_cursor,
+        &record);
     photo_store_observe_result(store);
     if(store==PHOTO_MEDIA_STORE_NOT_FOUND){*scan_cursor=0U;return false;}
     if(store!=PHOTO_MEDIA_STORE_OK)return false;
-    photo_media_store_stats_t stats={0};photo_media_store_get_stats(&media_store,&stats);
+    photo_media_store_stats_t stats={0};
+    if(!photo_media_stats_locked(&stats)){
+        photo_store_observe_result(PHOTO_MEDIA_STORE_IO_ERROR);
+        return false;
+    }
     const uint32_t slot_count=(uint32_t)(stats.capacity_bytes/stats.slot_bytes);
     *scan_cursor=record.slot+1U>=slot_count?0U:record.slot+1U;
     if(utc_ms<record.retention_expires_at_unix_ms)return false;
-    store=photo_media_store_release(&media_store,&record);
+    store=photo_media_release_locked(&record);
     photo_store_observe_result(store);
     if(store!=PHOTO_MEDIA_STORE_OK){
         photo_emit_source_status("photo_retention_release_failed");
@@ -2334,8 +2514,8 @@ static bool photo_upload_one(egolink_esp_p0_https_t *https,
     if(server_verified_out)*server_verified_out=false;
     if(!scan_cursor||!atomic_load(&media_store_ready))return false;
     photo_media_store_record_t record;
-    photo_media_store_result_t store=photo_media_store_peek_committed(&media_store,
-        *scan_cursor,&record);
+    photo_media_store_result_t store=photo_media_peek_locked(*scan_cursor,
+        &record);
     photo_store_observe_result(store);
     if(store==PHOTO_MEDIA_STORE_NOT_FOUND){*scan_cursor=0U;return false;}
     if(store!=PHOTO_MEDIA_STORE_OK){
@@ -2344,12 +2524,17 @@ static bool photo_upload_one(egolink_esp_p0_https_t *https,
             photo_emit_source_status("photo_media_store_runtime_failure");
         return true;
     }
-    photo_media_store_stats_t stats={0};photo_media_store_get_stats(&media_store,&stats);
+    photo_media_store_stats_t stats={0};
+    if(!photo_media_stats_locked(&stats)){
+        photo_store_observe_result(PHOTO_MEDIA_STORE_IO_ERROR);
+        atomic_fetch_add(&photo_upload_failures,1U);
+        return true;
+    }
     const uint32_t slot_count=(uint32_t)(stats.capacity_bytes/stats.slot_bytes);
     *scan_cursor=record.slot+1U>=slot_count?0U:record.slot+1U;
     uint64_t utc_ms=0U;if(!photo_wall_clock(&utc_ms))return true;
     if(utc_ms>=record.retention_expires_at_unix_ms){
-        store=photo_media_store_release(&media_store,&record);
+        store=photo_media_release_locked(&record);
         photo_store_observe_result(store);
         if(store==PHOTO_MEDIA_STORE_OK){
             atomic_fetch_add(&photo_expired_released,1U);
@@ -2367,8 +2552,7 @@ static bool photo_upload_one(egolink_esp_p0_https_t *https,
     if(record.payload_bytes>sizeof(jpeg)){
         atomic_fetch_add(&photo_upload_failures,1U);return true;
     }
-    store=photo_media_store_read(&media_store,&record,0U,jpeg,
-        record.payload_bytes);
+    store=photo_media_read_locked(&record,0U,jpeg,record.payload_bytes);
     photo_store_observe_result(store);
     if(store!=PHOTO_MEDIA_STORE_OK){
         atomic_fetch_add(&photo_upload_failures,1U);
@@ -2395,7 +2579,7 @@ static bool photo_upload_one(egolink_esp_p0_https_t *https,
     if(server_verified_out)*server_verified_out=server_verified;
     bool released=false;
     if(server_verified){
-        store=photo_media_store_release(&media_store,&record);
+        store=photo_media_release_locked(&record);
         photo_store_observe_result(store);
         released=store==PHOTO_MEDIA_STORE_OK;
         if(released)atomic_fetch_add(&photo_upload_acked,1U);
@@ -2446,10 +2630,14 @@ static void uploader_task(void *unused)
     unsigned ordinary_uploads_since_photo=0U;
     uint32_t photo_upload_cursor=0U,photo_retention_cursor=0U;
     static uint8_t command_response[2048],command_ack_response[8192];
+    photo_stack_hwm_observe(&photo_upload_stack_hwm_bytes);
 #endif
     egolink_esp_p0_https_t https={.origin=CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL,.expected_host=CONFIG_EGOLINK_MESSAGE_HUB_EXPECTED_TLS_HOST,
         .bearer=CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN,.max_attempts=1,.transaction_timeout_ms=12000,.reuse_connection=true};
     while(!atomic_load(&stopping)) {
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+        photo_stack_hwm_observe(&photo_upload_stack_hwm_bytes);
+#endif
         int64_t now=now_us();network_runtime_snapshot_t route=read_network();
         if(connection_generation!=route.generation||route.route==COLLECTION_NETWORK_ROUTE_NONE){
             egolink_esp_p0_https_close(&https);connection_generation=route.generation;
@@ -2603,6 +2791,9 @@ static void uploader_task(void *unused)
     atomic_store(&uploader_active_generation,0);
     atomic_store(&uploader_retired_generation,atomic_load(&network_route_generation));
     atomic_store(&uploader_finished,true);
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    photo_stack_hwm_observe(&photo_upload_stack_hwm_bytes);
+#endif
     ESP_LOGI(TAG,"UPLOADER stopped=true durable_cache_preserved=true volatile_ram_pending=%u",(unsigned)uxQueueMessagesWaiting(ram_fallback));vTaskDelete(NULL);
 }
 void app_main(void)
@@ -2611,8 +2802,32 @@ void app_main(void)
     const esp_app_desc_t *application=esp_app_get_description();
     for(unsigned i=0;i<32;i++)snprintf(firmware_elf_sha256+i*2,3,"%02x",application->app_elf_sha256[i]);
     if(!boot_identity()) {ESP_LOGE(TAG,"STOP identity_persistence_failed nvs_preserved=true");return;}
-    ingress=xQueueCreate(16,sizeof(queued_t*));ram_fallback=xQueueCreate(4,sizeof(queued_t*));spool_mutex=xSemaphoreCreateMutex();
-    if(!ingress||!ram_fallback||!spool_mutex){ESP_LOGE(TAG,"STOP allocation_failed");return;}
+    ingress=xQueueCreate(16,sizeof(queued_t*));
+    ram_fallback=xQueueCreate(4,sizeof(queued_t*));
+    spool_mutex=xSemaphoreCreateMutex();
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    media_store_mutex=xSemaphoreCreateMutex();
+    atomic_store(&photo_main_stack_hwm_bytes,UINT_MAX);
+    atomic_store(&photo_store_stack_hwm_bytes,UINT_MAX);
+    atomic_store(&photo_imu_stack_hwm_bytes,UINT_MAX);
+    atomic_store(&photo_modem_stack_hwm_bytes,UINT_MAX);
+    atomic_store(&photo_upload_stack_hwm_bytes,UINT_MAX);
+    atomic_store(&photo_wifi_stack_hwm_bytes,UINT_MAX);
+#endif
+    bool allocation_failed=!ingress||!ram_fallback||!spool_mutex;
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    allocation_failed=allocation_failed||!media_store_mutex;
+#endif
+    if(allocation_failed){
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+        if(media_store_mutex){vSemaphoreDelete(media_store_mutex);media_store_mutex=NULL;}
+#endif
+        if(spool_mutex){vSemaphoreDelete(spool_mutex);spool_mutex=NULL;}
+        if(ram_fallback){vQueueDelete(ram_fallback);ram_fallback=NULL;}
+        if(ingress){vQueueDelete(ingress);ingress=NULL;}
+        ESP_LOGE(TAG,"STOP allocation_failed queues_and_mutexes_released=true");
+        return;
+    }
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
     const bool photo_state_initialized=photo_control_state_init();
     atomic_store(&photo_control_state_ready,photo_state_initialized);
@@ -2635,8 +2850,9 @@ void app_main(void)
             .max_payload_bytes=CONFIG_EGOLINK_PHOTO_MEDIA_MAX_PAYLOAD_BYTES,
             .max_committed_photos=CONFIG_EGOLINK_PHOTO_MEDIA_MAX_COMMITTED_PHOTOS,
             .max_committed_payload_bytes=CONFIG_EGOLINK_PHOTO_MEDIA_MAX_TOTAL_PAYLOAD_BYTES};
-        photo_media_store_result_t r=photo_media_store_init(&media_store,&config);media_store_ready=r==PHOTO_MEDIA_STORE_OK;
-        photo_media_store_stats_t stats={0};photo_media_store_get_stats(&media_store,&stats);
+        photo_media_store_stats_t stats={0};
+        photo_media_store_result_t r=photo_media_init_locked(&config,&stats);
+        atomic_store(&media_store_ready,r==PHOTO_MEDIA_STORE_OK);
         ESP_LOGI(TAG,"MEDIA_STORE init=%s ready=%d dedicated_partition=true capacity=%u slot_bytes=%u committed=%u torn=%u corrupt=%u reconciled=%u residual_torn=%u residual_corrupt=%u residual_unrecognized=%u",
             photo_media_store_result_name(r),media_store_ready,(unsigned)media_partition->size,(unsigned)config.slot_bytes,
             (unsigned)stats.committed_slots,(unsigned)stats.torn_slots,
