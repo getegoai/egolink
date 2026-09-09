@@ -92,7 +92,13 @@
 #endif
 #endif
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
-#define CONFIG_ID "collector-v1-camera-runtime-i2c-gated"
+#if CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL
+#define CONFIG_ID "collector-v1-camera-shared-i2c-trial_unverified"
+#elif CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED
+#define CONFIG_ID "collector-v1-camera-shared-i2c-verified"
+#else
+#define CONFIG_ID "collector-v1-camera-shared-i2c-blocked"
+#endif
 #define COLLECTION_PARTITION_ADDRESS 0x500000U
 #define COLLECTION_PARTITION_SIZE 0x100000U
 #define SOURCE_COUNT 13
@@ -105,6 +111,13 @@ static const char *const sources[SOURCE_COUNT]={"gnss","lte","imu","wifi","power
 #define SOURCE_COUNT 12
 enum { GNSS, LTE, IMU, WIFI, POWER, DEVICE, ANCHOR, SOURCE_STATUS, SESSION, LOSS, DELIVERY };
 static const char *const sources[SOURCE_COUNT]={"gnss","lte","imu","wifi","power","device","time_anchor","source_status","session","loss","delivery","unknown"};
+#endif
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+_Static_assert(sizeof(CONFIG_ID)<=PHOTO_CONTROL_CAPTURE_RUNTIME_CONFIG_BYTES,
+    "camera runtime config id exceeds capture journal provenance bound");
+_Static_assert(sizeof(CONFIG_EGOLINK_FW_VERSION)<=
+    PHOTO_CONTROL_CAPTURE_FW_VERSION_BYTES,
+    "camera firmware version exceeds capture journal provenance bound");
 #endif
 #define MEDIA_PARTITION_ADDRESS 0x600000U
 #define MEDIA_PARTITION_SIZE 0x900000U
@@ -399,6 +412,9 @@ static bool save_photo_capture_journal(
     return photo_control_capture_journal_encode(journal,blob,&bytes)&&
         photo_nvs_save(PHOTO_CAPTURE_JOURNAL_NVS_KEY,blob,bytes);
 }
+static const char *photo_timer_camera_policy_state_reason(void);
+static const char *photo_timer_camera_policy_message(void);
+static bool photo_timer_camera_policy_rejected(const char *state_reason);
 static bool photo_control_state_init(void)
 {
     uint8_t blob[PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES];size_t bytes=0U;bool missing=false;
@@ -417,6 +433,31 @@ static bool photo_control_state_init(void)
         return false;
     if(!photo_nvs_load_u64(PHOTO_METADATA_ACK_NVS_KEY,
         &metadata_ack_watermark,&missing))return false;
+    /* A gate-policy image may inherit an enabled or terminal-but-unreported
+     * enable command from verified firmware. Persistently reject it before
+     * publishing control readiness. An explicit disable command remains a
+     * valid applied state. Recovery may settle an already-started transaction
+     * but cannot take a new frame. */
+    const bool inherited_timer_enable=photo_timer.command_id[0]&&
+        !photo_timer_camera_policy_rejected(photo_timer.state_reason)&&
+        (photo_timer.enabled||(photo_timer.status_report_pending&&
+        strcmp(photo_timer.state_reason,"disabled_by_command")));
+    if(!platform_camera_timed_capture_allowed()&&inherited_timer_enable){
+        photo_timer.enabled=false;photo_timer.schedule_armed=false;
+        photo_timer.status_report_pending=true;
+        snprintf(photo_timer.state_reason,sizeof(photo_timer.state_reason),
+            "%s",photo_timer_camera_policy_state_reason());
+        if(!save_photo_timer(&photo_timer))return false;
+        if(photo_journal.kind==PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER&&
+           !strcmp(photo_journal.cmd_id,photo_timer.command_id)){
+            photo_journal.phase=PHOTO_CONTROL_JOURNAL_COMPLETE;
+            snprintf(photo_journal.status,sizeof(photo_journal.status),
+                "%s","error");
+            snprintf(photo_journal.message,sizeof(photo_journal.message),
+                "%s",photo_timer_camera_policy_message());
+            if(!save_photo_journal(&photo_journal))return false;
+        }
+    }
     atomic_store(&photo_command_ack_sequence,ack_sequence);
     photo_metadata_ack_watermark=metadata_ack_watermark;
     return true;
@@ -510,6 +551,12 @@ typedef struct {
     char config_version[PHOTO_CONTROL_ID_BYTES];
     char authorization_session_id[PHOTO_CONTROL_ID_BYTES];
     char retention_expires_at[PHOTO_CONTROL_TIME_TEXT_BYTES];
+    char camera_shared_i2c_state[PHOTO_CONTROL_CAPTURE_CAMERA_STATE_BYTES];
+    char camera_driver_profile[PHOTO_CONTROL_CAPTURE_DRIVER_PROFILE_BYTES];
+    char runtime_config_id[PHOTO_CONTROL_CAPTURE_RUNTIME_CONFIG_BYTES];
+    char capture_fw_version[PHOTO_CONTROL_CAPTURE_FW_VERSION_BYTES];
+    char capture_firmware_elf_sha256[
+        PHOTO_CONTROL_CAPTURE_ELF_SHA256_BYTES];
     uint64_t execution_expires_at_unix_ms;
     uint64_t retention_expires_at_unix_ms;
     uint64_t source_event_utc_ms;
@@ -533,6 +580,86 @@ typedef struct {
     photo_media_store_result_t store_result;
     const char *failure_reason;
 } photo_capture_outcome_t;
+
+static bool photo_camera_manual_capture_ready(
+    platform_camera_status_t status)
+{
+    return status==PLATFORM_CAMERA_OK||
+        status==PLATFORM_CAMERA_TRIAL_READY_UNVERIFIED;
+}
+
+static const char *photo_camera_driver_profile(
+    platform_camera_shared_i2c_state_t state,const char *persisted_profile)
+{
+    if(persisted_profile&&persisted_profile[0])return persisted_profile;
+    switch(state){
+    case PLATFORM_CAMERA_SHARED_I2C_UNKNOWN_LEGACY:
+        return "qvga-jpeg-q12-v1-shared-i2c-unknown_legacy";
+    case PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED:
+        return "qvga-jpeg-q12-v1-shared-i2c-trial_unverified";
+    case PLATFORM_CAMERA_SHARED_I2C_VERIFIED:
+        return "qvga-jpeg-q12-v1-shared-i2c-verified";
+    case PLATFORM_CAMERA_SHARED_I2C_BLOCKED:
+    default:
+        return "qvga-jpeg-q12-v1-shared-i2c-blocked";
+    }
+}
+
+static platform_camera_shared_i2c_state_t
+photo_camera_shared_i2c_state_from_name(const char *state)
+{
+    if(state&&!strcmp(state,"verified"))
+        return PLATFORM_CAMERA_SHARED_I2C_VERIFIED;
+    if(state&&!strcmp(state,"trial_unverified"))
+        return PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED;
+    if(state&&!strcmp(state,"blocked"))
+        return PLATFORM_CAMERA_SHARED_I2C_BLOCKED;
+    return PLATFORM_CAMERA_SHARED_I2C_UNKNOWN_LEGACY;
+}
+
+static const char *photo_timer_camera_policy_state_reason(void)
+{
+    switch(platform_camera_shared_i2c_state()){
+    case PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED:
+        return "camera_trial_manual_only";
+    case PLATFORM_CAMERA_SHARED_I2C_BLOCKED:
+        return "camera_shared_i2c_blocked";
+    default:
+        return "camera_runtime_unavailable";
+    }
+}
+
+static const char *photo_timer_camera_policy_message(void)
+{
+    return platform_camera_shared_i2c_state()==
+        PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED?
+        "camera_unverified_trial_manual_only":"camera_shared_i2c_blocked";
+}
+
+static bool photo_timer_camera_policy_rejected(const char *state_reason)
+{
+    return state_reason&&
+        (!strcmp(state_reason,"camera_trial_manual_only")||
+         !strcmp(state_reason,"camera_shared_i2c_blocked"));
+}
+
+static const char *photo_timer_camera_policy_message_for_reason(
+    const char *state_reason)
+{
+    return state_reason&&!strcmp(state_reason,"camera_trial_manual_only")?
+        "camera_unverified_trial_manual_only":"camera_shared_i2c_blocked";
+}
+
+static bool photo_timer_enforce_camera_policy(
+    photo_control_timer_t *timer)
+{
+    if(!timer||platform_camera_timed_capture_allowed())return false;
+    timer->enabled=false;timer->schedule_armed=false;
+    timer->status_report_pending=true;
+    snprintf(timer->state_reason,sizeof(timer->state_reason),"%s",
+        photo_timer_camera_policy_state_reason());
+    return true;
+}
 
 static bool photo_store_result_fatal(photo_media_store_result_t result)
 {
@@ -705,15 +832,19 @@ static cJSON *photo_source_status_payload(const char *event_reason,
     const bool utc_formatted=trusted_utc&&photo_format_utc_ms(utc_ms,utc);
     const char *camera_reason=NULL;
     const platform_camera_status_t camera_status=platform_camera_preflight(&camera_reason);
-    const bool ready=atomic_load(&photo_control_state_ready)&&
+    const bool manual_chain_ready=atomic_load(&photo_control_state_ready)&&
+        atomic_load(&media_store_ready)&&
+        photo_camera_manual_capture_ready(camera_status);
+    const bool verified_ready=atomic_load(&photo_control_state_ready)&&
         atomic_load(&media_store_ready)&&camera_status==PLATFORM_CAMERA_OK;
     cJSON *payload=cJSON_CreateObject();
     if(!payload)return NULL;
     cJSON_AddStringToObject(payload,"source","camera");
     cJSON_AddStringToObject(payload,"component","photo_control");
     cJSON_AddBoolToObject(payload,"camera_runtime_compiled",true);
-    cJSON_AddBoolToObject(payload,"driver_preflight_ready",camera_status==PLATFORM_CAMERA_OK);
-    cJSON_AddBoolToObject(payload,"capture_trigger_wired",ready);
+    cJSON_AddBoolToObject(payload,"driver_preflight_ready",
+        camera_status==PLATFORM_CAMERA_OK);
+    cJSON_AddBoolToObject(payload,"capture_trigger_wired",manual_chain_ready);
     cJSON_AddBoolToObject(payload,"media_store_ready",atomic_load(&media_store_ready));
     if(timer.command_id[0])cJSON_AddStringToObject(payload,"command_id",timer.command_id);
     else cJSON_AddNullToObject(payload,"command_id");
@@ -736,7 +867,7 @@ static cJSON *photo_source_status_payload(const char *event_reason,
     cJSON_AddStringToObject(state,"state_reason",
         timer.state_reason[0]?timer.state_reason:"not_configured");
     cJSON_AddBoolToObject(state,"trusted_utc",trusted_utc);
-    if(runtime_ready)*runtime_ready=ready;
+    if(runtime_ready)*runtime_ready=verified_ready;
     if(missing_reason)*missing_reason=
         !atomic_load(&photo_control_state_ready)?"photo_control_state_unavailable":
         !atomic_load(&media_store_ready)?"photo_media_store_unavailable":camera_reason;
@@ -834,7 +965,9 @@ static bool photo_append_capture_metadata(photo_capture_outcome_t *outcome,
         .sha256_hex=saved?digest:NULL,
         .storage_kind=saved?"persistent":"none",
         .camera_model=saved?"OV5640":"unknown",
-        .driver_profile="qvga-jpeg-q12-v1",
+        .driver_profile=photo_camera_driver_profile(
+            outcome->camera.shared_i2c_state,
+            outcome->intent.camera_driver_profile),
         .authorization_session_id=outcome->intent.authorization_session_id,
         .retention_expires_at=outcome->intent.retention_expires_at,
         .failure_reason=saved?NULL:(outcome->outcome_ambiguous?
@@ -849,8 +982,9 @@ static bool photo_append_capture_metadata(photo_capture_outcome_t *outcome,
         .timestamp_source="sntp_anchor",
         .timestamp_quality="network_time_unverified_accuracy",
         .monotonic_clock_domain_id=capture_clock_domain,
-        .fw_version=CONFIG_EGOLINK_FW_VERSION,
-        .firmware_elf_sha256=firmware_elf_sha256,.runtime_config_id=CONFIG_ID,
+        .fw_version=outcome->intent.capture_fw_version,
+        .firmware_elf_sha256=outcome->intent.capture_firmware_elf_sha256,
+        .runtime_config_id=outcome->intent.runtime_config_id,
     };
     size_t frame_bytes=0U;
     return photo_delivery_build_metadata_frame(&metadata,frame,sizeof(frame),
@@ -864,6 +998,7 @@ static bool photo_execute_capture(const photo_capture_intent_t *intent,
 {
     if(!intent||!outcome)return false;
     memset(outcome,0,sizeof(*outcome));outcome->intent=*intent;
+    outcome->camera.shared_i2c_state=platform_camera_shared_i2c_state();
     if(!photo_wall_clock(&outcome->anchor_utc_ms)){
         outcome->failure_reason="trusted_utc_unavailable";
         return false;
@@ -1642,6 +1777,31 @@ static void health(void)
     photo_control_timer_t timer;photo_timer_snapshot(&timer);
     uint64_t ignored_utc=0U;const bool photo_utc_trusted=photo_wall_clock(&ignored_utc);
     cJSON *camera=cJSON_AddObjectToObject(p,"camera_runtime");
+    const platform_camera_shared_i2c_state_t shared_i2c_state=
+        platform_camera_shared_i2c_state();
+    const bool trial_consumed=
+        platform_camera_unverified_trial_attempt_consumed();
+    const char *camera_preflight_reason=NULL;
+    const platform_camera_status_t camera_preflight=
+        platform_camera_preflight(&camera_preflight_reason);
+    cJSON_AddStringToObject(camera,"shared_i2c_state",
+        platform_camera_shared_i2c_state_name(shared_i2c_state));
+    cJSON_AddBoolToObject(camera,"shared_i2c_verified",
+        shared_i2c_state==PLATFORM_CAMERA_SHARED_I2C_VERIFIED);
+    cJSON_AddStringToObject(camera,"driver_preflight",
+        platform_camera_status_name(camera_preflight));
+    if(camera_preflight_reason)cJSON_AddStringToObject(camera,
+        "driver_preflight_reason",camera_preflight_reason);
+    else cJSON_AddNullToObject(camera,"driver_preflight_reason");
+    cJSON_AddBoolToObject(camera,"manual_capture_ready",
+        photo_camera_manual_capture_ready(camera_preflight));
+    cJSON_AddBoolToObject(camera,"timed_capture_allowed",
+        platform_camera_timed_capture_allowed());
+    cJSON_AddBoolToObject(camera,"unverified_trial_attempt_consumed",
+        trial_consumed);
+    cJSON_AddBoolToObject(camera,"unverified_trial_attempt_remaining",
+        shared_i2c_state==PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED&&
+        !trial_consumed);
     cJSON_AddBoolToObject(camera,"control_state_ready",atomic_load(&photo_control_state_ready));
     cJSON_AddBoolToObject(camera,"media_store_ready",atomic_load(&media_store_ready));
     cJSON_AddBoolToObject(camera,"media_store_stats_valid",media_stats_valid);
@@ -1816,6 +1976,21 @@ static bool photo_stamp_intent(photo_capture_intent_t *intent,uint64_t utc_ms,
     intent->capture_boot_count=boot;
     intent->capture_sequence_id=sequence;
     intent->timer_captured_count_before=timer_captured_count_before;
+    const platform_camera_shared_i2c_state_t shared_i2c_state=
+        platform_camera_shared_i2c_state();
+    snprintf(intent->camera_shared_i2c_state,
+        sizeof(intent->camera_shared_i2c_state),"%s",
+        platform_camera_shared_i2c_state_name(shared_i2c_state));
+    snprintf(intent->camera_driver_profile,
+        sizeof(intent->camera_driver_profile),"%s",
+        photo_camera_driver_profile(shared_i2c_state,NULL));
+    snprintf(intent->runtime_config_id,sizeof(intent->runtime_config_id),"%s",
+        CONFIG_ID);
+    snprintf(intent->capture_fw_version,sizeof(intent->capture_fw_version),"%s",
+        CONFIG_EGOLINK_FW_VERSION);
+    snprintf(intent->capture_firmware_elf_sha256,
+        sizeof(intent->capture_firmware_elf_sha256),"%s",
+        firmware_elf_sha256);
     return true;
 }
 
@@ -1883,6 +2058,19 @@ static void photo_capture_journal_from_intent(
     snprintf(journal->retention_expires_at,
         sizeof(journal->retention_expires_at),"%s",intent->retention_expires_at);
     snprintf(journal->failure_reason,sizeof(journal->failure_reason),"pending");
+    snprintf(journal->camera_shared_i2c_state,
+        sizeof(journal->camera_shared_i2c_state),"%s",
+        intent->camera_shared_i2c_state);
+    snprintf(journal->camera_driver_profile,
+        sizeof(journal->camera_driver_profile),"%s",
+        intent->camera_driver_profile);
+    snprintf(journal->runtime_config_id,sizeof(journal->runtime_config_id),"%s",
+        intent->runtime_config_id);
+    snprintf(journal->capture_fw_version,
+        sizeof(journal->capture_fw_version),"%s",intent->capture_fw_version);
+    snprintf(journal->capture_firmware_elf_sha256,
+        sizeof(journal->capture_firmware_elf_sha256),"%s",
+        intent->capture_firmware_elf_sha256);
     journal->execution_expires_at_unix_ms=intent->execution_expires_at_unix_ms;
     journal->retention_expires_at_unix_ms=intent->retention_expires_at_unix_ms;
     journal->source_event_utc_ms=intent->source_event_utc_ms;
@@ -1908,6 +2096,19 @@ static void photo_intent_from_capture_journal(
         journal->authorization_session_id);
     snprintf(intent->retention_expires_at,sizeof(intent->retention_expires_at),"%s",
         journal->retention_expires_at);
+    snprintf(intent->camera_shared_i2c_state,
+        sizeof(intent->camera_shared_i2c_state),"%s",
+        journal->camera_shared_i2c_state);
+    snprintf(intent->camera_driver_profile,
+        sizeof(intent->camera_driver_profile),"%s",
+        journal->camera_driver_profile);
+    snprintf(intent->runtime_config_id,sizeof(intent->runtime_config_id),"%s",
+        journal->runtime_config_id);
+    snprintf(intent->capture_fw_version,sizeof(intent->capture_fw_version),"%s",
+        journal->capture_fw_version);
+    snprintf(intent->capture_firmware_elf_sha256,
+        sizeof(intent->capture_firmware_elf_sha256),"%s",
+        journal->capture_firmware_elf_sha256);
     intent->execution_expires_at_unix_ms=journal->execution_expires_at_unix_ms;
     intent->retention_expires_at_unix_ms=journal->retention_expires_at_unix_ms;
     intent->source_event_utc_ms=journal->source_event_utc_ms;
@@ -1929,6 +2130,13 @@ static bool photo_capture_journal_matches_intent(
         !strcmp(journal->config_version,intent->config_version)&&
         !strcmp(journal->authorization_session_id,intent->authorization_session_id)&&
         !strcmp(journal->retention_expires_at,intent->retention_expires_at)&&
+        !strcmp(journal->camera_shared_i2c_state,
+            intent->camera_shared_i2c_state)&&
+        !strcmp(journal->camera_driver_profile,intent->camera_driver_profile)&&
+        !strcmp(journal->runtime_config_id,intent->runtime_config_id)&&
+        !strcmp(journal->capture_fw_version,intent->capture_fw_version)&&
+        !strcmp(journal->capture_firmware_elf_sha256,
+            intent->capture_firmware_elf_sha256)&&
         journal->execution_expires_at_unix_ms==intent->execution_expires_at_unix_ms&&
         journal->retention_expires_at_unix_ms==intent->retention_expires_at_unix_ms;
 }
@@ -1972,6 +2180,8 @@ static bool photo_capture_restore_outcome(
     if(!journal||!outcome||journal->phase==PHOTO_CONTROL_CAPTURE_NONE)return false;
     memset(outcome,0,sizeof(*outcome));
     photo_intent_from_capture_journal(journal,&outcome->intent);
+    outcome->camera.shared_i2c_state=photo_camera_shared_i2c_state_from_name(
+        outcome->intent.camera_shared_i2c_state);
     outcome->event_utc_ms=journal->source_event_utc_ms;
     outcome->event_monotonic_ns=journal->source_event_monotonic_ns;
     outcome->camera.attempted=journal->attempted;
@@ -2179,6 +2389,14 @@ static bool photo_handle_timer_command(egolink_esp_p0_https_t *https,
     const bool duplicate=duplicate_id;
     photo_control_timer_t timer;photo_timer_snapshot(&timer);
     if(duplicate&&journal.phase==PHOTO_CONTROL_JOURNAL_COMPLETE){
+        if(command->timer_enabled&&
+           !platform_camera_timed_capture_allowed()){
+            if(!photo_finish_journal(&journal,"error",
+                photo_timer_camera_policy_message()))return false;
+            photo_emit_source_status(photo_timer_camera_policy_message());
+            return photo_post_command_ack(https,route,interface_name,&journal,
+                NULL,NULL,true,response,response_capacity);
+        }
         /* A previously applied timer may now be disabled by its session
          * deadline or max-photo limit. That is an effective-state refresh,
          * not a rejected configuration. Keep `applied` and let timer_state
@@ -2194,13 +2412,16 @@ static bool photo_handle_timer_command(egolink_esp_p0_https_t *https,
     const char *camera_reason=NULL;
     const bool capture_ready=atomic_load(&media_store_ready)&&
         platform_camera_preflight(&camera_reason)==PLATFORM_CAMERA_OK;
+    const bool timed_capture_allowed=platform_camera_timed_capture_allowed();
     if(!trusted||!photo_control_command_is_live(command,trusted,utc_ms)||
-       (command->timer_enabled&&!capture_ready)){
+       (command->timer_enabled&&(!timed_capture_allowed||!capture_ready))){
         photo_journal_fill(&journal,PHOTO_CONTROL_JOURNAL_COMPLETE,
             PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER,command->cmd_id,"error",
             !trusted?"trusted_utc_unavailable":
             (!photo_control_command_is_live(command,trusted,utc_ms)?
-             "timer_command_expired":"camera_runtime_unavailable"),"none");
+             "timer_command_expired":(!timed_capture_allowed?
+             photo_timer_camera_policy_message():
+             "camera_runtime_unavailable")),"none");
         if(!save_photo_journal(&journal))return false;
         photo_journal_publish(&journal);
         photo_emit_source_status("timer_configuration_rejected");
@@ -2302,6 +2523,7 @@ static bool photo_settle_timer_capture(photo_control_timer_t *timer,
         timer->status_report_pending=true;
         snprintf(timer->state_reason,sizeof(timer->state_reason),
             "capture_retention_expired");
+        (void)photo_timer_enforce_camera_policy(timer);
         if(!save_photo_timer(timer))return false;
         photo_timer_publish(timer);
         return photo_capture_clear();
@@ -2314,6 +2536,7 @@ static bool photo_settle_timer_capture(photo_control_timer_t *timer,
         timer->status_report_pending=true;
         snprintf(timer->state_reason,sizeof(timer->state_reason),
             "capture_outcome_ambiguous");
+        (void)photo_timer_enforce_camera_policy(timer);
         if(!save_photo_timer(timer))return false;
         photo_timer_publish(timer);
         if(!photo_capture_clear())return false;
@@ -2344,6 +2567,7 @@ static bool photo_settle_timer_capture(photo_control_timer_t *timer,
                     "photo_identity_conflict":"media_store_unavailable");
         }
     }
+    (void)photo_timer_enforce_camera_policy(timer);
     if(!save_photo_timer(timer))return false;
     photo_timer_publish(timer);
     if(!photo_capture_clear())return false;
@@ -2416,19 +2640,25 @@ static void photo_service_local_timer(void)
         return;
     }
     const char *preflight_reason=NULL;
-    if(timer.enabled&&(!atomic_load(&media_store_ready)||
+    const bool timer_policy_rejected=
+        !platform_camera_timed_capture_allowed();
+    if(timer.enabled&&(timer_policy_rejected||
+       !atomic_load(&media_store_ready)||
        platform_camera_preflight(&preflight_reason)!=PLATFORM_CAMERA_OK)){
         timer.enabled=false;timer.schedule_armed=false;timer.status_report_pending=true;
         snprintf(timer.state_reason,sizeof(timer.state_reason),"%s",
-            atomic_load(&media_store_ready)?"camera_runtime_unavailable":
-            "media_store_unavailable");
+            timer_policy_rejected?photo_timer_camera_policy_state_reason():
+            (atomic_load(&media_store_ready)?"camera_runtime_unavailable":
+            "media_store_unavailable"));
         if(!save_photo_timer(&timer)){
             atomic_store(&photo_control_state_ready,false);
             return;
         }
         photo_timer_publish(&timer);
-        photo_emit_source_status(preflight_reason?preflight_reason:
-            "timer_disabled_runtime_unavailable");
+        photo_emit_source_status(timer_policy_rejected?
+            photo_timer_camera_policy_message():
+            (preflight_reason?preflight_reason:
+            "timer_disabled_runtime_unavailable"));
         return;
     }
     uint64_t utc_ms=0U;const bool trusted=photo_wall_clock(&utc_ms);
@@ -2465,11 +2695,18 @@ static bool photo_post_pending_timer_state(egolink_esp_p0_https_t *https,
 {
     photo_control_timer_t timer;photo_timer_snapshot(&timer);
     if(!timer.status_report_pending||!timer.command_id[0])return false;
+    const bool camera_policy_rejected=
+        photo_timer_camera_policy_rejected(timer.state_reason);
     photo_control_journal_t report;
     photo_journal_fill(&report,PHOTO_CONTROL_JOURNAL_COMPLETE,
-        PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER,timer.command_id,"applied",
-        timer.state_reason,"none");
-    if(!photo_post_command_ack(https,route,interface_name,&report,&timer,"applied",
+        PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER,timer.command_id,
+        camera_policy_rejected?"error":"applied",
+        camera_policy_rejected?
+            photo_timer_camera_policy_message_for_reason(timer.state_reason):
+            timer.state_reason,"none");
+    if(!photo_post_command_ack(https,route,interface_name,&report,
+        camera_policy_rejected?NULL:&timer,
+        camera_policy_rejected?NULL:"applied",
         true,response,response_capacity))return true;
     timer.status_report_pending=false;
     if(!save_photo_timer(&timer)){atomic_store(&photo_control_state_ready,false);return true;}
@@ -2867,9 +3104,12 @@ void app_main(void)
     bool wifi_started=network_init();
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
     const char *camera_reason=NULL;platform_camera_status_t camera_preflight=platform_camera_preflight(&camera_reason);
-    const bool camera_runtime_ready=camera_preflight==PLATFORM_CAMERA_OK&&
+    const platform_camera_shared_i2c_state_t camera_shared_i2c_state=
+        platform_camera_shared_i2c_state();
+    const bool camera_runtime_ready=photo_camera_manual_capture_ready(
+        camera_preflight)&&
         atomic_load(&media_store_ready)&&atomic_load(&photo_control_state_ready);
-    ESP_LOGI(TAG,"START boot=%" PRIu32 " firmware=%s no_sim_profile=%d run_seconds=%d camera_profile=%d camera_preflight=%s camera_reason=%s wifi_stack=%d lte_ppp_opt_in=%d",boot,CONFIG_EGOLINK_FW_VERSION,CONFIG_EGOLINK_COLLECTION_NO_SIM,CONFIG_EGOLINK_COLLECTION_RUN_SECONDS,CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE,platform_camera_status_name(camera_preflight),camera_reason?camera_reason:"none",network_stack_ready,CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
+    ESP_LOGI(TAG,"START boot=%" PRIu32 " firmware=%s no_sim_profile=%d run_seconds=%d camera_profile=%d camera_shared_i2c_state=%s camera_preflight=%s camera_reason=%s trial_attempt_consumed=%d timer_capture_allowed=%d wifi_stack=%d lte_ppp_opt_in=%d",boot,CONFIG_EGOLINK_FW_VERSION,CONFIG_EGOLINK_COLLECTION_NO_SIM,CONFIG_EGOLINK_COLLECTION_RUN_SECONDS,CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE,platform_camera_shared_i2c_state_name(camera_shared_i2c_state),platform_camera_status_name(camera_preflight),camera_reason?camera_reason:"none",platform_camera_unverified_trial_attempt_consumed(),platform_camera_timed_capture_allowed(),network_stack_ready,CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
 #else
     ESP_LOGI(TAG,"START boot=%" PRIu32 " firmware=%s no_sim_profile=%d run_seconds=%d media=false wifi_stack=%d lte_ppp_opt_in=%d",boot,CONFIG_EGOLINK_FW_VERSION,CONFIG_EGOLINK_COLLECTION_NO_SIM,CONFIG_EGOLINK_COLLECTION_RUN_SECONDS,network_stack_ready,CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
 #endif
@@ -2883,9 +3123,20 @@ void app_main(void)
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
     cJSON_AddBoolToObject(p,"camera_profile_requested",true);
     cJSON_AddBoolToObject(p,"camera_runtime_compiled",true);
-    cJSON_AddBoolToObject(p,"camera_driver_preflight_ready",camera_preflight==PLATFORM_CAMERA_OK);
+    cJSON_AddStringToObject(p,"camera_shared_i2c_state",
+        platform_camera_shared_i2c_state_name(camera_shared_i2c_state));
+    cJSON_AddBoolToObject(p,"camera_shared_i2c_verified",
+        camera_shared_i2c_state==PLATFORM_CAMERA_SHARED_I2C_VERIFIED);
+    cJSON_AddBoolToObject(p,"camera_driver_preflight_ready",
+        camera_preflight==PLATFORM_CAMERA_OK);
+    cJSON_AddBoolToObject(p,"camera_manual_capture_ready",
+        camera_runtime_ready);
     cJSON_AddBoolToObject(p,"camera_enabled",camera_runtime_ready);
     cJSON_AddBoolToObject(p,"camera_capture_trigger_wired",camera_runtime_ready);
+    cJSON_AddBoolToObject(p,"camera_timed_capture_allowed",
+        platform_camera_timed_capture_allowed());
+    cJSON_AddBoolToObject(p,"camera_unverified_trial_attempt_consumed",
+        platform_camera_unverified_trial_attempt_consumed());
     cJSON_AddBoolToObject(p,"photo_media_store_ready",atomic_load(&media_store_ready));
     cJSON_AddBoolToObject(p,"photo_control_state_ready",atomic_load(&photo_control_state_ready));
 #else
@@ -2896,7 +3147,9 @@ void app_main(void)
     cJSON_AddStringToObject(p,"stop_method",button_ready?"hold_BOOT_1_second_or_configured_deadline":"configured_deadline_only_button_init_failed");
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
     cJSON_AddStringToObject(p,"media_reason",camera_runtime_ready?
-        "camera_runtime_ready":(camera_reason?camera_reason:"photo_runtime_storage_or_state_unavailable"));
+        (camera_shared_i2c_state==PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED?
+        "camera_manual_capture_trial_unverified_ready":"camera_runtime_ready"):
+        (camera_reason?camera_reason:"photo_runtime_storage_or_state_unavailable"));
 #else
     cJSON_AddStringToObject(p,"media_reason","assembly_and_capture_scope_not_confirmed");
 #endif

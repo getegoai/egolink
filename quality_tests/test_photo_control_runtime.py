@@ -69,6 +69,40 @@ static const unsigned char CAPTURE[]={__CAPTURE__};
 static const unsigned char TIMER[]={__TIMER__};
 static const unsigned char EMPTY[]={__EMPTY__};
 
+static uint32_t legacy_crc_update(uint32_t crc,const void *data,size_t bytes)
+{
+  const uint8_t *p=data;
+  for(size_t i=0U;i<bytes;++i){
+    crc^=p[i];
+    for(unsigned bit=0U;bit<8U;++bit)
+      crc=(crc>>1U)^(UINT32_C(0xedb88320)&(0U-(crc&1U)));
+  }
+  return crc;
+}
+static void legacy_put32(uint8_t *p,uint32_t value)
+{ for(unsigned i=0U;i<4U;++i)p[i]=(uint8_t)(value>>(i*8U)); }
+static uint32_t legacy_capture_crc(const uint8_t *blob,size_t bytes)
+{
+  uint32_t crc=legacy_crc_update(UINT32_MAX,blob,28U);
+  if(bytes>32U)crc=legacy_crc_update(crc,blob+32U,bytes-32U);
+  return ~crc;
+}
+static size_t convert_current_capture_journal_to_legacy_v1(
+    uint8_t blob[PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES],size_t current_bytes)
+{
+  assert(current_bytes>68U);
+  size_t at=68U;
+  /* v1 ended after the same first seven one-byte-length-prefixed strings. */
+  for(unsigned field=0U;field<7U;++field){
+    assert(at<current_bytes&&blob[at]>0U);
+    at+=1U+(size_t)blob[at];
+    assert(at<=current_bytes);
+  }
+  legacy_put32(blob+4U,1U);
+  legacy_put32(blob+28U,legacy_capture_crc(blob,at));
+  return at;
+}
+
 int main(void){
   photo_control_command_t c;
   assert(photo_control_parse_raw_command(CAPTURE,sizeof(CAPTURE),&c)==PHOTO_CONTROL_PARSE_OK);
@@ -135,6 +169,14 @@ int main(void){
   strcpy(capture_journal.authorization_session_id,"photo-session-001");
   strcpy(capture_journal.retention_expires_at,"2027-01-15T10:00:00.123Z");
   strcpy(capture_journal.failure_reason,"none");
+  strcpy(capture_journal.camera_shared_i2c_state,"trial_unverified");
+  strcpy(capture_journal.camera_driver_profile,
+      "qvga-jpeg-q12-v1-shared-i2c-trial_unverified");
+  strcpy(capture_journal.runtime_config_id,
+      "collector-v1-camera-shared-i2c-trial_unverified");
+  strcpy(capture_journal.capture_fw_version,"camera-runtime-test");
+  memset(capture_journal.capture_firmware_elf_sha256,'a',64U);
+  capture_journal.capture_firmware_elf_sha256[64U]=0;
   uint8_t capture_blob[PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES];
   assert(photo_control_capture_journal_encode(&capture_journal,capture_blob,&bytes));
   photo_control_capture_journal_t capture_restored;
@@ -144,8 +186,52 @@ int main(void){
   assert(capture_restored.capture_boot_count==7U&&capture_restored.capture_sequence_id==42U);
   assert(capture_restored.source_event_monotonic_ns==987654321ULL);
   assert(capture_restored.media_saved&&!strcmp(capture_restored.photo_id,"timer-photo-001"));
+  assert(!strcmp(capture_restored.camera_shared_i2c_state,"trial_unverified"));
+  assert(!strcmp(capture_restored.camera_driver_profile,
+      "qvga-jpeg-q12-v1-shared-i2c-trial_unverified"));
+  assert(!strcmp(capture_restored.runtime_config_id,
+      "collector-v1-camera-shared-i2c-trial_unverified"));
+  assert(!strcmp(capture_restored.capture_fw_version,"camera-runtime-test"));
+  assert(!strcmp(capture_restored.capture_firmware_elf_sha256,
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+
+  /* A syntactically valid but contradictory gate/profile pair is rejected
+   * before persistence. */
+  strcpy(capture_journal.camera_shared_i2c_state,"verified");
+  assert(!photo_control_capture_journal_encode(
+      &capture_journal,capture_blob,&bytes));
+  strcpy(capture_journal.camera_shared_i2c_state,"trial_unverified");
   capture_blob[bytes-1U]^=1U;
   assert(!photo_control_capture_journal_decode(capture_blob,bytes,&capture_restored));
+
+  /* A real v1 byte layout remains readable, but its absent capture-time gate
+   * facts stay explicitly unknown rather than inheriting the current image. */
+  assert(photo_control_capture_journal_encode(&capture_journal,capture_blob,&bytes));
+  bytes=convert_current_capture_journal_to_legacy_v1(capture_blob,bytes);
+  assert(photo_control_capture_journal_decode(capture_blob,bytes,&capture_restored));
+  assert(capture_restored.phase==PHOTO_CONTROL_CAPTURE_RESULT);
+  assert(!strcmp(capture_restored.photo_id,"timer-photo-001"));
+  assert(!strcmp(capture_restored.camera_shared_i2c_state,"unknown_legacy"));
+  assert(!strcmp(capture_restored.camera_driver_profile,
+      "qvga-jpeg-q12-v1-shared-i2c-unknown_legacy"));
+  assert(!strcmp(capture_restored.runtime_config_id,"unknown_legacy"));
+  assert(!strcmp(capture_restored.capture_fw_version,"unknown_legacy"));
+  assert(!strcmp(capture_restored.capture_firmware_elf_sha256,
+      "0000000000000000000000000000000000000000000000000000000000000000"));
+  assert(strcmp(capture_restored.camera_shared_i2c_state,"verified"));
+  assert(!strstr(capture_restored.camera_driver_profile,"-verified"));
+  assert(photo_control_capture_journal_encode(
+      &capture_restored,capture_blob,&bytes));
+  photo_control_capture_journal_t migrated;
+  assert(photo_control_capture_journal_decode(capture_blob,bytes,&migrated));
+  assert(!strcmp(migrated.camera_shared_i2c_state,"unknown_legacy"));
+  assert(!strcmp(migrated.camera_driver_profile,
+      "qvga-jpeg-q12-v1-shared-i2c-unknown_legacy"));
+  assert(!strcmp(migrated.runtime_config_id,"unknown_legacy"));
+  assert(!strcmp(migrated.capture_fw_version,"unknown_legacy"));
+  assert(!strcmp(migrated.capture_firmware_elf_sha256,
+      "0000000000000000000000000000000000000000000000000000000000000000"));
+
   photo_control_capture_journal_default(&capture_restored);
   assert(photo_control_capture_journal_allows_new_command(&capture_restored));
 
@@ -224,6 +310,11 @@ int main(void) {
 
     def test_component_is_discovered_and_exercises_restart_timer_and_journal(self):
         self.assertIn(b"capture-command-001", self.ack)
+
+    def test_capture_journal_preserves_v2_provenance_and_migrates_v1_as_unknown(self):
+        # The native setUp harness performs the v2 byte-for-byte round trip,
+        # constructs a genuine v1 layout, and rejects any verified inference.
+        self.assertTrue(self.ack.startswith(b"EGLK/1"))
 
     def test_timer_ack_projects_complete_applied_effective_state(self):
         initial = initial_raw_frame_record(

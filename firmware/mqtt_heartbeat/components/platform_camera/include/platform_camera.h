@@ -12,6 +12,8 @@ typedef enum {
     PLATFORM_CAMERA_OK = 0,
     PLATFORM_CAMERA_DISABLED,
     PLATFORM_CAMERA_BLOCKED_SHARED_I2C_UNVERIFIED,
+    PLATFORM_CAMERA_TRIAL_READY_UNVERIFIED,
+    PLATFORM_CAMERA_TRIAL_ATTEMPT_CONSUMED,
     PLATFORM_CAMERA_BUSY,
     PLATFORM_CAMERA_I2C_BUS_UNAVAILABLE,
     PLATFORM_CAMERA_INIT_FAILED,
@@ -21,6 +23,15 @@ typedef enum {
     PLATFORM_CAMERA_CONSUMER_FAILED,
     PLATFORM_CAMERA_DEINIT_FAILED
 } platform_camera_status_t;
+
+typedef enum {
+    /* Used only for recovered legacy capture provenance. Runtime policy never
+     * returns this state for the current image. */
+    PLATFORM_CAMERA_SHARED_I2C_UNKNOWN_LEGACY = 0,
+    PLATFORM_CAMERA_SHARED_I2C_BLOCKED,
+    PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED,
+    PLATFORM_CAMERA_SHARED_I2C_VERIFIED
+} platform_camera_shared_i2c_state_t;
 
 typedef struct {
     platform_camera_status_t status;
@@ -36,6 +47,7 @@ typedef struct {
     uint8_t pixel_format;
     uint8_t sha256[PLATFORM_CAMERA_SHA256_BYTES];
     char sha256_hex[PLATFORM_CAMERA_SHA256_HEX_BYTES];
+    platform_camera_shared_i2c_state_t shared_i2c_state;
     bool attempted;
     bool frame_acquired;
     bool jpeg_markers_valid;
@@ -54,6 +66,11 @@ typedef bool (*platform_camera_frame_consumer_t)(
     const platform_camera_capture_result_t *metadata);
 
 platform_camera_status_t platform_camera_preflight(const char **reason);
+platform_camera_shared_i2c_state_t platform_camera_shared_i2c_state(void);
+const char *platform_camera_shared_i2c_state_name(
+    platform_camera_shared_i2c_state_t);
+bool platform_camera_unverified_trial_attempt_consumed(void);
+bool platform_camera_timed_capture_allowed(void);
 
 /* Low-level capture seam. It does not receive or persist commands.
  * The collection runtime owns capture_photo_once/configure_photo_timer, binds the

@@ -1,0 +1,8 @@
+# DANGER: EXPLICIT ENGINEERING TRIAL ONLY. Apply this file after
+# sdkconfig.camera_collection.defaults for a separately authorized build.
+# It does not verify shared-I2C coexistence, authorize flashing/capture, or
+# permit local timers. The existing Web capture_photo_once path may make at
+# most one bounded hardware capture attempt per boot.
+# CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_BLOCKED is not set
+# CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED is not set
+CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL=y

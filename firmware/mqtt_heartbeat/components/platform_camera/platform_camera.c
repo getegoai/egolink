@@ -1,5 +1,6 @@
 #include "platform_camera.h"
 
+#include <stdatomic.h>
 #include <string.h>
 
 #include "sdkconfig.h"
@@ -9,6 +10,14 @@
 #endif
 #ifndef CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED
 #define CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED 0
+#endif
+#ifndef CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL
+#define CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL 0
+#endif
+
+#if CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED && \
+    CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL
+#error "shared-I2C verified and unverified-trial camera states are mutually exclusive"
 #endif
 
 #define CAMERA_PIN_D0 7
@@ -58,24 +67,77 @@ _Static_assert(((CAMERA_DATA_MASK|CAMERA_CONTROL_MASK) &
 
 static const char *const s_profile = "waveshare_esp32s3_sim7670g_4g_ov5640";
 #if CONFIG_EGOLINK_PLATFORM_CAMERA_ENABLED
-static bool s_lifecycle_blocked;
+static atomic_bool s_lifecycle_blocked;
+#if CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL
+static atomic_bool s_unverified_trial_attempt_consumed;
 #endif
+#endif
+
+platform_camera_shared_i2c_state_t platform_camera_shared_i2c_state(void)
+{
+#if !CONFIG_EGOLINK_PLATFORM_CAMERA_ENABLED
+    return PLATFORM_CAMERA_SHARED_I2C_BLOCKED;
+#elif CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED
+    return PLATFORM_CAMERA_SHARED_I2C_VERIFIED;
+#elif CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL
+    return PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED;
+#else
+    return PLATFORM_CAMERA_SHARED_I2C_BLOCKED;
+#endif
+}
+
+const char *platform_camera_shared_i2c_state_name(
+    platform_camera_shared_i2c_state_t state)
+{
+    switch(state){
+    case PLATFORM_CAMERA_SHARED_I2C_UNKNOWN_LEGACY:return "unknown_legacy";
+    case PLATFORM_CAMERA_SHARED_I2C_BLOCKED:return "blocked";
+    case PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED:return "trial_unverified";
+    case PLATFORM_CAMERA_SHARED_I2C_VERIFIED:return "verified";
+    default:return "unknown";
+    }
+}
+
+bool platform_camera_unverified_trial_attempt_consumed(void)
+{
+#if CONFIG_EGOLINK_PLATFORM_CAMERA_ENABLED && \
+    CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL
+    return atomic_load(&s_unverified_trial_attempt_consumed);
+#else
+    return false;
+#endif
+}
+
+bool platform_camera_timed_capture_allowed(void)
+{
+    return platform_camera_shared_i2c_state()==
+        PLATFORM_CAMERA_SHARED_I2C_VERIFIED;
+}
 
 platform_camera_status_t platform_camera_preflight(const char **reason)
 {
 #if !CONFIG_EGOLINK_PLATFORM_CAMERA_ENABLED
     if(reason)*reason="camera_profile_disabled";
     return PLATFORM_CAMERA_DISABLED;
-#elif !CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED
-    if(reason)*reason="blocked_shared_i2c_hardware_coexistence_unverified_gpio15_16_i2c0";
-    return PLATFORM_CAMERA_BLOCKED_SHARED_I2C_UNVERIFIED;
 #else
-#if CONFIG_EGOLINK_PLATFORM_CAMERA_ENABLED
-    if(s_lifecycle_blocked){
+    const platform_camera_shared_i2c_state_t state=
+        platform_camera_shared_i2c_state();
+    if(state==PLATFORM_CAMERA_SHARED_I2C_BLOCKED){
+        if(reason)*reason="blocked_shared_i2c_hardware_coexistence_unverified_gpio15_16_i2c0";
+        return PLATFORM_CAMERA_BLOCKED_SHARED_I2C_UNVERIFIED;
+    }
+    if(atomic_load(&s_lifecycle_blocked)){
         if(reason)*reason="camera_driver_cleanup_failed_reboot_required";
         return PLATFORM_CAMERA_DEINIT_FAILED;
     }
-#endif
+    if(state==PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED){
+        if(platform_camera_unverified_trial_attempt_consumed()){
+            if(reason)*reason="camera_unverified_trial_attempt_consumed_this_boot";
+            return PLATFORM_CAMERA_TRIAL_ATTEMPT_CONSUMED;
+        }
+        if(reason)*reason="camera_unverified_trial_manual_once_ready";
+        return PLATFORM_CAMERA_TRIAL_READY_UNVERIFIED;
+    }
     if(reason)*reason=NULL;
     return PLATFORM_CAMERA_OK;
 #endif
@@ -127,13 +189,27 @@ platform_camera_status_t platform_camera_capture_single(
     if(!result)return PLATFORM_CAMERA_CAPTURE_FAILED;
     memset(result,0,sizeof(*result));result->pin_profile=s_profile;
     result->camera_model="unknown";
+    result->shared_i2c_state=platform_camera_shared_i2c_state();
     result->status=platform_camera_preflight(&result->reason);
-    if(result->status!=PLATFORM_CAMERA_OK)return result->status;
+    if(result->status!=PLATFORM_CAMERA_OK&&
+       result->status!=PLATFORM_CAMERA_TRIAL_READY_UNVERIFIED)
+        return result->status;
 #if CONFIG_EGOLINK_PLATFORM_CAMERA_ENABLED
     if(_lock_try_acquire(&s_capture_lock)!=0){
         result->status=PLATFORM_CAMERA_BUSY;result->reason="camera_single_frame_already_in_progress";
         return result->status;
     }
+#if CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL
+    bool trial_available=false;
+    if(!atomic_compare_exchange_strong(&s_unverified_trial_attempt_consumed,
+        &trial_available,true)){
+        result->status=PLATFORM_CAMERA_TRIAL_ATTEMPT_CONSUMED;
+        result->reason="camera_unverified_trial_attempt_consumed_this_boot";
+        _lock_release(&s_capture_lock);
+        return result->status;
+    }
+#endif
+    result->status=PLATFORM_CAMERA_OK;result->reason=NULL;
     result->attempted=true;result->capture_started_us=esp_timer_get_time();
     i2c_config_t bus={.mode=I2C_MODE_MASTER,.sda_io_num=CAMERA_PIN_SDA,.scl_io_num=CAMERA_PIN_SCL,
         .sda_pullup_en=GPIO_PULLUP_ENABLE,.scl_pullup_en=GPIO_PULLUP_ENABLE,
@@ -152,7 +228,7 @@ platform_camera_status_t platform_camera_capture_single(
          * failures too; do not claim cleanup success without its return. */
         esp_err_t cleanup=esp_camera_deinit();
         result->driver_deinitialized=cleanup==ESP_OK;
-        if(cleanup!=ESP_OK)s_lifecycle_blocked=true;
+        if(cleanup!=ESP_OK)atomic_store(&s_lifecycle_blocked,true);
         result->status=PLATFORM_CAMERA_INIT_FAILED;
         result->reason=cleanup==ESP_OK?"esp_camera_init_failed_driver_cleaned":
             "esp_camera_init_failed_cleanup_unverified";
@@ -175,7 +251,7 @@ platform_camera_status_t platform_camera_capture_single(
         result->capture_completed_us=esp_timer_get_time();
         esp_err_t deinit=esp_camera_deinit();
         result->driver_deinitialized=deinit==ESP_OK;
-        if(deinit!=ESP_OK)s_lifecycle_blocked=true;
+        if(deinit!=ESP_OK)atomic_store(&s_lifecycle_blocked,true);
         _lock_release(&s_capture_lock);return result->status;
     }
     camera_fb_t *frame=esp_camera_fb_get();
@@ -202,11 +278,11 @@ platform_camera_status_t platform_camera_capture_single(
     result->capture_completed_us=esp_timer_get_time();
     esp_err_t deinit=esp_camera_deinit();result->driver_deinitialized=deinit==ESP_OK;
     if(deinit!=ESP_OK&&result->status==PLATFORM_CAMERA_OK){
-        s_lifecycle_blocked=true;
+        atomic_store(&s_lifecycle_blocked,true);
         result->status=PLATFORM_CAMERA_DEINIT_FAILED;
         result->reason="esp_camera_deinit_failed_reboot_required_no_physical_power_claim";
     }else if(deinit!=ESP_OK){
-        s_lifecycle_blocked=true;
+        atomic_store(&s_lifecycle_blocked,true);
     }
     _lock_release(&s_capture_lock);
     return result->status;
@@ -222,6 +298,8 @@ const char *platform_camera_status_name(platform_camera_status_t status)
     case PLATFORM_CAMERA_OK:return "ok";
     case PLATFORM_CAMERA_DISABLED:return "disabled";
     case PLATFORM_CAMERA_BLOCKED_SHARED_I2C_UNVERIFIED:return "blocked_shared_i2c_unverified";
+    case PLATFORM_CAMERA_TRIAL_READY_UNVERIFIED:return "trial_ready_unverified";
+    case PLATFORM_CAMERA_TRIAL_ATTEMPT_CONSUMED:return "trial_attempt_consumed";
     case PLATFORM_CAMERA_BUSY:return "busy";
     case PLATFORM_CAMERA_I2C_BUS_UNAVAILABLE:return "i2c_bus_unavailable";
     case PLATFORM_CAMERA_INIT_FAILED:return "init_failed";

@@ -9,6 +9,23 @@
 #define JOURNAL_MAGIC UINT32_C(0x50434a52)
 #define CAPTURE_JOURNAL_MAGIC UINT32_C(0x50434150)
 #define PERSIST_VERSION UINT32_C(1)
+#define CAPTURE_JOURNAL_VERSION_LEGACY UINT32_C(1)
+#define CAPTURE_JOURNAL_VERSION_CURRENT UINT32_C(2)
+#define CAPTURE_LEGACY_CAMERA_STATE "unknown_legacy"
+#define CAPTURE_LEGACY_DRIVER_PROFILE \
+    "qvga-jpeg-q12-v1-shared-i2c-unknown_legacy"
+#define CAPTURE_BLOCKED_CAMERA_STATE "blocked"
+#define CAPTURE_BLOCKED_DRIVER_PROFILE \
+    "qvga-jpeg-q12-v1-shared-i2c-blocked"
+#define CAPTURE_TRIAL_CAMERA_STATE "trial_unverified"
+#define CAPTURE_TRIAL_DRIVER_PROFILE \
+    "qvga-jpeg-q12-v1-shared-i2c-trial_unverified"
+#define CAPTURE_VERIFIED_CAMERA_STATE "verified"
+#define CAPTURE_VERIFIED_DRIVER_PROFILE \
+    "qvga-jpeg-q12-v1-shared-i2c-verified"
+#define CAPTURE_LEGACY_BUILD_ID "unknown_legacy"
+#define CAPTURE_LEGACY_ELF_SHA256 \
+    "0000000000000000000000000000000000000000000000000000000000000000"
 
 static uint32_t crc32_update(uint32_t crc, const void *data, size_t bytes)
 {
@@ -47,6 +64,36 @@ static bool safe_text(const char *text, size_t capacity)
     for (const unsigned char *p = (const unsigned char *)text; *p; ++p)
         if (*p < 0x20U || *p > 0x7eU || *p == '\n' || *p == '\r') return false;
     return true;
+}
+
+static bool lowercase_sha256(const char *text)
+{
+    if (!text || strlen(text) != 64U) return false;
+    for (size_t i = 0U; i < 64U; ++i)
+        if (!((text[i] >= '0' && text[i] <= '9') ||
+              (text[i] >= 'a' && text[i] <= 'f'))) return false;
+    return true;
+}
+
+static bool capture_camera_provenance_consistent(
+    const photo_control_capture_journal_t *journal)
+{
+    if (!journal) return false;
+    const char *expected_profile = NULL;
+    if (!strcmp(journal->camera_shared_i2c_state,
+                CAPTURE_LEGACY_CAMERA_STATE))
+        expected_profile = CAPTURE_LEGACY_DRIVER_PROFILE;
+    else if (!strcmp(journal->camera_shared_i2c_state,
+                     CAPTURE_BLOCKED_CAMERA_STATE))
+        expected_profile = CAPTURE_BLOCKED_DRIVER_PROFILE;
+    else if (!strcmp(journal->camera_shared_i2c_state,
+                     CAPTURE_TRIAL_CAMERA_STATE))
+        expected_profile = CAPTURE_TRIAL_DRIVER_PROFILE;
+    else if (!strcmp(journal->camera_shared_i2c_state,
+                     CAPTURE_VERIFIED_CAMERA_STATE))
+        expected_profile = CAPTURE_VERIFIED_DRIVER_PROFILE;
+    return expected_profile &&
+        !strcmp(journal->camera_driver_profile, expected_profile);
 }
 
 static bool leap(unsigned year)
@@ -515,8 +562,20 @@ bool photo_control_capture_journal_encode(
 {
     if(!journal||!out||!written||journal->phase>PHOTO_CONTROL_CAPTURE_RESULT||
        journal->kind>PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER)return false;
+    if(journal->phase!=PHOTO_CONTROL_CAPTURE_NONE&&
+       (!safe_text(journal->camera_shared_i2c_state,
+            sizeof(journal->camera_shared_i2c_state))||
+        !safe_text(journal->camera_driver_profile,
+            sizeof(journal->camera_driver_profile))||
+        !safe_text(journal->runtime_config_id,
+            sizeof(journal->runtime_config_id))||
+        !safe_text(journal->capture_fw_version,
+            sizeof(journal->capture_fw_version))||
+        !lowercase_sha256(journal->capture_firmware_elf_sha256)||
+        !capture_camera_provenance_consistent(journal)))return false;
     memset(out,0xff,PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES);
-    put32(out,CAPTURE_JOURNAL_MAGIC);put32(out+4U,PERSIST_VERSION);
+    put32(out,CAPTURE_JOURNAL_MAGIC);
+    put32(out+4U,CAPTURE_JOURNAL_VERSION_CURRENT);
     put32(out+8U,(uint32_t)journal->phase);put32(out+12U,(uint32_t)journal->kind);
     put32(out+16U,(journal->attempted?1U:0U)|(journal->frame_acquired?2U:0U)|
         (journal->media_saved?4U:0U));
@@ -535,7 +594,17 @@ bool photo_control_capture_journal_encode(
        !append_text(out,PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES,&at,journal->config_version)||
        !append_text(out,PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES,&at,journal->authorization_session_id)||
        !append_text(out,PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES,&at,journal->retention_expires_at)||
-       !append_text(out,PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES,&at,journal->failure_reason))return false;
+       !append_text(out,PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES,&at,journal->failure_reason)||
+       !append_text(out,PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES,&at,
+           journal->camera_shared_i2c_state)||
+       !append_text(out,PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES,&at,
+           journal->camera_driver_profile)||
+       !append_text(out,PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES,&at,
+           journal->runtime_config_id)||
+       !append_text(out,PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES,&at,
+           journal->capture_fw_version)||
+       !append_text(out,PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES,&at,
+           journal->capture_firmware_elf_sha256))return false;
     put32(out+28U,capture_journal_crc(out,at));*written=at;return true;
 }
 
@@ -543,8 +612,11 @@ bool photo_control_capture_journal_decode(const uint8_t *blob,size_t bytes,
     photo_control_capture_journal_t *journal)
 {
     if(!blob||!journal||bytes<69U||bytes>PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES||
-       get32(blob)!=CAPTURE_JOURNAL_MAGIC||get32(blob+4U)!=PERSIST_VERSION||
+       get32(blob)!=CAPTURE_JOURNAL_MAGIC||
+       (get32(blob+4U)!=CAPTURE_JOURNAL_VERSION_LEGACY&&
+        get32(blob+4U)!=CAPTURE_JOURNAL_VERSION_CURRENT)||
        get32(blob+28U)!=capture_journal_crc(blob,bytes))return false;
+    const uint32_t version=get32(blob+4U);
     photo_control_capture_journal_t value={0};
     value.phase=(photo_control_capture_phase_t)get32(blob+8U);
     value.kind=(photo_control_command_kind_t)get32(blob+12U);
@@ -575,7 +647,34 @@ bool photo_control_capture_journal_decode(const uint8_t *blob,size_t bytes,
        !read_text(blob,bytes,&at,value.config_version,sizeof(value.config_version))||
        !read_text(blob,bytes,&at,value.authorization_session_id,sizeof(value.authorization_session_id))||
        !read_text(blob,bytes,&at,value.retention_expires_at,sizeof(value.retention_expires_at))||
-       !read_text(blob,bytes,&at,value.failure_reason,sizeof(value.failure_reason))||at!=bytes||
+       !read_text(blob,bytes,&at,value.failure_reason,sizeof(value.failure_reason)))return false;
+    if(version==CAPTURE_JOURNAL_VERSION_CURRENT){
+        if(!read_text(blob,bytes,&at,value.camera_shared_i2c_state,
+               sizeof(value.camera_shared_i2c_state))||
+           !read_text(blob,bytes,&at,value.camera_driver_profile,
+               sizeof(value.camera_driver_profile))||
+           !read_text(blob,bytes,&at,value.runtime_config_id,
+               sizeof(value.runtime_config_id))||
+           !read_text(blob,bytes,&at,value.capture_fw_version,
+               sizeof(value.capture_fw_version))||
+           !read_text(blob,bytes,&at,value.capture_firmware_elf_sha256,
+               sizeof(value.capture_firmware_elf_sha256)))return false;
+    }else{
+        snprintf(value.camera_shared_i2c_state,
+            sizeof(value.camera_shared_i2c_state),"%s",
+            CAPTURE_LEGACY_CAMERA_STATE);
+        snprintf(value.camera_driver_profile,
+            sizeof(value.camera_driver_profile),"%s",
+            CAPTURE_LEGACY_DRIVER_PROFILE);
+        snprintf(value.runtime_config_id,sizeof(value.runtime_config_id),"%s",
+            CAPTURE_LEGACY_BUILD_ID);
+        snprintf(value.capture_fw_version,sizeof(value.capture_fw_version),"%s",
+            CAPTURE_LEGACY_BUILD_ID);
+        snprintf(value.capture_firmware_elf_sha256,
+            sizeof(value.capture_firmware_elf_sha256),"%s",
+            CAPTURE_LEGACY_ELF_SHA256);
+    }
+    if(at!=bytes||
        !safe_id(value.photo_id)||!safe_id(value.command_id)||
        !safe_id(value.config_version)||!safe_id(value.authorization_session_id)||
        (strcmp(value.trigger_reason,"web_manual")&&strcmp(value.trigger_reason,"device_timer"))||
@@ -591,7 +690,16 @@ bool photo_control_capture_journal_decode(const uint8_t *blob,size_t bytes,
         strcmp(value.trigger_reason,"device_timer"))||
        (value.frame_acquired&&!value.attempted)||
        (value.media_saved&&!value.frame_acquired)||
-       (value.phase==PHOTO_CONTROL_CAPTURE_STARTED&&flags!=0U))return false;
+       (value.phase==PHOTO_CONTROL_CAPTURE_STARTED&&flags!=0U)||
+       !safe_text(value.camera_shared_i2c_state,
+           sizeof(value.camera_shared_i2c_state))||
+       !safe_text(value.camera_driver_profile,
+           sizeof(value.camera_driver_profile))||
+       !safe_text(value.runtime_config_id,sizeof(value.runtime_config_id))||
+       !safe_text(value.capture_fw_version,
+           sizeof(value.capture_fw_version))||
+       !lowercase_sha256(value.capture_firmware_elf_sha256)||
+       !capture_camera_provenance_consistent(&value))return false;
     *journal=value;return true;
 }
 

@@ -11,6 +11,11 @@
 #define PHOTO_CONTROL_TIMER_BLOB_BYTES 512U
 #define PHOTO_CONTROL_JOURNAL_BLOB_BYTES 384U
 #define PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES 1024U
+#define PHOTO_CONTROL_CAPTURE_CAMERA_STATE_BYTES 24U
+#define PHOTO_CONTROL_CAPTURE_DRIVER_PROFILE_BYTES 80U
+#define PHOTO_CONTROL_CAPTURE_RUNTIME_CONFIG_BYTES 64U
+#define PHOTO_CONTROL_CAPTURE_FW_VERSION_BYTES 64U
+#define PHOTO_CONTROL_CAPTURE_ELF_SHA256_BYTES 65U
 
 typedef enum {
     PHOTO_CONTROL_COMMAND_NONE = 0,
@@ -143,6 +148,15 @@ typedef struct {
     char authorization_session_id[PHOTO_CONTROL_ID_BYTES];
     char retention_expires_at[PHOTO_CONTROL_TIME_TEXT_BYTES];
     char failure_reason[96];
+    /* Capture-time provenance. These values are journaled before touching the
+     * camera so recovery never relabels an old frame with the current image's
+     * shared-I2C gate or driver profile. */
+    char camera_shared_i2c_state[PHOTO_CONTROL_CAPTURE_CAMERA_STATE_BYTES];
+    char camera_driver_profile[PHOTO_CONTROL_CAPTURE_DRIVER_PROFILE_BYTES];
+    char runtime_config_id[PHOTO_CONTROL_CAPTURE_RUNTIME_CONFIG_BYTES];
+    char capture_fw_version[PHOTO_CONTROL_CAPTURE_FW_VERSION_BYTES];
+    char capture_firmware_elf_sha256[
+        PHOTO_CONTROL_CAPTURE_ELF_SHA256_BYTES];
     uint64_t execution_expires_at_unix_ms;
     uint64_t retention_expires_at_unix_ms;
     uint64_t source_event_utc_ms;

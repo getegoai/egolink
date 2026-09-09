@@ -15,16 +15,40 @@ menu "Ego Link platform camera"
             enable commands, periodic capture, upload, or physical camera
             power switching.
 
-    config EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED
-        bool "Operator verified camera coexistence on shared platform I2C0"
-        default n
+    choice EGOLINK_PLATFORM_CAMERA_SHARED_I2C_GATE
+        prompt "Shared platform I2C0 camera authorization state"
+        default EGOLINK_PLATFORM_CAMERA_SHARED_I2C_BLOCKED
         depends on EGOLINK_PLATFORM_CAMERA_ENABLED
         help
-            The camera profile forces esp32-camera to its legacy SCCB driver
-            and existing-I2C0 mode. platform_i2c_bus remains the sole bus
-            installer/owner on GPIO15/16; camera deinit must not delete it.
-            The historical camera smoke was camera-only, so keep this false
-            until a joint image verifies camera capture plus QMI8658A/MAX17048
-            continuity on the actual wiring. Capture fails closed while false.
+            BLOCKED is the normal fail-closed Camera profile. The two opt-in
+            authorization states are deliberately mutually exclusive.
+
+        config EGOLINK_PLATFORM_CAMERA_SHARED_I2C_BLOCKED
+            bool "BLOCKED: no shared-I2C camera capture authorization"
+            help
+                Default state. The driver remains compiled for integration
+                checks, but capture fails before touching camera hardware.
+
+        config EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED
+            bool "Operator verified camera coexistence on shared platform I2C0"
+            help
+                The camera profile forces esp32-camera to its legacy SCCB
+                driver and existing-I2C0 mode. platform_i2c_bus remains the
+                sole bus installer/owner on GPIO15/16; camera deinit must not
+                delete it. Select this only after a named joint-image hardware
+                result verifies capture plus QMI8658A/MAX17048 continuity on
+                the actual wiring.
+
+        config EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL
+            bool "DANGER: authorize one unverified shared-I2C trial per boot"
+            depends on EGOLINK_COLLECTION_CAMERA_PROFILE
+            help
+                Engineering evidence mode only. This permits at most one
+                bounded hardware capture attempt per boot through the existing
+                capture_photo_once command path. It rejects timer enable and
+                never represents hardware verification. A separately reviewed
+                image must select VERIFIED after accepting named live evidence.
+
+    endchoice
 
 endmenu
