@@ -17,6 +17,60 @@ release.
       antenna, Wi-Fi/BLE, battery, charger, enclosure and market assumptions.
 - [ ] Founder decisions exist for carry form, size/weight, environmental
       target, battery capacity, operator/channel and charger-in-box.
+- [ ] The Camera population decision is explicit for each A0/launch variant;
+      an A-line development milestone is not treated as a product BOM choice.
+- [ ] Exact Camera module, sensor, lens, FPC, connector, revision/marking/lot
+      and primary manufacturer evidence are attached, or every missing field
+      remains `unknown` without a fabricated `CAM-C1` identity.
+- [ ] A-line returns exact combined-image/config digests, JPEG distribution,
+      phase latencies, heap/DMA/stack watermarks, storage growth and measured
+      power where available; historical isolated smoke is not substituted.
+
+## Camera, Media And Optical Review
+
+- [ ] The complete Camera GPIO/bus matrix is reviewed with modem flow/control,
+      USB/debug, boot straps, SOS, audio, IMU/gauge, outbox and image storage;
+      development-board pins are not copied into the product schematic.
+- [ ] Shared control-bus voltage, pull-ups, capacitance, frequency, arbitration,
+      timeout/recovery and Camera init/deinit ownership are closed with QMI and
+      gauge continuity evidence before a shared topology is selected.
+- [ ] Camera PCLK/TF-detect GPIO46 and external-JTAG GPIO39-42 conflicts remain
+      explicit in the development run; the product design has an independent
+      conflict and boot-state review.
+- [ ] `V_CAMERA_SW`, PWDN/reset or equivalent recovery, rail-good/readback,
+      shutdown sequence and IO back-power prevention are reviewed. Software
+      driver deinit is not accepted as physical power-off evidence.
+- [ ] Camera active, post-deinit idle, true rail-off, capture/save, LTE upload
+      and combined modem/GNSS/sensor power are separately measured.
+- [ ] The image-media part and bus are independently selected; the priority
+      outbox F-RAM is not assumed to hold JPEG data.
+- [ ] Media capacity includes P99 JPEG size, aligned-slot overhead, manual
+      bursts, outage duration, damaged-slot margin, metadata and explicit full
+      behavior. The engineering 288-slot/five-minute profile's exact 24-hour
+      zero-margin result is not promoted to a product capacity claim.
+- [ ] Lowest-empty-slot reuse, erase/program amplification, endurance, wear
+      distribution and media replacement/lifetime assumptions are closed.
+- [ ] Empty/partial/full/corrupt media boot scans have measured time, energy and
+      watchdog margin; restart never treats partial JPEG bytes as a success.
+- [ ] Final flash/storage sizing preserves signed recovery or A/B OTA, NVS,
+      certificates, crash evidence, priority outbox and ordinary observations;
+      the engineering single-factory partition map is not a release layout.
+- [ ] Raw images at rest have reviewed encryption/key ownership, authorized
+      retention, expiry/delete, secure disposal and failure behavior. The
+      current unencrypted engineering partition is not product evidence.
+- [ ] JPEG/TLS buffers, Camera framebuffer/DMA and every task stack have
+      measured margin under capture, save, upload, route transition and
+      recovery; application-flash free space is not used as RAM evidence.
+- [ ] Lens direction, actual FOV, focus, low light, motion blur and each carry
+      orientation's body/clothing occlusion are measured in permitted scenes.
+- [ ] Optical window material/thickness/coating, black baffle, controlled glue
+      path, reflections, fog/condensation, ingress and post-drop alignment have
+      a coupled optical/mechanical/sealing plan.
+- [ ] Camera off/init/capture/save/upload states are compared for LTE/GNSS/RF,
+      digital-noise, thermal and reset effects.
+- [ ] A user-perceptible privacy state is tied to actual Camera power/clock
+      reality rather than only a received command; Camera failure cannot block
+      Location, Ego Call or physical SOS.
 
 ## Electrical Engineering Review
 
@@ -82,6 +136,9 @@ release.
       SOS+call transients pass without reset, data loss or false ACK.
 - [ ] Typical guard reaches the accepted 48-hour target on representative
       battery/enclosure/antenna/firmware/operator configuration.
+- [ ] Camera duty is excluded from a Camera-off guard claim and is reported as
+      a separate measured duty cycle; no Camera experiment borrows the 48-hour
+      result.
 - [ ] Hardware evidence records exact board revision, firmware/image, SIM and
       operator, power source, connection path, timestamp and evidence path.
 

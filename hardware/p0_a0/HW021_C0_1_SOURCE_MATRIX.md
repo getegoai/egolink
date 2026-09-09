@@ -51,6 +51,28 @@ hardware/audio/GNSS/firmware evidence to add it as a checked row. `MODEM-C1`
 is therefore a development-continuity candidate only, not a down-select; the
 two paths require an explicit comparable-evidence decision.
 
+## Camera And Image-Media Identity Gap
+
+No production `CAM-C1` or Camera-media-storage candidate is created in C0.1.
+The 2026-06-23 development-board run identified the attached sensor as an
+OV5640 and produced three bounded QVGA JPEG frames. That local observation
+does not identify the Camera module manufacturer, orderable part number,
+module revision, lens, FPC, connector, production lifecycle or optical
+performance. It also does not constitute a manufacturer source for any such
+fact.
+
+| Required identity | Current evidence state | What is known | Evidence required before a candidate row may be added |
+| --- | --- | --- | --- |
+| Camera sensor/module | `identity_incomplete` / `unverified` | One development setup reported OV5640 sensor identity and valid JPEG framing. | Physical module front/back markings, exact module OPN and revision, FPC/connector identity, received-sample marking/lot, and matching primary manufacturer documentation. |
+| Lens/optical stack | `unknown` | No retained TCAM-001 image was reviewed for field of view or image quality. | Exact lens OPN, focal length/focus range, FOV, chief-ray/window constraints, IR/filter stack, mounting direction and primary lens/module documentation. |
+| Image-media storage | `unknown` | The current Camera-collection build profile reserves a 9 MiB internal-flash image range; its initial on-board audit found that range empty. | Exact product storage OPN, interface, capacity, endurance, retention/security behavior, lifecycle and primary manufacturer evidence. The 512-KiB F-RAM outbox candidate is not an image store. |
+
+The current A-line Camera result is therefore a design-input experiment, not a
+production part selection. Camera remains outside the three P0 capability
+Gates, and whether it is populated in the first sales configuration remains a
+founder decision. Its optional population still requires a buildable,
+default-safe interface and an independently reviewed enclosure variant.
+
 ## Audio Chain
 
 | Ref | Exact candidate identity | Official source and revision | Source state | HW-021 use and unresolved condition |
@@ -107,5 +129,9 @@ exists above:
   limits from the exact module hardware design;
 - exact level translators, codec rail regulators, USB ESD/CC parts, RF matching
   values, SOS switch, haptic/status parts and production fixture adapter;
+- exact Camera module/sensor/lens/FPC/connector identity and lifecycle, if the
+  launch or an A0 evaluation configuration populates Camera;
+- exact image-media storage part and its capacity, endurance, encryption,
+  secure-retention and OTA-partition coexistence evidence;
 - official vendor clarification of the SIM7670G sleep-current conflict;
 - authorized-channel lifecycle/MOQ/lead-time evidence for every candidate.

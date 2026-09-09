@@ -27,6 +27,7 @@ capture.
 | MCU/RTOS | `ESP32-S3-WROOM-1-N16R8`; temperature-margin alternative `ESP32-S3-WROOM-1-N16R2` | exact official module identities checked; silicon/sample revision and product suitability `unverified` |
 | Cat.1/GNSS modem | `SIM7670G` family/module marking | `identity_incomplete`: GNSS-enabled order suffix, HW/KDL revision, firmware and exact hardware-design manual `unknown` |
 | IMU | `QMI8658C`, 14-pin LGA | official function/package checked; exact order suffix/lifecycle and product-mount evidence `unknown` |
+| Camera / image media | no production candidate; one development setup reported OV5640 sensor identity and QVGA JPEG framing | module/lens/FPC/connector and product media-storage identities `unknown`; current A-line evidence is an input experiment only |
 | audio | `TLV320AIC3204IRHBR`, `MMICT3902-00-012`, `TPA2011D1YFFR`, `AS01508MS-SP15-WP-R`, `TPS22919DCKR` | official candidates only; electrical/acoustic/full-duplex product evidence `unverified` |
 | persistent storage | `CY15B104Q-LHXI` | official 4-Mbit SPI F-RAM candidate; allocation, authenticated ACK and failure semantics still open |
 | charger/protection/gauge/logic rail | `BQ25185DLHR`, `BQ29700DSET` + `CSD83325L`, `BQ27441DRZR-G1A`, `TPS63802DLAR` | official candidates only; system calculations and representative power evidence absent |
@@ -52,6 +53,14 @@ conditions, vendor clarification and measurement.
 - Persistent storage: reserve an SPI F-RAM path and a capacity equation for
   critical outbox records, redundant metadata and authenticated ACK/tombstone
   state. Exact record sizing and outage retention remain `unknown`.
+- Camera/image media: keep the production Camera population, sensor/module,
+  DVP/MIPI/SPI interface, lens/FOV/FPC and storage part unresolved. A populated
+  variant requires default-off hard power, truthful privacy state, optical
+  window/sealing and an image-media store independent of the priority outbox.
+  The current 9-MiB/288-slot unencrypted engineering layout has exactly zero
+  count margin at five minutes per image for 24 hours, can concentrate wear on
+  low-numbered released slots, scans the full range at boot, and has no A/B OTA
+  layout; none of those properties is a product baseline.
 - Power: keep modem on a protected-cell-compatible conditional rail and logic
   on a separate 3.3-V buck-boost domain; audio is switched safe-off. Vendor
   maxima and nominal battery capacity are not system budgets.
@@ -80,6 +89,7 @@ conditions, vendor clarification and measurement.
 | `B6` | exact missing support parts, lifecycle/authorized-channel check and independent EE/RF/audio review | no final BOM/AVL, schematic or release review exists |
 | `B7` | explicit PICO-versus-WROOM A0 MCU decision against the Master Context baseline | the C0.1 WROOM candidates cannot silently replace the named PICO engineering starting point |
 | `B8` | comparable first-party evidence and an explicit SIM7670G-versus-China-market modem decision, including the Master Context's unverified `ML307A-GSLN` lead | SIM7670G continuity evidence cannot silently become the product modem selection |
+| `B9` | explicit Camera population decision plus exact module/lens/FPC, bus/pin, hard-power/privacy, optical/sealing, image-media/endurance/encryption and OTA-capacity evidence | the current OV5640 development smoke and 16-MiB engineering flash layout cannot freeze a product Camera or storage path |
 
 ## Current Gate State
 
@@ -94,7 +104,10 @@ converted into board-level audio, traffic, power, RF or reliability claims.
 - COMPLIANCE-010 supplies qualified constraints; the internal inquiry is still
   `NOT_SENT`.
 - LOC-021 and OUTBOX-010 supply versioned state/event/storage semantics.
-- Native VoLTE and camera remain non-blocking reserve/growth decisions.
+- Native VoLTE and production Camera population remain non-blocking
+  reserve/growth decisions for the three P0 capability Gates. Camera is still
+  a required measured input to the current ADR-0015 A-line milestone and to
+  this conditional design review; the two scopes must not be conflated.
 
 ## Release-to-HW-022 Checklist
 

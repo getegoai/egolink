@@ -106,6 +106,44 @@ window/occlusion/sealing, thermal/RF coupling, storage quota and uplink budget.
 Unmeasured values remain `unknown`/`unverified`; a development OV5640 does not
 silently become the product BOM choice.
 
+### C0.1 Camera Audit Result
+
+The current combined-firmware design exposes useful constraints without
+closing a product choice:
+
+- the development map consumes D0-D7 GPIO7-14, shared I2C0 GPIO15/16, XCLK
+  GPIO39, HREF GPIO41, VSYNC GPIO42 and PCLK GPIO46; PCLK conflicts with the
+  board TF-detect path, while GPIO39-42 must remain free of external JTAG in
+  the A-line test;
+- the configured QVGA/JPEG path uses one internal-DRAM framebuffer and no
+  Camera PWDN/reset GPIO, so driver deinit is not physical standby or power-off
+  evidence;
+- the 9-MiB engineering image store contains 288 fixed 32-KiB slots. At five
+  minutes per image this is exactly 24 hours with zero photo-count margin;
+- the allocator can repeatedly reuse a low-numbered slot after immediate ACK
+  release, and boot initialization scans the complete owned media range, so
+  endurance/wear distribution and boot-time/energy are explicit inputs;
+- the engineering map has one factory app, no A/B OTA layout, and unencrypted
+  raw JPEG storage. A product media part, secure retention design and complete
+  OTA/storage budget remain `unknown`.
+
+These facts are now represented in the C0.1 source gaps, interface/budget
+worksheet and independent review checklist. They do not advance a hardware or
+P0 Gate.
+
+### Required A-to-C Camera Handoff
+
+Each named authorized A-line run must return the physical board/Camera/lens/
+FPC/IMU/power identities and wiring; exact firmware/config/binary/partition
+identity; JPEG distribution; initialization, frame, save, deinit and upload
+latencies; internal/DMA heap and task-stack watermarks; sensor/bus/reset error
+evidence; storage growth, slot use, write/erase and boot-scan behavior;
+Wi-Fi/LTE traffic and ordinary-observation continuity; measured Camera/idle/
+upload power where available; and actual lens direction/FOV/occlusion/window
+state. Privacy authorization, retention/deletion and evidence paths remain
+part of the handoff. Missing measurements stay `unknown` and do not stop
+unrelated C-line work.
+
 # Blocking Decisions
 
 1. Obtain SIMCom first-party evidence for the exact GNSS-enabled SIM7670G order
@@ -118,7 +156,9 @@ silently become the product BOM choice.
    USB ECM/RNDIS remain conditional alternatives rather than frozen choices.
 3. Resolve Camera/IMU/gauge interface ownership and obtain the measured A-line
    Camera resource, persistence, transfer, power and mechanical inputs listed
-   above. Select a production Camera only through the normal evidence review.
+   above. Close the product image-media part, endurance/wear, encryption,
+   hard-power/privacy, OTA-capacity, RF and optical/sealing inputs. Select a
+   production Camera only through the normal evidence review.
 4. Decide carry form, enclosure envelope, battery target and operator/channel;
    then obtain an exact battery-pack revision with pulse, impedance, NTC,
    protection and certification evidence.
@@ -148,11 +188,14 @@ documentation slice and is not evidence for hardware behavior.
 # Completion Evidence
 
 - `hardware/p0_a0/HW021_C0_1_SOURCE_MATRIX.md` records official-source
-  candidates and exact missing identities without making a selection.
+  candidates and exact missing identities, including the deliberately unnamed
+  Camera module/lens/media-store gap, without making a selection.
 - `hardware/p0_a0/HW021_C0_1_INTERFACE_BUDGETS.md` records conditional bearer,
-  audio, storage, power, SIM/debug/RF ownership and unknown inputs.
+  audio, Camera/image-media, storage, power, SIM/debug/RF ownership and unknown
+  inputs.
 - `hardware/p0_a0/HW021_C0_1_REVIEW_CHECKLIST.md` keeps every release and
-  representative-evidence check open.
+  representative-evidence check open, including Camera power, optics, media,
+  endurance, privacy and coexistence.
 - Hardware: `NOT_RUN`; this task cannot claim a prototype exists.
 - Gates: integrated-hardware `P0-LOC`, `P0-CALL`, `P0-SOS` are `NOT_RUN`.
 - Remaining risks: the blocking decisions above prevent final down-select,
