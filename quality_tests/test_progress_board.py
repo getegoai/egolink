@@ -76,6 +76,25 @@ class ProgressBoardTests(unittest.TestCase):
         self.assertEqual(states["CCC-001"], "done")
         self.assertEqual(states["DDD-001"], "planned")
 
+    def test_task_paths_are_stable_repo_relative_posix_paths(self):
+        board = board_mod.build_board(self.root)
+        active_by_id = {task["id"]: task for task in board["active_tasks"]}
+
+        self.assertEqual(
+            active_by_id["AAA-001"]["path"],
+            "docs/tasks/active/AAA-001_X.md",
+        )
+        self.assertEqual(
+            active_by_id["BBB-001"]["path"],
+            "docs/tasks/active/BBB-001_Y.md",
+        )
+        self.assertEqual(
+            board["recent_done"][0]["path"],
+            "docs/tasks/done/CCC-001_Z.md",
+        )
+        serialized = json.dumps(board)
+        self.assertNotIn(self.root.name, serialized)
+
     def test_markdown_render_contains_key_sections(self):
         board = board_mod.build_board(self.root)
         md = board_mod.render_markdown(board)

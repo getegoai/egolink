@@ -47,8 +47,9 @@ def parse_frontmatter(text: str) -> dict:
     return fields
 
 
-def scan_packets(tasks_dir: Path) -> dict:
+def scan_packets(tasks_dir: Path, *, repo_root: Path | None = None) -> dict:
     """Return {task_id: packet_info} for active/ and done/ packets."""
+    repo_root = (repo_root or tasks_dir.parent.parent).resolve()
     packets: dict = {}
     for state_dir, default_state in (("active", "in_progress"), ("done", "done")):
         folder = tasks_dir / state_dir
@@ -77,7 +78,7 @@ def scan_packets(tasks_dir: Path) -> dict:
                 or fields.get("last_verified")
                 or fields.get("created")
                 or "",
-                "path": path.as_posix(),
+                "path": path.resolve().relative_to(repo_root).as_posix(),
             }
     return packets
 
@@ -146,7 +147,7 @@ def resolve_milestones(config: dict, packets: dict) -> list:
 def build_board(repo_root: Path) -> dict:
     config_path = repo_root / "docs" / "current" / "progress_board_config.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
-    packets = scan_packets(repo_root / "docs" / "tasks")
+    packets = scan_packets(repo_root / "docs" / "tasks", repo_root=repo_root)
     active = sorted(
         (p for p in packets.values() if p["state"] in ("in_progress", "paused")),
         key=lambda p: p["id"],
