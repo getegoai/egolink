@@ -11,6 +11,14 @@ FIRMWARE = ROOT / "firmware" / "mqtt_heartbeat"
 
 
 CAMERA_NATIVE_HEADERS = {
+    "esp_err.h": r'''#pragma once
+typedef int esp_err_t;
+#define ESP_OK 0
+#define ESP_FAIL -1
+#define ESP_ERR_INVALID_ARG 258
+#define ESP_ERR_INVALID_STATE 259
+#define ESP_ERR_TIMEOUT 263
+''',
     "driver/i2c.h": r'''#pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -99,10 +107,11 @@ CAMERA_NATIVE_HARNESS = r'''
 #include <stdio.h>
 #include <string.h>
 
-static unsigned lock_calls, unlock_calls, i2c_calls, init_calls, get_calls;
-static unsigned return_calls, deinit_calls, consumer_calls;
+static unsigned lock_calls, unlock_calls, i2c_calls, lease_calls, lease_release_calls;
+static unsigned init_calls, get_calls, return_calls, deinit_calls, consumer_calls;
 static bool lock_busy;
 static esp_err_t i2c_result=ESP_OK;
+static esp_err_t lease_result=ESP_OK;
 static int64_t clock_us=1000;
 static sensor_t sensor={.id={.PID=OV5640_PID}};
 static uint8_t jpeg[]={0xff,0xd8,0x11,0x22,0xff,0xd9};
@@ -119,6 +128,10 @@ esp_err_t platform_i2c_bus_ensure(i2c_port_t port,const i2c_config_t *config)
     assert(config->sda_io_num==15&&config->scl_io_num==16);
     assert(config->master.clk_speed==100000U);return i2c_result;
 }
+esp_err_t platform_i2c_bus_lease_acquire(i2c_port_t port,uint32_t timeout_ms)
+{++lease_calls;assert(port==I2C_NUM_0);assert(timeout_ms==250U);return lease_result;}
+esp_err_t platform_i2c_bus_lease_release(i2c_port_t port)
+{++lease_release_calls;assert(port==I2C_NUM_0);return ESP_OK;}
 esp_err_t esp_camera_init(const camera_config_t *config)
 {
     ++init_calls;assert(config&&config->frame_size==FRAMESIZE_QVGA);
@@ -183,14 +196,16 @@ int main(void)
     assert(first.attempted&&first.frame_acquired&&first.framebuffer_returned&&
         first.driver_deinitialized);
     assert(platform_camera_unverified_trial_attempt_consumed());
-    assert(i2c_calls==1&&init_calls==1&&get_calls==1&&return_calls==1&&
-        deinit_calls==1&&consumer_calls==1&&unlock_calls==1);
+    assert(i2c_calls==1&&lease_calls==1&&lease_release_calls==1&&
+        init_calls==1&&get_calls==1&&return_calls==1&&deinit_calls==1&&
+        consumer_calls==1&&unlock_calls==1);
     platform_camera_capture_result_t second;
     assert(platform_camera_capture_single(consume,NULL,&second)==
         PLATFORM_CAMERA_TRIAL_ATTEMPT_CONSUMED);
     assert(!second.attempted&&!second.frame_acquired);
-    assert(i2c_calls==1&&init_calls==1&&get_calls==1&&return_calls==1&&
-        deinit_calls==1&&consumer_calls==1&&unlock_calls==1);
+    assert(i2c_calls==1&&lease_calls==1&&lease_release_calls==1&&
+        init_calls==1&&get_calls==1&&return_calls==1&&deinit_calls==1&&
+        consumer_calls==1&&unlock_calls==1);
 #elif NATIVE_EXPECTED_MODE == 2
     assert(platform_camera_shared_i2c_state()==PLATFORM_CAMERA_SHARED_I2C_VERIFIED);
     assert(!strcmp(platform_camera_shared_i2c_state_name(
@@ -202,8 +217,9 @@ int main(void)
         assert(result.attempted&&result.driver_deinitialized);
     }
     assert(!platform_camera_unverified_trial_attempt_consumed());
-    assert(i2c_calls==2&&init_calls==2&&get_calls==2&&return_calls==2&&
-        deinit_calls==2&&consumer_calls==2&&unlock_calls==2);
+    assert(i2c_calls==2&&lease_calls==2&&lease_release_calls==2&&
+        init_calls==2&&get_calls==2&&return_calls==2&&deinit_calls==2&&
+        consumer_calls==2&&unlock_calls==2);
 #elif NATIVE_EXPECTED_MODE == 3
     assert(platform_camera_shared_i2c_state()==
         PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED);
@@ -221,6 +237,20 @@ int main(void)
     assert(!retry.attempted);
     assert(i2c_calls==1&&!init_calls&&!get_calls&&!deinit_calls&&!consumer_calls);
     assert(unlock_calls==1);
+#elif NATIVE_EXPECTED_MODE == 4
+    assert(platform_camera_shared_i2c_state()==
+        PLATFORM_CAMERA_SHARED_I2C_TRIAL_UNVERIFIED);
+    lease_result=ESP_ERR_TIMEOUT;
+    platform_camera_capture_result_t failed;
+    assert(platform_camera_capture_single(consume,NULL,&failed)==
+        PLATFORM_CAMERA_I2C_BUS_UNAVAILABLE);
+    assert(failed.attempted&&!failed.frame_acquired);
+    assert(failed.reason&&!strcmp(failed.reason,
+        "platform_i2c0_transaction_lease_timeout"));
+    assert(platform_camera_unverified_trial_attempt_consumed());
+    assert(i2c_calls==1&&lease_calls==1&&!lease_release_calls);
+    assert(!init_calls&&!get_calls&&!deinit_calls&&!consumer_calls);
+    assert(unlock_calls==1);
 #else
 #error "unknown native camera test mode"
 #endif
@@ -236,7 +266,7 @@ def _run_camera_native(mode: int) -> str:
         components=("platform_camera",),
         headers=CAMERA_NATIVE_HEADERS,
         defines=CAMERA_NATIVE_DEFINES + (
-            f"CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL={int(mode in (1, 3))}",
+            f"CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL={int(mode in (1, 3, 4))}",
             f"CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED={int(mode == 2)}",
             f"NATIVE_EXPECTED_MODE={mode}",
         ),
@@ -533,6 +563,10 @@ def _check_camera_profile_is_explicit_i2c_gated_and_bounded_single_frame():
     assert ".sccb_i2c_port=CAMERA_I2C_PORT" in source
     assert "platform_i2c_bus_ensure(CAMERA_I2C_PORT,&bus)" in source
     assert source.index("platform_i2c_bus_ensure(CAMERA_I2C_PORT,&bus)") < source.index("esp_camera_init(&config)")
+    assert "platform_i2c_bus_lease_acquire(" in source
+    assert "CAMERA_I2C_LEASE_TIMEOUT_MS 250U" in source
+    assert source.index("platform_i2c_bus_lease_acquire(") < source.index("esp_camera_init(&config)")
+    assert source.count("platform_i2c_bus_lease_release(CAMERA_I2C_PORT)") == 3
     assert "CONFIG_SCCB_HARDWARE_I2C_DRIVER_LEGACY=y" in defaults
     assert "CONFIG_SCCB_HARDWARE_I2C_PORT0=y" in defaults
     assert "CONFIG_SCCB_CLK_FREQ=100000" in defaults
@@ -695,6 +729,9 @@ class CameraCollectionPlatformTests(unittest.TestCase):
 
     def test_shared_i2c_failed_trial_attempt_also_consumes_boot_budget(self):
         self.assertIn("native PASS", _run_camera_native(3))
+
+    def test_shared_i2c_lease_timeout_fails_before_camera_driver_entry(self):
+        self.assertIn("native PASS", _run_camera_native(4))
 
     def test_shared_i2c_verified_mode_retains_repeat_capture(self):
         self.assertIn("native PASS", _run_camera_native(2))

@@ -29,7 +29,13 @@ static bool s_max17048_ready;
 static esp_err_t max17048_read_u16(uint8_t reg, uint16_t *value)
 {
     uint8_t raw[2] = {0, 0};
-    esp_err_t err = i2c_master_write_read_device(
+    esp_err_t err = platform_i2c_bus_lease_acquire(
+        MAX17048_I2C_PORT,
+        CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_I2C_TIMEOUT_MS);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = i2c_master_write_read_device(
         MAX17048_I2C_PORT,
         MAX17048_I2C_ADDR,
         &reg,
@@ -37,10 +43,11 @@ static esp_err_t max17048_read_u16(uint8_t reg, uint16_t *value)
         raw,
         sizeof(raw),
         pdMS_TO_TICKS(CONFIG_EGOLINK_PLATFORM_POWER_MAX17048_I2C_TIMEOUT_MS));
+    esp_err_t release_err = platform_i2c_bus_lease_release(MAX17048_I2C_PORT);
     if (err == ESP_OK) {
         *value = ((uint16_t)raw[0] << 8) | raw[1];
     }
-    return err;
+    return err != ESP_OK ? err : release_err;
 }
 
 static void max17048_init(void)

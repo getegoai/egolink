@@ -73,6 +73,22 @@ class PlatformPowerFirmwareTests(unittest.TestCase):
         self.assertIn("SDA GPIO15 / SCL GPIO16", self.kconfig)
         self.assertIn("SDA GPIO3 / SCL GPIO2", self.kconfig)
 
+    def test_max17048_transaction_takes_and_releases_shared_bus_lease(self) -> None:
+        read = self.source.split("static esp_err_t max17048_read_u16", 1)[1].split(
+            "static void max17048_init", 1
+        )[0]
+        self.assertIn("platform_i2c_bus_lease_acquire", read)
+        self.assertIn("i2c_master_write_read_device", read)
+        self.assertIn("platform_i2c_bus_lease_release", read)
+        self.assertLess(
+            read.index("platform_i2c_bus_lease_acquire"),
+            read.index("i2c_master_write_read_device"),
+        )
+        self.assertLess(
+            read.index("i2c_master_write_read_device"),
+            read.index("platform_i2c_bus_lease_release"),
+        )
+
     def test_hpwr_marker_metadata_is_log_only(self) -> None:
         for token in [
             "platform_power_event_kind_t",

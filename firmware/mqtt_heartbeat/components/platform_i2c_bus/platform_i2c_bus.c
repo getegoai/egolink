@@ -1,8 +1,12 @@
 #include "platform_i2c_bus.h"
 #include <stdbool.h>
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <sys/lock.h>
 
 static _lock_t install_lock;
+static _lock_t transaction_locks[I2C_NUM_MAX];
 static struct {
     bool installed;
     i2c_config_t config;
@@ -34,4 +38,38 @@ esp_err_t platform_i2c_bus_ensure(i2c_port_t port, const i2c_config_t *config)
     }
     _lock_release(&install_lock);
     return result;
+}
+
+esp_err_t platform_i2c_bus_lease_acquire(i2c_port_t port, uint32_t timeout_ms)
+{
+    if ((unsigned)port >= I2C_NUM_MAX) return ESP_ERR_INVALID_ARG;
+
+    _lock_acquire(&install_lock);
+    const bool installed = buses[port].installed;
+    _lock_release(&install_lock);
+    if (!installed) return ESP_ERR_INVALID_STATE;
+
+    const int64_t started_us = esp_timer_get_time();
+    const int64_t timeout_us = (int64_t)timeout_ms * 1000LL;
+    for (;;) {
+        if (_lock_try_acquire(&transaction_locks[port]) == 0) return ESP_OK;
+        if (timeout_ms == 0U || esp_timer_get_time() - started_us >= timeout_us)
+            return ESP_ERR_TIMEOUT;
+        /* One scheduler tick prevents a contending sensor from busy-spinning.
+         * The esp_timer deadline, not the tick duration, owns the bound. */
+        vTaskDelay(1);
+    }
+}
+
+esp_err_t platform_i2c_bus_lease_release(i2c_port_t port)
+{
+    if ((unsigned)port >= I2C_NUM_MAX) return ESP_ERR_INVALID_ARG;
+
+    _lock_acquire(&install_lock);
+    const bool installed = buses[port].installed;
+    _lock_release(&install_lock);
+    if (!installed) return ESP_ERR_INVALID_STATE;
+
+    _lock_release(&transaction_locks[port]);
+    return ESP_OK;
 }

@@ -3,6 +3,14 @@ import unittest
 from quality_tests.native_convergence import run_c
 
 HEADERS = {
+    "esp_err.h": '''#pragma once
+typedef int esp_err_t;
+#define ESP_OK 0
+#define ESP_FAIL -1
+#define ESP_ERR_INVALID_ARG 258
+#define ESP_ERR_INVALID_STATE 259
+#define ESP_ERR_TIMEOUT 263
+''',
     "driver/i2c.h": '''#pragma once
 #include <stddef.h>
 #include <stdint.h>
@@ -18,24 +26,52 @@ esp_err_t i2c_driver_install(i2c_port_t,int,size_t,size_t,int);
     "sys/lock.h": '''#pragma once
 typedef int _lock_t;
 void _lock_acquire(_lock_t*);
+int _lock_try_acquire(_lock_t*);
 void _lock_release(_lock_t*);
+''',
+    "esp_timer.h": '''#pragma once
+#include <stdint.h>
+int64_t esp_timer_get_time(void);
+''',
+    "freertos/FreeRTOS.h": '''#pragma once
+#include <stdint.h>
+typedef uint32_t TickType_t;
+''',
+    "freertos/task.h": '''#pragma once
+#include "freertos/FreeRTOS.h"
+void vTaskDelay(TickType_t);
 ''',
 }
 HARNESS = r'''
 #include "platform_i2c_bus.h"
 #include <pthread.h>
 #include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include "freertos/task.h"
 #include <sys/lock.h>
 static pthread_mutex_t bus_lock=PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t start_lock=PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t start_cv=PTHREAD_COND_INITIALIZER;
-static unsigned ready,go,configs,installs;
+static unsigned ready,go,configs,installs,lease_tries,lease_releases,delay_calls;
 static esp_err_t config_error,install_error;
 static i2c_config_t applied;
-void _lock_acquire(_lock_t *l){(void)l;assert(!pthread_mutex_lock(&bus_lock));}
-void _lock_release(_lock_t *l){(void)l;assert(!pthread_mutex_unlock(&bus_lock));}
+static _lock_t *install_lock_address,*held_transaction;
+static bool force_transaction_busy;
+static int64_t clock_us;
+void _lock_acquire(_lock_t *l)
+{if(!install_lock_address)install_lock_address=l;assert(l==install_lock_address);
+ assert(!pthread_mutex_lock(&bus_lock));}
+int _lock_try_acquire(_lock_t *l)
+{assert(l!=install_lock_address);++lease_tries;
+ if(force_transaction_busy||held_transaction==l){return 1;}
+ held_transaction=l;return 0;}
+void _lock_release(_lock_t *l)
+{if(l==install_lock_address){assert(!pthread_mutex_unlock(&bus_lock));return;}
+ assert(held_transaction==l);held_transaction=NULL;++lease_releases;}
+int64_t esp_timer_get_time(void){return clock_us;}
+void vTaskDelay(TickType_t ticks){++delay_calls;clock_us+=(int64_t)ticks*1000;}
 esp_err_t i2c_param_config(i2c_port_t p,const i2c_config_t *c)
 {assert(p>=0 && p<2);++configs;applied=*c;esp_err_t e=config_error;config_error=ESP_OK;return e;}
 esp_err_t i2c_driver_install(i2c_port_t p,int mode,size_t rx,size_t tx,int flags)
@@ -63,6 +99,19 @@ int main(void)
  go=1;pthread_cond_broadcast(&start_cv);pthread_mutex_unlock(&start_lock);
  assert(!pthread_join(a,NULL));assert(!pthread_join(b,NULL));
  assert(configs==1 && installs==1);
+ assert(platform_i2c_bus_lease_acquire(-1,1)==ESP_ERR_INVALID_ARG);
+ assert(platform_i2c_bus_lease_acquire(2,1)==ESP_ERR_INVALID_ARG);
+ assert(platform_i2c_bus_lease_acquire(1,1)==ESP_ERR_INVALID_STATE);
+ assert(platform_i2c_bus_lease_release(1)==ESP_ERR_INVALID_STATE);
+ force_transaction_busy=true;
+ assert(platform_i2c_bus_lease_acquire(0,3)==ESP_ERR_TIMEOUT);
+ assert(delay_calls==3&&!held_transaction&&!lease_releases);
+ force_transaction_busy=false;
+ assert(platform_i2c_bus_lease_acquire(0,0)==ESP_OK);
+ assert(held_transaction&&platform_i2c_bus_lease_release(0)==ESP_OK);
+ assert(!held_transaction&&lease_releases==1);
+ assert(platform_i2c_bus_lease_release(-1)==ESP_ERR_INVALID_ARG);
+ assert(platform_i2c_bus_lease_release(2)==ESP_ERR_INVALID_ARG);
  i2c_config_t conflict=c;conflict.sda_io_num=8;
  assert(platform_i2c_bus_ensure(0,&conflict)==ESP_ERR_INVALID_STATE);
  conflict=c;conflict.master.clk_speed=400000;
@@ -75,7 +124,7 @@ int main(void)
  install_error=ESP_ERR_INVALID_STATE;assert(platform_i2c_bus_ensure(1,&c)==ESP_ERR_INVALID_STATE);assert(installs==3);
  assert(platform_i2c_bus_ensure(1,&c)==ESP_OK);assert(installs==4);
  unsigned old=configs;assert(platform_i2c_bus_ensure(1,&c)==ESP_OK);assert(configs==old && installs==4);
- puts("native pthread: concurrent sensors install once; config conflict leaves pins unchanged; exact failure and retry PASS");
+ puts("native pthread: install once; lease timeout/acquire/release; exact failure and retry PASS");
  return 0;
 }
 '''
@@ -84,7 +133,7 @@ int main(void)
 class PlatformI2cBusNative(unittest.TestCase):
     def test_shared_install_conflict_failure_retry(self):
         output = run_c(HARNESS, components=("platform_i2c_bus",), headers=HEADERS)
-        self.assertIn("exact failure and retry PASS", output)
+        self.assertIn("lease timeout/acquire/release", output)
 
 
 if __name__ == "__main__":

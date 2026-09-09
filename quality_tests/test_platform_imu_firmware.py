@@ -86,6 +86,29 @@ class PlatformImuFirmwareTests(unittest.TestCase):
         self.assertIn("vTaskDelay(pdMS_TO_TICKS(10))", self.source)
         self.assertIn("qmi8658_init_configure_stop_failed", self.source)
 
+    def test_qmi8658_transactions_take_and_release_shared_bus_lease_without_nesting(self) -> None:
+        read = self.source.split("static esp_err_t platform_imu_i2c_read(", 1)[1].split(
+            "static esp_err_t platform_imu_i2c_read_u8", 1
+        )[0]
+        write = self.source.split("static esp_err_t platform_imu_i2c_write_u8(", 1)[1].split(
+            "static esp_err_t platform_imu_i2c_update_bits", 1
+        )[0]
+        update = self.source.split("static esp_err_t platform_imu_i2c_update_bits(", 1)[1].split(
+            "static esp_err_t qmi8658_i2c_read", 1
+        )[0]
+        for body, operation in (
+            (read, "i2c_master_write_read_device"),
+            (write, "i2c_master_write_to_device"),
+        ):
+            with self.subTest(operation=operation):
+                self.assertIn("platform_i2c_bus_lease_acquire", body)
+                self.assertIn(operation, body)
+                self.assertIn("platform_i2c_bus_lease_release", body)
+                self.assertLess(body.index("platform_i2c_bus_lease_acquire"), body.index(operation))
+                self.assertLess(body.index(operation), body.index("platform_i2c_bus_lease_release"))
+        self.assertNotIn("platform_i2c_bus_lease_acquire", update)
+        self.assertNotIn("platform_i2c_bus_lease_release", update)
+
     def test_stopped_one_shot_discards_startup_samples_and_fails_closed_on_stop_error(self) -> None:
         ordinary_sample = self.source.split("bool platform_imu_sample(void)", 1)[1].split(
             "bool platform_imu_capture_begin", 1

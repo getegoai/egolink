@@ -39,6 +39,7 @@
 #define CAMERA_LOCAL_STOP_GPIO 0
 #define CAMERA_I2C_PORT I2C_NUM_0
 #define CAMERA_I2C_FREQ_HZ 100000U
+#define CAMERA_I2C_LEASE_TIMEOUT_MS 250U
 #define PIN_BIT(pin) (UINT64_C(1) << (pin))
 #define CAMERA_DATA_MASK (PIN_BIT(CAMERA_PIN_D0)|PIN_BIT(CAMERA_PIN_D1)|PIN_BIT(CAMERA_PIN_D2)|PIN_BIT(CAMERA_PIN_D3)|PIN_BIT(CAMERA_PIN_D4)|PIN_BIT(CAMERA_PIN_D5)|PIN_BIT(CAMERA_PIN_D6)|PIN_BIT(CAMERA_PIN_D7))
 #define CAMERA_CONTROL_MASK (PIN_BIT(CAMERA_PIN_SDA)|PIN_BIT(CAMERA_PIN_SCL)|PIN_BIT(CAMERA_PIN_XCLK)|PIN_BIT(CAMERA_PIN_HREF)|PIN_BIT(CAMERA_PIN_VSYNC)|PIN_BIT(CAMERA_PIN_PCLK))
@@ -220,6 +221,14 @@ platform_camera_status_t platform_camera_capture_single(
         result->capture_completed_us=esp_timer_get_time();_lock_release(&s_capture_lock);
         return result->status;
     }
+    esp_err_t lease_result=platform_i2c_bus_lease_acquire(
+        CAMERA_I2C_PORT,CAMERA_I2C_LEASE_TIMEOUT_MS);
+    if(lease_result!=ESP_OK){
+        result->status=PLATFORM_CAMERA_I2C_BUS_UNAVAILABLE;
+        result->reason="platform_i2c0_transaction_lease_timeout";
+        result->capture_completed_us=esp_timer_get_time();_lock_release(&s_capture_lock);
+        return result->status;
+    }
     camera_config_t config=camera_config();
     esp_err_t init=esp_camera_init(&config);
     if(init!=ESP_OK){
@@ -233,6 +242,7 @@ platform_camera_status_t platform_camera_capture_single(
         result->reason=cleanup==ESP_OK?"esp_camera_init_failed_driver_cleaned":
             "esp_camera_init_failed_cleanup_unverified";
         result->capture_completed_us=esp_timer_get_time();
+        (void)platform_i2c_bus_lease_release(CAMERA_I2C_PORT);
         _lock_release(&s_capture_lock);
         return result->status;
     }
@@ -252,6 +262,7 @@ platform_camera_status_t platform_camera_capture_single(
         esp_err_t deinit=esp_camera_deinit();
         result->driver_deinitialized=deinit==ESP_OK;
         if(deinit!=ESP_OK)atomic_store(&s_lifecycle_blocked,true);
+        (void)platform_i2c_bus_lease_release(CAMERA_I2C_PORT);
         _lock_release(&s_capture_lock);return result->status;
     }
     camera_fb_t *frame=esp_camera_fb_get();
@@ -284,6 +295,7 @@ platform_camera_status_t platform_camera_capture_single(
     }else if(deinit!=ESP_OK){
         atomic_store(&s_lifecycle_blocked,true);
     }
+    (void)platform_i2c_bus_lease_release(CAMERA_I2C_PORT);
     _lock_release(&s_capture_lock);
     return result->status;
 #else

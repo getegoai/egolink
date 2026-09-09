@@ -128,7 +128,13 @@ static const char *PLATFORM_IMU_SENSOR_MODEL_QMI8658 = "QMI8658";
 
 static esp_err_t platform_imu_i2c_read(uint8_t addr, uint8_t reg, uint8_t *data, size_t len)
 {
-    return i2c_master_write_read_device(
+    esp_err_t err = platform_i2c_bus_lease_acquire(
+        QMI8658_I2C_PORT,
+        QMI8658_I2C_TIMEOUT_MS);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = i2c_master_write_read_device(
         QMI8658_I2C_PORT,
         addr,
         &reg,
@@ -136,6 +142,8 @@ static esp_err_t platform_imu_i2c_read(uint8_t addr, uint8_t reg, uint8_t *data,
         data,
         len,
         pdMS_TO_TICKS(QMI8658_I2C_TIMEOUT_MS));
+    esp_err_t release_err = platform_i2c_bus_lease_release(QMI8658_I2C_PORT);
+    return err != ESP_OK ? err : release_err;
 }
 
 static esp_err_t platform_imu_i2c_read_u8(uint8_t addr, uint8_t reg, uint8_t *value)
@@ -146,12 +154,20 @@ static esp_err_t platform_imu_i2c_read_u8(uint8_t addr, uint8_t reg, uint8_t *va
 static esp_err_t platform_imu_i2c_write_u8(uint8_t addr, uint8_t reg, uint8_t value)
 {
     uint8_t payload[2] = {reg, value};
-    return i2c_master_write_to_device(
+    esp_err_t err = platform_i2c_bus_lease_acquire(
+        QMI8658_I2C_PORT,
+        QMI8658_I2C_TIMEOUT_MS);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = i2c_master_write_to_device(
         QMI8658_I2C_PORT,
         addr,
         payload,
         sizeof(payload),
         pdMS_TO_TICKS(QMI8658_I2C_TIMEOUT_MS));
+    esp_err_t release_err = platform_i2c_bus_lease_release(QMI8658_I2C_PORT);
+    return err != ESP_OK ? err : release_err;
 }
 
 static esp_err_t platform_imu_i2c_update_bits(uint8_t addr, uint8_t reg, uint8_t mask, uint8_t value)
