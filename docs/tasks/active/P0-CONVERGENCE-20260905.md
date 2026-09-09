@@ -3,15 +3,15 @@ id: P0-CONVERGENCE-20260905
 title: Single-board Location and Camera field closure
 status: active
 priority: critical
-execution_state: shared_i2c_trial_offline_build_ready_live_overlay_and_authorization_pending
+execution_state: wifi_manual_camera_recovery_pass_lte_timer_outage_field_pending
 owner: codex_integrator
 created: 2026-09-05
 last_updated: 2026-09-09
 serves_gate: P0-LOC
 serves_milestone: single_4g_board_camera_field
 requires_hardware: true
-runtime_authorization: not_granted_scope_decision_only
-runtime_authorization_note: flashing_sim_traffic_deployment_and_real_scene_capture_require_a_named_bounded_operator_session
+runtime_authorization: founder_granted_direct_deploy_flash_test_20260909
+runtime_authorization_note: current_4g_board_direct_deploy_flash_and_bounded_test_authorized_no_amoled_call_or_public_raw_media
 data_cleanup_authorization: founder_legacy_wifi_backup_and_clear_20260909
 context:
   - AGENTS.md
@@ -33,6 +33,7 @@ context:
   - docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md
   - docs/hardware/PRIVACY_WIFI_SPOOL_PURGE_20260909.md
   - docs/hardware/CAMERA_MEDIA_RANGE_PREFLIGHT_20260909.md
+  - docs/hardware/CAMERA_SHARED_I2C_TRIAL_20260909.md
   - docs/tasks/active/LOC-021_DEVICE_LOCATION_INTEGRATION.md
   - docs/tasks/active/FIELD-020_L1_FIELD_DATASET.md
   - docs/tasks/active/OUTBOX-010_PERSISTENT_PRIORITY_OUTBOX.md
@@ -67,7 +68,7 @@ out_of_scope:
   - shared protocol or state-machine changes without integrator review
   - model behavior, new sensors, camera AI/video, general event sourcing or full app work
   - HTTP downgrade, disabled certificate or hostname validation, committed secrets
-  - automatic flashing, SIM traffic, recording, external notifications or deployment
+  - hardware/network operations outside the current founder-authorized single-4G-board deploy, flash and bounded-test scope; audio, external notifications or unauthorized scenes
   - claiming a P0 Gate PASS from source, native, build or isolated bench evidence
 ---
 
@@ -199,20 +200,39 @@ The exact future `ego_media` range `[0x600000,0xF00000)` was read in full into
 a private ignored backup. Its 9,437,184 bytes are all `0xFF`, SHA-256
 `BE1C8C26FAAE3AE3606606C9641F017A873F52A7833C9CF65142EF0E2405CE8A`,
 and a subsequent `verify_flash` readback returned `verify OK`. No write occurred;
-the board remains in ROM bootloader. This passes only the current
-observed-occupancy check for media-range ownership.
+the board was left in ROM bootloader at that checkpoint. This passes only the
+observed-occupancy check for media-range ownership; the later run006 app flash
+supersedes that transient state.
 
-Next, while powered off, verify the TF-free Camera/QMI8658A/MAX17048 wiring and
-keep GPIO39-42 free of external JTAG. Then define one named operator/privacy
-scope and permitted private scene. Within it, create an ignored no-SIM trial
-overlay with the actual private Wi-Fi/auth and run/session identity, rebuild and
-bind its new exact SHA, deploy the reviewed VPS/Web slice and flash only that
-named COM3 image. Run one Web-commanded QVGA trial and record sensor, bus,
-heap/DMA/stack, UART/reset/brownout/watchdog continuity. Only after that evidence
-passes review may a separate `VERIFIED` image and ignored SIM/LTE configuration
-be built. Timer, real-LTE one-shot, outage/restart recovery and
-independent-power tests follow in the Acceptance order. Every product Gate
-remains `NOT_RUN`.
+### Wi-Fi manual Camera/recovery checkpoint — 2026-09-09
+
+Commit `80c5e86fd` was rebuilt with the ignored no-SIM run006 overlay and
+flashed app-only at `0x200000` on the identified COM3 ESP32-S3. The joint image
+recovered the existing run005 metadata and JPEG across reboot with an exact VPS
+hash. A first fresh run006 command produced and eventually stored a new exact
+JPEG, but inherited backlog and `422` responses delayed metadata until the
+two-minute command expired; it did not earn a false command ACK.
+
+The authorized full 1 MiB collection-partition backup then matched SHA-256
+`ABEC92241968E7B5C23677FDE0A5A0F4B2DD8FB9DBDF083B2A218B3FCBDEEFB1`.
+Only `erase_region 0x500000 0x100000` was issued, and the complete immediate
+readback was all `0xFF`, SHA-256
+`F5FB04AA5B882706B9309E885F19477261336EF76A150C3B4D3489DFAC3953EC`.
+The next run006b command then received an exact matched 200 `ok` ACK and stored
+the same 2,707-byte OV5640 QVGA JPEG on the VPS with SHA-256
+`f556e97da859083ae6a67f64fee3f1dc05d1cea29928611d52b1a45fa9314c2e`.
+GNSS, external IMU and Wi-Fi collection continued without an observed panic,
+brownout, watchdog, stack overflow or unexpected reboot in the bounded windows.
+
+This passes the Wi-Fi manual bench slice only. The profile remains
+`UNVERIFIED_TRIAL`; no SIM or LTE bearer was active, and Web visual preview,
+timed/outage/restart capture, independent power and FIELD-020 remain. The
+post-clear 300-second boot also reached about 722 KiB queued and 25 bounded
+evictions, so the `422`/throughput problem must be closed before representative
+field collection. Full identities, hashes, privacy boundaries and private
+evidence paths are in
+[CAMERA-SHARED-I2C-TRIAL-20260909-001](../../hardware/CAMERA_SHARED_I2C_TRIAL_20260909.md).
+Every product Gate remains `NOT_RUN`.
 
 ## Prior execution adjustment — founder instruction 2026-09-06
 
@@ -356,7 +376,10 @@ candidate boundary. Do not claim a test executed when only its source matched.
 
 Use an existing unexpired authorization only if it covers this exact operation.
 Otherwise return one combined scope for the operator, rather than repeated
-per-command approval requests. No live I/O is authorized by this task text.
+per-command approval requests. The packet text alone grants no live I/O; the
+front matter now records the founder's separate 2026-09-09 authorization for
+direct deploy, flash and bounded testing on the connected 4G board. Work inside
+that scope proceeds without repeated per-command approval.
 
 The scope must contain: exact node identity, image and recovery hashes, ports
 reidentified at run time, endpoint and identity-verification rules, network/SIM
@@ -457,9 +480,11 @@ FW-007 was restored at 10:48:12 UTC with verified transfers and startup smoke.
 The continuous same-scope authorization recorded here was limited to that
 historical Location run series. It does not authorize the current Camera/LTE
 milestone, deployment, flashing, SIM traffic, or real-scene capture; those
-actions require a new named bounded session. Next is real-fix validation after
-antenna/placement confirmation; CALL/physical SOS and original concurrent
-recovery remain open.
+actions required a new named bounded session. The founder subsequently granted
+the current single-4G-board direct deploy/flash/test scope on 2026-09-09, as
+recorded in this packet's front matter and Camera evidence. Next is real-fix
+validation after antenna/placement confirmation; CALL/physical SOS and original
+concurrent recovery remain open.
 All three product Gates remain NOT_RUN. No further offline framework is needed.
 
 ## 2026-09-08 collector network-policy code slice

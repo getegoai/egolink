@@ -9,19 +9,60 @@ verified_by: codex
 
 ## 2026-09-09 current hardware state
 
-The identified connectivity board is intentionally held in the ESP32-S3 ROM
-bootloader on CH343 `COM3` after the authorized bounded legacy-spool cleanup.
-The retained 2026-09-06 collector application and NVS were not erased, but the
-`ego_collection` partition at `[0x122000,0x1F4000)` was privately backed up,
-selectively erased and completely read back as `0xFF`. `ego_outbox` was outside
-the operation. Do not reset this board into the legacy collector before a
-reviewed replacement candidate is ready, because that image can recreate the
-old Wi-Fi observation format. Exact identity, hashes and state are in
-[the cleanup evidence](../hardware/PRIVACY_WIFI_SPOOL_PURGE_20260909.md).
+The identified connectivity board on CH343 `COM3` now contains the run006
+Camera trial application built from commit
+`80c5e86fd8b39462128b831b9a06db7edbf2841a`. It was written app-only at
+`0x200000`; bootloader, partition table, NVS and other data partitions were not
+rewritten by that app flash. Its last bound application SHA-256 is
+`EE2FA5A3D2B65186B3A80597C1C574CAA66CBEB66DA5A5EE2125B3086C299D0D`.
+The final evidence window released COM3 after obtaining the required result;
+the board's later power/running state is not inferred from a closed monitor.
 
-No Camera/Location/LTE joint candidate has been flashed. AMOLED is excluded
-from this A-line milestone and its UI/CALL image is unchanged; any separate USB
-attachment is irrelevant to and unused by the A-line runtime.
+This image is `UNVERIFIED_TRIAL`, Wi-Fi/no-SIM with LTE PPP disabled. It must
+not be used as evidence of an LTE candidate. AMOLED is excluded from this
+A-line milestone and its UI/CALL image is unchanged. The untracked
+`hardware/mechanical/C-ME-0.1/` founder draft is also excluded and unchanged.
+
+## 2026-09-09 Camera shared-I2C trial — flashed Wi-Fi checkpoint
+
+The ignored run006 overlay bound firmware
+`0.1.0-camera-trial-80c5e86-006`, run
+`camera-trial-20260909-006`, a 300-second runtime bound, manual-only Camera,
+`NO_SIM=y` and LTE PPP disabled. The 1,104,464-byte app has SHA-256
+`EE2FA5A3D2B65186B3A80597C1C574CAA66CBEB66DA5A5EE2125B3086C299D0D`;
+the ELF SHA-256 is
+`6686F8E8BC1CECC19AEE4F89F01F2161DF3108847357BD9E64515DE9B3DD42EA`.
+
+The joint collector recovered the existing run005 metadata and 5,448-byte
+JPEG across reboot with exact server hash
+`19ca7a584d4d44bd1f874fce36233ae5d194a1011a2778a9fada2bf41224c369`.
+The first fresh run006 command captured and eventually stored a distinct
+2,665-byte JPEG with exact hash, but old collection backlog/server `422`
+responses delayed metadata until the two-minute command expired; it therefore
+did not earn a command ACK pass.
+
+Under the existing founder spool-clear authorization, the complete 1 MiB
+Camera-layout collection partition was saved privately with SHA-256
+`ABEC92241968E7B5C23677FDE0A5A0F4B2DD8FB9DBDF083B2A218B3FCBDEEFB1`,
+then only `0x500000..0x600000` was erased. The immediate complete readback was
+all `0xFF`, SHA-256
+`F5FB04AA5B882706B9309E885F19477261336EF76A150C3B4D3489DFAC3953EC`.
+Later bounded boots repopulated that partition.
+
+The clean run006b command returned an exact matched HTTP 200 `ok` ACK. OV5640
+photo `manual-990f9579033d6372637b0da53c99f0dd-n0` was a 320 x 240 JPEG,
+2,707 bytes, SHA-256
+`f556e97da859083ae6a67f64fee3f1dc05d1cea29928611d52b1a45fa9314c2e`;
+the VPS stored the same bytes before exact content ACK. GNSS, external IMU and
+Wi-Fi work continued in the observed windows without panic, brownout,
+watchdog, stack overflow or unexpected reboot. Boots 87 through 89 reached the
+normal bounded stop sequence; the shorter final boot-90 evidence window does
+not claim its later terminal stop line.
+
+This is a manual Wi-Fi bench checkpoint, not real LTE, timed/offline capture,
+independent power, Web visual-preview or FIELD-020 evidence. Details and
+private-evidence handling are in
+[CAMERA-SHARED-I2C-TRIAL-20260909-001](../hardware/CAMERA_SHARED_I2C_TRIAL_20260909.md).
 
 ## 2026-09-09 Camera shared-I2C trial — clean offline build checkpoint
 
@@ -73,25 +114,26 @@ Both Camera profiles retain `NO_SIM=y` and LTE PPP disabled. The blocked image
 cannot capture. The clean trial image proves the build/size boundary only: its
 compiled Wi-Fi SSID, Wi-Fi password and bearer token are empty, so its exact
 SHA cannot connect to the current Web command path and must not be flashed as a
-live candidate. A separately authorized bench run first needs an ignored,
-named private overlay, a clean rebuild and a new bound SHA. Neither image is the
-required real-LTE Camera candidate.
+live candidate. The later authorized run006 checkpoint used an ignored named
+private overlay, a new rebuild and the separately bound SHA recorded above.
+Neither clean checkpoint image, nor the run006 Wi-Fi image, is the required
+real-LTE Camera candidate.
 Camera deinit is only a software standby boundary because the present pin map
-has no PWDN; the raw JPEG partition is not encrypted. No image here was
-flashed, no photo was captured, and no LTE/VPS/field evidence was produced.
+has no PWDN; the raw JPEG partition is not encrypted. The four tabled clean
+checkpoint images were not flashed; the separately rebuilt run006 image was.
 
 The current static map puts OV5640 `0x3C`, MAX17048 `0x36` and QMI8658A `0x6A`
-on I2C0 GPIO15/16 at 100 kHz; the addresses are distinct, but electrical and
-runtime coexistence are unverified. This candidate uses an internal-DRAM frame
-buffer and legacy shared-I2C0. The 2026-06-23 camera smoke instead used PSRAM
-and `sccb-ng` on logical port 1, so it does not prove current memory or bus
-coexistence. Camera PCLK and TF card-detect both use GPIO46: remove the TF card,
+on I2C0 GPIO15/16 at 100 kHz. The run006 series now observes bounded Camera and
+IMU coexistence on the joint image, but the image deliberately remains
+`UNVERIFIED_TRIAL`; this is not a product electrical/endurance result. This
+candidate uses an internal-DRAM frame buffer and legacy shared-I2C0. Camera
+PCLK and TF card-detect both use GPIO46: remove the TF card,
 keep the TF driver disabled, and do not attach external GPIO JTAG on GPIO39-42
 during the joint test. Static ELF headroom is not runtime memory evidence; live
 acceptance must retain pre/during/post capture internal/DMA heap, largest DMA
 block, task-stack watermarks, sensor continuity and reset/UART/watchdog status.
 
-## Current actual collector image - 2026-09-06
+## Previous actual collector image - 2026-09-06
 
 COM3 / CH343 `5B91047400`, connectivity MAC `02:00:00:00:00:03`: collector app
 985,984 B / `1d67d2319f30d89ce794f0b7e1b3051130163a3d7b8ce92764f8c0bcc9ab6f25`.

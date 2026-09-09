@@ -8,16 +8,17 @@ verified_by: codex
 
 All unknown fields must remain explicit. Do not infer hardware capability from product names.
 
-## 2026-09-09 bounded cleanup state
+## 2026-09-09 bounded cleanup checkpoint
 
 `connectivity-node-001` was reidentified as ESP32-S3 rev v0.2, MAC
 `02:00:00:00:00:03`, 16 MiB physical flash, through CH343 `COM3` serial
 `5B91047400`. Its `ego_collection` partition was backed up, selectively erased
 and fully read back empty under the founder's cleanup authorization. The
 application, NVS and `ego_outbox` were not targeted. The board is deliberately
-held in the ROM bootloader pending a reviewed single-board Camera candidate;
-this operation adds no Camera, LTE, GNSS or IMU capability evidence. AMOLED is
-not part of the current A-line setup. See
+left in the ROM bootloader at that checkpoint; the later run006 app-only flash
+superseded this transient state. This cleanup operation itself adds no Camera,
+LTE, GNSS or IMU capability evidence. AMOLED is not part of the current A-line
+setup. See
 [PRIVACY_WIFI_SPOOL_PURGE_20260909](PRIVACY_WIFI_SPOOL_PURGE_20260909.md).
 
 ## 2026-09-09 Camera media-range preflight
@@ -26,22 +27,41 @@ The same identified board's proposed `[0x600000,0xF00000)` `ego_media` range
 was read in full to a private ignored backup. All 9,437,184 bytes were `0xFF`,
 and a subsequent `verify_flash` comparison matched the saved digest. This
 passes storage ownership only: no write occurred, the board remains in ROM
-bootloader, and Camera/shared-I2C/runtime/LTE evidence is unchanged. See
+bootloader at that checkpoint, and Camera/shared-I2C/runtime/LTE evidence was
+unchanged by the read. See
 [CAMERA-MEDIA-001](CAMERA_MEDIA_RANGE_PREFLIGHT_20260909.md).
+
+## 2026-09-09 current Camera trial checkpoint
+
+The board now contains the app-only run006 Camera trial image from commit
+`80c5e86fd`, application SHA-256
+`EE2FA5A3D2B65186B3A80597C1C574CAA66CBEB66DA5A5EE2125B3086C299D0D`.
+It is an explicit `UNVERIFIED_TRIAL`, Wi-Fi/no-SIM profile with LTE PPP
+disabled. In bounded joint-firmware boots it identified OV5640, captured real
+320 x 240 JPEGs, recovered an older durable photo across reboot, and completed
+a fresh run006b exact command/content ACK with byte-for-byte VPS storage while
+GNSS and external-IMU collection continued. No panic, brownout, watchdog,
+stack overflow or unexpected reboot was observed in those windows.
+
+This is current manual Wi-Fi bench evidence only. It does not verify LTE,
+timed/offline capture, Web visual preview, independent power, FIELD-020,
+endurance, product power or Camera product selection. Exact identities and
+honest failure/pass boundaries are in
+[CAMERA-SHARED-I2C-TRIAL-20260909-001](CAMERA_SHARED_I2C_TRIAL_20260909.md).
 
 ## Current Camera integration constraints
 
-The reviewed no-flash candidate places OV5640 `0x3C`, MAX17048 `0x36` and
-QMI8658A `0x6A` on I2C0 GPIO15/16 at 100 kHz. These distinct addresses establish
-only static compatibility; joint electrical and runtime behavior is unverified.
-The candidate uses an internal-DRAM framebuffer and legacy shared-I2C0, unlike
-the historical PSRAM/`sccb-ng` Camera smoke. Camera PCLK and the board's TF
+The candidate places OV5640 `0x3C`, MAX17048 `0x36` and QMI8658A `0x6A` on
+I2C0 GPIO15/16 at 100 kHz. Bounded Camera/IMU coexistence has now been observed
+in the run006 trial, but the image remains `UNVERIFIED_TRIAL` and no electrical
+endurance or product Gate follows from it. The candidate uses an internal-DRAM
+framebuffer and legacy shared-I2C0. Camera PCLK and the board's TF
 card-detect path both use GPIO46, so the first joint test requires the TF card
 physically removed and its driver disabled. GPIO39-42 must also remain free of
 external JTAG. Runtime resource watermarks and QMI8658A/MAX17048 continuity are
 acceptance evidence, not facts inferred from the successful isolated smoke.
 
-## 2026-09-06 current collector state
+## 2026-09-06 previous collector state
 
 The connectivity node currently retains collector app 985,984 B, SHA-256
 `1d67d2319f30d89ce794f0b7e1b3051130163a3d7b8ce92764f8c0bcc9ab6f25`.
@@ -84,7 +104,7 @@ Wearable UI-001 was not touched. Existing capability dates below remain intact.
 | board_id | role | full model | MCU/SoC | IMU | microphone | GNSS | cellular | camera | storage | validation status |
 |---|---|---|---|---|---|---|---|---|---|---|
 | wearable-node-001 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | ESP32-S3 | QMI8658 observed | basic input/output endpoints accepted for transition: operator-confirmed speech correlated with an approximately tenfold logical-channel RMS rise in run 007, and run 008 output was clear/normal overall; physical channel mapping, full duplex and product acoustics remain unverified | no onboard GNSS used in P0 | no cellular | no product camera path | unknown | CALL-010 development-board endpoint evidence only; no raw audio retained, 4G board untouched, UI-001 restored; not `P0-CALL` or product acceptance |
-| connectivity-node-001 | `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | ESP32-S3 + SIM7670G | external ATK-NB018 V1.0 QMI8658A observed at I2C `0x6A` on GPIO15/16; D2-006 captured 100 real non-mock samples; D2-007 again observed `WHO_AM_I=0x05` and confirmed idle stop but did not capture because LTE was not ready; D2-008 uploaded 26/26 real non-mock six-axis `sensor_sample` messages over Wi-Fi; D2-009 uploaded one bounded 100-sample window over Wi-Fi; D5-002 uploaded three further independently commanded 100-sample windows in one boot with zero read/mock/deadline failures and all three cadence qualified; FIELD-011 uploaded one bounded 100-sample window over LTE with zero read/mock/deadline failures and cadence qualified; FW-006 again observed QMI identity, idle-stop and a later real `mock=false` sample; D5-002 has one operator-confirmed flat-on-table stationary session and FIELD-011 has one operator-confirmed stationary window with pose unrecorded; mounting/calibration/accuracy and other activity labels remain unverified; evidence `reports/board_validation/20260810-qmi8658-probe/`, `reports/board_validation/20260810-d2007-imu-lte/`, `reports/board_validation/20260811-d2008-wifi-imu/`, `reports/board_validation/20260811-d2009-wifi-imu-window/`, `reports/board_validation/20260811-d5002-imu-seed/`, `reports/field_validation/FIELD-011-20260811-001/`, and `reports/firmware_validation/FW-006-20260812-001/` | SIM7670G PC-side AT no-fix evidence; firmware `request_location` scaffold observed as `driver_not_integrated` no-fix; FW-002B fix1 firmware-side SIM7670G UART/AT no-fix evidence observed with USB disconnected; FW-002C fix3 firmware-side SIM7670G UART/AT `fix=true` evidence observed with USB disconnected and `source_status=observed`; FIELD-011 same-image periodic location reported indoor `fix=false` / `no_fix`; FW-006 contains the corrected parser but its bounded startup observed no fixed response, so that parser remains hardware-unverified | SIM7670G LTE/AT evidence; LTE-001B fix1 firmware-side LTE status observability observed with USB disconnected as `LTE_READY`, registered, PDP active, assigned IP present, RAT `LTE`, and cell/signal metrics; FW-003/LTE-004/LOC-004A/LOC-005A/LTE-006 fix1/LTE-007/LTE-008 fix1 raw LTE command/report/observation/ACK slices observed with USB disconnected; D2-007 did not reach LTE command polling because this run reported `LTE_SIM_NOT_READY`; D2-008, D2-009, and D5-002 intentionally bypassed cellular and used Wi-Fi; FIELD-011 completed one real QMI8658 window over LTE with ten chunks, one manifest and one matching `ok` ACK; FW-006 startup reached `LTE_READY` and posted periodic location/observation events; Wi-Fi Message Hub heartbeat/ACK, request_location scaffold, FW-002B SIM7670G UART/AT no-fix report, FW-002C resetdiag fix2 short stability observation, and FW-002C fix3 GNSS real-fix report observed with USB disconnected | OV5640 smoke evidence | TF/SD not product-verified | USB-Free Message Hub communication observed; request_location scaffold observed; FW-002B fix1 flashed and runtime-validated for no-fix AT diagnostics; FW-002B stability observer saw a seq regression/reboot; FW-002C resetdiag fix1 reproduced repeated `panic` resets; FW-002C resetdiag fix2 passed a 120-second USB-Free VPS stability observation with `seq_regressions=0`; FW-002C fix3 passed USB-Free firmware-side SIM7670G real-fix validation; LTE-001B fix1 passed USB-Free firmware-side LTE status observability; KR-005 passed one USB-Free LTE-006 fix1 reliability explainability slice; LTE-008 fix1 passed one USB-Free bounded retry visibility slice without exercising a failed retry; QMI8658 identity and bounded static sampling passed D2-006; D2-007 startup identity/idle-stop passed but bounded LTE window capture failed before sampling with zero raw frames; D2-008 low-rate real six-axis Wi-Fi telemetry passed with 26 samples; D2-009 bounded 100 x 50 ms Wi-Fi window and explicit export passed with one cadence-qualified training-disabled window; D5-002 passed three independent 100 x 50 ms Wi-Fi windows, 300 samples, 30 chunks, three manifests/ACKs, and a three-window explicit export; FIELD-011 passed one operator-confirmed stationary joint-image LTE/QMI bench window and same-image periodic LTE location observation after a full power cycle; FW-006 replaced FIELD-011 once and passed a bounded USB-attached startup identity/QMI idle-stop/real-sample/LTE-ready check, but did not observe a fixed GNSS response; outdoor GNSS fix, USB-free FW-006 operation, three walking windows, LTE long-run stability, reconnect recovery, camera/GNSS/LTE product capability, IMU calibration/accuracy/mounting, activity diversity beyond stationary, battery accuracy, product power behavior, and final enclosure/mounting GNSS acceptance remain bounded by named tests |
+| connectivity-node-001 | `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | ESP32-S3 + SIM7670G | external ATK-NB018 V1.0 QMI8658A observed at I2C `0x6A` on GPIO15/16; D2-006 captured 100 real non-mock samples; D2-007 again observed `WHO_AM_I=0x05` and confirmed idle stop but did not capture because LTE was not ready; D2-008 uploaded 26/26 real non-mock six-axis `sensor_sample` messages over Wi-Fi; D2-009 uploaded one bounded 100-sample window over Wi-Fi; D5-002 uploaded three further independently commanded 100-sample windows in one boot with zero read/mock/deadline failures and all three cadence qualified; FIELD-011 uploaded one bounded 100-sample window over LTE with zero read/mock/deadline failures and cadence qualified; FW-006 again observed QMI identity, idle-stop and a later real `mock=false` sample; run006 observed external-IMU work continuing around bounded joint-firmware OV5640 capture/upload; mounting/calibration/accuracy and other activity labels remain unverified; evidence `reports/board_validation/20260810-qmi8658-probe/`, `reports/board_validation/20260810-d2007-imu-lte/`, `reports/board_validation/20260811-d2008-wifi-imu/`, `reports/board_validation/20260811-d2009-wifi-imu-window/`, `reports/board_validation/20260811-d5002-imu-seed/`, `reports/field_validation/FIELD-011-20260811-001/`, `reports/firmware_validation/FW-006-20260812-001/`, and `docs/hardware/CAMERA_SHARED_I2C_TRIAL_20260909.md` | SIM7670G PC-side AT no-fix evidence; firmware `request_location` scaffold observed as `driver_not_integrated` no-fix; FW-002B fix1 firmware-side SIM7670G UART/AT no-fix evidence observed with USB disconnected; FW-002C fix3 firmware-side SIM7670G UART/AT `fix=true` evidence observed with USB disconnected and `source_status=observed`; FIELD-011 same-image periodic location reported indoor `fix=false` / `no_fix`; FW-006 contains the corrected parser but its bounded startup observed no fixed response, so that parser remains hardware-unverified | SIM7670G LTE/AT evidence; LTE-001B fix1 firmware-side LTE status observability observed with USB disconnected as `LTE_READY`, registered, PDP active, assigned IP present, RAT `LTE`, and cell/signal metrics; FW-003/LTE-004/LOC-004A/LOC-005A/LTE-006 fix1/LTE-007/LTE-008 fix1 raw LTE command/report/observation/ACK slices observed with USB disconnected; D2-007 did not reach LTE command polling because this run reported `LTE_SIM_NOT_READY`; D2-008, D2-009, D5-002 and Camera run006 intentionally bypassed cellular and used Wi-Fi; FIELD-011 completed one real QMI8658 window over LTE with ten chunks, one manifest and one matching `ok` ACK; FW-006 startup reached `LTE_READY` and posted periodic location/observation events; Wi-Fi Message Hub heartbeat/ACK, request_location scaffold, FW-002B SIM7670G UART/AT no-fix report, FW-002C resetdiag fix2 short stability observation, and FW-002C fix3 GNSS real-fix report observed with USB disconnected | OV5640 isolated smoke plus bounded run006 joint-firmware manual QVGA capture, reboot recovery, exact command/content ACK and byte-for-byte VPS storage over Wi-Fi; current image remains `UNVERIFIED_TRIAL`; real LTE, timed/offline, Web visual preview, product Camera and endurance remain unverified | TF/SD not product-verified | USB-Free Message Hub communication observed; request_location scaffold observed; FW-002B fix1 flashed and runtime-validated for no-fix AT diagnostics; FW-002B stability observer saw a seq regression/reboot; FW-002C resetdiag fix1 reproduced repeated `panic` resets; FW-002C resetdiag fix2 passed a 120-second USB-Free VPS stability observation with `seq_regressions=0`; FW-002C fix3 passed USB-Free firmware-side SIM7670G real-fix validation; LTE-001B fix1 passed USB-Free firmware-side LTE status observability; KR-005 passed one USB-Free LTE-006 fix1 reliability explainability slice; LTE-008 fix1 passed one USB-Free bounded retry visibility slice without exercising a failed retry; QMI8658 identity and bounded static sampling passed D2-006; D2-007 startup identity/idle-stop passed but bounded LTE window capture failed before sampling with zero raw frames; D2-008 low-rate real six-axis Wi-Fi telemetry passed with 26 samples; D2-009 bounded 100 x 50 ms Wi-Fi window and explicit export passed with one cadence-qualified training-disabled window; D5-002 passed three independent 100 x 50 ms Wi-Fi windows, 300 samples, 30 chunks, three manifests/ACKs, and a three-window explicit export; FIELD-011 passed one operator-confirmed stationary joint-image LTE/QMI bench window and same-image periodic LTE location observation after a full power cycle; FW-006 replaced FIELD-011 once and passed a bounded USB-attached startup identity/QMI idle-stop/real-sample/LTE-ready check, but did not observe a fixed GNSS response; Camera run006 passed bounded USB-attached Wi-Fi manual capture/recovery and exact VPS storage without an unexpected reset; outdoor GNSS fix, true-LTE Camera closure, USB-free joint Camera operation, timed outage/restart, LTE long-run stability, reconnect recovery, camera/GNSS/LTE product capability, IMU calibration/accuracy/mounting, activity diversity beyond stationary, battery accuracy, product power behavior, and final enclosure/mounting GNSS acceptance remain bounded by named tests |
 | pc-bridge | development bridge | Windows PC | host CPU | n/a | n/a | PC-side SIM7670G AT probe | PC-side USB/RNDIS/AT observation | n/a | local JSONL/session files | development-only, not product dependency |
 
 ## FW-007 rollback baseline (historical runs)
