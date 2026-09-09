@@ -183,6 +183,28 @@ bool photo_control_capture_journal_decode(
 bool photo_control_capture_journal_allows_new_command(
     const photo_control_capture_journal_t *journal);
 
+/* Pure retry policy for settling a durable capture journal. Retention expiry
+ * may pre-empt a future monotonic retry deadline once per journal so expired
+ * media is handled promptly. A failed expiry attempt must then be scheduled
+ * through photo_control_capture_settle_retry_schedule_failure(), which arms a
+ * bounded monotonic delay and prevents expiry from creating a hot loop. */
+typedef struct {
+    uint64_t next_retry_monotonic_ms;
+    uint32_t backoff_ms;
+    bool retention_deadline_bypass_used;
+} photo_control_capture_settle_retry_t;
+
+void photo_control_capture_settle_retry_reset(
+    photo_control_capture_settle_retry_t *state,
+    uint32_t initial_backoff_ms);
+bool photo_control_capture_settle_retry_due(
+    photo_control_capture_settle_retry_t *state,
+    uint64_t now_monotonic_ms, bool retention_expired);
+bool photo_control_capture_settle_retry_schedule_failure(
+    photo_control_capture_settle_retry_t *state,
+    uint64_t now_monotonic_ms, bool retention_expired,
+    uint32_t expiry_retry_ms, uint32_t maximum_backoff_ms);
+
 /* Builds an EGLK/1 ACK using only bounded caller-provided fields. */
 bool photo_control_build_ack_frame(
     const char *cmd_id, const char *status, const char *message,

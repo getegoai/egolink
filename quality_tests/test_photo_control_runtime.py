@@ -235,6 +235,59 @@ int main(void){
   photo_control_capture_journal_default(&capture_restored);
   assert(photo_control_capture_journal_allows_new_command(&capture_restored));
 
+  /* Retention expiry may pre-empt a future retry once. After that attempt
+   * fails, repeated expiry observations must respect the short monotonic
+   * deadline instead of spinning on every uploader pass. */
+  photo_control_capture_settle_retry_t settle_retry;
+  photo_control_capture_settle_retry_reset(&settle_retry,1000U);
+  assert(photo_control_capture_settle_retry_schedule_failure(
+      &settle_retry,1000U,false,250U,60000U));
+  assert(settle_retry.next_retry_monotonic_ms==2000U);
+  assert(settle_retry.backoff_ms==2000U);
+  assert(!photo_control_capture_settle_retry_due(
+      &settle_retry,1500U,false));
+  assert(photo_control_capture_settle_retry_due(
+      &settle_retry,1500U,true));
+  assert(settle_retry.retention_deadline_bypass_used);
+  assert(photo_control_capture_settle_retry_schedule_failure(
+      &settle_retry,1500U,true,250U,60000U));
+  assert(settle_retry.next_retry_monotonic_ms==1750U);
+  assert(!photo_control_capture_settle_retry_due(
+      &settle_retry,1501U,true));
+  assert(!photo_control_capture_settle_retry_due(
+      &settle_retry,1749U,true));
+  assert(photo_control_capture_settle_retry_due(
+      &settle_retry,1750U,true));
+  assert(photo_control_capture_settle_retry_schedule_failure(
+      &settle_retry,1750U,true,250U,60000U));
+  assert(!photo_control_capture_settle_retry_due(
+      &settle_retry,1751U,true));
+
+  /* Reset represents a different durable journal and restores exactly one
+   * expiry bypass. */
+  photo_control_capture_settle_retry_reset(&settle_retry,1000U);
+  assert(photo_control_capture_settle_retry_schedule_failure(
+      &settle_retry,3000U,false,250U,60000U));
+  assert(photo_control_capture_settle_retry_due(
+      &settle_retry,3500U,true));
+  assert(!photo_control_capture_settle_retry_due(
+      &settle_retry,3500U,true));
+
+  /* Normal failures keep capped exponential backoff, and deadline arithmetic
+   * saturates instead of wrapping near UINT64_MAX. */
+  photo_control_capture_settle_retry_reset(&settle_retry,40000U);
+  assert(photo_control_capture_settle_retry_schedule_failure(
+      &settle_retry,0U,false,250U,60000U));
+  assert(settle_retry.next_retry_monotonic_ms==40000U);
+  assert(settle_retry.backoff_ms==60000U);
+  assert(photo_control_capture_settle_retry_schedule_failure(
+      &settle_retry,UINT64_MAX-100U,true,250U,60000U));
+  assert(settle_retry.next_retry_monotonic_ms==UINT64_MAX);
+  assert(!photo_control_capture_settle_retry_due(
+      &settle_retry,UINT64_MAX-1U,true));
+  assert(photo_control_capture_settle_retry_due(
+      &settle_retry,UINT64_MAX,true));
+
   char ack[1024];assert(photo_control_build_ack_frame("capture-command-001","ok","saved locally",
       "camera-runtime-test","lte",7U,true,ack,sizeof(ack),&bytes));
   assert(strstr(ack,"type=ack")&&strstr(ack,"status=ok")&&strstr(ack,"duplicate_local_execution_prevented=true"));
@@ -314,6 +367,11 @@ int main(void) {
     def test_capture_journal_preserves_v2_provenance_and_migrates_v1_as_unknown(self):
         # The native setUp harness performs the v2 byte-for-byte round trip,
         # constructs a genuine v1 layout, and rejects any verified inference.
+        self.assertTrue(self.ack.startswith(b"EGLK/1"))
+
+    def test_capture_settle_retry_policy_uses_simulated_time(self):
+        # The native harness covers one-shot expiry pre-emption, mandatory
+        # post-failure delay, per-journal reset, capped backoff, and overflow.
         self.assertTrue(self.ack.startswith(b"EGLK/1"))
 
     def test_timer_ack_projects_complete_applied_effective_state(self):

@@ -532,7 +532,14 @@ collection_spool_result_t collection_spool_append(collection_spool_t *s,
     return append_internal(s, kind, source_id, source_seq, payload, bytes, written);
 }
 
-static collection_spool_result_t head(collection_spool_t *s,
+typedef enum {
+    SELECT_ANY = 0,
+    SELECT_MATCHING,
+    SELECT_EXCLUDING,
+} selection_mode_t;
+
+static collection_spool_result_t selected_head(collection_spool_t *s,
+    selection_mode_t mode, collection_spool_kind_t kind, uint32_t source_id,
     collection_spool_record_t *out)
 {
     bool found = false;
@@ -546,7 +553,12 @@ static collection_spool_result_t head(collection_spool_t *s,
             if (!bytes || bytes > s->config.erase_bytes - at - RH ||
                 get32(h) != RECORD_MAGIC || get32(h + 40) != COMMIT ||
                 get32(h + 36) != crc32(h, 36U)) return COLLECTION_SPOOL_CORRUPT;
-            if (get32(h + 44) != 0U) {
+            const bool exact = get32(h + 20) == (uint32_t)kind &&
+                get32(h + 16) == source_id;
+            const bool selected = mode == SELECT_ANY ||
+                (mode == SELECT_MATCHING && exact) ||
+                (mode == SELECT_EXCLUDING && !exact);
+            if (get32(h + 44) != 0U && selected) {
                 if (!found || get64(h + 8) < out->token.ticket) {
                     decode_record(h, n, at, sector->generation, out);
                     found = true;
@@ -559,17 +571,70 @@ static collection_spool_result_t head(collection_spool_t *s,
     return found ? COLLECTION_SPOOL_OK : COLLECTION_SPOOL_EMPTY;
 }
 
+static collection_spool_result_t head(collection_spool_t *s,
+    collection_spool_record_t *out)
+{
+    return selected_head(s, SELECT_ANY, COLLECTION_SPOOL_DATA, 0U, out);
+}
+
+static collection_spool_result_t read_payload(collection_spool_t *s,
+    const collection_spool_record_t *record, void *payload, size_t capacity)
+{
+    if (capacity < record->token.payload_bytes)
+        return COLLECTION_SPOOL_BUFFER_TOO_SMALL;
+    if (!read_at(s, base(s, record->token.sector) + record->token.offset + RH,
+                 payload, record->token.payload_bytes))
+        return COLLECTION_SPOOL_IO_ERROR;
+    if (crc32(payload, record->token.payload_bytes) !=
+        record->token.payload_crc32)
+        return COLLECTION_SPOOL_CORRUPT;
+    return COLLECTION_SPOOL_OK;
+}
+
 collection_spool_result_t collection_spool_peek(collection_spool_t *s,
     collection_spool_record_t *out, void *payload, size_t capacity)
 {
     if (!s || !s->initialized || !out || !payload) return COLLECTION_SPOOL_BAD_ARGUMENT;
     collection_spool_result_t result = head(s, out);
     if (result != COLLECTION_SPOOL_OK) return result;
-    if (capacity < out->token.payload_bytes) return COLLECTION_SPOOL_BUFFER_TOO_SMALL;
-    if (!read_at(s, base(s, out->token.sector) + out->token.offset + RH,
-                 payload, out->token.payload_bytes)) return COLLECTION_SPOOL_IO_ERROR;
-    if (crc32(payload, out->token.payload_bytes) != out->token.payload_crc32)
-        return COLLECTION_SPOOL_CORRUPT;
+    return read_payload(s, out, payload, capacity);
+}
+
+collection_spool_result_t collection_spool_claim_matching(collection_spool_t *s,
+    collection_spool_kind_t kind, uint32_t source_id,
+    collection_spool_record_t *out, void *payload, size_t capacity)
+{
+    if (!s || !s->initialized || !out || !payload ||
+        (kind != COLLECTION_SPOOL_DATA && kind != COLLECTION_SPOOL_METADATA &&
+         kind != COLLECTION_SPOOL_LOSS))
+        return COLLECTION_SPOOL_BAD_ARGUMENT;
+    if (s->has_pin) return COLLECTION_SPOOL_ACK_MISMATCH;
+    collection_spool_result_t result = selected_head(s, SELECT_MATCHING, kind,
+        source_id, out);
+    if (result != COLLECTION_SPOOL_OK) return result;
+    result = read_payload(s, out, payload, capacity);
+    if (result != COLLECTION_SPOOL_OK) return result;
+    s->pinned = out->token;
+    s->has_pin = true;
+    return COLLECTION_SPOOL_OK;
+}
+
+collection_spool_result_t collection_spool_claim_excluding(collection_spool_t *s,
+    collection_spool_kind_t kind, uint32_t source_id,
+    collection_spool_record_t *out, void *payload, size_t capacity)
+{
+    if (!s || !s->initialized || !out || !payload ||
+        (kind != COLLECTION_SPOOL_DATA && kind != COLLECTION_SPOOL_METADATA &&
+         kind != COLLECTION_SPOOL_LOSS))
+        return COLLECTION_SPOOL_BAD_ARGUMENT;
+    if (s->has_pin) return COLLECTION_SPOOL_ACK_MISMATCH;
+    collection_spool_result_t result = selected_head(s, SELECT_EXCLUDING, kind,
+        source_id, out);
+    if (result != COLLECTION_SPOOL_OK) return result;
+    result = read_payload(s, out, payload, capacity);
+    if (result != COLLECTION_SPOOL_OK) return result;
+    s->pinned = out->token;
+    s->has_pin = true;
     return COLLECTION_SPOOL_OK;
 }
 
@@ -598,6 +663,53 @@ void collection_spool_unpin(collection_spool_t *s)
     if (s) s->has_pin = false;
 }
 
+static collection_spool_result_t pending_record_at_token(collection_spool_t *s,
+    const collection_spool_token_t *token, collection_spool_record_t *out)
+{
+    if (token->sector >= s->sector_count) return COLLECTION_SPOOL_ACK_MISMATCH;
+    collection_spool_sector_t *sector = &s->sectors[token->sector];
+    if (sector->state != SECTOR_VALID || sector->retired ||
+        sector->generation != token->sector_generation ||
+        token->offset < SH || token->offset >= sector->end)
+        return COLLECTION_SPOOL_ACK_MISMATCH;
+    uint8_t h[RH];
+    for (uint32_t at = SH; at < sector->end;) {
+        if (!read_at(s, base(s, token->sector) + at, h, RH))
+            return COLLECTION_SPOOL_IO_ERROR;
+        uint32_t bytes = get32(h + 4);
+        if (!bytes || bytes > s->config.erase_bytes - at - RH ||
+            get32(h) != RECORD_MAGIC || get32(h + 40) != COMMIT ||
+            get32(h + 36) != crc32(h, 36U))
+            return COLLECTION_SPOOL_CORRUPT;
+        if (at == token->offset) {
+            if (get32(h + 44) == 0U) return COLLECTION_SPOOL_ACK_MISMATCH;
+            decode_record(h, token->sector, at, sector->generation, out);
+            return same_token(token, &out->token) ? COLLECTION_SPOOL_OK :
+                COLLECTION_SPOOL_ACK_MISMATCH;
+        }
+        if (at > token->offset) return COLLECTION_SPOOL_ACK_MISMATCH;
+        at += RH + (uint32_t)aligned(bytes);
+    }
+    return COLLECTION_SPOOL_ACK_MISMATCH;
+}
+
+static collection_spool_result_t ack_record(collection_spool_t *s,
+    const collection_spool_record_t *record)
+{
+    collection_spool_sector_t *sector = &s->sectors[record->token.sector];
+    if (!sector->pending || sector->pending_bytes < record->token.payload_bytes)
+        return COLLECTION_SPOOL_CORRUPT;
+    uint8_t ack[4] = {0U, 0U, 0U, 0U};
+    if (!write_at(s, base(s, record->token.sector) + record->token.offset + 44U,
+                  ack, sizeof(ack)))
+        return COLLECTION_SPOOL_IO_ERROR;
+    --sector->pending;
+    sector->pending_bytes -= record->token.payload_bytes;
+    if (s->has_pin && same_token(&s->pinned, &record->token)) s->has_pin = false;
+    ++s->stats.acked_records_this_boot;
+    return COLLECTION_SPOOL_OK;
+}
+
 collection_spool_result_t collection_spool_ack(collection_spool_t *s,
     const collection_spool_token_t *token)
 {
@@ -609,15 +721,19 @@ collection_spool_result_t collection_spool_ack(collection_spool_t *s,
     const collection_spool_token_t *now = &current.token;
     if (!same_token(token, now))
         return COLLECTION_SPOOL_ACK_MISMATCH;
-    uint8_t ack[4] = {0U, 0U, 0U, 0U};
-    if (!write_at(s, base(s, now->sector) + now->offset + 44U, ack, sizeof(ack)))
-        return COLLECTION_SPOOL_IO_ERROR;
-    collection_spool_sector_t *sector = &s->sectors[now->sector];
-    --sector->pending;
-    sector->pending_bytes -= now->payload_bytes;
-    if (s->has_pin && same_token(&s->pinned, now)) s->has_pin = false;
-    ++s->stats.acked_records_this_boot;
-    return COLLECTION_SPOOL_OK;
+    return ack_record(s, &current);
+}
+
+collection_spool_result_t collection_spool_ack_claimed(collection_spool_t *s,
+    const collection_spool_token_t *token)
+{
+    if (!s || !s->initialized || !token) return COLLECTION_SPOOL_BAD_ARGUMENT;
+    if (!s->has_pin || !same_token(token, &s->pinned))
+        return COLLECTION_SPOOL_ACK_MISMATCH;
+    collection_spool_record_t current;
+    collection_spool_result_t result = pending_record_at_token(s, token, &current);
+    if (result != COLLECTION_SPOOL_OK) return result;
+    return ack_record(s, &current);
 }
 
 void collection_spool_get_stats(const collection_spool_t *s,

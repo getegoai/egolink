@@ -642,12 +642,41 @@ def _check_runtime_delivery_is_metadata_gated_fair_and_release_safe():
     assert "metadata_identity>photo_metadata_ack_watermark" in source
     assert "PHOTO_ORDINARY_UPLOAD_BUDGET 8U" in source
     assert "PHOTO_FAIR_UPLOAD_INTERVAL_US 30000000LL" in source
+    assert "PHOTO_METADATA_ORDINARY_ACK_BUDGET 4U" in source
+    assert "PHOTO_METADATA_FAIR_DEADLINE_US 30000000LL" in source
+    assert "PHOTO_METADATA_EMPTY_PROBE_INTERVAL_US 1000000LL" in source
+    assert "PHOTO_METADATA_UPLOAD_RETRY_INITIAL_MS 1000U" in source
+    assert "PHOTO_METADATA_UPLOAD_RETRY_MAX_MS 60000U" in source
     assert "photo_schedule_upload_retry(server_verified" in source
     assert "photo_control_capture_journal_allows_new_command(&pending_capture)" in source
     assert "PHOTO_CAPTURE_SETTLE_RETRY_INITIAL_MS 1000U" in source
     assert "PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS 60000U" in source
     assert "COLLECTION_UPLOAD_TASK_STACK_BYTES 20480U" in source
     assert 'xTaskCreate(uploader_task,"collection_upload",\n        COLLECTION_UPLOAD_TASK_STACK_BYTES' in source
+    uploader = source[source.index("static void uploader_task"):source.index(
+        "void app_main"
+    )]
+    assert uploader.index("collection_spool_claim_matching(&spool") < uploader.index(
+        "photo_upload_one(&https"
+    )
+    assert "COLLECTION_SPOOL_METADATA,CAMERA,&record,buffer,sizeof(buffer)" in uploader
+    assert "collection_spool_claim_excluding(&spool" in uploader
+    assert "collection_spool_ack_claimed(&spool,&record.token)" in uploader
+    assert uploader.index("photo_record_metadata_acked(record.source_seq)") < uploader.index(
+        "collection_spool_ack_claimed(&spool,&record.token)"
+    )
+    assert "noncamera_acks_since_camera>=PHOTO_METADATA_ORDINARY_ACK_BUDGET" in uploader
+    assert "now>=next_camera_metadata_fair_deadline" in uploader
+    assert "next_camera_metadata_fair_deadline=now_us()+" in uploader
+    assert "PHOTO_METADATA_EMPTY_PROBE_INTERVAL_US" in uploader
+    assert "if(durable&&!camera_metadata_claim&&durable_streak>=4" in uploader
+    assert "if(!camera_metadata_claim&&now<next_send)" in uploader
+    assert "if(camera_metadata_claim&&!locally_acked)" in uploader
+    assert "next_photo_upload=0;" in uploader and "next_photo_fair_deadline=0;" in uploader
+    assert "photo_upload_cursor=0U;" in uploader
+    assert "ordinary_uploads_since_photo=PHOTO_ORDINARY_UPLOAD_BUDGET;" in uploader
+    assert uploader.count("if(photo_http==404U)next_photo_fair_deadline=0;") == 2
+    assert "camera_priority=%d bytes=%u" in uploader
     assert "photo_capture_settle_retry_due" in source
     assert "photo_capture_settle_retry_schedule" in source
     assert "photo_capture_settle_retry_reset" in source

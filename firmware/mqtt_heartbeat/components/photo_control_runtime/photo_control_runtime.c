@@ -709,6 +709,59 @@ bool photo_control_capture_journal_allows_new_command(
     return journal&&journal->phase==PHOTO_CONTROL_CAPTURE_NONE;
 }
 
+void photo_control_capture_settle_retry_reset(
+    photo_control_capture_settle_retry_t *state,
+    uint32_t initial_backoff_ms)
+{
+    if(!state)return;
+    state->next_retry_monotonic_ms=0U;
+    state->backoff_ms=initial_backoff_ms;
+    state->retention_deadline_bypass_used=false;
+}
+
+bool photo_control_capture_settle_retry_due(
+    photo_control_capture_settle_retry_t *state,
+    uint64_t now_monotonic_ms,bool retention_expired)
+{
+    if(!state)return false;
+    if(retention_expired&&!state->retention_deadline_bypass_used){
+        state->retention_deadline_bypass_used=true;
+        return true;
+    }
+    return now_monotonic_ms>=state->next_retry_monotonic_ms;
+}
+
+static uint64_t retry_deadline_after(uint64_t now_monotonic_ms,
+                                     uint32_t delay_ms)
+{
+    if(now_monotonic_ms>UINT64_MAX-(uint64_t)delay_ms)return UINT64_MAX;
+    return now_monotonic_ms+(uint64_t)delay_ms;
+}
+
+bool photo_control_capture_settle_retry_schedule_failure(
+    photo_control_capture_settle_retry_t *state,
+    uint64_t now_monotonic_ms,bool retention_expired,
+    uint32_t expiry_retry_ms,uint32_t maximum_backoff_ms)
+{
+    if(!state||!expiry_retry_ms||!maximum_backoff_ms||!state->backoff_ms)
+        return false;
+
+    uint32_t delay_ms;
+    if(retention_expired){
+        state->retention_deadline_bypass_used=true;
+        delay_ms=expiry_retry_ms<maximum_backoff_ms
+            ?expiry_retry_ms:maximum_backoff_ms;
+    }else{
+        delay_ms=state->backoff_ms<maximum_backoff_ms
+            ?state->backoff_ms:maximum_backoff_ms;
+        state->backoff_ms=state->backoff_ms>maximum_backoff_ms/2U
+            ?maximum_backoff_ms:state->backoff_ms*2U;
+    }
+    state->next_retry_monotonic_ms=
+        retry_deadline_after(now_monotonic_ms,delay_ms);
+    return true;
+}
+
 bool photo_control_build_ack_frame(const char *cmd_id,const char *status,
     const char *message,const char *fw_version,const char *transport_type,uint32_t seq,
     bool duplicate_prevented,char *out,size_t capacity,size_t *written)

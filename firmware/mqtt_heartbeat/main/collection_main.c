@@ -123,8 +123,14 @@ _Static_assert(sizeof(CONFIG_EGOLINK_FW_VERSION)<=
 #define MEDIA_PARTITION_SIZE 0x900000U
 #define PHOTO_ORDINARY_UPLOAD_BUDGET 8U
 #define PHOTO_FAIR_UPLOAD_INTERVAL_US 30000000LL
+#define PHOTO_METADATA_ORDINARY_ACK_BUDGET 4U
+#define PHOTO_METADATA_FAIR_DEADLINE_US 30000000LL
+#define PHOTO_METADATA_EMPTY_PROBE_INTERVAL_US 1000000LL
+#define PHOTO_METADATA_UPLOAD_RETRY_INITIAL_MS 1000U
+#define PHOTO_METADATA_UPLOAD_RETRY_MAX_MS 60000U
 #define PHOTO_CAPTURE_SETTLE_RETRY_INITIAL_MS 1000U
 #define PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS 60000U
+#define PHOTO_CAPTURE_SETTLE_EXPIRY_RETRY_MS 1000U
 #define COLLECTION_UPLOAD_TASK_STACK_BYTES 20480U
 static const char *TAG="collection";
 typedef struct { size_t length; unsigned source,seq,loss_version; bool metadata; char bytes[COLLECTION_FRAME_CAPACITY]; } queued_t;
@@ -2635,66 +2641,75 @@ static bool photo_settle_pending_manual_capture(
     return true;
 }
 
-static void photo_capture_settle_retry_reset(unsigned *backoff_ms,
-                                             int64_t *next_retry_us)
+static bool photo_capture_retention_expired(
+    const photo_control_capture_journal_t *capture_journal)
 {
-    if(backoff_ms)*backoff_ms=PHOTO_CAPTURE_SETTLE_RETRY_INITIAL_MS;
-    if(next_retry_us)*next_retry_us=0;
+    uint64_t utc_ms=0U;
+    return capture_journal&&photo_wall_clock(&utc_ms)&&
+        utc_ms>=capture_journal->retention_expires_at_unix_ms;
 }
 
-static void photo_capture_settle_retry_schedule(unsigned *backoff_ms,
-                                                int64_t *next_retry_us)
+static void photo_capture_settle_retry_reset(
+    photo_control_capture_settle_retry_t *state)
 {
-    if(!backoff_ms||!next_retry_us)return;
-    const unsigned delay=*backoff_ms;
-    *next_retry_us=now_us()+(int64_t)delay*1000LL;
-    if(*backoff_ms<PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS)
-        *backoff_ms=*backoff_ms>PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS/2U?
-            PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS:*backoff_ms*2U;
+    photo_control_capture_settle_retry_reset(state,
+        PHOTO_CAPTURE_SETTLE_RETRY_INITIAL_MS);
+}
+
+static void photo_capture_settle_retry_schedule(
+    photo_control_capture_settle_retry_t *state,
+    const photo_control_capture_journal_t *capture_journal)
+{
+    if(!state)return;
+    const bool expired=photo_capture_retention_expired(capture_journal);
+    const unsigned delay=expired?PHOTO_CAPTURE_SETTLE_EXPIRY_RETRY_MS:
+        (state->backoff_ms<PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS?
+            state->backoff_ms:PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS);
+    if(!photo_control_capture_settle_retry_schedule_failure(state,
+        (uint64_t)now_us()/1000U,expired,
+        PHOTO_CAPTURE_SETTLE_EXPIRY_RETRY_MS,
+        PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS))return;
     ESP_LOGW(TAG,"PHOTO_CAPTURE_SETTLE_RETRY delay_ms=%u durable_journal=true",
         delay);
 }
 
 static bool photo_capture_settle_retry_due(
     const photo_control_capture_journal_t *capture_journal,int64_t now,
-    int64_t next_retry_us)
+    photo_control_capture_settle_retry_t *state)
 {
-    if(now>=next_retry_us)return true;
-    uint64_t utc_ms=0U;
-    return capture_journal&&photo_wall_clock(&utc_ms)&&
-        utc_ms>=capture_journal->retention_expires_at_unix_ms;
+    return photo_control_capture_settle_retry_due(state,(uint64_t)now/1000U,
+        photo_capture_retention_expired(capture_journal));
 }
 
-static void photo_service_local_timer(unsigned *capture_settle_backoff_ms,
-                                      int64_t *next_capture_settle_us)
+static void photo_service_local_timer(
+    photo_control_capture_settle_retry_t *capture_settle_retry)
 {
-    if(!capture_settle_backoff_ms||!next_capture_settle_us||
+    if(!capture_settle_retry||
        !atomic_load(&photo_control_state_ready))return;
     photo_control_timer_t timer;photo_timer_snapshot(&timer);
     photo_control_capture_journal_t capture_journal;
     photo_capture_journal_snapshot(&capture_journal);
     if(capture_journal.phase!=PHOTO_CONTROL_CAPTURE_NONE){
         if(!photo_capture_settle_retry_due(&capture_journal,now_us(),
-                                           *next_capture_settle_us))return;
+                                           capture_settle_retry))return;
         bool settled=false;
         if(capture_journal.kind==PHOTO_CONTROL_COMMAND_CAPTURE_ONCE){
             settled=photo_settle_pending_manual_capture(&capture_journal);
-            if(settled)photo_capture_settle_retry_reset(
-                capture_settle_backoff_ms,next_capture_settle_us);
-            else photo_capture_settle_retry_schedule(
-                capture_settle_backoff_ms,next_capture_settle_us);
+            if(settled)photo_capture_settle_retry_reset(capture_settle_retry);
+            else photo_capture_settle_retry_schedule(capture_settle_retry,
+                &capture_journal);
             return;
         }
         if(capture_journal.kind!=PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER||
            !photo_timer_matches_capture_journal(&timer,&capture_journal)){
-            photo_capture_settle_retry_schedule(capture_settle_backoff_ms,
-                next_capture_settle_us);
+            photo_capture_settle_retry_schedule(capture_settle_retry,
+                &capture_journal);
             return;
         }
         uint64_t recovery_utc_ms=0U;
         if(!photo_wall_clock(&recovery_utc_ms)){
-            photo_capture_settle_retry_schedule(capture_settle_backoff_ms,
-                next_capture_settle_us);
+            photo_capture_settle_retry_schedule(capture_settle_retry,
+                &capture_journal);
             return;
         }
         if(recovery_utc_ms>=capture_journal.retention_expires_at_unix_ms){
@@ -2706,14 +2721,12 @@ static void photo_service_local_timer(unsigned *capture_settle_backoff_ms,
                 settled=photo_settle_timer_capture(&timer,&capture_journal,
                     &recovered,recovery_utc_ms);
         }
-        if(settled)photo_capture_settle_retry_reset(capture_settle_backoff_ms,
-            next_capture_settle_us);
-        else photo_capture_settle_retry_schedule(capture_settle_backoff_ms,
-            next_capture_settle_us);
+        if(settled)photo_capture_settle_retry_reset(capture_settle_retry);
+        else photo_capture_settle_retry_schedule(capture_settle_retry,
+            &capture_journal);
         return;
     }
-    photo_capture_settle_retry_reset(capture_settle_backoff_ms,
-        next_capture_settle_us);
+    photo_capture_settle_retry_reset(capture_settle_retry);
     const char *preflight_reason=NULL;
     const bool timer_policy_rejected=
         !platform_camera_timed_capture_allowed();
@@ -2762,12 +2775,11 @@ static void photo_service_local_timer(unsigned *capture_settle_backoff_ms,
     photo_capture_outcome_t captured={0};
     if(!photo_capture_run_or_restore(&intent,&captured,&capture_journal)||
        !photo_settle_timer_capture(&timer,&capture_journal,&captured,utc_ms)){
-        photo_capture_settle_retry_schedule(capture_settle_backoff_ms,
-            next_capture_settle_us);
+        photo_capture_settle_retry_schedule(capture_settle_retry,
+            &capture_journal);
         return;
     }
-    photo_capture_settle_retry_reset(capture_settle_backoff_ms,
-        next_capture_settle_us);
+    photo_capture_settle_retry_reset(capture_settle_retry);
 }
 
 static bool photo_post_pending_timer_state(egolink_esp_p0_https_t *https,
@@ -2944,11 +2956,14 @@ static void uploader_task(void *unused)
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
     int64_t next_command_poll=0,next_photo_upload=0,next_timer_report=0;
     int64_t next_retention_scan=0,next_photo_fair_deadline=0;
-    int64_t next_capture_settle=0;
+    int64_t next_camera_metadata_send=0,next_camera_metadata_fair_deadline=0;
     unsigned photo_backoff=CONFIG_EGOLINK_PHOTO_UPLOAD_RETRY_INITIAL_MS;
-    unsigned capture_settle_backoff=PHOTO_CAPTURE_SETTLE_RETRY_INITIAL_MS;
+    unsigned camera_metadata_backoff=PHOTO_METADATA_UPLOAD_RETRY_INITIAL_MS;
     unsigned ordinary_uploads_since_photo=0U;
+    unsigned noncamera_acks_since_camera=PHOTO_METADATA_ORDINARY_ACK_BUDGET;
     uint32_t photo_upload_cursor=0U,photo_retention_cursor=0U;
+    photo_control_capture_settle_retry_t capture_settle_retry;
+    photo_capture_settle_retry_reset(&capture_settle_retry);
     static uint8_t command_response[2048],command_ack_response[8192];
     photo_stack_hwm_observe(&photo_upload_stack_hwm_bytes);
 #endif
@@ -2974,7 +2989,7 @@ static void uploader_task(void *unused)
             }
         }
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
-        photo_service_local_timer(&capture_settle_backoff,&next_capture_settle);
+        photo_service_local_timer(&capture_settle_retry);
         if(now>=next_retention_scan){
             (void)photo_release_one_expired(&photo_retention_cursor);
             next_retention_scan=now_us()+1000000LL;
@@ -2988,6 +3003,9 @@ static void uploader_task(void *unused)
            !interface_matches_route(route.route,interface_name)){
             next_send=now+5000000;vTaskDelay(pdMS_TO_TICKS(100));continue;
         }
+        collection_spool_record_t record={0};
+        collection_spool_result_t result=COLLECTION_SPOOL_EMPTY;
+        bool camera_metadata_claim=false,spool_claimed=false;
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
         if(now>=next_timer_report){
             if(photo_post_pending_timer_state(&https,&route,interface_name,
@@ -3008,14 +3026,29 @@ static void uploader_task(void *unused)
                 photo_control_capture_journal_t capture_after_command;
                 photo_capture_journal_snapshot(&capture_after_command);
                 if(capture_after_command.phase!=PHOTO_CONTROL_CAPTURE_NONE)
-                    photo_capture_settle_retry_schedule(&capture_settle_backoff,
-                        &next_capture_settle);
+                    photo_capture_settle_retry_schedule(&capture_settle_retry,
+                        &capture_after_command);
             }
             next_command_poll=now_us()+(command_ok?
                 CONFIG_EGOLINK_PHOTO_COMMAND_POLL_INTERVAL_MS:5000)*1000LL;
             continue;
         }
-        if(now>=next_photo_upload&&
+        if(now>=next_camera_metadata_send&&
+           (noncamera_acks_since_camera>=PHOTO_METADATA_ORDINARY_ACK_BUDGET||
+            now>=next_camera_metadata_fair_deadline)){
+            xSemaphoreTake(spool_mutex,portMAX_DELAY);
+            if(spool_ready)result=collection_spool_claim_matching(&spool,
+                COLLECTION_SPOOL_METADATA,CAMERA,&record,buffer,sizeof(buffer));
+            if(result==COLLECTION_SPOOL_IO_ERROR||result==COLLECTION_SPOOL_CORRUPT)
+                spool_ready=false;
+            xSemaphoreGive(spool_mutex);
+            camera_metadata_claim=result==COLLECTION_SPOOL_OK;
+            spool_claimed=camera_metadata_claim;
+            if(result==COLLECTION_SPOOL_EMPTY)
+                next_camera_metadata_send=now+
+                    PHOTO_METADATA_EMPTY_PROBE_INTERVAL_US;
+        }
+        if(!camera_metadata_claim&&now>=next_photo_upload&&
            (ordinary_uploads_since_photo>=PHOTO_ORDINARY_UPLOAD_BUDGET||
             now>=next_photo_fair_deadline)){
             uint32_t photo_http=0U;bool server_verified=false;
@@ -3025,21 +3058,44 @@ static void uploader_task(void *unused)
             next_photo_fair_deadline=now_us()+PHOTO_FAIR_UPLOAD_INTERVAL_US;
             ordinary_uploads_since_photo=0U;
             if(attempted){
+                if(photo_http==404U)next_photo_fair_deadline=0;
                 photo_schedule_upload_retry(server_verified,photo_http,
                     &photo_backoff,&next_photo_upload);
                 continue;
             }
         }
 #endif
-        collection_spool_record_t record={0};collection_spool_result_t result=COLLECTION_SPOOL_EMPTY;
-        xSemaphoreTake(spool_mutex,portMAX_DELAY);
-        if(spool_ready)result=collection_spool_peek(&spool,&record,buffer,sizeof(buffer));
-        if(result==COLLECTION_SPOOL_OK)result=collection_spool_pin(&spool,&record.token);
-        if(result==COLLECTION_SPOOL_IO_ERROR||result==COLLECTION_SPOOL_CORRUPT)spool_ready=false;
-        xSemaphoreGive(spool_mutex);
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+        if(!camera_metadata_claim){
+            xSemaphoreTake(spool_mutex,portMAX_DELAY);
+            if(spool_ready)result=collection_spool_claim_excluding(&spool,
+                COLLECTION_SPOOL_METADATA,CAMERA,&record,buffer,sizeof(buffer));
+            if(result==COLLECTION_SPOOL_EMPTY&&now>=next_camera_metadata_send&&
+               spool_ready){
+                result=collection_spool_claim_matching(&spool,
+                    COLLECTION_SPOOL_METADATA,CAMERA,&record,buffer,sizeof(buffer));
+                camera_metadata_claim=result==COLLECTION_SPOOL_OK;
+            }
+            if(result==COLLECTION_SPOOL_IO_ERROR||result==COLLECTION_SPOOL_CORRUPT)
+                spool_ready=false;
+            xSemaphoreGive(spool_mutex);
+            spool_claimed=result==COLLECTION_SPOOL_OK;
+        }
+#else
+        if(!camera_metadata_claim){
+            xSemaphoreTake(spool_mutex,portMAX_DELAY);
+            if(spool_ready)result=collection_spool_peek(&spool,&record,buffer,sizeof(buffer));
+            if(result==COLLECTION_SPOOL_OK)
+                result=collection_spool_pin(&spool,&record.token);
+            if(result==COLLECTION_SPOOL_IO_ERROR||result==COLLECTION_SPOOL_CORRUPT)
+                spool_ready=false;
+            xSemaphoreGive(spool_mutex);
+        }
+#endif
         queued_t *ram=NULL;char *body=buffer;size_t length=record.token.payload_bytes;
         bool durable=result==COLLECTION_SPOOL_OK;
-        if(durable&&durable_streak>=4&&xQueuePeek(ram_fallback,&ram,0)==pdTRUE){
+        if(durable&&!camera_metadata_claim&&durable_streak>=4&&
+           xQueuePeek(ram_fallback,&ram,0)==pdTRUE){
             xSemaphoreTake(spool_mutex,portMAX_DELAY);collection_spool_unpin(&spool);xSemaphoreGive(spool_mutex);
             durable=false;durable_streak=0;
         }
@@ -3057,6 +3113,7 @@ static void uploader_task(void *unused)
                         ordinary_uploads_since_photo=0U;
                         next_photo_fair_deadline=now_us()+
                             PHOTO_FAIR_UPLOAD_INTERVAL_US;
+                        if(photo_http==404U)next_photo_fair_deadline=0;
                         photo_schedule_upload_retry(server_verified,photo_http,
                             &photo_backoff,&next_photo_upload);
                         continue;
@@ -3067,17 +3124,23 @@ static void uploader_task(void *unused)
             }
             body=ram->bytes;length=ram->length;
         }
-        if(now<next_send){
+        if(!camera_metadata_claim&&now<next_send){
             if(durable){xSemaphoreTake(spool_mutex,portMAX_DELAY);collection_spool_unpin(&spool);xSemaphoreGive(spool_mutex);}
             vTaskDelay(pdMS_TO_TICKS(100));continue;
         }
         if(!length){
             if(durable){xSemaphoreTake(spool_mutex,portMAX_DELAY);collection_spool_unpin(&spool);xSemaphoreGive(spool_mutex);}
-            atomic_fetch_add(&send_errors,1);next_send=now+60000000;continue;
+            atomic_fetch_add(&send_errors,1);
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+            if(camera_metadata_claim)next_camera_metadata_send=now+60000000LL;
+            else
+#endif
+                next_send=now+60000000LL;
+            continue;
         }
         https.attempts=0;https.deadline_ms=(uint64_t)now_us()/1000+13000;
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
-        ++ordinary_uploads_since_photo;
+        if(!camera_metadata_claim)++ordinary_uploads_since_photo;
 #endif
         egolink_p0_delivery_post_request_t request={.body=(uint8_t*)body,.body_length=length,.response=response,.response_capacity=sizeof(response),
             .cancel_requested=upload_cancel,.transfer_generation=route.generation};
@@ -3090,29 +3153,81 @@ static void uploader_task(void *unused)
         bool matched=outcome==EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE&&posted.http_status_code>=200&&posted.http_status_code<300&&
             latest_generation==route.generation&&collection_record_ack_matches(body,length,CONFIG_EGOLINK_DEVICE_ID,response,posted.response_length);
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
-        if(matched&&durable&&record.kind==COLLECTION_SPOOL_METADATA&&
-           record.source_id==CAMERA&&!photo_record_metadata_acked(record.source_seq))
+        const bool camera_metadata_record=durable&&
+            record.kind==COLLECTION_SPOOL_METADATA&&record.source_id==CAMERA;
+        if(matched&&camera_metadata_record&&
+           !photo_record_metadata_acked(record.source_seq))
             matched=false;
 #endif
+        bool locally_acked=false;
         if(matched) {
             if(durable) {
-                xSemaphoreTake(spool_mutex,portMAX_DELAY);result=collection_spool_ack(&spool,&record.token);
+                xSemaphoreTake(spool_mutex,portMAX_DELAY);
+                result=spool_claimed?
+                    collection_spool_ack_claimed(&spool,&record.token):
+                    collection_spool_ack(&spool,&record.token);
                 if(result==COLLECTION_SPOOL_IO_ERROR||result==COLLECTION_SPOOL_CORRUPT)spool_ready=false;
                 xSemaphoreGive(spool_mutex);
-                if(result==COLLECTION_SPOOL_OK){atomic_fetch_add(&acked,1);++durable_streak;}
-            } else if(xQueueReceive(ram_fallback,&ram,0)==pdTRUE){atomic_fetch_add(&acked,1);free(ram);}
-            backoff=1000;next_send=now_us()+50000;
+                if(result==COLLECTION_SPOOL_OK){
+                    atomic_fetch_add(&acked,1);++durable_streak;locally_acked=true;
+                }
+            } else if(xQueueReceive(ram_fallback,&ram,0)==pdTRUE){
+                atomic_fetch_add(&acked,1);free(ram);locally_acked=true;
+            }
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+            if(locally_acked&&camera_metadata_record){
+                noncamera_acks_since_camera=0U;
+                camera_metadata_backoff=PHOTO_METADATA_UPLOAD_RETRY_INITIAL_MS;
+                next_camera_metadata_send=now_us()+50000LL;
+                next_camera_metadata_fair_deadline=now_us()+
+                    PHOTO_METADATA_FAIR_DEADLINE_US;
+                next_photo_upload=0;
+                next_photo_fair_deadline=0;
+                photo_upload_cursor=0U;
+                ordinary_uploads_since_photo=PHOTO_ORDINARY_UPLOAD_BUDGET;
+            }else if(locally_acked&&
+                     noncamera_acks_since_camera<PHOTO_METADATA_ORDINARY_ACK_BUDGET){
+                ++noncamera_acks_since_camera;
+            }
+            if(camera_metadata_claim&&!locally_acked){
+                next_camera_metadata_send=now_us()+
+                    (int64_t)camera_metadata_backoff*1000LL;
+                if(camera_metadata_backoff<PHOTO_METADATA_UPLOAD_RETRY_MAX_MS)
+                    camera_metadata_backoff=
+                        camera_metadata_backoff>PHOTO_METADATA_UPLOAD_RETRY_MAX_MS/2U?
+                        PHOTO_METADATA_UPLOAD_RETRY_MAX_MS:
+                        camera_metadata_backoff*2U;
+            }
+#endif
+            if(!camera_metadata_claim){backoff=1000;next_send=now_us()+50000LL;}
         } else {
             egolink_esp_p0_https_close(&https);
             atomic_fetch_add(&send_errors,1);
             bool permanent=posted.http_status_code==401||posted.http_status_code==403||posted.http_status_code==400||posted.http_status_code==409||posted.http_status_code==422||posted.transport_error==EGOLINK_P0_DELIVERY_TRANSPORT_ERROR_TLS;
-            next_send=now_us()+(permanent?300000000LL:(int64_t)backoff*1000);
-            if(backoff<60000)backoff=backoff>30000?60000:backoff*2;
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+            if(camera_metadata_claim){
+                const bool camera_permanent=posted.http_status_code==400||
+                    posted.http_status_code==401||posted.http_status_code==403||
+                    posted.http_status_code==409||posted.http_status_code==422;
+                next_camera_metadata_send=now_us()+(camera_permanent?300000000LL:
+                    (int64_t)camera_metadata_backoff*1000LL);
+                if(camera_metadata_backoff<PHOTO_METADATA_UPLOAD_RETRY_MAX_MS)
+                    camera_metadata_backoff=
+                        camera_metadata_backoff>PHOTO_METADATA_UPLOAD_RETRY_MAX_MS/2U?
+                        PHOTO_METADATA_UPLOAD_RETRY_MAX_MS:
+                        camera_metadata_backoff*2U;
+            }else
+#endif
+            {
+                next_send=now_us()+(permanent?300000000LL:(int64_t)backoff*1000LL);
+                if(backoff<60000)backoff=backoff>30000?60000:backoff*2;
+            }
         }
         if(durable){xSemaphoreTake(spool_mutex,portMAX_DELAY);collection_spool_unpin(&spool);xSemaphoreGive(spool_mutex);}
-        ESP_LOGI(TAG,"UPLOAD interface=%s route=%s generation=%" PRIu32 " http=%u matched=%d durable=%d bytes=%u",
+        ESP_LOGI(TAG,"UPLOAD interface=%s route=%s generation=%" PRIu32 " http=%u matched=%d durable=%d local_acked=%d camera_priority=%d bytes=%u",
             interface_name,collection_network_route_name(route.route),route.generation,
-            (unsigned)posted.http_status_code,matched,durable,(unsigned)length);
+            (unsigned)posted.http_status_code,matched,durable,locally_acked,
+            camera_metadata_claim,(unsigned)length);
     }
     egolink_esp_p0_https_close(&https);
     atomic_store(&uploader_active_generation,0);

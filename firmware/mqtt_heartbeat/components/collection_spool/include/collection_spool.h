@@ -138,8 +138,25 @@ collection_spool_result_t collection_spool_append(
 collection_spool_result_t collection_spool_peek(
     collection_spool_t *, collection_spool_record_t *, void *payload,
     size_t payload_capacity);
+/* Opt-in priority selection without changing the default global FIFO. Finds
+ * the oldest pending record with the exact kind/source pair, validates its
+ * payload, and pins it before returning. A failed claim never installs a pin. */
+collection_spool_result_t collection_spool_claim_matching(
+    collection_spool_t *, collection_spool_kind_t, uint32_t source_id,
+    collection_spool_record_t *, void *payload, size_t payload_capacity);
+/* Finds and pins the oldest pending record other than the exact kind/source
+ * pair. This lets an uploader make bounded progress on the complementary set
+ * without weakening the default FIFO or acknowledging an unclaimed record. */
+collection_spool_result_t collection_spool_claim_excluding(
+    collection_spool_t *, collection_spool_kind_t, uint32_t source_id,
+    collection_spool_record_t *, void *payload, size_t payload_capacity);
 /* A stale token, a non-head token, or any changed field never reclaims data. */
 collection_spool_result_t collection_spool_ack(
+    collection_spool_t *, const collection_spool_token_t *);
+/* ACK only the exact record installed by either filtered claim API. This is
+ * the sole out-of-order ACK path; stale, unpinned, or changed tokens are
+ * rejected without a flash mutation. */
+collection_spool_result_t collection_spool_ack_claimed(
     collection_spool_t *, const collection_spool_token_t *);
 /* Pin the current head while the sole uploader performs I/O outside the caller's
  * mutex. Capacity eviction skips its entire sector. ACK releases a matching pin;

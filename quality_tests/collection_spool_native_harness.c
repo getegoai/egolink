@@ -83,15 +83,23 @@ static void reset(size_t capacity, uint32_t protected_count)
     assert(flash.mutations == 0U);
 }
 
-static collection_spool_record_t append(uint64_t seq, size_t bytes, collection_spool_kind_t kind)
+static collection_spool_record_t append_source(uint32_t source, uint64_t seq,
+    size_t bytes, collection_spool_kind_t kind)
 {
     collection_spool_record_t r;
     payload[0] = (unsigned char)seq;
-    collection_spool_result_t result = collection_spool_append(&spool, kind, 7U, seq, payload, bytes, &r);
+    collection_spool_result_t result = collection_spool_append(&spool, kind,
+        source, seq, payload, bytes, &r);
     if (result != COLLECTION_SPOOL_OK)
         fprintf(stderr, "append seq=%" PRIu64 " result=%s\n", seq, collection_spool_result_name(result));
     assert(result == COLLECTION_SPOOL_OK);
     return r;
+}
+
+static collection_spool_record_t append(uint64_t seq, size_t bytes,
+    collection_spool_kind_t kind)
+{
+    return append_source(7U, seq, bytes, kind);
 }
 
 static collection_spool_record_t peek(collection_spool_t *s)
@@ -446,6 +454,277 @@ static void case_pinning(void)
     printf("{\"case\":\"inflight_pin\",\"protected_head\":true}\n");
 }
 
+static void case_filtered_claim(void)
+{
+    reset(SMALL, 2U);
+    collection_spool_record_t first = append_source(7U, 1U, 100U,
+        COLLECTION_SPOOL_METADATA);
+    collection_spool_record_t camera = append_source(11U, 2U, 100U,
+        COLLECTION_SPOOL_METADATA);
+    append_source(3U, 3U, 100U, COLLECTION_SPOOL_DATA);
+    assert(first.token.sector == camera.token.sector);
+    assert(peek(&spool).token.ticket == first.token.ticket);
+    assert(collection_spool_pin(&spool, &camera.token) ==
+        COLLECTION_SPOOL_ACK_MISMATCH);
+
+    collection_spool_record_t selected;
+    assert(collection_spool_claim_matching(&spool, COLLECTION_SPOOL_METADATA,
+        11U, &selected, output, sizeof(output)) == COLLECTION_SPOOL_OK);
+    assert(selected.token.ticket == camera.token.ticket &&
+        selected.kind == COLLECTION_SPOOL_METADATA && selected.source_id == 11U &&
+        selected.source_seq == 2U && output[0] == 2U && spool.has_pin);
+    assert(collection_spool_claim_matching(&spool, COLLECTION_SPOOL_METADATA,
+        11U, &selected, output, sizeof(output)) ==
+        COLLECTION_SPOOL_ACK_MISMATCH);
+    unsigned before = flash.mutations;
+    for (unsigned field = 0U; field < 6U; ++field) {
+        collection_spool_token_t bad = camera.token;
+        switch (field) {
+        case 0U: ++bad.sector_generation; break;
+        case 1U: ++bad.ticket; break;
+        case 2U: ++bad.sector; break;
+        case 3U: ++bad.offset; break;
+        case 4U: ++bad.payload_bytes; break;
+        default: ++bad.payload_crc32; break;
+        }
+        assert(collection_spool_ack_claimed(&spool, &bad) ==
+            COLLECTION_SPOOL_ACK_MISMATCH);
+    }
+    assert(collection_spool_ack(&spool, &camera.token) ==
+        COLLECTION_SPOOL_ACK_MISMATCH);
+    assert(flash.mutations == before);
+    collection_spool_unpin(&spool);
+    assert(collection_spool_ack_claimed(&spool, &camera.token) ==
+        COLLECTION_SPOOL_ACK_MISMATCH);
+
+    reboot();
+    assert(collection_spool_claim_matching(&spool, COLLECTION_SPOOL_METADATA,
+        11U, &selected, output, sizeof(output)) == COLLECTION_SPOOL_OK);
+    assert(selected.token.ticket == camera.token.ticket);
+    assert(collection_spool_ack_claimed(&spool, &selected.token) ==
+        COLLECTION_SPOOL_OK && !spool.has_pin);
+    assert(collection_spool_ack_claimed(&spool, &selected.token) ==
+        COLLECTION_SPOOL_ACK_MISMATCH);
+    reboot();
+    assert(collection_spool_claim_matching(&spool, COLLECTION_SPOOL_METADATA,
+        11U, &selected, output, sizeof(output)) == COLLECTION_SPOOL_EMPTY);
+    assert(peek(&spool).token.ticket == first.token.ticket);
+
+    camera = append_source(11U, 4U, 100U, COLLECTION_SPOOL_METADATA);
+    assert(collection_spool_claim_matching(&spool, COLLECTION_SPOOL_METADATA,
+        11U, &selected, output, 1U) == COLLECTION_SPOOL_BUFFER_TOO_SMALL);
+    assert(!spool.has_pin && selected.token.ticket == camera.token.ticket);
+    assert(collection_spool_claim_matching(&spool, COLLECTION_SPOOL_METADATA,
+        99U, &selected, output, sizeof(output)) == COLLECTION_SPOOL_EMPTY);
+    assert(collection_spool_claim_matching(&spool,
+        (collection_spool_kind_t)99U, 11U, &selected, output,
+        sizeof(output)) == COLLECTION_SPOOL_BAD_ARGUMENT);
+    assert(collection_spool_claim_matching(&spool, COLLECTION_SPOOL_METADATA,
+        11U, &selected, output, sizeof(output)) == COLLECTION_SPOOL_OK);
+    collection_spool_unpin(&spool);
+    reboot();
+    assert(collection_spool_claim_matching(&spool, COLLECTION_SPOOL_METADATA,
+        11U, &selected, output, sizeof(output)) == COLLECTION_SPOOL_OK);
+    assert(selected.token.ticket == camera.token.ticket);
+    assert(collection_spool_ack_claimed(&spool, &selected.token) ==
+        COLLECTION_SPOOL_OK);
+    printf("{\"case\":\"filtered_claim\",\"same_sector_non_head\":true,"
+        "\"wrong_tokens_rejected\":6,\"fifo_unchanged\":true}\n");
+}
+
+static void case_excluding_claim(void)
+{
+    reset(SMALL, 2U);
+    collection_spool_record_t camera = append_source(11U, 1U, 100U,
+        COLLECTION_SPOOL_METADATA);
+    collection_spool_record_t other_metadata = append_source(9U, 2U, 100U,
+        COLLECTION_SPOOL_METADATA);
+    collection_spool_record_t data = append_source(3U, 3U, 100U,
+        COLLECTION_SPOOL_DATA);
+    assert(camera.token.sector == other_metadata.token.sector);
+    assert(camera.token.sector != data.token.sector);
+    assert(peek(&spool).token.ticket == camera.token.ticket);
+
+    collection_spool_record_t selected;
+    assert(collection_spool_claim_excluding(&spool,
+        COLLECTION_SPOOL_METADATA, 11U, &selected, output,
+        sizeof(output)) == COLLECTION_SPOOL_OK);
+    assert(selected.token.ticket == other_metadata.token.ticket &&
+        selected.kind == COLLECTION_SPOOL_METADATA && selected.source_id == 9U &&
+        output[0] == 2U && spool.has_pin);
+    assert(collection_spool_claim_excluding(&spool,
+        COLLECTION_SPOOL_METADATA, 11U, &selected, output,
+        sizeof(output)) == COLLECTION_SPOOL_ACK_MISMATCH);
+    assert(collection_spool_ack_claimed(&spool, &selected.token) ==
+        COLLECTION_SPOOL_OK);
+
+    assert(collection_spool_claim_excluding(&spool,
+        COLLECTION_SPOOL_METADATA, 11U, &selected, output,
+        sizeof(output)) == COLLECTION_SPOOL_OK);
+    assert(selected.token.ticket == data.token.ticket &&
+        selected.kind == COLLECTION_SPOOL_DATA && selected.source_id == 3U &&
+        output[0] == 3U);
+    assert(collection_spool_ack_claimed(&spool, &selected.token) ==
+        COLLECTION_SPOOL_OK);
+    assert(collection_spool_claim_excluding(&spool,
+        COLLECTION_SPOOL_METADATA, 11U, &selected, output,
+        sizeof(output)) == COLLECTION_SPOOL_EMPTY);
+    assert(!spool.has_pin && peek(&spool).token.ticket == camera.token.ticket);
+    assert(collection_spool_claim_excluding(&spool,
+        (collection_spool_kind_t)99U, 11U, &selected, output,
+        sizeof(output)) == COLLECTION_SPOOL_BAD_ARGUMENT);
+    reboot();
+    assert(peek(&spool).token.ticket == camera.token.ticket);
+    printf("{\"case\":\"excluding_claim\",\"same_sector\":true,"
+        "\"cross_sector\":true,\"fifo_unchanged\":true}\n");
+}
+
+static void case_excluding_claim_includes_loss(void)
+{
+    reset(5U * 4096U, 2U);
+    collection_spool_record_t camera = append_source(11U, 1U, 100U,
+        COLLECTION_SPOOL_METADATA);
+    append_source(1U, 2U, 3000U, COLLECTION_SPOOL_DATA);
+    append_source(2U, 3U, 3000U, COLLECTION_SPOOL_DATA);
+    append_source(3U, 4U, 3000U, COLLECTION_SPOOL_DATA);
+    append_source(4U, 5U, 3000U, COLLECTION_SPOOL_DATA);
+
+    bool saw_data = false, saw_loss = false;
+    unsigned claimed = 0U;
+    collection_spool_record_t selected;
+    collection_spool_result_t result;
+    while ((result = collection_spool_claim_excluding(&spool,
+            COLLECTION_SPOOL_METADATA, 11U, &selected, output,
+            sizeof(output))) == COLLECTION_SPOOL_OK) {
+        assert(!(selected.kind == COLLECTION_SPOOL_METADATA &&
+            selected.source_id == 11U));
+        saw_data = saw_data || selected.kind == COLLECTION_SPOOL_DATA;
+        saw_loss = saw_loss || selected.kind == COLLECTION_SPOOL_LOSS;
+        assert(collection_spool_ack_claimed(&spool, &selected.token) ==
+            COLLECTION_SPOOL_OK);
+        assert(++claimed < 10U);
+    }
+    assert(result == COLLECTION_SPOOL_EMPTY && saw_data && saw_loss);
+    assert(peek(&spool).token.ticket == camera.token.ticket);
+    reboot();
+    assert(collection_spool_claim_excluding(&spool,
+        COLLECTION_SPOOL_METADATA, 11U, &selected, output,
+        sizeof(output)) == COLLECTION_SPOOL_EMPTY);
+    assert(peek(&spool).token.ticket == camera.token.ticket);
+    printf("{\"case\":\"excluding_claim_includes_loss\","
+        "\"data\":true,\"loss\":true,\"claimed\":%u}\n", claimed);
+}
+
+static void case_excluding_claim_pinned_eviction(void)
+{
+    reset(5U * 4096U, 2U);
+    collection_spool_record_t camera = append_source(11U, 1U, 100U,
+        COLLECTION_SPOOL_METADATA);
+    collection_spool_record_t pinned = append_source(2U, 2U, 3000U,
+        COLLECTION_SPOOL_DATA);
+    append_source(3U, 3U, 3000U, COLLECTION_SPOOL_DATA);
+    append_source(4U, 4U, 3000U, COLLECTION_SPOOL_DATA);
+
+    collection_spool_record_t selected;
+    assert(collection_spool_claim_excluding(&spool,
+        COLLECTION_SPOOL_METADATA, 11U, &selected, output,
+        sizeof(output)) == COLLECTION_SPOOL_OK);
+    assert(selected.token.ticket == pinned.token.ticket && spool.has_pin);
+    unsigned char pinned_sector[4096U];
+    memcpy(pinned_sector, flash.data + pinned.token.sector * 4096U,
+        sizeof(pinned_sector));
+    append_source(5U, 5U, 3000U, COLLECTION_SPOOL_DATA);
+    assert(memcmp(pinned_sector,
+        flash.data + pinned.token.sector * 4096U,
+        sizeof(pinned_sector)) == 0);
+    assert(collection_spool_ack_claimed(&spool, &selected.token) ==
+        COLLECTION_SPOOL_OK);
+    reboot();
+    collection_spool_stats_t stats;
+    collection_spool_get_stats(&spool, &stats);
+    assert(stats.evicted_records == 1U && stats.evicted_payload_bytes == 3000U);
+    assert(peek(&spool).token.ticket == camera.token.ticket);
+    assert(collection_spool_claim_matching(&spool, COLLECTION_SPOOL_DATA, 2U,
+        &selected, output, sizeof(output)) == COLLECTION_SPOOL_EMPTY);
+    printf("{\"case\":\"excluding_claim_pinned_eviction\","
+        "\"pinned_sector_preserved\":true,\"evicted_other_records\":1}\n");
+}
+
+static void case_filtered_claim_ack_cuts(void)
+{
+    unsigned cuts = 0U;
+    for (size_t prefix = 0U; prefix <= 4U; ++prefix) {
+        reset(SMALL, 2U);
+        collection_spool_record_t first = append_source(7U, 1U, 100U,
+            COLLECTION_SPOOL_METADATA);
+        collection_spool_record_t camera = append_source(11U, 2U, 100U,
+            COLLECTION_SPOOL_METADATA);
+        collection_spool_record_t selected;
+        assert(collection_spool_claim_matching(&spool,
+            COLLECTION_SPOOL_METADATA, 11U, &selected, output,
+            sizeof(output)) == COLLECTION_SPOOL_OK);
+        assert(selected.token.ticket == camera.token.ticket);
+        flash.fail_mutation = flash.mutations + 1U;
+        flash.fail_prefix = prefix;
+        assert(collection_spool_ack_claimed(&spool, &selected.token) ==
+            COLLECTION_SPOOL_IO_ERROR);
+        reboot();
+        assert(peek(&spool).token.ticket == first.token.ticket);
+        collection_spool_result_t result = collection_spool_claim_matching(&spool,
+            COLLECTION_SPOOL_METADATA, 11U, &selected, output, sizeof(output));
+        if (prefix == 4U) {
+            assert(result == COLLECTION_SPOOL_EMPTY);
+        } else {
+            assert(result == COLLECTION_SPOOL_OK &&
+                selected.token.ticket == camera.token.ticket);
+            assert(collection_spool_ack_claimed(&spool, &selected.token) ==
+                COLLECTION_SPOOL_OK);
+        }
+        reboot();
+        assert(collection_spool_claim_matching(&spool,
+            COLLECTION_SPOOL_METADATA, 11U, &selected, output,
+            sizeof(output)) == COLLECTION_SPOOL_EMPTY);
+        assert(peek(&spool).token.ticket == first.token.ticket);
+        ++cuts;
+    }
+    printf("{\"case\":\"filtered_claim_ack_power_cuts\",\"cuts\":%u}\n",
+        cuts);
+}
+
+static void case_filtered_claim_pinned_eviction(void)
+{
+    reset(5U * 4096U, 2U);
+    collection_spool_record_t oldest = append_source(1U, 1U, 3000U,
+        COLLECTION_SPOOL_DATA);
+    collection_spool_record_t selected;
+    collection_spool_record_t target = append_source(2U, 2U, 3000U,
+        COLLECTION_SPOOL_DATA);
+    append_source(1U, 3U, 3000U, COLLECTION_SPOOL_DATA);
+    assert(peek(&spool).token.ticket == oldest.token.ticket);
+    assert(collection_spool_claim_matching(&spool, COLLECTION_SPOOL_DATA, 2U,
+        &selected, output, sizeof(output)) == COLLECTION_SPOOL_OK);
+    assert(selected.token.ticket == target.token.ticket && spool.has_pin);
+    unsigned char pinned_sector[4096U];
+    memcpy(pinned_sector, flash.data + selected.token.sector * 4096U,
+        sizeof(pinned_sector));
+    append_source(3U, 4U, 3000U, COLLECTION_SPOOL_DATA);
+    assert(memcmp(pinned_sector,
+        flash.data + selected.token.sector * 4096U,
+        sizeof(pinned_sector)) == 0);
+    assert(collection_spool_ack_claimed(&spool, &selected.token) ==
+        COLLECTION_SPOOL_OK);
+    reboot();
+    collection_spool_stats_t stats;
+    collection_spool_get_stats(&spool, &stats);
+    assert(stats.evicted_records == 1U && stats.evicted_payload_bytes == 3000U);
+    assert(collection_spool_claim_matching(&spool, COLLECTION_SPOOL_DATA, 2U,
+        &selected, output, sizeof(output)) == COLLECTION_SPOOL_EMPTY);
+    collection_spool_record_t current = peek(&spool);
+    assert(current.kind == COLLECTION_SPOOL_DATA && current.source_seq == 3U);
+    printf("{\"case\":\"filtered_claim_pinned_eviction\","
+        "\"non_head_sector_preserved\":true,\"evicted_other_records\":1}\n");
+}
+
 static void case_corrupt_and_foreign(void)
 {
     reset(SMALL, 2U);
@@ -663,6 +942,12 @@ int main(void)
     case_eviction_cuts();
     case_protection_and_full();
     case_pinning();
+    case_filtered_claim();
+    case_excluding_claim();
+    case_excluding_claim_includes_loss();
+    case_excluding_claim_pinned_eviction();
+    case_filtered_claim_ack_cuts();
+    case_filtered_claim_pinned_eviction();
     case_corrupt_and_foreign();
     case_large_geometry();
     case_multisource_loss();
