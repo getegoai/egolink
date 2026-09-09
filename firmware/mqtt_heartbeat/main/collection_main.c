@@ -123,6 +123,8 @@ _Static_assert(sizeof(CONFIG_EGOLINK_FW_VERSION)<=
 #define MEDIA_PARTITION_SIZE 0x900000U
 #define PHOTO_ORDINARY_UPLOAD_BUDGET 8U
 #define PHOTO_FAIR_UPLOAD_INTERVAL_US 30000000LL
+#define PHOTO_CAPTURE_SETTLE_RETRY_INITIAL_MS 1000U
+#define PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS 60000U
 static const char *TAG="collection";
 typedef struct { size_t length; unsigned source,seq,loss_version; bool metadata; char bytes[COLLECTION_FRAME_CAPACITY]; } queued_t;
 static QueueHandle_t ingress, ram_fallback;
@@ -139,6 +141,7 @@ static atomic_bool photo_control_state_ready;
 static atomic_uint photo_capture_attempts,photo_capture_saved,photo_capture_failures;
 static atomic_uint photo_upload_acked,photo_upload_failures,photo_expired_released;
 static atomic_uint photo_command_polls,photo_command_parse_failures,photo_command_acks;
+static atomic_uint photo_metadata_persist_retries;
 static atomic_uint photo_command_ack_sequence;
 static uint64_t photo_metadata_ack_watermark;
 static photo_control_timer_t photo_timer;
@@ -818,8 +821,12 @@ static bool photo_append_direct_frame(unsigned source,const char *frame,
         atomic_fetch_add(&persisted,1U);
         return true;
     }
-    note_drop(source,capture_sequence_id,length,DROP_RAM_FULL);
-    ESP_LOGE(TAG,"PHOTO_DIRECT_RECORD source=%s durable=false result=%s",
+    /* The capture RESULT journal remains the durable source for this exact
+     * observation, so a failed append is pending work rather than a dropped
+     * record.  Counting every recovery attempt as loss creates false gaps and
+     * can itself flood the protected lane with loss summaries. */
+    atomic_fetch_add(&photo_metadata_persist_retries,1U);
+    ESP_LOGE(TAG,"PHOTO_DIRECT_RECORD source=%s durable=false result=%s retry_pending=true",
         sources[source],collection_spool_result_name(result));
     return false;
 }
@@ -1765,11 +1772,13 @@ static void health(void)
     cJSON_AddBoolToObject(p,"durable_storage_ready",spool_ready);
     cJSON_AddNumberToObject(p,"cache_capacity_bytes",stats.capacity_bytes);cJSON_AddNumberToObject(p,"cache_append_free_bytes",stats.append_free_bytes);
     cJSON_AddNumberToObject(p,"queue_bytes",stats.pending_payload_bytes);cJSON_AddNumberToObject(p,"pending_records",stats.pending_records);
+    cJSON_AddNumberToObject(p,"protected_pending_records",stats.protected_pending_records);
+    cJSON_AddNumberToObject(p,"protected_retained_bytes",stats.protected_retained_bytes);
     cJSON_AddNumberToObject(p,"evicted_records",stats.evicted_records);cJSON_AddNumberToObject(p,"evicted_bytes",stats.evicted_payload_bytes);
     cJSON_AddNumberToObject(p,"flash_written_bytes",stats.write_bytes_this_boot);cJSON_AddNumberToObject(p,"flash_erased_bytes",stats.erased_bytes_this_boot);
     cJSON_AddNumberToObject(p,"quarantined_sectors",stats.quarantined_sectors);cJSON_AddNumberToObject(p,"torn_tails",stats.torn_tails);cJSON_AddNumberToObject(p,"storage_io_errors",stats.io_errors_this_boot);
     cJSON_AddBoolToObject(p,"storage_stats_valid",stats_valid);
-    if(!stats_valid){const char *fields[]={"cache_capacity_bytes","cache_append_free_bytes","queue_bytes","pending_records","evicted_records","evicted_bytes","flash_written_bytes","flash_erased_bytes","quarantined_sectors","torn_tails","storage_io_errors"};for(unsigned i=0;i<sizeof(fields)/sizeof(fields[0]);i++)cJSON_ReplaceItemInObjectCaseSensitive(p,fields[i],cJSON_CreateNull());}
+    if(!stats_valid){const char *fields[]={"cache_capacity_bytes","cache_append_free_bytes","queue_bytes","pending_records","protected_pending_records","protected_retained_bytes","evicted_records","evicted_bytes","flash_written_bytes","flash_erased_bytes","quarantined_sectors","torn_tails","storage_io_errors"};for(unsigned i=0;i<sizeof(fields)/sizeof(fields[0]);i++)cJSON_ReplaceItemInObjectCaseSensitive(p,fields[i],cJSON_CreateNull());}
     cJSON_AddNumberToObject(p,"ram_pending",uxQueueMessagesWaiting(ram_fallback));cJSON_AddNumberToObject(p,"acked_this_boot",atomic_load(&acked));
     cJSON_AddStringToObject(p,"network_policy_state",collection_network_state_name(network.state));
     cJSON_AddStringToObject(p,"selected_route",collection_network_route_name(network.route));
@@ -1828,6 +1837,8 @@ static void health(void)
     cJSON_AddNumberToObject(camera,"command_polls",atomic_load(&photo_command_polls));
     cJSON_AddNumberToObject(camera,"command_parse_failures",atomic_load(&photo_command_parse_failures));
     cJSON_AddNumberToObject(camera,"command_acks",atomic_load(&photo_command_acks));
+    cJSON_AddNumberToObject(camera,"metadata_persist_retries",
+        atomic_load(&photo_metadata_persist_retries));
     cJSON *resources=cJSON_AddObjectToObject(camera,"resources");
     cJSON_AddNumberToObject(resources,"internal_free_bytes",
         (double)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
@@ -2623,32 +2634,85 @@ static bool photo_settle_pending_manual_capture(
     return true;
 }
 
-static void photo_service_local_timer(void)
+static void photo_capture_settle_retry_reset(unsigned *backoff_ms,
+                                             int64_t *next_retry_us)
 {
-    if(!atomic_load(&photo_control_state_ready))return;
+    if(backoff_ms)*backoff_ms=PHOTO_CAPTURE_SETTLE_RETRY_INITIAL_MS;
+    if(next_retry_us)*next_retry_us=0;
+}
+
+static void photo_capture_settle_retry_schedule(unsigned *backoff_ms,
+                                                int64_t *next_retry_us)
+{
+    if(!backoff_ms||!next_retry_us)return;
+    const unsigned delay=*backoff_ms;
+    *next_retry_us=now_us()+(int64_t)delay*1000LL;
+    if(*backoff_ms<PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS)
+        *backoff_ms=*backoff_ms>PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS/2U?
+            PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS:*backoff_ms*2U;
+    ESP_LOGW(TAG,"PHOTO_CAPTURE_SETTLE_RETRY delay_ms=%u durable_journal=true",
+        delay);
+}
+
+static bool photo_capture_settle_retry_due(
+    const photo_control_capture_journal_t *capture_journal,int64_t now,
+    int64_t next_retry_us)
+{
+    if(now>=next_retry_us)return true;
+    uint64_t utc_ms=0U;
+    return capture_journal&&photo_wall_clock(&utc_ms)&&
+        utc_ms>=capture_journal->retention_expires_at_unix_ms;
+}
+
+static void photo_service_local_timer(unsigned *capture_settle_backoff_ms,
+                                      int64_t *next_capture_settle_us)
+{
+    if(!capture_settle_backoff_ms||!next_capture_settle_us||
+       !atomic_load(&photo_control_state_ready))return;
     photo_control_timer_t timer;photo_timer_snapshot(&timer);
     photo_control_capture_journal_t capture_journal;
     photo_capture_journal_snapshot(&capture_journal);
     if(capture_journal.phase!=PHOTO_CONTROL_CAPTURE_NONE){
+        if(!photo_capture_settle_retry_due(&capture_journal,now_us(),
+                                           *next_capture_settle_us))return;
+        bool settled=false;
         if(capture_journal.kind==PHOTO_CONTROL_COMMAND_CAPTURE_ONCE){
-            (void)photo_settle_pending_manual_capture(&capture_journal);
+            settled=photo_settle_pending_manual_capture(&capture_journal);
+            if(settled)photo_capture_settle_retry_reset(
+                capture_settle_backoff_ms,next_capture_settle_us);
+            else photo_capture_settle_retry_schedule(
+                capture_settle_backoff_ms,next_capture_settle_us);
             return;
         }
         if(capture_journal.kind!=PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER||
-           !photo_timer_matches_capture_journal(&timer,&capture_journal))return;
-        uint64_t recovery_utc_ms=0U;
-        if(!photo_wall_clock(&recovery_utc_ms))return;
-        if(recovery_utc_ms>=capture_journal.retention_expires_at_unix_ms){
-            (void)photo_settle_timer_capture(&timer,&capture_journal,NULL,
-                recovery_utc_ms);
+           !photo_timer_matches_capture_journal(&timer,&capture_journal)){
+            photo_capture_settle_retry_schedule(capture_settle_backoff_ms,
+                next_capture_settle_us);
             return;
         }
-        photo_capture_outcome_t recovered;
-        if(!photo_capture_restore_outcome(&capture_journal,&recovered))return;
-        (void)photo_settle_timer_capture(&timer,&capture_journal,&recovered,
-            recovery_utc_ms);
+        uint64_t recovery_utc_ms=0U;
+        if(!photo_wall_clock(&recovery_utc_ms)){
+            photo_capture_settle_retry_schedule(capture_settle_backoff_ms,
+                next_capture_settle_us);
+            return;
+        }
+        if(recovery_utc_ms>=capture_journal.retention_expires_at_unix_ms){
+            settled=photo_settle_timer_capture(&timer,&capture_journal,NULL,
+                recovery_utc_ms);
+        }else{
+            photo_capture_outcome_t recovered;
+            if(photo_capture_restore_outcome(&capture_journal,&recovered))
+                settled=photo_settle_timer_capture(&timer,&capture_journal,
+                    &recovered,recovery_utc_ms);
+        }
+        if(settled)photo_capture_settle_retry_reset(capture_settle_backoff_ms,
+            next_capture_settle_us);
+        else photo_capture_settle_retry_schedule(capture_settle_backoff_ms,
+            next_capture_settle_us);
         return;
     }
+    photo_capture_settle_retry_reset(capture_settle_backoff_ms,
+        next_capture_settle_us);
     const char *preflight_reason=NULL;
     const bool timer_policy_rejected=
         !platform_camera_timed_capture_allowed();
@@ -2695,8 +2759,14 @@ static void photo_service_local_timer(void)
     photo_capture_intent_t intent;
     if(!photo_intent_from_timer(&timer,utc_ms,&intent))return;
     photo_capture_outcome_t captured={0};
-    if(!photo_capture_run_or_restore(&intent,&captured,&capture_journal))return;
-    if(!photo_settle_timer_capture(&timer,&capture_journal,&captured,utc_ms))return;
+    if(!photo_capture_run_or_restore(&intent,&captured,&capture_journal)||
+       !photo_settle_timer_capture(&timer,&capture_journal,&captured,utc_ms)){
+        photo_capture_settle_retry_schedule(capture_settle_backoff_ms,
+            next_capture_settle_us);
+        return;
+    }
+    photo_capture_settle_retry_reset(capture_settle_backoff_ms,
+        next_capture_settle_us);
 }
 
 static bool photo_post_pending_timer_state(egolink_esp_p0_https_t *https,
@@ -2873,7 +2943,9 @@ static void uploader_task(void *unused)
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
     int64_t next_command_poll=0,next_photo_upload=0,next_timer_report=0;
     int64_t next_retention_scan=0,next_photo_fair_deadline=0;
+    int64_t next_capture_settle=0;
     unsigned photo_backoff=CONFIG_EGOLINK_PHOTO_UPLOAD_RETRY_INITIAL_MS;
+    unsigned capture_settle_backoff=PHOTO_CAPTURE_SETTLE_RETRY_INITIAL_MS;
     unsigned ordinary_uploads_since_photo=0U;
     uint32_t photo_upload_cursor=0U,photo_retention_cursor=0U;
     static uint8_t command_response[2048],command_ack_response[8192];
@@ -2901,7 +2973,7 @@ static void uploader_task(void *unused)
             }
         }
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
-        photo_service_local_timer();
+        photo_service_local_timer(&capture_settle_backoff,&next_capture_settle);
         if(now>=next_retention_scan){
             (void)photo_release_one_expired(&photo_retention_cursor);
             next_retention_scan=now_us()+1000000LL;
@@ -2931,6 +3003,13 @@ static void uploader_task(void *unused)
             const bool command_ok=photo_poll_and_handle_command(&https,&route,
                 interface_name,command_response,sizeof(command_response),
                 command_ack_response,sizeof(command_ack_response));
+            if(!command_ok){
+                photo_control_capture_journal_t capture_after_command;
+                photo_capture_journal_snapshot(&capture_after_command);
+                if(capture_after_command.phase!=PHOTO_CONTROL_CAPTURE_NONE)
+                    photo_capture_settle_retry_schedule(&capture_settle_backoff,
+                        &next_capture_settle);
+            }
             next_command_poll=now_us()+(command_ok?
                 CONFIG_EGOLINK_PHOTO_COMMAND_POLL_INTERVAL_MS:5000)*1000LL;
             continue;

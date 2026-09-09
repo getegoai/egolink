@@ -340,6 +340,45 @@ static void case_eviction_cuts(void)
             ++cuts;
         }
     }
+    /* Reclaiming an ACKed protected sector while ordinary records remain is
+     * the combined path used when a full ordinary lane needs a durable loss
+     * intent. Exercise every mutation boundary across both sector rewrites. */
+    reset(SMALL, 2U);
+    collection_spool_record_t m1 = append(91U, 4000U, COLLECTION_SPOOL_METADATA);
+    collection_spool_record_t m2 = append(92U, 4000U, COLLECTION_SPOOL_METADATA);
+    for (uint64_t i = 1U; i <= 10U; ++i) append(i, 3000U, COLLECTION_SPOOL_DATA);
+    assert(collection_spool_ack(&spool, &m1.token) == COLLECTION_SPOOL_OK);
+    assert(collection_spool_ack(&spool, &m2.token) == COLLECTION_SPOOL_OK);
+    memcpy(checkpoint, flash.data, SMALL);
+    /* Protected erase/header, loss header/payload/commit, ordinary erase/header,
+     * and the replacement data header/payload/commit. */
+    const size_t reclaim_lengths[] = {
+        4096U, 40U, 4U, 40U, 88U, 4U,
+        4096U, 40U, 4U, 40U, 3000U, 4U,
+    };
+    for (unsigned mutation = 1U; mutation <= 12U; ++mutation) {
+        size_t length = reclaim_lengths[mutation - 1U];
+        size_t prefixes[] = {0U, 1U, length / 2U, length - 1U, length};
+        for (unsigned k = 0U; k < 5U; ++k) {
+            restore_fault(mutation, prefixes[k]);
+            payload[0] = 11U;
+            assert(collection_spool_append(&spool, COLLECTION_SPOOL_DATA,
+                7U, 11U, payload, 3000U, NULL) == COLLECTION_SPOOL_IO_ERROR);
+            reboot();
+            bool lost = mutation > 6U ||
+                (mutation == 6U && prefixes[k] == length);
+            bool appended = mutation == 12U && prefixes[k] == length;
+            collection_spool_stats_t stats;
+            collection_spool_get_stats(&spool, &stats);
+            assert(stats.evicted_records == (lost ? 1U : 0U));
+            uint64_t count = 0U, losses = 0U;
+            drain(&count, &losses);
+            assert(count == 10U - (lost ? 1U : 0U) +
+                (appended ? 1U : 0U));
+            assert(losses == (lost ? 1U : 0U));
+            ++cuts;
+        }
+    }
     printf("{\"case\":\"eviction_power_cuts\",\"cuts\":%u}\n", cuts);
 }
 
@@ -351,17 +390,32 @@ static void case_protection_and_full(void)
     for (uint64_t i = 1U; i <= 10U; ++i) append(i, 3000U, COLLECTION_SPOOL_DATA);
     assert(collection_spool_ack(&spool, &m1.token) == COLLECTION_SPOOL_OK);
     assert(collection_spool_ack(&spool, &m2.token) == COLLECTION_SPOOL_OK);
-    memcpy(checkpoint, flash.data, SMALL);
-    unsigned before = flash.mutations;
-    assert(collection_spool_append(&spool, COLLECTION_SPOOL_DATA, 7U, 11U,
-        payload, 3000U, NULL) == COLLECTION_SPOOL_PROTECTED_FULL);
-    assert(flash.mutations == before && memcmp(checkpoint, flash.data, SMALL) == 0);
+    append(11U, 3000U, COLLECTION_SPOOL_DATA);
+    reboot();
     collection_spool_stats_t stats;
     collection_spool_get_stats(&spool, &stats);
-    assert(stats.protected_retained_bytes == 8096U && stats.evicted_records == 0U);
-    uint64_t count = 0U;
-    drain(&count, NULL);
-    assert(count == 10U);
+    assert(stats.evicted_records == 1U && stats.evicted_payload_bytes == 3000U);
+    for (uint64_t i = 2U; i <= 10U; ++i) {
+        collection_spool_record_t r = peek(&spool);
+        assert(r.kind == COLLECTION_SPOOL_DATA && r.source_seq == i);
+        assert(collection_spool_ack(&spool, &r.token) == COLLECTION_SPOOL_OK);
+    }
+    collection_spool_record_t r = peek(&spool);
+    assert(r.kind == COLLECTION_SPOOL_LOSS);
+    collection_spool_loss_t loss;
+    assert(collection_spool_decode_loss(output, r.token.payload_bytes,
+        &loss) == COLLECTION_SPOOL_OK);
+    assert(loss.source_count == 1U && loss.sources[0].source_id == 7U);
+    assert(loss.sources[0].records == 1U &&
+        loss.sources[0].payload_bytes == 3000U);
+    assert(loss.sources[0].first_source_seq == 1U &&
+        loss.sources[0].last_source_seq == 1U);
+    assert(collection_spool_ack(&spool, &r.token) == COLLECTION_SPOOL_OK);
+    r = peek(&spool);
+    assert(r.kind == COLLECTION_SPOOL_DATA && r.source_seq == 11U);
+    assert(collection_spool_ack(&spool, &r.token) == COLLECTION_SPOOL_OK);
+    assert(collection_spool_peek(&spool, &r, output, sizeof(output)) ==
+        COLLECTION_SPOOL_EMPTY);
     append(93U, 3000U, COLLECTION_SPOOL_METADATA);
     reset(SMALL, 2U);
     spool.config.evict_oldest = false;
@@ -370,7 +424,7 @@ static void case_protection_and_full(void)
         payload, 3000U, NULL) == COLLECTION_SPOOL_FULL);
     assert(collection_spool_append(&spool, COLLECTION_SPOOL_DATA, 7U, 11U,
         payload, 4001U, NULL) == COLLECTION_SPOOL_TOO_LARGE);
-    printf("{\"case\":\"protected_full\",\"retained_metadata_bytes\":8096,\"silent_evictions\":0}\n");
+    printf("{\"case\":\"protected_full\",\"acked_protected_reclaimed_with_ordinary_pending\":true,\"durable_loss_records\":1}\n");
 }
 
 static void case_pinning(void)

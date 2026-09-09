@@ -19,7 +19,7 @@ class CollectionSpoolNativeTests(unittest.TestCase):
         })
         self.assertLess(cases["roundtrip"]["write_bytes"] / cases["roundtrip"]["payload_bytes"], 1.3)
         self.assertEqual(cases["append_power_cuts"]["cuts"], 180)
-        self.assertEqual(cases["eviction_power_cuts"]["cuts"], 45)
+        self.assertEqual(cases["eviction_power_cuts"]["cuts"], 105)
         self.assertEqual(cases["large_geometry"]["capacity_bytes"], 860160)
         self.assertEqual(cases["concurrent_uploader_producer"]["producer_records_during_io"], 20)
 

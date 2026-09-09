@@ -201,14 +201,6 @@ static bool has_retired(const collection_spool_t *s)
     return false;
 }
 
-static uint64_t ordinary_pending(const collection_spool_t *s)
-{
-    uint64_t count = 0U;
-    for (uint32_t i = s->config.protected_sectors; i < s->sector_count; ++i)
-        if (!s->sectors[i].retired) count += s->sectors[i].pending;
-    return count;
-}
-
 /* Apply committed eviction intents even when erase was interrupted. Protected
  * sectors are scanned first. A target with a newer committed generation is
  * already reused; an invalid/old target remains retired and may be re-erased. */
@@ -456,7 +448,7 @@ static collection_spool_result_t reserve_sector(collection_spool_t *s,
             break;
         }
     }
-    bool can_reclaim = !metadata || (ordinary_pending(s) == 0U && !has_retired(s));
+    bool can_reclaim = !metadata || !has_retired(s);
     if (candidate < 0 && can_reclaim) {
         for (uint32_t n = begin; n < end; ++n) {
             /* Preserve the newest lane as the durable generation/counter

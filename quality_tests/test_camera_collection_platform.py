@@ -644,6 +644,20 @@ def _check_runtime_delivery_is_metadata_gated_fair_and_release_safe():
     assert "PHOTO_FAIR_UPLOAD_INTERVAL_US 30000000LL" in source
     assert "photo_schedule_upload_retry(server_verified" in source
     assert "photo_control_capture_journal_allows_new_command(&pending_capture)" in source
+    assert "PHOTO_CAPTURE_SETTLE_RETRY_INITIAL_MS 1000U" in source
+    assert "PHOTO_CAPTURE_SETTLE_RETRY_MAX_MS 60000U" in source
+    assert "photo_capture_settle_retry_due" in source
+    assert "photo_capture_settle_retry_schedule" in source
+    assert "photo_capture_settle_retry_reset" in source
+    assert '"PHOTO_CAPTURE_SETTLE_RETRY delay_ms=%u durable_journal=true"' in source
+    direct = source[source.index("static bool photo_append_direct_frame"):source.index(
+        "static bool photo_append_metadata_frame"
+    )]
+    assert "note_drop(" not in direct
+    assert "retry_pending=true" in direct
+    assert '"metadata_persist_retries"' in source
+    assert '"protected_pending_records"' in source
+    assert '"protected_retained_bytes"' in source
     assert "photo_content_permanently_rejected" not in source
     assert "photo_append_media_terminal_status" not in source
     # The only ordinary upload release is inside the exact content-ACK branch;
