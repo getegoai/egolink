@@ -147,6 +147,59 @@ class FW001HardwareConfigScriptTests(unittest.TestCase):
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_TX_GPIO=18", config)
         self.assertIn("CONFIG_EGOLINK_SIM7670_UART_BAUD=115200", config)
 
+    def test_script_emits_portless_verified_https_target(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            firmware_dir = tmp_path / "firmware"
+            firmware_dir.mkdir()
+            token_file = tmp_path / "token.txt"
+            token_file.write_text("unit-secret-token\n", encoding="utf-8")
+            config_path = firmware_dir / "sdkconfig.https.local"
+
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(self.script),
+                    "-HostName",
+                    "example.invalid",
+                    "-Scheme",
+                    "https",
+                    "-Port",
+                    "443",
+                    "-TokenFile",
+                    str(token_file),
+                    "-FirmwareDir",
+                    str(firmware_dir),
+                    "-ConfigPath",
+                    str(config_path),
+                    "-Json",
+                ],
+                cwd=self.repo_root,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            payload = json.loads(result.stdout)
+            config = config_path.read_text(encoding="utf-8-sig")
+
+        self.assertEqual(payload["base_url"], "https://example.invalid")
+        self.assertIn(
+            'CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL="https://example.invalid"',
+            config,
+        )
+        self.assertNotIn("https://example.invalid:443", config)
+        self.assertIn(
+            'CONFIG_EGOLINK_MESSAGE_HUB_EXPECTED_TLS_HOST="example.invalid"',
+            config,
+        )
+        self.assertIn("CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y", config)
+        self.assertIn("CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y", config)
+        self.assertNotIn("unit-secret-token", result.stdout)
+
     def test_script_can_enable_max17048_power_config(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
