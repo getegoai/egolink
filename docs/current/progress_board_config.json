@@ -1,5 +1,5 @@
 {
-  "current_focus": "单 4G 主板 Camera/Location 联合源码与离线构建已通过审计，0x600000..0xF00000 媒体区的私密实机预读与板上校验也已完成；当前仍不代表 Camera 实机通过。下一步验证 OV5640 与 QMI8658/MAX17048 共享 I2C，生成启用 SIM/LTE 的具名本地候选，完成部署/刷写后执行真实 LTE 单拍、断网重启补传和独立供电短测，最后进入 FIELD-020。",
+  "current_focus": "Camera 默认 blocked；显式 shared-I2C trial profile 已完成干净离线构建，每次启动只允许一次 Web 手动实际尝试且禁止定时。该构建的 Wi-Fi/认证字段为空，只是构建证据，不能直接联网实拍。下一步是在具名操作/隐私范围内生成被 Git 忽略的 NO_SIM/Wi-Fi 私密 overlay，重建并绑定新 SHA，再部署/刷写/单拍；证据通过审查后才进入 VERIFIED、SIM/LTE、断网补传、独立供电短测和 FIELD-020。",
   "recent_done_limit": 8,
   "milestones": [
     {
@@ -194,10 +194,9 @@
     "PRIVACY-LOC-001": "planned"
   },
   "operator_asks": [
-    "保持当前 4G 板处于 ROM bootloader；核对 OV5640/排线与 QMI8658A/MAX17048 接线。联合台架时物理移除 TF 卡、禁用 TF 驱动，GPIO39-42 不接外部 JTAG；共享 I2C 与内部 DRAM 资源水位通过后才打开 verified Gate。",
-    "准备 SIM、LTE/GNSS 天线和独立电源；共享 I2C 未实测前不得生成或刷写声称可用的现场候选。",
-    "下一次实机阶段一次性确认 VPS 部署、精确 COM3 刷写、SIM 流量、允许拍摄的测试场景/人员、授权查看者与保留截止；不采音频、不公开照片。",
-    "先完成真实 LTE 单拍和离线重启同文件补传，再做单板短程携带；现场 blocker 清零后才启动 FIELD-020。",
+    "保持 4G 板断电并核对：仅该板参与；TF 已拔除且驱动禁用，CAM 开关置于 Camera 位置，OV5640 排线方向及 QMI8658A/MAX17048 的 GPIO15/16 接线正确，GPIO39-42 无外部 JTAG；随后只接 4G 板数据 USB。",
+    "一次性明确参与者、获准拍摄场景、查看者、保留截止与删除路径，并授权：使用本机私密值生成被 Git 忽略的 NO_SIM/Wi-Fi trial overlay，重建并绑定新的精确 SHA，部署本次 VPS/Web，在 COM3 只刷该具名镜像，再由现有 Web 命令执行一次 QVGA 手动测试。training_allowed=false；不开定时、不使用 SIM、不采音频、不公开或提交照片。",
+    "试验后先审查 Camera/IMU/gauge/I2C、heap/DMA/stack、UART/reset/brownout/watchdog 证据，再决定是否生成 VERIFIED；试验成功不自动晋级。随后才准备 SIM、LTE/GNSS 天线和独立电源，进入真实 LTE 单拍与恢复补传。",
     "在具名现场证据完成前，不宣称 Camera 外测就绪、定位精度、续航、量产或任何 P0 Gate 通过。"
   ]
 }

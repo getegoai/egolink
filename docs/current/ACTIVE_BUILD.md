@@ -23,30 +23,39 @@ No Camera/Location/LTE joint candidate has been flashed. AMOLED is excluded
 from this A-line milestone and its UI/CALL image is unchanged; any separate USB
 attachment is irrelevant to and unused by the A-line runtime.
 
-## 2026-09-09 Camera integration — offline build checkpoint
+## 2026-09-09 Camera shared-I2C trial — clean offline build checkpoint
 
-The single-board Camera source slice has passed final source review with no
-remaining known merge blocker. That review found and closed an owner-layer
-serialization gap between photo-store mutation and health telemetry, and added
-internal/DMA heap plus per-task stack-watermark telemetry. The slice includes
-the opt-in Camera collector entry, OV5640 QVGA/JPEG capture, durable
-command/timer/capture journals, the dedicated fixed-slot `ego_media` store,
-metadata-before-JPEG delivery, exact server ACK matching, retention cleanup and
-reboot recovery while retaining one network/uploader owner. Final focused and
-repository validation counts are recorded below.
+The normal Camera collector remains fail-closed with the shared-I2C Gate at
+`BLOCKED`. A separate tracked engineering overlay now selects
+`UNVERIFIED_TRIAL`: it permits at most one actual Camera/I2C attempt per boot,
+only through the existing authenticated `capture_photo_once` command path.
+Failure to acquire the capture lock does not consume the attempt; once hardware
+access begins, success or failure consumes it. Timed capture is rejected in
+this mode, including inherited or in-flight enable state from an older verified
+image. A genuine disable command remains valid.
 
-Three ESP-IDF 5.4.2 no-flash profiles were rebuilt and size-checked:
+The strict Camera `source_status` stays unavailable until the Gate is actually
+`VERIFIED`; manual-trial readiness, Gate state and remaining attempt are
+reported separately. Capture journal v2 persists the capture-time Gate, driver
+profile, runtime config, firmware version and ELF digest. A recovered v1 entry
+is labelled `unknown_legacy` and cannot borrow the current image's provenance.
+This closes the circular offline implementation blocker; it does not verify
+shared-I2C electrical or runtime coexistence.
 
-| Profile | Defaults | App bytes / partition | Free | SHA-256 |
+Four ESP-IDF 5.4.2 no-flash profiles were rebuilt from clean commit
+`ef3c06f6a9fd33ab604363ef9f6622dfbd02c1bb` and size-checked:
+
+| Profile | Defaults / Gate | App bytes / partition | Free | SHA-256 |
 |---|---|---:|---:|---|
-| default | `sdkconfig.defaults` | 896,240 / 1 MiB | `0x25310` (15%) | `730BEFF6C0859BC2319AE76850C0B69B913A238C352B2FA9E69DC243D5E33C97` |
-| legacy collector | `sdkconfig.defaults;sdkconfig.collection.defaults` | 991,568 / 1 MiB | `0xDEB0` (5%) | `E0ABEF606BD6135BA6B64180A00886237830FD5C46B679EFF7EAD02D76B64DFC` |
-| Camera collector | `sdkconfig.defaults;sdkconfig.collection.defaults;sdkconfig.camera_collection.defaults` | 1,030,816 / 3 MiB | `0x204560` (67%) | `69E9FB4A243908C0C158E2707C4BDCE90AA1FCCA24699CC767EF0F15FDDF36D0` |
+| default | `sdkconfig.defaults`; Camera off | 896,240 / 1 MiB | `0x25310` (15%) | `2EDC9153E618329378645D03FB8D808E68936179403FD7C9D2F88AFEA434A9AC` |
+| legacy collector | `sdkconfig.defaults;sdkconfig.collection.defaults`; Camera off | 991,568 / 1 MiB | `0xDEB0` (5%) | `CF265EA61F3F275216F592F865E6810AC85B5A30B0415CA1F071EF60626E9317` |
+| Camera blocked | `...;sdkconfig.camera_collection.defaults`; `BLOCKED=y` | 1,033,680 / 3 MiB | `0x203A30` (67%) | `E00474A5610011527DB6CBD62BF62E074C20D831FBB848B09B10BA0275572AA1` |
+| Camera trial | Camera blocked defaults plus `sdkconfig.camera_shared_i2c_trial.defaults`; `UNVERIFIED_TRIAL=y` | 1,101,648 / 3 MiB | `0x1F30B0` (65%) | `320B7D51726B91ABAE6CD83B797038DC77232AE72D3094308825708223E02333` |
 
-All three checkpoint binaries embed application version
-`v0.1.0-120-g3acbc8c03-dirty`: firmware source is commit `3acbc8c03`, while
-the uncommitted changes at build time were the accompanying evidence/status
-documents. They are no-flash review artifacts, not the named live candidate.
+All four checkpoint binaries embed application version
+`v0.1.0-123-gef3c06f6a` without `-dirty`; the worktree was clean before and
+after the matrix. They are no-flash review artifacts, not flashed images or
+live evidence.
 
 The Camera partition profile places `factory` at `0x200000..0x500000`,
 `ego_collection` at `0x500000..0x600000`, `ego_media` at
@@ -60,11 +69,15 @@ deliberately scrub non-valid slots only inside that exact partition after an
 authorized flash. See
 [CAMERA-MEDIA-001](../hardware/CAMERA_MEDIA_RANGE_PREFLIGHT_20260909.md).
 
-This build is intentionally not a live candidate: it still has `NO_SIM=y`, LTE
-PPP disabled and `EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED=n`. The last Gate
-prevents capture until OV5640, QMI8658A and MAX17048 coexistence is physically
-verified. Camera deinit is only a software standby boundary because the present
-pin map has no PWDN; the raw JPEG partition is not encrypted. No image here was
+Both Camera profiles retain `NO_SIM=y` and LTE PPP disabled. The blocked image
+cannot capture. The clean trial image proves the build/size boundary only: its
+compiled Wi-Fi SSID, Wi-Fi password and bearer token are empty, so its exact
+SHA cannot connect to the current Web command path and must not be flashed as a
+live candidate. A separately authorized bench run first needs an ignored,
+named private overlay, a clean rebuild and a new bound SHA. Neither image is the
+required real-LTE Camera candidate.
+Camera deinit is only a software standby boundary because the present pin map
+has no PWDN; the raw JPEG partition is not encrypted. No image here was
 flashed, no photo was captured, and no LTE/VPS/field evidence was produced.
 
 The current static map puts OV5640 `0x3C`, MAX17048 `0x36` and QMI8658A `0x6A`

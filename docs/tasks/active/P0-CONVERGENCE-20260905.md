@@ -3,7 +3,7 @@ id: P0-CONVERGENCE-20260905
 title: Single-board Location and Camera field closure
 status: active
 priority: critical
-execution_state: media_range_preflight_verified_camera_hardware_pending
+execution_state: shared_i2c_trial_offline_build_ready_live_overlay_and_authorization_pending
 owner: codex_integrator
 created: 2026-09-05
 last_updated: 2026-09-09
@@ -146,9 +146,21 @@ for exact scope, hashes, recovery location and resulting bootloader state.
 ### Offline source/build checkpoint — 2026-09-09
 
 The Camera/VPS/Web implementation slice is source-complete for the next live
-gate. Final firmware review found and closed a photo-store/health telemetry
-serialization gap and added runtime internal/DMA heap and task-stack watermarks;
-no known source merge blocker remains after the recorded validation.
+gate. The normal Camera profile is explicitly `blocked`. The additive
+`sdkconfig.camera_shared_i2c_trial.defaults` profile is
+`trial_unverified`: it admits at most one actual Camera/I2C attempt per boot
+through the existing Web `capture_photo_once` path and rejects all timer
+enable paths. Busy admission does not consume the attempt, while any hardware
+attempt does. It never promotes itself to `verified` or reports the strict
+Camera source as runtime-ready.
+
+Capture journal v2 binds the capture-time Gate, driver profile, runtime config,
+firmware version and ELF digest. It decodes v1 state as `unknown_legacy` rather
+than borrowing the current image identity. Final review also closed downgrade
+and in-flight recovery paths that could otherwise ACK a timer as `applied` in
+blocked/trial mode. No known High/Medium source blocker remains after the
+recorded validation.
+
 The selected source contains one-shot and durable timer control, capture
 journaling, a fixed-slot persistent JPEG store, metadata-before-media upload,
 strict command/content ACK identity, retention deletion, reboot settlement and
@@ -156,16 +168,19 @@ ordinary/photo upload fairness. The server contains Guardian-bound control,
 private persistence, integrity checking, status-separated preview/export and
 failed-purge tombstones. This is not deployment or hardware evidence.
 
-Focused Camera/media/control/delivery/HTTPS execution passes `46/46` (the
-narrow platform review subset passes `27/27`) and the full repository suite
-passes `1,777` tests with `13` environment-guarded skips. ESP-IDF 5.4.2
-no-flash builds pass for default (`896,240 B`), legacy collector (`991,568 B`)
-and Camera collector (`1,030,816 B`); exact hashes and partition
-headroom are recorded in `docs/current/ACTIVE_BUILD.md`.
+Focused Camera/media/control/delivery/HTTPS execution passes `84/84`; the
+final Camera Gate/journal subset passes `16/16`. Final repository-wide counts
+are recorded in `docs/current/STATUS.md`. ESP-IDF 5.4.2 no-flash builds from
+clean commit `ef3c06f6a` pass for default (`896,240 B`), legacy collector
+(`991,568 B`), Camera blocked (`1,033,680 B`) and Camera trial (`1,101,648 B`).
+Exact hashes and partition headroom are recorded in
+`docs/current/ACTIVE_BUILD.md`.
 
-The produced Camera profile intentionally remains `NO_SIM=y`, LTE PPP off and
-shared-I2C verification off. It therefore cannot produce the required real LTE
-JPEG.
+Both produced Camera profiles intentionally remain `NO_SIM=y` with LTE PPP
+off. Blocked performs no Camera access. The clean trial binary has empty
+compiled Wi-Fi and bearer credentials, so its exact SHA is build evidence only;
+the profile becomes the no-SIM Wi-Fi bench mechanism only after an ignored
+private overlay and rebuild. Neither can produce the required real-LTE JPEG.
 
 Its static bus map is I2C0 GPIO15/16 at 100 kHz with OV5640 `0x3C`, MAX17048
 `0x36` and QMI8658A `0x6A`; distinct addresses are not joint hardware evidence.
@@ -187,9 +202,17 @@ and a subsequent `verify_flash` readback returned `verify OK`. No write occurred
 the board remains in ROM bootloader. This passes only the current
 observed-occupancy check for media-range ownership.
 
-Next prove OV5640/QMI8658A/MAX17048 coexistence, generate a named ignored live
-config, deploy/flash under one bounded authorization and run the live sequence
-in the Acceptance table. Every product Gate remains `NOT_RUN`.
+Next, while powered off, verify the TF-free Camera/QMI8658A/MAX17048 wiring and
+keep GPIO39-42 free of external JTAG. Then define one named operator/privacy
+scope and permitted private scene. Within it, create an ignored no-SIM trial
+overlay with the actual private Wi-Fi/auth and run/session identity, rebuild and
+bind its new exact SHA, deploy the reviewed VPS/Web slice and flash only that
+named COM3 image. Run one Web-commanded QVGA trial and record sensor, bus,
+heap/DMA/stack, UART/reset/brownout/watchdog continuity. Only after that evidence
+passes review may a separate `VERIFIED` image and ignored SIM/LTE configuration
+be built. Timer, real-LTE one-shot, outage/restart recovery and
+independent-power tests follow in the Acceptance order. Every product Gate
+remains `NOT_RUN`.
 
 ## Prior execution adjustment — founder instruction 2026-09-06
 
