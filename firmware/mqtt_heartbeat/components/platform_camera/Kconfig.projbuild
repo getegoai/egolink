@@ -1,0 +1,30 @@
+menu "Ego Link platform camera"
+
+    config EGOLINK_PLATFORM_CAMERA_ENABLED
+        bool "Enable bounded OV5640 single-frame camera seam"
+        default n
+        depends on IDF_TARGET_ESP32S3
+        help
+            Opt-in engineering seam for the camera connector on the existing
+            Waveshare ESP32-S3-SIM7670G-4G board. One call performs at most one
+            init and one QVGA JPEG frame acquisition using one internal-DRAM
+            framebuffer, returns the framebuffer, and deinitializes the
+            driver. This deliberately leaves PSRAM disabled so the existing
+            always-lock-free atomic invariants remain valid. Runtime internal
+            heap headroom remains an unverified hardware gate. This does not
+            enable commands, periodic capture, upload, or physical camera
+            power switching.
+
+    config EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED
+        bool "Operator verified camera coexistence on shared platform I2C0"
+        default n
+        depends on EGOLINK_PLATFORM_CAMERA_ENABLED
+        help
+            The camera profile forces esp32-camera to its legacy SCCB driver
+            and existing-I2C0 mode. platform_i2c_bus remains the sole bus
+            installer/owner on GPIO15/16; camera deinit must not delete it.
+            The historical camera smoke was camera-only, so keep this false
+            until a joint image verifies camera capture plus QMI8658A/MAX17048
+            continuity on the actual wiring. Capture fails closed while false.
+
+endmenu

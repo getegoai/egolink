@@ -43,15 +43,18 @@ static int opens,client_inits,client_closes,client_cleanups,destroys,inner_conne
 static int tls_error_reads;
 static bool error_read_before_cleanup;
 static size_t write_count,response_offset;
+static size_t expected_body_bytes;
 static uint64_t clock_ms;
 static time_t wall_time;
 static bool bundle_attached,cancel_now,security_config_ok;
 static bool expected_reuse,client_connected,request_active;
+static int expected_method;
+static const unsigned char *expected_body;
 static esp_err_t (*event_handler)(esp_http_client_event_t*);
 static void *event_user_data;
 static const char *borrowed_url;
 static struct ifreq *borrowed_interface;
-static char bound_interface[32],seen_url[256],content_type[80],network[16],authorization[180];
+static char bound_interface[32],seen_url[256],content_type[80],network[16],authorization[180],content_sha256[65];
 static char desired_host[254];
 static unsigned char sent[4096];
 static int client_value;
@@ -116,7 +119,7 @@ esp_http_client_handle_t esp_http_client_init(const esp_http_client_config_t *cf
     ++client_inits;init_step=++step;snprintf(seen_url,sizeof(seen_url),"%s",cfg->url);
     borrowed_url=cfg->url;event_handler=cfg->event_handler;event_user_data=cfg->user_data;
     client_connected=request_active=false;
-    security_config_ok=cfg->method==HTTP_METHOD_POST && cfg->transport_type==HTTP_TRANSPORT_OVER_SSL &&
+    security_config_ok=cfg->method==expected_method && cfg->transport_type==HTTP_TRANSPORT_OVER_SSL &&
         cfg->crt_bundle_attach==esp_crt_bundle_attach && !cfg->skip_cert_common_name_check &&
         cfg->disable_auto_redirect && cfg->max_redirection_count==0 && cfg->keep_alive_enable==expected_reuse &&
         cfg->transport==&outer && bundle_attached && (!!cfg->event_handler==expected_reuse) &&
@@ -131,10 +134,11 @@ esp_err_t esp_http_client_set_header(void *client,const char *name,const char *v
     if(!strcmp(name,"Authorization")){snprintf(authorization,sizeof(authorization),"%s",value);authorization_step=++step;}
     else if(!strcmp(name,"Content-Type")){snprintf(content_type,sizeof(content_type),"%s",value);content_step=++step;}
     else if(!strcmp(name,"X-EgoLink-Transport")){snprintf(network,sizeof(network),"%s",value);network_step=++step;if(mode==HEADER_FAIL)return ESP_FAIL;}
+    else if(!strcmp(name,"X-Content-SHA256")){snprintf(content_sha256,sizeof(content_sha256),"%s",value);}
     return ESP_OK;
 }
 esp_err_t esp_http_client_open(void *client,int size){
-    if(client!=&client_value||size!=(int)sizeof(REQUEST_FRAME))return ESP_FAIL;
+    if(client!=&client_value||size!=(int)expected_body_bytes)return ESP_FAIL;
     ++opens;open_step=++step;
     /* SDK 5.4.2 open -> connect always prepares/reset parser state, then skips
      * esp_transport_connect when the client already is connected. */
@@ -150,6 +154,7 @@ int esp_http_client_write(void *client,const char *data,int remaining){
     if(mode==WRITE_INTERRUPTED && write_count>0)return -1;
     int count=remaining>7?7:remaining;
     if(write_count+(size_t)count>sizeof(sent))return -1;
+    if(!expected_body || memcmp(data,expected_body+write_count,(size_t)count)!=0)return -1;
     if(esp_transport_write(&outer,data,count,1000)!=count)return -1;
     memcpy(sent+write_count,data,(size_t)count);write_count+=(size_t)count;return count;
 }
@@ -187,10 +192,13 @@ static void reset(int selected){
     tls_error_reads=0;error_read_before_cleanup=false;tls_error.code=tls_error.flags=0;
     write_count=response_offset=0;clock_ms=1000;wall_time=1788650000;
     bundle_attached=cancel_now=security_config_ok=false;
+    expected_method=HTTP_METHOD_POST;expected_body=REQUEST_FRAME;
+    expected_body_bytes=sizeof(REQUEST_FRAME);
     expected_reuse=client_connected=request_active=false;event_handler=NULL;event_user_data=NULL;
     borrowed_url=NULL;borrowed_interface=NULL;snprintf(desired_host,sizeof(desired_host),"ego.example");
     memset(bound_interface,0,sizeof(bound_interface));memset(seen_url,0,sizeof(seen_url));
     memset(content_type,0,sizeof(content_type));memset(network,0,sizeof(network));memset(sent,0,sizeof(sent));
+    memset(content_sha256,0,sizeof(content_sha256));
 }
 static egolink_esp_p0_https_t configuration(void){
     return (egolink_esp_p0_https_t){.origin="https://ego.example",.expected_host="ego.example",.bearer="test-token",
@@ -343,6 +351,68 @@ static int reuse_cases(void){
     }
     return 0;
 }
+static int camera_route_cases(void){
+    static unsigned char response[8192];
+    egolink_p0_delivery_post_result_t result;
+    egolink_esp_p0_https_t config;
+
+    reset(GOOD);config=configuration();
+    expected_method=0;expected_body=NULL;expected_body_bytes=0U;
+    CHECK(egolink_esp_p0_https_poll_collection_command(&config,
+        "collector_test-001","pp1",response,sizeof(response),cancelled,NULL,73U,
+        &result)==EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE);
+    CHECK(!strcmp(seen_url,"https://ego.example/api/v1/devices/collector_test-001/commands/poll.raw"));
+    CHECK(!strcmp(network,"lte")&&!content_type[0]&&!content_sha256[0]);
+    CHECK(write_count==0U&&result.response_length==sizeof(SERVER_ACK));
+
+    reset(GOOD);config=configuration();
+    CHECK(egolink_esp_p0_https_ack_collection_command(&config,
+        "collector_test-001","capture-001","st1",REQUEST_FRAME,
+        sizeof(REQUEST_FRAME),response,sizeof(response),cancelled,NULL,73U,
+        &result)==EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE);
+    CHECK(!strcmp(seen_url,"https://ego.example/api/v1/devices/collector_test-001/commands/capture-001/ack.raw"));
+    CHECK(!strcmp(content_type,"text/x-egolink-frame; profile=raw-frame.p0.v1"));
+    CHECK(!strcmp(network,"wifi")&&write_count==sizeof(REQUEST_FRAME)&&
+          !memcmp(sent,REQUEST_FRAME,sizeof(REQUEST_FRAME)));
+
+    static const unsigned char jpeg[]={0xffU,0xd8U,0x01U,0x02U,0x03U,0x04U,0xffU,0xd9U};
+    static const char sha[]="00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
+    reset(GOOD);config=configuration();
+    expected_body=jpeg;expected_body_bytes=sizeof(jpeg);
+    CHECK(egolink_esp_p0_https_upload_collection_photo(&config,
+        "collector_test-001","manual-abcd-n0",sha,"pp1",jpeg,sizeof(jpeg),
+        response,sizeof(response),cancelled,NULL,73U,&result)==
+        EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE);
+    CHECK(!strcmp(seen_url,"https://ego.example/api/v1/devices/collector_test-001/photos/manual-abcd-n0/content"));
+    CHECK(!strcmp(content_type,"image/jpeg")&&!strcmp(content_sha256,sha));
+    CHECK(!strcmp(network,"lte")&&write_count==sizeof(jpeg)&&
+          !memcmp(sent,jpeg,sizeof(jpeg)));
+
+    const char *bad_ids[]={"../bad","a/b","a?b","a#b","a b","a\nb"};
+    for(unsigned i=0U;i<sizeof(bad_ids)/sizeof(bad_ids[0]);++i){
+        reset(GOOD);config=configuration();
+        CHECK(egolink_esp_p0_https_ack_collection_command(&config,
+            "collector_test-001",bad_ids[i],"st1",REQUEST_FRAME,
+            sizeof(REQUEST_FRAME),response,sizeof(response),cancelled,NULL,73U,
+            &result)==EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED);
+        CHECK(opens==0&&client_inits==0&&result.response_length==0U);
+    }
+    reset(GOOD);config=configuration();expected_body=jpeg;expected_body_bytes=sizeof(jpeg);
+    CHECK(egolink_esp_p0_https_upload_collection_photo(&config,
+        "collector_test-001","manual-abcd-n0",
+        "00112233445566778899AABBccddeeff00112233445566778899aabbccddeeff",
+        "pp1",jpeg,sizeof(jpeg),response,sizeof(response),cancelled,NULL,73U,
+        &result)==EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED);
+    CHECK(opens==0&&client_inits==0);
+    unsigned char bad_jpeg[sizeof(jpeg)];memcpy(bad_jpeg,jpeg,sizeof(jpeg));bad_jpeg[0]=0U;
+    reset(GOOD);config=configuration();expected_body=bad_jpeg;expected_body_bytes=sizeof(bad_jpeg);
+    CHECK(egolink_esp_p0_https_upload_collection_photo(&config,
+        "collector_test-001","manual-abcd-n0",sha,"pp1",bad_jpeg,
+        sizeof(bad_jpeg),response,sizeof(response),cancelled,NULL,73U,&result)==
+        EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED);
+    CHECK(opens==0&&client_inits==0);
+    return 0;
+}
 int main(void){
     static unsigned char response[8192];
     egolink_p0_delivery_post_request_t request={.route=EGOLINK_P0_OUTBOX_ROUTE_MANUAL_SOS,
@@ -420,7 +490,8 @@ int main(void){
     CHECK(egolink_esp_p0_https_post_collection(&config,"collector_test-001","pp1",&request,&result)==EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE);
     CHECK(!strcmp(bound_interface,"pp1") && !strcmp(network,"lte") && inner_connects==1);
     CHECK(reuse_cases()==0);
-    printf("{\"reuse_two_requests_one_tls\":true,\"reuse_request_bounds_and_lifetimes\":true,\"reuse_uncertain_write_exact_retry\":true,\"reuse_fault_retirements\":10,\"reuse_identity_changes\":5,\"reuse_age_and_count_limits\":true,\"reuse_preflight_retirements\":7,\"fixed_route_headers_interface\":true,\"complete_server_ack\":true,\"fault_cases\":15,\"ascii_id_rejections\":%u,\"clock_tls_guard\":true,\"tls_origin_and_hostname_guards\":true,\"tls_failure_classification\":true,\"interface_rejections\":8,\"early_rejection_clears_result\":true,\"empty_interface_rejected\":%s,\"ppp_interface_binding\":true}\n",
+    CHECK(camera_route_cases()==0);
+    printf("{\"reuse_two_requests_one_tls\":true,\"reuse_request_bounds_and_lifetimes\":true,\"reuse_uncertain_write_exact_retry\":true,\"reuse_fault_retirements\":10,\"reuse_identity_changes\":5,\"reuse_age_and_count_limits\":true,\"reuse_preflight_retirements\":7,\"fixed_route_headers_interface\":true,\"complete_server_ack\":true,\"fault_cases\":15,\"ascii_id_rejections\":%u,\"clock_tls_guard\":true,\"tls_origin_and_hostname_guards\":true,\"tls_failure_classification\":true,\"interface_rejections\":8,\"early_rejection_clears_result\":true,\"empty_interface_rejected\":%s,\"ppp_interface_binding\":true,\"camera_fixed_routes\":true,\"camera_bounded_payload_guards\":true}\n",
         (unsigned)(sizeof(invalid_ids)/sizeof(invalid_ids[0])),empty_interface_rejected?"true":"false");
     return 0;
 }

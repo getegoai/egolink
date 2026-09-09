@@ -77,6 +77,10 @@ class CollectionHttpsNativeTests(unittest.TestCase):
     def test_preflight_rejection_also_closes_a_previously_authenticated_connection(self):
         self.assertEqual(self.result["reuse_preflight_retirements"], 7)
 
+    def test_camera_routes_use_the_same_bounded_tls_and_interface_owner(self):
+        self.assertTrue(self.result["camera_fixed_routes"])
+        self.assertTrue(self.result["camera_bounded_payload_guards"])
+
 
 if __name__ == "__main__":
     unittest.main()

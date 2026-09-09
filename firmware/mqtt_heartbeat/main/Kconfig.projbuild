@@ -4,6 +4,59 @@ config EGOLINK_COLLECTION_PROFILE
     bool "Asynchronous raw collection engineering entry"
     default n
 
+config EGOLINK_COLLECTION_CAMERA_PROFILE
+    bool "16 MiB single-board camera collection runtime"
+    default n
+    depends on EGOLINK_COLLECTION_PROFILE && EGOLINK_PLATFORM_CAMERA_ENABLED
+    help
+        Selects the dedicated 16 MiB partition guards, media store and the
+        existing Message Hub command/ACK route for the current single-board
+        collector. Camera capture remains fail-closed until shared I2C
+        ownership is explicitly verified. Source/build success is not
+        hardware evidence.
+
+config EGOLINK_PHOTO_COMMAND_POLL_INTERVAL_MS
+    int "Photo command poll interval"
+    default 2000
+    range 500 60000
+    depends on EGOLINK_COLLECTION_CAMERA_PROFILE
+
+config EGOLINK_PHOTO_UPLOAD_RETRY_INITIAL_MS
+    int "Photo upload initial retry backoff"
+    default 2000
+    range 500 60000
+    depends on EGOLINK_COLLECTION_CAMERA_PROFILE
+
+config EGOLINK_PHOTO_UPLOAD_RETRY_MAX_MS
+    int "Photo upload maximum retry backoff"
+    default 60000
+    range 1000 300000
+    depends on EGOLINK_COLLECTION_CAMERA_PROFILE
+
+config EGOLINK_PHOTO_MEDIA_SLOT_BYTES
+    int "Dedicated photo slot bytes"
+    default 32768
+    range 8192 131072
+    depends on EGOLINK_COLLECTION_CAMERA_PROFILE
+
+config EGOLINK_PHOTO_MEDIA_MAX_PAYLOAD_BYTES
+    int "Maximum JPEG payload bytes"
+    default 28672
+    range 1024 126976
+    depends on EGOLINK_COLLECTION_CAMERA_PROFILE
+
+config EGOLINK_PHOTO_MEDIA_MAX_COMMITTED_PHOTOS
+    int "Maximum retained committed photos"
+    default 288
+    range 1 512
+    depends on EGOLINK_COLLECTION_CAMERA_PROFILE
+
+config EGOLINK_PHOTO_MEDIA_MAX_TOTAL_PAYLOAD_BYTES
+    int "Maximum retained JPEG payload bytes"
+    default 8257536
+    range 1048576 10485760
+    depends on EGOLINK_COLLECTION_CAMERA_PROFILE
+
 config EGOLINK_COLLECTION_RUN_SECONDS
     int "Collection session seconds (0: local continuous session)"
     range 0 86400

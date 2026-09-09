@@ -31,8 +31,13 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "mbedtls/base64.h"
+#include "mbedtls/sha256.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "photo_media_store.h"
+#include "photo_control_runtime.h"
+#include "photo_delivery_runtime.h"
+#include "platform_camera.h"
 #include "platform_imu.h"
 #include "platform_power.h"
 #include "sim7670_gnss.h"
@@ -40,9 +45,38 @@
 #ifndef CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
 #define CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED 0
 #endif
+#ifndef CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+#define CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE 0
+#endif
 
 #if !CONFIG_EGOLINK_COLLECTION_PROFILE
 #error "Dedicated collector source requires its profile"
+#endif
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+#if CONFIG_EGOLINK_PHOTO_UPLOAD_RETRY_INITIAL_MS > CONFIG_EGOLINK_PHOTO_UPLOAD_RETRY_MAX_MS
+#error "Photo upload initial backoff must not exceed its maximum"
+#endif
+#if !CONFIG_ESPTOOLPY_FLASHSIZE_16MB
+#error "Camera collection profile requires the explicit 16 MiB flash image size"
+#endif
+#if CONFIG_EGOLINK_PHOTO_MEDIA_SLOT_BYTES % 4096 != 0
+#error "Photo media slots must be whole 4 KiB erase sectors"
+#endif
+#if CONFIG_EGOLINK_PHOTO_MEDIA_MAX_PAYLOAD_BYTES + PHOTO_MEDIA_STORE_HEADER_BYTES > CONFIG_EGOLINK_PHOTO_MEDIA_SLOT_BYTES
+#error "Photo payload plus header exceeds its dedicated slot"
+#endif
+#if 0x900000 % CONFIG_EGOLINK_PHOTO_MEDIA_SLOT_BYTES != 0
+#error "Photo media partition must contain whole fixed-size slots"
+#endif
+#if 0x900000 / CONFIG_EGOLINK_PHOTO_MEDIA_SLOT_BYTES > PHOTO_MEDIA_STORE_MAX_SLOTS
+#error "Photo media partition slot count exceeds static recovery index capacity"
+#endif
+#if CONFIG_EGOLINK_PHOTO_MEDIA_MAX_COMMITTED_PHOTOS > 0x900000 / CONFIG_EGOLINK_PHOTO_MEDIA_SLOT_BYTES
+#error "Photo count quota exceeds available media slots"
+#endif
+#if CONFIG_EGOLINK_PHOTO_MEDIA_MAX_TOTAL_PAYLOAD_BYTES > CONFIG_EGOLINK_PHOTO_MEDIA_MAX_COMMITTED_PHOTOS * CONFIG_EGOLINK_PHOTO_MEDIA_MAX_PAYLOAD_BYTES
+#error "Photo byte quota cannot be reached within the configured photo count quota"
+#endif
 #endif
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
 #if !CONFIG_EGOLINK_COLLECTION_LTE_USB_DESCRIPTOR_VERIFIED
@@ -55,10 +89,25 @@
 #error "LTE retry initial backoff must not exceed its maximum"
 #endif
 #endif
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+#define CONFIG_ID "collector-v1-camera-runtime-i2c-gated"
+#define COLLECTION_PARTITION_ADDRESS 0x500000U
+#define COLLECTION_PARTITION_SIZE 0x100000U
+#define SOURCE_COUNT 13
+enum { GNSS, LTE, IMU, WIFI, POWER, DEVICE, ANCHOR, SOURCE_STATUS, SESSION, LOSS, DELIVERY, CAMERA, UNKNOWN_SOURCE };
+static const char *const sources[SOURCE_COUNT]={"gnss","lte","imu","wifi","power","device","time_anchor","source_status","session","loss","delivery","camera","unknown"};
+#else
 #define CONFIG_ID "collector-v1-20hz-gnss5s-cell10s"
+#define COLLECTION_PARTITION_ADDRESS 0x122000U
+#define COLLECTION_PARTITION_SIZE 0xD2000U
 #define SOURCE_COUNT 12
 enum { GNSS, LTE, IMU, WIFI, POWER, DEVICE, ANCHOR, SOURCE_STATUS, SESSION, LOSS, DELIVERY };
 static const char *const sources[SOURCE_COUNT]={"gnss","lte","imu","wifi","power","device","time_anchor","source_status","session","loss","delivery","unknown"};
+#endif
+#define MEDIA_PARTITION_ADDRESS 0x600000U
+#define MEDIA_PARTITION_SIZE 0x900000U
+#define PHOTO_ORDINARY_UPLOAD_BUDGET 8U
+#define PHOTO_FAIR_UPLOAD_INTERVAL_US 30000000LL
 static const char *TAG="collection";
 typedef struct { size_t length; unsigned source,seq,loss_version; bool metadata; char bytes[COLLECTION_FRAME_CAPACITY]; } queued_t;
 static QueueHandle_t ingress, ram_fallback;
@@ -66,6 +115,21 @@ static SemaphoreHandle_t spool_mutex;
 static collection_spool_t spool;
 static const esp_partition_t *partition;
 static atomic_bool spool_ready;
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+static photo_media_store_t media_store;
+static const esp_partition_t *media_partition;
+static atomic_bool media_store_ready;
+static atomic_bool photo_control_state_ready;
+static atomic_uint photo_capture_attempts,photo_capture_saved,photo_capture_failures;
+static atomic_uint photo_upload_acked,photo_upload_failures,photo_expired_released;
+static atomic_uint photo_command_polls,photo_command_parse_failures,photo_command_acks;
+static atomic_uint photo_command_ack_sequence;
+static uint64_t photo_metadata_ack_watermark;
+static photo_control_timer_t photo_timer;
+static photo_control_journal_t photo_journal;
+static photo_control_capture_journal_t photo_capture_journal;
+static portMUX_TYPE photo_state_mux=portMUX_INITIALIZER_UNLOCKED;
+#endif
 static atomic_bool stopping, imu_stopped, modem_stopped, writer_stopped, wifi_ready;
 static atomic_bool imu_finished,modem_finished,uploader_finished,wifi_finished,wifi_cleanup_confirmed;
 static atomic_bool gnss_stopped,lte_ppp_stopped,lte_hangup_required,lte_hangup_confirmed,lte_cleanup_confirmed;
@@ -89,6 +153,13 @@ static bool wifi_disconnect_handler_registered;
 static int64_t session_start_us;
 static portMUX_TYPE clock_mux=portMUX_INITIALIZER_UNLOCKED;
 static int64_t utc_offset_us;
+static portMUX_TYPE location_ref_mux=portMUX_INITIALIZER_UNLOCKED;
+static struct {
+    bool valid;
+    char observation_id[96];
+    char event_utc[40];
+    char timestamp_quality[64];
+} last_trusted_location_ref;
 static portMUX_TYPE network_mux=portMUX_INITIALIZER_UNLOCKED;
 typedef struct {
     collection_network_state_t state;
@@ -157,6 +228,16 @@ static void note_drop(unsigned source,unsigned seq,size_t bytes,unsigned reason)
 }
 static void add_nullable_number(cJSON *o,const char *key,bool valid,double v)
 { if(valid) cJSON_AddNumberToObject(o,key,v); else cJSON_AddNullToObject(o,key); }
+static bool format_utc_from_monotonic(int64_t mono,char out[40])
+{
+    portENTER_CRITICAL(&clock_mux);int64_t offset=utc_offset_us;portEXIT_CRITICAL(&clock_mux);
+    if(!offset||mono<0)return false;
+    int64_t absolute=mono+offset;if(absolute<0)return false;
+    time_t sec=absolute/1000000;struct tm value;
+    if(!gmtime_r(&sec,&value)||!strftime(out,40,"%Y-%m-%dT%H:%M:%S",&value))return false;
+    size_t n=strlen(out);
+    return snprintf(out+n,40-n,".%03uZ",(unsigned)(absolute%1000000/1000))>0;
+}
 static cJSON *envelope(unsigned source,unsigned seq,int64_t mono,const char *status,const char *reason,cJSON *payload)
 {
     cJSON *o=cJSON_CreateObject(); if(!o) { cJSON_Delete(payload);return NULL; }
@@ -189,7 +270,7 @@ static cJSON *envelope(unsigned source,unsigned seq,int64_t mono,const char *sta
     cJSON_AddItemToObject(o,"payload",payload?payload:cJSON_CreateObject());
     return o;
 }
-static void emit(unsigned source,int64_t mono,const char *status,const char *reason,cJSON *payload,bool metadata)
+static unsigned emit(unsigned source,int64_t mono,const char *status,const char *reason,cJSON *payload,bool metadata)
 {
     unsigned seq=atomic_fetch_add(&sequences[source],1)+1;
     queued_t *q=malloc(sizeof(*q)); cJSON *o=envelope(source,seq,mono,status,reason,payload);
@@ -200,9 +281,10 @@ static void emit(unsigned source,int64_t mono,const char *status,const char *rea
         q->length=collection_record_frame(o,q->bytes,sizeof(q->bytes));
         bytes=q->length;failure=q->length?DROP_INGRESS:DROP_FRAME;
         if(q->length) atomic_fetch_add(&generated_bytes[source],q->length);
-        if(q->length && xQueueSend(ingress,&q,0)==pdTRUE) { cJSON_Delete(o);return; }
+        if(q->length && xQueueSend(ingress,&q,0)==pdTRUE) { cJSON_Delete(o);return seq; }
     }
     free(q);cJSON_Delete(o);note_drop(source,seq,bytes,failure);
+    return 0U;
 }
 static bool flash_read(void *ctx,size_t offset,void *out,size_t length)
 { return esp_partition_read(ctx,offset,out,length)==ESP_OK; }
@@ -210,6 +292,536 @@ static bool flash_write(void *ctx,size_t offset,const void *data,size_t length)
 { return esp_partition_write(ctx,offset,data,length)==ESP_OK; }
 static bool flash_erase(void *ctx,size_t offset,size_t length)
 { return esp_partition_erase_range(ctx,offset,length)==ESP_OK; }
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+#define PHOTO_TIMER_NVS_KEY "photo_timer_v1"
+#define PHOTO_JOURNAL_NVS_KEY "photo_cmd_v1"
+#define PHOTO_CAPTURE_JOURNAL_NVS_KEY "photo_cap_v1"
+#define PHOTO_ACK_SEQUENCE_NVS_KEY "photo_ack_seq_v1"
+#define PHOTO_METADATA_ACK_NVS_KEY "photo_meta_ack_v1"
+static bool photo_nvs_load(const char *key,uint8_t *blob,size_t capacity,
+                           size_t *bytes,bool *missing)
+{
+    if(!key||!blob||!capacity||!bytes||!missing)return false;
+    *bytes=0U;
+    *missing=false;
+    nvs_handle_t handle;
+    esp_err_t result=nvs_open("ego_collection",NVS_READONLY,&handle);
+    if(result!=ESP_OK)return false;
+    size_t required=0U;result=nvs_get_blob(handle,key,NULL,&required);
+    if(result==ESP_ERR_NVS_NOT_FOUND){*missing=true;nvs_close(handle);return true;}
+    if(result!=ESP_OK||!required||required>capacity){nvs_close(handle);return false;}
+    result=nvs_get_blob(handle,key,blob,&required);
+    nvs_close(handle);
+    if(result!=ESP_OK)return false;
+    *bytes=required;
+    return true;
+}
+static bool photo_nvs_save(const char *key,const uint8_t *blob,size_t bytes)
+{
+    if(!key||!blob||!bytes)return false;
+    nvs_handle_t handle;
+    esp_err_t result=nvs_open("ego_collection",NVS_READWRITE,&handle);
+    if(result!=ESP_OK)return false;
+    result=nvs_set_blob(handle,key,blob,bytes);if(result==ESP_OK)result=nvs_commit(handle);
+    size_t check_bytes=bytes;
+    uint8_t check[PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES];
+    if(bytes>sizeof(check))result=ESP_ERR_INVALID_SIZE;
+    if(result==ESP_OK)result=nvs_get_blob(handle,key,check,&check_bytes);
+    nvs_close(handle);
+    return result==ESP_OK&&check_bytes==bytes&&memcmp(check,blob,bytes)==0;
+}
+static bool photo_nvs_load_u32(const char *key,uint32_t *value,bool *missing)
+{
+    if(!key||!value||!missing)return false;
+    *value=0U;*missing=false;nvs_handle_t handle;
+    esp_err_t result=nvs_open("ego_collection",NVS_READONLY,&handle);
+    if(result!=ESP_OK)return false;
+    result=nvs_get_u32(handle,key,value);nvs_close(handle);
+    if(result==ESP_ERR_NVS_NOT_FOUND){*missing=true;*value=0U;return true;}
+    return result==ESP_OK;
+}
+static bool photo_nvs_save_u32(const char *key,uint32_t value)
+{
+    if(!key)return false;
+    nvs_handle_t handle;
+    esp_err_t result=nvs_open("ego_collection",NVS_READWRITE,&handle);
+    if(result!=ESP_OK)return false;
+    result=nvs_set_u32(handle,key,value);if(result==ESP_OK)result=nvs_commit(handle);
+    uint32_t check=0U;if(result==ESP_OK)result=nvs_get_u32(handle,key,&check);
+    nvs_close(handle);return result==ESP_OK&&check==value;
+}
+static bool photo_nvs_load_u64(const char *key,uint64_t *value,bool *missing)
+{
+    if(!key||!value||!missing)return false;
+    *value=0U;*missing=false;
+    nvs_handle_t handle;
+    esp_err_t result=nvs_open("ego_collection",NVS_READONLY,&handle);
+    if(result!=ESP_OK)return false;
+    result=nvs_get_u64(handle,key,value);nvs_close(handle);
+    if(result==ESP_ERR_NVS_NOT_FOUND){*missing=true;*value=0U;return true;}
+    return result==ESP_OK;
+}
+static bool photo_nvs_save_u64(const char *key,uint64_t value)
+{
+    if(!key)return false;
+    nvs_handle_t handle;
+    esp_err_t result=nvs_open("ego_collection",NVS_READWRITE,&handle);
+    if(result!=ESP_OK)return false;
+    result=nvs_set_u64(handle,key,value);if(result==ESP_OK)result=nvs_commit(handle);
+    uint64_t check=0U;if(result==ESP_OK)result=nvs_get_u64(handle,key,&check);
+    nvs_close(handle);return result==ESP_OK&&check==value;
+}
+static bool save_photo_timer(const photo_control_timer_t *timer)
+{
+    uint8_t blob[PHOTO_CONTROL_TIMER_BLOB_BYTES];size_t bytes=0U;
+    return photo_control_timer_encode(timer,blob,&bytes)&&
+        photo_nvs_save(PHOTO_TIMER_NVS_KEY,blob,bytes);
+}
+static bool save_photo_journal(const photo_control_journal_t *journal)
+{
+    uint8_t blob[PHOTO_CONTROL_JOURNAL_BLOB_BYTES];size_t bytes=0U;
+    return photo_control_journal_encode(journal,blob,&bytes)&&
+        photo_nvs_save(PHOTO_JOURNAL_NVS_KEY,blob,bytes);
+}
+static bool save_photo_capture_journal(
+    const photo_control_capture_journal_t *journal)
+{
+    uint8_t blob[PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES];size_t bytes=0U;
+    return photo_control_capture_journal_encode(journal,blob,&bytes)&&
+        photo_nvs_save(PHOTO_CAPTURE_JOURNAL_NVS_KEY,blob,bytes);
+}
+static bool photo_control_state_init(void)
+{
+    uint8_t blob[PHOTO_CONTROL_CAPTURE_JOURNAL_BLOB_BYTES];size_t bytes=0U;bool missing=false;
+    uint32_t ack_sequence=0U;
+    uint64_t metadata_ack_watermark=0U;
+    photo_control_timer_default(&photo_timer);photo_control_journal_default(&photo_journal);
+    photo_control_capture_journal_default(&photo_capture_journal);
+    if(!photo_nvs_load(PHOTO_TIMER_NVS_KEY,blob,sizeof(blob),&bytes,&missing)||
+       (!missing&&!photo_control_timer_decode(blob,bytes,&photo_timer)))return false;
+    if(!photo_nvs_load(PHOTO_JOURNAL_NVS_KEY,blob,sizeof(blob),&bytes,&missing)||
+       (!missing&&!photo_control_journal_decode(blob,bytes,&photo_journal)))return false;
+    if(!photo_nvs_load(PHOTO_CAPTURE_JOURNAL_NVS_KEY,blob,sizeof(blob),&bytes,&missing)||
+       (!missing&&!photo_control_capture_journal_decode(blob,bytes,
+           &photo_capture_journal)))return false;
+    if(!photo_nvs_load_u32(PHOTO_ACK_SEQUENCE_NVS_KEY,&ack_sequence,&missing))
+        return false;
+    if(!photo_nvs_load_u64(PHOTO_METADATA_ACK_NVS_KEY,
+        &metadata_ack_watermark,&missing))return false;
+    atomic_store(&photo_command_ack_sequence,ack_sequence);
+    photo_metadata_ack_watermark=metadata_ack_watermark;
+    return true;
+}
+static void photo_timer_snapshot(photo_control_timer_t *out)
+{
+    portENTER_CRITICAL(&photo_state_mux);*out=photo_timer;portEXIT_CRITICAL(&photo_state_mux);
+}
+static void photo_timer_publish(const photo_control_timer_t *value)
+{
+    portENTER_CRITICAL(&photo_state_mux);photo_timer=*value;portEXIT_CRITICAL(&photo_state_mux);
+}
+static void photo_journal_snapshot(photo_control_journal_t *out)
+{
+    portENTER_CRITICAL(&photo_state_mux);*out=photo_journal;portEXIT_CRITICAL(&photo_state_mux);
+}
+static void photo_journal_publish(const photo_control_journal_t *value)
+{
+    portENTER_CRITICAL(&photo_state_mux);photo_journal=*value;portEXIT_CRITICAL(&photo_state_mux);
+}
+static void photo_capture_journal_snapshot(photo_control_capture_journal_t *out)
+{
+    portENTER_CRITICAL(&photo_state_mux);*out=photo_capture_journal;
+    portEXIT_CRITICAL(&photo_state_mux);
+}
+static void photo_capture_journal_publish(
+    const photo_control_capture_journal_t *value)
+{
+    portENTER_CRITICAL(&photo_state_mux);photo_capture_journal=*value;
+    portEXIT_CRITICAL(&photo_state_mux);
+}
+static bool photo_next_ack_sequence(uint32_t *sequence)
+{
+    if(!sequence)return false;
+    uint32_t current=atomic_load(&photo_command_ack_sequence);
+    if(current==UINT32_MAX)return false;
+    uint32_t next=current+1U;
+    if(!photo_nvs_save_u32(PHOTO_ACK_SEQUENCE_NVS_KEY,next))return false;
+    atomic_store(&photo_command_ack_sequence,next);*sequence=next;return true;
+}
+static bool photo_record_metadata_acked(uint64_t source_sequence)
+{
+    if(!source_sequence||source_sequence<=photo_metadata_ack_watermark)return true;
+    if(!photo_nvs_save_u64(PHOTO_METADATA_ACK_NVS_KEY,source_sequence))return false;
+    photo_metadata_ack_watermark=source_sequence;
+    return true;
+}
+static bool photo_wall_clock(uint64_t *utc_ms)
+{
+    if(!utc_ms)return false;
+    portENTER_CRITICAL(&clock_mux);bool anchored=utc_offset_us!=0;portEXIT_CRITICAL(&clock_mux);
+    struct timeval value;
+    if(!anchored||gettimeofday(&value,NULL)!=0||value.tv_sec<1767225600||
+       value.tv_sec>=4102444800LL)return false;
+    *utc_ms=(uint64_t)value.tv_sec*1000U+(uint64_t)value.tv_usec/1000U;return true;
+}
+static bool photo_format_utc_ms(uint64_t utc_ms,char out[40])
+{
+    time_t seconds=(time_t)(utc_ms/1000U);struct tm value;
+    if(!gmtime_r(&seconds,&value)||!strftime(out,40,"%Y-%m-%dT%H:%M:%S",&value))return false;
+    size_t n=strlen(out);
+    return snprintf(out+n,40-n,".%03uZ",(unsigned)(utc_ms%1000U))>0;
+}
+static void photo_digest_hex(const uint8_t digest[PHOTO_MEDIA_STORE_SHA256_BYTES],char out[65])
+{
+    static const char digits[]="0123456789abcdef";
+    for(size_t i=0U;i<PHOTO_MEDIA_STORE_SHA256_BYTES;++i){
+        out[i*2U]=digits[digest[i]>>4U];out[i*2U+1U]=digits[digest[i]&15U];
+    }
+    out[64]='\0';
+}
+static bool photo_make_id(const char *prefix,const char *identity,uint32_t ordinal,
+                          char out[96])
+{
+    if(!prefix||!identity||!out)return false;
+    uint8_t digest[32];
+    char material[320];
+    int n=snprintf(material,sizeof(material),"%s|%s|%" PRIu32,prefix,identity,ordinal);
+    if(n<=0||(size_t)n>=sizeof(material)||mbedtls_sha256((const unsigned char*)material,
+        (size_t)n,digest,0)!=0)return false;
+    char hex[65];photo_digest_hex(digest,hex);
+    n=snprintf(out,96,"%s-%.32s-n%" PRIu32,prefix,hex,ordinal);
+    return n>0&&(size_t)n<96U;
+}
+
+typedef struct {
+    photo_control_command_kind_t kind;
+    char photo_id[96];
+    char trigger_reason[24];
+    char command_id[PHOTO_CONTROL_ID_BYTES];
+    char config_version[PHOTO_CONTROL_ID_BYTES];
+    char authorization_session_id[PHOTO_CONTROL_ID_BYTES];
+    char retention_expires_at[PHOTO_CONTROL_TIME_TEXT_BYTES];
+    uint64_t execution_expires_at_unix_ms;
+    uint64_t retention_expires_at_unix_ms;
+    uint64_t source_event_utc_ms;
+    uint64_t source_event_monotonic_ns;
+    uint32_t capture_boot_count;
+    uint32_t capture_sequence_id;
+    uint32_t timer_captured_count_before;
+} photo_capture_intent_t;
+
+typedef struct {
+    photo_capture_intent_t intent;
+    photo_media_store_record_t record;
+    platform_camera_capture_result_t camera;
+    uint64_t anchor_utc_ms;
+    int64_t anchor_monotonic_us;
+    uint64_t event_utc_ms;
+    uint64_t event_monotonic_ns;
+    bool media_saved;
+    bool existing_media;
+    bool outcome_ambiguous;
+    photo_media_store_result_t store_result;
+    const char *failure_reason;
+} photo_capture_outcome_t;
+
+static bool photo_store_result_fatal(photo_media_store_result_t result)
+{
+    return result==PHOTO_MEDIA_STORE_IO_ERROR||
+        result==PHOTO_MEDIA_STORE_CORRUPT;
+}
+
+static void photo_store_observe_result(photo_media_store_result_t result)
+{
+    if(photo_store_result_fatal(result))atomic_store(&media_store_ready,false);
+}
+
+static bool photo_append_direct_frame(unsigned source,const char *frame,
+                                      size_t length,uint32_t capture_boot_count,
+                                      uint32_t capture_sequence_id)
+{
+    if(!frame||!length||length>COLLECTION_FRAME_CAPACITY||
+       !capture_boot_count||!capture_sequence_id||source>=SOURCE_COUNT)return false;
+    collection_spool_result_t result=COLLECTION_SPOOL_IO_ERROR;
+    xSemaphoreTake(spool_mutex,portMAX_DELAY);
+    if(atomic_load(&spool_ready)){
+        result=collection_spool_append(&spool,COLLECTION_SPOOL_METADATA,source,
+            ((uint64_t)capture_boot_count<<32U)|capture_sequence_id,
+            frame,length,NULL);
+    }
+    if(result==COLLECTION_SPOOL_IO_ERROR||result==COLLECTION_SPOOL_CORRUPT||
+       result==COLLECTION_SPOOL_FOREIGN_DATA)atomic_store(&spool_ready,false);
+    xSemaphoreGive(spool_mutex);
+    if(result==COLLECTION_SPOOL_OK){
+        atomic_fetch_add(&generated_bytes[source],(unsigned)length);
+        atomic_fetch_add(&persisted,1U);
+        return true;
+    }
+    note_drop(source,capture_sequence_id,length,DROP_RAM_FULL);
+    ESP_LOGE(TAG,"PHOTO_DIRECT_RECORD source=%s durable=false result=%s",
+        sources[source],collection_spool_result_name(result));
+    return false;
+}
+
+static bool photo_append_metadata_frame(const char *frame,size_t length,
+                                        uint32_t capture_boot_count,
+                                        uint32_t capture_sequence_id)
+{
+    return photo_append_direct_frame(CAMERA,frame,length,capture_boot_count,
+        capture_sequence_id);
+}
+
+static cJSON *photo_source_status_payload(const char *event_reason,
+                                          bool *runtime_ready,
+                                          const char **missing_reason)
+{
+    photo_control_timer_t timer;photo_timer_snapshot(&timer);
+    uint64_t utc_ms=0U;const bool trusted_utc=photo_wall_clock(&utc_ms);
+    char utc[40]={0};
+    const bool utc_formatted=trusted_utc&&photo_format_utc_ms(utc_ms,utc);
+    const char *camera_reason=NULL;
+    const platform_camera_status_t camera_status=platform_camera_preflight(&camera_reason);
+    const bool ready=atomic_load(&photo_control_state_ready)&&
+        atomic_load(&media_store_ready)&&camera_status==PLATFORM_CAMERA_OK;
+    cJSON *payload=cJSON_CreateObject();
+    if(!payload)return NULL;
+    cJSON_AddStringToObject(payload,"source","camera");
+    cJSON_AddStringToObject(payload,"component","photo_control");
+    cJSON_AddBoolToObject(payload,"camera_runtime_compiled",true);
+    cJSON_AddBoolToObject(payload,"driver_preflight_ready",camera_status==PLATFORM_CAMERA_OK);
+    cJSON_AddBoolToObject(payload,"capture_trigger_wired",ready);
+    cJSON_AddBoolToObject(payload,"media_store_ready",atomic_load(&media_store_ready));
+    if(timer.command_id[0])cJSON_AddStringToObject(payload,"command_id",timer.command_id);
+    else cJSON_AddNullToObject(payload,"command_id");
+    if(timer.authorization_session_id[0])
+        cJSON_AddStringToObject(payload,"authorization_session_id",timer.authorization_session_id);
+    else cJSON_AddNullToObject(payload,"authorization_session_id");
+    if(utc_formatted)cJSON_AddStringToObject(payload,"source_event_utc",utc);
+    else cJSON_AddNullToObject(payload,"source_event_utc");
+    cJSON_AddNumberToObject(payload,"source_event_monotonic_ms",now_us()/1000);
+    cJSON_AddStringToObject(payload,"event_reason",event_reason?event_reason:"periodic_state");
+    cJSON *state=cJSON_AddObjectToObject(payload,"timer_state");
+    if(timer.config_version[0])cJSON_AddStringToObject(state,"config_version",timer.config_version);
+    else cJSON_AddNullToObject(state,"config_version");
+    cJSON_AddBoolToObject(state,"enabled",timer.enabled);
+    cJSON_AddNumberToObject(state,"interval_seconds",timer.interval_seconds);
+    cJSON_AddNumberToObject(state,"session_expires_at_unix_ms",
+        (double)timer.session_expires_at_unix_ms);
+    cJSON_AddNumberToObject(state,"max_photos",timer.max_photos);
+    cJSON_AddNumberToObject(state,"captured_count",timer.captured_photos);
+    cJSON_AddStringToObject(state,"state_reason",
+        timer.state_reason[0]?timer.state_reason:"not_configured");
+    cJSON_AddBoolToObject(state,"trusted_utc",trusted_utc);
+    if(runtime_ready)*runtime_ready=ready;
+    if(missing_reason)*missing_reason=
+        !atomic_load(&photo_control_state_ready)?"photo_control_state_unavailable":
+        !atomic_load(&media_store_ready)?"photo_media_store_unavailable":camera_reason;
+    return payload;
+}
+
+static void photo_emit_source_status(const char *event_reason)
+{
+    bool ready=false;const char *reason=NULL;
+    cJSON *payload=photo_source_status_payload(event_reason,&ready,&reason);
+    emit(SOURCE_STATUS,now_us(),ready?"observed":"unavailable",ready?NULL:reason,
+        payload,true);
+}
+
+static bool photo_frame_to_media(void *opaque,const uint8_t *jpeg,size_t jpeg_bytes,
+                                 const platform_camera_capture_result_t *metadata)
+{
+    photo_capture_outcome_t *outcome=opaque;
+    if(!outcome||!jpeg||!metadata)return false;
+    if(!atomic_load(&media_store_ready)){
+        outcome->failure_reason="photo_media_store_unavailable";
+        return false;
+    }
+    if(metadata->width==0U||metadata->height==0U){
+        outcome->store_result=PHOTO_MEDIA_STORE_BAD_ARGUMENT;
+        outcome->failure_reason="camera_frame_dimensions_invalid";
+        return false;
+    }
+    if(jpeg_bytes>CONFIG_EGOLINK_PHOTO_MEDIA_MAX_PAYLOAD_BYTES){
+        outcome->store_result=PHOTO_MEDIA_STORE_TOO_LARGE;
+        outcome->failure_reason="jpeg_exceeds_configured_media_payload_limit";
+        return false;
+    }
+    /* The consumer is invoked only after esp_camera_fb_get returned a real
+     * frame. Anchor authorization to that point, not to driver init start. */
+    int64_t delta_us=now_us()-outcome->anchor_monotonic_us;
+    outcome->event_utc_ms=outcome->anchor_utc_ms+
+        (uint64_t)(delta_us>0?delta_us/1000LL:0LL);
+    outcome->event_monotonic_ns=(uint64_t)now_us()*1000U;
+    if(outcome->event_utc_ms>=outcome->intent.execution_expires_at_unix_ms){
+        outcome->store_result=PHOTO_MEDIA_STORE_BAD_ARGUMENT;
+        outcome->failure_reason="capture_started_after_authorized_window";
+        return false;
+    }
+    if(outcome->event_utc_ms>=outcome->intent.retention_expires_at_unix_ms){
+        outcome->store_result=PHOTO_MEDIA_STORE_BAD_ARGUMENT;
+        outcome->failure_reason="capture_started_after_retention_expiry";
+        return false;
+    }
+    outcome->store_result=photo_media_store_prepare_with_expiry(&media_store,
+        outcome->intent.photo_id,jpeg_bytes,metadata->sha256,
+        outcome->intent.retention_expires_at_unix_ms,outcome->event_utc_ms,
+        outcome->event_monotonic_ns,outcome->intent.capture_boot_count,
+        outcome->intent.capture_sequence_id,metadata->width,metadata->height,
+        &outcome->record);
+    photo_store_observe_result(outcome->store_result);
+    if(outcome->store_result!=PHOTO_MEDIA_STORE_OK){
+        outcome->failure_reason=photo_media_store_result_name(outcome->store_result);
+        return false;
+    }
+    outcome->store_result=photo_media_store_write(&media_store,&outcome->record,0U,
+        jpeg,jpeg_bytes);
+    if(outcome->store_result==PHOTO_MEDIA_STORE_OK)
+        outcome->store_result=photo_media_store_commit(&media_store,&outcome->record);
+    photo_store_observe_result(outcome->store_result);
+    outcome->media_saved=outcome->store_result==PHOTO_MEDIA_STORE_OK||
+        outcome->store_result==PHOTO_MEDIA_STORE_ALREADY_COMMITTED;
+    if(!outcome->media_saved)
+        outcome->failure_reason=photo_media_store_result_name(outcome->store_result);
+    return outcome->media_saved;
+}
+
+static bool photo_append_capture_metadata(photo_capture_outcome_t *outcome,
+                                          const char *failure_reason)
+{
+    char event_utc[40],digest[65],capture_clock_domain[64];
+    char frame[COLLECTION_FRAME_CAPACITY];
+    if(!outcome||!outcome->event_utc_ms||
+       !photo_format_utc_ms(outcome->event_utc_ms,event_utc))return false;
+    const bool saved=outcome->media_saved;
+    if(saved)photo_digest_hex(outcome->record.sha256,digest);
+    const uint32_t capture_boot_count=saved?outcome->record.capture_boot_count:
+        outcome->intent.capture_boot_count;
+    if(snprintf(capture_clock_domain,sizeof(capture_clock_domain),
+        "collection-esp-timer-b%" PRIu32,capture_boot_count)<=0)return false;
+    photo_delivery_metadata_t metadata={
+        .device_id=CONFIG_EGOLINK_DEVICE_ID,.photo_id=outcome->intent.photo_id,
+        .trigger_reason=outcome->intent.trigger_reason,
+        .command_id=outcome->intent.command_id,
+        .config_version=outcome->intent.config_version,
+        .capture_result=saved?"captured":
+            (outcome->outcome_ambiguous?"outcome_unknown":
+            (outcome->camera.frame_acquired?"captured":
+             (outcome->camera.attempted?"capture_failed":"not_attempted"))),
+        .local_save_status=saved?"saved":
+            (outcome->outcome_ambiguous?"unknown":
+             (outcome->camera.frame_acquired?"save_failed":"not_attempted")),
+        .device_upload_status=saved?"pending":"not_ready",
+        .media_type=saved?"image/jpeg":NULL,
+        .width=saved?outcome->record.width:0U,
+        .height=saved?outcome->record.height:0U,
+        .byte_length=saved?outcome->record.payload_bytes:0U,
+        .sha256_hex=saved?digest:NULL,
+        .storage_kind=saved?"persistent":"none",
+        .camera_model=saved?"OV5640":"unknown",
+        .driver_profile="qvga-jpeg-q12-v1",
+        .authorization_session_id=outcome->intent.authorization_session_id,
+        .retention_expires_at=outcome->intent.retention_expires_at,
+        .failure_reason=saved?NULL:(outcome->outcome_ambiguous?
+            "capture_outcome_unknown_after_reboot":
+            (failure_reason?failure_reason:"capture_failed")),
+        .capture_boot_count=capture_boot_count,
+        .capture_sequence_id=saved?outcome->record.capture_sequence_id:
+            outcome->intent.capture_sequence_id,
+        .capture_monotonic_ns=saved?outcome->record.capture_monotonic_ns:
+            outcome->event_monotonic_ns,
+        .capture_event_utc=event_utc,
+        .timestamp_source="sntp_anchor",
+        .timestamp_quality="network_time_unverified_accuracy",
+        .monotonic_clock_domain_id=capture_clock_domain,
+        .fw_version=CONFIG_EGOLINK_FW_VERSION,
+        .firmware_elf_sha256=firmware_elf_sha256,.runtime_config_id=CONFIG_ID,
+    };
+    size_t frame_bytes=0U;
+    return photo_delivery_build_metadata_frame(&metadata,frame,sizeof(frame),
+        &frame_bytes)&&photo_append_metadata_frame(frame,frame_bytes,
+            metadata.capture_boot_count,metadata.capture_sequence_id);
+}
+
+static bool photo_execute_capture(const photo_capture_intent_t *intent,
+                                  bool allow_new_capture,
+                                  photo_capture_outcome_t *outcome)
+{
+    if(!intent||!outcome)return false;
+    memset(outcome,0,sizeof(*outcome));outcome->intent=*intent;
+    if(!photo_wall_clock(&outcome->anchor_utc_ms)){
+        outcome->failure_reason="trusted_utc_unavailable";
+        return false;
+    }
+    outcome->anchor_monotonic_us=now_us();
+    outcome->event_utc_ms=intent->source_event_utc_ms;
+    outcome->event_monotonic_ns=intent->source_event_monotonic_ns;
+    if(!atomic_load(&media_store_ready)){
+        outcome->failure_reason="photo_media_store_unavailable";
+        return false;
+    }
+    outcome->store_result=photo_media_store_find(&media_store,intent->photo_id,
+        &outcome->record);
+    photo_store_observe_result(outcome->store_result);
+    if(outcome->store_result==PHOTO_MEDIA_STORE_OK){
+        if(outcome->record.capture_unix_ms>=intent->execution_expires_at_unix_ms||
+           outcome->record.capture_unix_ms>=intent->retention_expires_at_unix_ms){
+            outcome->failure_reason="persisted_capture_outside_authorized_window";
+            return false;
+        }
+        outcome->media_saved=true;outcome->existing_media=true;
+        outcome->event_utc_ms=outcome->record.capture_unix_ms;
+        outcome->event_monotonic_ns=outcome->record.capture_monotonic_ns;
+        return true;
+    }
+    if(outcome->store_result!=PHOTO_MEDIA_STORE_NOT_FOUND){
+        outcome->failure_reason=photo_media_store_result_name(outcome->store_result);
+        return false;
+    }
+    if(!allow_new_capture){
+        outcome->failure_reason="capture_outcome_unknown_after_restart";
+        return false;
+    }
+    if(outcome->anchor_utc_ms>=intent->execution_expires_at_unix_ms){
+        outcome->failure_reason="capture_authorization_expired_before_start";
+        return false;
+    }
+    if(outcome->anchor_utc_ms>=intent->retention_expires_at_unix_ms){
+        outcome->failure_reason="photo_retention_expired_before_start";
+        return false;
+    }
+    atomic_fetch_add(&photo_capture_attempts,1U);
+    const platform_camera_status_t result=platform_camera_capture_single(
+        photo_frame_to_media,outcome,&outcome->camera);
+    if(outcome->media_saved){
+        atomic_fetch_add(&photo_capture_saved,1U);
+        if(result!=PLATFORM_CAMERA_OK)
+            ESP_LOGW(TAG,"PHOTO_CAPTURE media_saved=true lifecycle=%s reason=%s",
+                platform_camera_status_name(result),
+                outcome->camera.reason?outcome->camera.reason:"none");
+        return true;
+    }
+    atomic_fetch_add(&photo_capture_failures,1U);
+    if(!outcome->event_utc_ms)outcome->event_utc_ms=outcome->anchor_utc_ms;
+    if(outcome->camera.capture_started_us>0)
+        outcome->event_monotonic_ns=(uint64_t)outcome->camera.capture_started_us*1000U;
+    if(!outcome->failure_reason)outcome->failure_reason=outcome->camera.reason;
+    return false;
+}
+
+static void photo_journal_fill(photo_control_journal_t *journal,
+                               photo_control_journal_phase_t phase,
+                               photo_control_command_kind_t kind,
+                               const char *cmd_id,const char *status,
+                               const char *message,const char *photo_id)
+{
+    memset(journal,0,sizeof(*journal));journal->phase=phase;journal->kind=kind;
+    snprintf(journal->cmd_id,sizeof(journal->cmd_id),"%s",cmd_id);
+    snprintf(journal->status,sizeof(journal->status),"%s",status);
+    snprintf(journal->message,sizeof(journal->message),"%s",message);
+    snprintf(journal->photo_id,sizeof(journal->photo_id),"%s",
+        photo_id&&*photo_id?photo_id:"none");
+}
+#endif
 static void storage_task(void *unused)
 {
     (void)unused;queued_t *q;
@@ -586,7 +1198,21 @@ static void modem_task(void *unused)
             add_nullable_number(p,"satellites",g.satellites_valid,g.satellites);
             cJSON_AddStringToObject(p,"receiver_date",g.utc_date);cJSON_AddStringToObject(p,"receiver_time",g.utc_time);
             const char *status=query_status(&r);if(r.outcome==SIM7670_LOCATION_BOUNDED_REPORT_READY&&!g.fix&&g.no_fix_observed)status="no_fix";
-            emit(GNSS,now,status,r.reason?"see_at_outcome_and_reason":NULL,p,false);
+            unsigned gnss_seq=emit(GNSS,now,status,r.reason?"see_at_outcome_and_reason":NULL,p,false);
+            if(gnss_seq&&g.fix&&g.lat_valid&&g.lon_valid){
+                char event_utc[40];
+                if(format_utc_from_monotonic(now,event_utc)){
+                    portENTER_CRITICAL(&location_ref_mux);
+                    last_trusted_location_ref.valid=true;
+                    snprintf(last_trusted_location_ref.observation_id,
+                        sizeof(last_trusted_location_ref.observation_id),
+                        "col-b%" PRIu32 "-gnss-%u",boot,gnss_seq);
+                    memcpy(last_trusted_location_ref.event_utc,event_utc,strlen(event_utc)+1U);
+                    memcpy(last_trusted_location_ref.timestamp_quality,
+                        "network_time_unverified_accuracy",33U);
+                    portEXIT_CRITICAL(&location_ref_mux);
+                }
+            }
             next_gnss=now+CONFIG_EGOLINK_COLLECTION_GNSS_INTERVAL_MS*1000LL;
         }
         vTaskDelay(pdMS_TO_TICKS(20));
@@ -852,6 +1478,38 @@ static void health(void)
     cJSON_AddStringToObject(p,"selected_route",collection_network_route_name(network.route));
     cJSON_AddNumberToObject(p,"route_generation",network.generation);
     cJSON_AddBoolToObject(p,"lte_ppp_opt_in",CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    photo_media_store_stats_t media={0};
+    if(atomic_load(&media_store_ready))photo_media_store_get_stats(&media_store,&media);
+    photo_control_timer_t timer;photo_timer_snapshot(&timer);
+    uint64_t ignored_utc=0U;const bool photo_utc_trusted=photo_wall_clock(&ignored_utc);
+    cJSON *camera=cJSON_AddObjectToObject(p,"camera_runtime");
+    cJSON_AddBoolToObject(camera,"control_state_ready",atomic_load(&photo_control_state_ready));
+    cJSON_AddBoolToObject(camera,"media_store_ready",atomic_load(&media_store_ready));
+    cJSON_AddNumberToObject(camera,"committed_photos",media.committed_slots);
+    cJSON_AddNumberToObject(camera,"committed_payload_bytes",(double)media.committed_payload_bytes);
+    cJSON_AddNumberToObject(camera,"reconciled_owned_slots",
+        media.reconciled_owned_slots);
+    cJSON_AddNumberToObject(camera,"capture_attempts",atomic_load(&photo_capture_attempts));
+    cJSON_AddNumberToObject(camera,"capture_saved",atomic_load(&photo_capture_saved));
+    cJSON_AddNumberToObject(camera,"capture_failures",atomic_load(&photo_capture_failures));
+    cJSON_AddNumberToObject(camera,"upload_server_verified",atomic_load(&photo_upload_acked));
+    cJSON_AddNumberToObject(camera,"upload_failures",atomic_load(&photo_upload_failures));
+    cJSON_AddNumberToObject(camera,"expired_local_releases",atomic_load(&photo_expired_released));
+    cJSON_AddNumberToObject(camera,"command_polls",atomic_load(&photo_command_polls));
+    cJSON_AddNumberToObject(camera,"command_parse_failures",atomic_load(&photo_command_parse_failures));
+    cJSON_AddNumberToObject(camera,"command_acks",atomic_load(&photo_command_acks));
+    cJSON *timer_state=cJSON_AddObjectToObject(camera,"timer_state");
+    if(timer.config_version[0])cJSON_AddStringToObject(timer_state,"config_version",timer.config_version);
+    else cJSON_AddNullToObject(timer_state,"config_version");
+    cJSON_AddBoolToObject(timer_state,"enabled",timer.enabled);
+    cJSON_AddNumberToObject(timer_state,"interval_seconds",timer.interval_seconds);
+    cJSON_AddNumberToObject(timer_state,"session_expires_at_unix_ms",(double)timer.session_expires_at_unix_ms);
+    cJSON_AddNumberToObject(timer_state,"max_photos",timer.max_photos);
+    cJSON_AddNumberToObject(timer_state,"captured_count",timer.captured_photos);
+    cJSON_AddStringToObject(timer_state,"state_reason",timer.state_reason[0]?timer.state_reason:"not_configured");
+    cJSON_AddBoolToObject(timer_state,"trusted_utc",photo_utc_trusted);
+#endif
     cJSON *rates=cJSON_AddObjectToObject(p,"sources");
     for(unsigned i=0;i<SOURCE_COUNT;i++){
         cJSON *s=cJSON_AddObjectToObject(rates,sources[i]);cJSON_AddNumberToObject(s,"generated_bytes",atomic_load(&generated_bytes[i]));
@@ -906,12 +1564,889 @@ static size_t loss_frame(const collection_spool_record_t *record,const void *dat
     cJSON_DeleteItemFromObjectCaseSensitive(o,"firmware_elf_sha256");
     size_t n=collection_record_frame(o,frame,COLLECTION_FRAME_CAPACITY);cJSON_Delete(o);return n;
 }
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+static const char *photo_transport(collection_network_route_t route)
+{ return route==COLLECTION_NETWORK_ROUTE_LTE?"lte":"wifi"; }
+
+static bool photo_post_command_ack(egolink_esp_p0_https_t *https,
+    const network_runtime_snapshot_t *route,const char *interface_name,
+    const photo_control_journal_t *journal,const photo_control_timer_t *timer,
+    const char *timer_status,bool duplicate_prevented,uint8_t *response,
+    size_t response_capacity)
+{
+    if(!https||!route||!interface_name||!journal||!response)return false;
+    char frame[2048];size_t frame_bytes=0U;
+    uint32_t seq=0U;if(!photo_next_ack_sequence(&seq)){
+        atomic_store(&photo_control_state_ready,false);return false;
+    }
+    uint64_t ignored_utc=0U;const bool trusted_utc=photo_wall_clock(&ignored_utc);
+    bool built=timer?
+        photo_control_build_timer_state_ack_frame(journal->cmd_id,
+            timer_status?timer_status:"applied",journal->message,
+            CONFIG_EGOLINK_FW_VERSION,photo_transport(route->route),seq,
+            duplicate_prevented,timer,trusted_utc,frame,sizeof(frame),&frame_bytes):
+        photo_control_build_ack_frame(journal->cmd_id,journal->status,
+            journal->message,CONFIG_EGOLINK_FW_VERSION,
+            photo_transport(route->route),seq,duplicate_prevented,frame,
+            sizeof(frame),&frame_bytes);
+    if(!built)return false;
+    uint8_t ack_digest[32];char ack_digest_hex[65];
+    if(mbedtls_sha256((const unsigned char *)frame,frame_bytes,ack_digest,0)!=0)
+        return false;
+    photo_digest_hex(ack_digest,ack_digest_hex);
+    https->attempts=0U;https->deadline_ms=(uint64_t)now_us()/1000U+13000U;
+    egolink_p0_delivery_post_result_t posted={0};
+    atomic_store(&uploader_active_generation,route->generation);
+    const egolink_p0_delivery_post_outcome_t outcome=
+        egolink_esp_p0_https_ack_collection_command(https,
+            CONFIG_EGOLINK_DEVICE_ID,journal->cmd_id,interface_name,
+            (const uint8_t *)frame,frame_bytes,response,response_capacity,
+            upload_cancel,NULL,route->generation,&posted);
+    atomic_store(&uploader_active_generation,0U);
+    bool matched=outcome==EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE&&
+        posted.http_status_code>=200U&&posted.http_status_code<300U&&
+        atomic_load(&network_route_generation)==route->generation&&
+        photo_delivery_command_ack_response_matches(response,
+            posted.response_length,journal->cmd_id,
+            timer?(timer_status?timer_status:"applied"):journal->status,
+            ack_digest_hex);
+    if(matched)atomic_fetch_add(&photo_command_acks,1U);
+    else egolink_esp_p0_https_close(https);
+    ESP_LOGI(TAG,"PHOTO_COMMAND_ACK cmd=%s status=%s http=%u matched=%d duplicate=%d",
+        journal->cmd_id,timer?timer_status:journal->status,
+        (unsigned)posted.http_status_code,matched,duplicate_prevented);
+    return matched;
+}
+
+static bool photo_finish_journal(photo_control_journal_t *journal,
+                                 const char *status,const char *message)
+{
+    journal->phase=PHOTO_CONTROL_JOURNAL_COMPLETE;
+    snprintf(journal->status,sizeof(journal->status),"%s",status);
+    snprintf(journal->message,sizeof(journal->message),"%s",message);
+    if(!save_photo_journal(journal))return false;
+    photo_journal_publish(journal);return true;
+}
+
+static bool photo_stamp_intent(photo_capture_intent_t *intent,uint64_t utc_ms,
+                               uint32_t timer_captured_count_before)
+{
+    if(!intent||!utc_ms||!boot)return false;
+    const int64_t monotonic_us=now_us();
+    const uint32_t sequence=atomic_fetch_add(&sequences[CAMERA],1U)+1U;
+    if(monotonic_us<=0||!sequence)return false;
+    intent->source_event_utc_ms=utc_ms;
+    intent->source_event_monotonic_ns=(uint64_t)monotonic_us*1000U;
+    intent->capture_boot_count=boot;
+    intent->capture_sequence_id=sequence;
+    intent->timer_captured_count_before=timer_captured_count_before;
+    return true;
+}
+
+static bool photo_intent_from_command(const photo_control_command_t *command,
+                                      uint64_t utc_ms,
+                                      photo_capture_intent_t *intent)
+{
+    memset(intent,0,sizeof(*intent));intent->kind=command->kind;
+    snprintf(intent->trigger_reason,sizeof(intent->trigger_reason),"web_manual");
+    snprintf(intent->command_id,sizeof(intent->command_id),"%s",command->cmd_id);
+    snprintf(intent->config_version,sizeof(intent->config_version),"manual-single-v1");
+    snprintf(intent->authorization_session_id,sizeof(intent->authorization_session_id),
+        "%s",command->authorization_session_id);
+    snprintf(intent->retention_expires_at,sizeof(intent->retention_expires_at),
+        "%s",command->retention_expires_at);
+    intent->execution_expires_at_unix_ms=command->expires_at_unix_ms;
+    intent->retention_expires_at_unix_ms=command->retention_expires_at_unix_ms;
+    return photo_make_id("manual",command->cmd_id,0U,intent->photo_id)&&
+        photo_stamp_intent(intent,utc_ms,0U);
+}
+
+static bool photo_intent_from_timer(const photo_control_timer_t *timer,
+                                    uint64_t scheduled_utc_ms,
+                                    photo_capture_intent_t *intent)
+{
+    memset(intent,0,sizeof(*intent));intent->kind=PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER;
+    snprintf(intent->trigger_reason,sizeof(intent->trigger_reason),"device_timer");
+    snprintf(intent->command_id,sizeof(intent->command_id),"%s",timer->command_id);
+    snprintf(intent->config_version,sizeof(intent->config_version),"%s",timer->config_version);
+    snprintf(intent->authorization_session_id,sizeof(intent->authorization_session_id),
+        "%s",timer->authorization_session_id);
+    snprintf(intent->retention_expires_at,sizeof(intent->retention_expires_at),
+        "%s",timer->retention_expires_at);
+    intent->execution_expires_at_unix_ms=timer->session_expires_at_unix_ms;
+    intent->retention_expires_at_unix_ms=timer->retention_expires_at_unix_ms;
+    /* Failure observations must not reuse the previous observation/photo ID.
+     * Include this due instant even when captured_count does not advance. */
+    char identity[192];
+    int n=snprintf(identity,sizeof(identity),"%s|%" PRIu64,
+        timer->command_id,scheduled_utc_ms);
+    return n>0&&(size_t)n<sizeof(identity)&&
+        photo_make_id("timer",identity,(uint32_t)(scheduled_utc_ms&UINT32_MAX),
+            intent->photo_id)&&
+        photo_stamp_intent(intent,scheduled_utc_ms,timer->captured_photos);
+}
+
+static const char *photo_outcome_reason(const photo_capture_outcome_t *outcome);
+
+static void photo_capture_journal_from_intent(
+    const photo_capture_intent_t *intent,
+    photo_control_capture_journal_t *journal)
+{
+    memset(journal,0,sizeof(*journal));
+    journal->phase=PHOTO_CONTROL_CAPTURE_STARTED;journal->kind=intent->kind;
+    snprintf(journal->photo_id,sizeof(journal->photo_id),"%s",intent->photo_id);
+    snprintf(journal->trigger_reason,sizeof(journal->trigger_reason),"%s",
+        intent->trigger_reason);
+    snprintf(journal->command_id,sizeof(journal->command_id),"%s",
+        intent->command_id);
+    snprintf(journal->config_version,sizeof(journal->config_version),"%s",
+        intent->config_version);
+    snprintf(journal->authorization_session_id,
+        sizeof(journal->authorization_session_id),"%s",
+        intent->authorization_session_id);
+    snprintf(journal->retention_expires_at,
+        sizeof(journal->retention_expires_at),"%s",intent->retention_expires_at);
+    snprintf(journal->failure_reason,sizeof(journal->failure_reason),"pending");
+    journal->execution_expires_at_unix_ms=intent->execution_expires_at_unix_ms;
+    journal->retention_expires_at_unix_ms=intent->retention_expires_at_unix_ms;
+    journal->source_event_utc_ms=intent->source_event_utc_ms;
+    journal->source_event_monotonic_ns=intent->source_event_monotonic_ns;
+    journal->capture_boot_count=intent->capture_boot_count;
+    journal->capture_sequence_id=intent->capture_sequence_id;
+    journal->timer_captured_count_before=intent->timer_captured_count_before;
+}
+
+static void photo_intent_from_capture_journal(
+    const photo_control_capture_journal_t *journal,
+    photo_capture_intent_t *intent)
+{
+    memset(intent,0,sizeof(*intent));intent->kind=journal->kind;
+    snprintf(intent->photo_id,sizeof(intent->photo_id),"%s",journal->photo_id);
+    snprintf(intent->trigger_reason,sizeof(intent->trigger_reason),"%s",
+        journal->trigger_reason);
+    snprintf(intent->command_id,sizeof(intent->command_id),"%s",journal->command_id);
+    snprintf(intent->config_version,sizeof(intent->config_version),"%s",
+        journal->config_version);
+    snprintf(intent->authorization_session_id,
+        sizeof(intent->authorization_session_id),"%s",
+        journal->authorization_session_id);
+    snprintf(intent->retention_expires_at,sizeof(intent->retention_expires_at),"%s",
+        journal->retention_expires_at);
+    intent->execution_expires_at_unix_ms=journal->execution_expires_at_unix_ms;
+    intent->retention_expires_at_unix_ms=journal->retention_expires_at_unix_ms;
+    intent->source_event_utc_ms=journal->source_event_utc_ms;
+    intent->source_event_monotonic_ns=journal->source_event_monotonic_ns;
+    intent->capture_boot_count=journal->capture_boot_count;
+    intent->capture_sequence_id=journal->capture_sequence_id;
+    intent->timer_captured_count_before=journal->timer_captured_count_before;
+}
+
+static bool photo_capture_journal_matches_intent(
+    const photo_control_capture_journal_t *journal,
+    const photo_capture_intent_t *intent)
+{
+    return journal&&intent&&journal->phase!=PHOTO_CONTROL_CAPTURE_NONE&&
+        journal->kind==intent->kind&&
+        !strcmp(journal->photo_id,intent->photo_id)&&
+        !strcmp(journal->trigger_reason,intent->trigger_reason)&&
+        !strcmp(journal->command_id,intent->command_id)&&
+        !strcmp(journal->config_version,intent->config_version)&&
+        !strcmp(journal->authorization_session_id,intent->authorization_session_id)&&
+        !strcmp(journal->retention_expires_at,intent->retention_expires_at)&&
+        journal->execution_expires_at_unix_ms==intent->execution_expires_at_unix_ms&&
+        journal->retention_expires_at_unix_ms==intent->retention_expires_at_unix_ms;
+}
+
+static bool photo_capture_begin(const photo_capture_intent_t *intent,
+                                photo_control_capture_journal_t *journal,
+                                bool *newly_started)
+{
+    if(!newly_started)return false;
+    *newly_started=false;
+    photo_capture_journal_snapshot(journal);
+    if(journal->phase!=PHOTO_CONTROL_CAPTURE_NONE)
+        return photo_capture_journal_matches_intent(journal,intent);
+    photo_capture_journal_from_intent(intent,journal);
+    if(!save_photo_capture_journal(journal))return false;
+    photo_capture_journal_publish(journal);*newly_started=true;return true;
+}
+
+static bool photo_capture_record_result(photo_control_capture_journal_t *journal,
+                                        const photo_capture_outcome_t *outcome)
+{
+    if(!journal||!outcome||journal->phase!=PHOTO_CONTROL_CAPTURE_STARTED||
+       !photo_capture_journal_matches_intent(journal,&outcome->intent))return false;
+    journal->phase=PHOTO_CONTROL_CAPTURE_RESULT;
+    journal->attempted=outcome->camera.attempted;
+    journal->frame_acquired=outcome->camera.frame_acquired;
+    journal->media_saved=outcome->media_saved;
+    journal->source_event_utc_ms=outcome->media_saved?
+        outcome->record.capture_unix_ms:outcome->event_utc_ms;
+    journal->source_event_monotonic_ns=outcome->media_saved?
+        outcome->record.capture_monotonic_ns:outcome->event_monotonic_ns;
+    snprintf(journal->failure_reason,sizeof(journal->failure_reason),"%s",
+        outcome->media_saved?"none":photo_outcome_reason(outcome));
+    if(!save_photo_capture_journal(journal))return false;
+    photo_capture_journal_publish(journal);return true;
+}
+
+static bool photo_capture_restore_outcome(
+    photo_control_capture_journal_t *journal,photo_capture_outcome_t *outcome)
+{
+    if(!journal||!outcome||journal->phase==PHOTO_CONTROL_CAPTURE_NONE)return false;
+    memset(outcome,0,sizeof(*outcome));
+    photo_intent_from_capture_journal(journal,&outcome->intent);
+    outcome->event_utc_ms=journal->source_event_utc_ms;
+    outcome->event_monotonic_ns=journal->source_event_monotonic_ns;
+    outcome->camera.attempted=journal->attempted;
+    outcome->camera.frame_acquired=journal->frame_acquired;
+    outcome->failure_reason=journal->failure_reason;
+    outcome->store_result=photo_media_store_find(&media_store,journal->photo_id,
+        &outcome->record);
+    photo_store_observe_result(outcome->store_result);
+    if(outcome->store_result==PHOTO_MEDIA_STORE_OK){
+        if(journal->phase==PHOTO_CONTROL_CAPTURE_RESULT&&!journal->media_saved)
+            return false;
+        if(outcome->record.retention_expires_at_unix_ms!=
+               journal->retention_expires_at_unix_ms||
+           outcome->record.capture_boot_count!=journal->capture_boot_count||
+           outcome->record.capture_sequence_id!=journal->capture_sequence_id)
+            return false;
+        outcome->media_saved=true;outcome->existing_media=true;
+        outcome->camera.attempted=true;outcome->camera.frame_acquired=true;
+        outcome->event_utc_ms=outcome->record.capture_unix_ms;
+        outcome->event_monotonic_ns=outcome->record.capture_monotonic_ns;
+    }else if(outcome->store_result==PHOTO_MEDIA_STORE_NOT_FOUND){
+        if(journal->phase==PHOTO_CONTROL_CAPTURE_RESULT&&journal->media_saved)
+            return false;
+        outcome->store_result=PHOTO_MEDIA_STORE_NOT_FOUND;
+        if(journal->phase==PHOTO_CONTROL_CAPTURE_STARTED){
+            outcome->outcome_ambiguous=true;
+            outcome->failure_reason="capture_outcome_unknown_after_restart";
+        }
+    }else return false;
+    if(journal->phase==PHOTO_CONTROL_CAPTURE_STARTED&&!outcome->outcome_ambiguous&&
+       !photo_capture_record_result(journal,outcome))return false;
+    return true;
+}
+
+static bool photo_capture_clear(void)
+{
+    photo_control_capture_journal_t empty;
+    photo_control_capture_journal_default(&empty);
+    if(!save_photo_capture_journal(&empty))return false;
+    photo_capture_journal_publish(&empty);return true;
+}
+
+static bool photo_capture_run_or_restore(const photo_capture_intent_t *intent,
+    photo_capture_outcome_t *outcome,photo_control_capture_journal_t *journal)
+{
+    bool newly_started=false;
+    if(!photo_capture_begin(intent,journal,&newly_started))return false;
+    if(!newly_started)return photo_capture_restore_outcome(journal,outcome);
+    (void)photo_execute_capture(intent,true,outcome);
+    return photo_capture_record_result(journal,outcome);
+}
+
+/* Retention is a privacy boundary, not a delivery state.  Delete authorized
+ * media before publishing any diagnostic and tolerate the reboot window after
+ * erase: an absent record at/after expiry is already privacy-safe and lets the
+ * durable capture transaction finish without inventing a server ACK. */
+static bool photo_release_capture_for_retention(
+    const photo_control_capture_journal_t *journal,const char *released_reason,
+    const char *failure_reason)
+{
+    if(!journal||!atomic_load(&media_store_ready))return false;
+    photo_media_store_record_t record;
+    photo_media_store_result_t result=photo_media_store_find(&media_store,
+        journal->photo_id,&record);
+    photo_store_observe_result(result);
+    if(result==PHOTO_MEDIA_STORE_NOT_FOUND){
+        photo_emit_source_status("photo_retention_media_already_absent");
+        return true;
+    }
+    if(result!=PHOTO_MEDIA_STORE_OK||
+       record.retention_expires_at_unix_ms!=
+            journal->retention_expires_at_unix_ms||
+       record.capture_boot_count!=journal->capture_boot_count||
+       record.capture_sequence_id!=journal->capture_sequence_id){
+        photo_emit_source_status(failure_reason);
+        return false;
+    }
+    result=photo_media_store_release(&media_store,&record);
+    photo_store_observe_result(result);
+    if(result!=PHOTO_MEDIA_STORE_OK){
+        photo_emit_source_status(failure_reason);
+        return false;
+    }
+    atomic_fetch_add(&photo_expired_released,1U);
+    photo_emit_source_status(released_reason);
+    return true;
+}
+
+static const char *photo_outcome_reason(const photo_capture_outcome_t *outcome)
+{
+    if(outcome->failure_reason)return outcome->failure_reason;
+    if(outcome->camera.reason)return outcome->camera.reason;
+    if(outcome->store_result!=PHOTO_MEDIA_STORE_OK&&
+       outcome->store_result!=PHOTO_MEDIA_STORE_ALREADY_COMMITTED)
+        return photo_media_store_result_name(outcome->store_result);
+    return "capture_or_save_failed";
+}
+
+static bool photo_handle_capture_command(egolink_esp_p0_https_t *https,
+    const network_runtime_snapshot_t *route,const char *interface_name,
+    const photo_control_command_t *command,uint8_t *response,size_t response_capacity)
+{
+    photo_control_journal_t journal;photo_journal_snapshot(&journal);
+    photo_control_capture_journal_t capture_journal;
+    photo_capture_journal_snapshot(&capture_journal);
+    const bool duplicate_id=journal.phase!=PHOTO_CONTROL_JOURNAL_NONE&&
+        strcmp(journal.cmd_id,command->cmd_id)==0;
+    if(duplicate_id&&journal.kind!=PHOTO_CONTROL_COMMAND_CAPTURE_ONCE){
+        ESP_LOGE(TAG,"PHOTO_COMMAND id_reused_with_different_kind cmd=%s",command->cmd_id);
+        return false;
+    }
+    const bool duplicate=duplicate_id;
+    const bool pending_capture=capture_journal.phase!=PHOTO_CONTROL_CAPTURE_NONE&&
+        capture_journal.kind==PHOTO_CONTROL_COMMAND_CAPTURE_ONCE&&
+        !strcmp(capture_journal.command_id,command->cmd_id);
+    if(capture_journal.phase!=PHOTO_CONTROL_CAPTURE_NONE&&!pending_capture)
+        return false;
+    if(duplicate&&journal.phase==PHOTO_CONTROL_JOURNAL_COMPLETE&&!pending_capture)
+        return photo_post_command_ack(https,route,interface_name,&journal,NULL,NULL,
+            true,response,response_capacity);
+    uint64_t utc_ms=0U;const bool trusted_utc=photo_wall_clock(&utc_ms);
+    photo_capture_intent_t intent;
+    if(pending_capture)photo_intent_from_capture_journal(&capture_journal,&intent);
+    else if(!trusted_utc||!photo_control_command_is_live(command,true,utc_ms)){
+        photo_journal_fill(&journal,PHOTO_CONTROL_JOURNAL_COMPLETE,
+            PHOTO_CONTROL_COMMAND_CAPTURE_ONCE,command->cmd_id,"error",
+            trusted_utc?"capture_command_expired":"trusted_utc_unavailable",
+            "none");
+        if(!save_photo_journal(&journal))return false;
+        photo_journal_publish(&journal);
+        return photo_post_command_ack(https,route,interface_name,&journal,NULL,NULL,
+            duplicate,response,response_capacity);
+    }else if(!photo_intent_from_command(command,utc_ms,&intent))return false;
+    if(!trusted_utc)return false;
+    if(utc_ms>=intent.retention_expires_at_unix_ms){
+        if(pending_capture){
+            if(!photo_release_capture_for_retention(&capture_journal,
+                "manual_capture_retention_expired_before_metadata",
+                "photo_retention_release_failed"))return false;
+            if(!photo_capture_clear())return false;
+        }
+        if(!photo_finish_journal(&journal,"error",
+            "capture_retention_expired_before_metadata"))return false;
+        return photo_post_command_ack(https,route,interface_name,&journal,NULL,NULL,
+            true,response,response_capacity);
+    }
+    if(!duplicate){
+        photo_journal_fill(&journal,PHOTO_CONTROL_JOURNAL_EXECUTING,
+            PHOTO_CONTROL_COMMAND_CAPTURE_ONCE,command->cmd_id,"pending",
+            "capture_started",intent.photo_id);
+        if(!save_photo_journal(&journal))return false;
+        photo_journal_publish(&journal);
+    }else if(journal.phase==PHOTO_CONTROL_JOURNAL_EXECUTING&&
+             strcmp(journal.photo_id,intent.photo_id)!=0)return false;
+
+    photo_capture_outcome_t captured={0};
+    if(!photo_capture_run_or_restore(&intent,&captured,&capture_journal))return false;
+    if(captured.outcome_ambiguous){
+        if(!photo_append_capture_metadata(&captured,
+            "capture_outcome_unknown_after_reboot"))return false;
+        if(!photo_finish_journal(&journal,"error",
+            "capture_outcome_unknown_after_reboot"))return false;
+        if(!photo_capture_clear())return false;
+        photo_emit_source_status("manual_capture_outcome_unknown_after_reboot");
+        return photo_post_command_ack(https,route,interface_name,&journal,NULL,NULL,
+            true,response,response_capacity);
+    }
+    const bool media_saved=captured.media_saved;
+    const bool metadata_saved=photo_append_capture_metadata(&captured,
+        photo_outcome_reason(&captured));
+    if(!metadata_saved)return false;
+    const char *status=media_saved?"ok":"error";
+    const char *message=media_saved?"photo_saved_metadata_queued":
+        photo_outcome_reason(&captured);
+    if(!photo_finish_journal(&journal,status,message))return false;
+    if(!photo_capture_clear())return false;
+    photo_emit_source_status(media_saved?"manual_capture_saved":"manual_capture_failed");
+    return photo_post_command_ack(https,route,interface_name,&journal,NULL,NULL,
+        duplicate,response,response_capacity);
+}
+
+static bool photo_timer_matches_command(const photo_control_timer_t *timer,
+                                        const photo_control_command_t *command)
+{
+    return timer&&command&&strcmp(timer->command_id,command->cmd_id)==0&&
+        strcmp(timer->authorization_session_id,command->authorization_session_id)==0&&
+        strcmp(timer->config_version,command->config_version)==0&&
+        strcmp(timer->retention_expires_at,command->retention_expires_at)==0&&
+        timer->interval_seconds==command->interval_seconds&&
+        timer->session_expires_at_unix_ms==command->session_expires_at_unix_ms&&
+        timer->max_photos==command->max_photos;
+}
+
+static bool photo_handle_timer_command(egolink_esp_p0_https_t *https,
+    const network_runtime_snapshot_t *route,const char *interface_name,
+    const photo_control_command_t *command,uint8_t *response,size_t response_capacity)
+{
+    photo_control_journal_t journal;photo_journal_snapshot(&journal);
+    const bool duplicate_id=journal.phase!=PHOTO_CONTROL_JOURNAL_NONE&&
+        strcmp(journal.cmd_id,command->cmd_id)==0;
+    if(duplicate_id&&journal.kind!=PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER){
+        ESP_LOGE(TAG,"PHOTO_COMMAND id_reused_with_different_kind cmd=%s",command->cmd_id);
+        return false;
+    }
+    const bool duplicate=duplicate_id;
+    photo_control_timer_t timer;photo_timer_snapshot(&timer);
+    if(duplicate&&journal.phase==PHOTO_CONTROL_JOURNAL_COMPLETE){
+        /* A previously applied timer may now be disabled by its session
+         * deadline or max-photo limit. That is an effective-state refresh,
+         * not a rejected configuration. Keep `applied` and let timer_state
+         * carry the truthful terminal state. A command that never applied
+         * has no timer_state and repeats its durable error ACK. */
+        const bool applied=strcmp(journal.status,"applied")==0&&
+            photo_timer_matches_command(&timer,command);
+        return photo_post_command_ack(https,route,interface_name,&journal,
+            applied?&timer:NULL,applied?"applied":NULL,true,response,
+            response_capacity);
+    }
+    uint64_t utc_ms=0U;const bool trusted=photo_wall_clock(&utc_ms);
+    const char *camera_reason=NULL;
+    const bool capture_ready=atomic_load(&media_store_ready)&&
+        platform_camera_preflight(&camera_reason)==PLATFORM_CAMERA_OK;
+    if(!trusted||!photo_control_command_is_live(command,trusted,utc_ms)||
+       (command->timer_enabled&&!capture_ready)){
+        photo_journal_fill(&journal,PHOTO_CONTROL_JOURNAL_COMPLETE,
+            PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER,command->cmd_id,"error",
+            !trusted?"trusted_utc_unavailable":
+            (!photo_control_command_is_live(command,trusted,utc_ms)?
+             "timer_command_expired":"camera_runtime_unavailable"),"none");
+        if(!save_photo_journal(&journal))return false;
+        photo_journal_publish(&journal);
+        photo_emit_source_status("timer_configuration_rejected");
+        return photo_post_command_ack(https,route,interface_name,&journal,NULL,NULL,
+            duplicate,response,response_capacity);
+    }
+    if(!duplicate){
+        photo_journal_fill(&journal,PHOTO_CONTROL_JOURNAL_EXECUTING,
+            PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER,command->cmd_id,"pending",
+            "timer_configuration_started","none");
+        if(!save_photo_journal(&journal))return false;
+        photo_journal_publish(&journal);
+    }
+    if(!photo_control_timer_apply(&timer,command,true,utc_ms,(uint64_t)now_us()/1000U))
+        return false;
+    timer.status_report_pending=true;
+    if(!save_photo_timer(&timer))return false;
+    photo_timer_publish(&timer);
+    if(!photo_finish_journal(&journal,"applied","timer_configuration_applied"))return false;
+    photo_emit_source_status("timer_configuration_applied");
+    const bool accepted=photo_post_command_ack(https,route,interface_name,&journal,
+        &timer,"applied",duplicate,response,response_capacity);
+    if(!accepted)return false;
+    timer.status_report_pending=false;
+    if(!save_photo_timer(&timer)){
+        atomic_store(&photo_control_state_ready,false);return false;
+    }
+    photo_timer_publish(&timer);return true;
+}
+
+static bool photo_poll_and_handle_command(egolink_esp_p0_https_t *https,
+    const network_runtime_snapshot_t *route,const char *interface_name,
+    uint8_t *command_response,size_t command_capacity,
+    uint8_t *ack_response,size_t ack_capacity)
+{
+    https->attempts=0U;https->deadline_ms=(uint64_t)now_us()/1000U+13000U;
+    egolink_p0_delivery_post_result_t received={0};
+    atomic_store(&uploader_active_generation,route->generation);
+    const egolink_p0_delivery_post_outcome_t outcome=
+        egolink_esp_p0_https_poll_collection_command(https,
+            CONFIG_EGOLINK_DEVICE_ID,interface_name,command_response,command_capacity,
+            upload_cancel,NULL,route->generation,&received);
+    atomic_store(&uploader_active_generation,0U);
+    atomic_fetch_add(&photo_command_polls,1U);
+    if(outcome!=EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE||
+       received.http_status_code<200U||received.http_status_code>=300U||
+       atomic_load(&network_route_generation)!=route->generation){
+        egolink_esp_p0_https_close(https);return false;
+    }
+    if(received.response_length==0U)return true;
+    photo_control_command_t command;
+    const photo_control_parse_result_t parsed=photo_control_parse_raw_command(
+        command_response,received.response_length,&command);
+    if(parsed==PHOTO_CONTROL_PARSE_EMPTY)return true;
+    if(parsed!=PHOTO_CONTROL_PARSE_OK){
+        atomic_fetch_add(&photo_command_parse_failures,1U);
+        ESP_LOGE(TAG,"PHOTO_COMMAND parse=%s ack=false",
+            photo_control_parse_result_name(parsed));
+        return false;
+    }
+    return command.kind==PHOTO_CONTROL_COMMAND_CAPTURE_ONCE?
+        photo_handle_capture_command(https,route,interface_name,&command,
+            ack_response,ack_capacity):
+        photo_handle_timer_command(https,route,interface_name,&command,
+            ack_response,ack_capacity);
+}
+
+static bool photo_timer_matches_capture_journal(
+    const photo_control_timer_t *timer,
+    const photo_control_capture_journal_t *journal)
+{
+    return timer&&journal&&journal->kind==PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER&&
+        !strcmp(timer->command_id,journal->command_id)&&
+        !strcmp(timer->config_version,journal->config_version)&&
+        !strcmp(timer->authorization_session_id,
+            journal->authorization_session_id)&&
+        !strcmp(timer->retention_expires_at,journal->retention_expires_at)&&
+        timer->session_expires_at_unix_ms==journal->execution_expires_at_unix_ms&&
+        timer->retention_expires_at_unix_ms==journal->retention_expires_at_unix_ms;
+}
+
+static bool photo_settle_timer_capture(photo_control_timer_t *timer,
+    photo_control_capture_journal_t *capture_journal,
+    photo_capture_outcome_t *captured,uint64_t now_utc_ms)
+{
+    if(!photo_timer_matches_capture_journal(timer,capture_journal)||
+       !now_utc_ms)return false;
+    if(now_utc_ms>=capture_journal->retention_expires_at_unix_ms){
+        if(!photo_release_capture_for_retention(capture_journal,
+            "timer_capture_retention_expired_before_metadata",
+            "photo_retention_release_failed"))return false;
+        const uint32_t before=capture_journal->timer_captured_count_before;
+        if(capture_journal->phase==PHOTO_CONTROL_CAPTURE_RESULT&&
+           capture_journal->media_saved&&timer->captured_photos==before)
+            ++timer->captured_photos;
+        else if(timer->captured_photos!=before&&
+                timer->captured_photos!=before+1U)return false;
+        timer->enabled=false;timer->schedule_armed=false;
+        timer->status_report_pending=true;
+        snprintf(timer->state_reason,sizeof(timer->state_reason),
+            "capture_retention_expired");
+        if(!save_photo_timer(timer))return false;
+        photo_timer_publish(timer);
+        return photo_capture_clear();
+    }
+    if(!captured)return false;
+    if(captured->outcome_ambiguous){
+        if(!photo_append_capture_metadata(captured,
+            "capture_outcome_unknown_after_reboot"))return false;
+        photo_control_timer_complete_attempt(timer,false,(uint64_t)now_us()/1000U);
+        timer->status_report_pending=true;
+        snprintf(timer->state_reason,sizeof(timer->state_reason),
+            "capture_outcome_ambiguous");
+        if(!save_photo_timer(timer))return false;
+        photo_timer_publish(timer);
+        if(!photo_capture_clear())return false;
+        photo_emit_source_status("timer_capture_outcome_unknown_after_reboot");
+        return true;
+    }
+    if(!photo_append_capture_metadata(captured,
+        photo_outcome_reason(captured)))return false;
+    const uint32_t before=capture_journal->timer_captured_count_before;
+    if(captured->media_saved){
+        if(timer->captured_photos==before)
+            photo_control_timer_complete_attempt(timer,true,
+                (uint64_t)now_us()/1000U);
+        else if(timer->captured_photos!=before+1U)return false;
+    }else{
+        if(timer->captured_photos!=before)return false;
+        photo_control_timer_complete_attempt(timer,false,(uint64_t)now_us()/1000U);
+        if(captured->store_result==PHOTO_MEDIA_STORE_FULL||
+           captured->store_result==PHOTO_MEDIA_STORE_TOO_LARGE||
+           captured->store_result==PHOTO_MEDIA_STORE_IDENTITY_CONFLICT||
+           photo_store_result_fatal(captured->store_result)){
+            timer->enabled=false;timer->schedule_armed=false;
+            timer->status_report_pending=true;
+            snprintf(timer->state_reason,sizeof(timer->state_reason),"%s",
+                captured->store_result==PHOTO_MEDIA_STORE_FULL?"media_store_full":
+                captured->store_result==PHOTO_MEDIA_STORE_TOO_LARGE?"jpeg_too_large":
+                captured->store_result==PHOTO_MEDIA_STORE_IDENTITY_CONFLICT?
+                    "photo_identity_conflict":"media_store_unavailable");
+        }
+    }
+    if(!save_photo_timer(timer))return false;
+    photo_timer_publish(timer);
+    if(!photo_capture_clear())return false;
+    photo_emit_source_status(captured->media_saved?
+        "timer_capture_saved":"timer_capture_failed");
+    return true;
+}
+
+static bool photo_settle_pending_manual_capture(
+    photo_control_capture_journal_t *capture_journal)
+{
+    if(!capture_journal||
+       capture_journal->kind!=PHOTO_CONTROL_COMMAND_CAPTURE_ONCE)return false;
+    uint64_t utc_ms=0U;if(!photo_wall_clock(&utc_ms))return false;
+    photo_control_journal_t command_journal;photo_journal_snapshot(&command_journal);
+    if(command_journal.kind!=PHOTO_CONTROL_COMMAND_CAPTURE_ONCE||
+       command_journal.phase==PHOTO_CONTROL_JOURNAL_NONE||
+       strcmp(command_journal.cmd_id,capture_journal->command_id))return false;
+    if(utc_ms>=capture_journal->retention_expires_at_unix_ms){
+        if(!photo_release_capture_for_retention(capture_journal,
+            "manual_capture_retention_expired_before_metadata",
+            "photo_retention_release_failed"))return false;
+        if(!photo_finish_journal(&command_journal,"error",
+            "capture_retention_expired_before_metadata")||
+           !photo_capture_clear())return false;
+        return true;
+    }
+    photo_capture_outcome_t recovered;
+    if(!photo_capture_restore_outcome(capture_journal,&recovered))return false;
+    if(!photo_append_capture_metadata(&recovered,
+        recovered.outcome_ambiguous?"capture_outcome_unknown_after_reboot":
+            photo_outcome_reason(&recovered)))return false;
+    if(!photo_finish_journal(&command_journal,
+        recovered.media_saved?"ok":"error",
+        recovered.media_saved?"photo_saved_metadata_queued":
+        (recovered.outcome_ambiguous?"capture_outcome_unknown_after_reboot":
+            photo_outcome_reason(&recovered))))return false;
+    if(!photo_capture_clear())return false;
+    photo_emit_source_status(recovered.media_saved?"manual_capture_recovered":
+        (recovered.outcome_ambiguous?
+            "manual_capture_outcome_unknown_after_reboot":
+            "manual_capture_failure_recovered"));
+    return true;
+}
+
+static void photo_service_local_timer(void)
+{
+    if(!atomic_load(&photo_control_state_ready))return;
+    photo_control_timer_t timer;photo_timer_snapshot(&timer);
+    photo_control_capture_journal_t capture_journal;
+    photo_capture_journal_snapshot(&capture_journal);
+    if(capture_journal.phase!=PHOTO_CONTROL_CAPTURE_NONE){
+        if(capture_journal.kind==PHOTO_CONTROL_COMMAND_CAPTURE_ONCE){
+            (void)photo_settle_pending_manual_capture(&capture_journal);
+            return;
+        }
+        if(capture_journal.kind!=PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER||
+           !photo_timer_matches_capture_journal(&timer,&capture_journal))return;
+        uint64_t recovery_utc_ms=0U;
+        if(!photo_wall_clock(&recovery_utc_ms))return;
+        if(recovery_utc_ms>=capture_journal.retention_expires_at_unix_ms){
+            (void)photo_settle_timer_capture(&timer,&capture_journal,NULL,
+                recovery_utc_ms);
+            return;
+        }
+        photo_capture_outcome_t recovered;
+        if(!photo_capture_restore_outcome(&capture_journal,&recovered))return;
+        (void)photo_settle_timer_capture(&timer,&capture_journal,&recovered,
+            recovery_utc_ms);
+        return;
+    }
+    const char *preflight_reason=NULL;
+    if(timer.enabled&&(!atomic_load(&media_store_ready)||
+       platform_camera_preflight(&preflight_reason)!=PLATFORM_CAMERA_OK)){
+        timer.enabled=false;timer.schedule_armed=false;timer.status_report_pending=true;
+        snprintf(timer.state_reason,sizeof(timer.state_reason),"%s",
+            atomic_load(&media_store_ready)?"camera_runtime_unavailable":
+            "media_store_unavailable");
+        if(!save_photo_timer(&timer)){
+            atomic_store(&photo_control_state_ready,false);
+            return;
+        }
+        photo_timer_publish(&timer);
+        photo_emit_source_status(preflight_reason?preflight_reason:
+            "timer_disabled_runtime_unavailable");
+        return;
+    }
+    uint64_t utc_ms=0U;const bool trusted=photo_wall_clock(&utc_ms);
+    const bool was_armed=timer.schedule_armed;
+    const photo_control_timer_decision_t decision=photo_control_timer_tick(&timer,
+        trusted,utc_ms,(uint64_t)now_us()/1000U);
+    if(decision==PHOTO_CONTROL_TIMER_WAITING_FOR_TRUSTED_UTC){
+        if(was_armed)photo_timer_publish(&timer);
+        return;
+    }
+    if(decision==PHOTO_CONTROL_TIMER_EXPIRED||
+       decision==PHOTO_CONTROL_TIMER_LIMIT_REACHED){
+        if(!save_photo_timer(&timer)){atomic_store(&photo_control_state_ready,false);return;}
+        photo_timer_publish(&timer);
+        photo_emit_source_status(decision==PHOTO_CONTROL_TIMER_EXPIRED?
+            "timer_session_expired":"timer_max_photos_reached");
+        return;
+    }
+    if(decision==PHOTO_CONTROL_TIMER_WAITING){
+        if(!was_armed){photo_timer_publish(&timer);photo_emit_source_status("timer_interval_armed");}
+        return;
+    }
+    if(decision!=PHOTO_CONTROL_TIMER_DUE)return;
+    photo_capture_intent_t intent;
+    if(!photo_intent_from_timer(&timer,utc_ms,&intent))return;
+    photo_capture_outcome_t captured={0};
+    if(!photo_capture_run_or_restore(&intent,&captured,&capture_journal))return;
+    if(!photo_settle_timer_capture(&timer,&capture_journal,&captured,utc_ms))return;
+}
+
+static bool photo_post_pending_timer_state(egolink_esp_p0_https_t *https,
+    const network_runtime_snapshot_t *route,const char *interface_name,
+    uint8_t *response,size_t response_capacity)
+{
+    photo_control_timer_t timer;photo_timer_snapshot(&timer);
+    if(!timer.status_report_pending||!timer.command_id[0])return false;
+    photo_control_journal_t report;
+    photo_journal_fill(&report,PHOTO_CONTROL_JOURNAL_COMPLETE,
+        PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER,timer.command_id,"applied",
+        timer.state_reason,"none");
+    if(!photo_post_command_ack(https,route,interface_name,&report,&timer,"applied",
+        true,response,response_capacity))return true;
+    timer.status_report_pending=false;
+    if(!save_photo_timer(&timer)){atomic_store(&photo_control_state_ready,false);return true;}
+    photo_timer_publish(&timer);return true;
+}
+
+static bool photo_release_one_expired(uint32_t *scan_cursor)
+{
+    if(!scan_cursor||!atomic_load(&media_store_ready))return false;
+    uint64_t utc_ms=0U;if(!photo_wall_clock(&utc_ms))return false;
+    photo_media_store_record_t record;
+    photo_media_store_result_t store=photo_media_store_peek_committed(
+        &media_store,*scan_cursor,&record);
+    photo_store_observe_result(store);
+    if(store==PHOTO_MEDIA_STORE_NOT_FOUND){*scan_cursor=0U;return false;}
+    if(store!=PHOTO_MEDIA_STORE_OK)return false;
+    photo_media_store_stats_t stats={0};photo_media_store_get_stats(&media_store,&stats);
+    const uint32_t slot_count=(uint32_t)(stats.capacity_bytes/stats.slot_bytes);
+    *scan_cursor=record.slot+1U>=slot_count?0U:record.slot+1U;
+    if(utc_ms<record.retention_expires_at_unix_ms)return false;
+    store=photo_media_store_release(&media_store,&record);
+    photo_store_observe_result(store);
+    if(store!=PHOTO_MEDIA_STORE_OK){
+        photo_emit_source_status("photo_retention_release_failed");
+        return false;
+    }
+    atomic_fetch_add(&photo_expired_released,1U);
+    photo_emit_source_status("photo_retention_expired_local_release");
+    return true;
+}
+
+static bool photo_upload_one(egolink_esp_p0_https_t *https,
+    const network_runtime_snapshot_t *route,const char *interface_name,
+    uint8_t *response,size_t response_capacity,uint32_t *scan_cursor,
+    uint32_t *http_status,bool *server_verified_out)
+{
+    if(http_status)*http_status=0U;
+    if(server_verified_out)*server_verified_out=false;
+    if(!scan_cursor||!atomic_load(&media_store_ready))return false;
+    photo_media_store_record_t record;
+    photo_media_store_result_t store=photo_media_store_peek_committed(&media_store,
+        *scan_cursor,&record);
+    photo_store_observe_result(store);
+    if(store==PHOTO_MEDIA_STORE_NOT_FOUND){*scan_cursor=0U;return false;}
+    if(store!=PHOTO_MEDIA_STORE_OK){
+        atomic_fetch_add(&photo_upload_failures,1U);
+        if(!atomic_load(&media_store_ready))
+            photo_emit_source_status("photo_media_store_runtime_failure");
+        return true;
+    }
+    photo_media_store_stats_t stats={0};photo_media_store_get_stats(&media_store,&stats);
+    const uint32_t slot_count=(uint32_t)(stats.capacity_bytes/stats.slot_bytes);
+    *scan_cursor=record.slot+1U>=slot_count?0U:record.slot+1U;
+    uint64_t utc_ms=0U;if(!photo_wall_clock(&utc_ms))return true;
+    if(utc_ms>=record.retention_expires_at_unix_ms){
+        store=photo_media_store_release(&media_store,&record);
+        photo_store_observe_result(store);
+        if(store==PHOTO_MEDIA_STORE_OK){
+            atomic_fetch_add(&photo_expired_released,1U);
+            photo_emit_source_status("photo_retention_expired_local_release");
+        }else{
+            atomic_fetch_add(&photo_upload_failures,1U);
+            photo_emit_source_status("photo_retention_release_failed");
+        }
+        return true;
+    }
+    const uint64_t metadata_identity=
+        ((uint64_t)record.capture_boot_count<<32U)|record.capture_sequence_id;
+    if(metadata_identity>photo_metadata_ack_watermark)return false;
+    static uint8_t jpeg[CONFIG_EGOLINK_PHOTO_MEDIA_MAX_PAYLOAD_BYTES];
+    if(record.payload_bytes>sizeof(jpeg)){
+        atomic_fetch_add(&photo_upload_failures,1U);return true;
+    }
+    store=photo_media_store_read(&media_store,&record,0U,jpeg,
+        record.payload_bytes);
+    photo_store_observe_result(store);
+    if(store!=PHOTO_MEDIA_STORE_OK){
+        atomic_fetch_add(&photo_upload_failures,1U);
+        if(!atomic_load(&media_store_ready))
+            photo_emit_source_status("photo_media_store_runtime_failure");
+        return true;
+    }
+    char digest[65];photo_digest_hex(record.sha256,digest);
+    https->attempts=0U;https->deadline_ms=(uint64_t)now_us()/1000U+13000U;
+    egolink_p0_delivery_post_result_t posted={0};
+    atomic_store(&uploader_active_generation,route->generation);
+    const egolink_p0_delivery_post_outcome_t outcome=
+        egolink_esp_p0_https_upload_collection_photo(https,
+            CONFIG_EGOLINK_DEVICE_ID,record.photo_id,digest,interface_name,
+            jpeg,record.payload_bytes,response,response_capacity,upload_cancel,NULL,
+            route->generation,&posted);
+    atomic_store(&uploader_active_generation,0U);
+    if(http_status)*http_status=posted.http_status_code;
+    const bool server_verified=outcome==EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE&&
+        posted.http_status_code>=200U&&posted.http_status_code<300U&&
+        atomic_load(&network_route_generation)==route->generation&&
+        photo_delivery_content_ack_response_matches(response,posted.response_length,
+            CONFIG_EGOLINK_DEVICE_ID,record.photo_id,digest,record.payload_bytes);
+    if(server_verified_out)*server_verified_out=server_verified;
+    bool released=false;
+    if(server_verified){
+        store=photo_media_store_release(&media_store,&record);
+        photo_store_observe_result(store);
+        released=store==PHOTO_MEDIA_STORE_OK;
+        if(released)atomic_fetch_add(&photo_upload_acked,1U);
+        else{
+            atomic_fetch_add(&photo_upload_failures,1U);
+            if(!atomic_load(&media_store_ready))
+                photo_emit_source_status("photo_release_failed_after_server_verified");
+            egolink_esp_p0_https_close(https);
+        }
+    }else{
+        atomic_fetch_add(&photo_upload_failures,1U);
+        egolink_esp_p0_https_close(https);
+    }
+    ESP_LOGI(TAG,"PHOTO_UPLOAD photo=%s http=%u server_verified=%d released=%d bytes=%u",
+        record.photo_id,(unsigned)posted.http_status_code,server_verified,released,
+        (unsigned)record.payload_bytes);
+    return true;
+}
+
+static void photo_schedule_upload_retry(bool server_verified,uint32_t http_status,
+    unsigned *backoff_ms,int64_t *next_upload_us)
+{
+    if(!backoff_ms||!next_upload_us)return;
+    if(server_verified){
+        *backoff_ms=CONFIG_EGOLINK_PHOTO_UPLOAD_RETRY_INITIAL_MS;
+        *next_upload_us=now_us()+50000LL;
+        return;
+    }
+    const unsigned delay=*backoff_ms;
+    *next_upload_us=now_us()+(int64_t)delay*1000LL;
+    if(*backoff_ms<CONFIG_EGOLINK_PHOTO_UPLOAD_RETRY_MAX_MS)
+        *backoff_ms=*backoff_ms>CONFIG_EGOLINK_PHOTO_UPLOAD_RETRY_MAX_MS/2U?
+            CONFIG_EGOLINK_PHOTO_UPLOAD_RETRY_MAX_MS:*backoff_ms*2U;
+    ESP_LOGW(TAG,"PHOTO_UPLOAD_RETRY http=%u delay_ms=%u exact_ack=false",
+        (unsigned)http_status,delay);
+}
+#endif
 static void uploader_task(void *unused)
 {
     (void)unused;bool anchored=false;
     int64_t next_send=0;unsigned backoff=1000,durable_streak=0,connection_generation=0;
     static char buffer[COLLECTION_FRAME_CAPACITY],loss_buffer[COLLECTION_FRAME_CAPACITY];
     static uint8_t response[8192];
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    int64_t next_command_poll=0,next_photo_upload=0,next_timer_report=0;
+    int64_t next_retention_scan=0,next_photo_fair_deadline=0;
+    unsigned photo_backoff=CONFIG_EGOLINK_PHOTO_UPLOAD_RETRY_INITIAL_MS;
+    unsigned ordinary_uploads_since_photo=0U;
+    uint32_t photo_upload_cursor=0U,photo_retention_cursor=0U;
+    static uint8_t command_response[2048],command_ack_response[8192];
+#endif
     egolink_esp_p0_https_t https={.origin=CONFIG_EGOLINK_MESSAGE_HUB_BASE_URL,.expected_host=CONFIG_EGOLINK_MESSAGE_HUB_EXPECTED_TLS_HOST,
         .bearer=CONFIG_EGOLINK_MESSAGE_HUB_BEARER_TOKEN,.max_attempts=1,.transaction_timeout_ms=12000,.reuse_connection=true};
     while(!atomic_load(&stopping)) {
@@ -930,7 +2465,57 @@ static void uploader_task(void *unused)
                 portENTER_CRITICAL(&clock_mux);utc_offset_us=utc-mono;portEXIT_CRITICAL(&clock_mux);anchored=true;
             }
         }
-        if(route.route==COLLECTION_NETWORK_ROUTE_NONE||!route.netif||!anchored||now<next_send) {vTaskDelay(pdMS_TO_TICKS(100));continue;}
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+        photo_service_local_timer();
+        if(now>=next_retention_scan){
+            (void)photo_release_one_expired(&photo_retention_cursor);
+            next_retention_scan=now_us()+1000000LL;
+        }
+#endif
+        if(route.route==COLLECTION_NETWORK_ROUTE_NONE||!route.netif||!anchored) {
+            vTaskDelay(pdMS_TO_TICKS(100));continue;
+        }
+        char interface_name[16]={0};
+        if(esp_netif_get_netif_impl_name(route.netif,interface_name)!=ESP_OK||
+           !interface_matches_route(route.route,interface_name)){
+            next_send=now+5000000;vTaskDelay(pdMS_TO_TICKS(100));continue;
+        }
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+        if(now>=next_timer_report){
+            if(photo_post_pending_timer_state(&https,&route,interface_name,
+                command_ack_response,sizeof(command_ack_response))){
+                next_timer_report=now_us()+5000000LL;continue;
+            }
+            next_timer_report=now+5000000LL;
+        }
+        photo_control_capture_journal_t pending_capture;
+        photo_capture_journal_snapshot(&pending_capture);
+        if(atomic_load(&photo_control_state_ready)&&
+           photo_control_capture_journal_allows_new_command(&pending_capture)&&
+           now>=next_command_poll){
+            const bool command_ok=photo_poll_and_handle_command(&https,&route,
+                interface_name,command_response,sizeof(command_response),
+                command_ack_response,sizeof(command_ack_response));
+            next_command_poll=now_us()+(command_ok?
+                CONFIG_EGOLINK_PHOTO_COMMAND_POLL_INTERVAL_MS:5000)*1000LL;
+            continue;
+        }
+        if(now>=next_photo_upload&&
+           (ordinary_uploads_since_photo>=PHOTO_ORDINARY_UPLOAD_BUDGET||
+            now>=next_photo_fair_deadline)){
+            uint32_t photo_http=0U;bool server_verified=false;
+            const bool attempted=photo_upload_one(&https,&route,interface_name,
+                response,sizeof(response),&photo_upload_cursor,&photo_http,
+                &server_verified);
+            next_photo_fair_deadline=now_us()+PHOTO_FAIR_UPLOAD_INTERVAL_US;
+            ordinary_uploads_since_photo=0U;
+            if(attempted){
+                photo_schedule_upload_retry(server_verified,photo_http,
+                    &photo_backoff,&next_photo_upload);
+                continue;
+            }
+        }
+#endif
         collection_spool_record_t record={0};collection_spool_result_t result=COLLECTION_SPOOL_EMPTY;
         xSemaphoreTake(spool_mutex,portMAX_DELAY);
         if(spool_ready)result=collection_spool_peek(&spool,&record,buffer,sizeof(buffer));
@@ -945,20 +2530,40 @@ static void uploader_task(void *unused)
         }
         if(durable&&record.kind==COLLECTION_SPOOL_LOSS){length=loss_frame(&record,buffer,loss_buffer);body=loss_buffer;}
         if(!durable) {
-            if(!ram&&xQueuePeek(ram_fallback,&ram,0)!=pdTRUE){vTaskDelay(pdMS_TO_TICKS(100));continue;}
+            if(!ram&&xQueuePeek(ram_fallback,&ram,0)!=pdTRUE){
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+                if(atomic_load(&spool_ready)&&now>=next_photo_upload){
+                    uint32_t photo_http=0U;
+                    bool server_verified=false;
+                    const bool attempted=photo_upload_one(&https,&route,interface_name,
+                        response,sizeof(response),&photo_upload_cursor,&photo_http,
+                        &server_verified);
+                    if(attempted){
+                        ordinary_uploads_since_photo=0U;
+                        next_photo_fair_deadline=now_us()+
+                            PHOTO_FAIR_UPLOAD_INTERVAL_US;
+                        photo_schedule_upload_retry(server_verified,photo_http,
+                            &photo_backoff,&next_photo_upload);
+                        continue;
+                    }
+                }
+#endif
+                vTaskDelay(pdMS_TO_TICKS(100));continue;
+            }
             body=ram->bytes;length=ram->length;
+        }
+        if(now<next_send){
+            if(durable){xSemaphoreTake(spool_mutex,portMAX_DELAY);collection_spool_unpin(&spool);xSemaphoreGive(spool_mutex);}
+            vTaskDelay(pdMS_TO_TICKS(100));continue;
         }
         if(!length){
             if(durable){xSemaphoreTake(spool_mutex,portMAX_DELAY);collection_spool_unpin(&spool);xSemaphoreGive(spool_mutex);}
             atomic_fetch_add(&send_errors,1);next_send=now+60000000;continue;
         }
-        char interface_name[16]={0};
-        if(esp_netif_get_netif_impl_name(route.netif,interface_name)!=ESP_OK||
-           !interface_matches_route(route.route,interface_name)){
-            if(durable){xSemaphoreTake(spool_mutex,portMAX_DELAY);collection_spool_unpin(&spool);xSemaphoreGive(spool_mutex);}
-            next_send=now+5000000;continue;
-        }
         https.attempts=0;https.deadline_ms=(uint64_t)now_us()/1000+13000;
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+        ++ordinary_uploads_since_photo;
+#endif
         egolink_p0_delivery_post_request_t request={.body=(uint8_t*)body,.body_length=length,.response=response,.response_capacity=sizeof(response),
             .cancel_requested=upload_cancel,.transfer_generation=route.generation};
         egolink_p0_delivery_post_result_t posted={0};
@@ -969,6 +2574,11 @@ static void uploader_task(void *unused)
         if(latest_generation!=route.generation){egolink_esp_p0_https_close(&https);atomic_store(&uploader_retired_generation,latest_generation);}
         bool matched=outcome==EGOLINK_P0_DELIVERY_POST_HTTP_RESPONSE&&posted.http_status_code>=200&&posted.http_status_code<300&&
             latest_generation==route.generation&&collection_record_ack_matches(body,length,CONFIG_EGOLINK_DEVICE_ID,response,posted.response_length);
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+        if(matched&&durable&&record.kind==COLLECTION_SPOOL_METADATA&&
+           record.source_id==CAMERA&&!photo_record_metadata_acked(record.source_seq))
+            matched=false;
+#endif
         if(matched) {
             if(durable) {
                 xSemaphoreTake(spool_mutex,portMAX_DELAY);result=collection_spool_ack(&spool,&record.token);
@@ -1003,15 +2613,50 @@ void app_main(void)
     if(!boot_identity()) {ESP_LOGE(TAG,"STOP identity_persistence_failed nvs_preserved=true");return;}
     ingress=xQueueCreate(16,sizeof(queued_t*));ram_fallback=xQueueCreate(4,sizeof(queued_t*));spool_mutex=xSemaphoreCreateMutex();
     if(!ingress||!ram_fallback||!spool_mutex){ESP_LOGE(TAG,"STOP allocation_failed");return;}
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    const bool photo_state_initialized=photo_control_state_init();
+    atomic_store(&photo_control_state_ready,photo_state_initialized);
+    if(!photo_state_initialized)
+        ESP_LOGE(TAG,"PHOTO_CONTROL init=blocked reason=nvs_state_missing_or_corrupt fail_closed=true");
+#endif
     partition=esp_partition_find_first(ESP_PARTITION_TYPE_DATA,0x41,"ego_collection");
-    if(partition && !partition->encrypted && partition->erase_size==4096 && partition->address==0x122000 && partition->size==0xD2000) {
+    if(partition && !partition->encrypted && partition->erase_size==4096 && partition->address==COLLECTION_PARTITION_ADDRESS && partition->size==COLLECTION_PARTITION_SIZE) {
         collection_spool_config_t config={.context=(void*)partition,.read=flash_read,.write=flash_write,.erase=flash_erase,.capacity_bytes=partition->size,.erase_bytes=4096,.protected_sectors=8,.evict_oldest=true};
         collection_spool_result_t r=collection_spool_init(&spool,&config);spool_ready=r==COLLECTION_SPOOL_OK;
         ESP_LOGI(TAG,"STORAGE init=%s capacity=%u foreign_data_preserved=true",collection_spool_result_name(r),(unsigned)partition->size);
-    }
+    } else ESP_LOGE(TAG,"STORAGE init=blocked reason=partition_guard_failed expected_address=0x%x expected_size=0x%x",
+        (unsigned)COLLECTION_PARTITION_ADDRESS,(unsigned)COLLECTION_PARTITION_SIZE);
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    media_partition=esp_partition_find_first(ESP_PARTITION_TYPE_DATA,0x42,"ego_media");
+    if(media_partition&&!media_partition->encrypted&&media_partition->erase_size==4096&&
+       media_partition->address==MEDIA_PARTITION_ADDRESS&&media_partition->size==MEDIA_PARTITION_SIZE){
+        photo_media_store_config_t config={.context=(void*)media_partition,.read=flash_read,.write=flash_write,.erase=flash_erase,
+            .capacity_bytes=media_partition->size,.erase_bytes=4096,.slot_bytes=CONFIG_EGOLINK_PHOTO_MEDIA_SLOT_BYTES,
+            .max_payload_bytes=CONFIG_EGOLINK_PHOTO_MEDIA_MAX_PAYLOAD_BYTES,
+            .max_committed_photos=CONFIG_EGOLINK_PHOTO_MEDIA_MAX_COMMITTED_PHOTOS,
+            .max_committed_payload_bytes=CONFIG_EGOLINK_PHOTO_MEDIA_MAX_TOTAL_PAYLOAD_BYTES};
+        photo_media_store_result_t r=photo_media_store_init(&media_store,&config);media_store_ready=r==PHOTO_MEDIA_STORE_OK;
+        photo_media_store_stats_t stats={0};photo_media_store_get_stats(&media_store,&stats);
+        ESP_LOGI(TAG,"MEDIA_STORE init=%s ready=%d dedicated_partition=true capacity=%u slot_bytes=%u committed=%u torn=%u corrupt=%u reconciled=%u residual_torn=%u residual_corrupt=%u residual_unrecognized=%u",
+            photo_media_store_result_name(r),media_store_ready,(unsigned)media_partition->size,(unsigned)config.slot_bytes,
+            (unsigned)stats.committed_slots,(unsigned)stats.torn_slots,
+            (unsigned)stats.corrupt_slots,(unsigned)stats.reconciled_owned_slots,
+            (unsigned)stats.reconciled_torn_slots,
+            (unsigned)stats.reconciled_corrupt_slots,
+            (unsigned)stats.reconciled_unrecognized_slots);
+    }else ESP_LOGE(TAG,"MEDIA_STORE init=blocked reason=partition_guard_failed expected_address=0x%x expected_size=0x%x",
+        (unsigned)MEDIA_PARTITION_ADDRESS,(unsigned)MEDIA_PARTITION_SIZE);
+#endif
     platform_power_init();
     bool wifi_started=network_init();
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    const char *camera_reason=NULL;platform_camera_status_t camera_preflight=platform_camera_preflight(&camera_reason);
+    const bool camera_runtime_ready=camera_preflight==PLATFORM_CAMERA_OK&&
+        atomic_load(&media_store_ready)&&atomic_load(&photo_control_state_ready);
+    ESP_LOGI(TAG,"START boot=%" PRIu32 " firmware=%s no_sim_profile=%d run_seconds=%d camera_profile=%d camera_preflight=%s camera_reason=%s wifi_stack=%d lte_ppp_opt_in=%d",boot,CONFIG_EGOLINK_FW_VERSION,CONFIG_EGOLINK_COLLECTION_NO_SIM,CONFIG_EGOLINK_COLLECTION_RUN_SECONDS,CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE,platform_camera_status_name(camera_preflight),camera_reason?camera_reason:"none",network_stack_ready,CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
+#else
     ESP_LOGI(TAG,"START boot=%" PRIu32 " firmware=%s no_sim_profile=%d run_seconds=%d media=false wifi_stack=%d lte_ppp_opt_in=%d",boot,CONFIG_EGOLINK_FW_VERSION,CONFIG_EGOLINK_COLLECTION_NO_SIM,CONFIG_EGOLINK_COLLECTION_RUN_SECONDS,network_stack_ready,CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
+#endif
     /* Both reviewed Waveshare V1/V2 schematics connect BOOT to GPIO0/GND.
      * Input only: a one-second press requests cooperative collection stop. */
     gpio_config_t button={.pin_bit_mask=1ULL<<0,.mode=GPIO_MODE_INPUT,.pull_up_en=GPIO_PULLUP_ENABLE,.pull_down_en=GPIO_PULLDOWN_DISABLE,.intr_type=GPIO_INTR_DISABLE};
@@ -1019,11 +2664,30 @@ void app_main(void)
     ESP_LOGI(TAG,"LOCAL_STOP gpio=0 input_ready=%d initial_level=%d hold_ms=1000",button_ready,button_ready?gpio_get_level(0):-1);
     cJSON *p=cJSON_CreateObject();cJSON_AddStringToObject(p,"state","started");cJSON_AddStringToObject(p,"config_id",CONFIG_ID);
     cJSON_AddNumberToObject(p,"imu_sample_interval_us",50000);cJSON_AddNumberToObject(p,"imu_chunk_samples",20);cJSON_AddNumberToObject(p,"gnss_interval_ms",CONFIG_EGOLINK_COLLECTION_GNSS_INTERVAL_MS);
-    cJSON_AddBoolToObject(p,"camera_enabled",false);cJSON_AddBoolToObject(p,"audio_enabled",false);
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    cJSON_AddBoolToObject(p,"camera_profile_requested",true);
+    cJSON_AddBoolToObject(p,"camera_runtime_compiled",true);
+    cJSON_AddBoolToObject(p,"camera_driver_preflight_ready",camera_preflight==PLATFORM_CAMERA_OK);
+    cJSON_AddBoolToObject(p,"camera_enabled",camera_runtime_ready);
+    cJSON_AddBoolToObject(p,"camera_capture_trigger_wired",camera_runtime_ready);
+    cJSON_AddBoolToObject(p,"photo_media_store_ready",atomic_load(&media_store_ready));
+    cJSON_AddBoolToObject(p,"photo_control_state_ready",atomic_load(&photo_control_state_ready));
+#else
+    cJSON_AddBoolToObject(p,"camera_enabled",false);
+#endif
+    cJSON_AddBoolToObject(p,"audio_enabled",false);
     cJSON_AddNumberToObject(p,"run_seconds",CONFIG_EGOLINK_COLLECTION_RUN_SECONDS);
     cJSON_AddStringToObject(p,"stop_method",button_ready?"hold_BOOT_1_second_or_configured_deadline":"configured_deadline_only_button_init_failed");
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    cJSON_AddStringToObject(p,"media_reason",camera_runtime_ready?
+        "camera_runtime_ready":(camera_reason?camera_reason:"photo_runtime_storage_or_state_unavailable"));
+#else
     cJSON_AddStringToObject(p,"media_reason","assembly_and_capture_scope_not_confirmed");
+#endif
     emit(SESSION,session_start_us,"started",NULL,p,true);
+#if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
+    photo_emit_source_status("runtime_start_or_reboot_restore");
+#endif
     BaseType_t store_created=xTaskCreate(storage_task,"collection_store",6144,NULL,4,NULL);
     BaseType_t imu_created=xTaskCreatePinnedToCore(imu_task,"collection_imu",6144,NULL,6,NULL,1);
     BaseType_t modem_created=xTaskCreate(modem_task,"collection_modem",12288,NULL,4,NULL);

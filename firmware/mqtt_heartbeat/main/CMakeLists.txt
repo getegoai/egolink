@@ -48,4 +48,6 @@ idf_component_register(
     SRCS ${EGOLINK_MAIN_SOURCES}
     INCLUDE_DIRS "."
     REQUIRES ${EGOLINK_MAIN_REQUIREMENTS}
+    PRIV_REQUIRES photo_media_store platform_camera photo_control_runtime
+    photo_delivery_runtime
 )

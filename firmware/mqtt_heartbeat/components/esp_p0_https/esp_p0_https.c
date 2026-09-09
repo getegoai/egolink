@@ -217,7 +217,9 @@ static esp_err_t connection_event(esp_http_client_event_t *event)
 
 static egolink_p0_delivery_post_outcome_t post_exact(
     void *context, const egolink_p0_delivery_post_request_t *r,
-    egolink_p0_delivery_post_result_t *result, const char *interface_name, bool collection)
+    egolink_p0_delivery_post_result_t *result, const char *interface_name,
+    bool collection, int method, const char *content_type,
+    const char *content_sha256, size_t body_limit)
 {
     egolink_esp_p0_https_t *c = context;
     const char *collection_transport = NULL;
@@ -230,8 +232,12 @@ static egolink_p0_delivery_post_outcome_t post_exact(
     }
     memset(result, 0, sizeof(*result));
     result->completion_time_ms = now_ms();
-    if (!egolink_esp_p0_https_config_valid(c) || !r || !r->body || !r->response ||
-        !r->path || !r->body_length || r->body_length > EGOLINK_OUTBOX_MAX_PAYLOAD_BYTES ||
+    bool get = method == 0;
+    bool post = method == HTTP_METHOD_POST;
+    if (!egolink_esp_p0_https_config_valid(c) || !r || !r->response ||
+        !r->path || !(get || post) ||
+        (get && (r->body || r->body_length)) ||
+        (post && (!r->body || !r->body_length || r->body_length > body_limit || !content_type)) ||
         !r->response_capacity || r->response_capacity > EGOLINK_P0_DELIVERY_RUNTIME_RESPONSE_BYTES ||
         (collection && !collection_transport) ||
         !(collection || (r->route == EGOLINK_P0_OUTBOX_ROUTE_LOCATION_STATE &&
@@ -327,7 +333,7 @@ static egolink_p0_delivery_post_outcome_t post_exact(
         esp_transport_set_func(state->transport, tls_connect, tls_read, tls_write,
             tls_close, NULL, NULL, NULL) != ESP_OK) goto finish;
         const esp_http_client_config_t cfg = {
-        .url = state->url, .method = HTTP_METHOD_POST,
+        .url = state->url, .method = method,
         .transport_type = HTTP_TRANSPORT_OVER_SSL,
         .crt_bundle_attach = esp_crt_bundle_attach,
         .skip_cert_common_name_check = false,
@@ -346,8 +352,9 @@ static egolink_p0_delivery_post_outcome_t post_exact(
     }
     if (!client) goto finish;
     if (esp_http_client_set_header(client, "Authorization", authorization) != ESP_OK ||
-        esp_http_client_set_header(client, "Content-Type", collection ? "application/octet-stream" : "application/json") != ESP_OK ||
+        (content_type && esp_http_client_set_header(client, "Content-Type", content_type) != ESP_OK) ||
         (collection && esp_http_client_set_header(client, "X-EgoLink-Transport", collection_transport) != ESP_OK) ||
+        (content_sha256 && esp_http_client_set_header(client, "X-Content-SHA256", content_sha256) != ESP_OK) ||
         (reuse && esp_http_client_set_header(client, "Connection", "keep-alive") != ESP_OK) ||
         !remaining(client, deadline, r) ||
         esp_http_client_open(client, (int)r->body_length) != ESP_OK) goto finish;
@@ -419,9 +426,31 @@ egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_post(
     void *context, const egolink_p0_delivery_post_request_t *r,
     egolink_p0_delivery_post_result_t *result)
 {
-    return post_exact(context, r, result, NULL, false);
+    return post_exact(context, r, result, NULL, false, HTTP_METHOD_POST,
+        "application/json", NULL, EGOLINK_OUTBOX_MAX_PAYLOAD_BYTES);
 }
 #if CONFIG_EGOLINK_COLLECTION_PROFILE
+static bool bounded_identifier(const char *value,size_t maximum)
+{
+    if(!value)return false;
+    size_t length=strlen(value);
+    if(!length||length>maximum||
+       !((value[0]>='a'&&value[0]<='z')||(value[0]>='A'&&value[0]<='Z')||
+         (value[0]>='0'&&value[0]<='9')))return false;
+    for(const char *p=value+1;*p;++p)
+        if(!((*p>='a'&&*p<='z')||(*p>='A'&&*p<='Z')||(*p>='0'&&*p<='9')||
+             *p=='-'||*p=='_'||*p=='.'||*p==':'||*p=='@'))return false;
+    return true;
+}
+
+static bool sha256_hex_valid(const char *value)
+{
+    if(!value||strlen(value)!=64U)return false;
+    for(const char *p=value;*p;++p)
+        if(!((*p>='0'&&*p<='9')||(*p>='a'&&*p<='f')))return false;
+    return true;
+}
+
 egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_post_collection(
     egolink_esp_p0_https_t *context, const char *device_id, const char *interface_name,
     const egolink_p0_delivery_post_request_t *r, egolink_p0_delivery_post_result_t *result)
@@ -441,6 +470,84 @@ egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_post_collection(
     snprintf(path, sizeof(path), "/api/v1/devices/%s/raw-ingest", device_id);
     egolink_p0_delivery_post_request_t request = *r;
     request.path = path;
-    return post_exact(context, &request, result, interface_name, true);
+    return post_exact(context, &request, result, interface_name, true,
+        HTTP_METHOD_POST,"application/octet-stream",NULL,
+        EGOLINK_OUTBOX_MAX_PAYLOAD_BYTES);
+}
+
+egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_poll_collection_command(
+    egolink_esp_p0_https_t *context,const char *device_id,const char *interface_name,
+    uint8_t *response,size_t response_capacity,
+    egolink_p0_delivery_cancel_probe_fn cancel_requested,void *cancel_context,
+    uint32_t transfer_generation,egolink_p0_delivery_post_result_t *result)
+{
+    if(result)memset(result,0,sizeof(*result));
+    if(!bounded_identifier(device_id,64U)||!collection_interface_transport(interface_name)){
+        egolink_esp_p0_https_close(context);return EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED;
+    }
+    char path[128];
+    int n=snprintf(path,sizeof(path),"/api/v1/devices/%s/commands/poll.raw",device_id);
+    if(n<=0||(size_t)n>=sizeof(path)){
+        egolink_esp_p0_https_close(context);return EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED;
+    }
+    egolink_p0_delivery_post_request_t request={.path=path,.body=NULL,.body_length=0U,
+        .response=response,.response_capacity=response_capacity,
+        .cancel_requested=cancel_requested,.cancel_context=cancel_context,
+        .transfer_generation=transfer_generation};
+    return post_exact(context,&request,result,interface_name,true,0,
+        NULL,NULL,0U);
+}
+
+egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_ack_collection_command(
+    egolink_esp_p0_https_t *context,const char *device_id,const char *cmd_id,
+    const char *interface_name,const uint8_t *frame,size_t frame_bytes,
+    uint8_t *response,size_t response_capacity,
+    egolink_p0_delivery_cancel_probe_fn cancel_requested,void *cancel_context,
+    uint32_t transfer_generation,egolink_p0_delivery_post_result_t *result)
+{
+    if(result)memset(result,0,sizeof(*result));
+    if(!bounded_identifier(device_id,64U)||!bounded_identifier(cmd_id,128U)||
+       !collection_interface_transport(interface_name)){
+        egolink_esp_p0_https_close(context);return EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED;
+    }
+    char path[256];
+    int n=snprintf(path,sizeof(path),"/api/v1/devices/%s/commands/%s/ack.raw",device_id,cmd_id);
+    if(n<=0||(size_t)n>=sizeof(path)){
+        egolink_esp_p0_https_close(context);return EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED;
+    }
+    egolink_p0_delivery_post_request_t request={.path=path,.body=frame,.body_length=frame_bytes,
+        .response=response,.response_capacity=response_capacity,
+        .cancel_requested=cancel_requested,.cancel_context=cancel_context,
+        .transfer_generation=transfer_generation};
+    return post_exact(context,&request,result,interface_name,true,HTTP_METHOD_POST,
+        "text/x-egolink-frame; profile=raw-frame.p0.v1",NULL,
+        EGOLINK_OUTBOX_MAX_PAYLOAD_BYTES);
+}
+
+egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_upload_collection_photo(
+    egolink_esp_p0_https_t *context,const char *device_id,const char *photo_id,
+    const char sha256_hex[65],const char *interface_name,const uint8_t *jpeg,
+    size_t jpeg_bytes,uint8_t *response,size_t response_capacity,
+    egolink_p0_delivery_cancel_probe_fn cancel_requested,void *cancel_context,
+    uint32_t transfer_generation,egolink_p0_delivery_post_result_t *result)
+{
+    if(result)memset(result,0,sizeof(*result));
+    if(!bounded_identifier(device_id,64U)||!bounded_identifier(photo_id,128U)||
+       !sha256_hex_valid(sha256_hex)||!collection_interface_transport(interface_name)||
+       !jpeg||jpeg_bytes<4U||jpeg_bytes>65536U||jpeg[0]!=0xffU||jpeg[1]!=0xd8U||
+       jpeg[jpeg_bytes-2U]!=0xffU||jpeg[jpeg_bytes-1U]!=0xd9U){
+        egolink_esp_p0_https_close(context);return EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED;
+    }
+    char path[256];
+    int n=snprintf(path,sizeof(path),"/api/v1/devices/%s/photos/%s/content",device_id,photo_id);
+    if(n<=0||(size_t)n>=sizeof(path)){
+        egolink_esp_p0_https_close(context);return EGOLINK_P0_DELIVERY_POST_CALLBACK_FAILED;
+    }
+    egolink_p0_delivery_post_request_t request={.path=path,.body=jpeg,.body_length=jpeg_bytes,
+        .response=response,.response_capacity=response_capacity,
+        .cancel_requested=cancel_requested,.cancel_context=cancel_context,
+        .transfer_generation=transfer_generation};
+    return post_exact(context,&request,result,interface_name,true,HTTP_METHOD_POST,
+        "image/jpeg",sha256_hex,65536U);
 }
 #endif

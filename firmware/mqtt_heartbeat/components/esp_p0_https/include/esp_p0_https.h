@@ -36,3 +36,28 @@ egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_post_collection(
     egolink_esp_p0_https_t *context, const char *device_id, const char *interface_name,
     const egolink_p0_delivery_post_request_t *request,
     egolink_p0_delivery_post_result_t *result);
+
+/* Camera collection keeps one network owner and the existing Message Hub
+ * command table. These narrow helpers expose only the three additional fixed
+ * routes; callers cannot supply an origin or arbitrary path. All responses
+ * require an explicit complete Content-Length within response_capacity. */
+egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_poll_collection_command(
+    egolink_esp_p0_https_t *context, const char *device_id,
+    const char *interface_name, uint8_t *response, size_t response_capacity,
+    egolink_p0_delivery_cancel_probe_fn cancel_requested, void *cancel_context,
+    uint32_t transfer_generation, egolink_p0_delivery_post_result_t *result);
+
+egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_ack_collection_command(
+    egolink_esp_p0_https_t *context, const char *device_id, const char *cmd_id,
+    const char *interface_name, const uint8_t *frame, size_t frame_bytes,
+    uint8_t *response, size_t response_capacity,
+    egolink_p0_delivery_cancel_probe_fn cancel_requested, void *cancel_context,
+    uint32_t transfer_generation, egolink_p0_delivery_post_result_t *result);
+
+egolink_p0_delivery_post_outcome_t egolink_esp_p0_https_upload_collection_photo(
+    egolink_esp_p0_https_t *context, const char *device_id,
+    const char *photo_id, const char sha256_hex[65],
+    const char *interface_name, const uint8_t *jpeg, size_t jpeg_bytes,
+    uint8_t *response, size_t response_capacity,
+    egolink_p0_delivery_cancel_probe_fn cancel_requested, void *cancel_context,
+    uint32_t transfer_generation, egolink_p0_delivery_post_result_t *result);
