@@ -493,7 +493,7 @@ static void test_stop_replay_and_conflict_are_fail_closed(void)
     puts("scenario stop-replay/conflict-fail-closed PASS");
 }
 
-static void test_predial_failures_disable_without_false_stop(void)
+static void test_predial_failures_cleanup_and_retry(void)
 {
     const collection_network_connector_result_t failures[] = {
         COLLECTION_NETWORK_CONNECTOR_TIMEOUT,
@@ -508,21 +508,23 @@ static void test_predial_failures_disable_without_false_stop(void)
         push_poll(&rig.connector, failures[i]);
         poll_coordinator(&rig, 2);
         assert(rig.policy_snapshot.state == COLLECTION_NETWORK_SWITCHING);
-        send_event(&rig, COLLECTION_NETWORK_EVENT_WIFI_READY, 3, 0);
-        rig.retirement.uploader_active_generation = 0;
         rig.retirement.uploader_retired_generation = rig.retirement.published_generation;
-        poll_coordinator(&rig, 4);
+        poll_coordinator(&rig, 3);
         collection_network_coordinator_snapshot_t state =
             collection_network_coordinator_snapshot(&rig.coordinator);
-        assert(state.stage == COLLECTION_NETWORK_COORDINATOR_DISABLED);
-        assert(!state.cleanup_confirmed);
-        assert(rig.policy_snapshot.state == COLLECTION_NETWORK_WIFI_READY);
-        assert(rig.policy_snapshot.route == COLLECTION_NETWORK_ROUTE_WIFI);
-        assert(!rig.policy.config.lte_enabled && rig.policy.stop_blocked);
-        send_event(&rig, COLLECTION_NETWORK_EVENT_STOP, 5, 0);
-        assert(rig.policy_snapshot.state == COLLECTION_NETWORK_STOPPING);
+        assert(state.stage == COLLECTION_NETWORK_COORDINATOR_IDLE);
+        assert(state.cleanup_confirmed);
+        assert(rig.policy_snapshot.state == COLLECTION_NETWORK_NO_ROUTE);
+        assert(rig.policy.config.lte_enabled && !rig.policy.stop_blocked);
+        uint32_t first = rig.policy_snapshot.active_lte_attempt_id;
+        send_event(&rig, COLLECTION_NETWORK_EVENT_TICK, 103, 0);
+        assert(rig.policy_snapshot.state == COLLECTION_NETWORK_LTE_DIALING);
+        assert(rig.policy_snapshot.active_lte_attempt_id != first);
+        admit(&rig, true, 104);
+        assert(rig.connector.operation_count == 2);
+        assert(rig.connector.operations[1] == COLLECTION_NETWORK_CONNECTOR_PROBE);
     }
-    puts("scenario predial-failure/stop-truth PASS");
+    puts("scenario predial-failure/cleanup-retry PASS");
 }
 
 static void test_uncertain_dial_requires_guarded_hangup(void)
@@ -849,7 +851,7 @@ int main(void)
     test_start_replay_preserves_attempt_owner();
     test_attempt_wrap_preserves_serial_order();
     test_stop_replay_and_conflict_are_fail_closed();
-    test_predial_failures_disable_without_false_stop();
+    test_predial_failures_cleanup_and_retry();
     test_uncertain_dial_requires_guarded_hangup();
     test_dial_epoch_failure_retains_hangup_fact();
     test_epoch_change_and_late_notice_fail_closed();
@@ -877,7 +879,7 @@ class CollectionNetworkCoordinatorNativeTests(unittest.TestCase):
             "scenario start-replay/owner-preserved PASS",
             "scenario attempt-wrap/serial-order PASS",
             "scenario stop-replay/conflict-fail-closed PASS",
-            "scenario predial-failure/stop-truth PASS",
+            "scenario predial-failure/cleanup-retry PASS",
             "scenario uncertain-dial/guarded-hangup PASS",
             "scenario dial-epoch/hangup-fact PASS",
             "scenario epoch-change/late-notice PASS",

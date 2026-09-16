@@ -28,13 +28,20 @@ void collection_usb_lte_state_connect(collection_usb_lte_state_t *s, bool connec
 }
 void collection_usb_lte_state_fail(collection_usb_lte_state_t *s, collection_usb_lte_result_t result)
 {
+    /* PROBE and ECHO_OFF cannot put the modem into PPP data mode. A failed
+     * pre-dial command is therefore safe to retry on the same physical USB
+     * connection after the outer policy's bounded backoff. Once DIAL (or a
+     * teardown command) has been submitted, retain the conservative unknown
+     * mode until guarded cleanup or a physical reconnect resolves it. */
+    bool data_mode_uncertain = s->status.data_mode ||
+        s->status.operation >= COLLECTION_USB_LTE_DIAL;
     s->pending = false;
     s->status.result = result;
     s->status.command_mode = false;
     s->status.data_mode = false;
     s->status.ppp_has_ip = false;
     s->status.hangup_confirmed = false;
-    s->uncertain = true;
+    s->uncertain = data_mode_uncertain;
     s->quiet = true;
     s->status.quiesced = true;
     s->rx_size = 0;

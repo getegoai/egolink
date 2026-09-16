@@ -155,7 +155,7 @@ esp_err_t usbh_cdc_register_dev_event_cb(const usb_device_match_id_t *m,test_usb
 esp_err_t usbh_cdc_port_open(const usbh_cdc_port_config_t *c,void **p)
 {opened_itf=c->itf_num;rx_cb=c->cbs.recv_data;*p=(void*)1;return ESP_OK;}
 esp_err_t usbh_cdc_write_bytes(void *p,const uint8_t *b,size_t n,unsigned wait)
-{assert(p==(void*)1 && wait==25);assert(n<sizeof(last_write));memcpy(last_write,b,n);last_write[n]=0;++writes;
+{assert(p==(void*)1 && (wait==25 || wait==1000));assert(n<sizeof(last_write));memcpy(last_write,b,n);last_write[n]=0;++writes;
  if(in_write){SetEvent(in_write);assert(WaitForSingleObject(release_write,500)==WAIT_OBJECT_0);}
  esp_err_t e=next_write;next_write=ESP_OK;return e;}
 esp_err_t usbh_cdc_get_rx_buffer_size(void *p,size_t *n){assert(p==(void*)1);*n=incoming_size;return ESP_OK;}
@@ -178,7 +178,7 @@ esp_err_t iot_eth_stop(void *h){assert(h);++stops;esp_err_t e=next_stop;next_sto
 void *iot_eth_new_netif_glue(void *h){return h;}
 static void feed(const void *b,size_t n){assert(n<=sizeof(incoming));memcpy(incoming,b,n);incoming_size=n;rx_cb((void*)1,NULL);}
 static void line(const char *s){feed(s,strlen(s));}
-static collection_usb_lte_status_t status(void){collection_usb_lte_status_t s;collection_usb_lte_get_status(&s);return s;}
+static collection_usb_lte_status_t status(void){collection_usb_lte_status_t s;assert(collection_usb_lte_get_status(&s));return s;}
 static void usb_connection(bool connected){usb_device_desc_t d={0x05c6,0x9330};usbh_cdc_device_event_data_t e={0};
  if(connected){e.new_dev.dev_addr=7;e.new_dev.device_desc=&d;}else e.dev_gone.dev_addr=7;
  event_cb(connected?0:1,&e,NULL);}
@@ -189,6 +189,10 @@ static DWORD WINAPI cancellation(void *u)
  collection_usb_lte_cancel();return 0;}
 static DWORD WINAPI delayed_disconnect(void *u)
 {(void)u;assert(WaitForSingleObject(in_write,500)==WAIT_OBJECT_0);SetEvent(release_write);usb_connection(false);return 0;}
+static DWORD WINAPI ppp_transmit(void *u)
+{(void)u;uint8_t packet[]={0x7e,9,8};assert(eth_driver->transmit(eth_driver,packet,sizeof(packet))==ESP_OK);return 0;}
+static DWORD WINAPI delayed_release(void *u)
+{(void)u;Sleep(50);SetEvent(release_write);return 0;}
 int main(void)
 {
  owner_thread=GetCurrentThreadId();
@@ -204,6 +208,8 @@ int main(void)
  usb_connection(true);assert(opened_itf==8 && !writes);
  assert(collection_usb_lte_begin(COLLECTION_USB_LTE_DIAL,100)==COLLECTION_USB_LTE_BAD_STATE);
  assert(collection_usb_lte_begin(COLLECTION_USB_LTE_PROBE,100)==COLLECTION_USB_LTE_PENDING);
+ atomic_store(&clock_ms,100);assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_TIMEOUT);
+ assert(collection_usb_lte_begin(COLLECTION_USB_LTE_PROBE,100)==COLLECTION_USB_LTE_PENDING);
  assert(!strcmp(last_write,"AT\r\n"));line("\r\nBROKENOK\r\n");
  assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_PENDING);line("\r\nO");
  assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_PENDING);line("K\r\n");
@@ -212,14 +218,30 @@ int main(void)
  assert(!strcmp(last_write,"ATD*99***1#\r\n"));line("\r\nOK\r\n");
  assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_PENDING && starts==0);
  const unsigned char reply[]={13,10,'C','O','N','N','E','C','T',13,10,0x7e,0xff,0x03};
- feed(reply,sizeof(reply));assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_OK && starts==1);
- assert(ppp_size==3 && ppp[0]==0x7e && !status().ppp_has_ip);
+ feed(reply,sizeof(reply));assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_PENDING && starts==0);
+ const unsigned char early[]={0x7e,0x21};feed(early,sizeof(early));
+ atomic_store(&clock_ms,199);assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_PENDING && starts==0);
+ atomic_store(&clock_ms,200);assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_OK && starts==1);
+ assert(ppp_size==5 && ppp[0]==0x7e && ppp[3]==0x7e && !status().ppp_has_ip);
  ip_event_got_ip_t got={&netif};handlers[0](NULL,IP_EVENT,IP_EVENT_PPP_GOT_IP,&got);
  assert(status().ppp_has_ip && !status().ppp_stopped);
  uint8_t packet[]={0x7e,1,2};unsigned before=writes;
  assert(eth_driver->transmit(eth_driver,packet,sizeof(packet))==ESP_OK && writes==before+1);
- feed(packet,sizeof(packet));assert(ppp_size==6 && writes==before+1);
+ feed(packet,sizeof(packet));assert(ppp_size==8 && writes==before+1);
  uint32_t online_epoch=status().connection_epoch;
+ in_write=CreateEvent(NULL,TRUE,FALSE,NULL);release_write=CreateEvent(NULL,TRUE,FALSE,NULL);
+ HANDLE tx=CreateThread(NULL,0,ppp_transmit,NULL,0,NULL);assert(tx);
+ assert(WaitForSingleObject(in_write,500)==WAIT_OBJECT_0);
+ collection_usb_lte_status_t busy_status,busy_before;
+ memset(&busy_status,0xa5,sizeof(busy_status));busy_before=busy_status;
+ assert(!collection_usb_lte_get_status(&busy_status));
+ assert(!memcmp(&busy_status,&busy_before,sizeof(busy_status)));
+ assert(collection_usb_lte_poll_for_epoch(online_epoch)==COLLECTION_USB_LTE_BUSY);
+ SetEvent(release_write);
+ assert(WaitForSingleObject(tx,1000)==WAIT_OBJECT_0);CloseHandle(tx);
+ CloseHandle(in_write);CloseHandle(release_write);in_write=NULL;release_write=NULL;
+ assert(collection_usb_lte_get_status(&busy_status) && busy_status.usb_connected &&
+     busy_status.ppp_has_ip && busy_status.connection_epoch==online_epoch);
  unsigned before_disconnect_writes=writes,before_disconnect_starts=starts;
  usb_connection(false);usb_connection(true);
  uint32_t reconnected_epoch=status().connection_epoch;
@@ -247,13 +269,23 @@ int main(void)
  assert(collection_usb_lte_begin_for_epoch(
      COLLECTION_USB_LTE_DIAL,100,reconnected_epoch)==COLLECTION_USB_LTE_PENDING);
  line("\r\nCONNECT\r\n");
+ assert(collection_usb_lte_poll_for_epoch(reconnected_epoch)==COLLECTION_USB_LTE_PENDING);
+ atomic_store(&clock_ms,300);
  assert(collection_usb_lte_poll_for_epoch(reconnected_epoch)==COLLECTION_USB_LTE_OK);
  assert(starts==before_disconnect_starts+1);
+ in_write=CreateEvent(NULL,TRUE,FALSE,NULL);release_write=CreateEvent(NULL,TRUE,FALSE,NULL);
+ tx=CreateThread(NULL,0,ppp_transmit,NULL,0,NULL);assert(tx);
+ assert(WaitForSingleObject(in_write,500)==WAIT_OBJECT_0);
+ assert(collection_usb_lte_cancel_poll_for_epoch(reconnected_epoch)==COLLECTION_USB_LTE_BUSY);
+ HANDLE release=CreateThread(NULL,0,delayed_release,NULL,0,NULL);assert(release);
  assert(collection_usb_lte_quiesce_for_epoch(reconnected_epoch)==COLLECTION_USB_LTE_OK &&
      stops==before_disconnect_stops+3 && !status().hangup_confirmed);
+ assert(WaitForSingleObject(tx,1000)==WAIT_OBJECT_0);CloseHandle(tx);
+ assert(WaitForSingleObject(release,1000)==WAIT_OBJECT_0);CloseHandle(release);
+ CloseHandle(in_write);CloseHandle(release_write);in_write=NULL;release_write=NULL;
  assert(eth_driver->transmit(eth_driver,packet,sizeof(packet))!=ESP_OK);
  assert(collection_usb_lte_begin(COLLECTION_USB_LTE_ESCAPE,100)==COLLECTION_USB_LTE_BAD_STATE);
- atomic_store(&clock_ms,1000);
+ atomic_store(&clock_ms,1300);
  assert(collection_usb_lte_begin(COLLECTION_USB_LTE_ESCAPE,100)==COLLECTION_USB_LTE_PENDING);
  assert(!strcmp(last_write,"+++"));line("\r\nOK\r\n");assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_OK);
  assert(collection_usb_lte_begin(COLLECTION_USB_LTE_HANGUP,100)==COLLECTION_USB_LTE_PENDING);
@@ -263,7 +295,7 @@ int main(void)
  assert(status().ppp_stopped);
  assert(collection_usb_lte_begin(COLLECTION_USB_LTE_DIAL,100)==COLLECTION_USB_LTE_PENDING);
  unsigned starts_before_timeout=starts;
- atomic_store(&clock_ms,1100);assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_TIMEOUT);
+ atomic_store(&clock_ms,1400);assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_TIMEOUT);
  line("\r\nCONNECT\r\n");assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_TIMEOUT && starts==starts_before_timeout);
  assert(collection_usb_lte_begin(COLLECTION_USB_LTE_DIAL,100)==COLLECTION_USB_LTE_BAD_STATE);
  unsigned writes_before_plain_reconnect=writes;
@@ -361,7 +393,7 @@ class CollectionUsbLteNative(unittest.TestCase):
 #include <stdio.h>
 #include "collection_usb_lte.h"
 int main(void) { collection_usb_lte_status_t s;
- collection_usb_lte_get_status(&s); assert(!s.enabled && !s.ppp_has_ip);
+ assert(collection_usb_lte_get_status(&s)); assert(!s.enabled && !s.ppp_has_ip);
  assert(collection_usb_lte_init(NULL)==ESP_ERR_NOT_SUPPORTED);
  assert(collection_usb_lte_begin(COLLECTION_USB_LTE_DIAL,100)==COLLECTION_USB_LTE_DISABLED);
  assert(collection_usb_lte_poll()==COLLECTION_USB_LTE_DISABLED);

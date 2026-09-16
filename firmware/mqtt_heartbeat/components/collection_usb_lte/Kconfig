@@ -8,6 +8,7 @@ menu "Collection USB LTE"
         depends on IDF_TARGET_ESP32S3 && EGOLINK_COLLECTION_USB_LTE_DEPENDENCIES
         select LWIP_PPP_SUPPORT
         select LWIP_PPP_NOTIFY_PHASE_SUPPORT
+        select LWIP_PPP_PAP_SUPPORT
         help
             Requires the actual USB VID/PID/modem interface in the init config.
             First add this component's usb_dependencies directory to the

@@ -37,8 +37,11 @@ After quiesce, allow at least one second after the last submission, perform
 ESCAPE then HANGUP, and require their actual replies. Failure remains visible.
 The module continues powered for GNSS/Cell regardless of the selected network.
 
-USB callbacks serialize port lifetime against one bounded USB write (two
-25 ms waits). Only those callback-side gate acquisitions can wait for the
-owner's current submission; owner begin/poll/quiesce never wait for the gate.
-No response wait holds it. Underlying USB worker tasks belong to the standard
-transport stack, not a second modem control owner.
+USB callbacks serialize port lifetime against a bounded write. PPP output may
+wait up to 100 ms for the connector gate and up to 1,000 ms for the USB
+submission used by the pinned upstream. A busy gate is reported separately
+from bad state: command polling remains pending under its original deadline,
+status callers retain their last complete snapshot, and epoch-scoped quiesce
+may wait up to 1,100 ms so contention cannot become a false terminal cleanup.
+No modem response wait holds the gate. Underlying USB worker tasks belong to
+the standard transport stack, not a second modem control owner.

@@ -15,7 +15,7 @@ typedef enum {
     COLLECTION_USB_LTE_CANCELLED, COLLECTION_USB_LTE_DISCONNECTED,
     COLLECTION_USB_LTE_MODEM_ERROR, COLLECTION_USB_LTE_IO_ERROR,
     COLLECTION_USB_LTE_OVERFLOW, COLLECTION_USB_LTE_BAD_STATE,
-    COLLECTION_USB_LTE_STALE_EPOCH,
+    COLLECTION_USB_LTE_STALE_EPOCH, COLLECTION_USB_LTE_BUSY,
     COLLECTION_USB_LTE_DISABLED
 } collection_usb_lte_result_t;
 typedef enum {
@@ -71,6 +71,8 @@ collection_usb_lte_result_t collection_usb_lte_cancel_poll_for_epoch(
     uint32_t expected_epoch);
 collection_usb_lte_result_t collection_usb_lte_quiesce_for_epoch(
     uint32_t expected_epoch);
-void collection_usb_lte_get_status(collection_usb_lte_status_t *status);
+/* A busy connector gate is not a disconnected modem. On false, status is
+ * unchanged so a caller may retain its last complete snapshot. */
+bool collection_usb_lte_get_status(collection_usb_lte_status_t *status);
 esp_netif_t *collection_usb_lte_netif(void);
 const char *collection_usb_lte_result_name(collection_usb_lte_result_t result);

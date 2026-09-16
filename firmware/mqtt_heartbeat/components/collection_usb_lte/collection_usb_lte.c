@@ -13,7 +13,7 @@ const char *collection_usb_lte_result_name(collection_usb_lte_result_t r)
 {
     static const char *const names[] = {"idle", "pending", "ok", "timeout", "cancelled",
         "disconnected", "modem_error", "io_error", "overflow", "bad_state",
-        "stale_epoch", "disabled"};
+        "stale_epoch", "busy", "disabled"};
     return (unsigned)r < sizeof(names)/sizeof(names[0]) ? names[r] : "unknown";
 }
 
@@ -36,8 +36,13 @@ collection_usb_lte_result_t collection_usb_lte_cancel_poll_for_epoch(uint32_t ep
 { (void)epoch; return COLLECTION_USB_LTE_DISABLED; }
 collection_usb_lte_result_t collection_usb_lte_quiesce_for_epoch(uint32_t epoch)
 { (void)epoch; return COLLECTION_USB_LTE_DISABLED; }
-void collection_usb_lte_get_status(collection_usb_lte_status_t *s)
-{ if (s) { memset(s, 0, sizeof(*s)); s->result = COLLECTION_USB_LTE_DISABLED; } }
+bool collection_usb_lte_get_status(collection_usb_lte_status_t *s)
+{
+    if (!s) return false;
+    memset(s, 0, sizeof(*s));
+    s->result = COLLECTION_USB_LTE_DISABLED;
+    return true;
+}
 esp_netif_t *collection_usb_lte_netif(void) { return NULL; }
 #else
 #include <stdatomic.h>
@@ -54,9 +59,11 @@ esp_netif_t *collection_usb_lte_netif(void) { return NULL; }
 #include "iot_eth_interface.h"
 #include "iot_eth_netif_glue.h"
 
+#define COLLECTION_USB_LTE_PPP_SETTLE_MS 100U
+
 /* The gate serializes the USB port lifetime with physical disconnect. Owner
- * entry is try-lock only. CDC callbacks wait for one bounded USB submission
- * (two 25 ms waits); no response wait or netif IPC holds this gate. Objects
+ * entry is try-lock only. PPP output waits for one bounded USB submission;
+ * no modem response wait or netif IPC holds this gate. Objects
  * remain allocated until reboot, including after init failure. */
 static struct {
     collection_usb_lte_state_t state;
@@ -72,7 +79,8 @@ static struct {
     esp_netif_t *netif;
     esp_event_handler_instance_t ip_handler, lost_handler, ppp_handler;
     usb_device_match_id_t match[2];
-    bool netif_started, attempted_init, disconnect_teardown_valid;
+    bool netif_started, ppp_start_pending, attempted_init, disconnect_teardown_valid;
+    uint64_t ppp_start_ready_ms;
     uint32_t netif_connection_epoch, disconnect_teardown_epoch;
     atomic_bool cancel, disconnect_pending;
     uint8_t rx_buffer[1536];
@@ -82,8 +90,14 @@ static uint64_t now_ms(void) { return (uint64_t)esp_timer_get_time() / 1000; }
 static bool owner(void) { return usb.owner && usb.owner == xTaskGetCurrentTaskHandle(); }
 static bool enter_owner(void) { return owner() && xSemaphoreTake(usb.gate, 0) == pdTRUE; }
 static void leave(void) { xSemaphoreGive(usb.gate); }
+static void clear_ppp_start_gate_locked(void)
+{
+    usb.ppp_start_pending = false;
+    usb.ppp_start_ready_ms = 0;
+}
 static esp_err_t link_down(void)
 {
+    clear_ppp_start_gate_locked();
     if (usb.eth && usb.netif_started) {
         esp_err_t e = iot_eth_stop(usb.eth); /* event queue, zero wait */
         if (e == ESP_OK) {
@@ -125,11 +139,19 @@ static esp_err_t driver_deinit(iot_eth_driver_t *d)
 static esp_err_t driver_transmit(iot_eth_driver_t *d, uint8_t *bytes, size_t n)
 {
     (void)d;
-    if (!n || n > 1536 || xSemaphoreTake(usb.gate, 0) != pdTRUE) return ESP_ERR_INVALID_STATE;
+    if (!n || n > 1536) return ESP_ERR_INVALID_ARG;
+    /* lwIP may answer an inbound LCP frame while the CDC callback is just
+     * releasing this gate. A zero-wait lock silently discarded that reply
+     * and could keep negotiation in ESTABLISH forever. Match the pinned
+     * upstream transport's bounded 1 s USB submission while keeping gate
+     * acquisition itself short. */
+    if (xSemaphoreTake(usb.gate, pdMS_TO_TICKS(100)) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
     esp_err_t e = ESP_ERR_INVALID_STATE;
     if (usb.port && usb.state.status.data_mode && !usb.state.quiet &&
         !atomic_load(&usb.cancel) && !atomic_load(&usb.disconnect_pending)) {
-        e = usbh_cdc_write_bytes(usb.port, bytes, n, pdMS_TO_TICKS(25));
+        e = usbh_cdc_write_bytes(usb.port, bytes, n, pdMS_TO_TICKS(1000));
         usb.state.last_tx_ms = now_ms();
         if (e == ESP_OK) usb.state.status.ppp_tx_bytes += (uint32_t)n;
         else usb.state.status.last_io_error = e;
@@ -153,6 +175,20 @@ static void receive(usbh_cdc_port_handle_t port, void *context)
     if (e != ESP_OK) {
         usb.state.status.last_io_error = e;
         collection_usb_lte_state_fail(&usb.state, COLLECTION_USB_LTE_IO_ERROR);
+    } else if (usb.state.status.data_mode && usb.ppp_start_pending &&
+               !usb.netif_started) {
+        /* The modem may emit PPP bytes during its documented post-CONNECT
+         * settle interval. Retain them until lwIP is started instead of
+         * dropping the beginning of LCP negotiation. */
+        if (n > sizeof(usb.state.rx) - usb.state.rx_size) {
+            ++usb.state.status.rx_overflows;
+            clear_ppp_start_gate_locked();
+            collection_usb_lte_state_fail(&usb.state, COLLECTION_USB_LTE_OVERFLOW);
+        } else {
+            memcpy(usb.state.rx + usb.state.rx_size, usb.rx_buffer, n);
+            usb.state.rx_size += n;
+            usb.state.rx_time_ms = now_ms();
+        }
     } else if (usb.state.status.data_mode && !usb.state.quiet && !usb.state.pending && usb.netif_started) {
         /* PPP input copies bytes into lwIP's bounded input queue. Never AT. */
         e = usb.mediator->stack_input(usb.mediator, usb.rx_buffer, n);
@@ -176,6 +212,7 @@ static void usb_event(usbh_cdc_device_event_t event, usbh_cdc_device_event_data_
                 ? usb.netif_connection_epoch
                 : usb.state.status.connection_epoch;
         }
+        clear_ppp_start_gate_locked();
         collection_usb_lte_state_connect(&usb.state, false);
         usb.disconnect_teardown_valid = true;
         /* A prior owner may have observed the early fence while waiting for
@@ -205,6 +242,7 @@ static void usb_event(usbh_cdc_device_event_t event, usbh_cdc_device_event_data_
         /* A quick reconnect must not erase an unfinished stop of the netif
          * retained from the disconnected lifecycle. The owner retires that
          * residue before any new command or PPP start can be admitted. */
+        clear_ppp_start_gate_locked();
         collection_usb_lte_state_connect(&usb.state, true);
     } else collection_usb_lte_state_fail(&usb.state, COLLECTION_USB_LTE_IO_ERROR);
     leave();
@@ -320,11 +358,24 @@ static collection_usb_lte_result_t poll_locked(void)
     if (retired != COLLECTION_USB_LTE_OK) return retired;
     if (atomic_load(&usb.cancel)) {
         usb.state.cancelled = true;
+        if (usb.ppp_start_pending) {
+            clear_ppp_start_gate_locked();
+            collection_usb_lte_state_fail(&usb.state, COLLECTION_USB_LTE_CANCELLED);
+        }
         collection_usb_lte_state_quiesce(&usb.state);
     }
     bool pending = usb.state.pending;
-    collection_usb_lte_result_t r = collection_usb_lte_state_poll(&usb.state, now_ms());
+    uint64_t now = now_ms();
+    collection_usb_lte_result_t r = collection_usb_lte_state_poll(&usb.state, now);
     if (pending && r == COLLECTION_USB_LTE_OK && usb.state.status.data_mode) {
+        usb.ppp_start_pending = true;
+        usb.ppp_start_ready_ms = now + COLLECTION_USB_LTE_PPP_SETTLE_MS;
+        usb.state.quiet = false;
+        usb.state.status.quiesced = false;
+    }
+    if (usb.ppp_start_pending) {
+        if (now < usb.ppp_start_ready_ms) return COLLECTION_USB_LTE_PENDING;
+        clear_ppp_start_gate_locked();
         esp_err_t e = iot_eth_start(usb.eth); /* no AT; posts PPP start */
         if (e == ESP_OK) {
             usb.netif_started = true;
@@ -361,7 +412,8 @@ collection_usb_lte_result_t collection_usb_lte_begin(collection_usb_lte_operatio
 }
 collection_usb_lte_result_t collection_usb_lte_poll(void)
 {
-    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    if (!usb.gate || !owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    if (!enter_owner()) return COLLECTION_USB_LTE_BUSY;
     collection_usb_lte_result_t result = poll_locked();
     leave();
     return result;
@@ -371,6 +423,7 @@ esp_err_t collection_usb_lte_quiesce(void)
 {
     atomic_store(&usb.cancel, true);
     if (!usb.gate || !enter_owner()) return ESP_ERR_INVALID_STATE;
+    clear_ppp_start_gate_locked();
     collection_usb_lte_state_quiesce(&usb.state);
     (void)link_down();
     esp_err_t e = usb.netif_started ? ESP_FAIL : ESP_OK;
@@ -380,7 +433,8 @@ esp_err_t collection_usb_lte_quiesce(void)
 
 collection_usb_lte_result_t collection_usb_lte_service(void)
 {
-    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    if (!usb.gate || !owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    if (!enter_owner()) return COLLECTION_USB_LTE_BUSY;
     collection_usb_lte_result_t result = usb.state.status.initialized
         ? retire_disconnected_netif_locked()
         : COLLECTION_USB_LTE_BAD_STATE;
@@ -410,7 +464,8 @@ collection_usb_lte_result_t collection_usb_lte_begin_for_epoch(
 
 collection_usb_lte_result_t collection_usb_lte_poll_for_epoch(uint32_t expected_epoch)
 {
-    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    if (!usb.gate || !owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    if (!enter_owner()) return COLLECTION_USB_LTE_BUSY;
     collection_usb_lte_result_t retired = retire_disconnected_netif_locked();
     if (usb.state.status.connection_epoch != expected_epoch) {
         leave();
@@ -428,7 +483,8 @@ collection_usb_lte_result_t collection_usb_lte_poll_for_epoch(uint32_t expected_
 collection_usb_lte_result_t collection_usb_lte_cancel_poll_for_epoch(
     uint32_t expected_epoch)
 {
-    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    if (!usb.gate || !owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    if (!enter_owner()) return COLLECTION_USB_LTE_BUSY;
     collection_usb_lte_result_t retired = retire_disconnected_netif_locked();
     if (usb.state.status.connection_epoch != expected_epoch) {
         leave();
@@ -447,7 +503,14 @@ collection_usb_lte_result_t collection_usb_lte_cancel_poll_for_epoch(
 collection_usb_lte_result_t collection_usb_lte_quiesce_for_epoch(
     uint32_t expected_epoch)
 {
-    if (!usb.gate || !enter_owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    if (!usb.gate || !owner()) return COLLECTION_USB_LTE_BAD_STATE;
+    /* A retired uploader does not imply that lwIP has stopped emitting PPP
+     * control frames. Cover the driver's bounded 100 ms gate wait plus 1 s
+     * USB submission so teardown does not turn ordinary contention into a
+     * terminal cleanup failure. */
+    if (xSemaphoreTake(usb.gate, pdMS_TO_TICKS(1100)) != pdTRUE) {
+        return COLLECTION_USB_LTE_BUSY;
+    }
     collection_usb_lte_result_t retired = retire_disconnected_netif_locked();
     if (usb.state.status.connection_epoch != expected_epoch) {
         leave();
@@ -458,6 +521,7 @@ collection_usb_lte_result_t collection_usb_lte_quiesce_for_epoch(
         return retired;
     }
     atomic_store(&usb.cancel, true);
+    clear_ppp_start_gate_locked();
     collection_usb_lte_state_quiesce(&usb.state);
     (void)link_down();
     collection_usb_lte_result_t result = usb.netif_started
@@ -466,16 +530,15 @@ collection_usb_lte_result_t collection_usb_lte_quiesce_for_epoch(
     leave();
     return result;
 }
-void collection_usb_lte_get_status(collection_usb_lte_status_t *s)
+bool collection_usb_lte_get_status(collection_usb_lte_status_t *s)
 {
-    if (!s) return;
-    memset(s, 0, sizeof(*s));
-    s->enabled = true;
-    s->result = COLLECTION_USB_LTE_BAD_STATE;
-    if (usb.gate && xSemaphoreTake(usb.gate, pdMS_TO_TICKS(25)) == pdTRUE) {
-        *s = usb.state.status;
-        leave();
+    if (!s || !usb.gate ||
+        xSemaphoreTake(usb.gate, pdMS_TO_TICKS(25)) != pdTRUE) {
+        return false;
     }
+    *s = usb.state.status;
+    leave();
+    return true;
 }
 esp_netif_t *collection_usb_lte_netif(void)
 { return usb.state.status.initialized ? usb.netif : NULL; }

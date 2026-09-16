@@ -1289,7 +1289,8 @@ static collection_network_policy_snapshot_t policy_event(
 static collection_network_connector_result_t lte_connector_result(
     collection_usb_lte_result_t result)
 {
-    if(result==COLLECTION_USB_LTE_PENDING)return COLLECTION_NETWORK_CONNECTOR_PENDING;
+    if(result==COLLECTION_USB_LTE_PENDING||result==COLLECTION_USB_LTE_BUSY)
+        return COLLECTION_NETWORK_CONNECTOR_PENDING;
     if(result==COLLECTION_USB_LTE_OK)return COLLECTION_NETWORK_CONNECTOR_OK;
     if(result==COLLECTION_USB_LTE_DISCONNECTED)return COLLECTION_NETWORK_CONNECTOR_DISCONNECTED;
     if(result==COLLECTION_USB_LTE_TIMEOUT)return COLLECTION_NETWORK_CONNECTOR_TIMEOUT;
@@ -1297,6 +1298,19 @@ static collection_network_connector_result_t lte_connector_result(
     if(result==COLLECTION_USB_LTE_OVERFLOW)return COLLECTION_NETWORK_CONNECTOR_OVERFLOW;
     if(result==COLLECTION_USB_LTE_STALE_EPOCH)return COLLECTION_NETWORK_CONNECTOR_STALE_EPOCH;
     return COLLECTION_NETWORK_CONNECTOR_FAILED;
+}
+static collection_usb_lte_status_t lte_status_cache={
+    .enabled=true,
+    .ppp_stopped=true,
+    .result=COLLECTION_USB_LTE_IDLE,
+};
+static bool lte_status_snapshot(collection_usb_lte_status_t *out)
+{
+    collection_usb_lte_status_t current;
+    bool fresh=collection_usb_lte_get_status(&current);
+    if(fresh)lte_status_cache=current;
+    *out=lte_status_cache;
+    return fresh;
 }
 static collection_usb_lte_operation_t lte_connector_operation(
     collection_network_connector_operation_t operation)
@@ -1315,14 +1329,28 @@ static collection_network_connector_result_t lte_connector_begin(
     uint32_t timeout_ms,uint32_t expected_epoch)
 {
     (void)context;
-    return lte_connector_result(collection_usb_lte_begin_for_epoch(
-        lte_connector_operation(operation),timeout_ms,expected_epoch));
+    collection_usb_lte_result_t raw=collection_usb_lte_begin_for_epoch(
+        lte_connector_operation(operation),timeout_ms,expected_epoch);
+    collection_usb_lte_status_t status;bool fresh=lte_status_snapshot(&status);
+    ESP_LOGI(TAG,"LTE_USB_BEGIN op=%d epoch=%" PRIu32 " result=%s fresh=%d usb=%d command=%d data=%d io=%d",
+        (int)operation,expected_epoch,collection_usb_lte_result_name(raw),
+        fresh,status.usb_connected,status.command_mode,status.data_mode,
+        (int)status.last_io_error);
+    return lte_connector_result(raw);
 }
 static collection_network_connector_result_t lte_connector_poll(
     void *context,uint32_t expected_epoch)
 {
-    (void)context;return lte_connector_result(
-        collection_usb_lte_poll_for_epoch(expected_epoch));
+    (void)context;collection_usb_lte_result_t raw=
+        collection_usb_lte_poll_for_epoch(expected_epoch);
+    if(raw!=COLLECTION_USB_LTE_PENDING) {
+        collection_usb_lte_status_t status;bool fresh=lte_status_snapshot(&status);
+        ESP_LOGI(TAG,"LTE_USB_POLL epoch=%" PRIu32 " op=%d result=%s fresh=%d modem=%s command=%d data=%d io=%d",
+            expected_epoch,(int)status.operation,collection_usb_lte_result_name(raw),
+            fresh,status.last_modem_result[0]?status.last_modem_result:"none",
+            status.command_mode,status.data_mode,(int)status.last_io_error);
+    }
+    return lte_connector_result(raw);
 }
 static collection_network_connector_result_t lte_connector_cancel_poll(
     void *context,uint32_t expected_epoch)
@@ -1333,13 +1361,18 @@ static collection_network_connector_result_t lte_connector_cancel_poll(
 static collection_network_connector_result_t lte_connector_quiesce(
     void *context,uint32_t expected_epoch)
 {
-    (void)context;return lte_connector_result(
-        collection_usb_lte_quiesce_for_epoch(expected_epoch));
+    (void)context;collection_usb_lte_result_t raw=
+        collection_usb_lte_quiesce_for_epoch(expected_epoch);
+    collection_usb_lte_status_t status;bool fresh=lte_status_snapshot(&status);
+    ESP_LOGI(TAG,"LTE_USB_QUIESCE epoch=%" PRIu32 " result=%s fresh=%d data=%d ppp_stopped=%d io=%d",
+        expected_epoch,collection_usb_lte_result_name(raw),fresh,status.data_mode,
+        status.ppp_stopped,(int)status.last_io_error);
+    return lte_connector_result(raw);
 }
 static void lte_connector_status(
     void *context,collection_network_connector_status_t *out)
 {
-    (void)context;collection_usb_lte_status_t status;collection_usb_lte_get_status(&status);
+    (void)context;collection_usb_lte_status_t status;lte_status_snapshot(&status);
     *out=(collection_network_connector_status_t){
         .usb_connected=status.usb_connected,.data_mode=status.data_mode,
         .ppp_has_ip=status.ppp_has_ip,.ppp_stopped=status.ppp_stopped,
@@ -1457,6 +1490,9 @@ static void modem_task(void *unused)
         CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED,usb_ready);
 
     int64_t next_gnss=0,next_cell=0;
+#if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
+    uint64_t next_lte_diag_ms=0;
+#endif
     while(!atomic_load(&stopping)) {
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
         photo_stack_hwm_observe(&photo_modem_stack_hwm_bytes);
@@ -1473,6 +1509,26 @@ static void modem_task(void *unused)
         }
         policy_result=policy_event(&policy,COLLECTION_NETWORK_EVENT_TICK,now_ms,0);
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
+        if(usb_ready&&now_ms>=next_lte_diag_ms) {
+            collection_usb_lte_status_t usb_status;
+            bool status_fresh=lte_status_snapshot(&usb_status);
+            collection_network_coordinator_snapshot_t coordinator=
+                collection_network_coordinator_snapshot(&lte_control);
+            ESP_LOGI(TAG,"LTE_USB_STATUS stage=%d attempt=%" PRIu32 " epoch=%" PRIu32
+                " fresh=%d usb=%d op=%d result=%s command=%d data=%d ip=%d ppp_stopped=%d"
+                " ppp_event=%" PRId32 " rx=%" PRIu32 " tx=%" PRIu32
+                " overflow=%" PRIu32 " io=%d",
+                (int)coordinator.stage,coordinator.attempt_id,
+                usb_status.connection_epoch,status_fresh,usb_status.usb_connected,
+                (int)usb_status.operation,
+                collection_usb_lte_result_name(usb_status.result),
+                usb_status.command_mode,usb_status.data_mode,
+                usb_status.ppp_has_ip,usb_status.ppp_stopped,
+                usb_status.last_ppp_event,usb_status.ppp_rx_bytes,
+                usb_status.ppp_tx_bytes,usb_status.rx_overflows,
+                (int)usb_status.last_io_error);
+            next_lte_diag_ms=now_ms+15000U;
+        }
         if(usb_ready)(void)collection_usb_lte_service();
         lte_apply_policy_result(&policy,&lte_control,policy_result,now_ms);
         collection_network_retirement_facts_t retirement=lte_retirement();

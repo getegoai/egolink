@@ -13,6 +13,9 @@ DEFAULTS = ROOT / "firmware/mqtt_heartbeat/sdkconfig.collection.defaults"
 USB_LTE_DEFAULTS = (
     ROOT / "firmware/mqtt_heartbeat/sdkconfig.collection_usb_lte.defaults"
 )
+USB_LTE_KCONFIG = (
+    ROOT / "firmware/mqtt_heartbeat/components/collection_usb_lte/Kconfig"
+)
 
 
 def function(source: str, name: str, next_name: str) -> str:
@@ -33,6 +36,7 @@ class CollectionProfileTests(unittest.TestCase):
         cls.kconfig = KCONFIG.read_text(encoding="utf-8")
         cls.defaults = DEFAULTS.read_text(encoding="utf-8")
         cls.usb_lte_defaults = USB_LTE_DEFAULTS.read_text(encoding="utf-8")
+        cls.usb_lte_kconfig = USB_LTE_KCONFIG.read_text(encoding="utf-8")
 
     def test_lte_is_explicit_opt_in_and_default_collector_remains_no_sim(self):
         block = self.kconfig.split("config EGOLINK_COLLECTION_LTE_PPP_ENABLED", 1)[1]
@@ -61,6 +65,19 @@ class CollectionProfileTests(unittest.TestCase):
         ):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, self.usb_lte_defaults)
+
+    def test_usb_lte_connector_compiles_pap_used_by_pinned_modem_profile(self):
+        self.assertIn("select LWIP_PPP_SUPPORT", self.usb_lte_kconfig)
+        self.assertIn("select LWIP_PPP_NOTIFY_PHASE_SUPPORT", self.usb_lte_kconfig)
+        self.assertIn("select LWIP_PPP_PAP_SUPPORT", self.usb_lte_kconfig)
+
+    def test_usb_lte_gate_contention_is_retryable_and_status_is_cached(self):
+        self.assertIn(
+            "result==COLLECTION_USB_LTE_PENDING||result==COLLECTION_USB_LTE_BUSY",
+            self.source,
+        )
+        self.assertIn("lte_status_cache", self.source)
+        self.assertIn("lte_status_snapshot", self.source)
 
     def test_wifi_scan_payload_retains_only_aggregate_radio_fields(self):
         scan = function(self.source, "scan_wifi", "wifi_task")

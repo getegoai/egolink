@@ -196,7 +196,10 @@ static collection_network_coordinator_notice_t begin_quiesce(
     }
     if (coordinator->command_submitted && !coordinator->dial_submitted &&
         status.ppp_stopped && !status.data_mode) {
-        return cleanup_failed(coordinator);
+        /* PROBE/ATE0 never entered data mode. Confirm the already-observed
+         * stopped state so the policy can use its ordinary bounded backoff
+         * instead of disabling LTE for the remainder of this boot. */
+        return cleanup_succeeded(coordinator);
     }
     bool needs_hangup = coordinator->dial_submitted ||
         coordinator->data_mode_entered || status.data_mode || !status.ppp_stopped;
