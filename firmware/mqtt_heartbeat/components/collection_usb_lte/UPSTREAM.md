@@ -19,7 +19,11 @@ selection, and continues GNSS/Cell. No callback issues AT commands.
 The default profile is disabled and has no third-party manifest/dependencies.
 To configure an enabled build, explicitly add this component's
 `usb_dependencies` directory to `EXTRA_COMPONENT_DIRS` before `project()`,
-then set `CONFIG_EGOLINK_COLLECTION_USB_LTE=y`. The hidden dependency Kconfig
+load `sdkconfig.collection_usb_lte.defaults`, then set
+`CONFIG_EGOLINK_COLLECTION_USB_LTE=y`. The sizing overlay raises only ESP-IDF's
+enumeration control-transfer buffer to the 1024-byte value used by the pinned
+`iot_usbh_modem` test profile; the SIM7670G composite configuration descriptor
+does not fit the ESP-IDF 5.4.2 default 256-byte buffer. The hidden dependency Kconfig
 symbol prevents enabling the driver without the dependency packet. Only that
 opt-in build resolves packages/creates its dependency lock. Default Wi-Fi and
 legacy builds never discover the nested packet. Init uses already initialized esp_netif and

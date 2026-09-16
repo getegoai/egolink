@@ -10,6 +10,9 @@ COORDINATOR = ROOT / "firmware/mqtt_heartbeat/components/collection_network_coor
 COORDINATOR_HEADER = ROOT / "firmware/mqtt_heartbeat/components/collection_network_coordinator/include/collection_network_coordinator.h"
 KCONFIG = ROOT / "firmware/mqtt_heartbeat/main/Kconfig.projbuild"
 DEFAULTS = ROOT / "firmware/mqtt_heartbeat/sdkconfig.collection.defaults"
+USB_LTE_DEFAULTS = (
+    ROOT / "firmware/mqtt_heartbeat/sdkconfig.collection_usb_lte.defaults"
+)
 
 
 def function(source: str, name: str, next_name: str) -> str:
@@ -29,6 +32,7 @@ class CollectionProfileTests(unittest.TestCase):
         cls.coordinator_header = COORDINATOR_HEADER.read_text(encoding="utf-8")
         cls.kconfig = KCONFIG.read_text(encoding="utf-8")
         cls.defaults = DEFAULTS.read_text(encoding="utf-8")
+        cls.usb_lte_defaults = USB_LTE_DEFAULTS.read_text(encoding="utf-8")
 
     def test_lte_is_explicit_opt_in_and_default_collector_remains_no_sim(self):
         block = self.kconfig.split("config EGOLINK_COLLECTION_LTE_PPP_ENABLED", 1)[1]
@@ -38,6 +42,25 @@ class CollectionProfileTests(unittest.TestCase):
         self.assertIn("EGOLINK_COLLECTION_USB_LTE", block)
         self.assertIn("CONFIG_EGOLINK_COLLECTION_NO_SIM=y", self.defaults)
         self.assertNotIn("CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED=y", self.defaults)
+
+    def test_usb_lte_profile_sizes_composite_enumeration_without_identity(self):
+        self.assertIn(
+            "CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE=1024",
+            self.usb_lte_defaults,
+        )
+        self.assertNotIn("CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE", self.defaults)
+        for forbidden in (
+            "EGOLINK_COLLECTION_USB_LTE=y",
+            "VENDOR_ID",
+            "PRODUCT_ID",
+            "MODEM_INTERFACE",
+            "SSID",
+            "PASSWORD",
+            "BEARER",
+            "DEVICE_ID",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, self.usb_lte_defaults)
 
     def test_wifi_scan_payload_retains_only_aggregate_radio_fields(self):
         scan = function(self.source, "scan_wifi", "wifi_task")

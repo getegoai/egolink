@@ -1,0 +1,8 @@
+# Opt-in USB/LTE transport sizing overlay.
+#
+# SIM7670G exposes a composite USB configuration descriptor larger than the
+# ESP-IDF 5.4.2 default 256-byte enumeration buffer. Espressif's pinned
+# iot_usbh_modem 2.2.0 test profile uses 1024 bytes for the same host seam.
+# This file enables no transport, contains no descriptor identity and carries
+# no credentials; load it only with the explicit USB/LTE dependency/profile.
+CONFIG_USB_HOST_CONTROL_TRANSFER_MAX_SIZE=1024
