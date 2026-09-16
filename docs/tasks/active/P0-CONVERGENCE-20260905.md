@@ -3,10 +3,10 @@ id: P0-CONVERGENCE-20260905
 title: Single-board Location and Camera field closure
 status: active
 priority: critical
-execution_state: wifi_manual_camera_recovery_pass_lte_timer_outage_field_pending
+execution_state: lte_manual_camera_api_integrity_and_concurrency_regression_pass_timed_outage_route_transition_power_field_pending
 owner: codex_integrator
 created: 2026-09-05
-last_updated: 2026-09-09
+last_updated: 2026-09-16
 serves_gate: P0-LOC
 serves_milestone: single_4g_board_camera_field
 requires_hardware: true
@@ -34,6 +34,7 @@ context:
   - docs/hardware/PRIVACY_WIFI_SPOOL_PURGE_20260909.md
   - docs/hardware/CAMERA_MEDIA_RANGE_PREFLIGHT_20260909.md
   - docs/hardware/CAMERA_SHARED_I2C_TRIAL_20260909.md
+  - docs/hardware/CAMERA_LTE_MANUAL_CLOSURE_20260916.md
   - docs/tasks/active/LOC-021_DEVICE_LOCATION_INTEGRATION.md
   - docs/tasks/active/FIELD-020_L1_FIELD_DATASET.md
   - docs/tasks/active/OUTBOX-010_PERSISTENT_PRIORITY_OUTBOX.md
@@ -233,6 +234,72 @@ field collection. Full identities, hashes, privacy boundaries and private
 evidence paths are in
 [CAMERA-SHARED-I2C-TRIAL-20260909-001](../../hardware/CAMERA_SHARED_I2C_TRIAL_20260909.md).
 Every product Gate remains `NOT_RUN`.
+
+### Real-LTE manual Camera/API checkpoint — 2026-09-16
+
+The app-only run015 image
+`0.1.0-camera-lte-trial-015`, run
+`camera-lte-trial-20260916-015`, application SHA-256
+`281C060625DC5F99EA37C7CAD01C419B65CF7D005ACC98334FFDB6090ED58B26`,
+was exercised on the identified connectivity board. Its first pre-dial USB
+modem attempt timed out and cleaned up; the same boot's second attempt reached
+`CONNECT`, brought up `pp2` and carried ordinary HTTPS uploads over the actual
+SIM7670G LTE PPP route.
+
+Exactly one fresh authenticated two-minute manual command was issued. The
+joint collector detected OV5640, captured and locally saved photo
+`manual-9df82b52af19ae3683f61a7e80b793b8-n0`, then sent metadata and its 3,957
+JPEG bytes over LTE. The exact command ACK was HTTP 200 `ok`, matched once and
+not duplicated. VPS expected/stored byte counts and hashes matched, and an
+authorized private Guardian content-API download independently matched
+SHA-256
+`D167BEF33EB1B186DA3A71CE3F8785C42A1F2F7F44FD18034FFDB1E263DF29A55`.
+The browser UI was not used to decode or view this JPEG, so browser preview and
+export remain `NOT_RUN`.
+
+The retained 300-second window contains continuing GNSS/no-fix, external IMU,
+LTE and available-power observations after the photo, 43 ordinary LTE
+HTTP-200 uploads, and no panic, USB enumeration failure or unexpected reboot.
+USB supplied power/serial/flash; this is real LTE data evidence but not
+USB-free or independent-power evidence. The last retained health sample still
+had 230,047 queued bytes and two errors, so sustained throughput remains open.
+
+After the 600-second firmware bound, the complete 1 MiB collection spool was
+backed up without erase. The read left the board in ROM bootloader and the
+already delivered Camera slot had been released; this does not prove pending-
+photo restart recovery. The Camera Gate remains manual-only
+`trial_unverified`, timed capture remains disabled, and no controlled
+Wi-Fi/LTE transition was run. Full identities, hashes, private evidence paths
+and non-claims are in
+[CAMERA-LTE-MANUAL-20260916-001](../../hardware/CAMERA_LTE_MANUAL_CLOSURE_20260916.md).
+
+That transient bootloader state was superseded by the app-only run016 image
+`0.1.0-camera-lte-trial-016`, run
+`camera-lte-trial-20260916-016`. Its 1,204,416-byte application SHA-256 is
+`A69B9AFB7292002A2D9745F5E90B261226329DA480791724CE91243C19B3DE9C`;
+ELF SHA-256 is
+`1E09F4AF1279BC08CCA0C36DF642B25ECFEC8638B8693EE4CDDFBEDD26FF7FAD`.
+The app-only write and an independent verification both matched without an
+erase or write to another partition.
+
+Run016's 180-second real-LTE regression recorded one link-up, one PPP IPv4
+event, 25 ordinary HTTP-200 uploads and nine fresh healthy LTE status
+snapshots. It recorded no stale/busy status, link-down, panic or Camera event.
+No photo command was issued, so this is focused LTE status/PPP concurrency
+evidence and does not duplicate or expand the run015 Camera result. USB still
+supplied power/serial. The 17,442-byte private log
+`run016_lte_concurrency_regression.raw.log` has SHA-256
+`45EE643CFA281A9AD1B9679A242B363679021AE79361286779101AB6D3861DA5`.
+The first and last retained health samples show queued bytes increasing from
+502,511 to 605,143 while persisted records rose from 3 to 66 and
+acknowledgements from 0 to 21. Errors and evictions stayed zero, but the net
+102,632-byte growth confirms that sustained throughput is still a blocker.
+
+The shortest remaining sequence is browser preview/export for the exact stored
+photo, sustained-rate/backlog closure and a separately bound timed candidate,
+default-off timed enable/disable plus complete-outage/same-file restart recovery,
+controlled Wi-Fi/LTE transition, independent-power coexistence and FIELD-020.
+`P0-LOC`, `P0-CALL` and `P0-SOS` all remain `NOT_RUN`.
 
 ## Prior execution adjustment — founder instruction 2026-09-06
 

@@ -1,27 +1,99 @@
 ---
 document_status: authoritative
 decision_updated: 2026-09-09
-last_verified: 2026-09-09
+last_verified: 2026-09-16
 verified_by: codex
 ---
 
 # Active Build
 
-## 2026-09-09 current hardware state
+## 2026-09-16 current hardware state
 
-The identified connectivity board on CH343 `COM3` now contains the run006
-Camera trial application built from commit
-`80c5e86fd8b39462128b831b9a06db7edbf2841a`. It was written app-only at
-`0x200000`; bootloader, partition table, NVS and other data partitions were not
-rewritten by that app flash. Its last bound application SHA-256 is
-`EE2FA5A3D2B65186B3A80597C1C574CAA66CBEB66DA5A5EE2125B3086C299D0D`.
-The final evidence window released COM3 after obtaining the required result;
-the board's later power/running state is not inferred from a closed monitor.
+The identified connectivity board on CH343 `COM3` most recently executed the
+run016 app-only image `0.1.0-camera-lte-trial-016`, run
+`camera-lte-trial-20260916-016`. Its 1,204,416-byte application SHA-256 is
+`A69B9AFB7292002A2D9745F5E90B261226329DA480791724CE91243C19B3DE9C`;
+its ELF SHA-256 is
+`1E09F4AF1279BC08CCA0C36DF642B25ECFEC8638B8693EE4CDDFBEDD26FF7FAD`.
+It was written app-only at `0x200000`; bootloader, partition table, NVS and data
+partitions were not rewritten by that app flash. The write and a separate
+`verify_flash` both returned matching digests.
 
-This image is `UNVERIFIED_TRIAL`, Wi-Fi/no-SIM with LTE PPP disabled. It must
-not be used as evidence of an LTE candidate. AMOLED is excluded from this
-A-line milestone and its UI/CALL image is unchanged. The untracked
-`hardware/mechanical/C-ME-0.1/` founder draft is also excluded and unchanged.
+Run016 enabled the actual SIM7670G PPP data route while retaining the explicit
+manual-only `trial_unverified` Camera Gate and disabled timer path. After the
+required 180-second regression window, the serial monitor closed; later
+power/running state is not inferred from that closed monitor.
+
+AMOLED is excluded from this A-line milestone and its UI/CALL image is
+unchanged. The untracked `hardware/mechanical/C-ME-0.1/` founder draft is also
+excluded and unchanged.
+
+## 2026-09-16 LTE concurrency regression — current flashed image
+
+The current run016 image preserves the same descriptor suffix
+`v0.1.0-135-g114632695-dirty`; the immutable application/ELF digests above bind
+this distinct build. The 180-second private serial capture contains one
+matching START, one LTE link-up, one PPP IPv4 event, 25 ordinary
+`route=lte` HTTP-200 uploads and nine fresh healthy LTE-status snapshots.
+There was no stale status snapshot, gate-busy result, link-down, panic or
+Camera event.
+
+The retained health samples also show `queued_bytes` rising from 502,511 to
+605,143 between the first and last sample while persisted records rose from 3
+to 66 and acknowledgements from 0 to 21. Errors and evictions remained zero in
+that window, but the positive net backlog proves the current source rate and
+single-record HTTPS path are not yet sustainable for field use.
+
+No photo command was sent during run016. This is a focused regression for the
+LTE status/PPP concurrency fix and continued ordinary data delivery, not a
+second Camera test. USB supplied power and serial access; the data path was
+SIM7670G PPP, so this remains neither independent-power nor FIELD-020 evidence.
+The 17,442-byte private log is
+`run016_lte_concurrency_regression.raw.log`, SHA-256
+`45EE643CFA281A9AD1B9679A242B363679021AE79361286779101AB6D3861DA5`.
+The app write and independent verification matched without erasing any other
+partition.
+
+## 2026-09-16 real-LTE manual Camera and private-API checkpoint
+
+The bound run015 image advertises application descriptor
+`v0.1.0-135-g114632695-dirty`. Its application SHA-256 is
+`281C060625DC5F99EA37C7CAD01C419B65CF7D005ACC98334FFDB6090ED58B26` and its
+ELF SHA-256 is
+`F3B49C55755F38A4046F433DE4718BFDEEF1E2AA077D87F4C6AD3F24AA7904CB`;
+these immutable digests, not the shared dirty descriptor suffix, identify the
+executed run015 build. Its Wi-Fi credentials were empty, LTE PPP was selected,
+the runtime limit was 600 seconds, timed Camera capture was disabled and at
+most one actual manual Camera attempt was allowed in the boot.
+
+The first USB-modem negotiation failed before dial and was cleaned up for a
+same-boot retry. Attempt two completed `CONNECT`, brought up `pp2`, obtained PPP
+IP events and carried ordinary uploads with `route=lte`. The retained
+300-second serial window contains one link-up, three PPP IP events, 45 LTE
+ordinary-upload results, 43 HTTP-200 results, and no enumeration failure, PPP
+user interrupt, panic, brownout, watchdog or unexpected reboot marker.
+
+One new authenticated command was issued: session
+`run015-photo-20260916T043314Z`, command
+`run015-capture-20260916T043314Z`, two-minute TTL,
+`trigger_reason=web_manual`, `training_allowed=false`. The device returned an
+exact HTTP 200 `ok` command ACK (`matched=1`, `duplicate=0`), identified the
+OV5640 and produced photo
+`manual-9df82b52af19ae3683f61a7e80b793b8-n0`, a 3,957-byte 320 x 240 JPEG.
+The VPS verified and durably stored the content before exact ACK; an authorized
+private Guardian content-API download matched the device/server byte count and
+SHA-256
+`D167BEF33EB1B186DA3A71CE3F8785C42A1F2F7F44FD18034FFDB1E263DF29A55`.
+GNSS/no-fix, external IMU, LTE and available-power observations continued after
+the photo in the retained window.
+
+USB supplied power, serial observation and flash access, but the observed data
+route was ESP32-managed SIM7670G PPP rather than host forwarding. This passes
+one bounded real-LTE manual Camera -> VPS -> private-API byte-integrity slice;
+it does not pass browser preview/export, timed/outage/restart behavior,
+controlled Wi-Fi/LTE transition, independent power, endurance, FIELD-020 or a
+P0 Gate. Details and private evidence handling are in
+[CAMERA-LTE-MANUAL-20260916-001](../hardware/CAMERA_LTE_MANUAL_CLOSURE_20260916.md).
 
 ## 2026-09-09 Camera shared-I2C trial — flashed Wi-Fi checkpoint
 
@@ -654,7 +726,7 @@ supersedes that historical mirror. All three P0 capability Gates remain
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG `COM8` observed 2026-09-02; MAC `02:00:00:00:00:01` | UI-001 field-friendly D1 status sidecar is currently flashed after the bounded CALL-010 override was reversed. The `659120`-byte application has SHA-256 `11D72868...A23139`; the latest run-008 bounded restore observed `hello`, `display_ready`, `status_rendered` and `ask_user_rendered`. It retains the cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt and QMI8658 engineering sampler. |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`, SIM7670G USB ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-16 | Collector app `1d67d231...c9ab6f25` is the current retained image after run 006 stopped normally; it is a Wi-Fi-only 300-second bench profile, not field/LTE/product evidence. FW-007 `0.1.0-fw007-lte-wifi-failover` is the verified rollback fallback; its historical failover evidence and limitations remain recorded below. |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`; historical direct-to-host SIM7670G ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-16 | Latest executed app is run016 `0.1.0-camera-lte-trial-016`, application SHA-256 `A69B9AFB...9B3DE9C`. Its 180-second USB-powered/serial-observed, ESP32-managed LTE PPP regression retained 25 ordinary HTTP-200 uploads and nine fresh healthy status snapshots without stale/busy/link-down/panic markers; no photo command was sent. Run015 separately passed the one real-LTE manual Camera -> VPS -> private-API integrity slice. Timer/outage/restart, browser preview, route transition, independent power and field use remain unverified. FW-007 remains the recorded rollback fallback. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 

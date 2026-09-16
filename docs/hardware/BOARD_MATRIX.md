@@ -1,12 +1,58 @@
 ---
 document_status: authoritative
-last_verified: 2026-09-09
+last_verified: 2026-09-16
 verified_by: codex
 ---
 
 # Board Matrix
 
 All unknown fields must remain explicit. Do not infer hardware capability from product names.
+
+## 2026-09-16 current LTE concurrency checkpoint
+
+`connectivity-node-001` most recently executed app-only image
+`0.1.0-camera-lte-trial-016`, run
+`camera-lte-trial-20260916-016`. The 1,204,416-byte application has SHA-256
+`A69B9AFB7292002A2D9745F5E90B261226329DA480791724CE91243C19B3DE9C`;
+ELF SHA-256 is
+`1E09F4AF1279BC08CCA0C36DF642B25ECFEC8638B8693EE4CDDFBEDD26FF7FAD`.
+The app-only write at `0x200000` and an independent verification both matched;
+no other partition was erased or written.
+
+Its 180-second USB-powered/serial-observed run brought up the ESP32-managed
+SIM7670G PPP path and retained 25 ordinary LTE HTTP-200 uploads plus nine fresh
+healthy LTE status snapshots. It recorded no stale/busy status, link-down,
+panic or Camera event. Queued bytes still rose from 502,511 to 605,143 while
+persisted records rose from 3 to 66 and acknowledgements from 0 to 21, so the
+run also confirms a remaining sustained-throughput blocker. No photo command
+was sent; this is a focused
+status/PPP-concurrency regression, not a repeat Camera closure, independent-
+power run or field result. The private log SHA-256 is
+`45EE643CFA281A9AD1B9679A242B363679021AE79361286779101AB6D3861DA5`.
+
+## 2026-09-16 real-LTE manual Camera checkpoint
+
+Before that regression, `connectivity-node-001` executed app-only image
+`0.1.0-camera-lte-trial-015`, run
+`camera-lte-trial-20260916-015`, application SHA-256
+`281C060625DC5F99EA37C7CAD01C419B65CF7D005ACC98334FFDB6090ED58B26`.
+The combined collector's second bounded modem attempt established the
+ESP32-managed SIM7670G PPP interface. Exactly one authenticated manual command
+then produced a current 320 x 240 OV5640 JPEG, saved it locally, uploaded its
+metadata and 3,957 content bytes over LTE, received exact VPS command/content
+ACKs and permitted an authorized private Guardian API download whose SHA-256
+matched device and server state.
+
+The retained 300-second window also contains continuing GNSS/no-fix, external
+QMI8658A, LTE and available-power observations after capture, 43 ordinary LTE
+HTTP-200 uploads, and no panic, USB enumeration failure or unexpected reboot.
+USB still supplied power/serial/flash, so this is not USB-free or
+independent-power evidence. Browser rendering, timed/outage/restart capture,
+controlled route transition, endurance, FIELD-020, product Camera selection
+and every P0 Gate remain unverified/`NOT_RUN`. The post-run spool backup used
+`--after no_reset` and left the board in ROM bootloader at that checkpoint.
+See
+[CAMERA-LTE-MANUAL-20260916-001](CAMERA_LTE_MANUAL_CLOSURE_20260916.md).
 
 ## 2026-09-09 bounded cleanup checkpoint
 
@@ -31,9 +77,10 @@ bootloader at that checkpoint, and Camera/shared-I2C/runtime/LTE evidence was
 unchanged by the read. See
 [CAMERA-MEDIA-001](CAMERA_MEDIA_RANGE_PREFLIGHT_20260909.md).
 
-## 2026-09-09 current Camera trial checkpoint
+## 2026-09-09 prior Camera trial checkpoint
 
-The board now contains the app-only run006 Camera trial image from commit
+At that checkpoint the board contained the app-only run006 Camera trial image
+from commit
 `80c5e86fd`, application SHA-256
 `EE2FA5A3D2B65186B3A80597C1C574CAA66CBEB66DA5A5EE2125B3086C299D0D`.
 It is an explicit `UNVERIFIED_TRIAL`, Wi-Fi/no-SIM profile with LTE PPP
@@ -43,7 +90,7 @@ a fresh run006b exact command/content ACK with byte-for-byte VPS storage while
 GNSS and external-IMU collection continued. No panic, brownout, watchdog,
 stack overflow or unexpected reboot was observed in those windows.
 
-This is current manual Wi-Fi bench evidence only. It does not verify LTE,
+This is historical manual Wi-Fi bench evidence only. It does not verify LTE,
 timed/offline capture, Web visual preview, independent power, FIELD-020,
 endurance, product power or Camera product selection. Exact identities and
 honest failure/pass boundaries are in
@@ -52,9 +99,10 @@ honest failure/pass boundaries are in
 ## Current Camera integration constraints
 
 The candidate places OV5640 `0x3C`, MAX17048 `0x36` and QMI8658A `0x6A` on
-I2C0 GPIO15/16 at 100 kHz. Bounded Camera/IMU coexistence has now been observed
-in the run006 trial, but the image remains `UNVERIFIED_TRIAL` and no electrical
-endurance or product Gate follows from it. The candidate uses an internal-DRAM
+I2C0 GPIO15/16 at 100 kHz. Bounded Camera/IMU coexistence was observed in
+run006 and again around the run015 real-LTE manual capture, but the Camera
+profile remains `trial_unverified` and no electrical endurance or product Gate
+follows from it. The candidate uses an internal-DRAM
 framebuffer and legacy shared-I2C0. Camera PCLK and the board's TF
 card-detect path both use GPIO46, so the first joint test requires the TF card
 physically removed and its driver disabled. GPIO39-42 must also remain free of
@@ -63,7 +111,8 @@ acceptance evidence, not facts inferred from the successful isolated smoke.
 
 ## 2026-09-06 previous collector state
 
-The connectivity node currently retains collector app 985,984 B, SHA-256
+At that checkpoint the connectivity node retained collector app 985,984 B,
+SHA-256
 `1d67d2319f30d89ce794f0b7e1b3051130163a3d7b8ce92764f8c0bcc9ab6f25`.
 Run 006 stopped normally at 07:32:47 UTC and COM3 closed. This is a Wi-Fi-only,
 300-second USB bench profile with real QMI8658 and MAX17048 collection; it is
@@ -100,6 +149,13 @@ at 07:26:32 UTC. Descriptor `fw007-e9ca7a4` was observed; NVS was not erased.
 Evidence: `reports/board_validation/P0-CONVERGENCE-20260905-001/`;
 `actual_fw007_restore_result.json` supplies exact images, path, MAC and times.
 Wearable UI-001 was not touched. Existing capability dates below remain intact.
+
+The long accumulated cells below retain each dated experiment. For
+`connectivity-node-001`, the 2026-09-16 checkpoints above supersede only the
+older run006 phrases that call the Wi-Fi trial the current image or say that no
+real-LTE Camera closure exists. Run015 supplies that one bounded manual
+LTE/API-integrity slice and run016 is the current flashed LTE concurrency
+checkpoint; every other unverified limitation in the row remains.
 
 | board_id | role | full model | MCU/SoC | IMU | microphone | GNSS | cellular | camera | storage | validation status |
 |---|---|---|---|---|---|---|---|---|---|---|

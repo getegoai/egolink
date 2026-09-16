@@ -1,7 +1,7 @@
 ---
 document_status: authoritative
 decision_updated: 2026-09-09
-last_verified: 2026-09-04
+last_verified: 2026-09-16
 verified_by: founder/codex
 decision_adr: ../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md
 ---
@@ -25,11 +25,12 @@ source, evidence and final `P0-CALL`/`P0-SOS` obligations remain. HW-021 and
 COMPLIANCE-010 continue. Camera is required here but is not a fourth product
 Gate, Camera AI or a Location/SOS decision source.
 
-The scope decision itself creates no Camera or field evidence. The application
-partition retains the prior collector build; a separate bounded 2026-09-09
-legacy-data backup/purge result does not prove combined Camera, real-LTE photo
-upload, persistent photo recovery or field behavior. All three product Gates
-remain `NOT_RUN`.
+At ADR-0015 acceptance time, the decision itself created no new evidence and
+the application partition still retained the prior collector build. Subsequent
+live state and evidence are recorded only in
+[STATUS](STATUS.md), [ACTIVE_BUILD](ACTIVE_BUILD.md) and the
+[current packet](../tasks/active/P0-CONVERGENCE-20260905.md); they do not by
+themselves advance a P0 Gate. All three product Gates remain `NOT_RUN`.
 
 ## 2026-09-05 Prior Accepted Runtime Convergence
 
@@ -388,28 +389,25 @@ battery/charging, intended users and child-product questions.
 
 ## Immediate Execution Order
 
-1. Reidentify the single connectivity node, Camera, external IMU, power,
-   antennas, active/recovery images, pin/bus ownership and actually persistent
-   photo medium. Keep every unknown explicit.
-2. Integrate one bounded Camera capture path into the current collector image;
-   preserve Location/network/raw sensing and release resources after success or
-   failure. Build and execute focused coexistence/resource regressions.
-3. On that same candidate, prove ordinary-observation upload over actual Wi-Fi
-   and actual LTE plus a controlled transition. Retain exact IDs and pending
-   bytes until exact durable ACK; expose route, retry, duplicate and loss truth.
-4. Reuse the authenticated command/ACK surface for one expiring Web capture.
-   Prove device receipt, current JPEG creation, reliable local save, real-LTE
-   upload, VPS integrity/persistence and authorized Web preview as separate
-   states.
-5. Reuse the same path for default-off local timed capture with an interval and
+1. Use the current run016 LTE-concurrency image as the bounded baseline and
+   close sustained upload/backlog errors without a broad spool clear. Bind the
+   next Camera candidate separately and keep the manual Camera Gate limited
+   until timed-mode promotion is explicit.
+2. Verify authorized browser decode/preview and export for the exact run015
+   photo; private content-API byte integrity is already proven but is not Web
+   visual evidence.
+3. Reuse the same path for default-off local timed capture with an interval and
    bounded session end. Prove pending stop/config truth, offline quota, restart
    recovery of the same IDs/files, corruption/full behavior and no catch-up
    recapture of missed intervals.
-6. Run one independently powered single-board joint short test with AMOLED and
+4. Prove a controlled actual Wi-Fi/LTE transition on the joint candidate.
+   Retain exact IDs and pending bytes until durable ACK and expose route, retry,
+   duplicate and loss truth.
+5. Run one independently powered single-board joint short test with AMOLED and
    PC forwarding absent. Confirm GNSS/LTE/IMU/power progress and bounded memory/
    task/storage growth during Camera work, including the reviewed network
    transition, then dispatch FIELD-020.
-7. Continue HW-021, applicable reliability/power work and COMPLIANCE-010 in
+6. Continue HW-021, applicable reliability/power work and COMPLIANCE-010 in
    parallel. Keep CALL-020/CALL-021/full SOS paused and retain all final release
    dependencies. All current P0 Gates remain `NOT_RUN`.
 
@@ -426,12 +424,21 @@ battery/charging, intended users and child-product questions.
 
 ## Current Evidence Boundary
 
-The 2026-09-09 scope decision is not new execution evidence. The actual retained
-connectivity image is still the 2026-09-06 Wi-Fi-only collector, and TCAM-001 is
-a separate 2026-06-23 camera-smoke result. No current combined image, verified
-photo persistence medium, same-candidate Wi-Fi/LTE transition, LTE photo upload,
-Web preview, independent-power joint run or Camera-inclusive FIELD-020 result
-exists yet.
+The 2026-09-09 scope decision itself is not execution evidence. Subsequent
+run006 joint-firmware work proved bounded manual QVGA capture, persistent media
+and exact VPS storage over Wi-Fi. Run015 then proved one authenticated current
+manual command -> OV5640 capture -> local save -> SIM7670G LTE PPP upload ->
+durable VPS object -> authenticated private Guardian content-API byte-integrity
+slice while ordinary GNSS/no-fix, external IMU, LTE and power observations
+continued. Run016 then passed a 180-second focused regression with 25 ordinary
+LTE HTTP-200 uploads, nine fresh healthy status snapshots and no stale/busy,
+link-down, panic or Camera event; no photo command was issued. Queued bytes
+still rose from 502,511 to 605,143, so sustained throughput remains open. USB
+supplied power/serial/flash in both runs, so neither result is USB-free or
+independent-power evidence. Browser visual preview/export, timed capture,
+complete-outage and pending-photo restart recovery, controlled Wi-Fi/LTE
+transition, independently powered joint operation and Camera-inclusive
+FIELD-020 remain `NOT_RUN`.
 
 CALL-010 now has accepted-for-transition basic development-board input/output
 endpoint evidence: the spoken-input metric response and clear/normal overall

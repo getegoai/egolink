@@ -1,7 +1,7 @@
 ---
 document_status: authoritative
 decision_updated: 2026-09-09
-last_verified: 2026-09-09
+last_verified: 2026-09-16
 verified_by: founder/codex
 ---
 
@@ -33,11 +33,13 @@ sellable-P0 Gate and is not a Location/SOS decision source.
 
 - `connectivity-node-001` was reidentified on CH343 `COM3` as ESP32-S3 rev
   v0.2, MAC `02:00:00:00:00:03`, with 16 MiB physical flash.
-- The board now contains the app-only Camera trial image built from commit
-  `80c5e86fd8b39462128b831b9a06db7edbf2841a`, flashed at `0x200000`.
-  Its application SHA-256 is
-  `EE2FA5A3D2B65186B3A80597C1C574CAA66CBEB66DA5A5EE2125B3086C299D0D`.
-  It is a Wi-Fi/no-SIM `UNVERIFIED_TRIAL` image, not an LTE candidate.
+- The latest executed application is the app-only run016 image
+  `0.1.0-camera-lte-trial-016`, run
+  `camera-lte-trial-20260916-016`, 1,204,416 bytes, application SHA-256
+  `A69B9AFB7292002A2D9745F5E90B261226329DA480791724CE91243C19B3DE9C`.
+  It used the SIM7670G PPP route and retained the explicit manual-only
+  `trial_unverified` Camera Gate; it is bounded engineering evidence, not a
+  released Camera or field candidate.
 - The current Camera-layout `ego_collection` partition at `0x500000`, length
   `0x100000`, was privately backed up and then exactly erased under the existing
   founder authorization. The immediate complete readback was all `0xFF`; later
@@ -49,15 +51,32 @@ sellable-P0 Gate and is not a Location/SOS decision source.
   a subsequent `verify_flash` readback returned `verify OK`; the current
   observed occupancy permits reserving it for `ego_media` without displacing
   observed retained data.
-- The joint firmware identified the OV5640 and completed real QVGA captures,
-  cross-reboot metadata/JPEG recovery and a fresh exact command/content ACK to
-  the VPS while GNSS, external IMU and Wi-Fi collection continued. The clean
-  run006b JPEG was 2,707 bytes and matched the VPS SHA-256 exactly.
+- Run015 identified the OV5640 and completed exactly one fresh authenticated
+  manual command -> real QVGA capture -> local save -> LTE metadata/content
+  upload -> VPS durable storage -> private Guardian content-API download. The
+  3,957-byte JPEG matched the device/server/API SHA-256 exactly. GNSS/no-fix,
+  external IMU, LTE and available-power observations continued after capture.
+- The bounded 300-second serial window observed PPP link/IP establishment and
+  43 ordinary LTE HTTP-200 uploads without a panic, USB-enumeration failure or
+  unexpected reboot. USB supplied power/serial/flash, so this is real LTE data
+  evidence but not USB-free or independent-power evidence.
+- After run015, the complete 1 MiB collection spool was privately backed up
+  without erase. Its transient ROM-bootloader exit state was superseded by the
+  run016 app-only write and independent matching `verify_flash`; no other
+  partition was erased.
+- Run016 then passed a 180-second LTE concurrency regression with one link-up,
+  one PPP IPv4 event, 25 ordinary LTE HTTP-200 uploads and nine fresh healthy
+  status snapshots. It recorded no stale/busy status, link-down, panic or photo
+  event. No photo command was issued; run015 remains the Camera closure proof.
+  Across the retained health samples, however, queued bytes rose from 502,511
+  to 605,143 while persisted records rose from 3 to 66 and acknowledgements
+  from 0 to 21. Errors/evictions stayed zero in that window, but the net growth
+  keeps sustained throughput open.
 - AMOLED is excluded from A-line runtime and acceptance; its retained UI/CALL
   image is unchanged. The `C-ME-0.1` C-line draft was not touched.
-- No SIM traffic, real-LTE Camera transfer, timed/offline Camera run,
-  independently powered run or FIELD-020 run has occurred. Private Web visual
-  preview/export is not yet accepted.
+- Browser visual preview/export, timed/offline Camera capture, restart recovery
+  of a pending photo, controlled Wi-Fi/LTE transition, independently powered
+  operation and FIELD-020 remain `NOT_RUN`.
 
 Exact active-image history and board capability boundaries are in
 [ACTIVE_BUILD](ACTIVE_BUILD.md) and the
@@ -71,6 +90,8 @@ the later run006 app flash supersedes that transient device state.
 The current joint-firmware run, hashes, exact partition clear and honest
 failure/pass split are recorded in
 [CAMERA-SHARED-I2C-TRIAL-20260909-001](../hardware/CAMERA_SHARED_I2C_TRIAL_20260909.md).
+The later real-LTE manual Camera and private-API integrity slice is recorded in
+[CAMERA-LTE-MANUAL-20260916-001](../hardware/CAMERA_LTE_MANUAL_CLOSURE_20260916.md).
 
 ## Verified evidence that may be inherited
 
@@ -123,17 +144,19 @@ historical project data. Exact ranges, counts and hashes are recorded in
 - The deployed VPS/Web source slice now contains Guardian-bound capture sessions,
   one-shot/timer controls, immutable Camera metadata, private JPEG storage,
   integrity-verified content ACK, retention tombstones/retry, preview and
-  export. Its ingest/storage path accepted the exact run005, run006 and run006b
-  Camera identities and bytes. Browser-side visual preview/export remains
-  unverified.
+  export. Its ingest/storage path accepted the exact run005, run006, run006b
+  and run015 Camera identities and bytes. Run015 additionally passed an
+  authenticated private Guardian content-API byte-integrity check;
+  browser-side visual preview/export remains unverified.
 - Four earlier clean no-flash builds pass: default, legacy collector, Camera
   blocked and Camera trial. Both Camera profiles deliberately retain
   `NO_SIM=y` and LTE PPP disabled. The clean trial build has empty compiled
   Wi-Fi and bearer credentials, so its exact SHA is build evidence rather than
   a network-capable live image. The trial profile supplies the controlled
-  mechanism used by the ignored private run006 overlay. The resulting combined
-  image was flashed and exercised, but remains `UNVERIFIED_TRIAL` and is not
-  LTE-ready.
+  mechanism first used by the ignored private run006 overlay. The later run015
+  image enabled the real SIM7670G PPP path and completed one bounded manual
+  Camera transfer over LTE, while the Camera Gate deliberately remained
+  `trial_unverified` and timed capture stayed disabled.
 
 ## Product Gate status
 
@@ -148,36 +171,34 @@ all three Gates must eventually pass.
 
 ## Blocking facts before the next live run
 
-1. The shared-I2C manual trial now has real joint-firmware success evidence,
-   but the current image is still the intentionally limited one-attempt-per-boot
-   `UNVERIFIED_TRIAL`. A separate named candidate must consume the evidence and
-   make the promotion explicit before timed capture is enabled.
-2. Collection throughput is not field-ready. The first run006 command exposed
-   old-backlog/`422` delay and command expiry; even after the exact spool clear,
-   a 300-second boot reached about 722 KiB queued with 25 bounded evictions.
-   Close the rejection/throughput cause and tune the experimental rate before
-   treating the dataset as representative or loss-free.
-3. Build and bind the actual SIM/LTE-enabled candidate. The current image has
-   `NO_SIM=y`, LTE PPP disabled and only Wi-Fi evidence; it cannot satisfy the
-   real-LTE milestone by reinterpretation.
-4. Verify the private Web preview/export for the exact same stored photo, then
-   prove timed enable/disable, outage capture and same-file reboot recovery.
+1. Shared-I2C manual capture and one real-LTE delivery now have bounded success
+   evidence, and run016 closes the immediate LTE status/PPP concurrency
+   regression. The flashed profile is still the intentionally limited one-
+   attempt-per-boot `trial_unverified` mode; any timed-capture promotion needs
+   a separately bound candidate and explicit evidence.
+2. Collection throughput is not field-ready. Run006 exposed old-backlog/`422`
+   delay and bounded eviction; run015 still ended its last retained health
+   sample with 230,047 queued bytes and two recorded errors. Run016 had zero
+   errors/evictions in its retained window, but queued bytes nevertheless rose
+   by 102,632 while only 21 of 63 newly persisted records were acknowledged.
+   Close the sustained-rate/backlog cause before treating the dataset as
+   representative or loss-free.
+3. Verify the authorized browser preview/export for the exact run015 stored
+   photo; the successful private API download is not browser rendering.
+4. Prove timed enable/disable, outage capture and same-file reboot recovery.
 5. Independent power, route transition, longer coexistence and FIELD-020 are
    still unrun. Camera hard-power cutoff and product power remain unverified.
 
 ## Immediate execution order
 
-1. Diagnose and fix the ordinary-record `422`/upload-rate bottleneck using the
-   retained run006 evidence; rerun one bounded Wi-Fi window without relying on
-   another broad spool clear.
-2. Convert the successful shared-I2C evidence into a separately named Camera
-   candidate, keeping the privacy, TLS, ownership and exact-ACK boundaries.
-3. Enable and prove the actual SIM/LTE route, then repeat one fresh command ->
-   capture -> durable metadata/JPEG -> VPS exact verification -> private Web
-   preview with GNSS/IMU/ordinary observations still progressing.
-4. Prove default-off timed enable/disable, full outage capture, restart and
+1. Use run016 as the bounded LTE concurrency baseline, close sustained
+   upload/backlog errors without another broad spool clear, and bind the next
+   Camera candidate without weakening privacy, TLS, modem ownership or exact
+   ACK boundaries.
+2. Verify browser decode/preview and export for the exact run015 photo identity.
+3. Prove default-off timed enable/disable, full outage capture, restart and
    same-file recovery without catch-up recapture.
-5. Exercise controlled Wi-Fi/LTE transition and retained-spool accounting,
+4. Exercise controlled Wi-Fi/LTE transition and retained-spool accounting,
    then run the independent-power short test and FIELD-020.
 
 ## Parallel and paused lanes
@@ -195,9 +216,9 @@ all three Gates must eventually pass.
 
 ## Validation record for this revision
 
-- `python scripts/context_lint.py`: PASS after the 2026-09-09 run006/run006b
+- `python scripts/context_lint.py`: PASS after the 2026-09-16 run015/run016
   evidence update; the unfinished `C-ME-0.1` draft remained excluded.
-- `scripts/verify.ps1`: PASS, 1,784 tests, 13 environment-guarded skips. A skip
+- `scripts/verify.ps1`: PASS, 1,797 tests, 13 environment-guarded skips. A skip
   is not hardware evidence.
 - Focused Camera/media/control/delivery/HTTPS suite: PASS, 84/84. The final
   Camera Gate/journal subset passes 16/16.
@@ -227,6 +248,22 @@ all three Gates must eventually pass.
   described in the linked evidence. Browser decode, real LTE transfer,
   timed-outage/reboot capture, independent power and FIELD-020 remain
   `NOT_RUN`.
+- Run015 flashed the app-only
+  `0.1.0-camera-lte-trial-015` image and passed one real-SIM LTE PPP manual
+  Camera -> VPS -> authenticated private-API byte-integrity slice. Application
+  SHA-256 is
+  `281C060625DC5F99EA37C7CAD01C419B65CF7D005ACC98334FFDB6090ED58B26`;
+  the retained raw log SHA-256 is
+  `418FC074D5B32EC86838B2F315295A1AA8536D60A3B3D6A485069FFDD630FD5C`.
+  Browser rendering, timer/outage/restart, route transition, independent power,
+  FIELD-020 and all three P0 Gates remain `NOT_RUN`.
+- Run016 app-only write and independent verify matched application SHA-256
+  `A69B9AFB7292002A2D9745F5E90B261226329DA480791724CE91243C19B3DE9C`.
+  Its 180-second real-LTE ordinary-upload regression recorded 25 HTTP-200
+  uploads, nine fresh healthy status snapshots and zero stale/busy/link-down/
+  panic/photo events. The private log SHA-256 is
+  `45EE643CFA281A9AD1B9679A242B363679021AE79361286779101AB6D3861DA5`.
+  No Camera command was issued and no remaining milestone or P0 Gate advanced.
 
 The prior 3,000-plus-line chronological status was preserved byte-for-byte as
 a non-authoritative source snapshot under
