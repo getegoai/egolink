@@ -160,6 +160,66 @@ carried data, so independent power remains unverified. The serial window ended
 after the required 180-second observation; later power/runtime state is not
 inferred from the closed monitor.
 
+## Authorized post-run016 spool preservation and precise clear
+
+Before the next throughput run, the actual partition table and the complete
+post-run016 `ego_collection` partition were read back privately. The partition
+table readback was 4,096 bytes with SHA-256
+`821CCD8D98853D897F401D965694856959FEE9A02C16ADC895A5772D0FBC618A`.
+It confirmed `ego_collection` at `0x500000`, length `0x100000`. The complete
+1,048,576-byte collection-spool backup has SHA-256
+`ECBF85D49344670893C9579F956B937D0990F8AA4A711D512E959CF15238033E`.
+
+Under the founder's explicit authorization to back up and clear the old
+Wi-Fi/spool data, only the exact range `0x500000` plus `0x100000` bytes was
+erased. A complete immediate readback contained zero non-`0xFF` bytes and has
+SHA-256
+`F5FB04AA5B882706B9309E885F19477261336EF76A150C3B4D3489DFAC3953EC`.
+The operation did not target the application, bootloader, partition table,
+NVS, Camera media store or outbox. The board was intentionally held in the ROM
+bootloader until the subsequent app-only run017 flash, preventing an
+intermediate boot from refilling the cleared collection partition. Run017 then
+used that verified empty-spool starting point; its normal observations mean
+this paragraph must not be read as a claim that the partition is still blank.
+
+## Post-clear run017 empty-spool throughput regression
+
+The app-only run017 image `0.1.0-camera-lte-trial-017`, run
+`camera-lte-trial-20260916-017`, was written at `0x200000` and passed a
+separate `verify_flash`. Its 1,204,416-byte application SHA-256 is
+`07CF1EF3FEA13548FB9B7F5EF8F5C965FE6B6BF53EBD6AE9369F2E8CF0223529`;
+its ELF SHA-256 is
+`F9D47609BEB820803B2919B1F01B70D3B82E62FF8928F84CCD1ABB294919854A`.
+The app flash did not target any data partition. The only throughput-oriented
+profile change from run016 was extending the Camera command poll interval from
+2 seconds to 15 seconds; sensor sampling remained unchanged.
+
+The retained capture covered 620 seconds around a firmware-bounded 600-second
+run and ended with one bounded-complete marker. Its 57,156-byte private log has
+SHA-256
+`FABC0C2ED5E6DCE4DDCCBDBF33524C681FF3DA32E50DCEA65CAB46E61895CA63`.
+The first USB-modem probe timed out at approximately 9.7 seconds, completed its
+bounded quiesce/backoff path, and the next attempt established PPP at about
+34.9 seconds. The log then contains one LTE link-up, one PPP IP event and 248
+ordinary LTE upload results. All 248 returned HTTP 200, matched a local pending
+record, were accepted durably and were locally acknowledged. Sixty-five TLS
+handshakes were observed. Across 20 health samples, the queue reached an initial
+55,842-byte pre-PPP peak, cleared by approximately the 124-second sample, then
+stayed between 0 and 6,658 bytes and ended at 0. The steady segment's endpoint
+net slope is zero; an ordinary least-squares fit over the phase-shifted sawtooth
+samples is slightly positive at about 3.28 bytes/second, so this evidence is a
+bounded no-net-growth result rather than a claim that every fitted slope metric
+is non-positive. Evictions, RAM-pending records, recorded errors, stale-status
+snapshots, gate-busy results, link-down events, panics and Camera events all
+remained zero.
+
+No photo command was issued in run017. USB supplied power and serial/flash
+access while SIM7670G PPP carried the data. This closes the immediate sustained
+ordinary-observation throughput blocker for this empty-spool, ten-minute,
+USB-powered bench scope. It does not prove browser preview, timed Camera
+capture, complete-outage or restart photo recovery, Wi-Fi/LTE transition,
+independent power, endurance, FIELD-020 or any P0 Gate.
+
 ## Evidence handling
 
 Private raw serial data, the spool readback and the authorized test JPEG remain
@@ -172,6 +232,13 @@ The manual Camera closure log is `run015_lte_ppp_tx_wait.raw.log`, SHA-256
 The post-closure regression log is
 `run016_lte_concurrency_regression.raw.log`, SHA-256
 `45EE643CFA281A9AD1B9679A242B363679021AE79361286779101AB6D3861DA5`.
+The post-run016 preservation files are
+`partition_table_run016_posttest.bin`,
+`ego_collection_run016_posttest.bin` and
+`ego_collection_run016_postclear.bin`; their digests and bounded meanings are
+recorded above. The empty-spool throughput log is
+`run017_empty_spool_throughput.raw.log`, SHA-256
+`FABC0C2ED5E6DCE4DDCCBDBF33524C681FF3DA32E50DCEA65CAB46E61895CA63`.
 The private API download is
 `run015-manual-9df82b52af19ae3683f61a7e80b793b8-n0.jpg`, whose digest is
 recorded above. This document intentionally omits credentials, precise
@@ -186,8 +253,10 @@ log is committed, publicly served or approved for training.
    identified candidate; prove default-off timed enable/disable, expiry,
    complete-outage local capture and same-file restart recovery without
    catch-up recapture.
-3. Resolve sustained ordinary-observation throughput/backlog behavior and
-   account for every error, retry, eviction, duplicate and loss.
+3. Carry the run017 15-second command-poll result into the separately validated
+   field candidate, then extend throughput evidence beyond the ten-minute
+   empty-spool bench scope while accounting for every error, retry, eviction,
+   duplicate and loss.
 4. Prove a controlled Wi-Fi/LTE transition without identity/time drift, then
    run the independently powered single-board coexistence short test.
 5. Dispatch FIELD-020 only after those blockers close. CALL, complete SOS and

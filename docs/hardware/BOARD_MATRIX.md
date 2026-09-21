@@ -8,9 +8,43 @@ verified_by: codex
 
 All unknown fields must remain explicit. Do not infer hardware capability from product names.
 
-## 2026-09-16 current LTE concurrency checkpoint
+## 2026-09-16 current empty-spool LTE throughput checkpoint
 
-`connectivity-node-001` most recently executed app-only image
+`connectivity-node-001` currently has app-only image
+`0.1.0-camera-lte-trial-017`, run
+`camera-lte-trial-20260916-017`. The 1,204,416-byte application has SHA-256
+`07CF1EF3FEA13548FB9B7F5EF8F5C965FE6B6BF53EBD6AE9369F2E8CF0223529`;
+ELF SHA-256 is
+`F9D47609BEB820803B2919B1F01B70D3B82E62FF8928F84CCD1ABB294919854A`.
+The app-only write at `0x200000` and an independent verification both matched.
+
+Before that write, the complete post-run016 1 MiB `ego_collection` partition
+was backed up. Only `[0x500000,0x600000)` was then erased under the existing
+authorization, and its complete readback was all `0xFF`; the application, NVS,
+`ego_media` and `ego_outbox` partitions were not targeted. Run017 therefore
+started with an empty ordinary-observation spool.
+
+The 620-second serial capture around the 600-second firmware bound used USB for
+power and serial while the ESP32-managed SIM7670G PPP interface carried data.
+It retained 248 ordinary uploads, all HTTP 200, exact-identity matched and
+locally acknowledged, with 65 TLS handshakes. The initial queued-byte peak of
+55,842 cleared by about 124 seconds; the steady range was 0-6,658 bytes and the
+final queue was zero. Evictions, RAM-pending records, errors, stale/busy status,
+link-down, panic and Camera events were all zero, and the bounded run completed
+once. Camera command polling was increased from 2 to 15 seconds while sensor
+rates remained unchanged. This closes the immediate ordinary-observation
+throughput blocker for one 10-minute empty-spool bench condition only; it does
+not prove historical-backlog recovery, endurance or FIELD-020. The tracked
+FIELD-020 overlay now carries the 15-second polling setting.
+
+No photo command was issued, so run015 remains the real-LTE Camera proof. USB
+power/serial means run017 is not independent-power evidence. Browser preview,
+timed/offline/reboot photo behavior, a controlled route transition, endurance,
+FIELD-020 and every P0 Gate remain unverified/`NOT_RUN`.
+
+## 2026-09-16 prior LTE concurrency checkpoint
+
+Before run017, `connectivity-node-001` executed app-only image
 `0.1.0-camera-lte-trial-016`, run
 `camera-lte-trial-20260916-016`. The 1,204,416-byte application has SHA-256
 `A69B9AFB7292002A2D9745F5E90B261226329DA480791724CE91243C19B3DE9C`;
@@ -154,8 +188,9 @@ The long accumulated cells below retain each dated experiment. For
 `connectivity-node-001`, the 2026-09-16 checkpoints above supersede only the
 older run006 phrases that call the Wi-Fi trial the current image or say that no
 real-LTE Camera closure exists. Run015 supplies that one bounded manual
-LTE/API-integrity slice and run016 is the current flashed LTE concurrency
-checkpoint; every other unverified limitation in the row remains.
+LTE/API-integrity slice, run016 retains its negative queue-growth result, and
+run017 is the current flashed empty-spool LTE-throughput checkpoint; every
+other unverified limitation in the row remains.
 
 | board_id | role | full model | MCU/SoC | IMU | microphone | GNSS | cellular | camera | storage | validation status |
 |---|---|---|---|---|---|---|---|---|---|---|

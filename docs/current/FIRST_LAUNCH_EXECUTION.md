@@ -389,17 +389,20 @@ battery/charging, intended users and child-product questions.
 
 ## Immediate Execution Order
 
-1. Use the current run016 LTE-concurrency image as the bounded baseline and
-   close sustained upload/backlog errors without a broad spool clear. Bind the
-   next Camera candidate separately and keep the manual Camera Gate limited
-   until timed-mode promotion is explicit.
+1. Retain run017 as the bounded joint-firmware baseline. Its 15-second Camera
+   command polling closed the immediate ordinary-observation throughput blocker
+   only for one 10-minute empty-spool USB bench run; do not generalize this to
+   historical-backlog recovery, endurance or field operation. The tracked
+   FIELD-020 overlay now carries the same polling interval, while sensor rates
+   remain unchanged.
 2. Verify authorized browser decode/preview and export for the exact run015
    photo; private content-API byte integrity is already proven but is not Web
    visual evidence.
-3. Reuse the same path for default-off local timed capture with an interval and
-   bounded session end. Prove pending stop/config truth, offline quota, restart
-   recovery of the same IDs/files, corruption/full behavior and no catch-up
-   recapture of missed intervals.
+3. Bind and promote a separate timed Camera candidate from the run017 baseline,
+   then reuse the same path for default-off local timed capture with an interval
+   and bounded session end. Prove pending stop/config truth, offline quota,
+   restart recovery of the same IDs/files, corruption/full behavior and no
+   catch-up recapture of missed intervals.
 4. Prove a controlled actual Wi-Fi/LTE transition on the joint candidate.
    Retain exact IDs and pending bytes until durable ACK and expose route, retry,
    duplicate and loss truth.
@@ -433,12 +436,27 @@ slice while ordinary GNSS/no-fix, external IMU, LTE and power observations
 continued. Run016 then passed a 180-second focused regression with 25 ordinary
 LTE HTTP-200 uploads, nine fresh healthy status snapshots and no stale/busy,
 link-down, panic or Camera event; no photo command was issued. Queued bytes
-still rose from 502,511 to 605,143, so sustained throughput remains open. USB
-supplied power/serial/flash in both runs, so neither result is USB-free or
-independent-power evidence. Browser visual preview/export, timed capture,
-complete-outage and pending-photo restart recovery, controlled Wi-Fi/LTE
-transition, independently powered joint operation and Camera-inclusive
-FIELD-020 remain `NOT_RUN`.
+still rose from 502,511 to 605,143, preserving that negative result as the
+reason for run017.
+
+Before run017, the complete post-run016 1 MiB collection partition was backed
+up and only `[0x500000,0x600000)` was erased under the existing authorization;
+an all-`0xFF` readback verified the empty range. The application, NVS, media and
+outbox partitions were not targeted. The app-only run017 write and independent
+verification then matched. With sensor rates unchanged and Camera command
+polling increased from 2 to 15 seconds, its 620-second capture around the
+600-second firmware bound recorded 248/248 ordinary LTE HTTP-200, identity-
+matched and locally acknowledged uploads, 65 TLS handshakes, an initial
+55,842-byte peak cleared by about 124 seconds, steady queued bytes of 0-6,658
+and final zero. Evictions, RAM-pending records, errors, stale/busy status,
+link-down, panic and Camera events were all zero; the run completed once. This
+closes the immediate ordinary-throughput blocker only for that empty-spool
+10-minute bench condition. No photo command was issued. USB supplied power and
+serial while SIM7670G PPP carried data, so this is not independent-power or
+field evidence. Browser visual preview/export, timed capture, complete-outage
+and pending-photo restart recovery, controlled Wi-Fi/LTE transition,
+independently powered joint operation and Camera-inclusive FIELD-020 remain
+`NOT_RUN`.
 
 CALL-010 now has accepted-for-transition basic development-board input/output
 endpoint evidence: the spoken-input metric response and clear/normal overall

@@ -1,7 +1,7 @@
 ---
 document_status: authoritative
 decision_updated: 2026-09-09
-last_verified: 2026-08-23
+last_verified: 2026-09-21
 verified_by: codex
 owner: founder
 decision_adr: ../architecture/adr/ADR-0010-asynchronous-observation-timeline-and-store-forward.md
@@ -517,3 +517,52 @@ learned estimator。FT-001B/EXP-A1-000 的等待不是新增基础设施的理�
 旧 FT-001B/EXP-A1-000 数据可在独立硬件窗口继续产生并进入这一证据链，但不
 阻塞已有依赖的 Sprint 1 切片。AI 模型只在数据质量、Replay 与 offline/Shadow
 比较之后讨论晋级；其他互不冲突的 lane 继续执行。
+
+## 15. Active Ego-State 状态机与 3D IMU 数字孪生基线 (2026-09-21)
+
+### 15.1 Active Ego-State 端到端架构 (Task A1-A3)
+
+为实现边缘端实时人身移动与姿态异常感知，系统建立了从设备端 C 引擎到云端持久化展示的闭环：
+
+```text
+[物理传感器输入]
+20Hz QMI8658 (accel/gyro) + GNSS fix/speed + 4G LTE RSRP/Cell + MAX17048 电池
+  ↓ (零堆内存、200 点静态环形缓冲区 ~6.4KB)
+[firmware/mqtt_heartbeat/components/ego_state_engine]
+- 空间移动度分类 (spatial_mobility): stationary / pedestrian_walking / running / in_vehicle / indoor_weak_gnss
+- 姿态异常检测 (posture_anomaly): normal / abnormal_shock / suspected_fall / prolonged_immobility
+- 穿戴状态推断 (device_wear_state): tabletop_resting / handheld / wearable_or_bag / charging_docked
+- 证据链摘要生成 (evidence_digest): mbedtls SHA-256 (涵盖 IMU RMS、峰值冲击、陀螺方差、GNSS速度、网络与电池)
+  ↓ (随 DEVICE 健康帧上报，符合 shared/contracts/ego_state_estimation_v0.schema.json)
+[server/collection_store.py]
+- SQLite 数据库表 `collection_ego_states` 原子事务持久化
+  ↓
+[server/message_hub.py]
+- REST API: `GET /api/v1/devices/<id>/ego-state/latest` & `timeline`
+  ↓
+[server/web/ (DevBench 仪表盘)]
+- Active Ego-State 监控卡片: 移动度徽章、跌倒告警、置信度、物理证据指标与 SHA-256 证据哈希
+```
+
+### 15.2 3D IMU 数字孪生与设备平面校准 (`server/web/scripts/imu3d.js`)
+
+针对 6 轴 IMU 在 Web 3D 渲染中的坐标系对齐、无磁力计自旋以及万向节死锁问题，建立了如下权威实现基线：
+
+1. **统一世界坐标系与模型几何**：
+   - Canvas 3D 引擎以世界 $Y$ 轴为垂直高度轴（Up 指向天空），地平面为 $X-Z$ 平面。
+   - PCB 几何模型：厚度位于 $Y \in [-3, +3]$（法向量 $[0, 1, 0]$ 朝上），长度在 $X$ 轴（$[-44, +44]$），宽度在 $Z$ 轴（$[-28, +28]$）。
+   - 3D 坐标指示箭头：青色 `Up (Z)` 垂直板面向上指向天空，橙色 `X` 沿纵向长边向前，绿色 `Y` 沿横向短边向右，与真机参考外观严格 1:1 对齐。
+
+2. **Rodrigues 设备平面校准算法**：
+   - 校准目标向量设为世界 Up 轴 $\vec{u} = [0, 1, 0]$。
+   - 用户点击“🎯 设备平面校准”时，利用 Rodrigues 旋转公式计算将当前测得的静止重力加速度向量 $\vec{g}_{\text{raw}}$ 旋转至 $[0, 1, 0]$ 的 $3\times3$ 对齐矩阵 $R$。
+   - 对齐后，板卡平放在桌面上时重力加速度严格对准 $+Y$，保证 Pitch = 0.0°, Roll = 0.0°，板卡绝对水平贴合地平面。
+
+3. **陀螺仪零漂锁存与零速更新 (ZUPT)**：
+   - QMI8658 无地磁罗盘约束，实测存在约 $-3.25^\circ/\text{s}$ 的恒定静态偏置（$gy = -208$ LSB）。
+   - 校准时同步锁存静态陀螺偏置（Tare Gyro Bias）并在运行时扣除。
+   - 引入零速静止更新（ZUPT）：当角速度范数 $< 1.8^\circ/\text{s}$ 且合加速度 $\approx 1.0\,\text{G}$ 时，冻结航向角（Yaw）积分，彻底消除静止时的漂移自旋。
+
+4. **无奇点欧拉角旋转链**：
+   - 采用 Roll（绕横向 $Z$ 轴）$\to$ Pitch（绕纵向 $X$ 轴）$\to$ Yaw（绕垂直 $Y$ 轴）的次序串联，彻底消除近 $90^\circ$ 时的万向节自锁翻转跳变。
+

@@ -1,40 +1,152 @@
 ---
 document_status: authoritative
 decision_updated: 2026-09-09
-last_verified: 2026-09-16
+last_verified: 2026-09-21
 verified_by: codex
 ---
 
 # Active Build
 
-## 2026-09-16 current hardware state
+## 2026-09-21 current hardware state — run022 cellular call driver & ego-state engine field candidate live flash (Boot 188)
 
-The identified connectivity board on CH343 `COM3` most recently executed the
-run016 app-only image `0.1.0-camera-lte-trial-016`, run
-`camera-lte-trial-20260916-016`. Its 1,204,416-byte application SHA-256 is
-`A69B9AFB7292002A2D9745F5E90B261226329DA480791724CE91243C19B3DE9C`;
-its ELF SHA-256 is
-`1E09F4AF1279BC08CCA0C36DF642B25ECFEC8638B8693EE4CDDFBEDD26FF7FAD`.
-It was written app-only at `0x200000`; bootloader, partition table, NVS and data
-partitions were not rewritten by that app flash. The write and a separate
-`verify_flash` both returned matching digests.
+The identified connectivity board on CH343 `COM3` executes the candidate image (`0.1.0-sensor-policy-continuous-021`, run `field-sensor-policy-20260919-021`) integrating the Phase 3 Task B1 cellular voice AT channel driver (`sim7670_cellular_call`), the native ego-state estimation engine (`ego_state_engine`), dynamic sensor policy continuous collection (`collection_sensor_policy`), SIM7670G USB LTE PPP, and I2C 9-clock bus self-healing (`platform_i2c_bus_recover`).
+Its 1,228,080-byte application SHA-256 is `f9869caeab2b4fce9cae2d553d9d0142dbb63e37bc386237a0524325712c6d3f`; its ELF SHA-256 is `420d7607e026cc37d4cc03e9781ecb95abcb19d5d09cd3858ae3a0979efe9aa5`.
+It was written app-only at `0x200000`; `verify_flash` confirmed exact digest match (`verify OK (digest matched)`).
+In Boot 188, camera runtime debug heap/stack metrics were trimmed from the `HEALTH` sub-record, sizing the overall `DEVICE` frame well within `COLLECTION_FRAME_CAPACITY` (4000 bytes) and eliminating flash spool drop risks. Boot 188 booted with `lte_ppp_opt_in=1`, GPIO 15/16 9-clock clearing, MAX17048 probe `0x0012`, QMI8658 probe `0x05`, ego-state engine initialized (`EGO_STATE_ENGINE initialized successfully`), SIM7670 UART1 exclusive AT ownership (`SIM7670_EXCLUSIVE_UART_READY uart=1 tx_gpio=18 rx_gpio=17 baud=115200`), cellular call driver initialized and configured (`SIM7670_CELLULAR_CALL initialized and configured successfully`), USB LTE PPP connection and IP acquisition (`ETHIP:10.49.186.235`), and continuous telemetry upload over 4G LTE. Live VPS ingestion confirmed `col-b188-device-1` with `ego_state` (`spatial_mobility: "stationary"`, `device_wear_state: "tabletop_resting"`, `confidence: 0.83`) stored durably in `collection_ego_states`. Full repository verification passed 1,833/1,833 automated tests.
 
-Run016 enabled the actual SIM7670G PPP data route while retaining the explicit
-manual-only `trial_unverified` Camera Gate and disabled timer path. After the
-required 180-second regression window, the serial monitor closed; later
-power/running state is not inferred from that closed monitor.
+## 2026-09-19 prior hardware state (run021)
+
+The identified connectivity board on CH343 `COM3` executes the dynamic sensor policy continuous running candidate image (`0.1.0-sensor-policy-continuous-021`, run `field-sensor-policy-20260919-021`) with `run_seconds=0` (continuous collection session), verified shared-I2C camera profile, SIM7670G USB LTE PPP, I2C 9-clock bus clearing & 3x retry probe loop (`platform_i2c_bus_recover`), and the native dynamic sensor policy engine (`collection_sensor_policy`).
+Its 1,216,912-byte application SHA-256 is `79c0dae8689ffd91601303735384a3e7ab03a4f83b633af04eba7779c1a0bc54`; its ELF SHA-256 is `2411325042246be77f9e696f9d1cc7c89840f97e46fc4a7b5c928bc7c1d39e87`.
+It was written app-only at `0x200000`; `verify_flash` confirmed exact digest match.
+Boot 171 booted with `run_seconds=0`, `lte_ppp_opt_in=1`, GPIO 15/16 9-clock clearing, MAX17048 probe `0x0012`, QMI8658 probe `0x05`, dynamic policy config `p0-sprint1-engineering-default-20260823`, USB LTE PPP IP acquisition (`ETHIP:10.45.175.95`), TLS certificate validation, and continuous telemetry uploads returning HTTP 200 with zero evictions.
+Real hardware stationary accelerometer RMS was measured on bench at `0.157 m/s²` (well below `0.3 m/s²` stationary threshold, correctly classified as `stable`).
+Live VPS Message Hub (`https://ego.example.invalid`) received verified telemetry across all sources (`session`, `device`, `imu`, `power`, `gnss`, `lte`, `wifi`) containing the full `sensor_policy` payload (`motion_rms_m_s2`, `mobility_state`, `gnss_interval_ms`, `cell_interval_ms`) and startup session records.
+
+## 2026-09-18 prior hardware state (run020)
+
+The identified connectivity board on CH343 `COM3` executes the dynamic sensor policy continuous running candidate image (`0.1.0-sensor-policy-continuous-020`, run `field-sensor-policy-20260918-020`) with `run_seconds=0` (continuous collection session), verified shared-I2C camera profile, SIM7670G USB LTE PPP, and the native dynamic sensor policy engine (`collection_sensor_policy`).
+Its 1,215,856-byte application SHA-256 is `b64c72a1df2cc5cc1424e656a49e0bcbe22da855aee4ef932bd83b55b889567c`; its ELF SHA-256 is `126639b1eec7fa431a08667a2ad0a0ae530271e86110db3c8b47d46eceffc10f`.
+It was written app-only at `0x200000`; `verify_flash` confirmed exact digest match.
+Boots 152 and 153 booted with `run_seconds=0`, `sensor_policy_enabled=true`, QMI8658 probe `0x05`, MAX17048 probe `0x0012`, dynamic policy config `p0-sprint1-engineering-default-20260823`, USB LTE PPP IP acquisition, TLS cert validation, and continuous telemetry uploads returning HTTP 200 with zero evictions.
+Real hardware stationary accelerometer RMS was measured on bench at `0.0220 m/s²` (well below `0.3 m/s²` stationary threshold, correctly classified as `stable`).
+Live VPS Message Hub (`https://ego.example.invalid`) received verified telemetry containing the full `sensor_policy` payload (`motion_rms_m_s2`, `mobility_state`, `gnss_interval_ms`, `cell_interval_ms`) and startup session records with `sensor_policy_enabled=true`.
+
+## 2026-09-17 prior hardware state (run019)
+
+The identified connectivity board on CH343 `COM3` executes the continuous running candidate
+image (`0.1.0-camera-lte-continuous-019`, run `field-continuous-20260917-019`) with
+`run_seconds=0` (continuous collection session), verified shared-I2C camera profile,
+and SIM7670G USB LTE PPP.
+Its 1,204,352-byte application SHA-256 is
+`a67601c4001490eddf983e6f62ff00334dc0c9c22874b5229ff332f08d7f7481`; its ELF
+SHA-256 is
+`f3f3e5989103cb23068dc851948bf390863ae4e636d37b717e90d295e817814d`.
+It was written app-only at `0x200000`; `verify_flash` confirmed exact digest match.
+Boot 142 booted with `run_seconds=0`, `stop_method=hold_BOOT_1_second_or_configured_deadline`,
+QMI8658 probe `0x05`, SIM7670G UART ready, USB LTE PPP IP `10.65.88.136`, established TLS,
+and active telemetry delivery to the VPS message hub.
+
+## 2026-09-17 prior hardware state (run018)
+
+In run018 (`run018_timed_candidate_full.raw.log`, 73,648 bytes, SHA-256
+`B860E339EFE279465835253336EAF41011ABB99B078B48AB74FAF6A85C9D5737`), the board
+booted with `shared_i2c_state=verified` and `timer_capture_allowed=1`, mounted
+the 9 MiB `ego_media` partition, established SIM7670G USB LTE PPP at 35 seconds,
+polled capture command `cmd-capture-1789620168691`, triggered the OV5640,
+persisted the 3,657-byte JPEG `manual-1400e20507f538839dec32a6b93ddcc5-n0`
+(SHA-256 `911a8ab6c60ae819e3749f55daa9ba4be72adc3b01ebfd25a648cd1da1168232`)
+to flash media store, and uploaded it over LTE PPP to the VPS. The VPS durably
+stored the image on disk and marked `content_status='stored'`. The device
+acknowledged the command (`PHOTO_COMMAND_ACK status=ok http=200`).
+Concurrently, 391 ordinary observation uploads were delivered and acknowledged
+with HTTP 200, completely draining the 608,911-byte queue to zero
+(`queued_bytes=0`). Evictions, RAM-pending records, panics, and link drops were
+zero.
 
 AMOLED is excluded from this A-line milestone and its UI/CALL image is
 unchanged. The untracked `hardware/mechanical/C-ME-0.1/` founder draft is also
 excluded and unchanged.
 
-## 2026-09-16 LTE concurrency regression — current flashed image
+## 2026-09-16 prior hardware state (run017)
 
-The current run016 image preserves the same descriptor suffix
-`v0.1.0-135-g114632695-dirty`; the immutable application/ELF digests above bind
-this distinct build. The 180-second private serial capture contains one
-matching START, one LTE link-up, one PPP IPv4 event, 25 ordinary
-`route=lte` HTTP-200 uploads and nine fresh healthy LTE-status snapshots.
+The connectivity board previously executed the run017 app-only image
+`0.1.0-camera-lte-trial-017` (SHA-256
+`07CF1EF3FEA13548FB9B7F5EF8F5C965FE6B6BF53EBD6AE9369F2E8CF0223529`).
+
+## 2026-09-17 camera timed candidate build & browser export verification
+
+1. **Browser visual preview and export verification**:
+   The exact stored run015 JPEG `manual-9df82b52af19ae3683f61a7e80b793b8-n0`
+   (3,957 bytes, SHA-256 `d167bef33eb1b186da3a71ce3f8785c42a1f2f7f44fd18034ffb1e263df29a55`)
+   was restored into the VPS private photo storage with an authorized 7-day retention
+   (`2026-09-24T00:00:00.000Z`). An authenticated HTTP GET request to
+   `/api/v1/devices/ego-link-001/photos/manual-9df82b52af19ae3683f61a7e80b793b8-n0/content`
+   with Guardian bearer authentication confirmed HTTP 200 `image/jpeg` with
+   matching byte count and SHA-256. Web DevBench (`/dev`) provides authenticated
+   thumbnail display, full-resolution dialog, and direct JPEG download.
+
+2. **Timed candidate promotion build**:
+   The shared-I2C camera profile was promoted from `UNVERIFIED_TRIAL` to
+   `VERIFIED` via `sdkconfig.camera_timed_candidate.defaults`
+   (`CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED=y`).
+   Clean ESP-IDF v5.4.2 build:
+   - Application binary: `1,104,960` bytes (0x10DC40), 65% partition free space.
+   - Application SHA-256: `0450DED50949CD496CD4BD610956F89F4F32C8F74CB6F667CE677AE1D48C4A2F`.
+   - ELF binary: `11,211,372` bytes, SHA-256: `1FCEAA51B30697E9F3DF9F21267526F82FE1A32C16B3107AD049B8E612E2EE20`.
+   - Profile unlocks `platform_camera_timed_capture_allowed()`, admitting
+     `configure_photo_timer` commands, local interval scheduling, and reboot recovery.
+   - Unflashed build evidence only; live execution awaits operator authorization.
+
+## 2026-09-16 empty-spool LTE throughput regression — current flashed image
+
+Before run017, the actual 4,096-byte partition table was read back with
+SHA-256
+`821CCD8D98853D897F401D965694856959FEE9A02C16ADC895A5772D0FBC618A`.
+It confirmed the `ego_collection` partition at `0x500000`, length `0x100000`.
+The complete post-run016 1,048,576-byte spool was preserved privately with
+SHA-256
+`ECBF85D49344670893C9579F956B937D0990F8AA4A711D512E959CF15238033E`.
+Under the founder-authorized old-Wi-Fi/spool clear, only that exact range was
+erased. The immediate complete readback was all `0xFF` (`nonFF=0`), SHA-256
+`F5FB04AA5B882706B9309E885F19477261336EF76A150C3B4D3489DFAC3953EC`.
+The application, bootloader, partition table, NVS, Camera media store and
+outbox were not targeted. The board remained in the ROM bootloader until the
+run017 app-only flash, so run017 began from the verified empty spool; normal
+run017 observations subsequently repopulated the partition.
+
+Run017 changed the Camera command poll interval from 2 seconds to 15 seconds
+without changing sensor sampling. Its 620-second private serial capture around
+the 600-second firmware bound records one bounded first-probe timeout and clean
+quiesce/backoff before PPP established at about 34.9 seconds. It then contains
+one LTE link-up, one PPP IP event, 248 ordinary LTE uploads and one bounded-
+complete marker. All 248 uploads returned HTTP 200, matched local pending
+records, were accepted durably and were locally acknowledged; 65 TLS handshakes
+were observed. Across 20 health samples, an initial 55,842-byte
+pre-PPP queue peak cleared by approximately 124 seconds. Thereafter the queue
+stayed between 0 and 6,658 bytes and the final health sample reported zero.
+Evictions, RAM-pending records, errors, stale-status snapshots, gate-busy
+results, link-down events, panics and Camera events were all zero.
+
+No photo command was sent. USB supplied power and serial/flash access while
+SIM7670G PPP carried data. This closes the immediate sustained
+ordinary-observation throughput blocker for this ten-minute empty-spool bench
+scope only; it does not establish independent-power, endurance, route-change,
+Camera outage/restart, FIELD-020 or P0 evidence. The 57,156-byte private log is
+`run017_empty_spool_throughput.raw.log`, SHA-256
+`FABC0C2ED5E6DCE4DDCCBDBF33524C681FF3DA32E50DCEA65CAB46E61895CA63`.
+
+## 2026-09-16 LTE concurrency regression — prior run016 image
+
+The prior run016 image preserves the descriptor suffix
+`v0.1.0-135-g114632695-dirty`. Its 1,204,416-byte application SHA-256 is
+`A69B9AFB7292002A2D9745F5E90B261226329DA480791724CE91243C19B3DE9C`;
+its ELF SHA-256 is
+`1E09F4AF1279BC08CCA0C36DF642B25ECFEC8638B8693EE4CDDFBEDD26FF7FAD`.
+These immutable digests bind the distinct run016 build. The 180-second private
+serial capture contains one matching START, one LTE link-up, one PPP IPv4
+event, 25 ordinary `route=lte` HTTP-200 uploads and nine fresh healthy
+LTE-status snapshots.
 There was no stale status snapshot, gate-busy result, link-down, panic or
 Camera event.
 
@@ -726,7 +838,7 @@ supersedes that historical mirror. All three P0 capability Gates remain
 | role | current board | observed ports | current use |
 |---|---|---|---|
 | `wearable_node` | ESP32-S3-Touch-AMOLED-2.06 | Espressif USB Serial/JTAG `COM8` observed 2026-09-02; MAC `02:00:00:00:00:01` | UI-001 field-friendly D1 status sidecar is currently flashed after the bounded CALL-010 override was reversed. The `659120`-byte application has SHA-256 `11D72868...A23139`; the latest run-008 bounded restore observed `hello`, `display_ready`, `status_rendered` and `ask_user_rendered`. It retains the cJSON serial downlink parser, `display_status` full-screen `D1 FIELD` page with `LINK`/`LOC`/`PWR`/`POST` rows, non-disruptive `status_update`, payload-driven `ask_user` prompt and QMI8658 engineering sampler. |
-| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`; historical direct-to-host SIM7670G ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-16 | Latest executed app is run016 `0.1.0-camera-lte-trial-016`, application SHA-256 `A69B9AFB...9B3DE9C`. Its 180-second USB-powered/serial-observed, ESP32-managed LTE PPP regression retained 25 ordinary HTTP-200 uploads and nine fresh healthy status snapshots without stale/busy/link-down/panic markers; no photo command was sent. Run015 separately passed the one real-LTE manual Camera -> VPS -> private-API integrity slice. Timer/outage/restart, browser preview, route transition, independent power and field use remain unverified. FW-007 remains the recorded rollback fallback. |
+| `connectivity_node` | Waveshare ESP32-S3-SIM7670G-4G | CH343 ESP32 console `COM3`; historical direct-to-host SIM7670G ports `COM4`/`COM5`/`COM6`/`COM7` observed 2026-08-16 | Latest executed app is run017 `0.1.0-camera-lte-trial-017`, application SHA-256 `07CF1EF3...F0223529`. Its empty-spool, 600-second USB-powered/serial-observed SIM7670G PPP regression delivered 248/248 ordinary uploads with HTTP 200, local match and local ACK; after pre-PPP buildup the queue drained and final health reported zero. This closes only the immediate ten-minute bench throughput blocker. Run015 separately passed one real-LTE manual Camera -> VPS -> private-API integrity slice. Timer/outage/restart, browser preview, route transition, independent power, endurance and field use remain unverified. FW-007 remains the recorded rollback fallback. |
 
 Port numbers are observations, not stable configuration. Tooling must identify devices by USB identity and/or versioned `hello`.
 

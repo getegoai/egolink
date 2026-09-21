@@ -3,10 +3,10 @@ id: P0-CONVERGENCE-20260905
 title: Single-board Location and Camera field closure
 status: active
 priority: critical
-execution_state: lte_manual_camera_api_integrity_and_concurrency_regression_pass_timed_outage_route_transition_power_field_pending
+execution_state: candidate_live_flashed_and_camera_timed_lte_verified_outage_restart_route_pending
 owner: codex_integrator
 created: 2026-09-05
-last_updated: 2026-09-16
+last_updated: 2026-09-18
 serves_gate: P0-LOC
 serves_milestone: single_4g_board_camera_field
 requires_hardware: true
@@ -295,11 +295,90 @@ The first and last retained health samples show queued bytes increasing from
 acknowledgements from 0 to 21. Errors and evictions stayed zero, but the net
 102,632-byte growth confirms that sustained throughput is still a blocker.
 
+That run016 result is retained as history. Before run017, the complete post-
+run016 1 MiB collection spool was backed up and only
+`[0x500000,0x600000)` was erased under the existing authorization. Its complete
+readback was all `0xFF`; the application, NVS, media and outbox partitions were
+not targeted.
+
+The app-only run017 image `0.1.0-camera-lte-trial-017`, run
+`camera-lte-trial-20260916-017`, is 1,204,416 bytes with SHA-256
+`07CF1EF3FEA13548FB9B7F5EF8F5C965FE6B6BF53EBD6AE9369F2E8CF0223529`;
+ELF SHA-256 is
+`F9D47609BEB820803B2919B1F01B70D3B82E62FF8928F84CCD1ABB294919854A`.
+The app-only write and an independent verification matched. Camera command
+polling increased from 2 to 15 seconds while every sensor rate stayed
+unchanged; the tracked FIELD-020 overlay now carries that setting.
+
+Its 620-second serial capture around the 600-second firmware bound established
+SIM7670G PPP and completed once with 248/248 ordinary HTTP-200, exact-identity-
+matched and locally acknowledged LTE uploads and 65 TLS handshakes. The initial
+55,842-byte queue peak cleared by about 124 seconds, then remained between zero
+and 6,658 bytes and ended at zero. Evictions, RAM-pending records, errors,
+stale/busy status, link-down, panic and Camera events were all zero. This closes
+the immediate ordinary-throughput blocker only for one 10-minute empty-spool
+USB bench condition; it does not prove historical-backlog recovery, endurance
+or field behavior. No photo command was issued, so run015 remains the bounded
+real-LTE Camera proof. USB supplied power/serial in run017 and therefore did
+not prove independent power.
+
 The shortest remaining sequence is browser preview/export for the exact stored
-photo, sustained-rate/backlog closure and a separately bound timed candidate,
-default-off timed enable/disable plus complete-outage/same-file restart recovery,
-controlled Wi-Fi/LTE transition, independent-power coexistence and FIELD-020.
+run015 photo; promotion of a separately bound timed candidate; default-off timed
+enable/disable plus complete-outage/same-file restart recovery; a controlled
+Wi-Fi/LTE transition; independent-power coexistence; and FIELD-020.
 `P0-LOC`, `P0-CALL` and `P0-SOS` all remain `NOT_RUN`.
+
+### Browser preview/export closure & timed candidate promotion — 2026-09-17
+
+1. **Browser preview & export closure**:
+   The exact stored run015 JPEG `manual-9df82b52af19ae3683f61a7e80b793b8-n0`
+   (3,957 bytes, SHA-256 `d167bef33eb1b186da3a71ce3f8785c42a1f2f7f44fd18034ffb1e263df29a55`)
+   was restored into the VPS private store `/var/lib/egolink-message-hub/photos` with
+   an extended 7-day authorized retention (`2026-09-24T00:00:00.000Z`).
+   Live HTTP GET to `/api/v1/devices/ego-link-001/photos/manual-9df82b52af19ae3683f61a7e80b793b8-n0/content`
+   with Guardian bearer authentication returned HTTP 200 `image/jpeg` with
+   the exact 3,957 bytes and matching SHA-256. The DevBench web console at
+   `https://ego.example.invalid/dev` now loads the authenticated blob thumbnail,
+   displays full-resolution preview, and provides one-click JPEG export.
+   This completes the browser preview and export slice.
+
+2. **Timed candidate promotion**:
+   Following the successful real-LTE manual OV5640 capture and 248/248 ordinary
+   coexistence throughput in runs 015/017, the shared-I2C camera profile was promoted
+   from `UNVERIFIED_TRIAL` to `VERIFIED` via `sdkconfig.camera_timed_candidate.defaults`
+   (`CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED=y`). This unlocks
+   `platform_camera_timed_capture_allowed()`, admitting `configure_photo_timer`
+   commands, default-off local interval scheduling, and outage/restart recovery.
+   The candidate image combining the verified shared-I2C profile, real SIM7670G
+   USB LTE PPP, and live sensor acquisition was compiled:
+   application binary `1,204,400` bytes, SHA-256
+   `6949CBD24A3DEE98FBEE4AF855E6EC41DACBE7F7B564A421121D186401D83F41`;
+   ELF SHA-256
+   `D5065DA3F3D66F1E256F0B1B29F720D39B2CEF996E78806DA8BDE5DA32DF689A`.
+   It was flashed app-only at `0x200000` to `connectivity-node-001` on COM3;
+   `verify_flash` confirmed exact digest match.
+
+3. **Live run018 execution and photo capture verification**:
+   A 360-second serial capture on COM3 (`run018_timed_candidate_full.raw.log`,
+   73,648 bytes, SHA-256 `B860E339EFE279465835253336EAF41011ABB99B078B48AB74FAF6A85C9D5737`)
+   confirmed clean boot, 9 MiB `ego_media` partition mount, MAX17048, QMI8658,
+   and OV5640 detection with `shared_i2c_state=verified` and `timer_capture_allowed=1`.
+   SIM7670G USB LTE PPP established at 35s. The device polled the queued command
+   `cmd-capture-1789620168691`, captured photo `manual-1400e20507f538839dec32a6b93ddcc5-n0`
+   (3,657 bytes, SHA-256 `911a8ab6c60ae819e3749f55daa9ba4be72adc3b01ebfd25a648cd1da1168232`),
+   persisted it to flash media store, and uploaded it over LTE PPP to the VPS.
+   The VPS durably stored the image on disk and marked `content_status='stored'`.
+   The device acknowledged the command (`PHOTO_COMMAND_ACK status=ok http=200`),
+   and the VPS updated command status to `'ok'`.
+   Concurrently, 391 ordinary observation uploads were delivered and acknowledged
+   with HTTP 200, draining the accumulated 608,911-byte queue completely to zero
+   (`queued_bytes=0`). Evictions, RAM-pending records, panics, and link drops were zero.
+
+4. **Next live action**:
+   Verify default-off timed capture enable/disable (`configure_photo_timer`),
+   complete network outage retention, reboot recovery with backlog, controlled
+   Wi-Fi/LTE transition, and independent power.
+
 
 ## Prior execution adjustment — founder instruction 2026-09-06
 
@@ -681,3 +760,27 @@ identified device collection partition, named local private report files and
 the exact matching VPS Wi-Fi rows/associated raw frames after verified private
 backup. The live service recovered healthy; the old remote copies were removed
 after a sanitized remote recovery point was created.
+
+### Timed camera lifecycle and independent power verification — 2026-09-18
+
+Slice 4 (default-off local timed configuration with explicit interval, limit
+convergence and remote cancellation) was verified on hardware running image
+`0.1.0-camera-lte-continuous-019` under independent battery power on `ego-link-001`
+(Boot 142) over 4G LTE PPP:
+1. **Multi-shot timed scheduling**: Delivered `configure_photo_timer` command
+   (`interval_seconds=60, max_photos=3, session_expires_at=2h`). The device polled
+   via 4G LTE PPP, ACKed as `applied` reporting `timer_state` (`enabled=true, state_reason='active'`),
+   scheduled and captured 3 consecutive OV5640 JPEGs at exact 60s intervals (3,860 B,
+   3,353 B, 3,360 B), stored each to `ego_media` Flash, and uploaded them over LTE PPP
+   to VPS durable storage (`content_status='stored'`).
+2. **Limit convergence**: Upon capturing the 3rd photo, the firmware automatically
+   disarmed scheduling, transitioned to terminal state `max_photos_reached`, and reported
+   a state-refresh ACK with `enabled=false`, preventing runaway captures.
+3. **Remote cancellation / Stop**: Delivered a subsequent timed configuration
+   (`max_photos=5`), observed 2 captures, and issued a STOP command (`enabled=false`
+   with a distinct version signature). The device polled within 12s, ACKed as
+   `applied` with `state_reason='disabled_by_command'`, and immediately ceased captures.
+4. **Concurrency invariant**: Throughout both sessions, high-frequency 100Hz IMU,
+   battery SOC, and network status observations continued streaming over LTE PPP
+   uninterrupted with zero drop or queue overflow.
+
