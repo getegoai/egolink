@@ -82,6 +82,12 @@ function Copy-ServerSource {
     New-Item -ItemType Directory -Force -Path $target | Out-Null
     Copy-Item -Force -Path (Join-Path $repoRoot "server\*.py") -Destination $target
     Copy-Item -Force -Path (Join-Path $repoRoot "server\.env.example") -Destination $target
+    $webSource = Join-Path $repoRoot "server\web"
+    if (Test-Path $webSource) {
+        $webTarget = Join-Path $target "web"
+        New-Item -ItemType Directory -Force -Path $webTarget | Out-Null
+        Copy-Item -Recurse -Force -Path (Join-Path $webSource "*") -Destination $webTarget
+    }
 }
 
 function Copy-FieldReportSummaries {

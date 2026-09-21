@@ -11,7 +11,7 @@ COLLECTION_HTML = """<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>EgoLink 采集</title><link rel="stylesheet" href="/collection.css"></head>
 <body><main><header><p>EGO LINK · 工程采集机</p><h1>采集</h1>
-<nav><a href="/guardian-location">家属定位</a><a href="/engineering">工程详情</a></nav>
+<nav><a href="/guardian-location">家属定位</a><a href="/engineering">工程详情</a><a href="/dev">⚡ 开发者工作台</a></nav>
 <p>检查设备实际采集与入库数据。采集机不作为正式安全保障设备。</p></header>
 <form id="connect" autocomplete="off"><label>设备 ID<input id="device-id" required maxlength="128" autocomplete="off" spellcheck="false"></label>
 <label>测试项目凭证<input id="project-token" type="password" required maxlength="512" autocomplete="off"></label>

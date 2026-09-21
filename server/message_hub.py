@@ -96,6 +96,38 @@ DEFAULT_D1_LABELING_QUEUE_REPORTS = REPO_ROOT / "reports" / "d1_labeling_queue"
 DEFAULT_D1_LABELING_REVIEW_REPORTS = REPO_ROOT / "reports" / "d1_labeling_reviews"
 DEFAULT_D1_LABELING_DECISION_REPORTS = REPO_ROOT / "reports" / "d1_labeling_decisions"
 DEFAULT_PROGRESS_BOARD = REPO_ROOT / "docs" / "generated" / "progress_board.json"
+DEV_BENCH_DIR = REPO_ROOT / "server" / "web"
+DEV_BENCH_SECURITY_HEADERS = {
+    "Cache-Control": "no-cache",
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://webapi.amap.com https://*.amap.com; "
+        "style-src 'self' 'unsafe-inline' https://webapi.amap.com https://*.amap.com; "
+        "connect-src 'self' https://webapi.amap.com https://*.amap.com https://restapi.amap.com; "
+        "img-src 'self' data: blob: https://webapi.amap.com https://*.amap.com https://*.is.autonavi.com; "
+        "font-src 'self' data: https://*.amap.com; "
+        "worker-src 'self' blob:; "
+        "child-src 'self' blob:; "
+        "base-uri 'none'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self'"
+    ),
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+}
+DEV_BENCH_MIME_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "application/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".ico": "image/x-icon",
+    ".map": "application/json; charset=utf-8",
+    ".txt": "text/plain; charset=utf-8",
+}
 MAX_BODY_BYTES = 1_000_000
 AMAP_JS_API_KEY_ENV = "EGOLINK_AMAP_JS_API_KEY"
 AMAP_SECURITY_JS_CODE_ENV = "EGOLINK_AMAP_SECURITY_JS_CODE"
@@ -1343,6 +1375,129 @@ class MessageHubStore:
             ).fetchall()
         return [json.loads(row["payload_json"]) for row in rows]
 
+    def field_verified_trajectory(self, limit: int = 500) -> dict[str, Any]:
+        with self.connection() as db:
+            rows = db.execute(
+                """
+                SELECT payload_json FROM messages
+                WHERE device_id = 'ego-link-r1-connectivity-001'
+                  AND event_type = 'location_report'
+                  AND json_extract(payload_json, '$.lat') > 1.0
+                ORDER BY id ASC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+            points = []
+            for row in rows:
+                p = json.loads(row["payload_json"])
+                points.append(
+                    {
+                        "lat": p.get("lat"),
+                        "lng": p.get("lon"),
+                        "altitude": p.get("altitude_m"),
+                        "speed": p.get("speed_mps"),
+                        "course": p.get("course_deg"),
+                        "satellites": p.get("satellites"),
+                        "hdop": p.get("hdop"),
+                        "time": p.get("server_received_at") or p.get("ts"),
+                    }
+                )
+        return {
+            "ok": True,
+            "track_id": "FW007-HW-20260815-001",
+            "device_id": "ego-link-r1-connectivity-001",
+            "name": "FW007 \u6df1\u5733\u5916\u573a\u5b9e\u6d4b\u8f68\u8ff9",
+            "region": "\u6df1\u5733\u9f99\u5c97",
+            "point_count": len(points),
+            "points": points,
+        }
+
+    def device_trajectory(self, device_id: str, limit: int = 200) -> dict[str, Any]:
+        with self.connection() as db:
+            gnss_rows = db.execute(
+                """
+                SELECT envelope_json FROM collection_records
+                WHERE device_id = ? AND source = 'gnss'
+                ORDER BY id DESC LIMIT ?
+                """,
+                (device_id, limit),
+            ).fetchall()
+            points = []
+            latest_gnss = None
+            for row in gnss_rows:
+                env = json.loads(row["envelope_json"])
+                payload = env.get("payload") or {}
+                if latest_gnss is None:
+                    latest_gnss = payload
+                if payload.get("fix") and isinstance(payload.get("latitude"), (int, float)):
+                    points.append(
+                        {
+                            "lat": payload["latitude"],
+                            "lng": payload["longitude"],
+                            "altitude": payload.get("altitude_m"),
+                            "speed": payload.get("speed_mps"),
+                            "course": payload.get("course_deg"),
+                            "satellites": payload.get("satellites"),
+                            "hdop": payload.get("hdop"),
+                            "time": env.get("timestamp_utc"),
+                        }
+                    )
+            cell_fallback = None
+            lte_row = db.execute(
+                """
+                SELECT envelope_json FROM collection_records
+                WHERE device_id = ? AND source = 'lte'
+                ORDER BY id DESC LIMIT 1
+                """,
+                (device_id,),
+            ).fetchone()
+            if lte_row:
+                lte_env = json.loads(lte_row["envelope_json"])
+                lte_payload = lte_env.get("payload") or {}
+                cell_id = lte_payload.get("cell_id")
+                known_towers = {
+                    "180571649": (22.751718, 114.228128, "中国移动4G基站 (深圳龙岗天安)"),
+                    "213661584": (22.752150, 114.229420, "中国移动4G基站 (深圳龙岗第2小区)"),
+                }
+                if cell_id:
+                    tower_info = known_towers.get(str(cell_id), (22.751718, 114.228128, f"中国移动4G基站 ({cell_id})"))
+                    cell_fallback = {
+                        "lat": tower_info[0],
+                        "lng": tower_info[1],
+                        "uncertainty": 300,
+                        "isCellTower": True,
+                        "cell_id": str(cell_id),
+                        "operator": lte_payload.get("operator", "46000"),
+                        "name": tower_info[2],
+                        "time": lte_env.get("timestamp_utc"),
+                    }
+            if not cell_fallback:
+                mem_row = db.execute(
+                    "SELECT memory_json FROM location_memory WHERE device_id = ?",
+                    (device_id,),
+                ).fetchone()
+                if mem_row:
+                    mem = json.loads(mem_row["memory_json"])
+                    last_loc = mem.get("last_known_location") or {}
+                    if last_loc.get("lat"):
+                        cell_fallback = {
+                            "lat": last_loc["lat"],
+                            "lng": last_loc["lon"],
+                            "uncertainty": mem.get("radius_m") or 100,
+                            "isMemory": True,
+                            "name": "\u5386\u53f2\u5df2\u77e5\u4f4d\u7f6e",
+                            "time": last_loc.get("updated_at"),
+                        }
+        return {
+            "ok": True,
+            "device_id": device_id,
+            "point_count": len(points),
+            "points": list(reversed(points)),
+            "latest_gnss": latest_gnss,
+            "cell_fallback": cell_fallback,
+        }
+
     def search_location_history(self, device_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         search = normalize_location_history_search(payload)
         filter_digest = location_history_filter_digest(device_id, search)
@@ -2403,6 +2558,61 @@ def make_handler(
                     content, content_type = (COLLECTION_JS, "application/javascript") if path.endswith(".js") else (COLLECTION_CSS, "text/css")
                     self.respond_bytes(content.encode("utf-8"), content_type=content_type + "; charset=utf-8", headers=COLLECTION_SECURITY_HEADERS)
                 return
+            if path in {"/dev", "/dev/"}:
+                index_file = DEV_BENCH_DIR / "index.html"
+                if not index_file.is_file():
+                    raise MessageHubError("not_found", "DevBench index not found", status=404)
+                dev_headers = dict(DEV_BENCH_SECURITY_HEADERS)
+                if amap_cookie_secret is not None:
+                    dev_headers["Set-Cookie"] = issue_amap_proxy_cookie(amap_cookie_secret)
+                self.respond_bytes(
+                    index_file.read_bytes(),
+                    content_type="text/html; charset=utf-8",
+                    headers=dev_headers,
+                )
+                return
+            if path.startswith("/dev/static/"):
+                subpath_str = path[len("/dev/static/"):]
+                try:
+                    unquoted = unquote(subpath_str)
+                    target = (DEV_BENCH_DIR / unquoted).resolve()
+                    if not target.is_file() or not target.is_relative_to(DEV_BENCH_DIR.resolve()):
+                        raise MessageHubError("not_found", "static resource not found", status=404)
+                except (ValueError, OSError):
+                    raise MessageHubError("not_found", "static resource not found", status=404)
+                ext = target.suffix.lower()
+                content_type = DEV_BENCH_MIME_TYPES.get(ext, "application/octet-stream")
+                self.respond_bytes(
+                    target.read_bytes(),
+                    content_type=content_type,
+                    headers=DEV_BENCH_SECURITY_HEADERS,
+                )
+                return
+            if path == "/api/v1/map/config":
+                map_headers = {"Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff"}
+                if amap_cookie_secret is not None:
+                    map_headers["Set-Cookie"] = issue_amap_proxy_cookie(amap_cookie_secret)
+                self.respond_json(
+                    {
+                        "configured": amap_api_key is not None,
+                        "amap_key": amap_api_key or "",
+                        "service_host": "/_AMapService" if amap_api_key else "",
+                    },
+                    headers=map_headers,
+                )
+                return
+            if path == "/api/v1/trajectories/field-verified":
+                self.respond_json(
+                    store.field_verified_trajectory(),
+                    headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+                )
+                return
+            if len(segments) == 5 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "trajectory":
+                self.respond_json(
+                    store.device_trajectory(segments[3]),
+                    headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+                )
+                return
             if len(segments) == 6 and segments[:3] == ["api", "v1", "devices"] and segments[4] == "collection":
                 self.require_guardian_authorization(segments[3])
                 headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
@@ -2415,8 +2625,76 @@ def make_handler(
                 elif segments[5] == "export.jsonl":
                     page = store.collection.page(segments[3], query, raw=True)
                     self.respond_bytes(jsonl_page(page), content_type="application/x-ndjson; charset=utf-8", headers={**headers, "Content-Disposition": 'attachment; filename="egolink-collection.jsonl"'})
+                elif segments[5] == "latest-records":
+                    source_val = query.get("source", [None])[0]
+                    status_val = query.get("status", [None])[0]
+                    try:
+                        limit_val = int(query.get("limit", [10])[0])
+                    except (ValueError, TypeError):
+                        limit_val = 10
+                    since_id_val = None
+                    if "since_id" in query:
+                        try:
+                            since_id_val = int(query.get("since_id", [0])[0])
+                        except (ValueError, TypeError):
+                            since_id_val = None
+                    self.respond_json(
+                        store.collection.latest_records(
+                            segments[3],
+                            source=source_val,
+                            status=status_val,
+                            limit=limit_val,
+                            since_id=since_id_val,
+                        ),
+                        headers=headers,
+                    )
+                elif segments[5] == "ego-state":
+                    self.respond_json(
+                        {"ok": True, "device_id": segments[3], "ego_state": store.collection.latest_ego_state(segments[3])},
+                        headers=headers,
+                    )
                 else:
                     raise CollectionError("collection_not_found", "collection route does not exist", 404)
+                return
+            if (
+                len(segments) in {5, 6}
+                and segments[:3] == ["api", "v1", "devices"]
+                and segments[4] == "ego-state"
+            ):
+                self.require_guardian_authorization(segments[3])
+                headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+                sub = segments[5] if len(segments) == 6 else "latest"
+                if sub == "latest":
+                    if query:
+                        raise CollectionError("invalid_collection_query", "ego-state latest has no query parameters", 400)
+                    latest = store.collection.latest_ego_state(segments[3])
+                    self.respond_json({"ok": True, "device_id": segments[3], "ego_state": latest}, headers=headers)
+                elif sub == "timeline":
+                    try:
+                        limit_val = int(query.get("limit", [50])[0])
+                    except (ValueError, TypeError):
+                        limit_val = 50
+                    timeline = store.collection.ego_state_timeline(segments[3], limit=limit_val)
+                    self.respond_json({"ok": True, "device_id": segments[3], "count": len(timeline), "timeline": timeline}, headers=headers)
+                else:
+                    raise CollectionError("collection_not_found", "ego-state route does not exist", 404)
+                return
+            if len(segments) == 7 and segments[:3] == ["api", "v1", "devices"] and segments[4:6] == ["collection", "ego-state"]:
+                self.require_guardian_authorization(segments[3])
+                headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+                if segments[6] == "latest":
+                    if query:
+                        raise CollectionError("invalid_collection_query", "ego-state latest has no query parameters", 400)
+                    self.respond_json({"ok": True, "device_id": segments[3], "ego_state": store.collection.latest_ego_state(segments[3])}, headers=headers)
+                elif segments[6] == "timeline":
+                    try:
+                        limit_val = int(query.get("limit", [50])[0])
+                    except (ValueError, TypeError):
+                        limit_val = 50
+                    timeline = store.collection.ego_state_timeline(segments[3], limit=limit_val)
+                    self.respond_json({"ok": True, "device_id": segments[3], "count": len(timeline), "timeline": timeline}, headers=headers)
+                else:
+                    raise CollectionError("collection_not_found", "ego-state route does not exist", 404)
                 return
             is_photo_route = (
                 len(segments) in {5, 6, 7}
@@ -3433,14 +3711,17 @@ def make_handler(
                     "/v3/assistant/coordinate/convert",
                     "/v3/log/init",
                 } else "private, max-age=60"
+                proxy_headers = {
+                    "Cache-Control": cache_control,
+                    "X-Content-Type-Options": "nosniff",
+                }
+                if amap_cookie_secret is not None:
+                    proxy_headers["Set-Cookie"] = issue_amap_proxy_cookie(amap_cookie_secret)
                 self.respond_bytes(
                     body,
                     content_type=content_type,
                     status=response.status,
-                    headers={
-                        "Cache-Control": cache_control,
-                        "X-Content-Type-Options": "nosniff",
-                    },
+                    headers=proxy_headers,
                 )
             except MessageHubError:
                 raise
@@ -10446,7 +10727,7 @@ def render_dashboard(*, amap_js_api_key: str | None = None) -> str:
   <header>
     <div>
       <h1>EgoLink 定位看板</h1>
-      <p><a href="/collection">进入采集：原始观测、各源状态与完整导出</a> · <a href="/guardian-location">家属定位</a></p>
+      <p><a href="/collection">进入采集：原始观测、各源状态与完整导出</a> · <a href="/guardian-location">家属定位</a> · <a href="/dev" style="color:#0ea5e9;font-weight:600;">⚡ 开发者工作台 (DevBench)</a></p>
       <span class="brand-note">设备位置、历史轨迹与外场状态</span>
     </div>
     <div class="header-actions">

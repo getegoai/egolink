@@ -37,7 +37,7 @@ _WIFI_LINK_EVENT_FIELDS = frozenset({"phase", "connected"})
 _WIFI_SCAN_SUMMARY_FIELDS = frozenset({"channel_summary", "scan_result", "total_seen", "truncated", "sampled_ap_count", "identifiers_retained", "privacy_reason", "connected", "disconnect_reason"})
 _WIFI_CHANNEL_SUMMARY_FIELDS = frozenset({"channel", "ap_count", "strongest_rssi"})
 COLLECTION_ENVELOPE_FIELDS = frozenset({"contract_version", "observation_id", "device_id", "source", "stream_id", "sequence_id", "boot_count", "monotonic_clock_domain_id", "timestamp_monotonic_ns", "timestamp_utc", "timestamp_source", "timestamp_quality", "fw_version", "config_id", "session_id", "status", "payload", "missing_reason"})
-COLLECTION_OPTIONAL_PROVENANCE_FIELDS = frozenset({"firmware_elf_sha256"})
+COLLECTION_OPTIONAL_PROVENANCE_FIELDS = frozenset({"firmware_elf_sha256", "test_run_id"})
 COLLECTION_WIFI_ENVELOPE_FIELDS = COLLECTION_ENVELOPE_FIELDS | COLLECTION_OPTIONAL_PROVENANCE_FIELDS
 FIRMWARE_ELF_SHA256 = re.compile(r"^[0-9a-f]{64}$")
 CAMERA_SOURCE_STATUS_FIELDS = frozenset({
@@ -138,6 +138,8 @@ def decode_envelope(payload: bytes, record: dict[str, Any]) -> dict[str, Any]:
         _identifier(value[field], field)
     if value["session_id"] is not None:
         _identifier(value["session_id"], "session_id")
+    if value.get("test_run_id") is not None:
+        _identifier(value["test_run_id"], "test_run_id")
     for field in ("sequence_id", "boot_count"):
         _integer(value[field], field, maximum=4_294_967_295)
     _integer(value["timestamp_monotonic_ns"], "timestamp_monotonic_ns", maximum=9_007_199_254_740_991)
@@ -413,6 +415,21 @@ class CollectionStore:
                 );
                 CREATE INDEX IF NOT EXISTS collection_annotations_device
                     ON collection_annotations(device_id, id);
+                CREATE TABLE IF NOT EXISTS collection_ego_states (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL, observation_id TEXT NOT NULL,
+                    record_id INTEGER NOT NULL, boot_count INTEGER NOT NULL,
+                    event_monotonic_ns INTEGER NOT NULL, sequence_id INTEGER NOT NULL,
+                    event_utc TEXT, received_at TEXT NOT NULL,
+                    spatial_mobility TEXT NOT NULL, posture_anomaly TEXT NOT NULL,
+                    device_wear_state TEXT NOT NULL, confidence REAL NOT NULL,
+                    window_duration_ms INTEGER NOT NULL, primary_evidence_digest TEXT NOT NULL,
+                    is_mock INTEGER NOT NULL, reason_codes_json TEXT NOT NULL,
+                    evidence_summary_json TEXT NOT NULL, ego_state_json TEXT NOT NULL,
+                    UNIQUE(device_id, observation_id)
+                );
+                CREATE INDEX IF NOT EXISTS collection_ego_state_device_time
+                    ON collection_ego_states(device_id, boot_count DESC, event_monotonic_ns DESC, sequence_id DESC);
             """)
 
     @staticmethod
@@ -537,7 +554,8 @@ class CollectionStore:
             ),
             "redacted": False,
         }
-        record["fw_version"], record["test_run_id"] = envelope["fw_version"], envelope["session_id"]
+        record["fw_version"] = envelope["fw_version"]
+        record["test_run_id"] = envelope.get("test_run_id") or envelope["session_id"]
         digest = hashlib.sha256(raw_body).hexdigest()
         received = record["server_received_at"]
         if camera_metadata is not None:
@@ -613,6 +631,44 @@ class CollectionStore:
                         WHERE (excluded.boot_count,excluded.event_monotonic_ns,excluded.sequence_id) >
                         (collection_source_states.boot_count,collection_source_states.event_monotonic_ns,collection_source_states.sequence_id)""",
                         (envelope["device_id"], target, inserted.lastrowid, envelope["boot_count"], envelope["timestamp_monotonic_ns"], envelope["sequence_id"]))
+                ego_state = envelope["payload"].get("ego_state")
+                if (
+                    envelope["source"] == "device"
+                    and isinstance(ego_state, dict)
+                    and ego_state.get("ready") is True
+                ):
+                    rec_id = int(existing["id"] if existing is not None else inserted.lastrowid)
+                    db.execute("""INSERT INTO collection_ego_states
+                        (device_id,observation_id,record_id,boot_count,event_monotonic_ns,sequence_id,
+                         event_utc,received_at,spatial_mobility,posture_anomaly,device_wear_state,
+                         confidence,window_duration_ms,primary_evidence_digest,is_mock,
+                         reason_codes_json,evidence_summary_json,ego_state_json)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        ON CONFLICT(device_id,observation_id) DO UPDATE SET
+                        record_id=excluded.record_id,
+                        spatial_mobility=excluded.spatial_mobility,
+                        posture_anomaly=excluded.posture_anomaly,
+                        device_wear_state=excluded.device_wear_state,
+                        confidence=excluded.confidence,
+                        window_duration_ms=excluded.window_duration_ms,
+                        primary_evidence_digest=excluded.primary_evidence_digest,
+                        is_mock=excluded.is_mock,
+                        reason_codes_json=excluded.reason_codes_json,
+                        evidence_summary_json=excluded.evidence_summary_json,
+                        ego_state_json=excluded.ego_state_json""",
+                        (envelope["device_id"],envelope["observation_id"],rec_id,
+                         envelope["boot_count"],envelope["timestamp_monotonic_ns"],envelope["sequence_id"],
+                         _utc_index(envelope.get("timestamp_utc")),received,
+                         str(ego_state.get("spatial_mobility") or "unknown"),
+                         str(ego_state.get("posture_anomaly") or "unknown"),
+                         str(ego_state.get("device_wear_state") or "unknown"),
+                         float(ego_state.get("confidence") or 0.0),
+                         int(ego_state.get("window_duration_ms") or 0),
+                         str(ego_state.get("primary_evidence_digest") or ""),
+                         1 if ego_state.get("is_mock") else 0,
+                         _json(ego_state.get("reason_codes") or []),
+                         _json(ego_state.get("evidence_summary") or {}),
+                         _json(ego_state)))
             if camera_metadata is not None and existing_photo is None and not conflict:
                 collection_record_id = int(existing["id"] if existing is not None else inserted.lastrowid)
                 self.hub.photos.insert_metadata(db, camera_metadata, collection_record_id)
@@ -647,6 +703,7 @@ class CollectionStore:
             annotations = db.execute("SELECT annotation_json FROM collection_annotations WHERE device_id=? ORDER BY id DESC LIMIT 20", (device_id,)).fetchall()
         return {"device_id": device_id, "server_now": _now(), "sources": sources,
                 "source_states": {row["target_source"]: self._record_view(row) for row in state_rows},
+                "latest_ego_state": self.latest_ego_state(device_id),
                 "last_contact": dict(delivery) if delivery else None,
                 "sessions": [dict(row) for row in sessions],
                 "recent_annotations": [json.loads(row["annotation_json"]) for row in annotations],
@@ -667,6 +724,53 @@ class CollectionStore:
                 (device_id, target_source),
             ).fetchone()
         return self._record_view(row) if row is not None else None
+
+    def latest_records(
+        self,
+        device_id: str,
+        *,
+        source: str | None = None,
+        status: str | None = None,
+        limit: int = 10,
+        since_id: int | None = None,
+    ) -> dict[str, Any]:
+        if source is not None and source not in SOURCES:
+            raise CollectionError("invalid_collection_source", "unknown source", 400)
+        bound_limit = max(1, min(limit, 100))
+        with self.hub.connection() as db:
+            if since_id is not None:
+                where = ["device_id=?", "id>?"]
+                args: list[Any] = [device_id, since_id]
+                if source is not None:
+                    where.append("source=?")
+                    args.append(source)
+                if status is not None:
+                    where.append("acquisition_status=?")
+                    args.append(status)
+                sql = f"SELECT * FROM collection_records WHERE {' AND '.join(where)} ORDER BY id ASC LIMIT ?"
+                rows = db.execute(sql, (*args, bound_limit)).fetchall()
+            else:
+                where = ["device_id=?"]
+                args = [device_id]
+                if source is not None:
+                    where.append("source=?")
+                    args.append(source)
+                if status is not None:
+                    where.append("acquisition_status=?")
+                    args.append(status)
+                sql = f"SELECT * FROM collection_records WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT ?"
+                rows = db.execute(sql, (*args, bound_limit)).fetchall()
+            records = [self._record_view(r) for r in rows]
+            latest_id = max((r["row_id"] for r in records), default=(since_id or 0))
+            return {
+                "ok": True,
+                "device_id": device_id,
+                "source": source,
+                "status": status,
+                "count": len(records),
+                "latest_id": latest_id,
+                "records": records,
+            }
 
     def annotate(self, device_id: str, raw_body: bytes, *, operator_id: str) -> dict[str, Any]:
         if len(raw_body) > 8192:
@@ -712,6 +816,57 @@ class CollectionStore:
         return {"row_id": row["id"], "envelope": json.loads(row["envelope_json"]),
                 "preview": json.loads(row["preview_json"]), "frame_bytes": row["frame_bytes"],
                 "payload_sha256": row["payload_sha256"], "server_received_at": row["received_at"], "persisted_at": row["persisted_at"]}
+
+    @staticmethod
+    def _ego_state_row_view(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "contract_version": "egolink.ego_state_estimation.v0.1",
+            "device_id": row["device_id"],
+            "observation_id": row["observation_id"],
+            "record_id": row["record_id"],
+            "boot_count": row["boot_count"],
+            "event_monotonic_ns": row["event_monotonic_ns"],
+            "sequence_id": row["sequence_id"],
+            "event_utc": row["event_utc"],
+            "received_at": row["received_at"],
+            "spatial_mobility": row["spatial_mobility"],
+            "posture_anomaly": row["posture_anomaly"],
+            "device_wear_state": row["device_wear_state"],
+            "confidence": row["confidence"],
+            "window_duration_ms": row["window_duration_ms"],
+            "primary_evidence_digest": row["primary_evidence_digest"],
+            "is_mock": bool(row["is_mock"]),
+            "reason_codes": json.loads(row["reason_codes_json"]) if row["reason_codes_json"] else [],
+            "evidence_summary": json.loads(row["evidence_summary_json"]) if row["evidence_summary_json"] else {},
+            "privacy_boundary": {
+                "local_priority": True,
+                "encrypted_at_rest": False,
+                "retention_category": "realtime_transient",
+            },
+        }
+
+    def latest_ego_state(self, device_id: str) -> dict[str, Any] | None:
+        with self.hub.connection() as db:
+            row = db.execute(
+                """SELECT * FROM collection_ego_states
+                   WHERE device_id=?
+                   ORDER BY boot_count DESC, event_monotonic_ns DESC, sequence_id DESC, id DESC
+                   LIMIT 1""",
+                (device_id,),
+            ).fetchone()
+        return self._ego_state_row_view(row) if row is not None else None
+
+    def ego_state_timeline(self, device_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        bound_limit = max(1, min(limit, 200))
+        with self.hub.connection() as db:
+            rows = db.execute(
+                """SELECT * FROM collection_ego_states
+                   WHERE device_id=?
+                   ORDER BY boot_count DESC, event_monotonic_ns DESC, sequence_id DESC, id DESC
+                   LIMIT ?""",
+                (device_id, bound_limit),
+            ).fetchall()
+        return [self._ego_state_row_view(r) for r in rows]
 
     def page(self, device_id: str, query: dict[str, list[str]], *, raw: bool = False) -> dict[str, Any]:
         schema = export_schema() if raw else None

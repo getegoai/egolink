@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EgoLink DevBench · 开发者与测试工作台</title>
+  <link rel="stylesheet" href="/dev/static/styles/dev_bench.css?v=20260918_02">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="devbench-header">
+    <div class="brand-section">
+      <div class="brand-logo">
+        <span>⚡</span> EgoLink DevBench
+      </div>
+      <span class="brand-badge">Dev/QA Console</span>
+    </div>
+
+    <div class="header-device-selector">
+      <label for="deviceSelect" style="color:var(--text-secondary);font-size:12px;font-weight:600;">目标节点:</label>
+      <select id="deviceSelect">
+        <option value="ego-link-001">ego-link-001</option>
+      </select>
+    </div>
+
+    <div class="header-status-pill" id="statusPill" style="cursor:pointer;" title="点击配置连接凭证">
+      <span id="statusDot" class="status-dot"></span>
+      <span id="statusText">等待配置凭证…</span>
+    </div>
+
+    <div class="header-controls">
+      <button id="refreshBtn" class="btn btn-sm" title="手动刷新">🔄 刷新</button>
+      <select id="refreshIntervalSelect" class="btn btn-sm" style="padding:4px 8px;">
+        <option value="2">实时 2s</option>
+        <option value="1">极速 1s</option>
+        <option value="5">自动 5s</option>
+        <option value="10" selected>自动 10s</option>
+        <option value="30">自动 30s</option>
+        <option value="0">手动刷新</option>
+      </select>
+      <button id="authBtn" class="btn btn-sm">
+        🔑 登录 / 凭证 <span id="authBadge" class="badge badge-warn">未配置</span>
+      </button>
+      <a href="/engineering" class="btn btn-sm" style="text-decoration:none;" target="_blank">旧版看板 ↗</a>
+      <a href="/collection" class="btn btn-sm" style="text-decoration:none;" target="_blank">采集机 ↗</a>
+    </div>
+  </header>
+
+  <!-- Nav Tabs -->
+  <nav class="nav-tabs">
+    <button class="nav-tab active" data-tab="overview">📊 设备概览</button>
+    <button class="nav-tab" data-tab="location">🛰️ 定位轨迹</button>
+    <button class="nav-tab" data-tab="camera">📷 相机实验室</button>
+    <button class="nav-tab" data-tab="sensors">📈 传感器示波器</button>
+    <button class="nav-tab" data-tab="rawframes">📡 报文监视</button>
+    <button class="nav-tab" data-tab="commands">🎮 控制中心</button>
+    <button class="nav-tab" data-tab="export">💾 外场与导出</button>
+  </nav>
+
+  <!-- Main Container -->
+  <main class="main-container">
+
+    <!-- Tab 1: Overview -->
+    <section id="tab-overview" class="tab-pane active">
+      <div class="grid-stack">
+        <div class="grid-stack grid-4col">
+          <div class="metric-box">
+            <div class="metric-label">Boot 轮次 / 运行时间</div>
+            <div id="metricBootCount" class="metric-value">—</div>
+            <div id="metricUptime" class="metric-sub">单调时钟基准</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">入库遥测帧数 (SQLite)</div>
+            <div id="metricPersisted" class="metric-value">—</div>
+            <div id="metricQueueBytes" class="metric-sub">待上传积压: 0 B</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">电池电量 (MAX17048)</div>
+            <div id="metricBattery" class="metric-value">—</div>
+            <div id="metricCharging" class="metric-sub">实时电压与状态</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">4G LTE 链路 / 信号</div>
+            <div id="metricTransport" class="metric-value">—</div>
+            <div id="metricLteSignal" class="metric-sub">SIM7670G 模块</div>
+          </div>
+        </div>
+
+        <!-- Ego-State Estimation & Evidence Chain Card -->
+        <div class="card">
+          <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span class="card-title">🧠 随身主动状态估计与不可篡改证据链 (Active Ego-State)</span>
+              <span class="brand-badge">端侧推理 · 本地优先</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span id="egoStateTime" class="card-subtitle">等待推理上报…</span>
+              <span class="badge badge-info" style="font-size:10px;">v0.1</span>
+            </div>
+          </div>
+
+          <div class="grid-stack grid-3col" style="margin-bottom:16px;">
+            <div class="metric-box">
+              <div class="metric-label">空间运动状态 (Spatial Mobility)</div>
+              <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+                <span id="egoSpatialMobilityBadge" class="badge badge-warn">UNKNOWN</span>
+                <span id="egoMobilityDesc" style="font-size:12px;color:var(--text-secondary);">未知</span>
+              </div>
+            </div>
+
+            <div class="metric-box">
+              <div class="metric-label">体态异常监控 (Posture Anomaly)</div>
+              <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+                <span id="egoPostureBadge" class="badge badge-ok">NORMAL</span>
+                <span id="egoPostureDesc" style="font-size:12px;color:var(--text-secondary);">正常日常</span>
+              </div>
+            </div>
+
+            <div class="metric-box">
+              <div class="metric-label">随身佩戴状态 (Device Wear)</div>
+              <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+                <span id="egoWearBadge" class="badge badge-warn">UNKNOWN</span>
+                <span id="egoWearDesc" style="font-size:12px;color:var(--text-secondary);">未知</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-stack grid-2col" style="gap:16px;">
+            <!-- Evidence Chain Details -->
+            <div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:14px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="font-weight:600;font-size:13px;color:var(--accent-cyan);">🔐 SHA-256 不可篡改证据摘要</span>
+                <span style="font-size:11px;color:var(--text-muted);">置信度 / 窗口</span>
+              </div>
+              <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
+                <span style="font-size:12px;color:var(--text-secondary);">推理置信度:</span>
+                <span id="egoConfidenceVal" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--accent-green);">—</span>
+                <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">(滑动窗口: <span id="egoWindowDuration">—</span> ms)</span>
+              </div>
+              <div style="margin-bottom:10px;">
+                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">Primary Evidence SHA-256:</div>
+                <div id="egoDigestHex" class="code-view" style="font-size:11px;padding:6px 10px;word-break:break-all;cursor:pointer;" title="点击复制摘要">—</div>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">推理判定规则码 (Reason Codes):</div>
+                <div id="egoReasonCodes" style="display:flex;flex-wrap:wrap;gap:4px;">
+                  <span class="badge badge-info">无规则触发</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Multi-source physical evidence signals -->
+            <div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:14px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <span style="font-weight:600;font-size:13px;color:var(--accent-cyan);">📊 物理证据链融合指标 (Physical Evidence Metrics)</span>
+                <span style="font-size:11px;color:var(--text-muted);">多源物理交叉校验</span>
+              </div>
+              <div class="grid-stack grid-2col" style="gap:10px;">
+                <div style="background:rgba(15,23,42,0.6);padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">IMU RMS 加速度</div>
+                  <div id="egoImuRms" style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--text-primary);">—</div>
+                </div>
+                <div style="background:rgba(15,23,42,0.6);padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">IMU 峰值冲击 (Peak)</div>
+                  <div id="egoPeakAccel" style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--text-primary);">—</div>
+                </div>
+                <div style="background:rgba(15,23,42,0.6);padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">陀螺仪动态方差</div>
+                  <div id="egoGyroVar" style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--text-primary);">—</div>
+                </div>
+                <div style="background:rgba(15,23,42,0.6);padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">GNSS 对地航速</div>
+                  <div id="egoGroundSpeed" style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--text-primary);">—</div>
+                </div>
+                <div style="background:rgba(15,23,42,0.6);padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">蜂窝网络类型</div>
+                  <div id="egoNetworkType" style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--text-primary);">—</div>
+                </div>
+                <div style="background:rgba(15,23,42,0.6);padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                  <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;">电源剩余容量 (SOC)</div>
+                  <div id="egoPowerSoc" style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--text-primary);">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-stack grid-2col">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">固件、芯片与时钟域标识</span>
+              <span id="metricFwVersion" class="badge badge-info">—</span>
+            </div>
+            <pre id="deviceInfoPre" class="code-view" style="max-height:280px;">等待设备信息上报…</pre>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">最近采集会话列表 (Collection Sessions)</span>
+              <span class="card-subtitle">按轮次与 Session 归档</span>
+            </div>
+            <div class="table-wrapper" style="max-height:280px;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>会话 ID</th>
+                    <th>Boot</th>
+                    <th>记录帧数</th>
+                  </tr>
+                </thead>
+                <tbody id="sessionsTableBody">
+                  <tr><td colspan="3" class="metric-sub" style="text-align:center;">暂无会话记录</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: Location -->
+    <section id="tab-location" class="tab-pane">
+      <div class="grid-stack">
+        <div class="grid-stack grid-4col">
+          <div class="metric-box">
+            <div class="metric-label">GNSS Fix 状态</div>
+            <div style="margin-top:6px;"><span id="locationStatusBadge" class="badge badge-warn">UNKNOWN</span></div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">当前坐标 (WGS-84)</div>
+            <div id="locationCoords" class="metric-value" style="font-size:15px;">—</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">定位精度 (HDOP / 覆盖半径)</div>
+            <div id="locationAccuracy" class="metric-value">—</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-label">可见卫星数 / 速度</div>
+            <div id="locationSatellites" class="metric-value">—</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              <span class="card-title">🛰️ 轨迹地图</span>
+              <div class="btn-group" style="display:flex;gap:4px;">
+                <button id="trackSourceLiveBtn" class="btn btn-sm btn-primary">🛰️ 当前硬件实时 (室内搜星/基站)</button>
+                <button id="trackSourceFieldBtn" class="btn btn-sm">🗺️ 外场实测轨迹回放 (FW007 500点)</button>
+              </div>
+              <div class="btn-group" style="display:flex;gap:4px;">
+                <button id="mapModeAmapBtn" class="btn btn-sm btn-primary" title="高德标准路网地图，包含道路、建筑与地名">🗺️ 高德路网</button>
+                <button id="mapModeSatelliteBtn" class="btn btn-sm" title="高德真实卫星航拍与混合路网">🛰️ 卫星航拍</button>
+                <button id="mapModeVectorBtn" class="btn btn-sm" title="离线矢量雷达画布引擎">⚡ 矢量雷达</button>
+              </div>
+            </div>
+            <span id="mapPointCountLabel" class="card-subtitle">加载轨迹点中…</span>
+          </div>
+
+          <!-- Playback Controls (visible for field-verified track) -->
+          <div id="playbackControlBar" style="display:none;padding:8px 12px;background:rgba(15,23,42,0.7);border-radius:6px;margin-bottom:10px;align-items:center;gap:14px;flex-wrap:wrap;font-size:12px;">
+            <button id="playbackPlayBtn" class="btn btn-sm btn-primary">▶ 播放轨迹</button>
+            <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px;">
+              <span id="playbackCurrentIndex" style="font-family:var(--font-mono);color:var(--accent-cyan);min-width:70px;">点位 0/0</span>
+              <input id="playbackSlider" type="range" min="0" max="0" value="0" style="flex:1;cursor:pointer;">
+            </div>
+            <div id="trackSummaryStats" class="metric-sub" style="font-family:var(--font-mono);color:var(--text-secondary);">
+              总里程: 4.82 km · 最高时速: 38.6 km/h · 500 点位
+            </div>
+          </div>
+
+          <div class="map-container">
+            <div id="devbenchAmapContainer" style="width:100%;height:100%;"></div>
+            <canvas id="vectorMapCanvas" class="vector-map-canvas" style="display:none;"></canvas>
+          </div>
+
+          <div id="locationExplainAlert" class="metric-sub" style="margin-top:10px;padding:8px 12px;background:rgba(30,41,59,0.4);border-radius:6px;border-left:3px solid var(--accent-primary);display:none;"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">GNSS 模组原始 AT 交互日志 (+CGNSSINFO)</span>
+            <span id="gnssAtTimestamp" class="card-subtitle">—</span>
+          </div>
+          <pre id="gnssAtPre" class="code-view" style="max-height:180px;">+CGNSSINFO 等待新日志…</pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: Camera -->
+    <section id="tab-camera" class="tab-pane">
+      <div class="grid-stack">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📸 相机远程抓拍控制台</span>
+            <span id="captureStatusText" class="metric-sub">就绪</span>
+          </div>
+          <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
+            <div class="form-group">
+              <label for="captureTtlInput">指令有效期 (TTL 秒):</label>
+              <input id="captureTtlInput" class="form-input" type="number" value="120" style="width:120px;">
+            </div>
+            <div class="form-group">
+              <label for="captureRetentionSelect">云端保留时长 (Retention):</label>
+              <select id="captureRetentionSelect" class="form-input" style="width:180px;">
+                <option value="604800" selected>7 天 (推荐开发测试)</option>
+                <option value="2592000">30 天 (外场长期评估)</option>
+                <option value="86400">1 天 (24 小时)</option>
+                <option value="3600">1 小时 (配额压测模式)</option>
+              </select>
+            </div>
+            <button id="capturePhotoBtn" class="btn btn-primary" style="height:38px;">📸 立即下发抓拍指令 (LTE One-Shot)</button>
+          </div>
+          <div id="captureProgressAlert" class="metric-sub" style="margin-top:8px;color:var(--text-muted);">
+            提示：下发后指令进入云端队列，单板模组在下一次 LTE 轮询抓拍（通常 5~15 秒），拍摄完成后自动上传并刷新画廊。
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⏱️ 定时自动抓拍控制台 (Photo Timer Cadence)</span>
+            <span id="timerStatusFeedback" class="metric-sub">就绪 (默认关闭)</span>
+          </div>
+          <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
+            <div class="form-group">
+              <label for="timerIntervalInput">抓拍周期 (秒, 60~86400):</label>
+              <input id="timerIntervalInput" class="form-input" type="number" value="60" min="60" max="86400" style="width:130px;">
+            </div>
+            <div class="form-group">
+              <label for="timerMaxPhotosInput">批次上限 (张, 1~1000):</label>
+              <input id="timerMaxPhotosInput" class="form-input" type="number" value="3" min="1" max="1000" style="width:110px;">
+            </div>
+            <div class="form-group">
+              <label for="timerConfigVersionInput">配置版本 (Config Tag):</label>
+              <input id="timerConfigVersionInput" class="form-input" type="text" value="timer-v1" style="width:130px;">
+            </div>
+            <button id="enableTimerBtn" class="btn btn-primary" style="height:38px;">▶ 启用定时抓拍</button>
+            <button id="disableTimerBtn" class="btn btn-secondary" style="height:38px;">⏹ 停用定时抓拍</button>
+          </div>
+          <div id="timerProgressAlert" class="metric-sub" style="margin-top:8px;color:var(--text-muted);">
+            规则：设备在已验证硬件门禁下生效（`timer_capture_allowed=1`），达到上限或会话到期后自动停止，断网期间捕获帧自动驻留 Flash 待恢复上传。
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">照片画廊与完整性检验 (Photo Gallery)</span>
+            <span id="photoCountBadge" class="card-subtitle">加载中…</span>
+          </div>
+          <div id="photoGallery" class="photo-gallery">
+            <div class="metric-sub" style="padding:20px;grid-column:1/-1;text-align:center;">正在加载照片列表…</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 4: Sensors -->
+    <section id="tab-sensors" class="tab-pane">
+      <div class="grid-stack">
+        <div class="grid-stack grid-2col" style="align-items:stretch;">
+          <!-- Left: Waveform Oscilloscope -->
+          <div class="card" style="display:flex;flex-direction:column;margin-bottom:0;">
+            <div class="card-header">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span class="card-title">📈 六轴波形示波器 (Acc / Gyro)</span>
+                <button id="imuPauseBtn" class="btn btn-sm">⏸ 暂停</button>
+                <select id="imuScaleSelect" class="form-input" style="padding:2px 8px;font-size:12px;width:90px;">
+                  <option value="0.5">缩放 0.5x</option>
+                  <option value="1.0" selected>缩放 1.0x</option>
+                  <option value="2.0">缩放 2.0x</option>
+                  <option value="5.0">缩放 5.0x</option>
+                </select>
+              </div>
+              <span id="imuStatusText" class="card-subtitle">等待六轴采样数据…</span>
+            </div>
+
+            <!-- Channel toggles -->
+            <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+              <button class="btn btn-sm imu-ch-btn active" data-ch="accX" style="border-left:4px solid #ef4444;padding:2px 6px;font-size:11px;">Acc X</button>
+              <button class="btn btn-sm imu-ch-btn active" data-ch="accY" style="border-left:4px solid #10b981;padding:2px 6px;font-size:11px;">Acc Y</button>
+              <button class="btn btn-sm imu-ch-btn active" data-ch="accZ" style="border-left:4px solid #3b82f6;padding:2px 6px;font-size:11px;">Acc Z</button>
+              <button class="btn btn-sm imu-ch-btn active" data-ch="gyroX" style="border-left:4px solid #f59e0b;padding:2px 6px;font-size:11px;">Gyro X</button>
+              <button class="btn btn-sm imu-ch-btn active" data-ch="gyroY" style="border-left:4px solid #06b6d4;padding:2px 6px;font-size:11px;">Gyro Y</button>
+              <button class="btn btn-sm imu-ch-btn active" data-ch="gyroZ" style="border-left:4px solid #a855f7;padding:2px 6px;font-size:11px;">Gyro Z</button>
+            </div>
+
+            <div class="oscilloscope-container">
+              <canvas id="imuCanvas" class="oscilloscope-canvas"></canvas>
+              <div class="oscilloscope-legend">
+                <div class="legend-item"><span class="legend-color" style="background:#ef4444;"></span> AX: <span id="valAccX">—</span></div>
+                <div class="legend-item"><span class="legend-color" style="background:#10b981;"></span> AY: <span id="valAccY">—</span></div>
+                <div class="legend-item"><span class="legend-color" style="background:#3b82f6;"></span> AZ: <span id="valAccZ">—</span></div>
+                <div class="legend-item"><span class="legend-color" style="background:#f59e0b;"></span> GX: <span id="valGyroX">—</span></div>
+                <div class="legend-item"><span class="legend-color" style="background:#06b6d4;"></span> GY: <span id="valGyroY">—</span></div>
+                <div class="legend-item"><span class="legend-color" style="background:#a855f7;"></span> GZ: <span id="valGyroZ">—</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: 3D Spatial Attitude Twin -->
+          <div class="card" style="display:flex;flex-direction:column;margin-bottom:0;">
+            <div class="card-header">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="card-title">🧊 3D 设备空间姿态孪生</span>
+                <span id="imu3dPoseBadge" class="badge badge-info">检测姿态中…</span>
+              </div>
+              <div style="display:flex;gap:6px;">
+                <button id="imu3dTareBtn" class="btn btn-sm" title="将当前平放姿态校准为设备水平基准零位">🎯 设备平面校准</button>
+                <button id="imu3dResetBtn" class="btn btn-sm" title="重置 3D 观察视角">🔄 复位视角</button>
+              </div>
+            </div>
+            <div class="oscilloscope-container">
+              <canvas id="imu3dCanvas" class="oscilloscope-canvas" style="cursor:grab;"></canvas>
+              <div class="oscilloscope-legend" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(90px, 1fr));gap:6px;font-size:11px;">
+                <div class="legend-item">📐 俯仰 <strong id="valAttitudePitch" style="color:#ef4444;margin-left:4px;">0.0°</strong></div>
+                <div class="legend-item">🔄 横滚 <strong id="valAttitudeRoll" style="color:#10b981;margin-left:4px;">0.0°</strong></div>
+                <div class="legend-item">🧭 航向 <strong id="valAttitudeYaw" style="color:#38bdf8;margin-left:4px;">0.0°</strong></div>
+                <div class="legend-item">⚖️ 合力 <strong id="valAttitudeG" style="color:#f8fafc;margin-left:4px;">1.00G</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-stack grid-2col">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Wi-Fi 周边扫描 AP 列表</span>
+              <span id="wifiApCountBadge" class="badge badge-info">0 AP</span>
+            </div>
+            <div class="table-wrapper" style="max-height:260px;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>信道 (Channel)</th>
+                    <th>AP 数量</th>
+                    <th>最强信号 (RSSI)</th>
+                  </tr>
+                </thead>
+                <tbody id="wifiTableBody">
+                  <tr><td class="metric-sub" colspan="3" style="text-align:center;">暂无 Wi-Fi 扫描结果</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">电源与电量计详细读数 (MAX17048)</span>
+            </div>
+            <div class="grid-stack grid-2col" style="margin-top:8px;">
+              <div class="metric-box">
+                <div class="metric-label">电池电压 (mV)</div>
+                <div id="powerMvDetail" class="metric-value">—</div>
+                <div class="metric-sub">工作电压区间 3300 ~ 4200 mV</div>
+              </div>
+              <div class="metric-box">
+                <div class="metric-label">电量百分比 (SOC %)</div>
+                <div id="powerSocDetail" class="metric-value">—</div>
+                <div class="metric-sub">基于库仑计高精模型</div>
+              </div>
+            </div>
+            <div style="margin-top:12px;font-size:12px;color:var(--text-secondary);" id="powerStatusText">
+              充电状态: 未知
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 5: Raw Frames -->
+    <section id="tab-rawframes" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span class="card-title">📡 采集报文原始数据流 (Raw Frames Stream)</span>
+            <select id="streamFilterSelect" class="form-input" style="padding:4px 8px;font-size:12px;width:150px;">
+              <option value="all">全部数据源 (All)</option>
+              <option value="gnss">GNSS 定位</option>
+              <option value="imu">IMU 六轴</option>
+              <option value="wifi">Wi-Fi 扫描</option>
+              <option value="power">电源与电量</option>
+              <option value="camera">相机与元数据</option>
+              <option value="lte">4G LTE 网络</option>
+              <option value="device">系统与存储</option>
+              <option value="session">会话管理</option>
+            </select>
+            <input id="streamSearchInput" class="form-input" placeholder="搜索关键字..." style="padding:4px 8px;font-size:12px;width:180px;">
+          </div>
+          <span id="rawFramesCountLabel" class="card-subtitle">展示最新 50 帧</span>
+        </div>
+        <div id="rawFramesStream" class="grid-stack" style="gap:6px;max-height:600px;overflow-y:auto;">
+          <div class="metric-sub" style="padding:20px;text-align:center;">暂无匹配报文帧</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 6: Commands -->
+    <section id="tab-commands" class="tab-pane">
+      <div class="grid-stack">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🎮 下发控制指令 (Downlink RPC)</span>
+            <span id="commandStatusFeedback" class="metric-sub">就绪</span>
+          </div>
+          <div style="display:grid;gap:14px;">
+            <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+              <div class="form-group">
+                <label for="commandTypeSelect">指令模板:</label>
+                <select id="commandTypeSelect" class="form-input" style="width:240px;">
+                  <option value="capture_photo_once">capture_photo_once (抓拍照片)</option>
+                  <option value="configure_photo_timer">configure_photo_timer (定时拍照)</option>
+                  <option value="set_report_interval">set_report_interval (上报周期)</option>
+                  <option value="query_status">query_status (查询状态)</option>
+                  <option value="custom">custom (自定义指令)</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex:1;min-width:280px;">
+                <label for="commandPayloadInput">指令参数 (JSON):</label>
+                <input id="commandPayloadInput" class="form-input" value='{"cmd": "capture_photo_once", "ttl_seconds": 120}'>
+              </div>
+              <button id="sendCommandBtn" class="btn btn-primary" style="height:38px;">发送下行指令</button>
+            </div>
+            <div class="form-hint" id="commandHintText">
+              提示：下发后指令存入 Message Hub 待发送队列，节点轮询拉取并执行，执行后上报 ACK 帧更新状态。
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">最近下行指令与执行状态 (Command History)</span>
+            <span id="commandsCountBadge" class="card-subtitle">加载中…</span>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>指令 ID</th>
+                  <th>指令类型</th>
+                  <th>参数负载</th>
+                  <th>下发时间</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="commandsTableBody">
+                <tr><td colspan="5" class="metric-sub" style="text-align:center;">暂无指令历史记录</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 7: Field Export -->
+    <section id="tab-export" class="tab-pane">
+      <div class="grid-stack">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📝 外场数据标注 (FIELD-020 Annotations)</span>
+            <span id="annotationStatusText" class="metric-sub"></span>
+          </div>
+          <div class="grid-stack grid-3col">
+            <div class="form-group">
+              <label for="sessionSceneInput">测试场景 (Scene):</label>
+              <input id="sessionSceneInput" class="form-input" placeholder="室外步行 / 室内驻留 / 车载快速移动">
+            </div>
+            <div class="form-group">
+              <label for="sessionWearingInput">佩戴姿态 (Wearing):</label>
+              <input id="sessionWearingInput" class="form-input" placeholder="胸前挂件 / 手腕 / 口袋 / 背包">
+            </div>
+            <div class="form-group">
+              <label for="sessionNoteInput">标注备注 (Notes):</label>
+              <input id="sessionNoteInput" class="form-input" placeholder="天气状况、环境遮挡、异常观察">
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;margin-top:16px;">
+            <button id="saveAnnotationBtn" class="btn btn-primary">💾 保存外场标注</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">最近外场标注记录</span>
+          </div>
+          <div class="table-wrapper" style="max-height:220px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>标注 ID</th>
+                  <th>场景</th>
+                  <th>佩戴</th>
+                  <th>备注</th>
+                  <th>记录时间</th>
+                </tr>
+              </thead>
+              <tbody id="annotationsTableBody">
+                <tr><td colspan="5" class="metric-sub" style="text-align:center;">暂无外场标注</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">💾 全量原始采集数据导出 (NDJSON)</span>
+          </div>
+          <p style="font-size:13px;color:var(--text-secondary);margin:0 0 14px 0;">
+            导出格式为包含全量 GNSS、IMU、Wi-Fi、电源、LTE 与相机的标准 JSONL (NDJSON) 文件，可直接导入离线分析工具与算法实验室。
+          </p>
+          <div style="display:flex;align-items:center;gap:14px;">
+            <button id="exportJsonlBtn" class="btn btn-primary">⬇ 导出全量原始 JSONL (NDJSON)</button>
+            <span id="exportProgressText" class="metric-sub"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Auth Settings Modal -->
+  <div id="authModal" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span class="modal-title">🔑 登录与访问凭证管理</span>
+        <button id="closeAuthBtn" class="btn btn-sm">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:rgba(56, 189, 248, 0.08);border:1px solid rgba(56, 189, 248, 0.2);padding:10px 12px;border-radius:var(--radius-md);font-size:12px;color:var(--text-secondary);line-height:1.5;">
+          🔒 <strong>安全说明</strong>：所有令牌凭证<strong>仅保存在您当前浏览器的本地缓存 (localStorage) 中</strong>，不会写入服务器代码或公开仓库。
+        </div>
+
+        <div class="form-group">
+          <label for="targetDeviceIdInput">目标节点设备 ID (Device ID):</label>
+          <input id="targetDeviceIdInput" class="form-input" placeholder="ego-link-001">
+          <span class="form-hint">采集节点的唯一标识符</span>
+        </div>
+
+        <div class="form-group">
+          <label for="hubTokenInput">Message Hub 管理令牌 (EGOLINK_MESSAGE_HUB_TOKEN):</label>
+          <input id="hubTokenInput" class="form-input" type="password" placeholder="请输入管理令牌">
+          <span class="form-hint">用于获取设备列表、遥测历史、下发系统指令</span>
+        </div>
+
+        <div class="form-group">
+          <label for="guardianTokenInput">Guardian 采集与照片访问令牌 (EGOLINK_GUARDIAN_TOKEN):</label>
+          <input id="guardianTokenInput" class="form-input" type="password" placeholder="留空默认复用 Message Hub 管理令牌">
+          <span class="form-hint">用于读取传感器观测、照片画廊下载及触发抓拍指令（留空时自动复用管理令牌）</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="clearAuthBtn" class="btn btn-danger">清空凭证</button>
+        <button id="saveAuthBtn" class="btn btn-primary">保存并连接</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Photo Viewer Modal -->
+  <div id="photoModal" class="modal-backdrop">
+    <div class="modal-box" style="max-width:840px;">
+      <div class="modal-header">
+        <span class="modal-title">📷 照片详情与高精校验</span>
+        <button id="photoModalClose" class="btn btn-sm">✕</button>
+      </div>
+      <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div id="photoModalMediaWrapper" style="background:#090d16;display:flex;align-items:center;justify-content:center;border-radius:var(--radius-md);overflow:hidden;min-height:240px;border:1px solid var(--border-subtle);">
+          <img id="photoModalImg" src="" alt="Photo" style="max-width:100%;max-height:360px;object-fit:contain;">
+        </div>
+        <div>
+          <pre id="photoModalMeta" class="code-view" style="height:100%;max-height:360px;font-size:11px;"></pre>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="photoDownloadBtn" class="btn btn-primary">⬇ 下载原图 JPEG</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/dev/static/scripts/main.js?v=20260921_04"></script>
+</body>
+</html>
