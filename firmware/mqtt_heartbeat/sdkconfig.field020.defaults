@@ -1,4 +1,4 @@
-# FIELD-020 rate-only overlay. Apply after sdkconfig.defaults,
+# FIELD-020 collection/transport cadence overlay. Apply after sdkconfig.defaults,
 # sdkconfig.collection.defaults and any selected camera profile.
 # It contains no credentials, device identity, LTE descriptor, capture
 # authorization, or hardware-capability claim.
@@ -8,3 +8,6 @@ CONFIG_EGOLINK_COLLECTION_GNSS_INTERVAL_MS=15000
 CONFIG_EGOLINK_COLLECTION_LTE_INTERVAL_MS=30000
 CONFIG_EGOLINK_COLLECTION_HEALTH_INTERVAL_MS=30000
 CONFIG_EGOLINK_COLLECTION_WIFI_SCAN_INTERVAL_MS=45000
+# Keep camera command polling below the command TTL while leaving enough time
+# for ordinary telemetry uploads to reuse their LTE/TLS connection.
+CONFIG_EGOLINK_PHOTO_COMMAND_POLL_INTERVAL_MS=15000

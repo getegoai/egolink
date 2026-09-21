@@ -1,2 +1,2 @@
-idf_component_register(SRCS "platform_i2c_bus.c" INCLUDE_DIRS "include" REQUIRES driver esp_timer freertos)
+idf_component_register(SRCS "platform_i2c_bus.c" INCLUDE_DIRS "include" REQUIRES driver esp_timer freertos esp_rom)
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Werror)

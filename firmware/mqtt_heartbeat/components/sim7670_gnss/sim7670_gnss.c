@@ -3298,6 +3298,86 @@ bool sim7670_lte_http_get_raw(
     return false;
 #endif
 }
+
+#ifndef ESP_ERR_TIMEOUT
+#define ESP_ERR_TIMEOUT 263
+#endif
+
+esp_err_t sim7670_at_send_raw_bounded(
+    const char *command,
+    char *response,
+    size_t response_size,
+    uint32_t timeout_ms)
+{
+    if (command == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (response != NULL && response_size > 0) {
+        response[0] = '\0';
+    }
+    if (!sim7670_at_backend_current_task_is_allowed()) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (sim7670_gnss_init() != ESP_OK) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (s_uart_mutex == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    uart_port_t uart_num = configured_uart_num();
+    if (xSemaphoreTake(s_uart_mutex, pdMS_TO_TICKS(timeout_ms + 500)) != pdTRUE) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    uart_flush_input(uart_num);
+    uart_write_bytes(uart_num, command, strlen(command));
+    uart_write_bytes(uart_num, "\r\n", 2);
+
+    char local_buf[128];
+    char *buf = (response != NULL && response_size > 0) ? response : local_buf;
+    size_t cap = (response != NULL && response_size > 0) ? response_size : sizeof(local_buf);
+    buf[0] = '\0';
+
+    uint8_t chunk[AT_READ_CHUNK_SIZE];
+    size_t length = 0;
+    bool matched = false;
+    bool saw_error = false;
+    int64_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+    while ((int64_t)xTaskGetTickCount() < deadline) {
+        int read = uart_read_bytes(uart_num, chunk, sizeof(chunk), pdMS_TO_TICKS(50));
+        if (read > 0) {
+            size_t available = cap - 1 - length;
+            size_t copy = (size_t)read < available ? (size_t)read : available;
+            if (copy > 0) {
+                memcpy(buf + length, chunk, copy);
+                length += copy;
+                buf[length] = '\0';
+            }
+            saw_error = response_has_terminal_error(buf) ||
+                        contains_token(buf, "BUSY") ||
+                        contains_token(buf, "NO CARRIER") ||
+                        contains_token(buf, "NO ANSWER") ||
+                        contains_token(buf, "NO DIALTONE");
+            if (saw_error) {
+                break;
+            }
+            if (response_has_complete_line(buf, "OK", false)) {
+                matched = true;
+                break;
+            }
+        }
+    }
+    xSemaphoreGive(s_uart_mutex);
+
+    if (saw_error) {
+        return ESP_FAIL;
+    }
+    if (!matched) {
+        return ESP_ERR_TIMEOUT;
+    }
+    return ESP_OK;
+}
 #else
 bool sim7670_at_backend_is_initialized(void)
 {
@@ -3436,5 +3516,19 @@ bool sim7670_lte_http_get_raw(
     }
     sim7670_lte_http_probe_result_init(result);
     return false;
+}
+
+esp_err_t sim7670_at_send_raw_bounded(
+    const char *command,
+    char *response,
+    size_t response_size,
+    uint32_t timeout_ms)
+{
+    (void)command;
+    (void)timeout_ms;
+    if (response != NULL && response_size > 0) {
+        response[0] = '\0';
+    }
+    return ESP_ERR_NOT_SUPPORTED;
 }
 #endif

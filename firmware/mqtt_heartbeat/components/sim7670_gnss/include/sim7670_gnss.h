@@ -379,6 +379,11 @@ bool sim7670_lte_http_get_raw(
     sim7670_lte_http_probe_result_t *result);
 void sim7670_lte_http_probe_result_init(sim7670_lte_http_probe_result_t *result);
 const char *sim7670_lte_http_backend_name(void);
+esp_err_t sim7670_at_send_raw_bounded(
+    const char *command,
+    char *response,
+    size_t response_size,
+    uint32_t timeout_ms);
 
 #ifdef __cplusplus
 }

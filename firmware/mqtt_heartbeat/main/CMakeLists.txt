@@ -49,5 +49,6 @@ idf_component_register(
     INCLUDE_DIRS "."
     REQUIRES ${EGOLINK_MAIN_REQUIREMENTS}
     PRIV_REQUIRES photo_media_store platform_camera photo_control_runtime
-    photo_delivery_runtime
+    photo_delivery_runtime collection_sensor_policy location_policy_core
+    sim7670_cellular_call ego_state_engine
 )

@@ -15,6 +15,7 @@
 #include "collection_network_coordinator.h"
 #include "collection_network_policy.h"
 #include "collection_record.h"
+#include "collection_sensor_policy.h"
 #include "collection_spool.h"
 #include "collection_usb_lte.h"
 #include "esp_app_desc.h"
@@ -43,6 +44,8 @@
 #include "platform_imu.h"
 #include "platform_power.h"
 #include "sim7670_gnss.h"
+#include "ego_state_engine.h"
+#include "sim7670_cellular_call.h"
 
 #ifndef CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
 #define CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED 0
@@ -148,6 +151,8 @@ _Static_assert(CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES >= 20 &&
 _Static_assert(COLLECTION_IMU_BASE64_CAPACITY +
     COLLECTION_IMU_FRAME_NON_SAMPLE_BUDGET <= COLLECTION_FRAME_CAPACITY,
     "IMU collection block can exceed the bounded EGLK frame");
+_Static_assert(sizeof(CONFIG_EGOLINK_TEST_RUN_ID) <= 129U,
+    "collection test-run ID exceeds the 128-byte contract bound");
 #define PHOTO_ORDINARY_UPLOAD_BUDGET 8U
 #define PHOTO_FAIR_UPLOAD_INTERVAL_US 30000000LL
 #define PHOTO_METADATA_ORDINARY_ACK_BUDGET 4U
@@ -166,6 +171,61 @@ static SemaphoreHandle_t spool_mutex;
 static collection_spool_t spool;
 static const esp_partition_t *partition;
 static atomic_bool spool_ready;
+static collection_sensor_policy_t sensor_policy;
+static SemaphoreHandle_t sensor_policy_mutex;
+static atomic_bool sensor_policy_ready;
+static ego_state_engine_ctx_t s_ego_state_engine;
+static SemaphoreHandle_t s_ego_state_mutex;
+static atomic_bool s_ego_state_ready;
+static ego_state_estimation_t s_health_ego_est;
+static ego_evidence_chain_t s_health_ego_ev;
+static sim7670_cellular_call_ctx_t s_cellular_call;
+static SemaphoreHandle_t s_cellular_call_mutex;
+static atomic_bool s_cellular_call_ready;
+static sim7670_call_status_t s_cellular_call_status;
+
+typedef enum {
+    CALL_CMD_NONE = 0,
+    CALL_CMD_DIAL,
+    CALL_CMD_HANGUP,
+    CALL_CMD_ANSWER
+} call_cmd_type_t;
+
+typedef struct {
+    call_cmd_type_t type;
+    char phone_number[SIM7670_CALL_PHONE_NUMBER_MAX_LEN];
+} pending_call_cmd_t;
+
+static pending_call_cmd_t s_pending_call_cmd;
+static portMUX_TYPE s_call_cmd_mux = portMUX_INITIALIZER_UNLOCKED;
+
+bool egolink_cellular_call_dial(const char *number)
+{
+    if (number == NULL || number[0] == '\0') {
+        return false;
+    }
+    portENTER_CRITICAL(&s_call_cmd_mux);
+    s_pending_call_cmd.type = CALL_CMD_DIAL;
+    snprintf(s_pending_call_cmd.phone_number, sizeof(s_pending_call_cmd.phone_number), "%s", number);
+    portEXIT_CRITICAL(&s_call_cmd_mux);
+    return true;
+}
+
+bool egolink_cellular_call_hangup(void)
+{
+    portENTER_CRITICAL(&s_call_cmd_mux);
+    s_pending_call_cmd.type = CALL_CMD_HANGUP;
+    s_pending_call_cmd.phone_number[0] = '\0';
+    portEXIT_CRITICAL(&s_call_cmd_mux);
+    return true;
+}
+
+static esp_err_t cellular_call_at_send(
+    void *user_ctx,
+    const char *cmd,
+    char *resp,
+    size_t resp_size,
+    uint32_t timeout_ms);
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
 static photo_media_store_t media_store;
 static const esp_partition_t *media_partition;
@@ -287,6 +347,21 @@ static void note_drop(unsigned source,unsigned seq,size_t bytes,unsigned reason)
 }
 static void add_nullable_number(cJSON *o,const char *key,bool valid,double v)
 { if(valid) cJSON_AddNumberToObject(o,key,v); else cJSON_AddNullToObject(o,key); }
+static bool configured_test_run_id_valid(void)
+{
+    const char *value=CONFIG_EGOLINK_TEST_RUN_ID;
+    if(value[0]&&!((value[0]>='a'&&value[0]<='z')||
+                   (value[0]>='A'&&value[0]<='Z')||
+                   (value[0]>='0'&&value[0]<='9')))
+        return false;
+    for(size_t index=0U;value[index];index++) {
+        const char ch=value[index];
+        if(!((ch>='a'&&ch<='z')||(ch>='A'&&ch<='Z')||
+             (ch>='0'&&ch<='9')||ch=='.'||ch=='_'||ch==':'||ch=='@'||ch=='-'))
+            return false;
+    }
+    return true;
+}
 static bool format_utc_from_monotonic(int64_t mono,char out[40])
 {
     portENTER_CRITICAL(&clock_mux);int64_t offset=utc_offset_us;portEXIT_CRITICAL(&clock_mux);
@@ -324,6 +399,9 @@ static cJSON *envelope(unsigned source,unsigned seq,int64_t mono,const char *sta
     cJSON_AddStringToObject(o,"firmware_elf_sha256",firmware_elf_sha256);
     cJSON_AddStringToObject(o,"config_id",CONFIG_ID);
     cJSON_AddStringToObject(o,"session_id",session_id);
+    if(CONFIG_EGOLINK_TEST_RUN_ID[0])
+        cJSON_AddStringToObject(o,"test_run_id",CONFIG_EGOLINK_TEST_RUN_ID);
+    else cJSON_AddNullToObject(o,"test_run_id");
     cJSON_AddStringToObject(o,"status",status);
     if(reason) cJSON_AddStringToObject(o,"missing_reason",reason); else cJSON_AddNullToObject(o,"missing_reason");
     cJSON_AddItemToObject(o,"payload",payload?payload:cJSON_CreateObject());
@@ -826,12 +904,35 @@ static void photo_stack_hwm_observe(atomic_uint *minimum_bytes)
           !atomic_compare_exchange_weak(minimum_bytes,&previous,current)){}
 }
 
-static void photo_add_stack_hwm(cJSON *object,const char *name,
+static void __attribute__((unused)) photo_add_stack_hwm(cJSON *object,const char *name,
                                 const atomic_uint *minimum_bytes)
 {
     const unsigned value=atomic_load(minimum_bytes);
     if(value==UINT_MAX)cJSON_AddNullToObject(object,name);
     else cJSON_AddNumberToObject(object,name,value);
+}
+
+static void __attribute__((unused)) photo_add_resources_debug(cJSON *camera)
+{
+    cJSON_AddNumberToObject(camera,"metadata_persist_retries",
+        atomic_load(&photo_metadata_persist_retries));
+    cJSON *resources=cJSON_AddObjectToObject(camera,"resources");
+    cJSON_AddNumberToObject(resources,"internal_free_bytes",
+        (double)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    cJSON_AddNumberToObject(resources,"internal_min_free_bytes",
+        (double)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
+    cJSON_AddNumberToObject(resources,"dma_free_bytes",
+        (double)heap_caps_get_free_size(MALLOC_CAP_DMA));
+    cJSON_AddNumberToObject(resources,"dma_largest_free_block_bytes",
+        (double)heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
+    cJSON *stack_hwm=cJSON_AddObjectToObject(resources,
+        "task_stack_high_watermark_bytes");
+    photo_add_stack_hwm(stack_hwm,"main",&photo_main_stack_hwm_bytes);
+    photo_add_stack_hwm(stack_hwm,"store",&photo_store_stack_hwm_bytes);
+    photo_add_stack_hwm(stack_hwm,"imu",&photo_imu_stack_hwm_bytes);
+    photo_add_stack_hwm(stack_hwm,"modem",&photo_modem_stack_hwm_bytes);
+    photo_add_stack_hwm(stack_hwm,"upload",&photo_upload_stack_hwm_bytes);
+    photo_add_stack_hwm(stack_hwm,"wifi",&photo_wifi_stack_hwm_bytes);
 }
 
 static bool photo_append_direct_frame(unsigned source,const char *frame,
@@ -1198,6 +1299,28 @@ static void imu_task(void *unused)
             for(unsigned i=0;i<4;i++) b[i]=(uint8_t)(offset>>(i*8));
             for(unsigned i=0;i<6;i++) {uint16_t v=(uint16_t)sample.raw_axes[i];b[4+i*2]=(uint8_t)v;b[5+i*2]=(uint8_t)(v>>8);}
             ++count;
+            if(atomic_load(&sensor_policy_ready) && xSemaphoreTake(sensor_policy_mutex, 0) == pdTRUE) {
+                collection_sensor_policy_feed_imu_sample(
+                    &sensor_policy,
+                    sample.accel_mg_x,
+                    sample.accel_mg_y,
+                    sample.accel_mg_z,
+                    (uint64_t)(sample.read_completed_us / 1000LL));
+                xSemaphoreGive(sensor_policy_mutex);
+            }
+            if(atomic_load(&s_ego_state_ready) && xSemaphoreTake(s_ego_state_mutex, 0) == pdTRUE) {
+                ego_state_engine_feed_imu(
+                    &s_ego_state_engine,
+                    (float)sample.accel_mg_x,
+                    (float)sample.accel_mg_y,
+                    (float)sample.accel_mg_z,
+                    (float)sample.gyro_mdps_x,
+                    (float)sample.gyro_mdps_y,
+                    (float)sample.gyro_mdps_z,
+                    sample.read_completed_us * 1000LL,
+                    sample.sample_is_mock);
+                xSemaphoreGive(s_ego_state_mutex);
+            }
         } else ++failures;
         if(count==CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES ||
            failures>=CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES ||
@@ -1413,6 +1536,16 @@ static void lte_apply_policy_result(
     }
 }
 #endif
+static esp_err_t cellular_call_at_send(
+    void *user_ctx,
+    const char *cmd,
+    char *resp,
+    size_t resp_size,
+    uint32_t timeout_ms)
+{
+    (void)user_ctx;
+    return sim7670_at_send_raw_bounded(cmd, resp, resp_size, timeout_ms);
+}
 static void modem_task(void *unused)
 {
     (void)unused;
@@ -1432,7 +1565,25 @@ static void modem_task(void *unused)
         cJSON_AddStringToObject(initial_payload,"phase","session_start_cleanup");
         cJSON_AddNumberToObject(initial_payload,"reason",initial_result.reason);
         emit(GNSS,now_us(),query_status(&initial_result),initial_result.reason?"initial_power_state_unconfirmed":NULL,initial_payload,false);
+
+        if(s_cellular_call_mutex != NULL) {
+            sim7670_cellular_call_config_t call_cfg = {
+                .at_send = cellular_call_at_send,
+                .user_ctx = NULL,
+                .clock_fn = now_us,
+            };
+            xSemaphoreTake(s_cellular_call_mutex, portMAX_DELAY);
+            if(sim7670_cellular_call_init(&s_cellular_call, &call_cfg) == ESP_OK) {
+                (void)sim7670_cellular_call_configure(&s_cellular_call, 100);
+                atomic_store(&s_cellular_call_ready, true);
+                ESP_LOGI(TAG, "SIM7670_CELLULAR_CALL initialized and configured successfully");
+            } else {
+                ESP_LOGE(TAG, "SIM7670_CELLULAR_CALL init failed");
+            }
+            xSemaphoreGive(s_cellular_call_mutex);
+        }
     }
+
 
     bool usb_ready=false;
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
@@ -1489,7 +1640,7 @@ static void modem_task(void *unused)
         collection_network_state_name(policy_result.state),collection_network_route_name(policy_result.route),
         CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED,usb_ready);
 
-    int64_t next_gnss=0,next_cell=0;
+    int64_t next_gnss=0,next_cell=0,next_call_poll=0;
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
     uint64_t next_lte_diag_ms=0;
 #endif
@@ -1498,6 +1649,17 @@ static void modem_task(void *unused)
         photo_stack_hwm_observe(&photo_modem_stack_hwm_bytes);
 #endif
         int64_t now=now_us();uint64_t now_ms=(uint64_t)now/1000U;
+        collection_sensor_policy_snapshot_t policy_snap={0};
+        bool immediate_gnss=false;
+        if(atomic_load(&sensor_policy_ready)&&xSemaphoreTake(sensor_policy_mutex,pdMS_TO_TICKS(10))==pdTRUE) {
+            policy_snap=collection_sensor_policy_snapshot(&sensor_policy);
+            immediate_gnss=collection_sensor_policy_consume_immediate_gnss(&sensor_policy);
+            xSemaphoreGive(sensor_policy_mutex);
+        }
+        if(immediate_gnss) {
+            ESP_LOGI(TAG,"SENSOR_POLICY: motion triggered immediate GNSS acquisition");
+            next_gnss=now;
+        }
         bool current_wifi=atomic_load(&wifi_ready);
         if(current_wifi!=previous_wifi) {
             previous_wifi=current_wifi;
@@ -1544,6 +1706,50 @@ static void modem_task(void *unused)
         if(collection_network_coordinator_blocks_uart_work(&lte_control)) {vTaskDelay(pdMS_TO_TICKS(20));continue;}
 #endif
 
+        if(uart_ready && atomic_load(&s_cellular_call_ready)) {
+            pending_call_cmd_t cmd = {0};
+            portENTER_CRITICAL(&s_call_cmd_mux);
+            cmd = s_pending_call_cmd;
+            s_pending_call_cmd.type = CALL_CMD_NONE;
+            portEXIT_CRITICAL(&s_call_cmd_mux);
+
+            if(cmd.type == CALL_CMD_DIAL) {
+                ESP_LOGI(TAG, "CELLULAR_CALL: Executing dial to %s", cmd.phone_number);
+                xSemaphoreTake(s_cellular_call_mutex, portMAX_DELAY);
+                esp_err_t err = sim7670_cellular_call_dial(&s_cellular_call, cmd.phone_number);
+                if(err == ESP_OK) {
+                    ESP_LOGI(TAG, "CELLULAR_CALL: Dial command accepted");
+                } else {
+                    ESP_LOGW(TAG, "CELLULAR_CALL: Dial command rejected, err=%s", esp_err_to_name(err));
+                }
+                xSemaphoreGive(s_cellular_call_mutex);
+                next_call_poll = 0;
+            } else if(cmd.type == CALL_CMD_HANGUP) {
+                ESP_LOGI(TAG, "CELLULAR_CALL: Executing hangup");
+                xSemaphoreTake(s_cellular_call_mutex, portMAX_DELAY);
+                sim7670_cellular_call_hangup(&s_cellular_call);
+                xSemaphoreGive(s_cellular_call_mutex);
+                next_call_poll = 0;
+            } else if(cmd.type == CALL_CMD_ANSWER) {
+                ESP_LOGI(TAG, "CELLULAR_CALL: Executing answer");
+                xSemaphoreTake(s_cellular_call_mutex, portMAX_DELAY);
+                sim7670_cellular_call_answer(&s_cellular_call);
+                xSemaphoreGive(s_cellular_call_mutex);
+                next_call_poll = 0;
+            }
+
+            if(now >= next_call_poll) {
+                sim7670_call_status_t call_stat;
+                xSemaphoreTake(s_cellular_call_mutex, portMAX_DELAY);
+                if(sim7670_cellular_call_poll_status(&s_cellular_call, &call_stat) == ESP_OK) {
+                    s_cellular_call_status = call_stat;
+                }
+                xSemaphoreGive(s_cellular_call_mutex);
+                int64_t poll_interval_us = (s_cellular_call_status.state == SIM7670_CALL_STATE_IDLE) ? 3000000LL : 1000000LL;
+                next_call_poll = now + poll_interval_us;
+            }
+        }
+
         if(uart_ready&&now>=next_cell) {
             trace_t trace={.at=cJSON_CreateArray()};
             sim7670_location_bounded_request_t req={.timeout_ms=5000,.per_command_timeout_cap_ms=500,.operation_token=operation++,.cancel_requested=cancel,.trace_at=trace_at,.trace_context=&trace,.continue_on_status_error=true};
@@ -1567,7 +1773,25 @@ static void modem_task(void *unused)
             cJSON_AddBoolToObject(p,"registration_valid",l.cereg_query.parse_valid);cJSON_AddBoolToObject(p,"attachment_valid",l.cgatt_query.parse_valid);
             cJSON_AddBoolToObject(p,"apn_query_valid",l.cgdcont_query.parse_valid);cJSON_AddBoolToObject(p,"ppp_dial_admitted",dial_admitted);
             emit(LTE,now,r.reason&&r.commands_completed>1?"partial":query_status(&r),r.reason?"see_at_outcome_and_reason":NULL,p,false);
-            next_cell=now+(int64_t)CONFIG_EGOLINK_COLLECTION_LTE_INTERVAL_MS*1000LL;
+            int64_t cell_interval_us=(int64_t)CONFIG_EGOLINK_COLLECTION_LTE_INTERVAL_MS*1000LL;
+            if(policy_snap.cell_interval_ms>0U) cell_interval_us=(int64_t)policy_snap.cell_interval_ms*1000LL;
+            next_cell=now+cell_interval_us;
+            if(atomic_load(&sensor_policy_ready)&&xSemaphoreTake(sensor_policy_mutex,pdMS_TO_TICKS(10))==pdTRUE) {
+                collection_sensor_policy_feed_cell_result(&sensor_policy,true,(uint64_t)(now/1000LL));
+                xSemaphoreGive(sensor_policy_mutex);
+            }
+            if(atomic_load(&s_ego_state_ready)&&xSemaphoreTake(s_ego_state_mutex,pdMS_TO_TICKS(10))==pdTRUE) {
+                ego_network_type_t net_type = l.registered ? EGO_NETWORK_LTE : EGO_NETWORK_OFFLINE;
+                float rsrp = l.rsrp_valid ? (float)l.rsrp : -120.0f;
+                ego_state_engine_feed_network(
+                    &s_ego_state_engine,
+                    net_type,
+                    rsrp,
+                    l.cell_id,
+                    0,
+                    "");
+                xSemaphoreGive(s_ego_state_mutex);
+            }
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
             notice=collection_network_coordinator_admit(
                 &lte_control,policy_result.active_lte_attempt_id,
@@ -1613,7 +1837,27 @@ static void modem_task(void *unused)
                     portEXIT_CRITICAL(&location_ref_mux);
                 }
             }
-            next_gnss=now+CONFIG_EGOLINK_COLLECTION_GNSS_INTERVAL_MS*1000LL;
+            int64_t gnss_interval_us=(int64_t)CONFIG_EGOLINK_COLLECTION_GNSS_INTERVAL_MS*1000LL;
+            if(policy_snap.gnss_interval_ms>0U) gnss_interval_us=(int64_t)policy_snap.gnss_interval_ms*1000LL;
+            next_gnss=now+gnss_interval_us;
+            if(atomic_load(&sensor_policy_ready)&&xSemaphoreTake(sensor_policy_mutex,pdMS_TO_TICKS(10))==pdTRUE) {
+                collection_sensor_policy_feed_gnss_result(
+                    &sensor_policy,g.fix&&g.lat_valid&&g.lon_valid,g.no_fix_observed,(uint64_t)(now/1000LL));
+                xSemaphoreGive(sensor_policy_mutex);
+            }
+            if(atomic_load(&s_ego_state_ready)&&xSemaphoreTake(s_ego_state_mutex,pdMS_TO_TICKS(10))==pdTRUE) {
+                ego_state_engine_feed_location(
+                    &s_ego_state_engine,
+                    g.fix && g.lat_valid && g.lon_valid,
+                    g.speed_valid ? (float)g.speed_mps : 0.0f,
+                    g.lat_valid ? g.lat : 0.0,
+                    g.lon_valid ? g.lon : 0.0,
+                    g.hdop_valid ? (float)g.hdop : 99.0f,
+                    g.satellites_valid ? (uint16_t)g.satellites : 0,
+                    g.course_valid ? (float)g.course_deg : 0.0f,
+                    now * 1000LL);
+                xSemaphoreGive(s_ego_state_mutex);
+            }
         }
         vTaskDelay(pdMS_TO_TICKS(20));
     }
@@ -1896,6 +2140,77 @@ static void health(void)
     cJSON_AddStringToObject(p,"selected_route",collection_network_route_name(network.route));
     cJSON_AddNumberToObject(p,"route_generation",network.generation);
     cJSON_AddBoolToObject(p,"lte_ppp_opt_in",CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
+    collection_sensor_policy_snapshot_t policy_snap={0};
+    if(atomic_load(&sensor_policy_ready)&&xSemaphoreTake(sensor_policy_mutex,pdMS_TO_TICKS(10))==pdTRUE) {
+        collection_sensor_policy_feed_battery(
+            &sensor_policy,power.battery_percent,power.battery_is_mock,power.charging,(uint64_t)(now_us()/1000LL));
+        policy_snap=collection_sensor_policy_snapshot(&sensor_policy);
+        xSemaphoreGive(sensor_policy_mutex);
+    }
+    cJSON *sp=cJSON_AddObjectToObject(p,"sensor_policy");
+    cJSON_AddStringToObject(sp,"policy_mode",collection_sensor_policy_mode_name(policy_snap.policy_mode));
+    cJSON_AddStringToObject(sp,"mobility_state",collection_sensor_policy_mobility_name(policy_snap.mobility_state));
+    cJSON_AddNumberToObject(sp,"motion_rms_m_s2",policy_snap.current_rms_m_s2);
+    cJSON_AddNumberToObject(sp,"gnss_interval_ms",(double)policy_snap.gnss_interval_ms);
+    cJSON_AddNumberToObject(sp,"cell_interval_ms",(double)policy_snap.cell_interval_ms);
+    cJSON_AddNumberToObject(sp,"imu_rate_hz",policy_snap.imu_rate_hz);
+    cJSON_AddBoolToObject(sp,"low_battery_latched",policy_snap.low_battery_latched);
+    if(policy_snap.config_id)cJSON_AddStringToObject(sp,"config_id",policy_snap.config_id);
+    if(policy_snap.config_hash)cJSON_AddStringToObject(sp,"config_hash",policy_snap.config_hash);
+    bool ego_eval_ok = false;
+    if(atomic_load(&s_ego_state_ready)&&xSemaphoreTake(s_ego_state_mutex,pdMS_TO_TICKS(10))==pdTRUE) {
+        ego_state_engine_feed_power(
+            &s_ego_state_engine,
+            power.battery_is_mock ? -1.0f : (float)power.battery_percent,
+            (power.battery_voltage_valid && !power.battery_is_mock) ? power.battery_millivolt : -1,
+            !power.charging_is_mock && power.charging);
+        ego_eval_ok = (ego_state_engine_evaluate(
+            &s_ego_state_engine,
+            now_us() * 1000LL,
+            10000,
+            &s_health_ego_est,
+            &s_health_ego_ev) == ESP_OK);
+        xSemaphoreGive(s_ego_state_mutex);
+    }
+    cJSON *es = cJSON_AddObjectToObject(p, "ego_state");
+    cJSON_AddBoolToObject(es, "ready", ego_eval_ok);
+    if(ego_eval_ok) {
+        cJSON_AddStringToObject(es, "spatial_mobility", ego_spatial_mobility_to_str(s_health_ego_est.spatial_mobility));
+        cJSON_AddStringToObject(es, "posture_anomaly", ego_posture_anomaly_to_str(s_health_ego_est.posture_anomaly));
+        cJSON_AddStringToObject(es, "device_wear_state", ego_device_wear_to_str(s_health_ego_est.device_wear_state));
+        cJSON_AddNumberToObject(es, "confidence", (double)s_health_ego_est.confidence);
+        cJSON_AddNumberToObject(es, "window_duration_ms", s_health_ego_est.window_duration_ms);
+        cJSON_AddStringToObject(es, "primary_evidence_digest", s_health_ego_est.primary_evidence_digest);
+        cJSON_AddBoolToObject(es, "is_mock", s_health_ego_est.is_mock);
+        cJSON *reasons = cJSON_AddArrayToObject(es, "reason_codes");
+        for(uint8_t ri = 0; ri < s_health_ego_est.reason_code_count; ri++) {
+            cJSON_AddItemToArray(reasons, cJSON_CreateString(s_health_ego_est.reason_codes[ri]));
+        }
+        cJSON *ev = cJSON_AddObjectToObject(es, "evidence_summary");
+        cJSON_AddStringToObject(ev, "evidence_id", s_health_ego_ev.evidence_id);
+        cJSON_AddNumberToObject(ev, "motion_rms_m_s2", (double)s_health_ego_ev.imu_evidence.motion_rms_m_s2);
+        cJSON_AddNumberToObject(ev, "peak_accel_m_s2", (double)s_health_ego_ev.imu_evidence.peak_accel_m_s2);
+        cJSON_AddNumberToObject(ev, "gyro_variance_dps2", (double)s_health_ego_ev.imu_evidence.gyro_variance_dps2);
+        cJSON_AddNumberToObject(ev, "imu_sample_count", s_health_ego_ev.imu_evidence.sample_count);
+        cJSON_AddBoolToObject(ev, "gnss_fix_valid", s_health_ego_ev.location_evidence.fix_valid);
+        cJSON_AddNumberToObject(ev, "ground_speed_m_s", (double)s_health_ego_ev.location_evidence.ground_speed_m_s);
+        cJSON_AddStringToObject(ev, "network_type", ego_network_type_to_str(s_health_ego_ev.network_evidence.network_type));
+        cJSON_AddNumberToObject(ev, "battery_soc_percent", (double)s_health_ego_ev.power_evidence.battery_soc_percent);
+        cJSON_AddBoolToObject(ev, "is_charging", s_health_ego_ev.power_evidence.is_charging);
+    }
+    cJSON *cc = cJSON_AddObjectToObject(p, "cellular_call");
+    cJSON_AddBoolToObject(cc, "ready", atomic_load(&s_cellular_call_ready));
+    sim7670_call_status_t call_snap = {0};
+    if (s_cellular_call_mutex != NULL && xSemaphoreTake(s_cellular_call_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        call_snap = s_cellular_call_status;
+        xSemaphoreGive(s_cellular_call_mutex);
+    }
+    cJSON_AddStringToObject(cc, "state", sim7670_call_state_to_str(call_snap.state));
+    cJSON_AddStringToObject(cc, "direction", call_snap.direction == SIM7670_CALL_DIR_OUTGOING ? "outgoing" :
+                                             call_snap.direction == SIM7670_CALL_DIR_INCOMING ? "incoming" : "none");
+    cJSON_AddStringToObject(cc, "phone_number", call_snap.phone_number);
+    cJSON_AddNumberToObject(cc, "duration_sec", call_snap.call_duration_sec);
+    cJSON_AddStringToObject(cc, "last_disconnect_reason", sim7670_call_disconnect_reason_to_str(call_snap.last_disconnect_reason));
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE
     photo_media_store_stats_t media={0};
     bool media_stats_valid=false;
@@ -1945,29 +2260,6 @@ static void health(void)
     cJSON_AddNumberToObject(camera,"capture_failures",atomic_load(&photo_capture_failures));
     cJSON_AddNumberToObject(camera,"upload_server_verified",atomic_load(&photo_upload_acked));
     cJSON_AddNumberToObject(camera,"upload_failures",atomic_load(&photo_upload_failures));
-    cJSON_AddNumberToObject(camera,"expired_local_releases",atomic_load(&photo_expired_released));
-    cJSON_AddNumberToObject(camera,"command_polls",atomic_load(&photo_command_polls));
-    cJSON_AddNumberToObject(camera,"command_parse_failures",atomic_load(&photo_command_parse_failures));
-    cJSON_AddNumberToObject(camera,"command_acks",atomic_load(&photo_command_acks));
-    cJSON_AddNumberToObject(camera,"metadata_persist_retries",
-        atomic_load(&photo_metadata_persist_retries));
-    cJSON *resources=cJSON_AddObjectToObject(camera,"resources");
-    cJSON_AddNumberToObject(resources,"internal_free_bytes",
-        (double)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-    cJSON_AddNumberToObject(resources,"internal_min_free_bytes",
-        (double)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
-    cJSON_AddNumberToObject(resources,"dma_free_bytes",
-        (double)heap_caps_get_free_size(MALLOC_CAP_DMA));
-    cJSON_AddNumberToObject(resources,"dma_largest_free_block_bytes",
-        (double)heap_caps_get_largest_free_block(MALLOC_CAP_DMA));
-    cJSON *stack_hwm=cJSON_AddObjectToObject(resources,
-        "task_stack_high_watermark_bytes");
-    photo_add_stack_hwm(stack_hwm,"main",&photo_main_stack_hwm_bytes);
-    photo_add_stack_hwm(stack_hwm,"store",&photo_store_stack_hwm_bytes);
-    photo_add_stack_hwm(stack_hwm,"imu",&photo_imu_stack_hwm_bytes);
-    photo_add_stack_hwm(stack_hwm,"modem",&photo_modem_stack_hwm_bytes);
-    photo_add_stack_hwm(stack_hwm,"upload",&photo_upload_stack_hwm_bytes);
-    photo_add_stack_hwm(stack_hwm,"wifi",&photo_wifi_stack_hwm_bytes);
     cJSON *timer_state=cJSON_AddObjectToObject(camera,"timer_state");
     if(timer.config_version[0])cJSON_AddStringToObject(timer_state,"config_version",timer.config_version);
     else cJSON_AddNullToObject(timer_state,"config_version");
@@ -3348,6 +3640,10 @@ void app_main(void)
     session_start_us=now_us();
     const esp_app_desc_t *application=esp_app_get_description();
     for(unsigned i=0;i<32;i++)snprintf(firmware_elf_sha256+i*2,3,"%02x",application->app_elf_sha256[i]);
+    if(!configured_test_run_id_valid()) {
+        ESP_LOGE(TAG,"STOP invalid_test_run_id collection_not_started=true");
+        return;
+    }
     if(!boot_identity()) {ESP_LOGE(TAG,"STOP identity_persistence_failed nvs_preserved=true");return;}
     ingress=xQueueCreate(16,sizeof(queued_t*));
     ram_fallback=xQueueCreate(4,sizeof(queued_t*));
@@ -3419,9 +3715,9 @@ void app_main(void)
     const bool camera_runtime_ready=photo_camera_manual_capture_ready(
         camera_preflight)&&
         atomic_load(&media_store_ready)&&atomic_load(&photo_control_state_ready);
-    ESP_LOGI(TAG,"START boot=%" PRIu32 " firmware=%s no_sim_profile=%d run_seconds=%d camera_profile=%d camera_shared_i2c_state=%s camera_preflight=%s camera_reason=%s trial_attempt_consumed=%d timer_capture_allowed=%d wifi_stack=%d lte_ppp_opt_in=%d",boot,CONFIG_EGOLINK_FW_VERSION,CONFIG_EGOLINK_COLLECTION_NO_SIM,CONFIG_EGOLINK_COLLECTION_RUN_SECONDS,CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE,platform_camera_shared_i2c_state_name(camera_shared_i2c_state),platform_camera_status_name(camera_preflight),camera_reason?camera_reason:"none",platform_camera_unverified_trial_attempt_consumed(),platform_camera_timed_capture_allowed(),network_stack_ready,CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
+    ESP_LOGI(TAG,"START boot=%" PRIu32 " firmware=%s test_run_id=%s no_sim_profile=%d run_seconds=%d camera_profile=%d camera_shared_i2c_state=%s camera_preflight=%s camera_reason=%s trial_attempt_consumed=%d timer_capture_allowed=%d wifi_stack=%d lte_ppp_opt_in=%d",boot,CONFIG_EGOLINK_FW_VERSION,CONFIG_EGOLINK_TEST_RUN_ID[0]?CONFIG_EGOLINK_TEST_RUN_ID:"none",CONFIG_EGOLINK_COLLECTION_NO_SIM,CONFIG_EGOLINK_COLLECTION_RUN_SECONDS,CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE,platform_camera_shared_i2c_state_name(camera_shared_i2c_state),platform_camera_status_name(camera_preflight),camera_reason?camera_reason:"none",platform_camera_unverified_trial_attempt_consumed(),platform_camera_timed_capture_allowed(),network_stack_ready,CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
 #else
-    ESP_LOGI(TAG,"START boot=%" PRIu32 " firmware=%s no_sim_profile=%d run_seconds=%d media=false wifi_stack=%d lte_ppp_opt_in=%d",boot,CONFIG_EGOLINK_FW_VERSION,CONFIG_EGOLINK_COLLECTION_NO_SIM,CONFIG_EGOLINK_COLLECTION_RUN_SECONDS,network_stack_ready,CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
+    ESP_LOGI(TAG,"START boot=%" PRIu32 " firmware=%s test_run_id=%s no_sim_profile=%d run_seconds=%d media=false wifi_stack=%d lte_ppp_opt_in=%d",boot,CONFIG_EGOLINK_FW_VERSION,CONFIG_EGOLINK_TEST_RUN_ID[0]?CONFIG_EGOLINK_TEST_RUN_ID:"none",CONFIG_EGOLINK_COLLECTION_NO_SIM,CONFIG_EGOLINK_COLLECTION_RUN_SECONDS,network_stack_ready,CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED);
 #endif
     /* Both reviewed Waveshare V1/V2 schematics connect BOOT to GPIO0/GND.
      * Input only: a one-second press requests cooperative collection stop. */
@@ -3460,7 +3756,30 @@ void app_main(void)
 #else
     cJSON_AddBoolToObject(p,"camera_enabled",false);
 #endif
+    sensor_policy_mutex=xSemaphoreCreateMutex();
+    if(sensor_policy_mutex!=NULL) {
+        if(collection_sensor_policy_init(&sensor_policy)) {
+            atomic_store(&sensor_policy_ready,true);
+            ESP_LOGI(TAG,"SENSOR_POLICY initialized successfully (config=%s)",
+                sensor_policy.snapshot.config_id?sensor_policy.snapshot.config_id:"unknown");
+        } else {
+            ESP_LOGE(TAG,"SENSOR_POLICY init failed");
+        }
+    }
+    s_ego_state_mutex = xSemaphoreCreateMutex();
+    if(s_ego_state_mutex != NULL) {
+        if(ego_state_engine_init(&s_ego_state_engine, CONFIG_EGOLINK_DEVICE_ID, boot, CONFIG_EGOLINK_FW_VERSION, firmware_elf_sha256) == ESP_OK) {
+            atomic_store(&s_ego_state_ready, true);
+            ESP_LOGI(TAG, "EGO_STATE_ENGINE initialized successfully");
+        } else {
+            ESP_LOGE(TAG, "EGO_STATE_ENGINE init failed");
+        }
+    }
+    s_cellular_call_mutex = xSemaphoreCreateMutex();
     cJSON_AddBoolToObject(p,"audio_enabled",false);
+    cJSON_AddBoolToObject(p,"sensor_policy_enabled",atomic_load(&sensor_policy_ready));
+    cJSON_AddBoolToObject(p,"ego_state_engine_enabled",atomic_load(&s_ego_state_ready));
+    cJSON_AddBoolToObject(p,"cellular_call_enabled",s_cellular_call_mutex!=NULL);
     cJSON_AddNumberToObject(p,"run_seconds",CONFIG_EGOLINK_COLLECTION_RUN_SECONDS);
     cJSON_AddStringToObject(p,"stop_method",button_ready?"hold_BOOT_1_second_or_configured_deadline":"configured_deadline_only_button_init_failed");
 #if CONFIG_EGOLINK_COLLECTION_CAMERA_PROFILE

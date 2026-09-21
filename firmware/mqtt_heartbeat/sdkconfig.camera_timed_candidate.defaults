@@ -1,0 +1,7 @@
+# CAMERA TIMED CANDIDATE
+# Promotes the shared-I2C camera profile from UNVERIFIED_TRIAL to VERIFIED
+# following the hardware evidence established in CAMERA-LTE-MANUAL-20260916-001 (run015/run017).
+# Authorizes default-off timed capture and local timer scheduling.
+# CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_BLOCKED is not set
+# CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_UNVERIFIED_TRIAL is not set
+CONFIG_EGOLINK_PLATFORM_CAMERA_SHARED_I2C_VERIFIED=y

@@ -16,3 +16,10 @@ esp_err_t platform_i2c_bus_ensure(i2c_port_t port, const i2c_config_t *config);
  * release it from the same task. */
 esp_err_t platform_i2c_bus_lease_acquire(i2c_port_t port, uint32_t timeout_ms);
 esp_err_t platform_i2c_bus_lease_release(i2c_port_t port);
+
+/* Recover an I2C bus by releasing any slave device stuck holding SDA low.
+ * Toggles SCL up to 9 clock cycles, emits a STOP condition, and re-installs
+ * the I2C driver with the previously ensured configuration.
+ * Safe to call when a bus transaction lockup or probe failure is encountered. */
+esp_err_t platform_i2c_bus_recover(i2c_port_t port);
+

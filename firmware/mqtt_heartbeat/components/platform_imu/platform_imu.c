@@ -315,31 +315,13 @@ static esp_err_t qmi8658_stop_measurement(void)
     return err == ESP_OK ? ESP_ERR_INVALID_RESPONSE : err;
 }
 
-static bool platform_imu_init_qmi8658(void)
+static bool platform_imu_probe_qmi8658_single_attempt(void)
 {
     uint8_t whoami = 0;
     uint8_t revision = 0;
     uint8_t reset_result = 0;
 
-    esp_err_t err = qmi8658_i2c_init();
-    if (err != ESP_OK) {
-        s_last_error = (int)err;
-        s_backend_status = "qmi8658_i2c_init_failed";
-        return false;
-    }
-
-#if CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS
-    err = axp2101_enable_minimal_rails();
-    if (err != ESP_OK) {
-        if (s_last_error == 0) {
-            s_last_error = (int)err;
-        }
-        s_backend_status = "qmi8658_axp2101_rails_failed";
-        return false;
-    }
-#endif
-
-    err = qmi8658_i2c_write_u8(QMI8658_REG_RESET, QMI8658_RESET_VALUE);
+    esp_err_t err = qmi8658_i2c_write_u8(QMI8658_REG_RESET, QMI8658_RESET_VALUE);
     if (err != ESP_OK) {
         s_last_error = (int)err;
         s_backend_status = "qmi8658_reset_failed";
@@ -416,6 +398,58 @@ static bool platform_imu_init_qmi8658(void)
         revision,
         reset_result);
     return true;
+}
+
+static bool platform_imu_init_qmi8658(void)
+{
+    esp_err_t err = qmi8658_i2c_init();
+    if (err != ESP_OK) {
+        s_last_error = (int)err;
+        s_backend_status = "qmi8658_i2c_init_failed";
+        return false;
+    }
+
+#if CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_AXP2101_RAILS
+    err = axp2101_enable_minimal_rails();
+    if (err != ESP_OK) {
+        if (s_last_error == 0) {
+            s_last_error = (int)err;
+        }
+        s_backend_status = "qmi8658_axp2101_rails_failed";
+        return false;
+    }
+#endif
+
+    const int max_retries = 3;
+    for (int attempt = 1; attempt <= max_retries; ++attempt) {
+        if (platform_imu_probe_qmi8658_single_attempt()) {
+            if (attempt > 1) {
+                ESP_LOGI(TAG, "PLATFORM_IMU_QMI8658_RETRY_RECOVERED attempt=%d", attempt);
+            }
+            return true;
+        }
+
+        ESP_LOGW(
+            TAG,
+            "PLATFORM_IMU_QMI8658_PROBE_RETRY attempt=%d/%d status=%s last_error=%d; recovering i2c bus",
+            attempt,
+            max_retries,
+            s_backend_status,
+            s_last_error);
+
+        if (attempt < max_retries) {
+            platform_i2c_bus_recover(QMI8658_I2C_PORT);
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
+    }
+
+    ESP_LOGE(
+        TAG,
+        "PLATFORM_IMU_QMI8658_PROBE_FAILED attempts=%d status=%s last_error=%d",
+        max_retries,
+        s_backend_status,
+        s_last_error);
+    return false;
 }
 
 static int16_t qmi8658_le16(const uint8_t *data)
@@ -666,6 +700,12 @@ bool platform_imu_capture_begin(void)
         return false;
     }
     esp_err_t err = qmi8658_configure_measurement();
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "PLATFORM_IMU_CAPTURE_BEGIN_RETRY err=%d; recovering i2c bus", (int)err);
+        platform_i2c_bus_recover(QMI8658_I2C_PORT);
+        vTaskDelay(pdMS_TO_TICKS(20));
+        err = qmi8658_configure_measurement();
+    }
     if (err != ESP_OK) {
         s_last_error = (int)err;
         s_backend_status = "qmi8658_capture_begin_failed";
