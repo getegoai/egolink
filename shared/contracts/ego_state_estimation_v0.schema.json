@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/ego_state_estimation_v0.schema.json",
+  "title": "EgoLink Active Ego-State Estimation v0",
+  "description": "Core active ego-state estimation decision contract. Grounded in multi-source sensor evidence to infer user spatial mobility, posture anomalies, and device wear state under local-first privacy principles.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "estimation_id",
+    "device_id",
+    "boot_count",
+    "timestamp_monotonic_ns",
+    "timestamp_utc",
+    "spatial_mobility",
+    "posture_anomaly",
+    "device_wear_state",
+    "confidence",
+    "window_duration_ms",
+    "reason_codes",
+    "primary_evidence_digest",
+    "is_mock"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "egolink.ego_state_estimation.v0.1"
+    },
+    "estimation_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+    },
+    "boot_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timestamp_monotonic_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timestamp_utc": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "spatial_mobility": {
+      "type": "string",
+      "enum": [
+        "stationary",
+        "pedestrian_walking",
+        "running",
+        "in_vehicle",
+        "indoor_weak_gnss",
+        "unknown"
+      ]
+    },
+    "posture_anomaly": {
+      "type": "string",
+      "enum": [
+        "normal",
+        "abnormal_shock",
+        "suspected_fall",
+        "prolonged_immobility",
+        "unknown"
+      ]
+    },
+    "device_wear_state": {
+      "type": "string",
+      "enum": [
+        "tabletop_resting",
+        "handheld",
+        "wearable_or_bag",
+        "charging_docked",
+        "unknown"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "window_duration_ms": {
+      "type": "integer",
+      "minimum": 100
+    },
+    "reason_codes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      }
+    },
+    "primary_evidence_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "is_mock": {
+      "type": "boolean"
+    }
+  }
+}

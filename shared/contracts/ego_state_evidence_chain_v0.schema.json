@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/ego_state_evidence_chain_v0.schema.json",
+  "title": "EgoLink Multi-Source Ego-State Evidence Chain v0",
+  "description": "Cryptographically verifiable multi-source sensor evidence chain backing an active ego-state estimation decision. Supports local-first tamper-evident audit without requiring centralized cloud validation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "evidence_id",
+    "evidence_digest",
+    "device_id",
+    "boot_count",
+    "timestamp_monotonic_ns",
+    "timestamp_utc",
+    "window_duration_ms",
+    "imu_evidence",
+    "location_evidence",
+    "network_evidence",
+    "power_evidence",
+    "provenance"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "egolink.ego_state_evidence_chain.v0.1"
+    },
+    "evidence_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+    },
+    "evidence_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 canonical hash of normalized evidence features."
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+    },
+    "boot_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timestamp_monotonic_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "timestamp_utc": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "window_duration_ms": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "imu_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_count",
+        "sample_rate_hz",
+        "motion_rms_m_s2",
+        "peak_accel_m_s2",
+        "gyro_variance_dps2",
+        "is_mock"
+      ],
+      "properties": {
+        "sample_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sample_rate_hz": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "motion_rms_m_s2": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "peak_accel_m_s2": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "gyro_variance_dps2": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "is_mock": {
+          "type": "boolean"
+        }
+      }
+    },
+    "location_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fix_valid",
+        "latitude_deg",
+        "longitude_deg",
+        "hdop",
+        "ground_speed_m_s",
+        "satellites_in_use",
+        "course_over_ground_deg"
+      ],
+      "properties": {
+        "fix_valid": {
+          "type": "boolean"
+        },
+        "latitude_deg": {
+          "type": ["number", "null"],
+          "minimum": -90.0,
+          "maximum": 90.0
+        },
+        "longitude_deg": {
+          "type": ["number", "null"],
+          "minimum": -180.0,
+          "maximum": 180.0
+        },
+        "hdop": {
+          "type": ["number", "null"],
+          "minimum": 0.0
+        },
+        "ground_speed_m_s": {
+          "type": ["number", "null"],
+          "minimum": 0.0
+        },
+        "satellites_in_use": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "course_over_ground_deg": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 360.0
+        }
+      }
+    },
+    "network_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network_type",
+        "lte_rsrp_dbm",
+        "lte_cell_id",
+        "wifi_ap_count",
+        "wifi_fingerprint_hash"
+      ],
+      "properties": {
+        "network_type": {
+          "type": "string",
+          "enum": ["offline", "wifi", "lte", "multi"]
+        },
+        "lte_rsrp_dbm": {
+          "type": ["number", "null"],
+          "minimum": -160.0,
+          "maximum": 0.0
+        },
+        "lte_cell_id": {
+          "type": ["string", "null"],
+          "maxLength": 64
+        },
+        "wifi_ap_count": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "wifi_fingerprint_hash": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "power_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "battery_soc_percent",
+        "battery_voltage_mv",
+        "is_charging"
+      ],
+      "properties": {
+        "battery_soc_percent": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 100.0
+        },
+        "battery_voltage_mv": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 6000
+        },
+        "is_charging": {
+          "type": ["boolean", "null"]
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_driver_backend",
+        "firmware_version",
+        "firmware_elf_sha256"
+      ],
+      "properties": {
+        "source_driver_backend": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "firmware_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "firmware_elf_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

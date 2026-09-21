@@ -50,6 +50,9 @@
 | `field_session_manifest.schema.json` | A0-003 标准 Session 包清单：绑定唯一 Session ID、四源与人工事件、device/boot/software/calibration、隐私、stream 范围、artifact hashes、A0-002 exact-input 报告及 seal/package closure；raw Session 不自行授权训练。 |
 | `field_manual_event.schema.json` | A0-003 人工事件 weak-label 合同：保存事件类型、事件/传输时间、操作者、note，以及可用时的 device/boot/clock/mapping lineage。 |
 | `imu_field_calibrated_window.schema.json` | A0-003 普通外场 IMU window 的非覆盖式 calibrated 视图；区别于只适用于 A0-001 七个校准姿态的 `imu_calibrated_window.v0.1`。 |
+| `ego_state_estimation_v0.schema.json` | 随身主动状态估计核心决策合同：统一涵盖空间移动状态（静止、步行、跑步、载具、弱信号）、突发与异常姿态（正常、剧烈冲击、疑似跌落、长时间静止失联）、设备佩戴环境（桌面静置、手持、随身、充电），以及置信度与主证据指纹。 |
+| `ego_state_evidence_chain_v0.schema.json` | 多源传感器可信证据链合同：逐决策绑定 20Hz/100Hz IMU 运动学特征（RMS、峰值加速度、角速度方差）、GNSS 状态与地面航速、LTE/Wi-Fi 网络指纹及电池电量斜率，配合不可篡改证据指纹实现本地优先审计。 |
+| `ego_state_report_v0.schema.json` | 结构化随身主动状态报告合同：组合状态决策与完整多源证据链，支持周期性聚合报告、状态跃迁触发报告与紧急事件告警，强约束本地优先隐私边界（`local_priority=true`）。 |
 
 ## 变更规则
 

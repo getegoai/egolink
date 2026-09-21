@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ego.local/contracts/collection_observation.schema.json",
   "title": "EgoLink collection observation in existing EGLK raw frame",
-  "description": "Raw-frame collection profile. The base envelope remains additive for non-Wi-Fi sources; Wi-Fi is intentionally restricted to exact identifier-free link/aggregate shapes by the 2026-09-08 privacy migration. Uses ADR-0010 and sensor_time_lineage field semantics. No change to historical imu_window or product Location wire. Delivery attempts and receive/ingest times are server metadata, never part of immutable observation identity.",
+  "description": "Raw-frame collection profile. The base envelope remains additive for non-Wi-Fi sources; Wi-Fi is intentionally restricted to exact identifier-free link/aggregate shapes by the 2026-09-08 privacy migration. Uses ADR-0010 and sensor_time_lineage field semantics. No change to historical imu_window or product Location wire. Optional test_run_id preserves collection-campaign provenance independently from session_id. Delivery attempts and receive/ingest times are server metadata, never part of immutable observation identity.",
   "$defs": {
     "wifiPrivacySafeValue": {
       "anyOf": [
@@ -638,6 +638,13 @@
       ],
       "maxLength": 128
     },
+    "test_run_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+    },
     "status": {
       "type": "string",
       "minLength": 1,
@@ -687,6 +694,7 @@
                 "firmware_elf_sha256",
                 "config_id",
                 "session_id",
+                "test_run_id",
                 "status",
                 "payload",
                 "missing_reason"

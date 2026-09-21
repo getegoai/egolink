@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/ego_state_report_v0.schema.json",
+  "title": "EgoLink Active Ego-State Report v0",
+  "description": "Structured Active Ego-State estimation report composed of state summary and cryptographically ground evidence chain. Supports local-first storage, periodic state aggregation, and transition alarms.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "report_id",
+    "device_id",
+    "boot_count",
+    "session_id",
+    "report_type",
+    "generated_at_utc",
+    "start_monotonic_ns",
+    "end_monotonic_ns",
+    "state_summary",
+    "evidence_chain",
+    "privacy_boundary",
+    "notes"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "egolink.ego_state_report.v0.1"
+    },
+    "report_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+    },
+    "device_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+    },
+    "boot_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+    },
+    "report_type": {
+      "type": "string",
+      "enum": [
+        "periodic_aggregate",
+        "event_transition",
+        "critical_alarm"
+      ]
+    },
+    "generated_at_utc": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "start_monotonic_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "end_monotonic_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "state_summary": {
+      "$ref": "ego_state_estimation_v0.schema.json"
+    },
+    "evidence_chain": {
+      "$ref": "ego_state_evidence_chain_v0.schema.json"
+    },
+    "privacy_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "local_priority",
+        "encrypted_at_rest",
+        "retention_category"
+      ],
+      "properties": {
+        "local_priority": {
+          "const": true
+        },
+        "encrypted_at_rest": {
+          "type": "boolean"
+        },
+        "retention_category": {
+          "type": "string",
+          "enum": [
+            "realtime_transient",
+            "daily_local",
+            "critical_permanent"
+          ]
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 256
+      }
+    }
+  }
+}
