@@ -23,6 +23,7 @@ SKIP_DIR_NAMES = {
     "build",
     "runtime",
     "runs",
+    "tmp",
 }
 
 LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")

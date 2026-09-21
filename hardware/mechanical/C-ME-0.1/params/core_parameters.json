@@ -1,0 +1,117 @@
+{
+  "schema_version": "1.0",
+  "design_revision": "C-ME-0.1",
+  "date": "2026-09-09",
+  "units": "mm",
+  "state": "ENVELOPE_STUDY_NOT_MANUFACTURING_RELEASE",
+  "coordinate_system": {
+    "handedness": "right",
+    "origin": "rear_datum_center",
+    "x": "width",
+    "y": "length_toward_lanyard",
+    "z": "outward_front",
+    "rear_z_mm": 0
+  },
+  "variants": [
+    {
+      "id": "REF60",
+      "length_mm": 60.0,
+      "width_mm": 44.0,
+      "thickness_mm": 22.0,
+      "outline_corner_radius_mm": 10.0,
+      "rim_fillet_mm": 3.0,
+      "evidence": "EST"
+    },
+    {
+      "id": "REF66",
+      "length_mm": 66.0,
+      "width_mm": 46.0,
+      "thickness_mm": 24.0,
+      "outline_corner_radius_mm": 11.0,
+      "rim_fillet_mm": 3.5,
+      "evidence": "EST"
+    }
+  ],
+  "prototype_assumptions": {
+    "sidewall_mm": 2.0,
+    "rear_cover_mm": 2.0,
+    "skin_clearance_per_side_mm": 0.4,
+    "evidence": "EST",
+    "incorporated_in_delivered_cad": false
+  },
+  "display": {
+    "decision": "TBD_HISTORY_CONFLICT",
+    "required_action": "compare_with_and_without; do_not_delete_requirement_silently",
+    "historical_candidate": "ED160F320MSO",
+    "exact_max_envelope_mm": null
+  },
+  "modem": {
+    "direction": "ML307A_external_GNSS",
+    "exact_order_code": null,
+    "exact_max_envelope_mm": null,
+    "GSLN_lifecycle_evidence": "USER_REPORTED_VENDOR_NEAR_EOL; formal_PCN_missing",
+    "A_lane_board_unchanged": "SIM7670G"
+  },
+  "gnss": {
+    "exact_order_code": null,
+    "exact_max_envelope_mm": null,
+    "antenna_type": null,
+    "antenna_keepout": null
+  },
+  "battery": {
+    "selected_capacity_mAh": null,
+    "max_pack_envelope_mm": null,
+    "swelling_allowance_mm": null,
+    "mass_g": null,
+    "supplier_doc": null,
+    "comparison_capacity_mAh": [
+      1200,
+      1500,
+      2000
+    ],
+    "comparison_note": "RFQ_only_not_claimed_to_fit_any_variant"
+  },
+  "camera": {
+    "exact_order_code": null,
+    "max_module_envelope_mm": null,
+    "fpc_drawing": null,
+    "horizontal_fov_deg": null,
+    "vertical_fov_deg": null,
+    "optical_axis_transform": null
+  },
+  "speaker": {
+    "exact_order_code": null,
+    "max_envelope_mm": null,
+    "rear_cavity_volume_mm3": null
+  },
+  "microphone": {
+    "exact_order_code": null,
+    "duct_and_vent_drawing": null
+  },
+  "antennas": {
+    "lte_doc": null,
+    "gnss_doc": null,
+    "wifi_ble_doc": null,
+    "placement_state": "TBD_not_all_copper_forbidden"
+  },
+  "seal": {
+    "material": null,
+    "free_cross_section_mm": null,
+    "compression_ratio": null,
+    "validated": false
+  },
+  "interfaces": {
+    "usb": "inherit_capless_USB_C_wet_zone_review",
+    "sim": "single_nano_SIM_service_path_review",
+    "skin_contract": "I0.1_PREVIEW",
+    "rf_optical_acoustic_keepouts": "TBD"
+  },
+  "verification": {
+    "software_installed": "USER_CONFIRMED",
+    "local_versions_verified": false,
+    "hardware_fit_tested": false,
+    "rf_tested": false,
+    "waterproof_tested": false,
+    "production_released": false
+  }
+}

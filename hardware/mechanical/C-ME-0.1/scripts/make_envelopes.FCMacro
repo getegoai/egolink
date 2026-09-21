@@ -1,0 +1,83 @@
+# Run INSIDE FreeCAD. Generates parameter-driven solid envelopes, NOT enclosures.
+# The parameters are in ../params/core_parameters.json. No network/hardware access.
+from pathlib import Path
+from datetime import datetime, timezone
+import json
+import os
+import sys
+import FreeCAD as App
+import Part
+import MeshPart
+
+def find_root():
+    if os.environ.get('EGOLINK_ME_ROOT'):
+        root=Path(os.environ['EGOLINK_ME_ROOT']).resolve()
+    elif '__file__' in globals():
+        root=Path(__file__).resolve().parents[1]
+    else:
+        root=Path.cwd()
+    if not (root/'params/core_parameters.json').is_file():
+        raise RuntimeError('Set EGOLINK_ME_ROOT to the unpacked C-ME directory, then reopen FreeCAD; or run the macro with __file__ available.')
+    return root
+
+def generate_shape(v):
+    w,l,t=v['width_mm'],v['length_mm'],v['thickness_mm']
+    shape=Part.makeBox(w,l,t,App.Vector(-w/2,-l/2,0))
+    vertical=[]
+    for edge in shape.Edges:
+        b=edge.BoundBox
+        if b.ZLength>t-1e-7 and b.XLength<1e-7 and b.YLength<1e-7:
+            vertical.append(edge)
+    if len(vertical)!=4:
+        raise RuntimeError('Unexpected topology: four vertical box edges required.')
+    shape=shape.makeFillet(v['outline_corner_radius_mm'],vertical)
+    rims=[e for e in shape.Edges if e.BoundBox.ZLength<1e-7]
+    shape=shape.makeFillet(v['rim_fillet_mm'],rims)
+    if shape.isNull() or not shape.isValid() or len(shape.Solids)!=1:
+        raise RuntimeError('Invalid envelope geometry; do not silently remove fillets.')
+    return shape
+
+def main():
+    root=find_root()
+    sys.path.insert(0,str(root/'scripts'))
+    from validate_inputs import check
+    params=json.loads((root/'params/core_parameters.json').read_text(encoding='utf-8-sig'))
+    result=check(params)
+    if result['schema_check']!='PASS':
+        raise RuntimeError(str(result['errors']))
+    stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S_%fZ')
+    out=root/'cad'/('freecad_local_'+stamp)
+    out.mkdir(parents=True,exist_ok=False)
+    rows=[]
+    for v in params['variants']:
+        ident=v['id']
+        doc=App.newDocument('EgoCore_'+ident)
+        obj=doc.addObject('Part::Feature','Envelope_'+ident)
+        obj.Label=ident+' | ENVELOPE ONLY / EST / NO ASSEMBLY'
+        obj.addProperty('App::PropertyString','Evidence','Traceability')
+        obj.Evidence='EST; regenerated from core_parameters.json; not a fitted enclosure'
+        obj.addProperty('App::PropertyString','ParameterRevision','Traceability')
+        obj.ParameterRevision=params['design_revision']
+        obj.Shape=generate_shape(v)
+        doc.recompute()
+        b=obj.Shape.BoundBox
+        expected=[v['width_mm'],v['length_mm'],v['thickness_mm']]
+        measured=[b.XLength,b.YLength,b.ZLength]
+        if any(abs(a-c)>0.05 for a,c in zip(expected,measured)):
+            raise RuntimeError('Unexpected envelope dimensions: '+ident)
+        doc.saveAs(str(out/(ident+'_ENVELOPE_ONLY.FCStd')))
+        Part.export([obj],str(out/(ident+'_ENVELOPE_ONLY.step')))
+        mesh=MeshPart.meshFromShape(Shape=obj.Shape,LinearDeflection=0.05,AngularDeflection=0.12,Relative=False)
+        mesh.write(str(out/(ident+'_ENVELOPE_ONLY.stl')))
+        rows.append({'id':ident,'xyz_mm':measured,'shape_valid':True,'volume_mm3':obj.Shape.Volume,'assembly_fit':'NOT_RUN'})
+        if App.GuiUp:
+            import FreeCADGui as Gui
+            Gui.activeDocument().activeView().viewAxonometric()
+            Gui.activeDocument().activeView().fitAll()
+    report={'tool':'FreeCAD','version':list(App.Version()),'coordinate_units':'mm',
+            'source_parameter_revision':params['design_revision'],'outputs':rows,
+            'hardware_fit':'NOT_RUN','note':'Parameter-driven macro; edit JSON and regenerate. Shape custom properties are not live sketch constraints.'}
+    (out/'FREECAD_RUN_REPORT.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    App.Console.PrintMessage('Ego Link envelopes exported to '+str(out)+'\n')
+
+main()

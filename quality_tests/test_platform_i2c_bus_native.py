@@ -22,6 +22,7 @@ typedef struct {int mode,sda_io_num,scl_io_num,sda_pullup_en,scl_pullup_en;
  struct {uint32_t clk_speed;} master;uint32_t clk_flags;} i2c_config_t;
 esp_err_t i2c_param_config(i2c_port_t,const i2c_config_t*);
 esp_err_t i2c_driver_install(i2c_port_t,int,size_t,size_t,int);
+esp_err_t i2c_driver_delete(i2c_port_t);
 ''',
     "sys/lock.h": '''#pragma once
 typedef int _lock_t;
@@ -40,6 +41,24 @@ typedef uint32_t TickType_t;
     "freertos/task.h": '''#pragma once
 #include "freertos/FreeRTOS.h"
 void vTaskDelay(TickType_t);
+''',
+    "driver/gpio.h": '''#pragma once
+#include <stdint.h>
+#include "esp_err.h"
+typedef int gpio_num_t;
+typedef enum { GPIO_MODE_INPUT_OUTPUT_OD = 0 } gpio_mode_t;
+typedef enum { GPIO_PULLUP_ENABLE = 0 } gpio_pullup_t;
+typedef enum { GPIO_PULLDOWN_DISABLE = 0 } gpio_pulldown_t;
+typedef enum { GPIO_INTR_DISABLE = 0 } gpio_int_type_t;
+typedef struct { uint64_t pin_bit_mask; gpio_mode_t mode; gpio_pullup_t pull_up_en; gpio_pulldown_t pull_down_en; gpio_int_type_t intr_type; } gpio_config_t;
+static inline esp_err_t gpio_config(const gpio_config_t *c) { (void)c; return 0; }
+static inline esp_err_t gpio_set_level(gpio_num_t g, uint32_t l) { (void)g; (void)l; return 0; }
+static inline int gpio_get_level(gpio_num_t g) { (void)g; return 1; }
+static inline esp_err_t gpio_reset_pin(gpio_num_t g) { (void)g; return 0; }
+''',
+    "esp_rom_sys.h": '''#pragma once
+#include <stdint.h>
+static inline void esp_rom_delay_us(uint32_t us) { (void)us; }
 ''',
 }
 HARNESS = r'''
@@ -77,6 +96,8 @@ esp_err_t i2c_param_config(i2c_port_t p,const i2c_config_t *c)
 esp_err_t i2c_driver_install(i2c_port_t p,int mode,size_t rx,size_t tx,int flags)
 {assert(p>=0 && p<2 && mode==I2C_MODE_MASTER && !rx && !tx && !flags);++installs;
  esp_err_t e=install_error;install_error=ESP_OK;return e;}
+esp_err_t i2c_driver_delete(i2c_port_t p)
+{assert(p>=0 && p<2); return ESP_OK;}
 static i2c_config_t config(void)
 {return (i2c_config_t){.mode=I2C_MODE_MASTER,.sda_io_num=15,.scl_io_num=16,
  .sda_pullup_en=1,.scl_pullup_en=1,.master={100000}};}

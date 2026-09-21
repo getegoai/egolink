@@ -27,6 +27,7 @@ typedef int esp_err_t;
 #define ESP_ERR_INVALID_ARG 258
 #define ESP_ERR_INVALID_STATE 259
 #define ESP_ERR_NOT_SUPPORTED 262
+#define ESP_ERR_TIMEOUT 263
 static inline const char *esp_err_to_name(esp_err_t e){(void)e;return "native_error";}
 """,
  "esp_check.h": '#define ESP_RETURN_ON_ERROR(x,tag,...) do{esp_err_t e=(x);(void)(tag);if(e!=ESP_OK)return e;}while(0)\n',

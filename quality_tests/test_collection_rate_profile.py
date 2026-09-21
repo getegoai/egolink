@@ -51,7 +51,7 @@ class CollectionRateProfileTests(unittest.TestCase):
         self.assertIn("CONFIG_EGOLINK_COLLECTION_GNSS_INTERVAL_MS=5000", self.legacy)
         self.assertNotIn("CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES", self.legacy)
 
-    def test_field_overlay_reduces_record_overhead_without_decimating_imu(self) -> None:
+    def test_field_overlay_sets_validated_collection_and_transport_cadence(self) -> None:
         for setting in (
             "CONFIG_EGOLINK_PLATFORM_IMU_QMI8658_SAMPLE_INTERVAL_MS=50",
             "CONFIG_EGOLINK_COLLECTION_IMU_CHUNK_SAMPLES=100",
@@ -59,6 +59,7 @@ class CollectionRateProfileTests(unittest.TestCase):
             "CONFIG_EGOLINK_COLLECTION_LTE_INTERVAL_MS=30000",
             "CONFIG_EGOLINK_COLLECTION_HEALTH_INTERVAL_MS=30000",
             "CONFIG_EGOLINK_COLLECTION_WIFI_SCAN_INTERVAL_MS=45000",
+            "CONFIG_EGOLINK_PHOTO_COMMAND_POLL_INTERVAL_MS=15000",
         ):
             with self.subTest(setting=setting):
                 self.assertIn(setting, self.field)
@@ -79,6 +80,9 @@ class CollectionRateProfileTests(unittest.TestCase):
             "CONFIG_EGOLINK_COLLECTION_WIFI_SCAN_INTERVAL_MS*1000LL",
             "COLLECTION_IMU_TASK_STACK_BYTES,NULL,6,NULL,1",
             '"collection_rate_profile_version","collection-rate-v1"',
+            '"test_run_id",CONFIG_EGOLINK_TEST_RUN_ID',
+            "configured_test_run_id_valid()",
+            "STOP invalid_test_run_id collection_not_started=true",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, self.source)

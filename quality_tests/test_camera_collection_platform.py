@@ -300,6 +300,12 @@ def _check_camera_gate_profiles_are_explicit_and_mutually_exclusive():
     assert trial[verified] is None
     assert trial[unverified_trial] == "y"
 
+    timed_path = FIRMWARE / "sdkconfig.camera_timed_candidate.defaults"
+    if timed_path.exists():
+        timed = _sdkconfig_entries(timed_path)
+        assert timed[verified] == "y"
+        assert timed[unverified_trial] is None
+
     kconfig = (
         FIRMWARE / "components" / "platform_camera" / "Kconfig.projbuild"
     ).read_text(encoding="utf-8")

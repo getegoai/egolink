@@ -43,6 +43,7 @@ firmware/camera_smoke/sdkconfig
 
 # Hardware smoke-test captures
 firmware/**/captures/
+*.log
 
 # Large binary packs (use Git LFS or external storage instead)
 *.zip

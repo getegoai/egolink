@@ -219,13 +219,48 @@ class CollectionIngestTests(unittest.TestCase):
             stored = base64.b64decode(db.execute("SELECT raw_payload_b64 FROM raw_frames").fetchone()[0])
         self.assertEqual(stored, raw)
 
+    def test_explicit_test_run_id_is_stored_and_old_frames_fall_back_to_session(self):
+        explicit = envelope(75, session_id=None, test_run_id="field-020-run-20260916")
+        legacy = envelope(76, session_id="legacy-session")
+        nullable = envelope(77, session_id="nullable-fallback", test_run_id=None)
+        for value in (explicit, legacy, nullable):
+            self.assertEqual(self.ingest(value)["result"], "accepted")
+
+        with self.store.connection() as db:
+            stored = [
+                tuple(row)
+                for row in db.execute(
+                    "SELECT frame_id,test_run_id FROM raw_frames ORDER BY id"
+                ).fetchall()
+            ]
+        self.assertEqual(stored, [
+            (explicit["observation_id"], "field-020-run-20260916"),
+            (legacy["observation_id"], "legacy-session"),
+            (nullable["observation_id"], "nullable-fallback"),
+        ])
+
+    def test_test_run_id_rejects_empty_unsafe_oversized_and_non_string_values(self):
+        invalid_values = ("", "field run with spaces", "x" * 129, 17, {})
+        for sequence, test_run_id in enumerate(invalid_values, 78):
+            with self.subTest(test_run_id=test_run_id):
+                with self.assertRaises(CollectionError) as raised:
+                    self.ingest(envelope(sequence, test_run_id=test_run_id))
+                self.assertEqual(raised.exception.code, "invalid_collection_envelope")
+        self.assertEqual(self.table_counts(), (0, 0, 0))
+
     def test_bounded_firmware_provenance_is_allowed_without_opening_wifi_extensions(self):
         value = envelope(45, source="wifi", status="observed",
                          payload=wifi_scan_payload(), missing_reason=None)
         value["firmware_elf_sha256"] = FIRMWARE_ELF_SHA256
+        value["test_run_id"] = "field-020-wifi-run"
         raw = frame(value)
         result = self.store.collection.ingest(raw, raw_record(raw), transport="wifi")
         self.assertEqual(result["result"], "accepted")
+        with self.store.connection() as db:
+            self.assertEqual(
+                db.execute("SELECT test_run_id FROM raw_frames").fetchone()[0],
+                "field-020-wifi-run",
+            )
 
         unknown = envelope(46, source="wifi", status="observed",
                            payload=wifi_scan_payload(), missing_reason=None)
@@ -303,7 +338,10 @@ class CollectionIngestTests(unittest.TestCase):
         firmware_provenance = envelope(74, source="wifi", status="observed",
                                        payload=wifi_scan_payload(), missing_reason=None)
         firmware_provenance["firmware_elf_sha256"] = FIRMWARE_ELF_SHA256
+        firmware_provenance["test_run_id"] = "field-020-wifi-run"
         self.assertEqual(list(validator.iter_errors(firmware_provenance)), [])
+        nullable_provenance = {**firmware_provenance, "test_run_id": None}
+        self.assertEqual(list(validator.iter_errors(nullable_provenance)), [])
         for invalid in (
             envelope(61, source="wifi", payload={"bssid": "00:11:22:33:44:55"}),
             envelope(62, source="wifi", payload={"nested": {"SSID": "private"}}),
@@ -325,6 +363,8 @@ class CollectionIngestTests(unittest.TestCase):
                     {"channel": 6, "ap_count": 2, "strongest_rssi": -60},
                 ], sampled_ap_count=3, total_seen=3)),
             {**firmware_provenance, "firmware_elf_sha256": "AB" * 32},
+            {**firmware_provenance, "test_run_id": "x" * 129},
+            {**firmware_provenance, "test_run_id": "field run with spaces"},
             {**firmware_provenance, "provenance_note": "not-allowlisted"},
         ):
             self.assertTrue(list(validator.iter_errors(invalid)))
