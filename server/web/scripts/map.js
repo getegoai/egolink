@@ -404,11 +404,6 @@ export class MapController {
     }
   }
 
-    if (this.playbackIndex !== null) {
-      this.updateAMapPlaybackCursor(this.playbackIndex);
-    }
-  }
-
   updateAMapPlaybackCursor(idx) {
     if (!this.amapInstance || !window.AMap || this.points.length < 2) return;
     const AMap = window.AMap;

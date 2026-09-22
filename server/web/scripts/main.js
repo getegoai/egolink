@@ -3,12 +3,12 @@
  * Fully implements all 7 developer & QA workspaces with robust authenticated flows.
  */
 
-import { renderEgoState } from './ego_state.js?v=20260922_01';
+import { renderEgoState } from './ego_state.js?v=20260922_02';
 import { api } from './api.js?v=20260918_02';
 import { state } from './state.js?v=20260918_02';
 import { ImuOscilloscope, IMU_COLORS } from './charts.js?v=20260918_02';
-import { Imu3dVisualizer } from './imu3d.js?v=20260922_01';
-import { MapController } from './map.js?v=20260922_01';
+import { Imu3dVisualizer } from './imu3d.js?v=20260922_02';
+import { MapController } from './map.js?v=20260922_02';
 
 class DevBenchApp {
   constructor() {
