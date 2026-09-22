@@ -112,8 +112,8 @@
             <div class="metric-box">
               <div class="metric-label">体态异常监控 (Posture Anomaly)</div>
               <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
-                <span id="egoPostureBadge" class="badge badge-ok">NORMAL</span>
-                <span id="egoPostureDesc" style="font-size:12px;color:var(--text-secondary);">正常日常</span>
+                <span id="egoPostureBadge" class="badge badge-warn">UNKNOWN</span>
+                <span id="egoPostureDesc" style="font-size:12px;color:var(--text-secondary);">姿态证据不足</span>
               </div>
             </div>
 
@@ -130,11 +130,11 @@
             <!-- Evidence Chain Details -->
             <div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:14px;">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <span style="font-weight:600;font-size:13px;color:var(--accent-cyan);">🔐 SHA-256 不可篡改证据摘要</span>
-                <span style="font-size:11px;color:var(--text-muted);">置信度 / 窗口</span>
+                <span style="font-weight:600;font-size:13px;color:var(--accent-cyan);">SHA-256 上报证据摘要</span>
+                <span style="font-size:11px;color:var(--text-muted);">规则分数 / 窗口</span>
               </div>
               <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
-                <span style="font-size:12px;color:var(--text-secondary);">推理置信度:</span>
+                <span style="font-size:12px;color:var(--text-secondary);">规则分数（非准确率）:</span>
                 <span id="egoConfidenceVal" style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--accent-green);">—</span>
                 <span style="font-size:12px;color:var(--text-muted);margin-left:8px;">(滑动窗口: <span id="egoWindowDuration">—</span> ms)</span>
               </div>
@@ -145,7 +145,7 @@
               <div>
                 <div style="font-size:11px;color:var(--text-secondary);margin-bottom:4px;">推理判定规则码 (Reason Codes):</div>
                 <div id="egoReasonCodes" style="display:flex;flex-wrap:wrap;gap:4px;">
-                  <span class="badge badge-info">无规则触发</span>
+                  <span class="badge badge-warn">无有效状态证据</span>
                 </div>
               </div>
             </div>

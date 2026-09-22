@@ -135,6 +135,7 @@ class FT001BImuBurstTests(unittest.TestCase):
             output = Path(tmp) / "burst.json"
             with (
                 mock.patch.object(burst, "HubClient", FakeClient),
+                mock.patch.object(burst, "load_token", return_value="offline-unit-test-token"),
                 mock.patch.object(burst, "_wait_for_ack", return_value={"status": "ok"}),
                 mock.patch.object(
                     burst,
@@ -197,6 +198,7 @@ class FT001BImuBurstTests(unittest.TestCase):
             output = Path(tmp) / "burst.json"
             with (
                 mock.patch.object(burst, "HubClient", FakeClient),
+                mock.patch.object(burst, "load_token", return_value="offline-unit-test-token"),
                 mock.patch.object(burst, "_wait_for_ack", return_value={"status": "ok"}),
                 mock.patch.object(
                     burst,
@@ -254,6 +256,7 @@ class FT001BImuBurstTests(unittest.TestCase):
             output = Path(tmp) / "burst.json"
             with (
                 mock.patch.object(burst, "HubClient", FakeClient),
+                mock.patch.object(burst, "load_token", return_value="offline-unit-test-token"),
                 mock.patch.object(burst, "_wait_for_ack", return_value={"status": "ok"}),
                 mock.patch.object(burst, "_wait_for_window", side_effect=[evidence, rebooted]),
             ):

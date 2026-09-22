@@ -30,6 +30,9 @@ class TestEgoStateEstimationContracts(unittest.TestCase):
         Draft202012Validator.check_schema(self.estimation_schema)
         Draft202012Validator.check_schema(self.evidence_schema)
         Draft202012Validator.check_schema(self.report_schema)
+        view_schema = json.loads((self.contracts_dir / "ego_state_view_v0.schema.json").read_text("utf-8"))
+        Draft202012Validator.check_schema(view_schema)
+        self.assertEqual(view_schema["properties"]["state"]["$ref"], "ego_state_estimation_v0.schema.json")
 
     def test_estimation_schema_valid_instance(self) -> None:
         validator = Draft202012Validator(self.estimation_schema)

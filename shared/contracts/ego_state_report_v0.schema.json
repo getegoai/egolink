@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ego.local/contracts/ego_state_report_v0.schema.json",
   "title": "EgoLink Active Ego-State Report v0",
-  "description": "Structured Active Ego-State estimation report composed of state summary and cryptographically ground evidence chain. Supports local-first storage, periodic state aggregation, and transition alarms.",
+  "description": "Structured engineering ego-state report combining a rule estimate and producer-reported feature summary. Digest fields are reported without independent signature or complete raw-chain verification. Privacy and retention fields describe producer assertions or requested policy; this contract does not implement storage, encryption, or retention enforcement.",
   "type": "object",
   "additionalProperties": false,
   "required": [

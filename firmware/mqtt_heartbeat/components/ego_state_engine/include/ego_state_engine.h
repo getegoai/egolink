@@ -15,6 +15,11 @@ extern "C" {
 #define EGO_STATE_REASON_CODE_MAX_LEN 48
 #define EGO_STATE_MAX_REASON_CODES 8
 
+/* Engineering freshness bounds, not product accuracy or detection guarantees. */
+#define EGO_STATE_IMU_MAX_AGE_NS INT64_C(1000000000)
+#define EGO_STATE_SOURCE_MAX_AGE_NS INT64_C(30000000000)
+#define EGO_STATE_MAX_WINDOW_MS 10000U
+
 #define EGO_STATE_ESTIMATION_CONTRACT_VERSION "egolink.ego_state_estimation.v0.1"
 #define EGO_STATE_EVIDENCE_CONTRACT_VERSION   "egolink.ego_state_evidence_chain.v0.1"
 #define EGO_STATE_REPORT_CONTRACT_VERSION     "egolink.ego_state_report.v0.1"
@@ -69,6 +74,9 @@ typedef struct {
     float peak_accel_m_s2;
     float gyro_variance_dps2;
     bool is_mock;
+    int64_t latest_sample_ns;
+    int64_t latest_shock_ns;
+    bool valid; /* Fresh, real, sufficient samples at this evaluation time. */
 } ego_imu_features_t;
 
 typedef struct {
@@ -80,6 +88,9 @@ typedef struct {
     uint16_t satellites_in_use;
     float course_over_ground_deg;
     int64_t last_update_ns;
+    bool valid;
+    bool is_mock;
+    bool future_rejected;
 } ego_location_snapshot_t;
 
 typedef struct {
@@ -88,13 +99,21 @@ typedef struct {
     char lte_cell_id[32];
     uint16_t wifi_ap_count;
     char wifi_fingerprint_hash[EGO_STATE_DIGEST_HEX_LEN];
+    int64_t last_update_ns;
+    bool valid;
+    bool is_mock;
+    bool future_rejected;
 } ego_network_snapshot_t;
 
 typedef struct {
     float battery_soc_percent;
     int32_t battery_voltage_mv;
     bool is_charging;
+    bool charging_valid;
     bool valid;
+    int64_t last_update_ns;
+    bool is_mock;
+    bool future_rejected;
 } ego_power_snapshot_t;
 
 typedef struct {
@@ -145,6 +164,12 @@ typedef struct {
 
     int64_t last_shock_time_ns;
     int64_t immobility_start_ns;
+    int64_t last_imu_input_ns;
+    int64_t last_evaluation_ns;
+    bool imu_invalid;
+    bool imu_invalid_is_mock;
+    bool imu_future_rejected;
+    bool last_imu_is_mock;
     uint32_t estimation_sequence;
 
     char device_id[32];
@@ -190,7 +215,8 @@ esp_err_t ego_state_engine_feed_location(
     float hdop,
     uint16_t sats,
     float course_deg,
-    int64_t timestamp_ns
+    int64_t timestamp_ns,
+    bool is_mock
 );
 
 /**
@@ -202,7 +228,9 @@ esp_err_t ego_state_engine_feed_network(
     float lte_rsrp_dbm,
     const char *lte_cell_id,
     uint16_t wifi_ap_count,
-    const char *wifi_hash
+    const char *wifi_hash,
+    int64_t timestamp_ns,
+    bool is_mock
 );
 
 /**
@@ -212,7 +240,10 @@ esp_err_t ego_state_engine_feed_power(
     ego_state_engine_ctx_t *ctx,
     float battery_soc_percent,
     int32_t battery_voltage_mv,
-    bool is_charging
+    bool is_charging,
+    bool charging_valid,
+    int64_t timestamp_ns,
+    bool is_mock
 );
 
 /**

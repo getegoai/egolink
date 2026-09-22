@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ego.local/contracts/ego_state_evidence_chain_v0.schema.json",
   "title": "EgoLink Multi-Source Ego-State Evidence Chain v0",
-  "description": "Cryptographically verifiable multi-source sensor evidence chain backing an active ego-state estimation decision. Supports local-first tamper-evident audit without requiring centralized cloud validation.",
+  "description": "Producer-reported normalized sensor feature summary associated with an engineering ego-state rule estimate. The digest does not establish a signature, independent authenticity, verification of the complete raw evidence chain, or cross-runtime canonical digest interoperability. Storage and privacy enforcement are outside this data contract.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -33,7 +33,7 @@
     "evidence_digest": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
-      "description": "SHA-256 canonical hash of normalized evidence features."
+      "description": "Producer-generated SHA-256 of selected normalized features. Not a signature or proof of complete raw evidence integrity; producer canonicalization and cross-runtime equality are not established by this contract."
     },
     "device_id": {
       "type": "string",

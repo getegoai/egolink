@@ -3,6 +3,7 @@
  * Fully implements all 7 developer & QA workspaces with robust authenticated flows.
  */
 
+import { renderEgoState } from './ego_state.js?v=20260922_01';
 import { api } from './api.js?v=20260918_02';
 import { state } from './state.js?v=20260918_02';
 import { ImuOscilloscope, IMU_COLORS } from './charts.js?v=20260918_02';
@@ -711,181 +712,8 @@ class DevBenchApp {
     });
   }
 
-  renderEgoState(egoState) {
-    if (!this.dom.egoSpatialMobilityBadge) return;
-    if (!egoState) {
-      if (this.dom.egoStateTime) this.dom.egoStateTime.textContent = '等待推理上报…';
-      if (this.dom.egoSpatialMobilityBadge) {
-        this.dom.egoSpatialMobilityBadge.className = 'badge badge-warn';
-        this.dom.egoSpatialMobilityBadge.textContent = 'UNKNOWN';
-      }
-      if (this.dom.egoMobilityDesc) this.dom.egoMobilityDesc.textContent = '未知';
-      if (this.dom.egoPostureBadge) {
-        this.dom.egoPostureBadge.className = 'badge badge-ok';
-        this.dom.egoPostureBadge.textContent = 'NORMAL';
-      }
-      if (this.dom.egoPostureDesc) this.dom.egoPostureDesc.textContent = '正常日常';
-      if (this.dom.egoWearBadge) {
-        this.dom.egoWearBadge.className = 'badge badge-warn';
-        this.dom.egoWearBadge.textContent = 'UNKNOWN';
-      }
-      if (this.dom.egoWearDesc) this.dom.egoWearDesc.textContent = '未知';
-      if (this.dom.egoConfidenceVal) this.dom.egoConfidenceVal.textContent = '—';
-      if (this.dom.egoWindowDuration) this.dom.egoWindowDuration.textContent = '—';
-      if (this.dom.egoDigestHex) this.dom.egoDigestHex.textContent = '—';
-      if (this.dom.egoReasonCodes) this.dom.egoReasonCodes.innerHTML = '<span class="badge badge-info">无规则触发</span>';
-      if (this.dom.egoImuRms) this.dom.egoImuRms.textContent = '—';
-      if (this.dom.egoPeakAccel) this.dom.egoPeakAccel.textContent = '—';
-      if (this.dom.egoGyroVar) this.dom.egoGyroVar.textContent = '—';
-      if (this.dom.egoGroundSpeed) this.dom.egoGroundSpeed.textContent = '—';
-      if (this.dom.egoNetworkType) this.dom.egoNetworkType.textContent = '—';
-      if (this.dom.egoPowerSoc) this.dom.egoPowerSoc.textContent = '—';
-      return;
-    }
-
-    // Timestamp & Sequence
-    if (this.dom.egoStateTime) {
-      const timeStr = egoState.event_utc || egoState.received_at || '';
-      const bootStr = egoState.boot_count !== undefined ? `Boot #${egoState.boot_count} · ` : '';
-      const seqStr = egoState.sequence_id !== undefined ? `Seq #${egoState.sequence_id}` : '';
-      this.dom.egoStateTime.textContent = `${bootStr}${seqStr}${timeStr ? ' · ' + timeStr : ''}` || '已上报';
-    }
-
-    // Spatial Mobility
-    const mobility = egoState.spatial_mobility || 'unknown';
-    if (this.dom.egoSpatialMobilityBadge && this.dom.egoMobilityDesc) {
-      if (mobility === 'stationary') {
-        this.dom.egoSpatialMobilityBadge.className = 'badge badge-info';
-        this.dom.egoSpatialMobilityBadge.textContent = '静止 (STATIONARY)';
-        this.dom.egoMobilityDesc.textContent = '微动静止或平放';
-      } else if (mobility === 'walking') {
-        this.dom.egoSpatialMobilityBadge.className = 'badge badge-ok';
-        this.dom.egoSpatialMobilityBadge.textContent = '步行 (WALKING)';
-        this.dom.egoMobilityDesc.textContent = '步伐律动平稳连续';
-      } else if (mobility === 'running') {
-        this.dom.egoSpatialMobilityBadge.className = 'badge badge-ok';
-        this.dom.egoSpatialMobilityBadge.textContent = '奔跑 (RUNNING)';
-        this.dom.egoMobilityDesc.textContent = '高频强冲击步伐律动';
-      } else if (mobility === 'vehicular') {
-        this.dom.egoSpatialMobilityBadge.className = 'badge badge-info';
-        this.dom.egoSpatialMobilityBadge.textContent = '乘车 (VEHICULAR)';
-        this.dom.egoMobilityDesc.textContent = '对地高航速平稳位移';
-      } else {
-        this.dom.egoSpatialMobilityBadge.className = 'badge badge-warn';
-        this.dom.egoSpatialMobilityBadge.textContent = mobility.toUpperCase();
-        this.dom.egoMobilityDesc.textContent = '特征未定或静置过渡';
-      }
-    }
-
-    // Posture Anomaly
-    const posture = egoState.posture_anomaly || 'normal';
-    if (this.dom.egoPostureBadge && this.dom.egoPostureDesc) {
-      if (posture === 'normal') {
-        this.dom.egoPostureBadge.className = 'badge badge-ok';
-        this.dom.egoPostureBadge.textContent = '正常日常 (NORMAL)';
-        this.dom.egoPostureDesc.textContent = '体态平稳无异常冲击';
-      } else if (posture === 'fall_suspected') {
-        this.dom.egoPostureBadge.className = 'badge badge-bad';
-        this.dom.egoPostureBadge.textContent = '疑似跌倒 (FALL)';
-        this.dom.egoPostureDesc.textContent = '⚠️ 剧烈冲击后失稳静止';
-      } else if (posture === 'free_fall') {
-        this.dom.egoPostureBadge.className = 'badge badge-bad';
-        this.dom.egoPostureBadge.textContent = '失重下坠 (FREE FALL)';
-        this.dom.egoPostureDesc.textContent = '⚠️ 瞬时失重失稳特征';
-      } else if (posture === 'prolonged_immobility') {
-        this.dom.egoPostureBadge.className = 'badge badge-warn';
-        this.dom.egoPostureBadge.textContent = '异常滞留 (IMMOBILITY)';
-        this.dom.egoPostureDesc.textContent = '⚠️ 随身状态下长时无活动';
-      } else {
-        this.dom.egoPostureBadge.className = 'badge badge-warn';
-        this.dom.egoPostureBadge.textContent = posture.toUpperCase();
-        this.dom.egoPostureDesc.textContent = '姿态未知';
-      }
-    }
-
-    // Wear State
-    const wear = egoState.device_wear_state || 'unknown';
-    if (this.dom.egoWearBadge && this.dom.egoWearDesc) {
-      if (wear === 'worn') {
-        this.dom.egoWearBadge.className = 'badge badge-ok';
-        this.dom.egoWearBadge.textContent = '佩戴中 (WORN)';
-        this.dom.egoWearDesc.textContent = '人体生理微动与加速度连续';
-      } else if (wear === 'detached') {
-        this.dom.egoWearBadge.className = 'badge badge-warn';
-        this.dom.egoWearBadge.textContent = '已脱落/离身 (DETACHED)';
-        this.dom.egoWearDesc.textContent = '无生理微动或脱手放置';
-      } else if (wear === 'charging_dock') {
-        this.dom.egoWearBadge.className = 'badge badge-info';
-        this.dom.egoWearBadge.textContent = '座充/充电中 (CHARGING)';
-        this.dom.egoWearDesc.textContent = '连接充电电源静置';
-      } else {
-        this.dom.egoWearBadge.className = 'badge badge-warn';
-        this.dom.egoWearBadge.textContent = wear.toUpperCase();
-        this.dom.egoWearDesc.textContent = '佩戴状态判定中';
-      }
-    }
-
-    // Confidence & Window
-    if (this.dom.egoConfidenceVal) {
-      const conf = egoState.confidence;
-      if (Number.isFinite(conf)) {
-        this.dom.egoConfidenceVal.textContent = `${(conf * 100).toFixed(0)}%`;
-        this.dom.egoConfidenceVal.style.color = conf >= 0.8 ? 'var(--accent-green)' : (conf >= 0.5 ? 'var(--accent-amber)' : 'var(--accent-rose)');
-      } else {
-        this.dom.egoConfidenceVal.textContent = '—';
-      }
-    }
-    if (this.dom.egoWindowDuration) {
-      this.dom.egoWindowDuration.textContent = egoState.window_duration_ms !== undefined ? egoState.window_duration_ms : '—';
-    }
-
-    // Evidence Digest
-    if (this.dom.egoDigestHex) {
-      const digest = egoState.primary_evidence_digest || '';
-      if (digest) {
-        this.dom.egoDigestHex.textContent = digest;
-        this.dom.egoDigestHex.setAttribute('data-full-digest', digest);
-      } else {
-        this.dom.egoDigestHex.textContent = '—';
-        this.dom.egoDigestHex.removeAttribute('data-full-digest');
-      }
-    }
-
-    // Reason Codes
-    if (this.dom.egoReasonCodes) {
-      const codes = egoState.reason_codes || [];
-      if (Array.isArray(codes) && codes.length > 0) {
-        this.dom.egoReasonCodes.innerHTML = codes.map(c => `<span class="badge badge-info">${c}</span>`).join(' ');
-      } else {
-        this.dom.egoReasonCodes.innerHTML = '<span class="badge badge-info">无特殊规则触发</span>';
-      }
-    }
-
-    // Evidence Summary Physical Metrics
-    const ev = egoState.evidence_summary || {};
-    if (this.dom.egoImuRms) {
-      const rms = ev.motion_rms_m_s2 ?? (Number.isFinite(ev.imu_rms_accel_mg) ? ev.imu_rms_accel_mg / 1000 * 9.80665 : undefined);
-      const rmsMg = ev.imu_rms_accel_mg ?? (Number.isFinite(ev.motion_rms_m_s2) ? ev.motion_rms_m_s2 / 9.80665 * 1000 : undefined);
-      this.dom.egoImuRms.textContent = Number.isFinite(rms) ? `${rms.toFixed(2)} m/s² (${rmsMg.toFixed(0)} mg)` : '—';
-    }
-    if (this.dom.egoPeakAccel) {
-      const peak = ev.peak_accel_m_s2 ?? (Number.isFinite(ev.imu_peak_accel_mg) ? ev.imu_peak_accel_mg / 1000 * 9.80665 : undefined);
-      const peakMg = ev.imu_peak_accel_mg ?? (Number.isFinite(ev.peak_accel_m_s2) ? ev.peak_accel_m_s2 / 9.80665 * 1000 : undefined);
-      this.dom.egoPeakAccel.textContent = Number.isFinite(peak) ? `${peak.toFixed(1)} m/s² (${peakMg.toFixed(0)} mg)` : '—';
-    }
-    if (this.dom.egoGyroVar) {
-      this.dom.egoGyroVar.textContent = Number.isFinite(ev.gyro_variance_dps2) ? `${ev.gyro_variance_dps2.toFixed(1)} (dps)²` : '—';
-    }
-    if (this.dom.egoGroundSpeed) {
-      const spd = ev.ground_speed_m_s ?? ev.gnss_ground_speed_mps;
-      this.dom.egoGroundSpeed.textContent = Number.isFinite(spd) ? `${spd.toFixed(2)} m/s` : '—';
-    }
-    if (this.dom.egoNetworkType) {
-      this.dom.egoNetworkType.textContent = ev.network_type ? String(ev.network_type).toUpperCase() : '—';
-    }
-    if (this.dom.egoPowerSoc) {
-      this.dom.egoPowerSoc.textContent = Number.isFinite(ev.battery_soc_percent) ? `${ev.battery_soc_percent.toFixed(1)}%` : '—';
-    }
+  renderEgoState(view, diagnostic = null) {
+    renderEgoState(this.dom, view, diagnostic);
   }
 
   renderCollectionSummary(summary) {
@@ -941,8 +769,8 @@ class DevBenchApp {
     // Active Ego-State Inference & Evidence Chain
     try {
       const deviceSource = bySource.get('device');
-      const egoState = summary.latest_ego_state || deviceSource?.latest?.envelope?.payload?.ego_state;
-      this.renderEgoState(egoState);
+      this.renderEgoState(summary.latest_ego_state,
+        summary.latest_ego_state_projection ?? deviceSource?.latest?.preview?.ego_state_projection);
     } catch (e) {
       console.warn('EgoState render error:', e);
     }

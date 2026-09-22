@@ -10,6 +10,7 @@ import binascii
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 from pathlib import Path
 import re
 import sqlite3
@@ -51,6 +52,109 @@ CAMERA_TIMER_STATE_FIELDS = frozenset({
     "session_expires_at_unix_ms", "max_photos", "captured_count",
     "state_reason", "trusted_utc",
 })
+
+# Keep the deployed collector stdlib-only. The focused contract tests compare
+# this bounded adapter against the unchanged JSON-Schema estimation oracle.
+EGO_STATE_VERSION = "egolink.ego_state_estimation.v0.1"
+EGO_VIEW_VERSION = "egolink.ego_state_view.v0.1"
+EGO_IDENTITY_FIELDS = frozenset({
+    "contract_version", "estimation_id", "device_id", "boot_count",
+    "timestamp_monotonic_ns", "timestamp_utc",
+})
+EGO_VALUE_FIELDS = frozenset({
+    "spatial_mobility", "posture_anomaly", "device_wear_state", "confidence",
+    "window_duration_ms", "reason_codes", "primary_evidence_digest", "is_mock",
+})
+EGO_ENUMS = {
+    "spatial_mobility": {"stationary", "pedestrian_walking", "running", "in_vehicle", "indoor_weak_gnss", "unknown"},
+    "posture_anomaly": {"normal", "abnormal_shock", "suspected_fall", "prolonged_immobility", "unknown"},
+    "device_wear_state": {"tabletop_resting", "handheld", "wearable_or_bag", "charging_docked", "unknown"},
+}
+
+
+def _ego_state_projection(envelope: dict[str, Any]) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    """Adapt only valid DEVICE states; a failed projection never rejects raw data.
+
+    Legacy firmware omitted *all* canonical identity/time fields. Only that
+    exact shape inherits collection source identity/time, never receive time.
+    Partially upgraded or conflicting identities are quarantined, not repaired.
+    """
+    payload = envelope.get("payload", {})
+    if envelope.get("source") != "device" or "ego_state" not in payload:
+        return None, {"status": "absent", "reason_code": "ego_state_missing"}
+    raw = payload["ego_state"]
+    if isinstance(raw, dict) and raw.get("ready") is False:
+        return None, {"status": "unavailable", "reason_code": "ego_state_not_ready"}
+
+    def invalid(reason: str) -> tuple[None, dict[str, Any]]:
+        return None, {"status": "invalid", "reason_code": reason}
+
+    if not isinstance(raw, dict) or raw.get("ready") is not True:
+        return invalid("ego_state_invalid_readiness")
+    if set(raw) - (EGO_IDENTITY_FIELDS | EGO_VALUE_FIELDS | {"ready", "evidence_summary"}):
+        return invalid("ego_state_unknown_fields")
+    if not EGO_VALUE_FIELDS <= raw.keys():
+        return invalid("ego_state_missing_values")
+    supplied_identity = EGO_IDENTITY_FIELDS & raw.keys()
+    if supplied_identity and supplied_identity != EGO_IDENTITY_FIELDS:
+        return invalid("ego_state_partial_identity")
+    identity_source = "device" if supplied_identity else "legacy_derived_from_collection_envelope"
+    state = {key: raw[key] for key in EGO_VALUE_FIELDS}
+    if supplied_identity:
+        state.update({key: raw[key] for key in EGO_IDENTITY_FIELDS})
+    else:
+        state.update({
+            "contract_version": EGO_STATE_VERSION,
+            "estimation_id": envelope["observation_id"],
+            "device_id": envelope["device_id"], "boot_count": envelope["boot_count"],
+            "timestamp_monotonic_ns": envelope["timestamp_monotonic_ns"],
+            "timestamp_utc": envelope["timestamp_utc"],
+        })
+    if state["contract_version"] != EGO_STATE_VERSION:
+        return invalid("ego_state_unsupported_version")
+    for key in ("estimation_id", "device_id"):
+        if not isinstance(state[key], str) or SAFE_ID.fullmatch(state[key]) is None:
+            return invalid("ego_state_invalid_identity")
+    for key, minimum in (("boot_count", 0), ("timestamp_monotonic_ns", 0), ("window_duration_ms", 100)):
+        if type(state[key]) is not int or not minimum <= state[key] <= INT64_MAX:
+            return invalid("ego_state_invalid_integer")
+    if state["device_id"] != envelope["device_id"] or state["boot_count"] != envelope["boot_count"]:
+        return invalid("ego_state_envelope_identity_mismatch")
+    if state["timestamp_monotonic_ns"] > envelope["timestamp_monotonic_ns"]:
+        return invalid("ego_state_future_source_time")
+    utc = state["timestamp_utc"]
+    if utc is not None:
+        try:
+            if not isinstance(utc, str) or len(utc) > 40 or re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)", utc) is None:
+                raise ValueError("invalid date-time")
+            parsed_utc = datetime.fromisoformat(utc.replace("Z", "+00:00"))
+            if parsed_utc.tzinfo is None:
+                raise ValueError("missing timezone")
+            if envelope["timestamp_utc"] is not None and parsed_utc > datetime.fromisoformat(envelope["timestamp_utc"].replace("Z", "+00:00")):
+                return invalid("ego_state_future_source_time")
+        except (ValueError, TypeError):
+            return invalid("ego_state_invalid_utc")
+    for key, values in EGO_ENUMS.items():
+        if not isinstance(state[key], str) or state[key] not in values:
+            return invalid("ego_state_invalid_enum")
+    confidence = state["confidence"]
+    if type(confidence) not in (int, float) or not 0 <= confidence <= 1 or not math.isfinite(confidence):
+        return invalid("ego_state_invalid_confidence")
+    if type(state["is_mock"]) is not bool:
+        return invalid("ego_state_invalid_mock_flag")
+    if (envelope.get("is_mock") is True or payload.get("is_mock") is True) and not state["is_mock"]:
+        return invalid("ego_state_mock_lineage_mismatch")
+    digest = state["primary_evidence_digest"]
+    if not isinstance(digest, str) or FIRMWARE_ELF_SHA256.fullmatch(digest) is None:
+        return invalid("ego_state_invalid_digest")
+    reasons = state["reason_codes"]
+    if not isinstance(reasons, list) or not reasons or any(not isinstance(code, str) or not 1 <= len(code) <= 128 for code in reasons):
+        return invalid("ego_state_invalid_reasons")
+    if len(set(reasons)) != len(reasons):
+        return invalid("ego_state_duplicate_reasons")
+    if not isinstance(raw.get("evidence_summary", {}), dict):
+        return invalid("ego_state_invalid_evidence_summary")
+    return state, {"status": "valid", "reason_code": "ego_state_schema_valid", "identity_source": identity_source}
 
 
 class CollectionError(ValueError):
@@ -538,6 +642,11 @@ class CollectionStore:
             except (ValueError, CollectionError) as error:
                 camera_status_shape_error = str(error)
         preview = inspect_source(envelope)
+        ego_state, ego_projection = _ego_state_projection(envelope)
+        if envelope["source"] == "device":
+            # This describes only the optional projection. Raw collection and
+            # its durable ACK remain truthful even for old/invalid state data.
+            preview["ego_state_projection"] = ego_projection
         if camera_status_shape_error is not None:
             preview.update(
                 status="parse_error",
@@ -631,44 +740,22 @@ class CollectionStore:
                         WHERE (excluded.boot_count,excluded.event_monotonic_ns,excluded.sequence_id) >
                         (collection_source_states.boot_count,collection_source_states.event_monotonic_ns,collection_source_states.sequence_id)""",
                         (envelope["device_id"], target, inserted.lastrowid, envelope["boot_count"], envelope["timestamp_monotonic_ns"], envelope["sequence_id"]))
-                ego_state = envelope["payload"].get("ego_state")
-                if (
-                    envelope["source"] == "device"
-                    and isinstance(ego_state, dict)
-                    and ego_state.get("ready") is True
-                ):
-                    rec_id = int(existing["id"] if existing is not None else inserted.lastrowid)
+                if ego_state is not None:
+                    rec_id = int(inserted.lastrowid)
                     db.execute("""INSERT INTO collection_ego_states
                         (device_id,observation_id,record_id,boot_count,event_monotonic_ns,sequence_id,
                          event_utc,received_at,spatial_mobility,posture_anomaly,device_wear_state,
                          confidence,window_duration_ms,primary_evidence_digest,is_mock,
                          reason_codes_json,evidence_summary_json,ego_state_json)
-                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                        ON CONFLICT(device_id,observation_id) DO UPDATE SET
-                        record_id=excluded.record_id,
-                        spatial_mobility=excluded.spatial_mobility,
-                        posture_anomaly=excluded.posture_anomaly,
-                        device_wear_state=excluded.device_wear_state,
-                        confidence=excluded.confidence,
-                        window_duration_ms=excluded.window_duration_ms,
-                        primary_evidence_digest=excluded.primary_evidence_digest,
-                        is_mock=excluded.is_mock,
-                        reason_codes_json=excluded.reason_codes_json,
-                        evidence_summary_json=excluded.evidence_summary_json,
-                        ego_state_json=excluded.ego_state_json""",
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                         (envelope["device_id"],envelope["observation_id"],rec_id,
-                         envelope["boot_count"],envelope["timestamp_monotonic_ns"],envelope["sequence_id"],
-                         _utc_index(envelope.get("timestamp_utc")),received,
-                         str(ego_state.get("spatial_mobility") or "unknown"),
-                         str(ego_state.get("posture_anomaly") or "unknown"),
-                         str(ego_state.get("device_wear_state") or "unknown"),
-                         float(ego_state.get("confidence") or 0.0),
-                         int(ego_state.get("window_duration_ms") or 0),
-                         str(ego_state.get("primary_evidence_digest") or ""),
-                         1 if ego_state.get("is_mock") else 0,
-                         _json(ego_state.get("reason_codes") or []),
-                         _json(ego_state.get("evidence_summary") or {}),
-                         _json(ego_state)))
+                         ego_state["boot_count"],ego_state["timestamp_monotonic_ns"],envelope["sequence_id"],
+                         ego_state["timestamp_utc"],received,
+                         ego_state["spatial_mobility"],ego_state["posture_anomaly"],ego_state["device_wear_state"],
+                         ego_state["confidence"],ego_state["window_duration_ms"],ego_state["primary_evidence_digest"],
+                         1 if ego_state["is_mock"] else 0,_json(ego_state["reason_codes"]),
+                         _json(envelope["payload"]["ego_state"].get("evidence_summary", {})),
+                         _json(envelope["payload"]["ego_state"])))
             if camera_metadata is not None and existing_photo is None and not conflict:
                 collection_record_id = int(existing["id"] if existing is not None else inserted.lastrowid)
                 self.hub.photos.insert_metadata(db, camera_metadata, collection_record_id)
@@ -704,6 +791,7 @@ class CollectionStore:
         return {"device_id": device_id, "server_now": _now(), "sources": sources,
                 "source_states": {row["target_source"]: self._record_view(row) for row in state_rows},
                 "latest_ego_state": self.latest_ego_state(device_id),
+                "latest_ego_state_projection": self.latest_ego_state_projection(device_id),
                 "last_contact": dict(delivery) if delivery else None,
                 "sessions": [dict(row) for row in sessions],
                 "recent_annotations": [json.loads(row["annotation_json"]) for row in annotations],
@@ -813,60 +901,113 @@ class CollectionStore:
 
     @staticmethod
     def _record_view(row: sqlite3.Row) -> dict[str, Any]:
-        return {"row_id": row["id"], "envelope": json.loads(row["envelope_json"]),
-                "preview": json.loads(row["preview_json"]), "frame_bytes": row["frame_bytes"],
+        envelope = json.loads(row["envelope_json"])
+        preview = json.loads(row["preview_json"])
+        if envelope.get("source") == "device":
+            _, preview["ego_state_projection"] = _ego_state_projection(envelope)
+        return {"row_id": row["id"], "envelope": envelope,
+                "preview": preview, "frame_bytes": row["frame_bytes"],
                 "payload_sha256": row["payload_sha256"], "server_received_at": row["received_at"], "persisted_at": row["persisted_at"]}
 
     @staticmethod
-    def _ego_state_row_view(row: sqlite3.Row) -> dict[str, Any]:
+    def _ego_state_row_view(row: sqlite3.Row) -> dict[str, Any] | None:
+        # Validate the immutable source again, including rows indexed before
+        # this adapter existed. No migration/deletion or trusting coerced SQL
+        # columns is needed to hide an invalid historical projection.
+        try:
+            envelope = json.loads(row["envelope_json"])
+            state, projection = _ego_state_projection(envelope)
+        except (KeyError, ValueError, TypeError, OverflowError):
+            return None
+        if state is None or envelope["device_id"] != row["device_id"] or envelope["observation_id"] != row["observation_id"]:
+            return None
         return {
-            "contract_version": "egolink.ego_state_estimation.v0.1",
-            "device_id": row["device_id"],
-            "observation_id": row["observation_id"],
-            "record_id": row["record_id"],
-            "boot_count": row["boot_count"],
-            "event_monotonic_ns": row["event_monotonic_ns"],
-            "sequence_id": row["sequence_id"],
-            "event_utc": row["event_utc"],
-            "received_at": row["received_at"],
-            "spatial_mobility": row["spatial_mobility"],
-            "posture_anomaly": row["posture_anomaly"],
-            "device_wear_state": row["device_wear_state"],
-            "confidence": row["confidence"],
-            "window_duration_ms": row["window_duration_ms"],
-            "primary_evidence_digest": row["primary_evidence_digest"],
-            "is_mock": bool(row["is_mock"]),
-            "reason_codes": json.loads(row["reason_codes_json"]) if row["reason_codes_json"] else [],
-            "evidence_summary": json.loads(row["evidence_summary_json"]) if row["evidence_summary_json"] else {},
-            "privacy_boundary": {
-                "local_priority": True,
+            "contract_version": EGO_VIEW_VERSION,
+            "state": state,
+            "evidence_summary": envelope["payload"]["ego_state"].get("evidence_summary", {}),
+            "provenance": {
+                "identity_source": projection["identity_source"],
+                "digest_verification": "not_performed",
+                "observation_id": envelope["observation_id"], "record_id": row["record_id"],
+                "sequence_id": envelope["sequence_id"],
+                "monotonic_clock_domain_id": envelope["monotonic_clock_domain_id"],
+                "fw_version": envelope["fw_version"], "config_id": envelope["config_id"],
+                "session_id": envelope["session_id"],
+                "timestamp_source": envelope["timestamp_source"],
+                "timestamp_quality": envelope["timestamp_quality"],
+            },
+            "receipt": {"server_received_at": row["received_at"], "persisted_at": row["persisted_at"]},
+            "storage": {
+                "backend": "message_hub_sqlite",
                 "encrypted_at_rest": False,
-                "retention_category": "realtime_transient",
+                "automatic_expiry": False,
+                "user_private_endpoint_verified": False,
             },
         }
 
     def latest_ego_state(self, device_id: str) -> dict[str, Any] | None:
+        states = self.ego_state_timeline(device_id, limit=1)
+        return states[0] if states else None
+
+    def latest_ego_state_projection(self, device_id: str) -> dict[str, Any] | None:
+        """Diagnose the newest state-bearing DEVICE packet, including quarantine.
+
+        A following health-only DEVICE packet is expected after split emission;
+        it must not hide an invalid/unavailable state or report false absence.
+        Stream the existing source index, stopping at the first state payload.
+        Older firmware can require scanning its complete DEVICE history.
+        """
         with self.hub.connection() as db:
-            row = db.execute(
-                """SELECT * FROM collection_ego_states
-                   WHERE device_id=?
-                   ORDER BY boot_count DESC, event_monotonic_ns DESC, sequence_id DESC, id DESC
-                   LIMIT 1""",
+            rows = db.execute(
+                """SELECT envelope_json,received_at,id FROM collection_records
+                   WHERE device_id=? AND source='device'
+                   ORDER BY boot_count DESC,event_monotonic_ns DESC,sequence_id DESC,id DESC""",
                 (device_id,),
-            ).fetchone()
-        return self._ego_state_row_view(row) if row is not None else None
+            )
+            for row in rows:
+                envelope = json.loads(row["envelope_json"])
+                payload = envelope.get("payload")
+                if not isinstance(payload, dict) or "ego_state" not in payload:
+                    continue
+                _, projection = _ego_state_projection(envelope)
+                return {**projection, "observation_id": envelope["observation_id"],
+                        "record_id": row["id"], "boot_count": envelope["boot_count"],
+                        "sequence_id": envelope["sequence_id"],
+                        "timestamp_monotonic_ns": envelope["timestamp_monotonic_ns"],
+                        "server_received_at": row["received_at"]}
+        return None
 
     def ego_state_timeline(self, device_id: str, limit: int = 50) -> list[dict[str, Any]]:
         bound_limit = max(1, min(limit, 200))
+        candidates: list[tuple[tuple[int, int, int, int], dict[str, Any]]] = []
         with self.hub.connection() as db:
             rows = db.execute(
-                """SELECT * FROM collection_ego_states
-                   WHERE device_id=?
-                   ORDER BY boot_count DESC, event_monotonic_ns DESC, sequence_id DESC, id DESC
-                   LIMIT ?""",
-                (device_id, bound_limit),
-            ).fetchall()
-        return [self._ego_state_row_view(r) for r in rows]
+                """SELECT e.*, c.envelope_json, c.persisted_at,
+                          c.boot_count source_boot_count, c.event_monotonic_ns source_monotonic_ns,
+                          c.sequence_id source_sequence_id
+                   FROM collection_ego_states e JOIN collection_records c ON c.id=e.record_id
+                   WHERE e.device_id=? AND c.device_id=e.device_id
+                   ORDER BY c.boot_count DESC, c.event_monotonic_ns DESC, c.sequence_id DESC, e.id DESC""",
+                (device_id,),
+            )
+            for row in rows:
+                # A legacy index may contain envelope time instead of the
+                # earlier evaluation time. Canonical time never exceeds its
+                # source envelope (checked by the adapter), so that envelope
+                # supplies a safe upper bound for lazy scanning. Keep at most
+                # limit valid views in memory; invalid/very delayed historical
+                # data may still require scanning the complete device history.
+                upper_bound = (row["source_boot_count"], row["source_monotonic_ns"], row["source_sequence_id"], row["id"])
+                if len(candidates) == bound_limit and upper_bound <= candidates[-1][0]:
+                    break
+                view = self._ego_state_row_view(row)
+                if view is not None:
+                    state = view["state"]
+                    key = (state["boot_count"], state["timestamp_monotonic_ns"], view["provenance"]["sequence_id"], row["id"])
+                    candidates.append((key, view))
+                    candidates.sort(key=lambda item: item[0], reverse=True)
+                    del candidates[bound_limit:]
+        return [view for _, view in candidates]
 
     def page(self, device_id: str, query: dict[str, list[str]], *, raw: bool = False) -> dict[str, Any]:
         schema = export_schema() if raw else None

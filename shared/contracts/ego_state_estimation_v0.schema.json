@@ -82,6 +82,7 @@
     },
     "confidence": {
       "type": "number",
+      "description": "Experimental deterministic rule/evidence-completeness score. Not a calibrated correctness probability, measured accuracy or a safety confirmation.",
       "minimum": 0.0,
       "maximum": 1.0
     },
@@ -101,6 +102,7 @@
     },
     "primary_evidence_digest": {
       "type": "string",
+      "description": "Producer-generated feature-summary digest. Not a signature, independent verification of the complete raw chain or proof of C/Python canonical digest interoperability.",
       "pattern": "^[0-9a-f]{64}$"
     },
     "is_mock": {

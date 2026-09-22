@@ -36,6 +36,14 @@ static void bytes_to_hex(const uint8_t *bytes, size_t len, char *out_hex, size_t
     out_hex[len * 2] = '\0';
 }
 
+static bool accepts_source_time(int64_t incoming, int64_t previous, int64_t evaluated, bool future_rejected)
+{
+    if (incoming < 0) return false;
+    if (incoming > previous) return true;
+    /* A future-clock observation rejected by evaluation cannot lock out recovery. */
+    return future_rejected && evaluated >= 0 && previous > evaluated && incoming >= evaluated;
+}
+
 esp_err_t ego_state_engine_init(
     ego_state_engine_ctx_t *ctx,
     const char *device_id,
@@ -55,6 +63,13 @@ esp_err_t ego_state_engine_init(
     copy_string(ctx->provenance.firmware_elf_sha256, sizeof(ctx->provenance.firmware_elf_sha256), elf_sha256 != NULL ? elf_sha256 : "unknown");
 
     ctx->network.network_type = EGO_NETWORK_OFFLINE;
+    ctx->location.last_update_ns = -1;
+    ctx->network.last_update_ns = -1;
+    ctx->power.last_update_ns = -1;
+    ctx->last_imu_input_ns = -1;
+    ctx->last_evaluation_ns = -1;
+    ctx->last_shock_time_ns = -1;
+    ctx->immobility_start_ns = -1;
     ctx->initialized = true;
     return ESP_OK;
 }
@@ -74,6 +89,41 @@ esp_err_t ego_state_engine_feed_imu(
         return ESP_ERR_INVALID_STATE;
     }
 
+    /* Ignore replays, including older mock data, without replacing live truth. */
+    if (!accepts_source_time(timestamp_ns, ctx->last_imu_input_ns, ctx->last_evaluation_ns, ctx->imu_future_rejected)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (timestamp_ns <= ctx->last_imu_input_ns) {
+        ctx->ring_count = 0;
+        ctx->ring_head = 0;
+        ctx->last_shock_time_ns = -1;
+        ctx->immobility_start_ns = -1;
+    }
+    if (ctx->last_imu_input_ns >= 0 &&
+        timestamp_ns - ctx->last_imu_input_ns > EGO_STATE_IMU_MAX_AGE_NS) {
+        ctx->immobility_start_ns = -1;
+    }
+    ctx->last_imu_input_ns = timestamp_ns;
+    ctx->last_imu_is_mock = is_mock;
+    ctx->imu_future_rejected = false;
+    if (!isfinite(ax_mg) || !isfinite(ay_mg) || !isfinite(az_mg) ||
+        !isfinite(gx_mdps) || !isfinite(gy_mdps) || !isfinite(gz_mdps) ||
+        fabsf(ax_mg) > 16000 || fabsf(ay_mg) > 16000 || fabsf(az_mg) > 16000 ||
+        fabsf(gx_mdps) > 4000000 || fabsf(gy_mdps) > 4000000 || fabsf(gz_mdps) > 4000000) {
+        ctx->ring_count = 0;
+        ctx->ring_head = 0;
+        ctx->imu_invalid = true;
+        ctx->imu_invalid_is_mock = is_mock;
+        ctx->immobility_start_ns = -1;
+        ctx->last_shock_time_ns = -1;
+        return ESP_ERR_INVALID_ARG;
+    }
+    ctx->imu_invalid = false;
+    ctx->imu_invalid_is_mock = false;
+    if (is_mock) {
+        ctx->immobility_start_ns = -1;
+        ctx->last_shock_time_ns = -1;
+    }
     uint16_t index = ctx->ring_head;
     ctx->imu_ring[index].ax_m_s2 = ax_mg * 0.00980665f;
     ctx->imu_ring[index].ay_m_s2 = ay_mg * 0.00980665f;
@@ -102,11 +152,28 @@ esp_err_t ego_state_engine_feed_location(
     float hdop,
     uint16_t sats,
     float course_deg,
-    int64_t timestamp_ns)
+    int64_t timestamp_ns,
+    bool is_mock)
 {
     if (ctx == NULL || !ctx->initialized) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (!accepts_source_time(timestamp_ns, ctx->location.last_update_ns, ctx->last_evaluation_ns, ctx->location.future_rejected)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    memset(&ctx->location, 0, sizeof(ctx->location));
+    ctx->location.last_update_ns = timestamp_ns;
+    ctx->location.is_mock = is_mock;
+    /* NAN represents an absent optional speed for a valid no-fix response. */
+    bool speed_missing_without_fix = !fix_valid && isnan(ground_speed_m_s);
+    if ((!speed_missing_without_fix &&
+         (!isfinite(ground_speed_m_s) || ground_speed_m_s < 0 || ground_speed_m_s > 200)) ||
+        !isfinite(lat_deg) || fabs(lat_deg) > 90 || !isfinite(lon_deg) || fabs(lon_deg) > 180 ||
+        !isfinite(hdop) || hdop < 0 || hdop > 1000 ||
+        !isfinite(course_deg) || course_deg < 0 || course_deg > 360) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    ctx->location.valid = true;
     ctx->location.fix_valid = fix_valid;
     ctx->location.ground_speed_m_s = ground_speed_m_s;
     ctx->location.latitude_deg = lat_deg;
@@ -124,11 +191,26 @@ esp_err_t ego_state_engine_feed_network(
     float lte_rsrp_dbm,
     const char *lte_cell_id,
     uint16_t wifi_ap_count,
-    const char *wifi_hash)
+    const char *wifi_hash,
+    int64_t timestamp_ns,
+    bool is_mock)
 {
     if (ctx == NULL || !ctx->initialized) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (!accepts_source_time(timestamp_ns, ctx->network.last_update_ns, ctx->last_evaluation_ns, ctx->network.future_rejected)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    memset(&ctx->network, 0, sizeof(ctx->network));
+    ctx->network.last_update_ns = timestamp_ns;
+    ctx->network.is_mock = is_mock;
+    bool rsrp_optional = net_type == EGO_NETWORK_OFFLINE || net_type == EGO_NETWORK_WIFI;
+    bool rsrp_missing = rsrp_optional && isnan(lte_rsrp_dbm);
+    if (net_type < EGO_NETWORK_OFFLINE || net_type > EGO_NETWORK_MULTI ||
+        (!rsrp_missing && (!isfinite(lte_rsrp_dbm) || lte_rsrp_dbm < -160 || lte_rsrp_dbm >= 0))) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    ctx->network.valid = true;
     ctx->network.network_type = net_type;
     ctx->network.lte_rsrp_dbm = lte_rsrp_dbm;
     if (lte_cell_id != NULL) {
@@ -145,14 +227,28 @@ esp_err_t ego_state_engine_feed_power(
     ego_state_engine_ctx_t *ctx,
     float battery_soc_percent,
     int32_t battery_voltage_mv,
-    bool is_charging)
+    bool is_charging,
+    bool charging_valid,
+    int64_t timestamp_ns,
+    bool is_mock)
 {
     if (ctx == NULL || !ctx->initialized) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (!accepts_source_time(timestamp_ns, ctx->power.last_update_ns, ctx->last_evaluation_ns, ctx->power.future_rejected)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    memset(&ctx->power, 0, sizeof(ctx->power));
+    ctx->power.last_update_ns = timestamp_ns;
+    ctx->power.is_mock = is_mock;
+    if (!isfinite(battery_soc_percent) || battery_soc_percent < 0 || battery_soc_percent > 100 ||
+        battery_voltage_mv < 0 || battery_voltage_mv > 6000) {
+        return ESP_ERR_INVALID_ARG;
+    }
     ctx->power.battery_soc_percent = battery_soc_percent;
     ctx->power.battery_voltage_mv = battery_voltage_mv;
     ctx->power.is_charging = is_charging;
+    ctx->power.charging_valid = charging_valid;
     ctx->power.valid = true;
     return ESP_OK;
 }
@@ -164,6 +260,8 @@ static void compute_window_imu_features(
     ego_imu_features_t *out_features)
 {
     memset(out_features, 0, sizeof(*out_features));
+    out_features->latest_sample_ns = -1;
+    out_features->latest_shock_ns = -1;
     if (ctx->ring_count == 0) {
         return;
     }
@@ -178,19 +276,8 @@ static void compute_window_imu_features(
     for (uint16_t i = 0; i < ctx->ring_count; ++i) {
         /* Ring buffer traversal: oldest to newest */
         uint16_t idx = (uint16_t)((ctx->ring_head + EGO_STATE_MAX_IMU_SAMPLES - ctx->ring_count + i) % EGO_STATE_MAX_IMU_SAMPLES);
-        if (ctx->imu_ring[idx].timestamp_ns >= cutoff_ns) {
-            samples[count++] = &ctx->imu_ring[idx];
-            if (ctx->imu_ring[idx].is_mock) {
-                is_mock = true;
-            }
-        }
-    }
-
-    if (count == 0) {
-        /* Fallback to latest up to 20 samples */
-        uint16_t take = ctx->ring_count < 20 ? ctx->ring_count : 20;
-        for (uint16_t i = 0; i < take; ++i) {
-            uint16_t idx = (uint16_t)((ctx->ring_head + EGO_STATE_MAX_IMU_SAMPLES - take + i) % EGO_STATE_MAX_IMU_SAMPLES);
+        if (ctx->imu_ring[idx].timestamp_ns >= cutoff_ns &&
+            ctx->imu_ring[idx].timestamp_ns <= now_monotonic_ns) {
             samples[count++] = &ctx->imu_ring[idx];
             if (ctx->imu_ring[idx].is_mock) {
                 is_mock = true;
@@ -203,6 +290,7 @@ static void compute_window_imu_features(
     if (count == 0) {
         return;
     }
+    out_features->latest_sample_ns = samples[count - 1]->timestamp_ns;
 
     /* Compute magnitudes, mean magnitude, and peak */
     float sum_mag = 0.0f;
@@ -217,6 +305,9 @@ static void compute_window_imu_features(
         float ay = samples[i]->ay_m_s2;
         float az = samples[i]->az_m_s2;
         float mag = sqrtf(ax * ax + ay * ay + az * az);
+        if (mag >= 25.0f) {
+            out_features->latest_shock_ns = samples[i]->timestamp_ns;
+        }
         mags[i] = mag;
         sum_mag += mag;
         if (mag > peak_mag) {
@@ -251,12 +342,12 @@ static void compute_window_imu_features(
     out_features->gyro_variance_dps2 = sum_sq_diff_g / (float)count;
 
     /* Compute sample rate */
-    out_features->sample_rate_hz = 20.0f;
+    out_features->sample_rate_hz = 0.0f;
     if (count >= 2) {
         int64_t dt_ns = samples[count - 1]->timestamp_ns - samples[0]->timestamp_ns;
-        if (dt_ns > 10000000LL) {
+        if (dt_ns > 0) {
             float dt_s = (float)dt_ns / 1000000000.0f;
-            out_features->sample_rate_hz = (float)count / dt_s;
+            out_features->sample_rate_hz = (float)(count - 1) / dt_s;
         }
     }
 }
@@ -274,12 +365,28 @@ static void add_reason_code(ego_state_estimation_t *state, const char *code)
     state->reason_code_count++;
 }
 
+static bool source_usable(ego_state_estimation_t *state, const char *source,
+                          bool valid, bool is_mock, int64_t timestamp_ns, int64_t now_ns)
+{
+    const char *problem = NULL;
+    if (timestamp_ns < 0) problem = "missing";
+    else if (!valid) problem = "invalid";
+    else if (timestamp_ns > now_ns) problem = "future";
+    else if (now_ns - timestamp_ns > EGO_STATE_SOURCE_MAX_AGE_NS) problem = "stale";
+    else if (is_mock) problem = "mock";
+    if (problem == NULL) return true;
+    char reason[EGO_STATE_REASON_CODE_MAX_LEN];
+    (void)snprintf(reason, sizeof(reason), "%s_%s", source, problem);
+    add_reason_code(state, reason);
+    return false;
+}
+
 static void compute_evidence_digest(
     const ego_evidence_chain_t *evidence,
     char *out_digest,
     size_t digest_size)
 {
-    /* Format deterministic canonical string */
+    /* Producer-specific feature summary; no cross-runtime canonical guarantee. */
     char raw_buf[1024];
     char speed_str[24];
     char hdop_str[24];
@@ -288,6 +395,7 @@ static void compute_evidence_digest(
     char soc_str[24];
     char volt_str[24];
     char chg_str[16];
+    char net_type_str[16];
 
     if (evidence->location_evidence.fix_valid) {
         (void)snprintf(speed_str, sizeof(speed_str), "%.2f", (double)evidence->location_evidence.ground_speed_m_s);
@@ -297,13 +405,19 @@ static void compute_evidence_digest(
         copy_string(hdop_str, sizeof(hdop_str), "null");
     }
 
-    if (evidence->network_evidence.lte_rsrp_dbm != 0.0f) {
+    if (evidence->network_evidence.valid) {
+        (void)snprintf(net_type_str, sizeof(net_type_str), "\"%s\"",
+                       ego_network_type_to_str(evidence->network_evidence.network_type));
+    } else {
+        copy_string(net_type_str, sizeof(net_type_str), "null");
+    }
+    if (evidence->network_evidence.valid && isfinite(evidence->network_evidence.lte_rsrp_dbm)) {
         (void)snprintf(rsrp_str, sizeof(rsrp_str), "%.1f", (double)evidence->network_evidence.lte_rsrp_dbm);
     } else {
         copy_string(rsrp_str, sizeof(rsrp_str), "null");
     }
 
-    if (evidence->network_evidence.wifi_ap_count > 0) {
+    if (evidence->network_evidence.valid && evidence->network_evidence.wifi_ap_count > 0) {
         (void)snprintf(wifi_str, sizeof(wifi_str), "%u", (unsigned int)evidence->network_evidence.wifi_ap_count);
     } else {
         copy_string(wifi_str, sizeof(wifi_str), "null");
@@ -312,7 +426,8 @@ static void compute_evidence_digest(
     if (evidence->power_evidence.valid) {
         (void)snprintf(soc_str, sizeof(soc_str), "%.1f", (double)evidence->power_evidence.battery_soc_percent);
         (void)snprintf(volt_str, sizeof(volt_str), "%ld", (long)evidence->power_evidence.battery_voltage_mv);
-        copy_string(chg_str, sizeof(chg_str), evidence->power_evidence.is_charging ? "true" : "false");
+        copy_string(chg_str, sizeof(chg_str), !evidence->power_evidence.charging_valid ? "null" :
+                    evidence->power_evidence.is_charging ? "true" : "false");
     } else {
         copy_string(soc_str, sizeof(soc_str), "null");
         copy_string(volt_str, sizeof(volt_str), "null");
@@ -324,7 +439,7 @@ static void compute_evidence_digest(
         "{\"boot_count\":%lu,\"device_id\":\"%s\","
         "\"imu\":{\"gyro_variance_dps2\":%.4f,\"motion_rms_m_s2\":%.4f,\"peak_accel_m_s2\":%.4f,\"sample_count\":%lu,\"sample_rate_hz\":%.1f},"
         "\"location\":{\"fix_valid\":%s,\"ground_speed_m_s\":%s,\"hdop\":%s},"
-        "\"network\":{\"lte_rsrp_dbm\":%s,\"network_type\":\"%s\",\"wifi_ap_count\":%s},"
+        "\"network\":{\"lte_rsrp_dbm\":%s,\"network_type\":%s,\"wifi_ap_count\":%s},"
         "\"power\":{\"battery_soc_percent\":%s,\"battery_voltage_mv\":%s,\"is_charging\":%s},"
         "\"timestamp_monotonic_ns\":%lld}",
         (unsigned long)evidence->boot_count,
@@ -338,7 +453,7 @@ static void compute_evidence_digest(
         speed_str,
         hdop_str,
         rsrp_str,
-        ego_network_type_to_str(evidence->network_evidence.network_type),
+        net_type_str,
         wifi_str,
         soc_str,
         volt_str,
@@ -367,7 +482,15 @@ esp_err_t ego_state_engine_evaluate(
     if (ctx == NULL || !ctx->initialized) {
         return ESP_ERR_INVALID_STATE;
     }
-
+    if (now_monotonic_ns < 0 || now_monotonic_ns < ctx->last_evaluation_ns ||
+        window_duration_ms < 100 || window_duration_ms > EGO_STATE_MAX_WINDOW_MS) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    ctx->last_evaluation_ns = now_monotonic_ns;
+    ctx->imu_future_rejected = ctx->last_imu_input_ns > now_monotonic_ns;
+    ctx->location.future_rejected = ctx->location.last_update_ns > now_monotonic_ns;
+    ctx->network.future_rejected = ctx->network.last_update_ns > now_monotonic_ns;
+    ctx->power.future_rejected = ctx->power.last_update_ns > now_monotonic_ns;
     ctx->estimation_sequence++;
 
     ego_imu_features_t imu_feat;
@@ -380,10 +503,34 @@ esp_err_t ego_state_engine_evaluate(
     state.boot_count = ctx->boot_count;
     state.timestamp_monotonic_ns = now_monotonic_ns;
     state.window_duration_ms = window_duration_ms;
-    state.is_mock = imu_feat.is_mock;
+    state.is_mock = imu_feat.is_mock || ctx->imu_invalid_is_mock ||
+        (ctx->imu_future_rejected && ctx->last_imu_is_mock) ||
+        ctx->location.is_mock || ctx->network.is_mock || ctx->power.is_mock;
+
+    const char *imu_problem = NULL;
+    if (ctx->imu_invalid) imu_problem = "imu_invalid";
+    else if (ctx->last_imu_input_ns > now_monotonic_ns) imu_problem = "imu_future";
+    else if (ctx->last_imu_input_ns < 0) imu_problem = "imu_missing";
+    else if (imu_feat.sample_count == 0 ||
+             now_monotonic_ns - imu_feat.latest_sample_ns > EGO_STATE_IMU_MAX_AGE_NS) imu_problem = "imu_stale";
+    else if (imu_feat.is_mock) imu_problem = "imu_mock";
+    else if (imu_feat.sample_count < 2) imu_problem = "imu_insufficient_samples";
+    bool imu_ok = imu_problem == NULL;
+    if (!imu_ok) {
+        add_reason_code(&state, imu_problem);
+        ctx->immobility_start_ns = -1;
+        ctx->last_shock_time_ns = -1;
+    }
+    bool location_ok = source_usable(&state, "gnss", ctx->location.valid,
+        ctx->location.is_mock, ctx->location.last_update_ns, now_monotonic_ns);
+    bool network_ok = source_usable(&state, "network", ctx->network.valid,
+        ctx->network.is_mock, ctx->network.last_update_ns, now_monotonic_ns);
+    bool power_ok = source_usable(&state, "power", ctx->power.valid,
+        ctx->power.is_mock, ctx->power.last_update_ns, now_monotonic_ns);
+    if (power_ok && !ctx->power.charging_valid) add_reason_code(&state, "power_charging_unknown");
 
     /* 1. Spatial Mobility Decision */
-    bool fix = ctx->location.fix_valid;
+    bool fix = location_ok && ctx->location.fix_valid;
     float speed = ctx->location.ground_speed_m_s;
     float rms = imu_feat.motion_rms_m_s2;
     float peak_accel = imu_feat.peak_accel_m_s2;
@@ -395,40 +542,47 @@ esp_err_t ego_state_engine_evaluate(
         state.spatial_mobility = EGO_SPATIAL_MOBILITY_IN_VEHICLE;
         (void)snprintf(reason_tmp, sizeof(reason_tmp), "gnss_speed_high_%.1fmps", (double)speed);
         add_reason_code(&state, reason_tmp);
-    } else if (fix && speed >= 1.8f && rms >= 1.2f) {
+    } else if (fix && imu_ok && speed >= 1.8f && rms >= 1.2f) {
         state.spatial_mobility = EGO_SPATIAL_MOBILITY_RUNNING;
         (void)snprintf(reason_tmp, sizeof(reason_tmp), "high_speed_and_motion_rms_%.2f", (double)rms);
         add_reason_code(&state, reason_tmp);
-    } else if (rms >= 0.3f) {
+    } else if (imu_ok && rms >= 0.3f) {
         state.spatial_mobility = EGO_SPATIAL_MOBILITY_PEDESTRIAN_WALKING;
         (void)snprintf(reason_tmp, sizeof(reason_tmp), "motion_rms_active_%.2f", (double)rms);
         add_reason_code(&state, reason_tmp);
-    } else if (!fix && (
+    } else if (imu_ok && location_ok && !fix && network_ok && (
         (ctx->network.wifi_ap_count >= 3) ||
         ((ctx->network.network_type == EGO_NETWORK_LTE || ctx->network.network_type == EGO_NETWORK_MULTI) &&
          ctx->network.lte_rsrp_dbm != 0.0f && ctx->network.lte_rsrp_dbm > -115.0f)
     )) {
         state.spatial_mobility = EGO_SPATIAL_MOBILITY_INDOOR_WEAK_GNSS;
-        add_reason_code(&state, "indoor_no_gnss_fix_with_rf_anchors");
-    } else {
+        add_reason_code(&state, "rf_no_fix_indoor_candidate");
+    } else if (imu_ok) {
         state.spatial_mobility = EGO_SPATIAL_MOBILITY_STATIONARY;
         (void)snprintf(reason_tmp, sizeof(reason_tmp), "motion_rms_quiet_%.2f", (double)rms);
         add_reason_code(&state, reason_tmp);
     }
 
     /* 2. Posture Anomaly Decision */
-    if (peak_accel >= 25.0f) {
-        ctx->last_shock_time_ns = now_monotonic_ns;
+    if (!imu_ok) {
+        state.posture_anomaly = EGO_POSTURE_ANOMALY_UNKNOWN;
+    } else if (peak_accel >= 25.0f) {
+        ctx->immobility_start_ns = -1;
+        /* Source time never advances merely because the same impact is replayed. */
+        if (imu_feat.latest_shock_ns > ctx->last_shock_time_ns)
+            ctx->last_shock_time_ns = imu_feat.latest_shock_ns;
         state.posture_anomaly = EGO_POSTURE_ANOMALY_ABNORMAL_SHOCK;
         (void)snprintf(reason_tmp, sizeof(reason_tmp), "impact_shock_%.1fmps2", (double)peak_accel);
         add_reason_code(&state, reason_tmp);
-    } else if (ctx->last_shock_time_ns > 0 &&
+    } else if (ctx->last_shock_time_ns >= 0 &&
                (now_monotonic_ns - ctx->last_shock_time_ns) < 10000000000LL &&
+               imu_feat.latest_sample_ns > ctx->last_shock_time_ns &&
                rms < 0.15f) {
+        ctx->immobility_start_ns = -1;
         state.posture_anomaly = EGO_POSTURE_ANOMALY_SUSPECTED_FALL;
         add_reason_code(&state, "shock_followed_by_stillness");
     } else if (rms < 0.05f) {
-        if (ctx->immobility_start_ns == 0) {
+        if (ctx->immobility_start_ns < 0) {
             ctx->immobility_start_ns = now_monotonic_ns;
             state.posture_anomaly = EGO_POSTURE_ANOMALY_NORMAL;
         } else if ((now_monotonic_ns - ctx->immobility_start_ns) > 300000000000LL) {
@@ -438,39 +592,34 @@ esp_err_t ego_state_engine_evaluate(
             state.posture_anomaly = EGO_POSTURE_ANOMALY_NORMAL;
         }
     } else {
-        ctx->immobility_start_ns = 0;
+        ctx->immobility_start_ns = -1;
         state.posture_anomaly = EGO_POSTURE_ANOMALY_NORMAL;
     }
 
     /* 3. Device Wear State Decision */
-    if (ctx->power.valid && ctx->power.is_charging) {
+    if (power_ok && ctx->power.charging_valid && ctx->power.is_charging) {
         state.device_wear_state = EGO_DEVICE_WEAR_CHARGING_DOCKED;
         add_reason_code(&state, "charging_cable_or_dock_attached");
-    } else if (rms < 0.05f && gyro_var < 0.02f) {
+    } else if (imu_ok && rms < 0.05f && gyro_var < 0.02f) {
         state.device_wear_state = EGO_DEVICE_WEAR_TABLETOP_RESTING;
         add_reason_code(&state, "pure_rest_tabletop");
-    } else if (state.spatial_mobility == EGO_SPATIAL_MOBILITY_STATIONARY && gyro_var > 0.05f && rms < 0.3f) {
+    } else if (imu_ok && state.spatial_mobility == EGO_SPATIAL_MOBILITY_STATIONARY && gyro_var > 0.05f && rms < 0.3f) {
         state.device_wear_state = EGO_DEVICE_WEAR_HANDHELD;
         add_reason_code(&state, "subtle_hand_movement");
-    } else {
+    } else if (imu_ok) {
         state.device_wear_state = EGO_DEVICE_WEAR_WEARABLE_OR_BAG;
         add_reason_code(&state, "dynamic_body_attachment");
     }
 
     /* 4. Confidence Score */
-    float confidence = 0.80f;
-    if (imu_feat.sample_count >= 20) {
-        confidence += 0.10f;
-    }
-    if (fix) {
-        confidence += 0.05f;
-    }
-    if (ctx->power.valid) {
-        confidence += 0.03f;
-    }
-    if (confidence > 0.99f) {
-        confidence = 0.99f;
-    }
+    /* Heuristic completeness score; not a calibrated correctness probability. */
+    bool complete = imu_ok && fix && network_ok && power_ok && ctx->power.charging_valid;
+    float confidence = 0.0f;
+    if (complete) confidence = imu_feat.sample_count >= 20 ? 0.98f : 0.88f;
+    else if (state.spatial_mobility != EGO_SPATIAL_MOBILITY_UNKNOWN ||
+             state.posture_anomaly != EGO_POSTURE_ANOMALY_UNKNOWN ||
+             state.device_wear_state != EGO_DEVICE_WEAR_UNKNOWN) confidence = 0.50f;
+    if (!complete) add_reason_code(&state, "partial_evidence_low_confidence");
     state.confidence = confidence;
 
     /* 5. Assemble Evidence Chain */
@@ -482,9 +631,14 @@ esp_err_t ego_state_engine_evaluate(
     evidence.timestamp_monotonic_ns = now_monotonic_ns;
     evidence.window_duration_ms = window_duration_ms;
     evidence.imu_evidence = imu_feat;
+    evidence.imu_evidence.valid = imu_ok;
     evidence.location_evidence = ctx->location;
     evidence.network_evidence = ctx->network;
     evidence.power_evidence = ctx->power;
+    evidence.location_evidence.valid = location_ok;
+    evidence.location_evidence.fix_valid = fix;
+    evidence.network_evidence.valid = network_ok;
+    evidence.power_evidence.valid = power_ok;
     evidence.provenance = ctx->provenance;
 
     compute_evidence_digest(&evidence, evidence.evidence_digest, sizeof(evidence.evidence_digest));

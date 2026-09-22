@@ -50,6 +50,106 @@ class TestEgoStateEstimator(unittest.TestCase):
         self.evidence_validator = Draft202012Validator(self.evidence_schema)
         self.report_validator = Draft202012Validator(self.report_schema, registry=reg)
 
+    def test_shared_truth_cases(self) -> None:
+        cases = json.loads((Path(__file__).parent / "fixtures/ego_state_truth_cases.json").read_text(encoding="utf-8"))["cases"]
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                estimator = EgoStateEstimator(boot_count=9)
+                for step in case["steps"]:
+                    op = step["op"]
+                    mock = step.get("mock", False)
+                    accepted = step.get("accepted", True)
+                    if op == "imu":
+                        for i in range(step["count"]):
+                            axes = step.get("axes_cycle", [step.get("axes", [0, 0, 1000, 0, 0, 0])])
+                            vals = [float(v) for v in axes[i % len(axes)]]
+                            self.assertEqual(estimator.feed_imu_sample(*vals,
+                                timestamp_ns=step["start"] + i * step.get("step", 50_000_000), is_mock=mock), accepted)
+                    elif op == "location":
+                        self.assertEqual(estimator.feed_location(fix_valid=step.get("fix", True),
+                            ground_speed_m_s=None if step.get("speed", 0) is None else float(step.get("speed", 0)), latitude_deg=0, longitude_deg=0,
+                            hdop=1, satellites_in_use=10, course_over_ground_deg=0,
+                            timestamp_ns=step["timestamp"], is_mock=mock), accepted)
+                    elif op == "network":
+                        self.assertEqual(estimator.feed_network(network_type=step.get("network_type", "lte"),
+                            lte_rsrp_dbm=None if step.get("rsrp", -80) is None else float(step.get("rsrp", -80)),
+                            wifi_ap_count=step.get("wifi_ap_count", 0),
+                            timestamp_ns=step["timestamp"], is_mock=mock), accepted)
+                    elif op == "power":
+                        self.assertEqual(estimator.feed_power(battery_soc_percent=step.get("soc", 80),
+                            battery_voltage_mv=4100, is_charging=step.get("charging", False),
+                            timestamp_ns=step["timestamp"], is_mock=mock), accepted)
+                    else:
+                        state, evidence = estimator.evaluate_state(step["now"], window_duration_ms=step.get("window", 1000))
+                        self.assertEqual([state[k] for k in ("spatial_mobility", "posture_anomaly", "device_wear_state")], step["states"])
+                        self.assertAlmostEqual(state["confidence"], step["confidence"], places=5)
+                        self.assertEqual(state["is_mock"], mock)
+                        self.assertTrue(set(step.get("reasons", [])) <= set(state["reason_codes"]))
+                        self.estimation_validator.validate(state)
+                        self.evidence_validator.validate(evidence)
+                        json.dumps(evidence, allow_nan=False)
+                        for section, expected in step.get("evidence_fields", {}).items():
+                            for key, value in expected.items():
+                                self.assertEqual(evidence[section][key], value)
+
+    def test_arbitrary_size_integers_invalidate_sources_without_overflow(self) -> None:
+        for value in (10**400, -(10**400)):
+            with self.subTest(value_sign=value > 0):
+                estimator = EgoStateEstimator()
+                estimator.feed_imu_sample(0, 0, 1000, 0, 0, 0, 0)
+                estimator.feed_imu_sample(0, 0, 1000, 0, 0, 0, 1)
+                estimator.feed_location(fix_valid=True, ground_speed_m_s=12, timestamp_ns=0)
+                estimator.feed_network(network_type="lte", lte_rsrp_dbm=-80, timestamp_ns=0)
+                estimator.feed_power(battery_soc_percent=80, battery_voltage_mv=4100,
+                                     is_charging=True, timestamp_ns=0)
+                self.assertFalse(estimator.feed_imu_sample(value, 0, 1000, 0, 0, 0, 2))
+                self.assertFalse(estimator.feed_location(fix_valid=True, ground_speed_m_s=value, timestamp_ns=2))
+                self.assertFalse(estimator.feed_network(network_type="lte", lte_rsrp_dbm=value, timestamp_ns=2))
+                self.assertFalse(estimator.feed_power(battery_soc_percent=value, battery_voltage_mv=4100,
+                                                     is_charging=True, timestamp_ns=2))
+                state, evidence = estimator.evaluate_state(2)
+                self.assertEqual([state[k] for k in ("spatial_mobility", "posture_anomaly", "device_wear_state")],
+                                 ["unknown", "unknown", "unknown"])
+                self.assertTrue({"imu_invalid", "gnss_invalid", "network_invalid", "power_invalid"}
+                                <= set(state["reason_codes"]))
+                self.evidence_validator.validate(evidence)
+                json.dumps(evidence, allow_nan=False)
+
+    def test_stale_shock_does_not_restart_fall_timer(self) -> None:
+        estimator = EgoStateEstimator()
+        estimator.feed_imu_sample(0, 0, 1000, 0, 0, 0, 0)
+        estimator.feed_imu_sample(3000, 0, 1000, 0, 0, 0, 50_000_000)
+        state, _ = estimator.evaluate_state(50_000_000, window_duration_ms=10000)
+        self.assertEqual(state["posture_anomaly"], "abnormal_shock")
+        for t in range(100_000_000, 10_100_000_000, 50_000_000):
+            estimator.feed_imu_sample(0, 0, 1000, 0, 0, 0, t)
+            if t == 9_000_000_000:
+                estimator.evaluate_state(t, window_duration_ms=10000)
+        state, _ = estimator.evaluate_state(10_100_000_000, window_duration_ms=1000)
+        self.assertEqual(state["posture_anomaly"], "normal")
+        self.assertEqual(estimator._last_shock_time_ns, 50_000_000)
+
+    def test_observation_gap_resets_immobility_and_clock_regression_is_rejected(self) -> None:
+        estimator = EgoStateEstimator()
+        for t in (0, 50_000_000):
+            estimator.feed_imu_sample(0, 0, 1000, 0, 0, 0, t)
+        estimator.evaluate_state(100_000_000)
+        for t in (302_000_000_000, 302_050_000_000):
+            estimator.feed_imu_sample(0, 0, 1000, 0, 0, 0, t)
+        state, _ = estimator.evaluate_state(302_100_000_000)
+        self.assertEqual(state["posture_anomaly"], "normal")
+        with self.assertRaises(ValueError):
+            estimator.evaluate_state(301_000_000_000)
+        for invalid in (-1, float("nan"), True):
+            with self.assertRaises(ValueError):
+                estimator.evaluate_state(invalid)
+
+    def test_report_does_not_claim_unimplemented_encryption(self) -> None:
+        report = EgoStateEstimator().generate_report(now_monotonic_ns=0)
+        self.assertFalse(report["privacy_boundary"]["encrypted_at_rest"])
+        self.assertIn("not implemented", " ".join(report["notes"]))
+        self.report_validator.validate(report)
+
     def test_stationary_bench_state_and_schema_validation(self) -> None:
         estimator = EgoStateEstimator(boot_count=171, session_id="test-session-171")
 
@@ -75,9 +175,10 @@ class TestEgoStateEstimator(unittest.TestCase):
             hdop=1.1,
             satellites_in_use=16,
             course_over_ground_deg=0.0,
+            timestamp_ns=2_000_000_000,
         )
-        estimator.feed_power(battery_soc_percent=99.0, battery_voltage_mv=4250, is_charging=False)
-        estimator.feed_network(network_type="lte", lte_rsrp_dbm=-85.0, lte_cell_id="460-00-1111")
+        estimator.feed_power(battery_soc_percent=99.0, battery_voltage_mv=4250, is_charging=False, timestamp_ns=2_000_000_000)
+        estimator.feed_network(network_type="lte", lte_rsrp_dbm=-85.0, lte_cell_id="460-00-1111", timestamp_ns=2_000_000_000)
 
         report = estimator.generate_report(
             report_type="periodic_aggregate",
@@ -125,6 +226,7 @@ class TestEgoStateEstimator(unittest.TestCase):
             latitude_deg=22.5432,
             longitude_deg=114.0580,
             hdop=1.4,
+            timestamp_ns=3_500_000_000,
         )
 
         state, evidence = estimator.evaluate_state(now_monotonic_ns=base_time + 30 * 50_000_000)
@@ -150,12 +252,12 @@ class TestEgoStateEstimator(unittest.TestCase):
                 timestamp_ns=base_time + i * 50_000_000,
             )
 
-        estimator.feed_location(fix_valid=True, ground_speed_m_s=2.8)
+        estimator.feed_location(fix_valid=True, ground_speed_m_s=2.8, timestamp_ns=4_250_000_000)
         state, _ = estimator.evaluate_state(now_monotonic_ns=base_time + 25 * 50_000_000)
         self.assertEqual(state["spatial_mobility"], "running")
 
         # In vehicle: speed >= 4.0 m/s
-        estimator.feed_location(fix_valid=True, ground_speed_m_s=12.5)
+        estimator.feed_location(fix_valid=True, ground_speed_m_s=12.5, timestamp_ns=4_300_000_000)
         state_veh, _ = estimator.evaluate_state(now_monotonic_ns=base_time + 26 * 50_000_000)
         self.assertEqual(state_veh["spatial_mobility"], "in_vehicle")
 
@@ -192,7 +294,7 @@ class TestEgoStateEstimator(unittest.TestCase):
 
     def test_charging_docked_state(self) -> None:
         estimator = EgoStateEstimator(boot_count=171)
-        estimator.feed_power(battery_soc_percent=80.0, battery_voltage_mv=4100, is_charging=True)
+        estimator.feed_power(battery_soc_percent=80.0, battery_voltage_mv=4100, is_charging=True, timestamp_ns=1000)
         estimator.feed_imu_sample(0, 0, 1000, 0, 0, 0, timestamp_ns=1000)
 
         state, _ = estimator.evaluate_state(now_monotonic_ns=2000)
@@ -221,8 +323,8 @@ class TestEgoStateEstimator(unittest.TestCase):
         for i in range(20):
             estimator.feed_imu_sample(0, 0, 1000, 0, 0, 0, timestamp_ns=i * 50_000_000)
 
-        estimator.feed_location(fix_valid=False)
-        estimator.feed_network(network_type="wifi", wifi_ap_count=5)
+        estimator.feed_location(fix_valid=False, timestamp_ns=1_000_000_000)
+        estimator.feed_network(network_type="wifi", wifi_ap_count=5, timestamp_ns=1_000_000_000)
 
         state, _ = estimator.evaluate_state(now_monotonic_ns=20 * 50_000_000)
         self.assertEqual(state["spatial_mobility"], "indoor_weak_gnss")
@@ -239,8 +341,8 @@ class TestEgoStateEstimator(unittest.TestCase):
 
         # 301 seconds later of continuous stillness
         t2 = t1 + 301_000_000_000
-        for i in range(20):
-            estimator.feed_imu_sample(0, 0, 1000, 0, 0, 0, timestamp_ns=t2 - (20 - i) * 50_000_000)
+        for t in range(t1, t2, 50_000_000):
+            estimator.feed_imu_sample(0, 0, 1000, 0, 0, 0, timestamp_ns=t)
         state2, _ = estimator.evaluate_state(now_monotonic_ns=t2)
         self.assertEqual(state2["posture_anomaly"], "prolonged_immobility")
 

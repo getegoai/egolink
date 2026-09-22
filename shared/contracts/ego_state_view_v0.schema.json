@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ego.local/contracts/ego_state_view_v0.schema.json",
+  "title": "EgoLink ego-state API view v0.1",
+  "description": "Versioned read-only view returned inside existing ego_state/timeline response wrappers and collection summary.latest_ego_state. Replaces the old flat object that incorrectly claimed estimation.v0.1. Consumers must use state for canonical decisions; evidence_summary is unverified source telemetry, not the full evidence-chain contract. confidence is a deterministic rule score, never measured accuracy. Legacy DEVICE frames with none of the six state identity/time members inherit estimation_id from observation_id and other identity/source-time fields from the observed collection envelope, visibly marked legacy_derived_from_collection_envelope. Partially supplied or mismatched identity, invalid enums/values and ready=false states are not valid projections. Raw collection persistence and ACK are unchanged; collection preview.ego_state_projection exposes absent/unavailable/invalid/valid diagnostics. Existing stored rows are revalidated on reads, skipped before applying the valid-result limit, and never rewritten. Source timestamps are never replaced with receipt time. Storage flags describe the current Message Hub implementation, not a Local-First or retention promise.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "state",
+    "evidence_summary",
+    "provenance",
+    "receipt",
+    "storage"
+  ],
+  "properties": {
+    "contract_version": {
+      "const": "egolink.ego_state_view.v0.1"
+    },
+    "state": {
+      "$ref": "ego_state_estimation_v0.schema.json"
+    },
+    "evidence_summary": {
+      "type": "object",
+      "description": "Optional raw DEVICE evidence summary, outside the canonical estimation contract. Its digest is reported, not independently verified or authenticated by this view."
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity_source",
+        "digest_verification",
+        "observation_id",
+        "record_id",
+        "sequence_id",
+        "monotonic_clock_domain_id",
+        "fw_version",
+        "config_id",
+        "session_id",
+        "timestamp_source",
+        "timestamp_quality"
+      ],
+      "properties": {
+        "digest_verification": {
+          "const": "not_performed",
+          "description": "The device reports this digest. The API has not recomputed or authenticated the complete evidence chain and has not verified a signature."
+        },
+        "identity_source": {
+          "enum": [
+            "device",
+            "legacy_derived_from_collection_envelope"
+          ]
+        },
+        "observation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "record_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sequence_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "monotonic_clock_domain_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "fw_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "config_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "session_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timestamp_source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timestamp_quality": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "server_received_at",
+        "persisted_at"
+      ],
+      "properties": {
+        "server_received_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "persisted_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "encrypted_at_rest",
+        "automatic_expiry",
+        "user_private_endpoint_verified"
+      ],
+      "properties": {
+        "backend": {
+          "const": "message_hub_sqlite"
+        },
+        "encrypted_at_rest": {
+          "const": false
+        },
+        "automatic_expiry": {
+          "const": false
+        },
+        "user_private_endpoint_verified": {
+          "const": false
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,187 @@
+{
+  "description": "Shared C/Python rule-truth fixtures. Freshness bounds are engineering parameters, not product accuracy claims.",
+  "cases": [
+    {"name": "offline_requires_no_lte_signal", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "location", "timestamp": 2000000000},
+      {"op": "power", "timestamp": 2000000000},
+      {"op": "network", "timestamp": 2000000000, "network_type": "offline", "rsrp": null},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.98, "c_evidence_flags": {"network_evidence.valid": true}, "evidence_fields": {"network_evidence": {"network_type": "offline", "lte_rsrp_dbm": null}}}
+    ]},
+    {"name": "wifi_without_lte_signal_can_be_candidate", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "location", "timestamp": 2000000000, "fix": false, "speed": null},
+      {"op": "network", "timestamp": 2000000000, "network_type": "wifi", "rsrp": null, "wifi_ap_count": 3},
+      {"op": "evaluate", "now": 2000000000, "states": ["indoor_weak_gnss", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["rf_no_fix_indoor_candidate"], "c_evidence_flags": {"network_evidence.valid": true}, "evidence_fields": {"network_evidence": {"network_type": "wifi", "lte_rsrp_dbm": null}}}
+    ]},
+    {"name": "lte_missing_or_zero_signal_invalidates_and_recovers", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "location", "timestamp": 2000000000, "fix": false, "speed": null},
+      {"op": "network", "timestamp": 2000000000, "network_type": "lte", "rsrp": null, "accepted": false},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["network_invalid"], "c_evidence_flags": {"network_evidence.valid": false}},
+      {"op": "network", "timestamp": 2000000001, "network_type": "lte", "rsrp": 0, "accepted": false},
+      {"op": "evaluate", "now": 2000000001, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["network_invalid"], "c_evidence_flags": {"network_evidence.valid": false}},
+      {"op": "network", "timestamp": 2000000002, "network_type": "lte", "rsrp": -80},
+      {"op": "evaluate", "now": 2000000002, "states": ["indoor_weak_gnss", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["rf_no_fix_indoor_candidate"], "c_evidence_flags": {"network_evidence.valid": true}}
+    ]},
+    {"name": "multi_missing_or_zero_signal_invalidates_and_recovers", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "location", "timestamp": 2000000000, "fix": false, "speed": null},
+      {"op": "network", "timestamp": 2000000000, "network_type": "multi", "rsrp": null, "accepted": false},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["network_invalid"], "c_evidence_flags": {"network_evidence.valid": false}},
+      {"op": "network", "timestamp": 2000000001, "network_type": "multi", "rsrp": 0, "accepted": false},
+      {"op": "evaluate", "now": 2000000001, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["network_invalid"], "c_evidence_flags": {"network_evidence.valid": false}},
+      {"op": "network", "timestamp": 2000000002, "network_type": "multi", "rsrp": -80},
+      {"op": "evaluate", "now": 2000000002, "states": ["indoor_weak_gnss", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["rf_no_fix_indoor_candidate"], "c_evidence_flags": {"network_evidence.valid": true}}
+    ]},
+    {"name": "no_sources", "steps": [
+      {"op": "evaluate", "now": 1000000000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "reasons": ["imu_missing", "gnss_missing", "network_missing", "power_missing"]}
+    ]},
+    {"name": "one_sample_is_insufficient", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 1},
+      {"op": "evaluate", "now": 1050000000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "reasons": ["imu_insufficient_samples"]}
+    ]},
+    {"name": "imu_only_partial", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["partial_evidence_low_confidence"]}
+    ]},
+    {"name": "stale_imu_does_not_fall_back", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "evaluate", "now": 4000000000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "reasons": ["imu_stale"]}
+    ]},
+    {"name": "future_imu_not_current", "steps": [
+      {"op": "imu", "start": 2000000000, "count": 2},
+      {"op": "evaluate", "now": 1000000000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "reasons": ["imu_future"]}
+    ]},
+    {"name": "mixed_mock_imu_not_real", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 2},
+      {"op": "imu", "start": 1100000000, "count": 1, "mock": true},
+      {"op": "evaluate", "now": 1150000000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "mock": true, "reasons": ["imu_mock"]}
+    ]},
+    {"name": "out_of_order_mock_cannot_replace_live", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "imu", "start": 500000000, "count": 1, "mock": true, "accepted": false},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "mock": false, "reasons": ["partial_evidence_low_confidence"]}
+    ]},
+    {"name": "invalid_imu_clears_prior_normal_and_recovers", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "imu", "start": 2000000000, "count": 1, "axes": ["NaN", 0, 1000, 0, 0, 0], "accepted": false},
+      {"op": "evaluate", "now": 2000000000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "reasons": ["imu_invalid"]},
+      {"op": "imu", "start": 2050000000, "count": 2},
+      {"op": "evaluate", "now": 2150000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5}
+    ]},
+    {"name": "fresh_motion_all_sources", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 20, "axes_cycle": [[0, 0, 600, 0, 0, 0], [0, 0, 1400, 0, 0, 0]]},
+      {"op": "location", "timestamp": 2000000000, "speed": 2.8},
+      {"op": "network", "timestamp": 2000000000},
+      {"op": "power", "timestamp": 2000000000},
+      {"op": "evaluate", "now": 2000000000, "states": ["running", "normal", "wearable_or_bag"], "confidence": 0.98}
+    ]},
+    {"name": "stale_gnss_does_not_keep_vehicle", "steps": [
+      {"op": "location", "timestamp": 1000000000, "speed": 12},
+      {"op": "imu", "start": 31000000000, "count": 20},
+      {"op": "evaluate", "now": 32000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["gnss_stale"]}
+    ]},
+    {"name": "future_gnss_does_not_create_vehicle", "steps": [
+      {"op": "location", "timestamp": 3000000000, "speed": 12},
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["gnss_future"]}
+    ]},
+    {"name": "no_fix_speed_is_not_vehicle", "steps": [
+      {"op": "location", "timestamp": 2000000000, "speed": 12, "fix": false},
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5}
+    ]},
+    {"name": "no_fix_missing_speed_is_valid_observation", "steps": [
+      {"op": "location", "timestamp": 2000000000, "speed": null, "fix": false},
+      {"op": "network", "timestamp": 2000000000},
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "evaluate", "now": 2000000000, "states": ["indoor_weak_gnss", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["rf_no_fix_indoor_candidate"], "c_evidence_flags": {"location_evidence.valid": true, "location_evidence.fix_valid": false}, "evidence_fields": {"location_evidence": {"fix_valid": false, "ground_speed_m_s": null}}}
+    ]},
+    {"name": "rf_no_fix_is_only_indoor_candidate", "steps": [
+      {"op": "location", "timestamp": 2000000000, "fix": false},
+      {"op": "network", "timestamp": 2000000000},
+      {"op": "power", "timestamp": 2000000000},
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "evaluate", "now": 2000000000, "states": ["indoor_weak_gnss", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["rf_no_fix_indoor_candidate"]}
+    ]},
+    {"name": "mock_gnss_not_used_for_vehicle", "steps": [
+      {"op": "location", "timestamp": 2000000000, "speed": 12, "mock": true},
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "mock": true, "reasons": ["gnss_mock"]}
+    ]},
+    {"name": "invalid_power_does_not_erase_imu", "steps": [
+      {"op": "power", "timestamp": 2000000000, "soc": -1, "accepted": false},
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["power_invalid"]}
+    ]},
+    {"name": "unknown_charging_is_not_docked", "steps": [
+      {"op": "power", "timestamp": 2000000000, "charging": null},
+      {"op": "evaluate", "now": 2000000000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "mock": false}
+    ]},
+    {"name": "fresh_power_only_reports_charging", "steps": [
+      {"op": "power", "timestamp": 2000000000, "charging": true},
+      {"op": "evaluate", "now": 2000000000, "states": ["unknown", "unknown", "charging_docked"], "confidence": 0.5}
+    ]},
+    {"name": "future_sources_recover_without_waiting_for_bad_clock", "steps": [
+      {"op": "imu", "start": 1000000000000, "count": 2, "mock": true},
+      {"op": "location", "timestamp": 1000000000000, "speed": 12},
+      {"op": "evaluate", "now": 1000000000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "mock": true, "reasons": ["imu_future", "gnss_future"]},
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "location", "timestamp": 2000000000, "speed": 0},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "mock": false}
+    ]},
+    {"name": "duplicate_between_evaluations_does_not_taint_real_data", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 2},
+      {"op": "evaluate", "now": 1050000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5},
+      {"op": "imu", "start": 1100000000, "count": 1},
+      {"op": "imu", "start": 1100000000, "count": 1, "mock": true, "accepted": false},
+      {"op": "evaluate", "now": 1150000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "mock": false}
+    ]},
+    {"name": "numeric_overflow_is_invalid", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 1, "axes": [1e+30, 0, 1000, 0, 0, 0], "accepted": false},
+      {"op": "evaluate", "now": 1000000000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "reasons": ["imu_invalid"]}
+    ]},
+    {"name": "out_of_order_mock_auxiliary_sources_are_ignored", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "location", "timestamp": 2000000000, "speed": 0},
+      {"op": "network", "timestamp": 2000000000},
+      {"op": "power", "timestamp": 2000000000},
+      {"op": "location", "timestamp": 1000000000, "speed": 12, "mock": true, "accepted": false},
+      {"op": "network", "timestamp": 1000000000, "mock": true, "accepted": false},
+      {"op": "power", "timestamp": 1000000000, "charging": true, "mock": true, "accepted": false},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.98, "mock": false}
+    ]},
+    {"name": "mock_power_does_not_claim_charging", "steps": [
+      {"op": "power", "timestamp": 2000000000, "charging": true, "mock": true},
+      {"op": "evaluate", "now": 2000000000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "mock": true, "reasons": ["power_mock"]}
+    ]},
+    {"name": "stale_power_does_not_claim_charging", "steps": [
+      {"op": "power", "timestamp": 1000000000, "charging": true},
+      {"op": "evaluate", "now": 32000000000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "reasons": ["power_stale"]}
+    ]},
+    {"name": "gnss_age_boundary", "steps": [
+      {"op": "location", "timestamp": 1, "speed": 12},
+      {"op": "evaluate", "now": 30000000001, "states": ["in_vehicle", "unknown", "unknown"], "confidence": 0.5},
+      {"op": "evaluate", "now": 30000000002, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "reasons": ["gnss_stale"]}
+    ]},
+    {"name": "auxiliary_age_boundary_invalidates_evidence", "steps": [
+      {"op": "location", "timestamp": 1, "speed": 12},
+      {"op": "network", "timestamp": 1},
+      {"op": "power", "timestamp": 1, "charging": true},
+      {"op": "evaluate", "now": 30000000001, "states": ["in_vehicle", "unknown", "charging_docked"], "confidence": 0.5, "c_evidence_flags": {"location_evidence.valid": true, "location_evidence.fix_valid": true, "network_evidence.valid": true, "power_evidence.valid": true}, "evidence_fields": {"location_evidence": {"ground_speed_m_s": 12}, "network_evidence": {"lte_rsrp_dbm": -80}, "power_evidence": {"battery_soc_percent": 80, "is_charging": true}}},
+      {"op": "evaluate", "now": 30000000002, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "reasons": ["gnss_stale", "network_stale", "power_stale"], "c_evidence_flags": {"location_evidence.valid": false, "location_evidence.fix_valid": false, "network_evidence.valid": false, "power_evidence.valid": false}, "evidence_fields": {"location_evidence": {"ground_speed_m_s": null}, "network_evidence": {"lte_rsrp_dbm": null}, "power_evidence": {"battery_soc_percent": null, "is_charging": null}}}
+    ]},
+    {"name": "imu_age_boundary", "steps": [
+      {"op": "imu", "start": 1000000000, "count": 2},
+      {"op": "evaluate", "now": 2050000000, "window": 10000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5},
+      {"op": "evaluate", "now": 2050000001, "window": 10000, "states": ["unknown", "unknown", "unknown"], "confidence": 0, "reasons": ["imu_stale"]}
+    ]},
+    {"name": "invalid_gnss_and_network_are_not_anchors", "steps": [
+      {"op": "location", "timestamp": 2000000000, "speed": "NaN", "accepted": false},
+      {"op": "network", "timestamp": 2000000000, "rsrp": 1, "accepted": false},
+      {"op": "imu", "start": 1000000000, "count": 20},
+      {"op": "evaluate", "now": 2000000000, "states": ["stationary", "normal", "tabletop_resting"], "confidence": 0.5, "reasons": ["gnss_invalid", "network_invalid"]}
+    ]}
+  ]
+}

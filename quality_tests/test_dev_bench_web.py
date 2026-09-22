@@ -85,7 +85,7 @@ class DevBenchWebRoutesTests(unittest.TestCase):
         self.assertIn(".devbench-header", text)
 
     def test_dev_bench_scripts_served(self) -> None:
-        for script in ["main.js", "api.js", "state.js", "charts.js", "map.js", "imu3d.js"]:
+        for script in ["main.js", "api.js", "state.js", "charts.js", "map.js", "imu3d.js", "ego_state.js"]:
             with self.subTest(script=script):
                 status, headers, body = self._get(f"/dev/static/scripts/{script}")
                 self.assertEqual(status, 200)
@@ -218,5 +218,4 @@ class DevBenchWebRoutesTests(unittest.TestCase):
         self.assertEqual(data_since["count"], 1)
         self.assertEqual(data_since["records"][0]["row_id"], rec_id_2)
         self.assertEqual(data_since["latest_id"], rec_id_2)
-
 

@@ -3,6 +3,7 @@
  * The spool mutex is never held during HTTP. No Location acceptance prerequisite. */
 #include <inttypes.h>
 #include <limits.h>
+#include <math.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1782,14 +1783,16 @@ static void modem_task(void *unused)
             }
             if(atomic_load(&s_ego_state_ready)&&xSemaphoreTake(s_ego_state_mutex,pdMS_TO_TICKS(10))==pdTRUE) {
                 ego_network_type_t net_type = l.registered ? EGO_NETWORK_LTE : EGO_NETWORK_OFFLINE;
-                float rsrp = l.rsrp_valid ? (float)l.rsrp : -120.0f;
+                float rsrp = l.rsrp_valid ? (float)l.rsrp : NAN;
                 ego_state_engine_feed_network(
                     &s_ego_state_engine,
                     net_type,
                     rsrp,
                     l.cell_id,
                     0,
-                    "");
+                    "",
+                    now * 1000LL,
+                    false);
                 xSemaphoreGive(s_ego_state_mutex);
             }
 #if CONFIG_EGOLINK_COLLECTION_LTE_PPP_ENABLED
@@ -1849,13 +1852,14 @@ static void modem_task(void *unused)
                 ego_state_engine_feed_location(
                     &s_ego_state_engine,
                     g.fix && g.lat_valid && g.lon_valid,
-                    g.speed_valid ? (float)g.speed_mps : 0.0f,
+                    g.speed_valid ? (float)g.speed_mps : NAN,
                     g.lat_valid ? g.lat : 0.0,
                     g.lon_valid ? g.lon : 0.0,
                     g.hdop_valid ? (float)g.hdop : 99.0f,
                     g.satellites_valid ? (uint16_t)g.satellites : 0,
                     g.course_valid ? (float)g.course_deg : 0.0f,
-                    now * 1000LL);
+                    now * 1000LL,
+                    false);
                 xSemaphoreGive(s_ego_state_mutex);
             }
         }
@@ -2163,7 +2167,10 @@ static void health(void)
             &s_ego_state_engine,
             power.battery_is_mock ? -1.0f : (float)power.battery_percent,
             (power.battery_voltage_valid && !power.battery_is_mock) ? power.battery_millivolt : -1,
-            !power.charging_is_mock && power.charging);
+            power.charging,
+            !power.charging_is_mock,
+            now_us() * 1000LL,
+            power.battery_is_mock);
         ego_eval_ok = (ego_state_engine_evaluate(
             &s_ego_state_engine,
             now_us() * 1000LL,
@@ -2172,9 +2179,20 @@ static void health(void)
             &s_health_ego_ev) == ESP_OK);
         xSemaphoreGive(s_ego_state_mutex);
     }
-    cJSON *es = cJSON_AddObjectToObject(p, "ego_state");
+    /* Keep the canonical estimate in its own bounded DEVICE record. Camera
+     * health plus state no longer fits the 4000-byte persistent frame budget.
+     * Emit it first so the later DEVICE record remains the full health view. */
+    cJSON *ego_payload = cJSON_CreateObject();
+    cJSON *es = cJSON_AddObjectToObject(ego_payload, "ego_state");
     cJSON_AddBoolToObject(es, "ready", ego_eval_ok);
     if(ego_eval_ok) {
+        cJSON_AddStringToObject(es, "contract_version", EGO_STATE_ESTIMATION_CONTRACT_VERSION);
+        cJSON_AddStringToObject(es, "estimation_id", s_health_ego_est.estimation_id);
+        cJSON_AddStringToObject(es, "device_id", s_health_ego_est.device_id);
+        cJSON_AddNumberToObject(es, "boot_count", s_health_ego_est.boot_count);
+        cJSON_AddNumberToObject(es, "timestamp_monotonic_ns", (double)s_health_ego_est.timestamp_monotonic_ns);
+        /* Do not borrow the later DEVICE envelope's UTC for an earlier evaluation. */
+        cJSON_AddNullToObject(es, "timestamp_utc");
         cJSON_AddStringToObject(es, "spatial_mobility", ego_spatial_mobility_to_str(s_health_ego_est.spatial_mobility));
         cJSON_AddStringToObject(es, "posture_anomaly", ego_posture_anomaly_to_str(s_health_ego_est.posture_anomaly));
         cJSON_AddStringToObject(es, "device_wear_state", ego_device_wear_to_str(s_health_ego_est.device_wear_state));
@@ -2188,16 +2206,28 @@ static void health(void)
         }
         cJSON *ev = cJSON_AddObjectToObject(es, "evidence_summary");
         cJSON_AddStringToObject(ev, "evidence_id", s_health_ego_ev.evidence_id);
-        cJSON_AddNumberToObject(ev, "motion_rms_m_s2", (double)s_health_ego_ev.imu_evidence.motion_rms_m_s2);
-        cJSON_AddNumberToObject(ev, "peak_accel_m_s2", (double)s_health_ego_ev.imu_evidence.peak_accel_m_s2);
-        cJSON_AddNumberToObject(ev, "gyro_variance_dps2", (double)s_health_ego_ev.imu_evidence.gyro_variance_dps2);
+        bool imu_features_valid = s_health_ego_ev.imu_evidence.valid;
+        add_nullable_number(ev, "motion_rms_m_s2", imu_features_valid,
+            (double)s_health_ego_ev.imu_evidence.motion_rms_m_s2);
+        add_nullable_number(ev, "peak_accel_m_s2", imu_features_valid,
+            (double)s_health_ego_ev.imu_evidence.peak_accel_m_s2);
+        add_nullable_number(ev, "gyro_variance_dps2", imu_features_valid,
+            (double)s_health_ego_ev.imu_evidence.gyro_variance_dps2);
         cJSON_AddNumberToObject(ev, "imu_sample_count", s_health_ego_ev.imu_evidence.sample_count);
         cJSON_AddBoolToObject(ev, "gnss_fix_valid", s_health_ego_ev.location_evidence.fix_valid);
-        cJSON_AddNumberToObject(ev, "ground_speed_m_s", (double)s_health_ego_ev.location_evidence.ground_speed_m_s);
-        cJSON_AddStringToObject(ev, "network_type", ego_network_type_to_str(s_health_ego_ev.network_evidence.network_type));
-        cJSON_AddNumberToObject(ev, "battery_soc_percent", (double)s_health_ego_ev.power_evidence.battery_soc_percent);
-        cJSON_AddBoolToObject(ev, "is_charging", s_health_ego_ev.power_evidence.is_charging);
+        add_nullable_number(ev, "ground_speed_m_s",
+            s_health_ego_ev.location_evidence.fix_valid,
+            (double)s_health_ego_ev.location_evidence.ground_speed_m_s);
+        if(s_health_ego_ev.network_evidence.valid)
+            cJSON_AddStringToObject(ev, "network_type", ego_network_type_to_str(s_health_ego_ev.network_evidence.network_type));
+        else cJSON_AddNullToObject(ev, "network_type");
+        add_nullable_number(ev, "battery_soc_percent", s_health_ego_ev.power_evidence.valid,
+            (double)s_health_ego_ev.power_evidence.battery_soc_percent);
+        if(s_health_ego_ev.power_evidence.valid && s_health_ego_ev.power_evidence.charging_valid)
+            cJSON_AddBoolToObject(ev, "is_charging", s_health_ego_ev.power_evidence.is_charging);
+        else cJSON_AddNullToObject(ev, "is_charging");
     }
+    emit(DEVICE, now_us(), "observed", NULL, ego_payload, false);
     cJSON *cc = cJSON_AddObjectToObject(p, "cellular_call");
     cJSON_AddBoolToObject(cc, "ready", atomic_load(&s_cellular_call_ready));
     sim7670_call_status_t call_snap = {0};

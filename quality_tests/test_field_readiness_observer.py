@@ -6,6 +6,7 @@ import threading
 import time
 from http.server import ThreadingHTTPServer
 import unittest
+from unittest import mock
 
 from pc_simulator import protocol
 from scripts import observe_field_readiness
@@ -13,6 +14,41 @@ from server import message_hub
 
 
 class FieldReadinessObserverTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # The observer integrates with HTTP and a real temporary store, but
+        # optional report availability must not depend on an operator's reports/.
+        summaries = {
+            "load_latest_field_results": {
+                "available": True, "status": "pass", "report_count": 1,
+                "reports": [{"kind": "unit_fixture", "status": "pass"}],
+            },
+            "load_latest_data_flywheel_status": {
+                "available": True, "status": "unit_fixture",
+                "counts": {}, "readiness": {"model_training_ready": False},
+            },
+        }
+        for name, summary in summaries.items():
+            patcher = mock.patch.object(message_hub, name, return_value=summary)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_missing_optional_reports_still_warn(self) -> None:
+        sample = {
+            "ok": True, "health_ok": True, "device_found": True, "field_ready": True,
+            "dashboard": {"markers_present": True},
+            "data_flywheel": {"available": False}, "field_results": {"available": False},
+        }
+        report = observe_field_readiness.evaluate_samples(
+            [sample], run_id="field-readiness-no-reports", hub_url="http://127.0.0.1",
+            device_id="ego-link-r1-test", require_fresh=True,
+            require_dashboard_markers=True, min_success_samples=1,
+        )
+        self.assertEqual(report["result"], "WARN")
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(set(report["warnings"]), {
+            "data_flywheel_summary_not_available", "field_results_summary_not_available",
+        })
+
     def test_observer_passes_on_fresh_server_dashboard_without_commands(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

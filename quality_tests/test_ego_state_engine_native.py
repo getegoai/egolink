@@ -3,6 +3,7 @@
 import unittest
 from pathlib import Path
 import os
+import json
 
 from quality_tests.native_convergence import run_c
 
@@ -30,9 +31,9 @@ static void test_initialization_and_stationary(void)
         assert(ego_state_engine_feed_imu(&ctx, 5, -3, 1002, 10, -15, 5, base_time + (int64_t)i * 50000000LL, false) == ESP_OK);
     }
 
-    assert(ego_state_engine_feed_location(&ctx, true, 0.0f, 22.5431, 114.0579, 1.1f, 16, 0.0f, base_time + 20LL * 50000000LL) == ESP_OK);
-    assert(ego_state_engine_feed_power(&ctx, 99.0f, 4250, false) == ESP_OK);
-    assert(ego_state_engine_feed_network(&ctx, EGO_NETWORK_LTE, -85.0f, "460-00-1111", 0, NULL) == ESP_OK);
+    assert(ego_state_engine_feed_location(&ctx, true, 0.0f, 22.5431, 114.0579, 1.1f, 16, 0.0f, base_time + 20LL * 50000000LL, false) == ESP_OK);
+    assert(ego_state_engine_feed_power(&ctx, 99.0f, 4250, false, true, 0, false) == ESP_OK);
+    assert(ego_state_engine_feed_network(&ctx, EGO_NETWORK_LTE, -85.0f, "460-00-1111", 0, NULL, 0, false) == ESP_OK);
 
     ego_state_estimation_t state;
     ego_evidence_chain_t evidence;
@@ -59,7 +60,7 @@ static void test_walking_and_running(void)
         float az = (i % 4 < 2) ? 1400.0f : 650.0f;
         assert(ego_state_engine_feed_imu(&ctx, 200.0f, 50.0f, az, 200.0f, -150.0f, 100.0f, base_time + (int64_t)i * 50000000LL, false) == ESP_OK);
     }
-    assert(ego_state_engine_feed_location(&ctx, true, 1.2f, 22.5432, 114.0580, 1.4f, 14, 90.0f, base_time + 30LL * 50000000LL) == ESP_OK);
+    assert(ego_state_engine_feed_location(&ctx, true, 1.2f, 22.5432, 114.0580, 1.4f, 14, 90.0f, base_time + 30LL * 50000000LL, false) == ESP_OK);
 
     ego_state_estimation_t state;
     assert(ego_state_engine_evaluate(&ctx, base_time + 30LL * 50000000LL, 1000, &state, NULL) == ESP_OK);
@@ -69,15 +70,15 @@ static void test_walking_and_running(void)
     /* Running: speed >= 1.8 and rms >= 1.2 */
     for (int i = 0; i < 20; ++i) {
         float az = (i % 2 == 0) ? 2200.0f : 200.0f;
-        assert(ego_state_engine_feed_imu(&ctx, 600.0f, 200.0f, az, 400.0f, -300.0f, 200.0f, base_time + 1000000000LL + (int64_t)i * 50000000LL, false) == ESP_OK);
+        assert(ego_state_engine_feed_imu(&ctx, 600.0f, 200.0f, az, 400.0f, -300.0f, 200.0f, base_time + 1500000000LL + (int64_t)i * 50000000LL, false) == ESP_OK);
     }
-    assert(ego_state_engine_feed_location(&ctx, true, 2.8f, 22.5435, 114.0585, 1.2f, 16, 95.0f, base_time + 1000000000LL + 20LL * 50000000LL) == ESP_OK);
-    assert(ego_state_engine_evaluate(&ctx, base_time + 1000000000LL + 20LL * 50000000LL, 1000, &state, NULL) == ESP_OK);
+    assert(ego_state_engine_feed_location(&ctx, true, 2.8f, 22.5435, 114.0585, 1.2f, 16, 95.0f, base_time + 1500000000LL + 20LL * 50000000LL, false) == ESP_OK);
+    assert(ego_state_engine_evaluate(&ctx, base_time + 1500000000LL + 20LL * 50000000LL, 1000, &state, NULL) == ESP_OK);
     assert(state.spatial_mobility == EGO_SPATIAL_MOBILITY_RUNNING);
 
     /* In vehicle: speed >= 4.0 */
-    assert(ego_state_engine_feed_location(&ctx, true, 15.0f, 22.5500, 114.0700, 1.0f, 18, 120.0f, base_time + 2000000000LL) == ESP_OK);
-    assert(ego_state_engine_evaluate(&ctx, base_time + 2000000000LL, 1000, &state, NULL) == ESP_OK);
+    assert(ego_state_engine_feed_location(&ctx, true, 15.0f, 22.5500, 114.0700, 1.0f, 18, 120.0f, base_time + 2600000000LL, false) == ESP_OK);
+    assert(ego_state_engine_evaluate(&ctx, base_time + 2600000000LL, 1000, &state, NULL) == ESP_OK);
     assert(state.spatial_mobility == EGO_SPATIAL_MOBILITY_IN_VEHICLE);
 }
 
@@ -113,7 +114,7 @@ static void test_charging_and_handheld(void)
     assert(ego_state_engine_init(&ctx, "test-001", 171, "0.1.0", "elf_sha_123") == ESP_OK);
 
     /* Charging docked */
-    assert(ego_state_engine_feed_power(&ctx, 80.0f, 4100, true) == ESP_OK);
+    assert(ego_state_engine_feed_power(&ctx, 80.0f, 4100, true, true, 0, false) == ESP_OK);
     assert(ego_state_engine_feed_imu(&ctx, 0, 0, 1000, 0, 0, 0, 1000, false) == ESP_OK);
     ego_state_estimation_t state;
     assert(ego_state_engine_evaluate(&ctx, 2000, 1000, &state, NULL) == ESP_OK);
@@ -121,7 +122,7 @@ static void test_charging_and_handheld(void)
 
     /* Handheld: stationary linear accel (rms < 0.3) but subtle tremor (gyro_var > 0.05) */
     assert(ego_state_engine_init(&ctx, "test-001", 171, "0.1.0", "elf_sha_123") == ESP_OK);
-    assert(ego_state_engine_feed_power(&ctx, 80.0f, 4100, false) == ESP_OK);
+    assert(ego_state_engine_feed_power(&ctx, 80.0f, 4100, false, true, 0, false) == ESP_OK);
     for (int i = 0; i < 20; ++i) {
         float gx = (i % 2 == 0) ? 300.0f : -250.0f;
         float gy = (i % 2 == 0) ? 200.0f : -180.0f;
@@ -142,8 +143,8 @@ static void test_indoor_and_immobility(void)
     for (int i = 0; i < 20; ++i) {
         assert(ego_state_engine_feed_imu(&ctx, 0, 0, 1000, 0, 0, 0, (int64_t)i * 50000000LL, false) == ESP_OK);
     }
-    assert(ego_state_engine_feed_location(&ctx, false, 0.0f, 0, 0, 0, 0, 0, 0) == ESP_OK);
-    assert(ego_state_engine_feed_network(&ctx, EGO_NETWORK_WIFI, 0.0f, NULL, 5, "hash_wifi_123") == ESP_OK);
+    assert(ego_state_engine_feed_location(&ctx, false, 0.0f, 0, 0, 0, 0, 0, 0, false) == ESP_OK);
+    assert(ego_state_engine_feed_network(&ctx, EGO_NETWORK_WIFI, NAN, NULL, 5, NULL, 0, false) == ESP_OK);
 
     ego_state_estimation_t state;
     assert(ego_state_engine_evaluate(&ctx, 20LL * 50000000LL, 1000, &state, NULL) == ESP_OK);
@@ -155,8 +156,8 @@ static void test_indoor_and_immobility(void)
     assert(state.posture_anomaly == EGO_POSTURE_ANOMALY_NORMAL);
 
     int64_t t2 = t1 + 301000000000LL;
-    for (int i = 0; i < 20; ++i) {
-        assert(ego_state_engine_feed_imu(&ctx, 0, 0, 1000, 0, 0, 0, t2 - (int64_t)(20 - i) * 50000000LL, false) == ESP_OK);
+    for (int64_t t = t1; t < t2; t += 50000000LL) {
+        assert(ego_state_engine_feed_imu(&ctx, 0, 0, 1000, 0, 0, 0, t, false) == ESP_OK);
     }
     assert(ego_state_engine_evaluate(&ctx, t2, 1000, &state, NULL) == ESP_OK);
     assert(state.posture_anomaly == EGO_POSTURE_ANOMALY_PROLONGED_IMMOBILITY);
@@ -200,6 +201,86 @@ int main(void)
 
 
 class TestEgoStateEngineNative(unittest.TestCase):
+    def test_shared_truth_cases_and_event_recovery(self) -> None:
+        cases = json.loads((ROOT / "quality_tests/fixtures/ego_state_truth_cases.json").read_text(encoding="utf-8"))["cases"]
+        code = ['#include <assert.h>', '#include <math.h>', '#include <stdio.h>', '#include <string.h>', '#include "ego_state_engine.h"',
+                'static int reason(const ego_state_estimation_t *s, const char *r) { for (int i=0;i<s->reason_code_count;i++) if (!strcmp(s->reason_codes[i],r)) return 1; return 0; }',
+                'int main(void) { ego_state_engine_ctx_t c; ego_state_estimation_t s; ego_evidence_chain_t e;']
+        def val(v):
+            if isinstance(v, bool):
+                return "true" if v else "false"
+            if v is None or v == "NaN":
+                return "NAN"
+            return str(v)
+        for case in cases:
+            code += [f'puts({json.dumps(case["name"])});', 'assert(ego_state_engine_init(&c,"fixture",9,"test","' + 'a' * 64 + '")==ESP_OK);']
+            for step in case["steps"]:
+                op = step["op"]
+                mock = val(step.get("mock", False))
+                result = "ESP_OK" if step.get("accepted", True) else "ESP_ERR_INVALID_ARG"
+                if op == "imu":
+                    axes = step.get("axes_cycle", [step.get("axes", [0,0,1000,0,0,0])])
+                    for i in range(step["count"]):
+                        ts = step["start"] + i * step.get("step", 50_000_000)
+                        code.append(f'assert(ego_state_engine_feed_imu(&c,{",".join(val(v) for v in axes[i % len(axes)])},{ts}LL,{mock})=={result});')
+                elif op == "location":
+                    code.append(f'assert(ego_state_engine_feed_location(&c,{val(step.get("fix",True))},{val(step.get("speed",0))},0,0,1,10,0,{step["timestamp"]}LL,{mock})=={result});')
+                elif op == "network":
+                    net_type = "EGO_NETWORK_" + step.get("network_type", "lte").upper()
+                    code.append(f'assert(ego_state_engine_feed_network(&c,{net_type},{val(step.get("rsrp",-80))},NULL,{step.get("wifi_ap_count",0)},NULL,{step["timestamp"]}LL,{mock})=={result});')
+                elif op == "power":
+                    charging = step.get("charging", False)
+                    code.append(f'assert(ego_state_engine_feed_power(&c,{step.get("soc",80)},4100,{val(charging is True)},{val(charging is not None)},{step["timestamp"]}LL,{mock})=={result});')
+                else:
+                    code.append(f'assert(ego_state_engine_evaluate(&c,{step["now"]}LL,{step.get("window",1000)},&s,&e)==ESP_OK);')
+                    for field, fn, expected in zip(("spatial_mobility","posture_anomaly","device_wear_state"),
+                                                  ("ego_spatial_mobility_to_str","ego_posture_anomaly_to_str","ego_device_wear_to_str"), step["states"]):
+                        code.append(f'assert(!strcmp({fn}(s.{field}),{json.dumps(expected)}));')
+                    code += [f'assert(fabsf(s.confidence-{float(step["confidence"])}f)<0.00001f);', f'assert(s.is_mock=={mock});']
+                    code.append(f'assert(e.imu_evidence.valid=={val(step["states"][1] != "unknown")});')
+                    code += [f'assert(reason(&s,{json.dumps(r)}));' for r in step.get("reasons", [])]
+                    for field, expected in step.get("c_evidence_flags", {}).items():
+                        code.append(f'assert(e.{field}=={val(expected)});')
+        code.append(r'''
+        /* Re-evaluating the same impact must not move its source event time. */
+        assert(ego_state_engine_init(&c,"fixture",10,"test","a")==ESP_OK);
+        assert(ego_state_engine_feed_imu(&c,0,0,1000,0,0,0,0,false)==ESP_OK);
+        assert(ego_state_engine_feed_imu(&c,3000,0,1000,0,0,0,50000000LL,false)==ESP_OK);
+        assert(ego_state_engine_evaluate(&c,50000000LL,10000,&s,&e)==ESP_OK);
+        assert(s.posture_anomaly==EGO_POSTURE_ANOMALY_ABNORMAL_SHOCK);
+        for(int64_t t=100000000LL;t<10100000000LL;t+=50000000LL) {
+            assert(ego_state_engine_feed_imu(&c,0,0,1000,0,0,0,t,false)==ESP_OK);
+            if(t==9000000000LL) assert(ego_state_engine_evaluate(&c,t,10000,&s,&e)==ESP_OK);
+        }
+        assert(ego_state_engine_evaluate(&c,10100000000LL,1000,&s,&e)==ESP_OK);
+        assert(s.posture_anomaly==EGO_POSTURE_ANOMALY_NORMAL);
+        assert(c.last_shock_time_ns==50000000LL);
+        /* An observation gap cannot be credited as continued immobility. */
+        assert(ego_state_engine_feed_imu(&c,0,0,1000,0,0,0,320000000000LL,false)==ESP_OK);
+        assert(ego_state_engine_feed_imu(&c,0,0,1000,0,0,0,320050000000LL,false)==ESP_OK);
+        assert(ego_state_engine_evaluate(&c,320100000000LL,1000,&s,&e)==ESP_OK);
+        assert(s.posture_anomaly==EGO_POSTURE_ANOMALY_NORMAL);
+        assert(ego_state_engine_evaluate(&c,310000000000LL,1000,&s,&e)==ESP_ERR_INVALID_ARG);
+        assert(ego_state_engine_evaluate(&c,-1,1000,&s,&e)==ESP_ERR_INVALID_ARG);
+        assert(ego_state_engine_evaluate(&c,320100000000LL,10001,&s,&e)==ESP_ERR_INVALID_ARG);
+        /* Initialization is boot-scoped: no impact or clock state survives it. */
+        assert(ego_state_engine_init(&c,"fixture",11,"test","a")==ESP_OK);
+        assert(ego_state_engine_evaluate(&c,0,1000,&s,&e)==ESP_OK);
+        assert(s.boot_count==11 && s.posture_anomaly==EGO_POSTURE_ANOMALY_UNKNOWN);
+        /* Missing network evidence cannot hash as an actual offline response. */
+        char missing_network_digest[EGO_STATE_DIGEST_HEX_LEN];
+        strcpy(missing_network_digest,e.evidence_digest);
+        assert(ego_state_engine_feed_network(&c,EGO_NETWORK_OFFLINE,NAN,NULL,0,NULL,0,false)==ESP_OK);
+        assert(ego_state_engine_evaluate(&c,0,1000,&s,&e)==ESP_OK);
+        assert(strcmp(missing_network_digest,e.evidence_digest));
+        puts("SHARED TRUTH CASES PASSED"); return 0; }
+        ''')
+        extra_sources = [str(MBEDTLS_SHA256)]
+        if MBEDTLS_PLATFORM_UTIL.is_file():
+            extra_sources.append(str(MBEDTLS_PLATFORM_UTIL))
+        stdout = run_c(harness="\n".join(code), components=("ego_state_engine",), extra_sources=extra_sources)
+        self.assertIn("SHARED TRUTH CASES PASSED", stdout)
+
     def test_native_ego_state_engine(self) -> None:
         extra_srcs = [str(MBEDTLS_SHA256)]
         if MBEDTLS_PLATFORM_UTIL.is_file():
@@ -223,7 +304,9 @@ class TestEgoStateEngineNative(unittest.TestCase):
         self.assertIn("ego_state_engine_feed_location(", main_c)
         self.assertIn("ego_state_engine_feed_power(", main_c)
         self.assertIn("ego_state_engine_evaluate(", main_c)
-        self.assertIn('cJSON_AddObjectToObject(p, "ego_state")', main_c)
+        # The bounded state record is separate from camera/health telemetry.
+        # test_ego_state_pipeline executes both production DEVICE emissions.
+        self.assertIn('cJSON_AddObjectToObject(ego_payload, "ego_state")', main_c)
         self.assertIn("ego_state_engine_init(&s_ego_state_engine,", main_c)
         self.assertIn('"ego_state_engine_enabled"', main_c)
 
