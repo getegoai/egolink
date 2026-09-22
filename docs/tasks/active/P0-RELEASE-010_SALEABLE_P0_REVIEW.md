@@ -7,7 +7,7 @@ lane: release
 execution_state: queued
 depends_on:
   - FIELD-020
-  - CALL-021
+  - CALL-031
   - SOS-010
   - OUTBOX-010
   - OPS-004
@@ -20,6 +20,7 @@ created: 2026-08-23
 last_updated: 2026-08-23
 
 context:
+  - docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
   - docs/current/FIRST_LAUNCH_EXECUTION.md
   - docs/product/EGO_MASTER_CONTEXT.md
@@ -33,6 +34,16 @@ out_of_scope:
   - choosing convenient thresholds after viewing the final acceptance run
   - treating A0 or split-board evidence as representative production evidence
 ---
+
+## 2026-09-22 primary-cellular dependency alignment
+
+ADR-0016 replaces the old RTC primary-path dependency with CALL-030 feasibility
+and CALL-031 native cellular product evidence. CALL-020/021 remain paused RTC
+assets. The criteria below retain their reliability/privacy/product invariants;
+current references to Ego Call mean native cellular primary, with RTC auxiliary.
+Historical implementation checkpoints remain dated evidence, not a new result.
+No Gate or hardware state advances from this dependency update.
+
 
 # Goal
 
@@ -48,6 +59,7 @@ revision is a saleable P0 rather than a collection of working components.
 - [ ] `P0-LOC`, `P0-CALL` and `P0-SOS` each have representative hardware,
       configuration identity, scenario coverage, raw/private evidence path,
       reviewer and explicit `PASS`/`FAIL`/`NOT_RUN` state.
+- [ ] G8 includes the local-first endpoint/relay retention and deletion evidence; BASE-010 is its minimal engineering input, not an advanced-AI release requirement.
 - [ ] G3 power, G4 durability, G5 water/acoustic, G6 RF, G7 NPI,
       G8 security/privacy and G9 China compliance have the same accountable
       evidence rows. Missing specialist tasks are created before review.
@@ -55,7 +67,7 @@ revision is a saleable P0 rather than a collection of working components.
       directions and physical SOS; the 48-hour guard result uses the same
       product revision or a documented re-test-equivalent revision.
 - [ ] Any missing/failed capability or assurance row stops release. L2/L3 and
-      Native VoLTE reserve never compensate for a failed P0 row.
+      optional RTC never compensate for a failed P0 row.
 
 # Execution Rule
 

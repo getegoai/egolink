@@ -29,6 +29,8 @@ out_of_scope:
   - flashing or sending commands without explicit operator intent
   - training models, unconsented/unbounded/public raw media or hiding failed observations
   - duplicating FT-001B/FIELD-003/PWR-001 tooling
+owner: gemini
+reviewed_at: 2026-09-22
 ---
 
 # Goal

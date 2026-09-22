@@ -34,6 +34,9 @@ out_of_scope:
   - changing TLS, certificates, proxy headers, cookies, upstream routing, or unrelated virtual hosts
   - disabling access logs for any route other than the exact AMap coordinate-convert path
   - VPS deployment or Nginx reload
+execution_state: acceptance_review
+owner: director
+reviewed_at: 2026-09-22
 ---
 
 # Goal

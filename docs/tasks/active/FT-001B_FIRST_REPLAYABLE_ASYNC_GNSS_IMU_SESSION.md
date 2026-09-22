@@ -39,6 +39,9 @@ out_of_scope:
   - claiming durable Store-and-Forward before reboot/recovery evidence exists
   - marking A0-001/A0-002/A0-003 or A-R0 passed from this engineering Session
   - flashing, commands or other hardware control without explicit operator intent
+execution_state: queued
+owner: gemini
+reviewed_at: 2026-09-22
 ---
 
 # Problem

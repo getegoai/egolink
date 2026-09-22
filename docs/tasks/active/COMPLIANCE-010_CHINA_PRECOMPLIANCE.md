@@ -14,6 +14,7 @@ created: 2026-08-23
 last_updated: 2026-08-23
 
 context:
+  - docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
   - docs/product/EGO_MASTER_CONTEXT.md
   - docs/product/MASS_PRODUCTION_REQUIREMENTS.md
@@ -85,8 +86,9 @@ Read docs/tasks/active/COMPLIANCE-010_CHINA_PRECOMPLIANCE.md in
 D:\pywork\egolink. Load only AGENTS.md, docs/CONTEXT_INDEX.md, and this packet's
 context. This is the sole active successor to PROD-002. Prepare a bounded,
 versioned evidence intake and professional inquiry tied to the HW-020 concept;
-keep every unknown explicit and separate RTC launch needs from Native VoLTE
-reserve. Do not treat web/vendor material as legal or lab approval, freeze a
+keep every unknown explicit and assess native cellular primary voice, optional
+RTC, private Base and bounded cloud relay under ADR-0016. Do not treat
+web/vendor material as legal or lab approval, freeze a
 BOM, purchase, contract, submit an application or send an external message
 without explicit founder authorization. If a named qualified response is
 provided, record source/date/scope/configuration and translate only supported

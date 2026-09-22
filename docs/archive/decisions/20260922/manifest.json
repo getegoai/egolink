@@ -1,0 +1,259 @@
+{
+  "archived_at": "2026-09-22",
+  "purpose": "Exact snapshots before named ADR-0016 edit phases; per-entry capture_scope distinguishes Git-baseline bytes from intermediate working-tree content; embedded authority is non-operative",
+  "snapshots": [
+    {
+      "source": "docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md",
+      "snapshot": "docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md.source",
+      "sha256": "541724a90a8737eac60c256d018ccd07f434528c78cc5feb429c0d4aaae39b91",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md",
+      "snapshot": "docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md.source",
+      "sha256": "63b154fabee7ab2fdde2c0324c3b7b140a69811dae9aa1ea26e5961ecfba5cb1",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/architecture/adr/ADR-0014-runtime-convergence.md",
+      "snapshot": "docs/architecture/adr/ADR-0014-runtime-convergence.md.source",
+      "sha256": "3bcf432df273f79ef5b34dc55cc425507c3fcf24ab578bced25257e20b108706",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md",
+      "snapshot": "docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md.source",
+      "sha256": "0e7a4bcb0d5f60bd4f9e9b3ba188cc8ddc9edf7e4d9b2ef1ef8de56336c4af5a",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/architecture/SYSTEM_OVERVIEW.md",
+      "snapshot": "docs/architecture/SYSTEM_OVERVIEW.md.source",
+      "sha256": "32b8a0063b7501d1bb63e047d5b6faeffdd1a41b4e3af1bf40d13a47aea7c175",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/compliance/CHINA_PRECOMPLIANCE_INQUIRY_V0.md",
+      "snapshot": "docs/compliance/CHINA_PRECOMPLIANCE_INQUIRY_V0.md.source",
+      "sha256": "31a5cdfc1074aa5cdda2aee584d46a3461aa719a17a3975b6035108ad4f5a83a",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent authorized specialist/task consistency migration; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/CONTEXT_INDEX.md",
+      "snapshot": "docs/CONTEXT_INDEX.md.source",
+      "sha256": "86bf10ba4a8848be96dda32bc4bf4854f7d947dcde99b55b91cd30593236aa85",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/current/EGO_LINK_AI_CURRENT_CONTEXT.md",
+      "snapshot": "docs/current/EGO_LINK_AI_CURRENT_CONTEXT.md.source",
+      "sha256": "b8de9d24cae0d5b3c481df378ed08781c59e8418f6b0a189dab3480e0b55d692",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/current/FIRST_LAUNCH_EXECUTION.md",
+      "snapshot": "docs/current/FIRST_LAUNCH_EXECUTION.md.source",
+      "sha256": "e83f60075bb7aa623c12c0bcc0cfa357ee86330fdd077c074fdbe15935bb8540",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/development/DEV_FLOW.md",
+      "snapshot": "docs/development/DEV_FLOW.md.source",
+      "sha256": "ce5aa6ebd5d007ad153cf7ed97717e30cbfa9664cb385208cb51d73f2a61214e",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/development/EGO_CALL.md",
+      "snapshot": "docs/development/EGO_CALL.md.source",
+      "sha256": "73eaeb2eb48a0c59ad9e7d2e4de9f64fc85a47c05578b327231e722e266e2542",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent authorized specialist/task consistency migration; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/hardware/P0_INTEGRATED_PROTOTYPE_DESIGN.md",
+      "snapshot": "docs/hardware/P0_INTEGRATED_PROTOTYPE_DESIGN.md.source",
+      "sha256": "a5b9c49f0631b8de5d9cca7303f5262d048696630d9b26efaa51d7d401add199",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent authorized specialist/task consistency migration; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/hardware/P0_PRODUCT_ARCHITECTURE.md",
+      "snapshot": "docs/hardware/P0_PRODUCT_ARCHITECTURE.md.source",
+      "sha256": "fe25898d00a821664c7726dc05251f3ee1c3e97cf67bf9e6ade3ef60629673d0",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent authorized specialist/task consistency migration; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/product/EGO_MASTER_CONTEXT.md",
+      "snapshot": "docs/product/EGO_MASTER_CONTEXT.md.review.source",
+      "sha256": "fb519a2cdf5499687179e1da4cc9ff93044c2f06d58a62b5eaae22e85e38cf9d",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": false,
+      "source_commit": null,
+      "capture_scope": "After this agent authority pass; before restoring still-operative privacy/model/manufacturing requirements in the authorized consistency review. Intermediate uncommitted working-tree content, not initial HEAD."
+    },
+    {
+      "source": "docs/product/EGO_MASTER_CONTEXT.md",
+      "snapshot": "docs/product/EGO_MASTER_CONTEXT.md.source",
+      "sha256": "b1181cfd263ec61628cd78e0ac9320900ccacd758b729a92fb4cc9a31d8bc2b6",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/product/MASS_PRODUCTION_REQUIREMENTS.md",
+      "snapshot": "docs/product/MASS_PRODUCTION_REQUIREMENTS.md.source",
+      "sha256": "910359228757ef38fdbf5605c6fe49e561b59b7f9e6207cab0cad65d3a3e3907",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent authorized specialist/task consistency migration; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/product/NORTH_STAR.md",
+      "snapshot": "docs/product/NORTH_STAR.md.source",
+      "sha256": "e71b36e8a2642ff36acfe2395f9057c551371da95d6ae112b0ad80f3269ff6f4",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/product/P0_SCOPE.md",
+      "snapshot": "docs/product/P0_SCOPE.md.source",
+      "sha256": "9ddad909ef810536af56ff81638d3e0d6e968baf1d32dfa5c63511ff8844681b",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/product/PRODUCT_CHARTER.md",
+      "snapshot": "docs/product/PRODUCT_CHARTER.md.source",
+      "sha256": "d1ac7a702920ba62fb17dee4ae6537a77ffa3d9a63300e01459c71e2b0b60b29",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/roadmap/P0_TO_PRODUCT_MIGRATION.md",
+      "snapshot": "docs/roadmap/P0_TO_PRODUCT_MIGRATION.md.source",
+      "sha256": "a945b2b414335da57c58a2a7275139e35fd04c9e7e19c6cdc96ba4ec9cfd84ab",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/roadmap/V1_PRODUCT_PLAN.md",
+      "snapshot": "docs/roadmap/V1_PRODUCT_PLAN.md.source",
+      "sha256": "3e458f7d7c57aa61c9d66c61f67a878ff492a2c0acad0b6f01875ab65e5ba7d1",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent initial authority alignment; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/tasks/active/COMPLIANCE-010_CHINA_PRECOMPLIANCE.md",
+      "snapshot": "docs/tasks/active/COMPLIANCE-010_CHINA_PRECOMPLIANCE.md.source",
+      "sha256": "b1a7e334082444c904f3636d5546891c960c4d3ac7189293c6a3441cd374dc3a",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": true,
+      "source_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "capture_scope": "Before this agent authorized specialist/task consistency migration; captured bytes match the recorded comparison commit."
+    },
+    {
+      "source": "docs/tasks/active/HW-021_EXACT_INTEGRATED_PROTOTYPE_DESIGN.md",
+      "snapshot": "docs/tasks/active/HW-021_EXACT_INTEGRATED_PROTOTYPE_DESIGN.md.source",
+      "sha256": "b7783c4fc00decf46812bc1bada8cfe85a236768c58863cfd8f529ae067fce44",
+      "historical_authority": false,
+      "captured_from": "isolated_worktree",
+      "comparison_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+      "matches_comparison_commit_bytes": false,
+      "source_commit": null,
+      "capture_scope": "After root WIP metadata edits (execution_state parked, owner unassigned, reviewed_at 2026-09-22); before this agent native-call/context/body migration. Intermediate uncommitted working-tree content, not initial HEAD."
+    }
+  ]
+}

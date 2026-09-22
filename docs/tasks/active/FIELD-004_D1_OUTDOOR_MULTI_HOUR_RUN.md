@@ -25,6 +25,8 @@ out_of_scope:
   - sending 4G-board serial commands
   - claiming location accuracy or battery life
   - raw private coordinate publication outside bounded evidence
+execution_state: continuous_regression
+reviewed_at: 2026-09-22
 ---
 
 This task serves D2 evidence collection while preserving D1 regression

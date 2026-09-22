@@ -34,6 +34,9 @@ out_of_scope:
   - defining the enclosing A0-003 Field Session schema
   - replay, evaluation, model training or Location Belief behavior
   - marking A0-002 or A-R0 passed without reviewed real four-source session evidence
+execution_state: queued
+owner: unassigned
+reviewed_at: 2026-09-22
 ---
 
 # Problem

@@ -1,138 +1,110 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-09
+decision_updated: 2026-09-22
 last_verified: 2026-08-23
 verified_by: codex
 ---
 
 # System Overview
 
-## Productization Sprint 1 System
+## Product responsibility architecture
 
-[ADR-0012](adr/ADR-0012-p0-productization-sprint-1.md) freezes the sellable P0
-around three capability Gates. Their current state is evidence truth, not a
-progress estimate:
+[ADR-0016](adr/ADR-0016-local-first-ego-state-cellular-primary.md) defines
+native-cellular primary calling, local-first/private ownership and parallel
+minimal Ego Base. This is a target responsibility map, not a deployment claim.
+
+```text
+EgoLink Core
+  physical SOS + prompt local feedback + bounded durable priority events
+  device Location Engine / Sensor Policy + honest deterministic ego-state
+  supported modem native voice + microphone / audio / speaker path
+      +-> cellular voice network <-> authorized telephone contact
+      +-> authenticated data -> bounded relay -> private Ego Base endpoint
+                                                    +-> history/replay/report
+                                                    +-> authorized Guardian
+  optional RTC data path <-> auxiliary Guardian calling
+```
 
 | Gate | Capability | Current state |
 |---|---|---|
-| `P0-LOC` | Reliable Location | `NOT_RUN` |
-| `P0-CALL` | Ego Call | `NOT_RUN` |
-| `P0-SOS` | physical-SOS loop | `NOT_RUN` |
+| `P0-LOC` | Reliable location with honest degradation | `NOT_RUN` |
+| `P0-CALL` | Native outgoing/incoming calls and stable two-way audio | `NOT_RUN` |
+| `P0-SOS` | Physical-SOS location/alert/primary-call loop | `NOT_RUN` |
 
-The target product topology is:
+Device operational state remains available offline. Base owns user-controlled
+private history and heavier derived inference; its first slice is BASE-010
+Session ingest/persistence/replay/report/lifecycle. Full private AI is later
+work and not a fourth Gate. Neither Base, RTC nor cloud is a dependency of
+local SOS recognition or a cellular call when its actual voice service works.
+The Message Hub is not a call-media proxy. No self-operated public PSTN/SIP
+gateway or public emergency-dispatch service is required.
 
-```text
-EgoLink device
-  physical SOS + local feedback + durable priority outbox
-  device Location Engine v0 + Sensor Policy v0
-  microphone / codec / speaker path
-  LTE data transport
-        |
-        +-> bounded event/status service -> Guardian alert/location surface
-        +-> controlled RTC service ------> Guardian two-way voice
-        +-> evidence mirror/timeline/replay/comparison
-```
+Native route feasibility is CALL-030; CALL-031 validates representative
+hardware after HW-022. Registration/AT ready/dial/ring/connected/two-way audible
+are different facts. Exact firmware/operator/audio evidence is required; no
+CS/VoLTE support is inferred from a board name. The current board's lack of an
+accepted microphone/speaker path precludes acoustic acceptance from its driver.
+Old CALL-020/021 remain paused RTC evidence, not primary-call predecessors.
 
-The device owns the minimum operational location and safety state required to
-act offline. The server owns a versioned mirror, event-time timeline, replay,
-comparison and richer *derived* estimation; it is not the sole live owner of
-the device's current state. Telemetry receive/ingest time must never replace a
-source event time or boot-scoped monotonic lineage.
+## Cloud lifecycle and present engineering path
 
-Ego Call media is separate from Message Hub telemetry. The Message Hub is not
-a media proxy. Sprint 1 excludes PSTN, SMS, public emergency dispatch and
-native VoLTE as launch dependencies. Native VoLTE remains a separately
-measured A0 migration reserve.
+Target cloud duties are reachability, signaling and bounded temporary relay.
+Each temporary store declares purpose, permitted data, owner/access, count/byte
+quota, expiry, private destination and ACK/deletion verification. Transport
+receipt, Base durable receipt and human acknowledgement remain separate.
+Preserve exact original identity/bytes until the declared durable ACK; any
+change in that boundary needs an explicit contract/recovery migration.
 
-## Current A-Line Evidence Topology
+The current single-board collector still sends observations and consented
+stills to an authenticated VPS collection/photo store and Web surface. That
+is an authorized bounded engineering transition, not implemented private Base,
+encryption-at-rest or product local-first evidence. Do not move or erase
+existing private data through this document; migration requires verified
+backup, reconciliation, rollback and separately scoped execution.
 
-[ADR-0015](adr/ADR-0015-single-4g-board-camera-field-milestone.md) makes the
-current A-line milestone a single-connectivity-board evidence run:
+## Current single-board evidence and ownership
 
-```text
-connectivity-node-001
-  ESP32-S3-SIM7670G-4G
-  GNSS / Cell-LTE / external QMI8658A / available power
-  historically observed OV5640 candidate
-  bounded ordinary-observation and JPEG persistence
-        |
-        +-> actual Wi-Fi and LTE upload + controlled route transition
-        +-> authenticated command / exact ACK
-        +-> durable private VPS photo + observation storage
-        +-> authorized existing Web control / preview / query / export
-```
+ADR-0015 retains one identified ESP32-S3-SIM7670G-4G connectivity board plus
+necessary Camera, external IMU, power and antennas. Gemini owns recovery,
+actual Wi-Fi/LTE transition, short independent-power carry and D2/FIELD-020.
+AMOLED, board-to-board forwarding and PC runtime are absent from that field path.
+Camera remains a milestone deliverable, not a Location/SOS decision source.
 
-This diagram is the current responsibility and acceptance boundary, not a claim
-that the combined firmware has been flashed or run. The Camera and external IMU
-must be reidentified and their shared pin/bus/resource behavior verified on the
-actual assembly. The one-shot photo proof must use real LTE; ordinary
-observations must also traverse actual Wi-Fi and LTE and survive a controlled
-transition with honest pending, retry, duplicate and loss accounting. AMOLED,
-board-to-board forwarding and PC runtime/forwarding are not part of this A-line
-run. CALL-020, CALL-021 and full physical SOS are paused, while their source and
-final product obligations remain.
+Codex ALIGN-STATE-010 owns decision/current-state/task alignment and existing
+rule-state truth: input validity/time/mock lineage, compatible DEVICE/canonical/
+API contracts, deterministic replay and actual Web rendering. Unknown, stale,
+future or invalid observations must not project as confident normal/safe state.
+Scores are experimental; SHA-256 and local_priority labels are not encryption
+or proof of storage ownership. New source is not a new boot or live deployment.
 
-## Retained Historical Dual-Board/PC Evidence Topology
+Read [ACTIVE_BUILD](../current/ACTIVE_BUILD.md),
+[BOARD_MATRIX](../hardware/BOARD_MATRIX.md) and [STATUS](../current/STATUS.md)
+for exact last reported evidence; this architecture does not duplicate it.
+Full physical SOS and the old RTC runtime remain paused in the field milestone.
+HW-021/compliance, CALL-030 and BASE-010 have separate bounded task consumers.
 
-```text
-wearable_node
-  ESP32-S3-Touch-AMOLED-2.06
-  QMI8658 / candidate audio path / display / touch
-  USB to PC
+## Retained invariants
 
-connectivity_node
-  ESP32-S3-SIM7670G-4G
-  SIM7670G / GNSS / candidate camera and TF-cache paths
-  USB to PC
+- Asynchronous sources keep capture/event time, boot/clock/sequence and quality;
+  ingest time cannot replace source time or reorder current truth silently.
+- Device minimum Location/Sensor Policy is authoritative for offline action;
+  private/server-derived replay cannot overwrite historical device decisions.
+- One modem owner, bounded cancellation, secure authenticated transport and
+  exact ACK remain mandatory. Capacity, failed persistence and loss are visible.
+- SOS recognized-input feedback is immediate; durable record attempt and
+  location/alert/native-call outcomes are independent. Storage failure cannot
+  suppress local feedback or earn normal durable-event credit.
+- Replay is distinct from physical action; settled alerts and ended calls do
+  not resurrect. Concurrent recovery needs ADR-0014's guarantees or a reviewed
+  behavioral equivalent; finite single-source proof need not wait globally.
+- Learned fusion, advanced L2/L3 and Camera inference do not block/veto manual
+  SOS or create release claims without separate evidence.
 
-PC Development Bridge
-  device discovery
-  serial relay
-  event bus
-  ContextRouter / Safety Kernel
-  data recording and replay
-  debug dashboard
-```
+## Historical development topology
 
-This dual-board/PC topology is retained historical development evidence, not
-the current A-line or target product architecture. Board names do not prove
-audio, sustained LTE voice, camera, battery, RF, enclosure or product behavior.
-If the paused CALL lane later resumes, `CALL-020` may use a PC/USB media bridge
-only under its own reviewed scope; that result is at most `pc_side_verified`
-and cannot pass `P0-CALL`.
-
-## Architectural Principles
-
-- Business logic depends on abstractions and versioned messages, not raw USB, COM ports, Wi-Fi, SIM7670G AT details, GNSS, camera, IMU, or board-specific APIs.
-- PC is a development bridge only.
-- Mock, stub, PC-side probe, and real firmware evidence may coexist only when source labels are explicit.
-- Safety-critical behavior uses deterministic rules; it must not depend on an LLM decision.
-- Public location belief (`Fine | Coarse | Predicted | Unknown`), mobility,
-  Sensor Policy, battery and transport/call state remain separate dimensions.
-- Physical SOS persists and gives local feedback before network delivery; AI,
-  camera, low battery, network loss or an unavailable RTC service cannot veto
-  it.
-- Learned location/context work is data- and replay-first, non-blocking L2/L3
-  work until a later accepted decision promotes measured capability.
-
-## Sellable P0 User Loop
-
-```text
-Guardian reads honest location state
-             +
-Guardian and device establish authorized two-way Ego Call
-             +
-physical SOS long press
--> durable local safety_event + local feedback
--> immediate upload of last trusted location
--> elevated GNSS/LTE policy
--> independent Guardian alert and Ego Call request states
--> replayable event-time evidence
-```
-
-The historical motion-candidate/AMOLED/PC loop remains reusable engineering
-evidence. It is not a substitute for, or a blocker ahead of, the three P0
-capability Gates.
-
-See `docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md` for the retained
-historical dual-board bridge design; it does not override ADR-0015.
+The AMOLED wearable + connectivity board + USB PC bridge remains a reusable
+engineering fixture for discovery, relay, UI, recording/replay and audio bench
+assets. It is not the product topology or proof of independent field behavior.
+A PC may host a Base experiment without becoming a fixed product dependency.
+See [historical dual-board architecture](DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md)
+and the [pre-migration sources](../archive/decisions/20260922/README.md).

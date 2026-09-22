@@ -41,6 +41,9 @@ out_of_scope:
   - plaintext map credentials, raw private coordinates, tokens, or logs in Git
   - historical coordinate mutation, accuracy claims, geofencing, or route inference
   - GitLab, firewall, ports, DNS, TLS, or database restoration
+execution_state: acceptance_review
+owner: director
+reviewed_at: 2026-09-22
 ---
 
 # Goal

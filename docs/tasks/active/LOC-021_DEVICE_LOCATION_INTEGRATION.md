@@ -4,7 +4,7 @@ title: Device, Message Hub and Guardian Location integration
 status: active
 priority: critical
 lane: A
-execution_state: in_progress
+execution_state: parked
 depends_on:
   - LOC-020
   - POLICY-010
@@ -47,6 +47,8 @@ out_of_scope:
   - fabricating coordinates, accuracy, confidence or delivery freshness
   - flashing, device commands, network changes or field runs without explicit
     operator intent
+owner: unassigned
+reviewed_at: 2026-09-22
 ---
 
 # Current Runtime Dispatch (2026-09-05)

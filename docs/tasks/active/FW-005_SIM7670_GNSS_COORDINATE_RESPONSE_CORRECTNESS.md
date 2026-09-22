@@ -40,6 +40,9 @@ out_of_scope:
   - firmware flashing, modem control, or field validation
   - wire protocol, server, Dashboard, or historical-database mutation
   - GNSS acquisition policy, A-GNSS, RF tuning, or hybrid-location implementation
+execution_state: acceptance_review
+owner: director
+reviewed_at: 2026-09-22
 ---
 
 # Goal

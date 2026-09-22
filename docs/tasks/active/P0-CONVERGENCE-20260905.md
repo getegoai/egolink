@@ -3,8 +3,8 @@ id: P0-CONVERGENCE-20260905
 title: Single-board Location and Camera field closure
 status: active
 priority: critical
-execution_state: candidate_live_flashed_and_camera_timed_lte_verified_outage_restart_route_pending
-owner: codex_integrator
+execution_state: in_progress
+owner: gemini
 created: 2026-09-05
 last_updated: 2026-09-18
 serves_gate: P0-LOC
@@ -71,6 +71,8 @@ out_of_scope:
   - HTTP downgrade, disabled certificate or hostname validation, committed secrets
   - hardware/network operations outside the current founder-authorized single-4G-board deploy, flash and bounded-test scope; audio, external notifications or unauthorized scenes
   - claiming a P0 Gate PASS from source, native, build or isolated bench evidence
+checkpoint_status: candidate_live_flashed_and_camera_timed_lte_verified_outage_restart_route_pending
+reviewed_at: 2026-09-22
 ---
 
 # P0-CONVERGENCE-20260905 — Single-board Location and Camera field closure

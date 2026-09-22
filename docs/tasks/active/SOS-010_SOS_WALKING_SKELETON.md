@@ -7,7 +7,7 @@ lane: B
 execution_state: paused_by_founder_20260909
 depends_on:
   - LOC-021
-  - CALL-021
+  - CALL-031
   - OUTBOX-010
 serves_gate: P0-SOS
 requires_hardware: true
@@ -15,6 +15,7 @@ created: 2026-08-23
 last_updated: 2026-09-09
 
 context:
+  - docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md
   - docs/architecture/adr/ADR-0014-runtime-convergence.md
   - docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md
   - docs/tasks/active/P0-CONVERGENCE-20260905.md
@@ -22,7 +23,7 @@ context:
   - docs/safety/SAFETY_CONTRACT.md
   - docs/architecture/adr/ADR-0010-asynchronous-observation-timeline-and-store-forward.md
   - docs/tasks/active/LOC-021_DEVICE_LOCATION_INTEGRATION.md
-  - docs/tasks/active/CALL-021_EMBEDDED_LTE_RTC_MEDIA.md
+  - docs/tasks/active/CALL-031_NATIVE_CELLULAR_PRODUCT_LOOP.md
   - docs/tasks/active/OUTBOX-010_PERSISTENT_PRIORITY_OUTBOX.md
 
 allowed_paths:
@@ -64,6 +65,16 @@ out_of_scope:
     `safety_event.context.battery_percent` nullable
   - physical SOS or P0-SOS acceptance claims from component/host-only evidence
 ---
+
+## 2026-09-22 primary-cellular dependency alignment
+
+ADR-0016 replaces the old RTC primary-path dependency with CALL-030 feasibility
+and CALL-031 native cellular product evidence. CALL-020/021 remain paused RTC
+assets. The criteria below retain their reliability/privacy/product invariants;
+current references to Ego Call mean native cellular primary, with RTC auxiliary.
+Historical implementation checkpoints remain dated evidence, not a new result.
+No Gate or hardware state advances from this dependency update.
+
 
 # Current Runtime Migration (2026-09-05)
 

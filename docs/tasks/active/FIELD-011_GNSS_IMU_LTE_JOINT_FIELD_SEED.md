@@ -59,6 +59,9 @@ out_of_scope:
   - MAX17048/battery acceptance, reconnect/store-forward claims, or power-life claims
   - dangerous motion, falls, impacts, driving, or public release of private coordinates
   - v0.4 PCB, chip-selection, enclosure, or industrial-design work
+execution_state: queued
+owner: gemini
+reviewed_at: 2026-09-22
 ---
 
 # Goal

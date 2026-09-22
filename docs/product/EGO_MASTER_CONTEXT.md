@@ -1,13 +1,13 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-09
+decision_updated: 2026-09-22
 last_verified: 2026-08-23
 verified_by: codex
 owner: founder
-baseline_version: v2.2
+baseline_version: v2.3
 authority_scope: current_sales_product_direction_and_system_product_baseline
 decision_adr: ../architecture/adr/ADR-0008-egolink-core-product-direction-reset.md
-priority_decision_adr: ../architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md
+priority_decision_adr: ../architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md
 sprint_decision_adr: ../architecture/adr/ADR-0012-p0-productization-sprint-1.md
 runtime_decision_adr: ../architecture/adr/ADR-0014-runtime-convergence.md
 current_milestone_adr: ../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md
@@ -15,338 +15,130 @@ current_milestone_adr: ../architecture/adr/ADR-0015-single-4g-board-camera-field
 
 # PROJECT EGO — MASTER PRODUCT CONTEXT
 
-> **版本：** v2.2
-> **生效日期：** 2026-08-23
-> **状态：** 当前销售产品方向与系统产品基线
-> **适用范围：** Ego 系统角色、EgoLink 首代产品要求、EgoCore 产品架构、发布门禁、结构与制造协作
-> **取代内容：** 旧版 `ShadowNode / The Monolith / HDMI + USB GUI Operator` 总项目定义，以及 ADR-0008 明确列出的旧 V1 Pro 产品、形态与采购决定。旧内容仅作为历史或 `Ego Operator` 子系统资料保留。
-
-> **来源说明：** v2.0 原稿由创始人放入 `docs/EGO_MASTER_CONTEXT.md`；v2.1
-> 将其规范化到当前产品 authority 路径，并修正证据、隐私、候选器件和旧权威
-> 冲突。产品方向由创始人确认，工程事实校正不构成硬件能力声明。
-> v2.2 根据创始人阶段总结 `docs/archive/product/EGO_LINK_MEMORY_20260818.md` 与
-> [ADR-0011](../architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md)
-> 收敛首发价值闭环、通话路线、能力优先级和多线并行方式；未改写 ADR-0008
-> 保留的无屏模块化 EgoCore、people-first、A0→A1、隐私、功耗和资产控制决定。
+> v2.3 — 2026-09-22，承接 2026-09-19 创始人决策与 9/22 实施指令。
+> 当前销售产品方向与系统角色 authority；不是硬件事实或已完成能力清单。
 
 ## 权威边界
 
-本文件是 Project Ego 当前销售产品方向的总入口，不是所有工程事实的单一存储处：
+北极星与原则见 [NORTH_STAR](NORTH_STAR.md)；本次迁移由 accepted
+[ADR-0016](../architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md)
+明确记录。ADR-0008 的无屏模块化 EgoCore、people-first、A0→A1 和产品保证
+继续有效。ADR-0011/0012 的 RTC-first/native-reserve 条款已部分取代。
 
-- 北极星与不可漂移原则以 [NORTH_STAR.md](NORTH_STAR.md) 为准；
-- 当前 P0/D2/D5 开发验证范围以 [PRODUCT_CHARTER.md](PRODUCT_CHARTER.md)、[P0_SCOPE.md](P0_SCOPE.md) 和 active task packet 为准；
-- 当前实机、镜像与板卡能力只以 [ACTIVE_BUILD.md](../current/ACTIVE_BUILD.md)、[BOARD_MATRIX.md](../hardware/BOARD_MATRIX.md) 和命名证据为准；
-- 已接受的架构变更以 [ADR](../architecture/adr/) 为准；无屏模块化产品迁移由 [ADR-0008](../architecture/adr/ADR-0008-egolink-core-product-direction-reset.md) 记录，首发能力与通信路线重排由 [ADR-0011](../architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md) 记录；
-- 协议、schema 和机器可校验字段以 [shared/contracts](../../shared/contracts/) 及对应协议基线为准；
-- 可变进度只以 [STATUS.md](../current/STATUS.md) 和当前任务包为准。
+P0 承诺/范围见 [PRODUCT_CHARTER](PRODUCT_CHARTER.md) 和 [P0_SCOPE](P0_SCOPE.md)；
+实机、镜像与能力仅以 [ACTIVE_BUILD](../current/ACTIVE_BUILD.md)、
+[BOARD_MATRIX](../hardware/BOARD_MATRIX.md) 和命名证据为准。进度见
+[STATUS](../current/STATUS.md) 与任务包；机器合同以 [shared/contracts](../../shared/contracts/)
+为准。决策日期不刷新硬件 last_verified。发现新冲突需记录并通过创始人批准的
+ADR/ECN 迁移，不能用产品目标覆盖实际失败或 unknown。
 
-如这些权威发生冲突，不得由本文件静默裁决；应记录冲突并通过创始人批准的 ADR/ECN 与相应权威文档同步解决。
+## 1. 系统目标与责任
 
-## 0. 给 AI 与开发者的强制指令
+**Ego 是以个人为中心、强隐私和本地优先的物理 AI 系统。EgoLink 的终局是
+随身主动状态估计；高可靠定位是最直接的用户入口与证据支柱。**
+通过真实 GNSS、蜂窝、IMU 及后续获准来源推断轨迹、活动、姿态与环境状态，
+形成带来源、不确定性和失败原因的报告。推断不等于观测，规则得分不等于校准概率。
 
-1. 本文件是 Project Ego 当前销售产品方向与系统产品基线；它不替代上述各专项事实源。
-2. 创始人最新明确产品决策的优先级高于本文件。发现冲突时先记录，再由创始人批准的 ADR/ECN 与对应 authority 同步；涉及已冻结的产品方向、PCB/结构、BOM、协议或发布门时必须完成该迁移，普通固件、测试和证据修复继续按当前 task packet 与 Git 流程执行，无需先改本文件。
-3. 不得把候选器件、公开宣传、搜索结果或开发板能力写成“已验证”。必须区分：
-   - **已冻结决策**：用户已明确确认；
-   - **工程基线**：本轮用于 A0/EVT 的实现选择，可通过门禁后变更；
-   - **候选项**：需要样品、正式资料或实测；
-   - **未知项**：不得猜测，必须提出问题或建立验证任务。
-4. 遵循“学习现状 → 提出问题 → 确认边界 → 计划 → 实现 → 留证”的开发闭环。不得跳过 active task packet、GitHub Flow、验收标准和证据记录直接修改主线；worktree 仅在并行工作确有需要时使用。
-5. Ego 的首要原则是：**安全闭环优先、本地优先、隐私优先、断网可降级、设计资产可控、失败可解释、模型可回滚。**
-6. 云端服务可以承担受控的转发、紧急暂存或经授权的增强计算，但不得成为人工 SOS、本地定位尝试和本地事件缓存的单点依赖。无网络时，本地检测、用户反馈、定位尝试和有界缓存继续；远程告警、数据交付或通话必须明确显示为 `pending`/`failed` 并按策略重试，绝不假装已经送达。
+| 子系统 | 当前责任与边界 |
+|---|---|
+| EgoLink Core | 最小本地 Location/Sensor Policy、规则状态与安全平面；蜂窝原生主通话；有界持久事件与采集；无网诚实降级 |
+| Ego Base | 同步研发的用户私有数据物理终点与算力后备；先实现授权 Session 接收/保存/回放/报告与生命周期，后扩复杂私有模型、记忆、训练及签名分发。尚无产品验收 |
+| VPS Message Hub | 目标仅为穿透、信令、中继及有界临时缓存；现有 collection/photo 数据库是授权工程过渡，不代表本地优先已实现 |
+| Ego RTC Service | 网络和软件条件具备时的可选辅助通话；不替代 P0-CALL 原生主路，既有 CALL-020/021 仍暂停 |
+| Guardian | 授权定位/状态、SOS/呼叫结果与人工确认界面；普通蜂窝电话联系人不必依赖 RTC app 才能接通 |
+| Ego Operator | 历史 HDMI/HID/GUI 操作资产，作为 Base 可选子系统，不能代替总产品定义 |
 
----
+设备持有离线仍须工作的 operational state。Base 保存私有历史、重建事件时间轴、
+回放和生成 derived 报告，不能用 ingest time 或后验推断改写设备当时状态。
+Base/云/AI 不可用不能阻止人工 SOS、本地反馈、定位尝试或可用的蜂窝主呼叫。
+开发 PC 可作为 Base 工程验证载体，不因此成为正式 Base 或随身运行依赖。
 
-## 0.2 Single-board Camera field milestone (2026-09-09)
+## 2. 首代产品与三项 Gate
 
-[ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md)
-replaces only the current engineering order. The A-line evidence vehicle is one
-identified SIM7670G connectivity board with the necessary existing external
-IMU, Camera, power source and antennas. It must close asynchronous Location/raw
-collection, bounded persistent backlog, actual Wi-Fi/LTE ordinary-observation
-upload and controlled transition, authorized still capture, real-LTE photo
-upload, durable VPS storage and existing-Web viewing before FIELD-020. AMOLED
-and board-to-board forwarding are not part of that run.
-
-CALL-020, CALL-021 and full physical SOS are paused for this milestone without
-removing their source, evidence or sellable-product obligations. C-line
-hardware and compliance work continues, including Camera interface, power,
-storage, optical and sealing inputs. Camera is required for this engineering
-milestone but is not a fourth product Gate, a Camera-AI release dependency or
-a source that can improve, veto or delay Location/SOS truth.
-
-This decision adds no hardware `last_verified` evidence and changes none of the
-three `NOT_RUN` P0 Gate states. The 2026-09-05 section below remains the prior
-runtime-convergence decision and still governs its retained safety, timing,
-ownership and recovery invariants where ADR-0015 does not replace scheduling.
-
-## 0.1 Prior runtime convergence decision (2026-09-05)
-
-[ADR-0014](../architecture/adr/ADR-0014-runtime-convergence.md) changed the
-then-current execution order and scoped local-failure behavior, while v2.2 sales-product
-requirements, screenless EgoCore, people-first scope and release Gates remain.
-The desktop HDMI/HID Master Context supplied in this review is historical; its
-filename does not replace this authority.
-
-Its order first delivered real-device Location through authenticated,
-certificate-verified secure transport to the bound Guardian using LOC-021 A-S,
-with real bidirectional CALL and embedded-bearer feasibility in parallel, then
-physical SOS and recovery. Single-source/current-boot experiments and isolated S smoke
-need not wait for the concurrent T0/T1 design; its ordering/checkpoint/replay
-promises remain in force for concurrent product activation.
-
-Operational Location state, persisted recovery state, outbound pending bytes
-and confirmed server state have separate truth. Queue/storage failure cannot
-silently stop local aging, policy or recognized-input feedback. SOS input
-recognized, stored, server received, terminal noticed and human acknowledged
-are separate outcomes. Failed storage triggers explicit degradation and only
-identity-valid, authorized, secure best-effort help; it never earns durability
-or delivery credit. Recovery may resume pending alert delivery with stable
-identity but must not re-open an expired or explicitly ended call. One modem
-owner, strict exact ACK and real source-event time remain mandatory.
-
-Decision adoption creates no new hardware `last_verified` evidence and grants
-no flash, SIM, recording or external-notification authorization. Independent
-code/tests/builds proceed; unmet live authority is resolved by one exact,
-budgeted experiment request with stop and recovery conditions.
-
----
-
-## 1. 项目总定义
-
-**Ego 是一个以个人为中心的物理 AI 系统。**
-
-它通过随身端感知现实环境，在本地完成低功耗判断，将复杂任务交给用户控制的家庭私有算力，并以受控的数据闭环持续改进个体模型。
-
-当前产品主线不是通用智能手表，也不是复古手机，更不是单独的电脑操作盒。当前主线由以下系统组成：
-
-| 子系统 | 定义 | 不可替代责任 |
-| --- | --- | --- |
-| **EgoLink** | 随身 AI 安全感知、定位、通话和事件采集终端 | 位置、SOS、4G 数据、Ego Call、本地规则安全、声音/运动/图像兼容路径、有界离线缓存，以及 Native VoLTE reserve |
-| **EgoBase** | 规划中的家庭私有 AI 基站与个人数据中枢 | 复杂多模态推理、长期记忆、样本治理、个体化训练、模型评测和签名下发；尚未实现，不是当前安全链路依赖 |
-| **VPS Message Hub** | 移动网络与家庭网络之间的最小可达层 | 消息转发、ACK、命令排队、紧急事件短时暂存；不作为长期原始音视频仓库 |
-| **Ego RTC Service** | 规划中的、受控的 Ego Call 实时通信服务 | 设备与 Guardian app 之间的呼叫信令、实时媒体、会话状态、弱网恢复与联系人升级；尚未实现，不得写成已验证能力，也不得掩盖 `pending`/`failed` |
-| **Ego Operator** | 旧版 HDMI 采集、视觉理解和 USB HID 物理操作能力 | 作为 EgoBase 的可选执行子系统保留，不再代表整个 Ego 项目 |
-
----
-
-## 2. 产品目标与优先级
-
-### 2.1 首要目标
-
-首款产品是 **无屏、独立防水、可更换外部载体的 AI 安全定位与双向通话核心**。
-首发用户价值闭环固定为：
+首款是**无屏、独立防水、可更换载体的随身状态估计/安全定位与双向通话核心**。
+儿童和老年人为首要 persona，兼容成年人；宠物是后续场景版本。
+腕带、挂件、胸卡、背包夹属于载体方向，不冻结当前尺寸/结构。
 
 ```text
-Reliable Location + Ego Call + physical SOS
+Reliable Location / honest rule-state + native cellular Ego Call + physical SOS
 ```
 
-它应能以腕带、挂件、胸卡、背包夹等方式随身携带。首发验收场景固定为
-**人员随身安全设备**：儿童和老年人是首要 persona，成年人使用兼容；宠物项圈
-是共用硬件平台的后续场景版本。
+| Gate | 要求 | 当前状态 |
+|---|---|---|
+| `P0-LOC` | 代表场景可靠定位，展示来源、年龄、置信/不确定性和 honest Unknown；参考点精度、连续性、时延与失败可回放 | `NOT_RUN` |
+| `P0-CALL` | 准确模组/固件/运营商上的原生拨出/呼入、接听/挂断/取消、稳定双向全双工音频及失败/恢复/授权证据；独立供电，无 PC/USB runtime | `NOT_RUN` |
+| `P0-SOS` | 合格长按立即反馈识别；耐久记录尝试、定位升级、Guardian 告警与独立蜂窝主呼叫；存储、送达、接通和人工确认分别记真 | `NOT_RUN` |
 
-### 2.2 扩展目标
+三者必须 PASS 才能销售，并受第 13 节产品保证约束。Camera、最小 Base 与规则
+状态工程验收不增加第四能力 Gate；高级 learned L2/L3、完整 Base 私有 AI 不成为
+新的首发硬门。它们不能补偿任一 P0 Gate 缺失。
 
-首代必须保留最小的确定性 `Rule Policy v0`/Safety Kernel，但 Productization
-Sprint 1 的执行责任收敛为实体 SOS、本地反馈、定位升级、低电/离线诚实状态、
-持久事件和有界重试。ADR-0002 中更广的端侧异常候选、本地确认/互动、主动
-check-in、学习式跌倒/风险模型、复杂上下文理解、高级相机/音频理解和模型自主
-接管 Sensor Policy 均保留接口与数据兼容性，转入 L2/L3，不作为首发阻塞项；
-安全平面稳定并积累真实数据后，再扩展更丰富的 AI 主动助手能力：
+首发包含 4G 数据、原生通话的完整麦克风/音频/扬声器路径、GNSS/蜂窝/IMU、
+确定性 Rule Policy/Safety Kernel、有界事件存储、实体 nano-SIM、SOS 键、状态灯、
+振动、电池管理、防水核心舱与 capless USB-C。RTC、Wi-Fi/BLE 辅助、LoRa、
+LE Audio/NFC、第二麦克风和扩展传感器按单独证据决定，不能仅凭开发板能力入 BOM。
+48h 典型守护续航是代表性整机实测硬门；任何候选与原生通话能力仍须验证。
 
-- 通过麦克风和扬声器完成自然语音交互；
-- 基于个人上下文主动发现风险、提醒和协助；
-- 通过 EgoBase 完成复杂多模态推理与个体化模型；
-- 后续增加 LoRa、本地协同和更多载体形态。
+## 3. 安全平面与规则状态真实性
 
-### 2.3 首代边界
+本地安全平面确定性负责实体 SOS、反馈、定位升级、低电/离线状态、耐久事件及
+有界重试。识别反馈不能等待 GNSS、AI、Base、RTC 或持久化成功；存储失败必须
+显示降级，不能沉默，也不能把 best-effort 帮助记为已耐久/送达。正常路径继续
+write-before-send、exact authenticated ACK；重启不得复活已结束/过期呼叫。
 
-| 分类 | 内容 |
-| --- | --- |
-| **首发核心产品要求** | 4G 数据、LTE 数据上的 Ego Call 双向全双工语音、GNSS/蜂窝/IMU 多源定位、Ego Call 麦克风与扬声器、六轴 IMU、确定性 Rule Policy v0/Safety Kernel、有界事件存储、实体 nano-SIM、SOS 键、状态灯、振动、电池与电量管理、防水核心舱、capless USB-C |
-| **A0 并行保留/评估，不作为首发软件放行门** | Native VoLTE 能力及其模组/麦克风/扬声器/功放或 Codec/电源/RF 路径、事件触发相机和高级音频 AI 路径、Wi-Fi/BLE 辅助连接、LoRa、蓝牙耳机/LE Audio、NFC、可选第二麦克风、扩展传感器；其量产保留与否分别受专门 Gate 约束 |
-| **后续版本或持续 OTA 演进** | Native VoLTE 公网电话 fallback、学习式风险/上下文模型、高级视觉/音频理解、模型接管 Sensor Policy、通用语音助手、宠物远程发声、LoRa 正式射频链、个性化多模态模型、可选显示附件 |
-| **首代明确不做** | 屏幕与触控、3.5 mm 耳机孔、连续录音录像上传、以云服务替代本地安全闭环、未经评测自动训练和自动下发模型 |
+已有 ego-state 规则引擎是本轮工程消费者。缺失、过期、未来、mock、部分/无效
+或乱序输入不能生成高置信正常/安全/佩戴结论。DEVICE 紧凑输入、canonical
+estimate、存储/API 与 Web 的投影必须版本化并验证，不得替无效输入补造有效状态。
+SHA-256 只证明其定义的完整性范围，`local_priority` 不是加密或实际存储位置证据。
+规则活动/姿态类别及 confidence 在标注真值评估前属于实验性输出。
 
-**扬声器、麦克风和 Ego Call 是首发核心，不得因取消屏幕而降级。** 无屏之后，主要交互由物理按键、麦克风、扬声器、振动和状态灯共同完成。
+学习式异常、主动 check-in、复杂多模态融合、Camera AI、AI voice 和模型接管
+Sensor Policy 属 L2/L3。它们的数据质量、回放、离线比较和 Shadow Mode 有独立
+任务；没有权力阻止人工 SOS 或直接触发未经授权的安全动作。
 
-上述条目是创始人冻结的产品要求或并行评估方向，不是已验证能力。Ego Call、
-Native VoLTE reserve、摄像头、防水、续航、声学和所有量产器件在取得对应证据
-前一律标记为 `unverified`；只有明确列入 P0 能力或横切销售放行矩阵的项目阻塞
-发布。典型守护模式 **48 小时续航是量产硬门**，只能在代表性电池、结构、天线、
-固件和网络配置上实测，不能预先宣称。
+## 4. 感知、时间与 Camera
 
-### 2.4 能力优先级与产品 Gate
+- GNSS fix/no_fix 与产品 `Fine/Coarse/Predicted/Unknown` 分开；字段枚举以机器合同为准。
+- last-trusted point 必须带真实年龄与来源；Cell 指纹或 IMU 不能单独冒充精确坐标。
+- 各源异步采集，保留 capture/event time、boot、sequence、clock quality 与 mock lineage；网络接收时间不是事件时间。
+- IMU 按功耗状态机、FIFO/中断、有界高率窗或明确工程采样 profile 工作；开发采样不等于产品可持续高率常开。
+- Camera 是 ADR-0015 当前单板里程碑交付，不是第四 Gate 或 Location/SOS 决策源。
+- 仅授权 Web 单次或默认关闭的本地定时静态图；命令收到、拍摄、完整保存、等待上传、中继收到、私有终点收到和可见分别记真。
+- 断网/重启保留同一文件、ID 和 source time；不补拍错过的时刻。配额、普通观测保留量、损坏/丢失必须可观测。
+- 原始图像需命名授权、场景/访问者、期限和删除路径；默认 training_allowed=false，无默认连续录音录像。
 
-第一代可销售 P0 只由三个能力 Gate 构成，三者必须同时 `PASS`：
+## 5. 原生主通话与无屏交互
 
-| Gate | 能力 | 首发要求 |
-| --- | --- | --- |
-| `P0-LOC` | Reliable Location | 必须 `PASS` |
-| `P0-CALL` | Ego Call | 必须 `PASS` |
-| `P0-SOS` | 实体 SOS 闭环 | 必须 `PASS` |
-| `L2-AI` | AI 增强定位 | 尽量加入，不阻塞 |
-| `L3` | 状态/事件理解 | 暂不进入首发关键路径 |
+主路为设备 -> 实际支持的蜂窝语音网络 -> 授权联系人，并能反向呼入。
+VoLTE/其他语音模式必须由准确模组、固件、SIM、运营商证据支持，不能假定 LTE
+板具备 CS fallback。RTC 只为备路；不建设自营公共 PSTN/SIP 网关或公共应急调度。
 
-`P0-LOC` 持续维护带来源、年龄、可信度和不确定性的 `location_belief`，证据不足
-时诚实输出 `Unknown`。`L2-AI` 当前只允许服务 GNSS 可靠度、移动分类和定位/功耗
-策略，并且先离线或 Shadow Mode。第 13 节的功耗、可靠性、防水声学、RF、合规和
-NPI 产品保证门仍必须通过；它们是三个 P0 能力 Gate 的证据约束，不是第四个用户
-功能。某个外部资料、硬件或操作者依赖只阻塞其依赖线。
+注册、AT 驱动初始化、拨号、振铃、连接、双向可听、人工响应分别记录。
+当前无麦克风/扬声器应用路径的开发板跳过声学闭环；linked driver 不是通话验收。
+完整产品路径需测并发功耗/RF、掉压复位、单向音频、啸叫/回声/静音，以及设计
+所需 AEC/AGC、声压和麦克风灵敏度。音频接口与器件由 A0 证据冻结。
+`G0V-VOLTE-RESERVE` 保留历史谱系，但 reserve viable 不再满足原生主路义务。
+通话同时通过独立、受控的数据路径传递位置、电量与定位可信度；数据通道失败
+须诚实降级，不能阻止可用的原生呼叫或把旧上下文显示为当前观测。
 
----
+主 SOS/通话键负责长按 SOS 与接听/确认；辅助键负责挂断/取消等，最终映射按
+可用性证据冻结。语音/振动/灯冗余反馈，不只用颜色表达紧急状态。隐私控制须
+可验证：产品必须以硬件可验证的方式切断环境麦克风和 Camera 电源域，安全平面
+保留明确的人工恢复路径。这是尚未验收的产品目标，不能从软件 deinit 推断实现；
+当前获准的有界采集须声明实际电源/隐私边界，不得声称已具备硬切断能力。
+旧 `safe/needs_help/no_response` 仅属后续 check-in 谱系，兼容映射保留原始值。
 
-## 3. 两个相互独立的运行平面
+## 6. 私有数据与 Base 最小闭环
 
-### 3.1 安全平面
+同步研发 Base 首片：明确用户/设备身份 -> 授权或合成 Session 接收 -> 私有耐久
+保存 -> event-time replay -> 带来源/不确定性的报告 -> 可验证保留、导出与删除。
+复杂模型、个体训练、模型注册/签名/回滚随后分片，不作为首片必需基础设施。
 
-安全平面必须在 EgoBase、VPS 增强服务或 AI 模型不可用时继续工作：
-
-- 物理 SOS；
-- 位置采集、来源标记、可信度和失败原因；
-- 4G 告警、Ego Call 双向语音、预设联系人与呼入控制；
-- 低电、离线、异常重启和失联检测；
-- 事件本地持久缓存、重试、补传和 ACK；
-- 最小可用的 Rule Policy v0/Safety Kernel：实体 SOS、本地反馈、定位升级、
-  低电/离线诚实状态、耐久事件和有界重试。
-
-声音/运动异常、主动 check-in 和通用状态判断属于 L2/L3 候选；它们可复用同一
-事件接口和采集能力，但不是首发安全平面的必需触发器。
-
-网络或 RTC 服务不可用时，人工 SOS、本地反馈、定位尝试和事件记录继续；远程
-告警与通话只能显示为 `pending` 或 `failed` 并按有界策略重试，不得假装已送达。
-
-### 3.2 AI 平面
-
-AI 平面负责增强判断，但不得阻止安全平面：
-
-- 声音事件、关键词与呼救识别；
-- 活动、跌落、碰撞、异常移动和拆卸识别；
-- 环境关键帧与短序列理解；
-- 位置、声音、运动、图像和历史状态融合；
-- 风险分级、关键样本选择和上传决策；
-- 复杂任务路由至 EgoBase；
-- 模型版本管理、灰度发布和回滚。
-
----
-
-## 4. 核心感知与定位合同
-
-### 4.1 定位
-
-定位不是单一 GNSS 坐标。产品必须提供：
-
-- GNSS、蜂窝定位、IMU 运动状态和有界 last-known 位置（必须带来源、年龄和不确定性）；
-- 当前来源与候选来源；
-- GNSS 传感器层的 `fix`/`no_fix` 证据，以及产品位置判断层的
-  `Fine`/`Coarse`/`Predicted`/`Unknown` 语义；具体字段与枚举不得在本文件
-  另立协议，以 [shared/contracts](../../shared/contracts/) 和当前协议基线为准；
-- 置信度、时间戳、精度范围和失败原因；
-- 位置报告、位置观测、位置记忆和原始 ACK 的可追溯关系。
-
-摄像头和 AI 可以增强场景判断，但不得成为基础定位与 SOS 的单点依赖。
-蜂窝、IMU、时间信息和未经验证的 Wi-Fi 证据不能单独生成或冒充精确坐标；
-历史点必须携带年龄和不确定性，绝不得显示成当前实测点。个人地点/路线记忆与
-Top-K 假设仍按状态为 `proposed` 的
-[ADR-0007](../architecture/adr/ADR-0007-gnss-denied-personal-location-memory.md)
-推进，在其正式接受和实现前不是已验证架构。
-
-### 4.2 声音
-
-首发必须形成一条完整的 **Ego Call 音频路径**：麦克风采集、编解码/RTC 媒体、
-LTE 数据传输、下行播放和免提声学必须端到端可测。其最终 Codec、AEC/AGC、
-数字/模拟接口和与低功耗声音感知的复用方式仍待 A0 证据冻结。
-
-A0 同时保留一条可独立验证的 **Native VoLTE reserve 路径**：候选模组的通话
-麦克风输入、音频输出、功放/Codec、扬声器、电源和 RF 条件必须可评估；它受
-`G0V-VOLTE-RESERVE` 管理，不是首发软件放行门。低功耗 AI 声音路径和高级声音
-理解可以并行验证，但不得耦合或拖慢 Ego Call、SOS 和 Rule Safety Kernel。
-
-### 4.3 运动
-
-六轴 IMU 为低功耗唤醒与移动证据传感器。它按功耗状态机使用低功耗模式、
-FIFO/中断和有界高率窗口，不代表持续高率常开采样。首发只要求它支持
-`stationary`/`moving`/`unknown` 的规则证据、GNSS Sensor Policy 触发和功耗
-调度；walking/running/vehicle 可作为 L2 增强。跌落、碰撞、拆卸、异常移动和
-多源风险融合保留采集接口，属于非阻塞 L2/L3 候选。
-
-### 4.4 环境图像
-
-事件摄像头是 A0 并行证据与后续能力兼容路径，不是首发软件放行阻塞项。
-ADR-0015 将它提升为当前单 4G 板采集里程碑的明确交付，但没有建立第四个
-P0 Gate。该里程碑允许显式授权的 Web 单次拍照，以及默认关闭、带间隔和会话
-结束边界的设备本地定时静态图采集：
-
-- 默认不连续录像；
-- Observation 必须记录 event time、时间质量与 `trigger_reason`；本轮只允许
-  授权的 Web 手动或设备定时 field-test 来源，不扩展为事件理解策略；
-- 原始媒体不进入普通日志或默认长期保留；只有命名授权会话、访问控制、保留
-  期限和删除路径同时成立时，才可进入独立的有界照片存储；
-- 命令接受、实际拍摄、本地可靠保存、等待上传和 VPS 验证保存必须分别记真；
-- 断网恢复补传同一照片及其原始时间/身份，不补拍已经错过的历史时刻；
-- 摄像头故障时，定位、通话、SOS、IMU 和声音安全能力必须继续运行。
-
-SOS 自动拍摄、异常声音/运动触发、短序列和本地关键帧选择均属于 L2/L3，需
-另行 consent/privacy 决策后才能启用。
-
----
-
-## 5. 无屏交互与电话功能
-
-### 5.1 基本交互
-
-- **主 SOS/通话键**：长按触发 SOS 事件、位置上报和预设联系人呼叫；短按用于接听/确认。
-- **辅助多功能键**：挂断、取消、重播提示或进入本地语音交互；最终按键映射由可用性测试冻结。
-- **隐私控制**：通过硬件可验证的方式切断环境麦克风和摄像头电源域；安全平面保留明确的人工恢复路径。
-- **状态反馈**：语音提示为主，振动和 RGB 状态灯为冗余反馈；不得仅用颜色表达紧急状态。
-- **首发确认**：只要求实体 SOS、接听、挂断、取消和本地/远程状态反馈可审计；
-  不要求主动询问或 `safe`/`needs_help`/`no_response` 三态闭环。
-
-`safe`、`needs_help`、`no_response` 以及历史 `need_help`/`unresponsive` 枚举仍
-作为 L2/L3 主动 check-in 谱系保留。未来启用时，适配层必须显式映射并保留
-原始值；不得用这组旧合同阻塞或静默扩大当前 P0。
-
-### 5.2 P0-CALL 首发放行与 Native VoLTE reserve
-
-`P0-CALL` 是首发通信硬门。设备、LTE 数据、受控服务和 Guardian app
-必须完成：
-
-- 设备呼叫监护人和监护人呼叫设备；
-- 双向全双工语音、接听、挂断、取消和可见的会话状态；
-- 弱网恢复和有界重试；首发至少支持一个已绑定 Guardian，联系人管理、
-  多监护人和超时升级属于后续产品扩展；
-- 通话同时传递位置、电量、定位可信度等受控上下文；
-- 网络、RTC、app 或设备失败时明确显示 `pending`/`failed`，并保留可审计记录；
-- 身份、授权、时效、防重放、隐私、运行成本和服务降级证据；
-- 4G 最大发射、Ego Call、GNSS 和本地 P0 规则并发时无掉压或异常复位；
-- 无单向音频、持续啸叫、严重回声或异常静音，并完成 AEC、AGC、降噪、声压和
-  麦克风灵敏度实测。
-
-`G0V-VOLTE-RESERVE` 独立回答准确模组型号/后缀、正式资料、固件、音频接口、
-参考设计、电源峰值、RF/天线和样品 bring-up 是否足以保留未来 Native VoLTE
-fallback。结果可以是 `reserve_viable` 或诚实的 `reserve_unavailable`；后者不
-否决一个满足 P0 LTE-data 路径的设计，但不得宣称未来可无板改迁移。若某一硬件
-版本被创始人明确要求保留该路径，则只在该版本的 PCB 决策点 stop-the-line。
-
-耳机能力优先作为后续蓝牙/LE Audio 扩展，不增加 3.5 mm 开孔。
-
----
-
-## 6. 事件与模型闭环
-
-“实时采集”不等于持续上传原始数据。首发先以可审计的 Rule Policy v0 完成
-`State → Observation → Trigger → Action → Outcome`；下列流程是从规则安全到
-学习式 L2/L3 的演进目标，不要求未通过 Gate 的相机、声音或高级模型阻塞首发：
-
-1. IMU 和低功耗声音门按功耗状态机驻留或占空比工作；
-2. SOS、异常运动、异常声音、位置变化或授权命令触发；
-3. 唤醒主 AI 计算、GNSS、摄像头和必要的 4G 数据会话；
-4. TinyML 完成本地初判、风险分级和关键样本选择；
-5. 形成最小事件包：位置与可信度、运动特征、允许保留的声音特征、允许保留的关键图像或引用、模型版本、电量、网络状态、设备状态和时间戳；原始声音/图像只有在明确事件策略、同意、期限和删除机制同时成立时才可加入；
-6. 紧急事件立即上报；普通训练候选样本在满足电量、网络和用户授权条件后延迟同步；
-7. EgoBase 完成复杂推理、标注、样本治理和个体化训练；
-8. 新模型经过离线评测、签名、灰度发布、在线监控和回滚验证后下发。
-
+云缓冲必须声明目的、数据类别、访问者、容量/时限、私有目的地、ACK 与删除验证。
+中继 ACK 不自动等于 Base 收到；唯一待交付副本不能在约定 durable ACK 前删除。
+现有 VPS/设备 spool 不自动改变或清空：先准备独立授权的备份、身份/数量核对、
+重试/删除语义与回滚迁移；本轮文档和 state truth 修复不授权部署或删除私人数据。
+默认无训练许可；用户控制的样本治理、评估、签名灰度和回滚是后续模型链要求。
 安全产品禁止不可复现、不可审计、不可回滚的设备自主在线学习。
 
 ---
@@ -390,12 +182,12 @@ fallback。结果可以是 `reserve_viable` 或诚实的 `reserve_unavailable`�
 
 | 模块 | 当前工程选择 | 状态与要求 |
 | --- | --- | --- |
-| 4G/GNSS/Native VoLTE reserve | `ML307A-GSLN` | **首选候选、未验证。** 作为 4G/GNSS 候选和 `G0V-VOLTE-RESERVE` 调研/样品对象；在取得准确后缀的正式硬件手册、引脚表、封装、参考设计、固件和适用网络证据前，不得进入原理图冻结。不得用 `DSLN/DCLN` 文档替代 `GSLN` 设计依据 |
+| 4G/GNSS/蜂窝原生语音 | `ML307A-GSLN` | **首选候选、未验证。** 作为 4G/GNSS/原生主通话候选；在取得准确后缀的正式硬件手册、引脚表、封装、参考设计、固件和适用网络证据前，不得进入原理图冻结。不得用 `DSLN/DCLN` 文档替代 `GSLN` 设计依据 |
 | TinyML/主控 | `ESP32-S3-PICO-1-N8R8` | **A0 工程基线，不是量产冻结。** 用现有工具链、Wi-Fi/BLE、相机和音频生态关闭系统风险；A1/量产选择仍需模型、功耗、供货和生命周期门禁 |
 | A1 低功耗 AI 候选 | Ambiq Apollo510B、Alif Ensemble/Balletto、后续成熟的 Espressif AI MCU | 通过真实声音、IMU、图像模型的精度、延迟、内存、休眠、活动能耗、SDK、供货和 PCBA 良率评测后决定；不得凭 NPU/TOPS 宣传替换 |
 | IMU | Bosch `BMI270` | **候选、未验证。** 低功耗唤醒、活动和可穿戴生态是评估理由，最终需完成正式资料、驱动、功耗、轴向、跌落/误报数据集和供应门禁；当前开发板 QMI8658 证据不可迁移为 BMI270 证据 |
-| Native VoLTE reserve 麦克风 | 差分模拟 MEMS，评估 `IM73A135` | **候选。** 需与模组偏置、共模、声孔和防水结构联合验证；不作为 Ego Call 软件首发门 |
-| Ego Call/AI 麦克风 | 低功耗 PDM MEMS，评估 `IM72D128V` / `IM69D129F` | **候选。** 首先服务 Ego Call，可并行支持 TinyML、有界易失环形缓存和语音交互；是否与 reserve 通话麦克风复用由音频 Gate 决定 |
+| 蜂窝原生通话麦克风 | 差分模拟 MEMS，评估 `IM73A135` | **候选。** 需与模组偏置、共模、声孔和防水结构联合验证；所选完整音频路径须满足 P0-CALL；本表不冻结具体器件 |
+| Ego Call/AI 麦克风 | 低功耗 PDM MEMS，评估 `IM72D128V` / `IM69D129F` | **候选。** 首先服务 Ego Call，可并行支持 TinyML、有界易失环形缓存和语音交互；是否与原生通话麦克风复用由音频 Gate 决定 |
 | 扬声器 | 约 15 × 11 mm、8 Ω、1 W、正面防水器件，评估 `CMS-151135-18S-X8` | **候选。** 必须配独立声腔、密封垫和模拟差分输入 Class-D 功放；不得把模组 `SPK_P/N` 直接接 8 Ω 扬声器 |
 | 功放 | 评估 TI `TPA2011D1` 或同级模拟差分 Class-D | **候选。** 通过实际 SPL、THD、温升、EMI、回声与弱电测试后才能冻结 |
 | 摄像头 | 事件触发的低功耗 2 MP 级模组；DVP/FPC 仅为 A0 候选接口 | **A0 并行评估、非首发阻塞项。** DVP/MIPI/SPI、传感器、镜头、FOV、低照度、功耗、隐私价值、SDK 和供应稳定性均待评测；当前开发板相机 smoke 不是产品验收，未通过 Gate 不得成为产品声明 |
@@ -427,8 +219,8 @@ A0 主板允许适度放大，目标采用 6 层、完整测试点、U.FL/I-PEX 
 
 ### 9.2 通信
 
-- 4G 是首代主要远程链路，LTE 数据承载 Ego Call、事件与状态；A0 同时保留
-  Native VoLTE 硬件迁移路径，但它不再是首发软件依赖；
+- 4G 是首代主要远程链路：受支持的蜂窝原生语音承载主通话，LTE 数据承载
+  事件/状态与可选 RTC 备路；原生拨接和完整双向音频属于 P0-CALL，不能以 reserve 代替；
 - A0 可评估 Wi-Fi/BLE 用于家庭配置、近场同步和辅助连接；量产是否保留
   2.4 GHz 射频尚未冻结，首代基础安全与定位链路不得依赖它；
 - LoRa 是后续能力，A0 预留电气合同、供电和结构/RF空间，量产时优先形成独立板型或 SKU；
@@ -462,94 +254,51 @@ EgoSkin 不得覆盖 RF 禁区；含金属、碳纤维或导电填料的打印�
 
 ## 11. 安全、隐私与设备可信
 
-- 人工 SOS 和电话不得被 AI 否决；
-- 摄像头和环境麦克风必须有清晰可感知的工作状态与隐私控制；
-- 原始音频和图像持久化默认关闭；默认只允许有界、加密、易失的环形缓存。任何持久化、上传或训练都必须绑定明确目的、事件策略、用户同意、保存期限、删除/撤回语义和隐私审查；`training_allowed` 默认 `false`；
-- 精确位置是受限数据，只能在有界证据/产品服务存储中按最小化、授权、期限和删除策略处理；原始 Wi-Fi SSID/BSSID 默认不留存；
-- 设备身份、固件、模型、配置和事件包必须可签名、验签和审计；
-- 使用安全启动、固件加密、密钥保护、反回滚和安全 OTA；
-- 模型更新必须绑定模型版本、数据版本、评测报告、目标设备、灰度批次和回滚点；
-- 远程命令必须有身份、权限、时效、重放防护和完整 ACK；
-- 紧急联系人、呼入白名单和远程摄像头权限必须是显式策略，不得默认无限开放。
+人工 SOS 和电话不能被 AI 否决。环境 Camera/麦克风必须可感知与受隐私控制。
+产品要求原始音频和图像持久化默认关闭；默认只允许有界、加密、易失的环形缓存。
+任何持久化、上传或训练都必须绑定明确目的、事件策略、用户同意、保存期限、
+访问控制、删除/撤回语义和隐私审查；`training_allowed` 默认 `false`。
+当前获准的未加密设备/VPS 采集仅是有界工程过渡，必须记录授权范围和实际保护，
+不因此满足产品默认策略，也不授权删除既有数据。精确位置/传感器明细同属受限私有数据；原始 Wi-Fi
+SSID/BSSID 默认不留存。工程存储未加密时必须如实标注，不能把要求写成实现。
 
----
+设备身份、固件、模型、配置和事件包必须可签名、验签和审计；安全启动、固件加密、
+密钥保护、反回滚和安全 OTA 均须产品化证据。模型更新必须绑定模型版本、数据版本、
+评测报告、目标设备、灰度批次和回滚点，并验证签名和回滚。远程命令要有身份、权限、
+时效、防重放与 exact ACK。联系人、呼入和 Camera 权限不默认开放。
 
-## 12. 当前工程路径与证据边界
+## 12. 当前工程路径
 
-易变进度不在本文件复制，统一查看 [STATUS.md](../current/STATUS.md)、
-[ACTIVE_BUILD.md](../current/ACTIVE_BUILD.md) 和当前任务包。截至本基线生效，
-只冻结以下边界：
+Gemini 拥有单板恢复、真实 Wi-Fi/LTE 切换、短独立供电携带与 D2/FIELD-020；
+Codex 拥有 ALIGN-STATE-010 决策/实况/任务管理及规则状态真实性。两者在共享
+采集文件上按明确边界整合。现有开发板与自定义产品 A0 并行，不能互相冒充证据。
 
-- 现有 ESP32-S3 + SIM7670G 开发板继续作为 D2/D5/FIELD 软件、数据、故障注入和闭环证据载体；它与新销售产品的 PCB/外壳/BOM 路线并行，不因本基线停止；
-- USB-Free LTE→VPS 薄链路、命令/ACK、位置报告/观测、Web/API/export 和有界真实 IMU 窗口已经有命名工程证据；这些证据只适用于记录的开发板、镜像和场景；
-- reboot-aware 与 USB-Free 行为有实证；重连和 store-forward 目前只验证了有界重试/故障注入与证据形状，真实 modem reconnect recovery 和耐久持久缓存仍未通过产品门；
-- 历史固件曾观察到一次真实 firmware-side GNSS fix，但当前 FW-006 的坐标修正和完整响应处理尚未在固定坐标硬件响应上验证；产品天线、遮挡恢复、精度、多源融合和长稳仍未验收；
-- 当前按 ADR-0015 执行：A 线先完成单 4G 板的 L1/D2/D5 位置与原始采集、
-  Camera 持久保存/LTE/VPS/Web 闭环及 FIELD-020；CALL 与完整 SOS 暂停并保留；
-  R3 重连/功耗、A0 硬件/Native VoLTE reserve、隐私与中国 pre-compliance
-  继续并行；阻塞只沿依赖关系传播；
-- 普通开发遵循 active task packet、GitHub Flow 和证据门；冻结器件、结构、PCB、协议和发布门的变更才需要 ADR/ECN、批次和复测范围。
+CALL-020/021 RTC 与完整 SOS 保持当前 milestone pause；原生 CALL-030 可行性输入服务 HW-022，
+CALL-031 验收集成原生产品链，不自动恢复旧 RTC 依赖图。Base 最小私有终点、A0、合规及
+可靠性/功耗按各自消费者并行。准确运行镜像、数据、失败与已验证边界只看 STATUS、
+ACTIVE_BUILD、BOARD_MATRIX 和命名任务；不从源码、固件标签或测试数量推断。
 
-现有开发板证据不能替代自定义 A0 PCB、准确 `ML307A-GSLN`、BMI270 或最终整机门禁；相反，新产品候选器件也不能改写开发板已验证事实。
+## 13. 产品化路线与保证门
 
----
+A0 用可调试的放大架构板关闭 Location、原生通话、SOS、存储、电源、RF 和音频
+风险：`EL-MAIN-A0 + EL-USB-A0 + 传感器/音频模块`，裸 4G 模组直接回流贴装，
+不以手表开发板作为产品架构；配置 U.FL/I-PEX 测试天线、完整测流点、日志口和
+测试夹具接口，并制作真实器件结构/公差样件。A1 进入防水核心舱 EVT、定制天线/声学/
+光学/SIM/USB/密封/电池及佩戴验证。A2 扩 LoRa/LE Audio/场景及私有多模态能力。
+Ego Base 最小终点与上述路线同步，不再等到历史 P4 才开始。
 
-## 13. 产品化路线与放行门
+| 保证门 | 必须有的代表性证据 |
+|---|---|
+| `G3-POWER` | Location/原生 Call/SOS 并发无 brownout；典型守护至少 48 小时 |
+| `G4-RELIABILITY` | 关键事件跨断网/重启、严格 ACK、容量/损坏/丢失记真；存储寿命与掉电行为 |
+| `G5-WATER-ACOUSTIC` | 声学及浸水/汗液/温循/跌落后的密封、声音、按键和接口 |
+| `G6-RF` | LTE/GNSS 与人体、载体、电池、扬声器和 USB 共存 |
+| `G7-NPI` | 团队控制的设计源/BOM/CPL/测试/工装/良率/序列号/ECN |
+| `G8-SECURITY-PRIVACY` | 身份、加密/密钥/更新；用户私有终点与中继生命周期、受限位置/媒体 |
+| `G9-CHINA-COMPLIANCE` | 准确产品配置的 SRRC、进网/分类、CCC、SAR/暴露、电池/充电及目标人群具名书面结论 |
 
-以下路线是产品化计划，不表示对应 PCBA、结构或供应链已经存在。
-
-### A0：自定义架构板
-
-- `EL-MAIN-A0 + EL-USB-A0 + 传感器/音频模块`；
-- 裸 4G 模组直接回流贴装，不再以手表开发板为产品架构；
-- U.FL/I-PEX 测试天线、完整测流点、日志口、测试夹具接口；
-- 关闭 4G 数据/Ego Call/GNSS、电源、声音、IMU、缓存与数据闭环风险，并并行
-  评估 Native VoLTE reserve、摄像头与高级 TinyML 兼容路径；
-- 同步制作 1:1 真实器件结构假板和公差链样件。
-
-### A1：防水核心舱 EVT
-
-- 压缩为产品化板框与结构；
-- 定制天线、声学、光学、SIM、USB、密封和电池；
-- 形成 Cradle 与 EgoSkin 机械接口；
-- 完成防水、跌落、汗液、温升、弱网、通话、续航和人体佩戴验证。
-
-### A2：主动助手与场景版本
-
-- LoRa 正式版本；
-- 蓝牙耳机/LE Audio；
-- 宠物场景扬声器策略；
-- 个性化多模态模型；
-- 可选显示附件，而不是强制主屏。
-
-### 强制门禁
-
-第一代发布只有三个能力 Gate；任何一个未通过都不得称为可销售 P0：
-
-| 门禁 | 必须回答的问题 |
-| --- | --- |
-| `P0-LOC` | 家属在声明场景打开 Guardian 客户端时，是否能看到带更新时间、来源、可信度和不确定性的当前位置或诚实降级结果；室外、室内、弱信号、无 GNSS、移动、静止与掉线条件是否有可回放实测？ |
-| `P0-CALL` | 设备↔LTE 数据↔受控服务↔Guardian 客户端是否能完成设备呼出、Guardian 呼入和稳定双向全双工语音，并有诚实状态、失败、重连、身份、声学、功耗和隐私证据？网络语音 PoC 是必要里程碑，但单独不能宣告 Gate `PASS`。 |
-| `P0-SOS` | 长按实体键后，本地反馈和耐久事件是否立即产生，最近可信位置是否立即上传、GNSS 是否升级、Guardian 是否收到诚实告警状态、Ego Call 是否启动，而且 AI/Camera 故障不能否决闭环？ |
-
-下列横切产品保证门仍是三个 P0 Gate 的强制销售放行证据：
-
-| 保证门 | 必须回答的问题 |
-| --- | --- |
-| `G3-POWER` | 代表性 P0 定位、Ego Call、SOS 负载下是否无 brownout，典型守护模式是否实测达到至少 48 小时？ |
-| `G4-RELIABILITY` | 关键事件能否跨重启/断网保存、ACK 后删除，并对满队列/丢弃给出显式证据？ |
-| `G5-WATER-ACOUSTIC` | 浸水、汗液、温循和跌落后，密封、通话、麦克风、扬声器、USB 和按键是否仍合格？ |
-| `G6-RF` | LTE/GNSS 天线与人体、EgoSkin、USB、电池和扬声器共存后是否达标？ |
-| `G7-NPI` | 设计源文件、BOM/CPL、测试、工装、良率、序列号和 ECN 是否可由 Ego 团队独立控制？ |
-| `G8-SECURITY-PRIVACY` | 设备/Guardian 身份、加密、密钥、更新、精确位置和语音隐私是否有产品化证据？ |
-| `G9-CHINA-COMPLIANCE` | SRRC、进网/分类、CCC、SAR/EM exposure、电池/充电及目标人群适用路径是否有具名书面结论？ |
-
-`G0V-VOLTE-RESERVE` 是 A0 设计复核项，不是首发软件或销售放行 Gate。只有当
-当前 PCB 设计主动封死已决定保留的迁移路径时才 stop-the-line；未来 Native
-VoLTE 能力本身不要求在 P0 发布前实现或实测。
-
-`L2-AI` 与 `L3` 不属于 P0 放行门。摄像头、学习式融合、异常检测或复杂状态理解
-只有在后续 accepted decision 明确升级时才可影响发布。
+这些仍约束 P0-LOC/P0-CALL/P0-SOS；Base 完整 AI、Camera 与 advanced L2/L3
+不增加第四能力 Gate。生产器件、硬件和合规不能凭公开宣传或开发板名称冻结。
 
 ---
 
@@ -584,12 +333,12 @@ VoLTE 能力本身不要求在 P0 发布前实现或实测。
 
 以下内容不得由 AI 擅自决定：
 
-1. 4G/GNSS/Native VoLTE reserve 模组的最终选择；`ML307A-GSLN` 只是首选候选，其准确硬件资料、GNSS 射频口、音频接口、AT/OpenCPU 固件和适用网络版本仍未验证；
-2. guard-mode 的 LTE 数据驻留、PSM/eDRX、Ego Call 入呼唤醒/可达率/延迟、SOS 冷启动时限，以及 Native VoLTE reserve 的寻呼策略；模组或 app 不可达时不得声称即时呼入；
-3. Ego RTC Service 的媒体/信令架构、Guardian app 平台、push/后台唤醒、身份与密钥、部署边界、运营成本和失败回退；
+1. 4G/GNSS/蜂窝原生通话 模组的最终选择；`ML307A-GSLN` 只是首选候选，其准确硬件资料、GNSS 射频口、音频接口、AT/OpenCPU 固件和适用网络版本仍未验证；
+2. guard-mode 的 LTE 数据驻留、PSM/eDRX、Ego Call 入呼唤醒/可达率/延迟、SOS 冷启动时限，以及 原生语音寻呼策略；模组或 app 不可达时不得声称即时呼入；
+3. 可选 Ego RTC Service 的媒体/信令架构、Guardian app 平台、push/后台唤醒、身份与密钥、部署边界、运营成本和失败回退；
 4. A1 最终 AI MCU；
 5. 摄像头是否进入首发发布配置，以及对应传感器、镜头、FOV 和模组 FPC；
-6. 单麦/双麦、音频混音、回声消除，以及 Ego Call、AI 和 Native VoLTE reserve 的共用策略；
+6. 单麦/双麦、音频混音、回声消除，以及 蜂窝原生通话、AI 和 RTC 备路的共用策略；
 7. 电池容量、外形和宣称续航；
 8. A1 核心舱尺寸、主板外形和天线形式；
 9. SIM 维护舱与防水侧卡托的选择；
@@ -602,46 +351,18 @@ VoLTE 能力本身不要求在 P0 发布前实现或实测。
 
 ---
 
-## 16. 对旧资料的处理与迁移
+## 16. 迁移与历史资产
 
-旧版 `EGO_MASTER_CONTEXT.md` 中以下内容不再有效：
+ADR-0016 部分取代 ADR-0011/0012 的 RTC 主路/native reserve、ADR-0014 的旧
+CALL 调度和将 Base 全部后置的计划。ADR-0015 的单板 Camera/恢复/切换/FIELD
+范围保留，VPS 终点改为明确工程过渡。当前规则状态工程验收不解禁高级模型。
+不自动恢复 ADR-0008 旧三网门；无屏模块化、people-first、诚实证据与 48h 保留。
 
-- Ego 等同于黑色铝合金方碑；
-- Ego 的核心仅为 HDMI 采集和 USB HID；
-- Air-Gapped 被解释为完全不使用移动网络；
-- EgoLink 只是复古手机式远程语音接口；
-- 7-Day Sprint、Stripe Atlas 和 GUI Operator 路线代表当前总项目阶段。
+旧 V1 Pro nRF/Air780、OLED/腕表尺寸/四层 PCB、data-only/no-camera、旧采购表
+由 ADR-0008 取代，不用于新采购/开模。历史桌面 Monolith/HDMI/HID 只属 Operator。
+旧通话/双板/PC/模型工具与成功失败记录保留；不能把历史改成未曾发生。
+本次精确源快照与[迁移 map](../archive/decisions/20260922/MIGRATION_MAP.md)记录替换范围。
 
-仍保留的原则和资产：
-
-- 本地与隐私优先；
-- 私有服务器与本地算力资源；
-- 视觉理解、物理执行和闭环验证能力；
-- Qwen、OCR、视觉模型、向量记忆等可作为 EgoBase/Ego Operator 技术资产；
-- 任何高风险行动都需验证、回滚和证据链。
-
-### 16.1 本次销售产品路线迁移
-
-| 旧 authority / 条款 | 新状态 | 当前 authority |
-| --- | --- | --- |
-| ADR-0008 的三网 Native VoLTE 首发硬门，以及高级端侧 AI/事件相机作为首发 blocker 的条款 | 由 ADR-0011 **部分取代**；Ego Call 成为首发通信硬门，Native VoLTE 转为 `G0V-VOLTE-RESERVE`，最低 Rule Safety Kernel 保留，高级 L3/相机能力并行或后置。ADR-0008 的无屏模块化 EgoCore、people-first、A0→A1、隐私、诚实定位、48h 和资产控制继续有效 | ADR-0011 + 本文件第 2、3、4、5、13 节 |
-| ADR-0005 的 `nRF54LM20B + Air780EGH` V1 Pro 硬件冻结 | 由 ADR-0008 取代，保留为历史决策；不再控制新原理图或采购 | 本文件的产品要求 + ADR-0008；具体 A0 器件仍按第 8、15 节门禁 |
-| ADR-0006 的 OLED、无摄像头、data-first/无普通电话产品方向 | 由 ADR-0008 取代；其中诚实通信、数据最小化和防水测试原则继续沿用 | 本文件第 2、3、5、10、11 节 |
-| `V1_PRO_FORM_FACTOR_BASELINE.md` 的腕表尺寸、OLED 和四层 PCB | superseded historical reference；不得用于新板框或开模 | 本文件第 7、10、13 节；具体结构尺寸仍待 A0/A1 任务冻结 |
-| `V1_PRO_EVT_PROCUREMENT_BASELINE.md` 的旧 BOM/采购路线 | superseded；停止据此新增采购 | 新 A0 候选评估任务和后续 BOM/AVL/采购基线 |
-| 现有 ESP32-S3 + SIM7670G 开发板和 D2/D5/FIELD 任务 | **不被取代**，继续并行 | `ACTIVE_BUILD.md`、`BOARD_MATRIX.md`、`STATUS.md` 和命名任务包 |
-| P0 产品验证承诺与 machine-readable contracts | **不被取代** | `PRODUCT_CHARTER.md`、`P0_SCOPE.md`、`shared/contracts/` |
-
-创始人阶段总结 `docs/archive/product/EGO_LINK_MEMORY_20260818.md` 是 ADR-0011 和本次 v2.2
-迁移的来源输入，不建立第二套并行产品 authority。旧文档和已接受 ADR 保留用于
-追溯，不得删除或重写成“从未发生”。任何尚未在表中列出的冲突必须先记录，再
-通过 ADR/ECN 处理。
-
----
-
-> **AI 执行检查：** 回答或实施 Ego 相关任务前，先判断其属于安全平面、AI
-> 平面、EgoLink、Ego RTC Service、Guardian app、EgoBase、Message Hub 还是
-> Ego Operator；核对是否触碰未冻结项；明确当前证据；把工作挂入 active task
-> packet、L1/L2/L3 能力优先级与对应产品 Gate；不得重新把销售产品引向“用
-> 开发板替代自定义产品”或“以屏幕定义产品”，不得把 planned Ego Call 写成
-> verified，也不得因一条工作线阻塞而中断其他独立并行线。
+实施前先判断消费者和安全/AI 平面，核对 task allowed_paths 与证据。普通可逆
+修复按任务进行；冻结器件、结构、PCB、协议与发布门须有相应 ADR/ECN、批次和
+复测范围。不得把 planned 写成 verified，也不得用一条依赖线阻塞全项目。

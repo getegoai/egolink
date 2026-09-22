@@ -8,7 +8,7 @@ execution_state: queued
 depends_on:
   - HW-022
   - LOC-021
-  - CALL-021
+  - CALL-031
   - SOS-010
 serves_gate: G3-POWER
 requires_hardware: true
@@ -16,10 +16,11 @@ created: 2026-08-23
 last_updated: 2026-08-23
 
 context:
+  - docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md
   - docs/hardware/POWER_AND_BATTERY_ENGINEERING_TARGETS.md
   - docs/tasks/active/HW-022_INTEGRATED_PROTOTYPE_BUILD.md
   - docs/tasks/active/FIELD-020_L1_FIELD_DATASET.md
-  - docs/tasks/active/CALL-021_EMBEDDED_LTE_RTC_MEDIA.md
+  - docs/tasks/active/CALL-031_NATIVE_CELLULAR_PRODUCT_LOOP.md
   - docs/tasks/active/SOS-010_SOS_WALKING_SKELETON.md
 
 allowed_paths:
@@ -30,6 +31,16 @@ out_of_scope:
   - changing location/call/SOS policy merely to manufacture a passing number
   - starting an unattended run without reviewed safety and operator intent
 ---
+
+## 2026-09-22 primary-cellular dependency alignment
+
+ADR-0016 replaces the old RTC primary-path dependency with CALL-030 feasibility
+and CALL-031 native cellular product evidence. CALL-020/021 remain paused RTC
+assets. The criteria below retain their reliability/privacy/product invariants;
+current references to Ego Call mean native cellular primary, with RTC auxiliary.
+Historical implementation checkpoints remain dated evidence, not a new result.
+No Gate or hardware state advances from this dependency update.
+
 
 # Goal
 

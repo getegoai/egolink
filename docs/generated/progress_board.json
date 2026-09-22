@@ -1,212 +1,131 @@
 {
-  "generated_at": "2026-09-09 11:09 UTC",
+  "generated_at": "2026-09-22 11:03 UTC",
   "git": {
-    "branch": "a0/first-real-field-session",
-    "head": "ef3c06f6a docs(hardware): add camera productization inputs [C]"
+    "branch": "d2/state-truth-management-20260922",
+    "head": "3a0728058 fix(state): preserve evidence truth across firmware, API and Web [D2]"
   },
-  "current_focus": "Camera 默认 blocked；显式 shared-I2C trial profile 已完成干净离线构建，每次启动只允许一次 Web 手动实际尝试且禁止定时。该构建的 Wi-Fi/认证字段为空，只是构建证据，不能直接联网实拍。下一步是在具名操作/隐私范围内生成被 Git 忽略的 NO_SIM/Wi-Fi 私密 overlay，重建并绑定新 SHA，再部署/刷写/单拍；证据通过审查后才进入 VERIFIED、SIM/LTE、断网补传、独立供电短测和 FIELD-020。",
+  "current_focus": "Codex 已完成 ALIGN-STATE-010 离线修复（源码 3a0728058），未烧录或部署。Gemini 负责单板恢复、实际 Wi-Fi/LTE 切换、D2 基线与 FIELD-020。最后报告镜像仍为 Boot188；三个产品 Gate 均为 NOT_RUN。",
   "milestones": [
     {
-      "id": "A-CAMERA",
-      "title": "Single-board Location and Camera Closure",
-      "done": 0,
-      "total": 2,
+      "id": "STATE-TRUTH",
+      "title": "状态真实性与项目对齐",
+      "done": 1,
+      "total": 1,
       "tasks": [
         {
-          "id": "P0-CONVERGENCE-20260905",
-          "label": "joint source and live closure",
-          "state": "in_progress"
-        },
-        {
-          "id": "FIELD-020",
-          "label": "representative field dataset",
-          "state": "in_progress"
+          "id": "ALIGN-STATE-010",
+          "label": "Codex state truth / contracts / governance",
+          "state": "done"
         }
       ]
     },
     {
-      "id": "C-PRODUCT",
-      "title": "Hardware and Pre-compliance",
-      "done": 0,
-      "total": 2,
-      "tasks": [
-        {
-          "id": "HW-021",
-          "label": "integrated hardware architecture",
-          "state": "in_progress"
-        },
-        {
-          "id": "COMPLIANCE-010",
-          "label": "China pre-compliance",
-          "state": "in_progress"
-        }
-      ]
-    },
-    {
-      "id": "DEFERRED-P0",
-      "title": "Paused Call and SOS Gates",
+      "id": "A-FIELD",
+      "title": "单板恢复与真实外场数据",
       "done": 0,
       "total": 3,
       "tasks": [
         {
-          "id": "CALL-020",
-          "label": "LTE data voice PoC",
-          "state": "paused"
+          "id": "P0-CONVERGENCE-20260905",
+          "label": "Gemini recovery / route transition",
+          "state": "in_progress"
         },
         {
-          "id": "CALL-021",
-          "label": "embedded RTC media",
-          "state": "paused"
+          "id": "D2-001",
+          "label": "reference metrics",
+          "state": "planned"
         },
         {
-          "id": "SOS-010",
-          "label": "physical SOS closure",
-          "state": "paused"
+          "id": "FIELD-020",
+          "label": "representative field dataset",
+          "state": "planned"
         }
       ]
     },
     {
-      "id": "RELEASE",
-      "title": "Engineering Alpha Release Gate",
-      "done": 4,
+      "id": "LOCAL-FIRST",
+      "title": "最小用户私有终点（并行准备）",
+      "done": 0,
+      "total": 1,
+      "tasks": [
+        {
+          "id": "BASE-010",
+          "label": "BASE-010",
+          "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "NATIVE-CALL",
+      "title": "原生蜂窝主通话与 SOS",
+      "done": 0,
       "total": 4,
       "tasks": [
         {
-          "id": "REL-012",
-          "label": "v0.1.0 alpha readiness",
-          "state": "done"
-        },
-        {
-          "id": "ENG-007",
-          "label": "retire autonomous queue",
-          "state": "done"
-        },
-        {
-          "id": "ENG-008",
-          "label": "progress board",
-          "state": "done"
-        },
-        {
-          "id": "OBS-005",
-          "label": "VPS progress visibility",
-          "state": "done"
-        }
-      ]
-    },
-    {
-      "id": "D1",
-      "title": "Link-Through Regression",
-      "done": 1,
-      "total": 2,
-      "tasks": [
-        {
-          "id": "D1-001",
-          "label": "4G link-through",
-          "state": "done"
-        },
-        {
-          "id": "PWR-001",
-          "label": "power baseline",
-          "state": "in_progress"
-        }
-      ]
-    },
-    {
-      "id": "D2",
-      "title": "Location Accuracy Baseline",
-      "done": 8,
-      "total": 10,
-      "tasks": [
-        {
-          "id": "D2-001",
-          "label": "location baseline tooling",
-          "state": "in_progress"
-        },
-        {
-          "id": "FIELD-003",
-          "label": "reference-point field run",
-          "state": "in_progress"
-        },
-        {
-          "id": "MAP-001",
-          "label": "no-key evidence map",
-          "state": "done"
-        },
-        {
-          "id": "FIELD-010",
-          "label": "server readiness observer",
-          "state": "done"
-        },
-        {
-          "id": "D2-002",
-          "label": "reference field automation",
-          "state": "done"
-        },
-        {
-          "id": "D2-003",
-          "label": "bounded field export",
-          "state": "done"
-        },
-        {
-          "id": "MAP-002",
-          "label": "mobile reference capture",
-          "state": "done"
-        },
-        {
-          "id": "MAP-003",
-          "label": "local reference overlay",
-          "state": "done"
-        },
-        {
-          "id": "D2-004",
-          "label": "historical VPS baseline and rule freeze",
-          "state": "done"
-        },
-        {
-          "id": "D2-005",
-          "label": "QMI configuration and motion readiness",
-          "state": "done"
-        }
-      ]
-    },
-    {
-      "id": "D5",
-      "title": "Location Data Flywheel",
-      "done": 0,
-      "total": 2,
-      "tasks": [
-        {
-          "id": "D5-001",
-          "label": "location data flywheel",
-          "state": "in_progress"
-        },
-        {
-          "id": "MODEL-LOC-001",
-          "label": "location model loop",
+          "id": "CALL-030",
+          "label": "CALL-030",
           "state": "planned"
+        },
+        {
+          "id": "HW-022",
+          "label": "HW-022",
+          "state": "planned"
+        },
+        {
+          "id": "CALL-031",
+          "label": "CALL-031",
+          "state": "planned"
+        },
+        {
+          "id": "SOS-010",
+          "label": "SOS-010",
+          "state": "paused"
         }
       ]
     },
     {
       "id": "PRODUCT",
-      "title": "Product Alpha Gaps",
-      "done": 1,
-      "total": 3,
+      "title": "产品保障",
+      "done": 0,
+      "total": 4,
       "tasks": [
         {
-          "id": "CALLSMS-001",
-          "label": "call/SMS verification",
+          "id": "HW-021",
+          "label": "HW-021",
+          "state": "parked"
+        },
+        {
+          "id": "PWR-020",
+          "label": "PWR-020",
           "state": "planned"
         },
         {
-          "id": "PWR-002",
-          "label": "low-power location policy decision",
-          "state": "done"
+          "id": "COMPLIANCE-010",
+          "label": "COMPLIANCE-010",
+          "state": "planned"
         },
         {
-          "id": "PRIVACY-LOC-001",
-          "label": "location data policy",
+          "id": "P0-RELEASE-010",
+          "label": "P0-RELEASE-010",
           "state": "planned"
+        }
+      ]
+    },
+    {
+      "id": "RTC-RESERVE",
+      "title": "已暂停的 RTC 备路资产",
+      "done": 0,
+      "total": 2,
+      "tasks": [
+        {
+          "id": "CALL-020",
+          "label": "CALL-020",
+          "state": "paused"
+        },
+        {
+          "id": "CALL-021",
+          "label": "CALL-021",
+          "state": "paused"
         }
       ]
     }
@@ -215,8 +134,11 @@
     {
       "id": "A0-001",
       "title": "IMU six-face calibration pipeline",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "unassigned",
+      "lane": "",
       "priority": "critical",
       "date": "2026-08-17",
       "path": "docs/tasks/active/A0-001_IMU_CALIBRATION_PIPELINE.md"
@@ -224,8 +146,11 @@
     {
       "id": "A0-002",
       "title": "Unified sensor timestamp and time-lineage validation",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "unassigned",
+      "lane": "",
       "priority": "critical",
       "date": "2026-08-17",
       "path": "docs/tasks/active/A0-002_UNIFIED_TIMESTAMP.md"
@@ -233,17 +158,35 @@
     {
       "id": "A0-003",
       "title": "Standard Field Session schema and sealed package validation",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "unassigned",
+      "lane": "",
       "priority": "critical",
       "date": "2026-08-17",
       "path": "docs/tasks/active/A0-003_FIELD_SESSION_SCHEMA.md"
+    },
+    {
+      "id": "BASE-010",
+      "title": "Minimum user-controlled private data endpoint",
+      "state": "planned",
+      "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "unassigned",
+      "lane": "C",
+      "priority": "high",
+      "date": "2026-09-22",
+      "path": "docs/tasks/active/BASE-010_LOCAL_FIRST_MINIMUM.md"
     },
     {
       "id": "CALL-020",
       "title": "PC-bridged LTE-data RTC media PoC",
       "state": "paused",
       "packet_status": "paused",
+      "execution_state": "paused_by_founder_20260909",
+      "owner": "",
+      "lane": "B",
       "priority": "critical",
       "date": "2026-09-09",
       "path": "docs/tasks/active/CALL-020_LTE_DATA_VOICE_POC.md"
@@ -253,15 +196,45 @@
       "title": "Embedded LTE-data RTC media",
       "state": "paused",
       "packet_status": "paused",
+      "execution_state": "paused_by_founder_20260909",
+      "owner": "",
+      "lane": "B",
       "priority": "critical",
       "date": "2026-09-09",
       "path": "docs/tasks/active/CALL-021_EMBEDDED_LTE_RTC_MEDIA.md"
     },
     {
+      "id": "CALL-030",
+      "title": "Native cellular feasibility and audio interface",
+      "state": "planned",
+      "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "unassigned",
+      "lane": "B",
+      "priority": "high",
+      "date": "2026-09-22",
+      "path": "docs/tasks/active/CALL-030_NATIVE_CELLULAR_FEASIBILITY.md"
+    },
+    {
+      "id": "CALL-031",
+      "title": "Native cellular primary product loop",
+      "state": "planned",
+      "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "unassigned",
+      "lane": "B",
+      "priority": "high",
+      "date": "2026-09-22",
+      "path": "docs/tasks/active/CALL-031_NATIVE_CELLULAR_PRODUCT_LOOP.md"
+    },
+    {
       "id": "COMPLIANCE-010",
       "title": "China P0 pre-compliance and classification",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "",
+      "lane": "D",
       "priority": "critical",
       "date": "2026-08-23",
       "path": "docs/tasks/active/COMPLIANCE-010_CHINA_PRECOMPLIANCE.md"
@@ -269,8 +242,11 @@
     {
       "id": "D2-001",
       "title": "D2 location accuracy baseline and metric gate",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "gemini",
+      "lane": "",
       "priority": "high",
       "date": "2026-07-11",
       "path": "docs/tasks/active/D2-001_LOCATION_ACCURACY_BASELINE.md"
@@ -278,8 +254,11 @@
     {
       "id": "D5-001",
       "title": "D5 location data flywheel mainline",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "unassigned",
+      "lane": "",
       "priority": "high",
       "date": "2026-07-11",
       "path": "docs/tasks/active/D5-001_LOCATION_DATA_FLYWHEEL_MAINLINE.md"
@@ -287,8 +266,11 @@
     {
       "id": "DOC-BASE-001",
       "title": "Establish the current Ego product-direction baseline",
-      "state": "in_progress",
+      "state": "acceptance_review",
       "packet_status": "active",
+      "execution_state": "acceptance_review",
+      "owner": "director",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-14",
       "path": "docs/tasks/active/DOC-BASE-001_EGO_MASTER_PRODUCT_BASELINE.md"
@@ -296,8 +278,11 @@
     {
       "id": "FIELD-003",
       "title": "Outdoor GNSS acceptance protocol and first measured run",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "gemini",
+      "lane": "",
       "priority": "high",
       "date": "2026-07-11",
       "path": "docs/tasks/active/FIELD-003_OUTDOOR_GNSS_ACCEPTANCE.md"
@@ -305,8 +290,11 @@
     {
       "id": "FIELD-004",
       "title": "D1 outdoor multi-hour field run",
-      "state": "in_progress",
+      "state": "continuous_regression",
       "packet_status": "continuous_regression",
+      "execution_state": "continuous_regression",
+      "owner": "",
+      "lane": "",
       "priority": "high",
       "date": "2026-07-09",
       "path": "docs/tasks/active/FIELD-004_D1_OUTDOOR_MULTI_HOUR_RUN.md"
@@ -314,8 +302,11 @@
     {
       "id": "FIELD-011",
       "title": "GNSS plus IMU LTE joint outdoor seed",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "gemini",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-11",
       "path": "docs/tasks/active/FIELD-011_GNSS_IMU_LTE_JOINT_FIELD_SEED.md"
@@ -323,8 +314,11 @@
     {
       "id": "FIELD-020",
       "title": "P0-LOC representative field dataset",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "gemini",
+      "lane": "A",
       "priority": "critical",
       "date": "2026-09-09",
       "path": "docs/tasks/active/FIELD-020_L1_FIELD_DATASET.md"
@@ -332,8 +326,11 @@
     {
       "id": "FT-001B",
       "title": "First replayable asynchronous L1 GNSS and IMU field session",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "gemini",
+      "lane": "",
       "priority": "critical",
       "date": "2026-08-23",
       "path": "docs/tasks/active/FT-001B_FIRST_REPLAYABLE_ASYNC_GNSS_IMU_SESSION.md"
@@ -341,8 +338,11 @@
     {
       "id": "FW-005",
       "title": "SIM7670 GNSS coordinate and response correctness",
-      "state": "in_progress",
+      "state": "acceptance_review",
       "packet_status": "active",
+      "execution_state": "acceptance_review",
+      "owner": "director",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-12",
       "path": "docs/tasks/active/FW-005_SIM7670_GNSS_COORDINATE_RESPONSE_CORRECTNESS.md"
@@ -350,8 +350,11 @@
     {
       "id": "FW-006",
       "title": "Deploy the FW-005 GNSS correctness image to the connectivity node",
-      "state": "in_progress",
+      "state": "acceptance_review",
       "packet_status": "active",
+      "execution_state": "acceptance_review",
+      "owner": "director",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-12",
       "path": "docs/tasks/active/FW-006_GNSS_CORRECTNESS_HARDWARE_UPDATE.md"
@@ -359,8 +362,11 @@
     {
       "id": "FW-007",
       "title": "Bounded LTE to Wi-Fi engineering failover",
-      "state": "in_progress",
+      "state": "acceptance_review",
       "packet_status": "active",
+      "execution_state": "acceptance_review",
+      "owner": "director",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-16",
       "path": "docs/tasks/active/FW-007_LTE_WIFI_FAILOVER.md"
@@ -368,8 +374,11 @@
     {
       "id": "HW-021",
       "title": "Exact integrated P0 prototype design and down-select",
-      "state": "in_progress",
+      "state": "parked",
       "packet_status": "active",
+      "execution_state": "parked",
+      "owner": "unassigned",
+      "lane": "D",
       "priority": "critical",
       "date": "2026-09-09",
       "path": "docs/tasks/active/HW-021_EXACT_INTEGRATED_PROTOTYPE_DESIGN.md"
@@ -377,8 +386,11 @@
     {
       "id": "HW-022",
       "title": "Integrated P0 prototype build and bring-up",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "",
+      "lane": "D",
       "priority": "critical",
       "date": "2026-08-23",
       "path": "docs/tasks/active/HW-022_INTEGRATED_PROTOTYPE_BUILD.md"
@@ -386,8 +398,11 @@
     {
       "id": "L2-001",
       "title": "Continuous IMU mobility capture, persistent spool and replay",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "",
+      "lane": "A",
       "priority": "medium",
       "date": "2026-08-23",
       "path": "docs/tasks/active/L2-001_CONTINUOUS_IMU_MOBILITY_CAPTURE.md"
@@ -395,8 +410,11 @@
     {
       "id": "LOC-021",
       "title": "Device, Message Hub and Guardian Location integration",
-      "state": "in_progress",
+      "state": "parked",
       "packet_status": "active",
+      "execution_state": "parked",
+      "owner": "unassigned",
+      "lane": "A",
       "priority": "critical",
       "date": "2026-09-05",
       "path": "docs/tasks/active/LOC-021_DEVICE_LOCATION_INTEGRATION.md"
@@ -406,6 +424,9 @@
       "title": "Model footprint assessment",
       "state": "paused",
       "packet_status": "paused",
+      "execution_state": "unscheduled",
+      "owner": "",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-23",
       "path": "docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md"
@@ -413,8 +434,11 @@
     {
       "id": "OPS-002",
       "title": "Official ego.example.invalid HTTPS entry and always-visible AMap canvas",
-      "state": "in_progress",
+      "state": "acceptance_review",
       "packet_status": "active",
+      "execution_state": "acceptance_review",
+      "owner": "director",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-12",
       "path": "docs/tasks/active/OPS-002_EGO_DOMAIN_HTTPS.md"
@@ -422,8 +446,11 @@
     {
       "id": "OPS-003",
       "title": "Suppress AMap coordinate-convert access logs",
-      "state": "in_progress",
+      "state": "acceptance_review",
       "packet_status": "active",
+      "execution_state": "acceptance_review",
+      "owner": "director",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-15",
       "path": "docs/tasks/active/OPS-003_AMAP_COORDINATE_LOG_PRIVACY.md"
@@ -431,8 +458,11 @@
     {
       "id": "OPS-004",
       "title": "Migrate device ingress from plaintext HTTP to TLS",
-      "state": "in_progress",
+      "state": "parked",
       "packet_status": "active",
+      "execution_state": "parked",
+      "owner": "unassigned",
+      "lane": "C",
       "priority": "critical",
       "date": "2026-09-02",
       "path": "docs/tasks/active/OPS-004_DEVICE_HTTPS_INGRESS.md"
@@ -440,8 +470,11 @@
     {
       "id": "OUTBOX-010",
       "title": "Persistent priority outbox",
-      "state": "in_progress",
+      "state": "parked",
       "packet_status": "active",
+      "execution_state": "parked",
+      "owner": "unassigned",
+      "lane": "C",
       "priority": "critical",
       "date": "2026-09-03",
       "path": "docs/tasks/active/OUTBOX-010_PERSISTENT_PRIORITY_OUTBOX.md"
@@ -451,15 +484,21 @@
       "title": "Single-board Location and Camera field closure",
       "state": "in_progress",
       "packet_status": "active",
+      "execution_state": "in_progress",
+      "owner": "gemini",
+      "lane": "",
       "priority": "critical",
-      "date": "2026-09-09",
+      "date": "2026-09-18",
       "path": "docs/tasks/active/P0-CONVERGENCE-20260905.md"
     },
     {
       "id": "P0-RELEASE-010",
       "title": "Saleable P0 release criteria and evidence review",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "",
+      "lane": "release",
       "priority": "critical",
       "date": "2026-08-23",
       "path": "docs/tasks/active/P0-RELEASE-010_SALEABLE_P0_REVIEW.md"
@@ -469,6 +508,9 @@
       "title": "Mass-production requirements definition and module/MCU selection gates",
       "state": "paused",
       "packet_status": "paused",
+      "execution_state": "unscheduled",
+      "owner": "",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-23",
       "path": "docs/tasks/active/PROD-001_MASS_PRODUCTION_REQUIREMENTS.md"
@@ -476,8 +518,11 @@
     {
       "id": "PWR-001",
       "title": "Real power telemetry and first 24h battery baseline run",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "gemini",
+      "lane": "",
       "priority": "high",
       "date": "2026-07-09",
       "path": "docs/tasks/active/PWR-001_POWER_TELEMETRY_24H_BATTERY_BASELINE.md"
@@ -485,8 +530,11 @@
     {
       "id": "PWR-020",
       "title": "Integrated P0 power and 48-hour guard matrix",
-      "state": "in_progress",
+      "state": "planned",
       "packet_status": "active",
+      "execution_state": "queued",
+      "owner": "",
+      "lane": "C",
       "priority": "critical",
       "date": "2026-08-23",
       "path": "docs/tasks/active/PWR-020_P0_48H_POWER_MATRIX.md"
@@ -496,6 +544,9 @@
       "title": "Physical SOS walking skeleton",
       "state": "paused",
       "packet_status": "paused",
+      "execution_state": "paused_by_founder_20260909",
+      "owner": "",
+      "lane": "B",
       "priority": "critical",
       "date": "2026-09-09",
       "path": "docs/tasks/active/SOS-010_SOS_WALKING_SKELETON.md"
@@ -503,8 +554,11 @@
     {
       "id": "WEB-004",
       "title": "AMap live location view with runtime-only credentials",
-      "state": "in_progress",
+      "state": "acceptance_review",
       "packet_status": "active",
+      "execution_state": "acceptance_review",
+      "owner": "director",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-15",
       "path": "docs/tasks/active/WEB-004_AMAP_LIVE_LOCATION_MAP.md"
@@ -512,8 +566,11 @@
     {
       "id": "WEB-005",
       "title": "Manual Dashboard refresh and selected trusted trajectory",
-      "state": "in_progress",
+      "state": "acceptance_review",
       "packet_status": "active",
+      "execution_state": "acceptance_review",
+      "owner": "director",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-15",
       "path": "docs/tasks/active/WEB-005_MANUAL_REFRESH_TRAJECTORY_SELECTION.md"
@@ -521,8 +578,11 @@
     {
       "id": "WEB-006",
       "title": "Paginated searchable all-location history",
-      "state": "in_progress",
+      "state": "acceptance_review",
       "packet_status": "active",
+      "execution_state": "acceptance_review",
+      "owner": "director",
+      "lane": "",
       "priority": "high",
       "date": "2026-08-15",
       "path": "docs/tasks/active/WEB-006_PAGINATED_LOCATION_HISTORY.md"
@@ -530,10 +590,25 @@
   ],
   "recent_done": [
     {
+      "id": "ALIGN-STATE-010",
+      "title": "Align founder decisions and repair ego-state truth and contracts",
+      "state": "done",
+      "packet_status": "done",
+      "execution_state": "done",
+      "owner": "codex",
+      "lane": "integration",
+      "priority": "critical",
+      "date": "2026-09-22",
+      "path": "docs/tasks/done/ALIGN-STATE-010_DECISION_AND_STATE_TRUTH.md"
+    },
+    {
       "id": "D2-006",
       "title": "QMI8658 external-module hardware identity probe",
       "state": "done",
       "packet_status": "done",
+      "execution_state": "unscheduled",
+      "owner": "",
+      "lane": "",
       "priority": "high",
       "date": "2026-09-09",
       "path": "docs/tasks/done/D2-006_QMI8658_HARDWARE_IDENTITY_PROBE.md"
@@ -543,6 +618,9 @@
       "title": "QMI8658 bounded window capture and LTE uplink",
       "state": "done",
       "packet_status": "superseded",
+      "execution_state": "unscheduled",
+      "owner": "",
+      "lane": "",
       "priority": "high",
       "date": "2026-09-09",
       "path": "docs/tasks/done/D2-007_QMI8658_BOUNDED_LTE_WINDOW_UPLINK.md"
@@ -552,6 +630,9 @@
       "title": "Wi-Fi QMI8658 sensor telemetry smoke",
       "state": "done",
       "packet_status": "done",
+      "execution_state": "unscheduled",
+      "owner": "",
+      "lane": "",
       "priority": "high",
       "date": "2026-09-09",
       "path": "docs/tasks/done/D2-008_WIFI_QMI8658_SENSOR_SMOKE.md"
@@ -561,6 +642,9 @@
       "title": "Wearable audio I/O and simultaneous-loop bring-up",
       "state": "done",
       "packet_status": "accepted_for_transition",
+      "execution_state": "completed",
+      "owner": "",
+      "lane": "B",
       "priority": "critical",
       "date": "2026-09-05",
       "path": "docs/tasks/done/CALL-010_AUDIO_HARDWARE_LOOP.md"
@@ -570,6 +654,9 @@
       "title": "Freeze Ego Call minimum architecture and PC loop",
       "state": "done",
       "packet_status": "accepted_for_transition",
+      "execution_state": "completed",
+      "owner": "",
+      "lane": "B",
       "priority": "critical",
       "date": "2026-08-23",
       "path": "docs/tasks/done/CALL-001_EGO_CALL_ARCHITECTURE_AND_PC_LOOP.md"
@@ -579,6 +666,9 @@
       "title": "P0 A0 architecture baseline and candidate constraints",
       "state": "done",
       "packet_status": "accepted_for_transition",
+      "execution_state": "completed",
+      "owner": "",
+      "lane": "D",
       "priority": "critical",
       "date": "2026-08-23",
       "path": "docs/tasks/done/HW-020_PRODUCT_ARCHITECTURE_FREEZE.md"
@@ -588,31 +678,20 @@
       "title": "Restore contract-consistent green L1 engineering baseline",
       "state": "done",
       "packet_status": "accepted_for_transition",
+      "execution_state": "completed",
+      "owner": "",
+      "lane": "A",
       "priority": "critical",
       "date": "2026-08-23",
       "path": "docs/tasks/done/L1-000_HEAD_CONTRACT_AND_TEST_RECOVERY.md"
-    },
-    {
-      "id": "LOC-020",
-      "title": "Location Engine v0",
-      "state": "done",
-      "packet_status": "accepted_for_transition",
-      "priority": "critical",
-      "date": "2026-08-23",
-      "path": "docs/tasks/done/LOC-020_LOCATION_ENGINE_V0.md"
     }
   ],
-  "operator_asks": [
-    "保持 4G 板断电并核对：仅该板参与；TF 已拔除且驱动禁用，CAM 开关置于 Camera 位置，OV5640 排线方向及 QMI8658A/MAX17048 的 GPIO15/16 接线正确，GPIO39-42 无外部 JTAG；随后只接 4G 板数据 USB。",
-    "一次性明确参与者、获准拍摄场景、查看者、保留截止与删除路径，并授权：使用本机私密值生成被 Git 忽略的 NO_SIM/Wi-Fi trial overlay，重建并绑定新的精确 SHA，部署本次 VPS/Web，在 COM3 只刷该具名镜像，再由现有 Web 命令执行一次 QVGA 手动测试。training_allowed=false；不开定时、不使用 SIM、不采音频、不公开或提交照片。",
-    "试验后先审查 Camera/IMU/gauge/I2C、heap/DMA/stack、UART/reset/brownout/watchdog 证据，再决定是否生成 VERIFIED；试验成功不自动晋级。随后才准备 SIM、LTE/GNSS 天线和独立电源，进入真实 LTE 单拍与恢复补传。",
-    "在具名现场证据完成前，不宣称 Camera 外测就绪、定位精度、续航、量产或任何 P0 Gate 通过。"
-  ],
+  "operator_asks": [],
   "assignees": {
-    "P0-CONVERGENCE-20260905": "codex + founder bounded hardware run",
-    "FIELD-020": "founder field run + codex evidence closure",
-    "HW-021": "codex hardware lane",
-    "COMPLIANCE-010": "codex + qualified labs/advisers",
+    "P0-CONVERGENCE-20260905": "Gemini",
+    "FIELD-020": "Gemini",
+    "HW-021": "parked / no active builder",
+    "COMPLIANCE-010": "unassigned / NOT_SENT",
     "CALL-020": "paused",
     "CALL-021": "paused",
     "SOS-010": "paused",
@@ -621,9 +700,9 @@
     "ENG-008": "codex",
     "OBS-005": "codex",
     "D1-001": "codex + founder field tests",
-    "PWR-001": "codex + founder field tests",
-    "D2-001": "codex",
-    "FIELD-003": "founder outdoor run + codex postrun",
+    "PWR-001": "Gemini",
+    "D2-001": "Gemini",
+    "FIELD-003": "Gemini",
     "FIELD-010": "codex",
     "D2-002": "codex",
     "D2-003": "codex",
@@ -636,7 +715,25 @@
     "MODEL-LOC-001": "codex",
     "CALLSMS-001": "blocked until explicit hardware task",
     "PWR-002": "planned",
-    "PRIVACY-LOC-001": "planned"
+    "PRIVACY-LOC-001": "planned",
+    "FT-001B": "Gemini",
+    "FIELD-011": "Gemini",
+    "FW-005": "Director acceptance review",
+    "FW-006": "Director acceptance review",
+    "WEB-006": "Director acceptance review",
+    "WEB-004": "Director acceptance review",
+    "WEB-005": "Director acceptance review",
+    "FW-007": "Director acceptance review",
+    "OPS-003": "Director acceptance review",
+    "OPS-002": "Director acceptance review",
+    "DOC-BASE-001": "Director acceptance review",
+    "OPS-004": "parked / no active builder",
+    "OUTBOX-010": "parked / no active builder",
+    "LOC-021": "parked / no active builder",
+    "ALIGN-STATE-010": "Codex",
+    "CALL-030": "unassigned / queued",
+    "CALL-031": "unassigned / queued",
+    "BASE-010": "unassigned / queued"
   },
   "key_releases": [
     {
@@ -681,9 +778,13 @@
     }
   ],
   "counts": {
-    "active": 30,
+    "active": 1,
     "paused": 5,
-    "open_total": 35,
-    "done_total": 162
+    "planned": 18,
+    "acceptance_review": 9,
+    "parked": 4,
+    "continuous_regression": 1,
+    "open_total": 38,
+    "done_total": 163
   }
 }

@@ -4,7 +4,7 @@ title: Persistent priority outbox
 status: active
 priority: critical
 lane: C
-execution_state: in_progress
+execution_state: parked
 depends_on: []
 serves_gate: P0-SOS
 requires_hardware: true
@@ -42,6 +42,8 @@ out_of_scope:
   - hiding overflow, deleting before positive ACK or fabricating event time
   - flashing, rebooting, disconnecting or commanding hardware without explicit
     operator intent
+owner: unassigned
+reviewed_at: 2026-09-22
 ---
 
 # Goal

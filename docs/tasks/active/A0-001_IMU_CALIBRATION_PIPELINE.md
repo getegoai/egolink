@@ -37,6 +37,9 @@ out_of_scope:
   - changing the current IMU wire protocol, sensor rate, ranges, pins, or firmware behavior
   - model training or changing Location Belief behavior
   - marking A0-001 or A-R0 as passed without a reviewed real six-pose capture artifact
+execution_state: queued
+owner: unassigned
+reviewed_at: 2026-09-22
 ---
 
 # Problem

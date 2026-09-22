@@ -1,18 +1,22 @@
 ---
-document_status: authoritative_engineering_baseline
+document_status: legacy_rtc_engineering_baseline
+decision_updated: 2026-09-22
 last_verified: 2026-08-23
 verified_by: codex
 source_task: CALL-001
 ---
 
-# Ego Call Minimum Architecture
+# Ego Call Legacy RTC Minimum Architecture
 
 ## Purpose
 
-Ego Call is the first-launch two-way voice path between one EgoCore and an
-authorized Guardian App over LTE data and managed RTC. It is not an ordinary
-phone service, and EgoLink will not operate a PSTN/SIP gateway in this phase.
-Native VoLTE remains an A0 hardware reserve under ADR-0011.
+This document preserves the CALL-001 RTC session/control contract between one
+EgoCore and an authorized Guardian App over LTE data and managed RTC. Under
+[ADR-0016](../architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md),
+the first-launch P0-CALL route is native cellular voice through CALL-030 and
+CALL-031; RTC is optional and CALL-020/021 remain paused. The RTC state machine
+below does not define native modem call states or resume the old task chain.
+The project does not operate a public PSTN/SIP gateway.
 
 This baseline freezes boundaries and truthful state semantics. It does not
 select an RTC vendor or claim device audio, mobile-app, weak-network, or
@@ -83,8 +87,13 @@ conflicting sequence fails closed instead of rewriting history.
 
 ## SOS Composition
 
-Manual SOS is deterministic and never waits for a fresh GNSS fix or an AI
-classification:
+The following is the historical CALL-001 fixture composition, retained to
+explain its existing ordering contract; it is not the current SOS dispatcher.
+Current product SOS gives immediate recognition feedback independently of
+storage success, attempts durable recording, declares storage degradation,
+and independently attempts the available native cellular primary route under
+ADR-0016. RTC fixture steps cannot impose an RTC or persistence dependency on
+that primary attempt. Manual SOS never waits for a fresh GNSS fix or AI:
 
 1. The device immediately persists the local SOS event and starts local
    feedback.
@@ -186,6 +195,7 @@ credential verification remain outside this PC fixture.
   production credentials.
 - Durable SOS safety-event persistence/replay: not claimed by CALL-001; must
   reuse the accepted safety-event contract and priority outbox.
-- Production RTC vendor, Guardian mobile app, real device audio, three-network
-  weak-signal tests, privacy approval, and launch operations: later measured
-  gates; currently `unverified`.
+- Production RTC vendor, Guardian mobile app, RTC device audio, three-network
+  weak-signal tests, privacy approval, and RTC operations remain `unverified`.
+  These are separate optional-RTC acceptance needs; native P0-CALL acceptance
+  belongs to CALL-031 and cannot borrow this fixture's evidence.

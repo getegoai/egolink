@@ -1,27 +1,30 @@
 ---
 document_status: draft_pending_founder_approval
+decision_updated: 2026-09-22
 last_verified: 2026-08-23
 verified_by: codex
 source_task: PROD-001
 ---
 
-## 2026-08-23 First-Launch Rebase
+## Current Decision Boundary — 2026-09-22
 
-ADR-0011 partially supersedes the launch-gate clauses inherited from ADR-0008.
-The first commercial loop is now **Reliable Location + Ego Call + SOS**. Ego
-Call uses LTE data and managed RTC between the device and Guardian App; the
-product does not build a PSTN/SIP gateway. Native VoLTE remains a desirable
-module capability and hardware reserve, but lack of three-operator native
-VoLTE evidence is no longer by itself a first-launch disqualifier. Likewise,
-minimum deterministic Safety Kernel behavior is a launch requirement, while
-advanced context/vision inference is an L3 post-launch capability rather than
-a condition for proving the first safety loop.
+[ADR-0016](../architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md)
+partially supersedes ADR-0011/0012's RTC-primary/native-reserve route. The first
+commercial loop remains **Reliable Location + Ego Call + SOS**; P0-CALL now
+requires supported native cellular dialing/answering and complete two-way
+audio. RTC is optional and CALL-020/021 remain paused. The product does not
+operate a public PSTN/SIP gateway. Exact voice mode, firmware and operator
+coverage require evidence; the old three-operator native-voice gate is not
+automatically restored. Existing three-operator LTE-data requirements below
+remain in force.
 
-All China certification, power, RF, audio, privacy, sourcing and evidence
-requirements below remain active. Where an older row says native VoLTE or
-advanced AI/camera is an unconditional launch gate, this rebase controls.
-
-ADR-0012 freezes Productization Sprint 1 and further controls this document:
+China certification, 48-hour power, RF, acoustic, privacy, manufacturing,
+sourcing and evidence requirements remain active. The deterministic local
+safety/location kernel and honest rule-state are required; advanced learned
+L2/L3, Camera AI and a complete Base AI system are not new launch Gates.
+Minimum private Base receiving/storage/replay/lifecycle work proceeds in
+parallel, with cloud services limited by a declared relay lifecycle. Present
+VPS collection is a bounded engineering transition, not local-first acceptance.
 
 | Capability Gate | Current state |
 |---|---|
@@ -33,9 +36,10 @@ The device owns minimum operational Location Engine v0/Sensor Policy v0 state;
 server fusion is derived evidence/replay. Product selection must support that
 split and source event-time lineage. Legacy `G0-EGOCALL` maps to `P0-CALL`.
 `COMPLIANCE-010` is the active China pre-compliance successor; PROD-002 is a
-retained intake only. Sprint 1 excludes PSTN, SMS, public emergency dispatch
-and native VoLTE as launch dependencies. Camera and learned fusion are
-non-blocking growth paths; AI work is data/replay first.
+retained intake only. Self-operated public PSTN/SIP gateways, SMS emergency
+dispatch and public emergency-service integration remain outside this launch.
+Native cellular primary is required; Camera and advanced learned fusion remain
+separately measured growth paths, with AI work data/replay first.
 
 ## 2026-08-14 Product-Direction Rebase
 
@@ -98,9 +102,9 @@ acceptable MOQ and lead-time risk, target price bands, Cradle/carry-form and
 size/weight envelopes, usage-profile cadence, launch battery claims, controlled
 contact/Ego Call policy, privacy-retention policy, and final market/channel
 assumptions. The screenless modular core and first-launch Reliable Location +
-Ego Call + SOS loop are fixed by ADR-0011/ADR-0012. Native VoLTE, advanced L3
-inference, and event-camera productization remain reserve/parallel decisions and must not
-silently become first-launch blockers.
+Ego Call + SOS loop remain fixed, with native cellular primary required by
+ADR-0016. Advanced L3 inference and event-camera productization remain
+parallel decisions and must not silently become new first-launch blockers.
 Use `MASS_PRODUCTION_FOUNDER_DECISION_SHEET.md` as the founder-facing fill-in
 surface for those values before replacing placeholders in this requirements
 document.
@@ -139,7 +143,7 @@ fillable because exact cadences are founder/product decisions.
 |---|---|---|---|
 | Typical guard mode | Physical SOS wake source enabled; low-power IMU sensing; Ego Call audio path idle/power-gated but able to enter the declared call setup budget; scheduled heartbeat/location refresh; physical-SOS local feedback/upload; indicators normally off; representative conditions for each target mainland China operator. No proactive check-in or always-listen/AudioGate duty cycle is assumed for P0. | Sustained voice call, camera capture, repeated weak-signal retries, emergency high-rate tracking, developer logging, and bench USB power. | Battery capacity, heartbeat/location intervals, SOS feedback, indicator/haptic/call-audio duty cycles, network-signal floor: TBD(founder). |
 | Light-use stretch | Lower-interaction daily use, no emergency escalation, reduced location/heartbeat cadence, minimal indicators/audio, no sustained call or camera use. | Emergency, weak-signal stress, continuous companion conversation, frequent GNSS fixes, and high-rate data capture. | Daily interaction budget, reduced cadence, allowed check-ins, and whether 7 days is a hard public claim: TBD(founder). |
-| Emergency mode | SOS flow, high-priority event upload, higher location cadence, guardian alert path, and Ego Call over LTE data. Native VoLTE may be tested as a reserved fallback path. | Not used to support normal 48-hour or 7-day claim. | Emergency duration target, call reachability/latency, contact policy, and location cadence: TBD(founder). |
+| Emergency mode | SOS flow, high-priority event upload, higher location cadence, guardian alert path, and independent native cellular Ego Call attempt; RTC is optional. Data or storage failure cannot silently block the available primary call. | Not used to support normal 48-hour or 7-day claim. | Emergency duration target, call reachability/latency, contact policy, and location cadence: TBD(founder). |
 | Measurement baseline | Representative battery, enclosure, antenna, SIM/operator, firmware image, model version, and environment recorded with raw power evidence. | Development-board USB-powered runs are not production battery evidence. | Production battery capacity and accepted test lab or bench procedure: TBD(founder). |
 
 ## 5. Cellular Module Evaluation Checklist
@@ -159,9 +163,9 @@ Disqualifying gates:
   the 48-hour guard-mode power budget.
 - GNSS strategy is documented: integrated module GNSS or external GNSS, with
   constellation support, cold/warm TTFF, power, antenna, and coexistence data.
-- RTC media reachability, microphone/speaker routing and weak-network behavior
-  are documented enough to answer the Ego Call path. Native VoLTE capability
-  is separately recorded as a reserve score; lack of it is not disqualifying.
+- Native cellular dialing/answering, microphone/speaker routing and weak-network
+  behavior must support P0-CALL on the exact module/firmware/operator. Missing
+  native voice or two-way audio cannot be waived by LTE-data/RTC evidence.
 - Microphone and audio interaction routing do not block the V1 companion loop.
 - Production availability, lifecycle status, MOQ, lead time, and FAE/support
   path are known enough for EVT sourcing.
@@ -186,8 +190,8 @@ Scored criteria after gates pass:
 | GNSS integration strategy | Gate plus score | Integrated/external GNSS decision data, constellations, cold TTFF, warm TTFF, sensitivity, antenna requirements, and current draw. | TBD(datasheet) | Score 0-3 | Integrated GNSS is not automatically better; power and antenna coupling decide. |
 | Low-power states | Gate plus score | PSM/eDRX or equivalent modes, sleep current, wake latency, network retention behavior, measured EVB current. | TBD(datasheet) | Score 0-3 | Must be compatible with 48-hour guard profile. |
 | AT command and SDK maturity | Score; gate if documentation is unusable | AT manual, SDK, examples, diagnostics, recovery commands, offline install evidence. | TBD(datasheet) | Score 0-3 | Prefer mature logs and deterministic failure recovery. |
-| Ego Call data/media capability | `P0-CALL` support Gate plus score | LTE data stability, RTC reachability/latency/loss plan, microphone/speaker interface options and recovery behavior. | First-launch requirement accepted by ADR-0012; module/system capability TBD(datasheet/test). | [ ] Pass [ ] Fail | RTC media stays separate from Message Hub telemetry; CALL-020 PC-bridged PoC cannot by itself pass the product Gate. |
-| Native VoLTE reserve | Independent A0 migration gate plus score; not a first-launch software gate | Exact-SKU VoLTE/voice docs, three-operator evidence plan and audio interface options. | Reserved capability under ADR-0012; TBD(datasheet/test). | [ ] Reserve viable [ ] Reserve unavailable; Score 0-3 | Resolve `G0V-VOLTE-RESERVE` before freezing or claiming the related PCB/audio/RF path, but do not reject an otherwise viable first-launch data module solely for missing native VoLTE. |
+| Optional RTC data/media capability | Separate optional-path score | LTE data stability, RTC reachability/latency/loss plan, media interface options and recovery behavior. | Optional under ADR-0016; module/system capability TBD(datasheet/test). | Score 0-3 | RTC media stays separate from Message Hub telemetry; paused CALL-020/021 evidence cannot pass native P0-CALL. |
+| Native cellular voice | `P0-CALL` support Gate plus score | Exact-SKU voice/AT/audio docs, firmware/SIM/operator coverage, dial/answer/hang-up/cancel and two-way acoustic evidence. | Primary route under ADR-0016; TBD(datasheet/test). | [ ] Pass [ ] Fail; Score 0-3 | CALL-030 feasibility feeds HW-022 and CALL-031 product acceptance. Historical `G0V-VOLTE-RESERVE` is insufficient; no CS fallback or three-operator voice coverage is assumed. |
 | Voice audio and microphone routing impact | `P0-CALL` support Gate | PCM/I2S/analog audio interface docs, mic/speaker routing diagram, echo/noise constraints, MCU handoff behavior. | TBD(datasheet) | [ ] Pass [ ] Fail | Must support the measured Ego Call path; AI audio reuse remains a separately scored growth decision. |
 | Module unit cost and full BOM impact | Score; gate against approved ceiling | Quote at sample, 1k, 10k, and 50k if available; total system BOM delta. | TBD(quote); ceiling TBD(founder). | Score 0-3 | Do not commit confidential supplier pricing. |
 | MOQ, lead time, allocation, PCN/EOL | Score; gate if sourcing cannot support EVT/DVT | Channel quote, authorized distributor response, lifecycle statement. | TBD(quote) | Score 0-3 | Founder MOQ and lead-time tolerance: TBD(founder). |
@@ -198,8 +202,8 @@ Scored criteria after gates pass:
 
 | Candidate | Role | RAT/bands | GNSS | Power states | AT/SDK maturity | Voice and microphone path | Cost, MOQ, lead time | Certification status | FAE/support | Decision notes |
 |---|---|---|---|---|---|---|---|---|---|---|
-| SIM7670G | Development comparison baseline only; current connectivity-node test module, not production-selected. | 4G module in current development context; exact RAT/band table TBD(datasheet). | Current context says SIM7670G is used for 4G data, GNSS, and development-link testing; constellations and TTFF TBD(datasheet). | Low-power modes and currents TBD(datasheet) and measurement. | Development link is in use; production AT/SDK maturity unverified. | Ego Call data/media system fit and product-suitable mic routing remain unverified; native VoLTE is recorded only as reserve evidence. | No production quote in current context: TBD(quote); founder ceiling TBD(founder). | Not accepted as final SKU; carried certifications TBD(datasheet/vendor). | TBD(vendor). | Baseline for comparison only. |
-| China operator candidate module | Pending official documents/business contact; production candidate cannot be evaluated until exact SKU/revision data arrive. | TBD(datasheet). | TBD(datasheet). | TBD(datasheet). | TBD(datasheet). | Must support the ADR-0012 `P0-CALL` data path; native VoLTE capability is scored separately. | TBD(quote); founder ceiling and MOQ tolerance TBD(founder). | TBD(datasheet/vendor). | TBD(vendor). | Awaiting official datasheet, exact SKU, sample and quote. |
+| SIM7670G | Development comparison baseline only; current connectivity-node test module, not production-selected. | 4G module in current development context; exact RAT/band table TBD(datasheet). | Current context says SIM7670G is used for 4G data, GNSS, and development-link testing; constellations and TTFF TBD(datasheet). | Low-power modes and currents TBD(datasheet) and measurement. | Development link is in use; production AT/SDK maturity unverified. | Native voice, complete two-way audio and product-suitable mic routing remain unverified; LTE-data or initialized AT driver is insufficient. | No production quote in current context: TBD(quote); founder ceiling TBD(founder). | Not accepted as final SKU; carried certifications TBD(datasheet/vendor). | TBD(vendor). | Baseline for comparison only. |
+| China operator candidate module | Pending official documents/business contact; production candidate cannot be evaluated until exact SKU/revision data arrive. | TBD(datasheet). | TBD(datasheet). | TBD(datasheet). | TBD(datasheet). | Must support ADR-0016 native P0-CALL and complete audio, with separate reliable LTE-data evidence. | TBD(quote); founder ceiling and MOQ tolerance TBD(founder). | TBD(datasheet/vendor). | TBD(vendor). | Awaiting official datasheet, exact SKU, sample and quote. |
 
 ## 6. MCU Evaluation Checklist
 
@@ -284,8 +288,8 @@ only through a later explicit product/ADR decision with measured evidence.
   size and weight envelope, IP and temperature targets, usage cadences,
   microphone/listen policy, privacy retention, and launch claim wording. The
   screenless modular form and first-launch Reliable Location + Ego Call + SOS
-  loop are accepted by ADR-0012; implementation remains unverified. Native
-  VoLTE is a reserve capability rather than a first-launch gate.
+  loop and native cellular primary are accepted under ADR-0016; implementation
+  remains unverified. Exact voice mode and operator coverage require evidence.
 - Awaiting final microphone/interaction hardware decision required by ADR-0002.
 
 ## 8. Evidence Required Before Selection ADRs

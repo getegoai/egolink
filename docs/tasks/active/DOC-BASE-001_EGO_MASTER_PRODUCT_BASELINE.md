@@ -66,6 +66,9 @@ out_of_scope:
   - procurement or freezing a production BOM from unverified candidates
   - importing the untracked v0.2, v0.3, or v0.4 design packs
   - changing current development-board evidence in ACTIVE_BUILD or BOARD_MATRIX
+execution_state: acceptance_review
+owner: director
+reviewed_at: 2026-09-22
 ---
 
 # Problem

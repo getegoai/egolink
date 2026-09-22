@@ -7,16 +7,17 @@ lane: D
 execution_state: queued
 depends_on:
   - HW-021
-  - CALL-020
+  - CALL-030
 serves_gate: P0-LOC/P0-CALL/P0-SOS
 requires_hardware: true
 created: 2026-08-23
 last_updated: 2026-08-23
 
 context:
+  - docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md
   - docs/hardware/P0_PRODUCT_ARCHITECTURE.md
   - docs/tasks/active/HW-021_EXACT_INTEGRATED_PROTOTYPE_DESIGN.md
-  - docs/tasks/active/CALL-020_LTE_DATA_VOICE_POC.md
+  - docs/tasks/active/CALL-030_NATIVE_CELLULAR_FEASIBILITY.md
   - docs/tasks/active/COMPLIANCE-010_CHINA_PRECOMPLIANCE.md
 
 allowed_paths:
@@ -28,10 +29,20 @@ out_of_scope:
   - claiming A0 bring-up is a saleable product or production BOM freeze
 ---
 
+## 2026-09-22 primary-cellular dependency alignment
+
+ADR-0016 replaces the old RTC primary-path dependency with CALL-030 feasibility
+and CALL-031 native cellular product evidence. CALL-020/021 remain paused RTC
+assets. The criteria below retain their reliability/privacy/product invariants;
+current references to Ego Call mean native cellular primary, with RTC auxiliary.
+Historical implementation checkpoints remain dated evidence, not a new result.
+No Gate or hardware state advances from this dependency update.
+
+
 # Goal
 
 Build and bring up one independently powered integrated prototype that gives
-CALL-021, LOC-021 and SOS-010 a real PC/USB-free execution target.
+CALL-031, LOC-021 and SOS-010 a real PC/USB-free execution target.
 
 # Acceptance
 
@@ -42,7 +53,7 @@ CALL-021, LOC-021 and SOS-010 a real PC/USB-free execution target.
       bring-up without borrowing split-development-board evidence.
 - [ ] USB is absent from product media/control evidence; independent power and
       debug boundaries are explicit.
-- [ ] CALL-020 measured media/network budgets and current pre-compliance
+- [ ] CALL-030 cellular/audio/power interface inputs and current pre-compliance
       constraints are traced into the built revision or recorded as blockers.
 - [ ] Failures remain visible; this task alone cannot pass any P0 Gate.
 

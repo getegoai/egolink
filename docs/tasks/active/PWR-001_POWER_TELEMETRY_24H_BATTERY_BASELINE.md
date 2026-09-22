@@ -27,6 +27,9 @@ out_of_scope:
   - changing the observation envelope beyond additive power fields
   - enclosure or charging-circuit work
   - GNSS/LTE behavior changes
+execution_state: queued
+owner: gemini
+reviewed_at: 2026-09-22
 ---
 
 # Problem

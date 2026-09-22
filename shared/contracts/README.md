@@ -2,7 +2,7 @@
 
 这些文件是 Ego Link 固件、PC Simulator、未来 Ego Base、模型训练代码和 P0 message hub 之间的稳定接口。
 
-## ADR-0012 Sprint 1 合同边界
+## ADR-0016 / Sprint 1 合同边界
 
 - `P0-LOC`、`P0-CALL`、`P0-SOS` 当前全部为 `NOT_RUN`。Schema、fixture、
   replay 或单元测试通过，只证明对应合同/工具切片，不代表产品 Gate 通过。
@@ -15,8 +15,10 @@
 - `SOS-010` 复用 `safety_event.schema.json` 与 persistent priority outbox，不新建
   第二套 SOS truth record。Guardian delivery/ack、Ego Call request/signaling/media
   各自保持真实独立状态。
-- Ego Call media 不经过 Message Hub。旧 `G0-EGOCALL` 名称仅映射到当前
-  `P0-CALL` 证据族；Sprint 1 不声明 PSTN、SMS、公共应急调度或 Native VoLTE。
+- Ego Call media 不经过 Message Hub。[ADR-0016](../../docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md)
+  已确定原生蜂窝主通话、RTC 可选辅助；CALL-030/031 负责主路可行性与产品验收。
+  既有 RTC 信令合同仍服务暂停的 CALL-020/021，不是原生电话协议。
+  自营公共 PSTN/SIP 网关、SMS 与公共应急调度仍不在本轮范围。
 - L2/AI 先消费隐私审查后的数据与 event-time replay，进入 offline/Shadow
   comparison；Camera 仅是可选实验观测，不能产生或否决 P0 决策。
 
@@ -50,9 +52,10 @@
 | `field_session_manifest.schema.json` | A0-003 标准 Session 包清单：绑定唯一 Session ID、四源与人工事件、device/boot/software/calibration、隐私、stream 范围、artifact hashes、A0-002 exact-input 报告及 seal/package closure；raw Session 不自行授权训练。 |
 | `field_manual_event.schema.json` | A0-003 人工事件 weak-label 合同：保存事件类型、事件/传输时间、操作者、note，以及可用时的 device/boot/clock/mapping lineage。 |
 | `imu_field_calibrated_window.schema.json` | A0-003 普通外场 IMU window 的非覆盖式 calibrated 视图；区别于只适用于 A0-001 七个校准姿态的 `imu_calibrated_window.v0.1`。 |
-| `ego_state_estimation_v0.schema.json` | 随身主动状态估计核心决策合同：统一涵盖空间移动状态（静止、步行、跑步、载具、弱信号）、突发与异常姿态（正常、剧烈冲击、疑似跌落、长时间静止失联）、设备佩戴环境（桌面静置、手持、随身、充电），以及置信度与主证据指纹。 |
-| `ego_state_evidence_chain_v0.schema.json` | 多源传感器可信证据链合同：逐决策绑定 20Hz/100Hz IMU 运动学特征（RMS、峰值加速度、角速度方差）、GNSS 状态与地面航速、LTE/Wi-Fi 网络指纹及电池电量斜率，配合不可篡改证据指纹实现本地优先审计。 |
-| `ego_state_report_v0.schema.json` | 结构化随身主动状态报告合同：组合状态决策与完整多源证据链，支持周期性聚合报告、状态跃迁触发报告与紧急事件告警，强约束本地优先隐私边界（`local_priority=true`）。 |
+| `ego_state_estimation_v0.schema.json` | 规范状态身份、来源时间、移动/姿态/携带枚举、unknown、mock 与实验规则分数；分数不是准确率或安全确认。摘要由 producer 生成，不是签名或完整原始链校验。 |
+| `ego_state_view_v0.schema.json` | API 视图内嵌严格 canonical `state`，单列旧帧推导来源、收件时间与实际存储属性；非法投影隔离，raw 采集和 ACK 保留；Web 只展示此视图。 |
+| `ego_state_evidence_chain_v0.schema.json` | 多来源特征、来源身份和 producer 摘要的结构合同；不证明不可篡改、跨 C/Python 摘要一致、静态加密或已部署本地优先存储。 |
+| `ego_state_report_v0.schema.json` | 组合估计与特征证据的报告结构；隐私标签是声明，不能替代加密、访问控制或生命周期实现，当前 Python 仅生成内存报告。 |
 
 ## 变更规则
 

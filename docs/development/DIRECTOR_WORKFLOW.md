@@ -12,7 +12,8 @@ definition and acceptance judgment. Current work uses GitHub Flow plus direct
 founder/Codex collaboration: a strong model remains in the planning and
 acceptance loop, and any helper AI is limited to explicitly scoped work.
 
-ADR-0011 changes the default scheduler from one global serial queue to the four
+ADR-0016 aligns the 9/19 direction and 9/22 Codex/Gemini ownership; ADR-0011
+originally changed the default scheduler from one global serial queue to the four
 bounded swimlanes defined in
 [`FIRST_LAUNCH_EXECUTION.md`](../current/FIRST_LAUNCH_EXECUTION.md). Each lane
 may have one integration-sized implementation packet in progress, so work in
@@ -23,7 +24,7 @@ contract review, hardware safety, or evidence acceptance.
 
 | Role | Who | Owns |
 |---|---|---|
-| Operator | founder | Decisions, hardware operations (flashing, field runs, power), procurement/business contacts, merges/commits |
+| Operator | founder | Decisions, hardware operations (flashing, field runs, power), procurement/business contacts; may delegate scoped Git commits/integration |
 | Director | Planning/acceptance session for this repo | Roadmap and ADRs, four-lane WIP, task packet authoring, collision-free integration order, acceptance review, STATUS/KR updates, fix instructions |
 | Builder | Codex (or any coding AI session) | Implementing exactly one task packet in its assigned lane at a time, producing diff + validation output + evidence |
 
@@ -54,7 +55,7 @@ contract review, hardware safety, or evidence acceptance.
    - shared contracts and integration points match the owning lane's accepted
      version; cross-lane work did not create duplicate or competing contracts;
    - no secrets, no unrelated cleanup.
-5. **Close.** On pass: Operator commits, Director moves the packet to
+5. **Close.** On pass: the Operator or explicitly assigned builder commits, Director moves the packet to
    `docs/tasks/done/` and updates `docs/current/STATUS.md`. On fail: Director
    appends a numbered fix note (fix1, fix2, ...) to the packet with the exact
    gap.
@@ -63,6 +64,20 @@ contract review, hardware safety, or evidence acceptance.
    issuing fix4 (lesson from LTE-003's eight fix rounds).
 
 ## Cadence
+
+Use two independent fields: `status` is packet lifecycle; `execution_state`
+controls WIP. Only explicit `in_progress` counts as current implementation.
+`queued`, `parked`, `acceptance_review`, `continuous_regression` and paused/blocked
+work remain visible without inflating WIP. A checked checklist or code-complete
+report enters `acceptance_review`; it is not automatic acceptance. Never archive
+unresolved hardware evidence solely to reduce the number of active packets.
+
+Every current item names an owner and consumer/dependency. For the 9/22 assignment,
+follow [Codex/Gemini boundaries](../current/CODEX_GEMINI_HANDOFF_20260922.md).
+Use isolated task worktrees when sharing a checkout with another builder, stage
+exact paths, and integrate named commits after checking shared-file overlap.
+Decision updates use `decision_updated`/`reviewed_at`; image/evidence dates change
+only when new evidence exists. No source commit is automatically a flashed image.
 
 - Four swimlanes run in parallel, with at most one integration-sized packet in
   progress in each lane:
@@ -82,8 +97,10 @@ contract review, hardware safety, or evidence acceptance.
   dispatch when file paths or contracts overlap.
 - After every lane slice, restore a green repository and exercise the smallest
   relevant cross-lane integration. Product-level integration follows the order
-  in `FIRST_LAUNCH_EXECUTION.md`: location context into Guardian/Call, SOS/Call
-  over persistent TLS transport, then measured traffic profiles into A0.
+  in `FIRST_LAUNCH_EXECUTION.md`: location context into Guardian/Call, native
+  cellular primary voice, SOS alerts and data context over authenticated TLS,
+  then measured traffic and power profiles into A0. Native voice must not wait
+  for the data channel; RTC is an optional fallback with separate acceptance.
 - The Director regenerates the founder progress board
   (`python scripts/build_progress_board.py`, output
   `docs/generated/PROGRESS_BOARD.md`) at every packet open/close/fix and
@@ -118,5 +135,10 @@ move the packet to done/.
 - Task packets remain the only unit of builder work.
 - `python scripts/context_lint.py` after context/task edits;
   `scripts/verify.ps1` when behavior may change.
+- Task `context` inputs must exist. A missing `allowed_paths` output is valid
+  only when `git check-ignore --no-index` confirms it is ignored; paths must
+  stay repository-relative without absolute paths or parent traversal. This
+  permits later creation of local generated output in a clean worktree. It
+  does not prove the output exists or satisfy an evidence/acceptance criterion.
 - Evidence beats narrative: anything without a replayable artifact is
   treated as not done.

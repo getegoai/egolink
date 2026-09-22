@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import unquote, urlparse
 
 
@@ -157,13 +158,62 @@ def load_task_paths(path: Path) -> dict[str, list[str]]:
     return parse_simple_lists(parse_text)
 
 
-def path_or_glob_exists(value: str) -> bool:
-    cleaned = value.split("#", 1)[0].strip().strip("'\"")
-    if not cleaned:
-        return True
+def normalize_task_path(value: str) -> str:
+    """Keep task inputs and potential outputs inside the repository."""
+    cleaned = value.split("#", 1)[0].strip().strip("'\"").replace("\\", "/")
+    windows_path = PureWindowsPath(cleaned)
+    if not cleaned or windows_path.drive or windows_path.root:
+        raise ValueError("expected a nonempty repository-relative path")
+    if ".." in PurePosixPath(cleaned).parts:
+        raise ValueError("parent traversal is not allowed")
+    normalized = PurePosixPath(cleaned).as_posix()
+    if not (ROOT / normalized).resolve().is_relative_to(ROOT.resolve()):
+        raise ValueError("resolved path escapes the repository")
+    return normalized
+
+
+def path_or_glob_exists(cleaned: str) -> bool:
     if any(char in cleaned for char in "*?["):
-        return any(ROOT.glob(cleaned))
+        matches = list(ROOT.glob(cleaned))
+        if any(not path.resolve().is_relative_to(ROOT.resolve()) for path in matches):
+            raise ValueError("matched path escapes the repository")
+        return bool(matches)
     return (ROOT / cleaned).exists()
+
+
+def is_ignored_output(cleaned: str) -> bool:
+    """A missing allowed output is valid only if Git explicitly ignores it.
+
+    Test a directory spelling too: Git needs its slash to recognize absent
+    directory globs such as build_*. This permits creation, not evidence credit.
+    """
+    # A force-added file can match ignore rules. Its deletion is still a
+    # missing tracked input/output, not permission to omit repository content.
+    try:
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", cleaned],
+            cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError:
+        return False
+    if tracked.returncode == 0:
+        return False
+    candidates = [cleaned, cleaned.rstrip("/") + "/"]
+    for candidate in candidates:
+        try:
+            result = subprocess.run(
+                ["git", "check-ignore", "--no-index", "-q", "--", candidate],
+                cwd=ROOT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except OSError:
+            return False
+        if result.returncode == 0:
+            return True
+    return False
 
 
 def check_active_tasks(errors: list[str]) -> None:
@@ -182,7 +232,13 @@ def check_active_tasks(errors: list[str]) -> None:
             continue
         for key in ("context", "allowed_paths"):
             for value in paths.get(key, []):
-                if not path_or_glob_exists(value):
+                try:
+                    cleaned = normalize_task_path(value)
+                    exists = path_or_glob_exists(cleaned)
+                except (OSError, TypeError, ValueError) as exc:
+                    errors.append(f"invalid {key} path in {repo_path(task)}: {value}: {exc}")
+                    continue
+                if not exists and not (key == "allowed_paths" and is_ignored_output(cleaned)):
                     errors.append(f"missing {key} path in {repo_path(task)}: {value}")
 
 

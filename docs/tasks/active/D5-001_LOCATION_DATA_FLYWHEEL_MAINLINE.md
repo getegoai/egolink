@@ -33,6 +33,9 @@ out_of_scope:
   - safety-classification model expansion
   - reading private raw coordinates outside explicit bounded evidence inputs
   - changing firmware protocol fields
+execution_state: queued
+owner: unassigned
+reviewed_at: 2026-09-22
 ---
 
 This task serves D5. It starts the data flywheel for location accuracy while

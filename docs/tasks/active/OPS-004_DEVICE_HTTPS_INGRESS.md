@@ -4,7 +4,7 @@ title: Migrate device ingress from plaintext HTTP to TLS
 status: active
 priority: critical
 lane: C
-execution_state: in_progress
+execution_state: parked
 queue_reason: offline candidate and read-only capability probe implemented; live modem probe, deployment and peer verification require separate intent
 requires_hardware: false
 created: 2026-08-23
@@ -38,6 +38,8 @@ out_of_scope:
   - deploying or rotating production credentials without operator intent
   - hiding a compatibility fallback or accepting invalid certificates
   - claiming persistent Store-and-Forward
+owner: unassigned
+reviewed_at: 2026-09-22
 ---
 
 # Goal

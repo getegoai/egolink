@@ -1,0 +1,30 @@
+{
+  "source_commit": "9de56b92a",
+  "reviewed_at": "2026-09-22",
+  "files": [
+    {
+      "source": "docs/current/STATUS.md",
+      "snapshot": "docs__current__STATUS.md.source",
+      "sha256": "f49933efad871e44086f55552cae7694df4be813daf7b0eec659efdde2095775",
+      "reason": "replace chronological current document with reconciled current-only index; preserve historical evidence and failures"
+    },
+    {
+      "source": "docs/current/ACTIVE_BUILD.md",
+      "snapshot": "docs__current__ACTIVE_BUILD.md.source",
+      "sha256": "0ca2676690a0e3d98df1ae2db26d6bf431be635e14f22dfd8d5e1b157c96ec41",
+      "reason": "replace chronological current document with reconciled current-only index; preserve historical evidence and failures"
+    },
+    {
+      "source": "docs/hardware/BOARD_MATRIX.md",
+      "snapshot": "docs__hardware__BOARD_MATRIX.md.source",
+      "sha256": "b72331991cf04fe5f61445db9517c5f2c15fc715860ab202d3839c04176ebea5",
+      "reason": "replace chronological current document with reconciled current-only index; preserve historical evidence and failures"
+    },
+    {
+      "source": "docs/tasks/TASK_TREE.md",
+      "snapshot": "docs__tasks__TASK_TREE.md.source",
+      "sha256": "719d297911110328112bcef649e4c305fad1dfe66c673c835ddbd0ff0e35d1f7",
+      "reason": "replace chronological current document with reconciled current-only index; preserve historical evidence and failures"
+    }
+  ]
+}

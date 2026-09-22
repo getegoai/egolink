@@ -6876,6 +6876,11 @@ def load_progress_board(path: Path = DEFAULT_PROGRESS_BOARD) -> dict[str, Any]:
         )
 
     git = as_dict(board.get("git"))
+    open_tasks = as_list(board.get("active_tasks"))
+    active_count = as_dict(board.get("counts")).get("active")
+    if type(active_count) is not int or active_count < 0:
+        # Legacy boards did not publish separate implementation/open counts.
+        active_count = len(open_tasks)
     return {
         "status": "available",
         "generated_at": str(board.get("generated_at") or "unknown")[:64],
@@ -6887,7 +6892,8 @@ def load_progress_board(path: Path = DEFAULT_PROGRESS_BOARD) -> dict[str, Any]:
         "milestones": milestones,
         "operator_asks": [str(item)[:600] for item in as_list(board.get("operator_asks"))[:12]],
         "summary": {
-            "active_count": len(as_list(board.get("active_tasks"))),
+            "active_count": active_count,
+            "open_count": len(open_tasks),
             "recent_done_count": len(as_list(board.get("recent_done"))),
             "key_release_count": len(as_list(board.get("key_releases"))),
         },

@@ -24,7 +24,27 @@ STATE_GLYPH = {
     "in_progress": "⏳",   # hourglass
     "paused": "⏸",        # pause
     "planned": "\U0001f4cb",   # clipboard
+    "acceptance_review": "🔎",
+    "parked": "⏸",
+    "continuous_regression": "🔁",
 }
+
+
+def execution_state(fields: dict, *, in_done_directory: bool) -> str:
+    """Directory membership is inventory, not proof of active implementation."""
+    if in_done_directory:
+        return "done"
+    status = fields.get("status", "").lower()
+    execution = fields.get("execution_state", "").lower()
+    if status in ("paused", "blocked") or execution.startswith(("paused", "blocked")):
+        return "paused"
+    if execution == "in_progress":
+        return "in_progress"
+    if execution in ("acceptance_review", "parked", "continuous_regression"):
+        return execution
+    if status == "continuous_regression":
+        return "continuous_regression"
+    return "planned"
 
 
 def parse_frontmatter(text: str) -> dict:
@@ -61,17 +81,15 @@ def scan_packets(tasks_dir: Path, *, repo_root: Path | None = None) -> dict:
             if not task_id:
                 continue
             status = (fields.get("status") or "").lower()
-            if state_dir == "done":
-                state = "done"
-            elif status in ("paused", "blocked"):
-                state = "paused"
-            else:
-                state = default_state
+            state = execution_state(fields, in_done_directory=state_dir == "done")
             packets[task_id] = {
                 "id": task_id,
                 "title": fields.get("title", path.stem),
                 "state": state,
                 "packet_status": status or default_state,
+                "execution_state": fields.get("execution_state", "unscheduled"),
+                "owner": fields.get("owner", ""),
+                "lane": fields.get("lane", ""),
                 "priority": fields.get("priority", ""),
                 "date": fields.get("completed")
                 or fields.get("last_updated")
@@ -149,7 +167,7 @@ def build_board(repo_root: Path) -> dict:
     config = json.loads(config_path.read_text(encoding="utf-8"))
     packets = scan_packets(repo_root / "docs" / "tasks", repo_root=repo_root)
     active = sorted(
-        (p for p in packets.values() if p["state"] in ("in_progress", "paused")),
+        (p for p in packets.values() if p["state"] != "done"),
         key=lambda p: p["id"],
     )
     in_progress_count = sum(1 for p in active if p["state"] == "in_progress")
@@ -174,6 +192,10 @@ def build_board(repo_root: Path) -> dict:
         "counts": {
             "active": in_progress_count,
             "paused": paused_count,
+            "planned": sum(1 for p in active if p["state"] == "planned"),
+            "acceptance_review": sum(1 for p in active if p["state"] == "acceptance_review"),
+            "parked": sum(1 for p in active if p["state"] == "parked"),
+            "continuous_regression": sum(1 for p in active if p["state"] == "continuous_regression"),
             "open_total": len(active),
             "done_total": sum(1 for p in packets.values() if p["state"] == "done"),
         },
@@ -189,7 +211,11 @@ def render_markdown(board: dict) -> str:
         f"- 当前焦点: {board['current_focus']}",
         f"- 已完成任务总数: {board['counts']['done_total']}"
         f"，进行中: {board['counts']['active']}"
-        f"，暂停: {board['counts'].get('paused', 0)}",
+        f"，暂停: {board['counts'].get('paused', 0)}"
+        f"，待验收: {board['counts'].get('acceptance_review', 0)}"
+        f"，排队: {board['counts'].get('planned', 0)}"
+        f"，搁置: {board['counts'].get('parked', 0)}"
+        f"，持续回归: {board['counts'].get('continuous_regression', 0)}",
         "",
         "## 里程碑",
         "",
@@ -203,9 +229,9 @@ def render_markdown(board: dict) -> str:
         lines.append(f"| {ms['id']} {ms['title']} | {ms['done']}/{ms['total']} | {items} |")
     lines += [
         "",
-        "图例: ✅完成 ⏳进行中 ⏸暂停 \U0001f4cb计划中",
+        "图例: ✅完成 ⏳实施中 ⏸暂停/搁置 \U0001f4cb排队 🔎待验收 🔁持续回归",
         "",
-        "## 进行中/暂停的任务",
+        "## 开放任务（只有实施中计入 WIP）",
         "",
         "| 任务 | 标题 | 状态 | 优先级 | 执行者 |",
         "|---|---|---|---|---|",
@@ -213,8 +239,8 @@ def render_markdown(board: dict) -> str:
     assignees = board["assignees"]
     for task in board["active_tasks"]:
         lines.append(
-            f"| {task['id']} | {task['title']} | {task['packet_status']} "
-            f"| {task['priority']} | {assignees.get(task['id'], '-')} |"
+            f"| {task['id']} | {task['title']} | {task['state']} "
+            f"| {task['priority']} | {task.get('owner') or assignees.get(task['id'], '-')} |"
         )
     lines += ["", "## 最近完成", "", "| 任务 | 标题 | 日期 |", "|---|---|---|"]
     for task in board["recent_done"]:

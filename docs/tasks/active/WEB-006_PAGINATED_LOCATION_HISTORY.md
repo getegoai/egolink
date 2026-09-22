@@ -38,6 +38,9 @@ out_of_scope:
   - arbitrary payload/full-text search, coordinate search, route inference, or geofencing
   - storing selections, filters, coordinates, tokens, private device data, or runtime logs in Git
   - DNS, TLS, Nginx, ports, deployment, or database restoration
+execution_state: acceptance_review
+owner: director
+reviewed_at: 2026-09-22
 ---
 
 # Goal

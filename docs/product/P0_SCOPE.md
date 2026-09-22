@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-09
+decision_updated: 2026-09-22
 last_verified: 2026-08-23
 verified_by: codex
 ---
@@ -11,7 +11,7 @@ verified_by: codex
 
 This document is authoritative for Productization Sprint 1 and the evidence
 scope of the sellable first-generation P0. It conforms to
-[EGO_MASTER_CONTEXT.md](EGO_MASTER_CONTEXT.md), ADR-0008 and ADR-0011. Current
+[EGO_MASTER_CONTEXT.md](EGO_MASTER_CONTEXT.md), ADR-0008 and [ADR-0016](../architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md). Current
 development-board results may satisfy engineering milestones but must never be
 promoted into final PCB/BOM or product claims without representative-product
 validation.
@@ -47,25 +47,29 @@ converges the verified requirements into one screenless EgoCore architecture.
   including a controlled transition with exact pending/ACK/duplicate/loss truth;
 - current milestone Camera closure on that same connectivity node: one
   authorized expiring Web capture and default-off bounded local timed capture,
-  separate JPEG/metadata persistence, real-LTE upload, durable VPS verification
+  separate JPEG/metadata persistence, real-LTE upload, bounded engineering VPS verification
   and existing-Web preview/export with explicit failure and backlog state;
-- `P0-CALL`: microphone/speaker hardware loop, a bounded PC-bridged LTE-data
-  voice PoC, then a PC/USB-free embedded media path on one independently
-  powered integrated prototype; the bridge is learning evidence, not Gate
-  completion;
+- `P0-CALL`: CALL-030 native-cellular modem/firmware/operator/audio feasibility,
+  HW-022 representative hardware, then CALL-031 PC/USB-free outgoing/incoming
+  calls and stable two-way audio; RTC remains auxiliary and its old packets paused;
 - `P0-SOS`: qualified physical button -> recognized-input feedback and durable
-  event attempt -> independent location priority, Guardian notification and Ego
-  Call; queue/storage degradation remains explicit;
+  event attempt -> independent location priority, Guardian notification and an independent
+  primary cellular Ego Call attempt; queue/storage degradation remains explicit;
 - minimal Guardian surface needed to see location/SOS/call truth, without
   requiring polished consumer UI;
 - versioned messages, explicit real/mock/source labels, privacy boundaries,
   quality inspection, and replay;
+- current deterministic ego-state truth and DEVICE/canonical/API/Web contract
+  compatibility under ALIGN-STATE-010; missing/stale/future/mock/invalid input
+  must not become confident normal or safe state;
+- BASE-010 minimum private Session endpoint, persistence/replay/report and
+  retention/export/deletion design in parallel, without a fourth capability Gate;
 - parallel product A0 audio/power/RF/antenna/BOM and China pre-compliance work.
 
 ## Bounded runtime convergence
 
 [ADR-0015](../architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md)
-now controls the immediate evidence order: combined single-board Location/raw
+retains Gemini's immediate collection evidence order under ADR-0016: combined single-board Location/raw
 collection/Camera, Web one-shot LTE proof, timed persistence/recovery, a short
 independently powered carry test and then FIELD-020. CALL-020, CALL-021 and full
 physical SOS are paused for this milestone, while their final Gate obligations
@@ -80,7 +84,7 @@ this finite engineering proof or independent S smoke; concurrent SOS/IMU
 ordering, checkpoint, exact tombstone and no-output replay commitments still
 apply before that product composition is enabled or recovery is claimed.
 
-When the paused B line resumes, CALL-021 product acceptance still requires
+The native successor CALL-031 product acceptance requires
 independently powered representative hardware without PC/USB media/control,
 and physical SOS/recovery integrates through the retained Location and CALL
 seams. Queue/storage failure must not
@@ -92,14 +96,16 @@ require a valid bounded experiment authorization.
 
 ## Out Of Scope
 
-- Formal Ego Base implementation.
+- Full Ego Base private-AI product and advanced model stack; the minimum
+  BASE-010 private endpoint is in scope for parallel development.
 - Learned multi-source location fusion on the P0 critical path.
-- General state understanding, fall/anomaly model release, camera AI, visual
+- Advanced learned/general state understanding, fall/anomaly model release, camera AI, visual
   decision loops, AI voice, audio recording, video streaming or continuous
   media capture.
 - Polished complete App, contact-management UX or multi-party calling before
   the minimum Guardian client and real voice path work.
-- PSTN, public SIP gateway, SMS dispatch or native VoLTE release behavior.
+- A self-operated public PSTN/SIP gateway, public emergency dispatch or SMS.
+  Native cellular voice is the primary P0-CALL product requirement, still unverified.
 - Adding new sensors merely to expand P0 scope; unbounded, unconsented,
   publicly stored or training-enabled Camera collection remains prohibited.
   The current milestone permits only its named manual/timed still boundary.
@@ -114,11 +120,15 @@ The practical P0 acceptance loop is:
 ```text
 take the device out for a representative day
 -> Guardian continuously sees honest location state
--> device and Guardian can call each other over LTE data
+-> device and authorized contact call each other through native cellular voice
 -> long-press SOS immediately escalates location and human contact
 -> the complete event/policy/call timeline can be replayed
 ```
 
 All three capability Gates (`P0-LOC`, `P0-CALL`, `P0-SOS`) must pass. L2-AI
 may improve the result but cannot compensate for or block a missing P0 Gate;
-L3 remains outside this Sprint.
+advanced learned L3 remains non-blocking. Current rule-state truth is an
+engineering obligation, not a model-accuracy Gate. Public-cloud receipt, Base
+receipt and human acknowledgement stay separate; existing VPS collection is
+authorized bounded engineering transition, not completed local-first storage.
+This task authorizes no deployment or migration/deletion of private data.

@@ -289,7 +289,8 @@ class Sim7670ReportEvidenceTests(unittest.TestCase):
             result = subprocess.run(
                 command,
                 cwd=directory,
-                shell=True,
+                # Preserve CMake's quoting without cmd.exe's 8191-char limit.
+                shell=os.name != "nt",
                 capture_output=True,
                 text=True,
                 timeout=60,

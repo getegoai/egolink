@@ -1,13 +1,14 @@
 ---
 document_status: authoritative
+decision_updated: 2026-09-22
 last_verified: 2026-08-23
 verified_by: codex
 ---
 
 # Ego Link P0 Development Flow
 
-Ego Link P0 uses a USB-Free, VPS Message-First, Demo-Driven, Contract-First
-Walking Skeleton flow:
+Ego Link uses a local-first, Demo-Driven, Contract-First Walking Skeleton.
+The current collection/VPS flow is an authorized bounded engineering transition:
 
 ```text
 device or simulator -> Public VPS Message Hub -> Web Dashboard
@@ -18,9 +19,9 @@ This document is the development-flow baseline for new P0 work. The existing
 GitHub Flow and task mechanics remain in `WORKFLOW.md`; this file defines the
 product-facing order in which work should be shaped.
 
-## Productization Sprint 1 Overlay
+## Current product and implementation flow
 
-[ADR-0012](../architecture/adr/ADR-0012-p0-productization-sprint-1.md) and
+[ADR-0016](../architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md) and
 [`FIRST_LAUNCH_EXECUTION.md`](../current/FIRST_LAUNCH_EXECUTION.md) control the
 current execution order. The USB-Free/VPS/R0-R4 material below remains a
 reusable engineering method and evidence lineage; it is not a global serial
@@ -43,25 +44,33 @@ external-evidence dependency blocks only its descendants.
 Sprint 1 remains contract-first and event-time-first:
 
 - the device owns Location Engine v0/Sensor Policy v0 operational state;
-- the server mirrors, derives, replays and compares without replacing source
-  event time with receive/ingest order;
-- call media stays outside Message Hub telemetry;
+- the private Base endpoint mirrors, derives, replays and compares without
+  replacing source event time with receive/ingest order; the VPS transition
+  must declare purpose, access, quota, expiry and lifecycle. Missing controls
+  remain implementation gaps, not completed privacy guarantees;
+- native cellular is the primary call route, with optional RTC fallback;
+  Message Hub telemetry is not native call media;
 - physical SOS composes the accepted safety event and persistent priority
   outbox;
-- learned fusion, continuous-IMU estimators and camera/context work are
-  data/replay-first L2/L3 work and do not block the P0 skeleton.
+- existing rule-state truth and explicit DEVICE/canonical/API/Web compatibility
+  are current engineering acceptance, including missing/stale/mock/invalid input;
+- advanced learned fusion and camera/context models remain data/replay-first
+  non-blocking L2/L3; complete Base AI is not a new capability Gate.
 
 A green build, fixture, simulator, schema or PC bridge is evidence for its
-named slice only. It does not change a P0 Gate from `NOT_RUN`, and no work in
-this flow claims PSTN, SMS, public emergency dispatch or native VoLTE.
+named slice only. It does not change a P0 Gate from `NOT_RUN`, and no work claims
+working native voice from AT initialization alone. A self-operated public
+PSTN/SIP gateway, SMS and public emergency dispatch remain out of scope.
 
 ## Core Principles
 
 - **USB-Free:** USB is for flashing, temporary debugging, and post-failure log
   export. Formal runtime, version acceptance, and field-test evidence must not
   depend on USB serial.
-- **VPS Message-First:** Real devices, PC Simulator, and Web Dashboard connect
-  through the Public VPS Message Hub for product-like operation.
+- **Local-First:** BASE-010 develops the minimum user-controlled private
+  Session endpoint in parallel. Public cloud is reachability/signaling/bounded
+  relay; engineering VPS receipt is not Base receipt or completed privacy.
+  Preserve existing private data; migration/deletion needs its own scope.
 - **Demo-Driven:** Every version must keep a demonstrable end-to-end loop. Do
   not spend long periods improving only internal modules with no visible loop.
 - **Contract-First:** Message fields, protocol versions, and compatibility rules
@@ -69,11 +78,24 @@ this flow claims PSTN, SMS, public emergency dispatch or native VoLTE.
 - **Walking Skeleton:** Build the thinnest complete loop first, then strengthen
   one layer at a time.
 
+## Current ownership
+
+Gemini owns single-board recovery, actual Wi-Fi/LTE switching and D2/FIELD-020.
+Codex ALIGN-STATE-010 owns decision/current-state/task alignment and rule-state
+truth. Shared collection_main edits are limited to the assigned packaging seam;
+acquisition/modem/camera/transport/profile changes stay with Gemini. Contract
+changes have one integrator and consumers adopt the accepted version.
+
+CALL-030 native feasibility feeds HW-021/HW-022 and CALL-031 representative
+product calling; old CALL-020/021 RTC packets remain paused. BASE-010 and A0/
+compliance are parallel queued work, not automatic WIP. See the current
+execution graph and each packet for dispatch, evidence and operator scope.
+
 ## Version Tracks
 
 | Track | Owns | Near-term versions |
 |---|---|---|
-| Server-Web | VPS service, storage, command queue, Web Dashboard, test reports | S0-S4 |
+| Server-Web | Private endpoint plus bounded transition service, contracts/API/Web and reports | S0-S4 |
 | Firmware | boot, network, telemetry, GNSS, command ACK, reconnect, cache | F0-F6 |
 | Protocol | envelopes, fields, topics/APIs, compatibility, error semantics | P0.1-P0.4 |
 

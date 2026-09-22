@@ -1,10 +1,20 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-19
+decision_updated: 2026-09-22
 last_verified: 2026-08-23
 verified_by: codex
 owner: founder
 ---
+
+## 2026-09-22 Decision migration
+
+[ADR-0016](../architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md)
+承接下方 9/19 决策与 9/22 对齐指令，明确蜂窝原生主路、RTC 备路、Ego Base
+同步最小私有终点与云端有界工程过渡。已有规则状态真实性纳入本轮工程验收；
+高级 L2/L3 与完整 Base AI 不新增首发能力 Gate。当前工作分工见
+[FIRST_LAUNCH_EXECUTION](../current/FIRST_LAUNCH_EXECUTION.md)。
+以下日期章节保留决策演进；较旧的 RTC-first、native reserve 与 Base 后置条款
+已按 ADR-0016 部分取代，不能作为当前调度或硬件结论。
 
 ## 2026-09-19 Founder Ego-State Estimation & Home Station Update
 
@@ -77,7 +87,7 @@ field and product evidence are reported separately. The active packet is
 
 ## 2026-08-23 Founder First-Launch Update
 
-The first-launch value loop is now **Reliable Location + Ego Call + physical
+The 2026-08-23 first-launch value loop was **Reliable Location + Ego Call + physical
 SOS**, as accepted by
 [ADR-0011](../architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md)
 and operationally frozen by
@@ -97,17 +107,17 @@ capability map:
 | `L2-AI` | AI-enhanced location | best effort; non-blocking |
 | `L3` | context/event understanding | outside the launch critical path |
 
-Productization Sprint 1 therefore adds no new sensor dependency and does not
-build learned multi-source fusion, camera AI, general anomaly detection, a
-polished complete app, PSTN, or native VoLTE. Interfaces and honest collection
+At that time Productization Sprint 1 added no new sensor dependency and did not
+build learned multi-source fusion, camera AI, general anomaly
+detection, a polished complete app, PSTN, or native VoLTE; the native-call
+exclusion is superseded by ADR-0016. Interfaces and honest collection
 hooks remain, but only Location Engine/Sensor Policy/Replay, the minimum real
 Ego Call chain, SOS composition, and their product-assurance evidence consume
 P0 critical-path capacity.
 
-`Ego Call` over LTE data through a controlled RTC service and Guardian app is
-the first-launch communications path. Native VoLTE is no longer a software
-launch blocker; A0 must still preserve and evaluate a viable modem, audio,
-power, and RF migration path under `G0V-VOLTE-RESERVE`.
+At that decision date, `Ego Call` used LTE data through controlled RTC and
+Native VoLTE was `G0V-VOLTE-RESERVE`. ADR-0016 replaces those communications
+clauses with native cellular primary and RTC optional fallback.
 
 `L1 Location`, `L2 Intelligence`, and `L3 Awareness` are capability-priority
 layers, not replacements for the product-assurance gates. L1 is launch
@@ -245,8 +255,8 @@ D2/D5、可靠性/功耗、产品 A0 和合规继续按各自依赖推进。指�
 
 - **GitHub Flow**：`main` 永远可构建可刷机；短分支 `d<demo>/<topic>`
   （如 `d1/power-duty-cycle`）；小步快合，不留长分支。
-- **必须建远程仓库**（当前没有远程，这是风险）：创始人建 GitHub 私有仓库
-  或 VPS Gitea，之后每日至少 push 一次。
+- **远程备份与协作**：按 `docs/development/GIT_FLOW.md` 核验当前 remote、访问权限和分支；
+  不沿用历史“当前没有远程”的状态断言。保持可恢复提交与授权的远程备份。
 - Commit 规范：`<type>(<scope>): <说明> [D<n>]`，type ∈ feat/fix/power/
   loc/safety/ops/docs；例：`feat(loc): add wifi fingerprint upload [D2]`。
 - 每个 Demo 验收即打 tag `v0.<demo>.<iter>` 并出一页报告。
@@ -280,6 +290,8 @@ ADR / 专项 authority（实现边界）→ roadmap / task packet（执行）。
 ACTIVE_BUILD 和 BOARD_MATRIX 反映现状；machine-readable contracts 控制协议。
 
 ## 变更记录
+
+- 2026-09-22 按创始人对齐指令接入 ADR-0016；明确旧条款适用期、当前分工与远程状态核验，不新增硬件证据。
 
 - 2026-09-19 创始人决策修订：产品终局目标定调为“随身主动状态估计”，定位为最直观用户功能与核心证据；确立强隐私性、本地优先高阶原则，同步研发家庭基站（Ego Base）替代公有云并作为随身设备算力后备；通话策略首要保证 LTE 蜂窝直拨通话（像手机一样通话），网络通话转为备选；开发板跳过无麦克风扬声器的音频测试。
 

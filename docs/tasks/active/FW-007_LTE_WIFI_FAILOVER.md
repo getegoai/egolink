@@ -43,6 +43,9 @@ out_of_scope:
   - durable offline queues, production radio claims, or Wi-Fi as a required safety link
   - automatic Wi-Fi-to-LTE failback, modem power cycling, or unbounded reconnect loops
   - firmware flashing, hardware commands, or long serial capture without a later explicit operator instruction
+execution_state: acceptance_review
+owner: director
+reviewed_at: 2026-09-22
 ---
 
 # Goal

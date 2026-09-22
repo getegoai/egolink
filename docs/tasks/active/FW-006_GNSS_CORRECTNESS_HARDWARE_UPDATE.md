@@ -36,6 +36,9 @@ out_of_scope:
   - flash erase, NVS erase, modem configuration, APN changes, or device commands
   - repeated flashing, indefinite serial monitoring, or field acceptance claims
   - VPS deployment, Dashboard changes, or historical database mutation
+execution_state: acceptance_review
+owner: director
+reviewed_at: 2026-09-22
 ---
 
 # Goal

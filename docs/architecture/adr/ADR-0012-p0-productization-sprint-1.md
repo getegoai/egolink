@@ -12,6 +12,16 @@ verified_by: founder/codex
 - Scope: P0 release Gates, Location Engine ownership, Sensor Policy, voice PoC,
   SOS composition, and scope exclusions
 
+## Subsequent decision — 2026-09-22
+
+[ADR-0016](ADR-0016-local-first-ego-state-cellular-primary.md) records the founder's 2026-09-19 decision and
+2026-09-22 migration instruction. It partially supersedes RTC-primary/native-
+reserve wording, defers no longer the minimal private Base endpoint, and admits
+bounded rule-state truth work. Three P0 Gate names, evidence obligations,
+local safety, source time, exact ACK and the current single-board field scope
+remain; CALL-020/021 and full SOS are not automatically resumed. The text
+below is the original dated decision, not a new current-state report.
+
 ## Context
 
 EgoLink has enough GNSS, LTE, IMU, Message Hub, field-evidence and contract

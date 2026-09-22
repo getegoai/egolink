@@ -4,7 +4,7 @@ title: Exact integrated P0 prototype design and down-select
 status: active
 priority: critical
 lane: D
-execution_state: in_progress
+execution_state: parked
 depends_on:
   - HW-020
 serves_gate: P0-LOC/P0-CALL/P0-SOS
@@ -13,6 +13,7 @@ created: 2026-08-23
 last_updated: 2026-09-09
 
 context:
+  - docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md
   - docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md
   - docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md
   - docs/hardware/P0_PRODUCT_ARCHITECTURE.md
@@ -20,7 +21,7 @@ context:
   - docs/hardware/TCAM_001_CAMERA_SMOKE_LIVE_CAPTURE_20260623.md
   - docs/product/MASS_PRODUCTION_REQUIREMENTS.md
   - docs/tasks/active/P0-CONVERGENCE-20260905.md
-  - docs/tasks/active/CALL-020_LTE_DATA_VOICE_POC.md
+  - docs/tasks/active/CALL-030_NATIVE_CELLULAR_FEASIBILITY.md
   - docs/tasks/active/COMPLIANCE-010_CHINA_PRECOMPLIANCE.md
 
 allowed_paths:
@@ -31,7 +32,9 @@ allowed_paths:
 out_of_scope:
   - purchasing, releasing fabrication data or powering hardware
   - treating a candidate table, ERC/DRC result or official datasheet as a built prototype
-  - adding sensors, Native VoLTE or camera AI to the P0 critical path
+  - adding sensors or camera AI to the P0 critical path; native cellular primary is already required by ADR-0016
+owner: unassigned
+reviewed_at: 2026-09-22
 ---
 
 # Goal
@@ -53,7 +56,8 @@ prototype design with exact part/revision identities and explicit evidence.
       and mounting direction, enclosure opening/sealing, JPEG RAM/storage and
       LTE-upload budgets are explicit design inputs rather than inferred from
       a development-board smoke.
-- [ ] The design can absorb CALL-020 codec/bitrate/traffic/jitter measurements
+- [ ] The design can absorb CALL-030 native call/control/audio feasibility and
+      separately measured product data/traffic/recovery requirements
       and COMPLIANCE-010 constraints without pretending those inputs already
       exist; unresolved choices are conditional release blockers.
 - [ ] Reviewable schematic/BOM/net/power/RF/acoustic constraints and an
@@ -62,10 +66,12 @@ prototype design with exact part/revision identities and explicit evidence.
 
 # Dispatch Boundary
 
-This task continues immediately in parallel with the A-line Camera milestone
-and COMPLIANCE-010. CALL-020 is paused; its unknown media inputs remain
-conditional fields and do not block unrelated Camera, RF, power, storage or
-mechanical work. They still block final audio/bearer release closure.
+This task is parked with no assigned active builder. On explicit dispatch it
+may proceed in parallel with Gemini's A-line and COMPLIANCE-010. CALL-030 is
+the current native call/control/audio input; missing evidence blocks relevant
+release closure, while unrelated Camera, RF, power, storage or mechanical
+design can proceed. CALL-020/021 remain paused optional RTC work and are not
+implicit prerequisites for the native path.
 Before creating design-source files, confirm the exact `hardware/p0_a0/`
 structure and add its local instructions if needed. Web/vendor facts require
 primary official sources; purchasing and fabrication require separate founder
@@ -85,9 +91,9 @@ revision `HW021-C0.1`. It contains:
 - an independent EE/RF/audio/mechanical/privacy/compliance release checklist.
 
 This slice does not complete any acceptance item: the exact modem/battery
-identities, CALL-020 measured inputs, final support parts, calculations,
+identities, CALL-030 native feasibility, measured data inputs, final support parts, calculations,
 schematic/BOM/layout and independent reviews remain open. The task therefore
-stays `active` / `in_progress`.
+stays lifecycle `active`, execution `parked`, pending assigned dispatch.
 
 ## 2026-09-09 Camera Design-Input Overlay
 
@@ -150,10 +156,13 @@ unrelated C-line work.
    code, HW/KDL revision, firmware, hardware-design manual and errata. Resolve
    the manufacturer's conflicting public sleep-current values; use neither in
    a budget meanwhile.
-2. When CALL resumes, feed measured codec/bitrate/frame/jitter/gap/reconnect/
-   overhead results into the worksheet and prove the selected bearer on MCU +
-   modem without a PC. Until then those fields stay unknown; UART+RTS/CTS and
-   USB ECM/RNDIS remain conditional alternatives rather than frozen choices.
+2. Feed CALL-030's exact native control/audio feasibility into the worksheet;
+   determine analog/PCM/I2S compatibility, clock/control ownership and complete
+   microphone/speaker routing. Separately measure product data load/recovery
+   and prove the selected bearer on MCU + modem without a PC. Missing fields
+   stay unknown; UART+RTS/CTS and USB ECM/RNDIS remain conditional alternatives.
+   Legacy RTC measurements may be reused only within their actual evidence
+   scope and do not automatically resume CALL-020/021.
 3. Resolve Camera/IMU/gauge interface ownership and obtain the measured A-line
    Camera resource, persistence, transfer, power and mechanical inputs listed
    above. Close the product image-media part, endurance/wear, encryption,

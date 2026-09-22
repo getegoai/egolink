@@ -1,0 +1,65 @@
+{
+  "status": "offline_build_only_not_flashed",
+  "built_at": "2026-09-22",
+  "source_base_commit": "9de56b92a8bb54e12f6b39e16bcd6f48c581c7e3",
+  "source_binding": "base commit plus listed source SHA-256; build occurred before final Git commits",
+  "profile": "collection + camera blocked/no-SIM; LTE PPP disabled",
+  "hardware_evidence": false,
+  "toolchain": "ESP-IDF 5.4.2; ESP32-S3 cross compiler",
+  "defaults": [
+    "sdkconfig.defaults",
+    "sdkconfig.collection.defaults",
+    "sdkconfig.camera_collection.defaults"
+  ],
+  "environment_notes": [
+    "IDF_TOOLS_PATH=C:/Espressif",
+    "IDF_PYTHON_CHECK_CONSTRAINTS=0: installed Python dependencies checked without missing constraints file",
+    "IDF_SKIP_TOOLS_CHECK=1: absent unrelated RISC-V GDB; actual target cross compilation and link completed"
+  ],
+  "artifacts": [
+    {
+      "path": "tmp/build_codex_state_truth/egolink_mqtt_heartbeat.bin",
+      "bytes": 1064272,
+      "sha256": "26ed197314e1b4234b1c5d760469b811958ddd2c451e3dbfb4ec5efea2d0522a"
+    },
+    {
+      "path": "tmp/build_codex_state_truth/egolink_mqtt_heartbeat.elf",
+      "bytes": 10734840,
+      "sha256": "54cba552797f7209cf81edf1780807b9cf2e89d8873cfc59108607f872de866a"
+    }
+  ],
+  "sdkconfig": {
+    "path": "firmware/mqtt_heartbeat/sdkconfig.codex_state.local",
+    "bytes": 76915,
+    "sha256": "876fe9aead15f6403d27cc432c27e147a3c7b691037ea49ee278828bc1347fa1"
+  },
+  "resolved_dependencies": {
+    "path": "tmp/align-state-build.dependencies.lock",
+    "bytes": 981,
+    "sha256": "37f1fecf124b818929d156a7926c3aaebd261ad5d55062800ba554dc75bc7009"
+  },
+  "changed_firmware_sources": [
+    {
+      "path": "firmware/mqtt_heartbeat/main/collection_main.c",
+      "bytes": 207813,
+      "sha256": "89570fd583c93607c42aedea5966eef9b1cbf1bf5fe41a14d92acea2b6cd1dcf"
+    },
+    {
+      "path": "firmware/mqtt_heartbeat/components/ego_state_engine/ego_state_engine.c",
+      "bytes": 28473,
+      "sha256": "492b57e4213b57b056d558c3ff53f1031c19267798451d573178e237e115c165"
+    },
+    {
+      "path": "firmware/mqtt_heartbeat/components/ego_state_engine/include/ego_state_engine.h",
+      "bytes": 7050,
+      "sha256": "8c33aac031c0f4bce6826c4e1f4c0b84273f83aaf88ed55b77ba4c4b30961df3"
+    }
+  ],
+  "build_log": "tmp/align-state-build-final.log",
+  "hardware_claims": "none; not a running or approved recovery image",
+  "artifact_note": "Build directory moved into ignored tmp after completion; CMake cache retains its original build location. Reconfigure a fresh output directory to rebuild.",
+  "matching_firmware_source_commit": "3a07280582abd28e84300aea9e6d6d8f176bf0b7",
+  "cross_compile_check_database": "tmp/build_codex_state_checks/compile_commands.json",
+  "cross_compile_check_note": "Fresh reconfiguration at its actual path; strict optional compiler tests execute against this database. The earlier relocated binary artifacts remain unchanged.",
+  "workspace_root": "D:/pywork/egolink-codex-state-20260922"
+}

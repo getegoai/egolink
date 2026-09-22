@@ -1,14 +1,28 @@
 {
-  "current_focus": "Camera 默认 blocked；显式 shared-I2C trial profile 已完成干净离线构建，每次启动只允许一次 Web 手动实际尝试且禁止定时。该构建的 Wi-Fi/认证字段为空，只是构建证据，不能直接联网实拍。下一步是在具名操作/隐私范围内生成被 Git 忽略的 NO_SIM/Wi-Fi 私密 overlay，重建并绑定新 SHA，再部署/刷写/单拍；证据通过审查后才进入 VERIFIED、SIM/LTE、断网补传、独立供电短测和 FIELD-020。",
+  "current_focus": "Codex 已完成 ALIGN-STATE-010 离线修复（源码 3a0728058），未烧录或部署。Gemini 负责单板恢复、实际 Wi-Fi/LTE 切换、D2 基线与 FIELD-020。最后报告镜像仍为 Boot188；三个产品 Gate 均为 NOT_RUN。",
   "recent_done_limit": 8,
   "milestones": [
     {
-      "id": "A-CAMERA",
-      "title": "Single-board Location and Camera Closure",
+      "id": "STATE-TRUTH",
+      "title": "状态真实性与项目对齐",
+      "tasks": [
+        {
+          "id": "ALIGN-STATE-010",
+          "label": "Codex state truth / contracts / governance"
+        }
+      ]
+    },
+    {
+      "id": "A-FIELD",
+      "title": "单板恢复与真实外场数据",
       "tasks": [
         {
           "id": "P0-CONVERGENCE-20260905",
-          "label": "joint source and live closure"
+          "label": "Gemini recovery / route transition"
+        },
+        {
+          "id": "D2-001",
+          "label": "reference metrics"
         },
         {
           "id": "FIELD-020",
@@ -17,157 +31,46 @@
       ]
     },
     {
-      "id": "C-PRODUCT",
-      "title": "Hardware and Pre-compliance",
+      "id": "LOCAL-FIRST",
+      "title": "最小用户私有终点（并行准备）",
       "tasks": [
-        {
-          "id": "HW-021",
-          "label": "integrated hardware architecture"
-        },
-        {
-          "id": "COMPLIANCE-010",
-          "label": "China pre-compliance"
-        }
+        "BASE-010"
       ]
     },
     {
-      "id": "DEFERRED-P0",
-      "title": "Paused Call and SOS Gates",
+      "id": "NATIVE-CALL",
+      "title": "原生蜂窝主通话与 SOS",
       "tasks": [
-        {
-          "id": "CALL-020",
-          "label": "LTE data voice PoC"
-        },
-        {
-          "id": "CALL-021",
-          "label": "embedded RTC media"
-        },
-        {
-          "id": "SOS-010",
-          "label": "physical SOS closure"
-        }
-      ]
-    },
-    {
-      "id": "RELEASE",
-      "title": "Engineering Alpha Release Gate",
-      "tasks": [
-        {
-          "id": "REL-012",
-          "label": "v0.1.0 alpha readiness"
-        },
-        {
-          "id": "ENG-007",
-          "label": "retire autonomous queue"
-        },
-        {
-          "id": "ENG-008",
-          "label": "progress board"
-        },
-        {
-          "id": "OBS-005",
-          "label": "VPS progress visibility"
-        }
-      ]
-    },
-    {
-      "id": "D1",
-      "title": "Link-Through Regression",
-      "tasks": [
-        {
-          "id": "D1-001",
-          "label": "4G link-through"
-        },
-        {
-          "id": "PWR-001",
-          "label": "power baseline"
-        }
-      ]
-    },
-    {
-      "id": "D2",
-      "title": "Location Accuracy Baseline",
-      "tasks": [
-        {
-          "id": "D2-001",
-          "label": "location baseline tooling"
-        },
-        {
-          "id": "FIELD-003",
-          "label": "reference-point field run"
-        },
-        {
-          "id": "MAP-001",
-          "label": "no-key evidence map"
-        },
-        {
-          "id": "FIELD-010",
-          "label": "server readiness observer"
-        },
-        {
-          "id": "D2-002",
-          "label": "reference field automation"
-        },
-        {
-          "id": "D2-003",
-          "label": "bounded field export"
-        },
-        {
-          "id": "MAP-002",
-          "label": "mobile reference capture"
-        },
-        {
-          "id": "MAP-003",
-          "label": "local reference overlay"
-        },
-        {
-          "id": "D2-004",
-          "label": "historical VPS baseline and rule freeze"
-        },
-        {
-          "id": "D2-005",
-          "label": "QMI configuration and motion readiness"
-        }
-      ]
-    },
-    {
-      "id": "D5",
-      "title": "Location Data Flywheel",
-      "tasks": [
-        {
-          "id": "D5-001",
-          "label": "location data flywheel"
-        },
-        {
-          "id": "MODEL-LOC-001",
-          "label": "location model loop"
-        }
+        "CALL-030",
+        "HW-022",
+        "CALL-031",
+        "SOS-010"
       ]
     },
     {
       "id": "PRODUCT",
-      "title": "Product Alpha Gaps",
+      "title": "产品保障",
       "tasks": [
-        {
-          "id": "CALLSMS-001",
-          "label": "call/SMS verification"
-        },
-        {
-          "id": "PWR-002",
-          "label": "low-power location policy decision"
-        },
-        {
-          "id": "PRIVACY-LOC-001",
-          "label": "location data policy"
-        }
+        "HW-021",
+        "PWR-020",
+        "COMPLIANCE-010",
+        "P0-RELEASE-010"
+      ]
+    },
+    {
+      "id": "RTC-RESERVE",
+      "title": "已暂停的 RTC 备路资产",
+      "tasks": [
+        "CALL-020",
+        "CALL-021"
       ]
     }
   ],
   "assignees": {
-    "P0-CONVERGENCE-20260905": "codex + founder bounded hardware run",
-    "FIELD-020": "founder field run + codex evidence closure",
-    "HW-021": "codex hardware lane",
-    "COMPLIANCE-010": "codex + qualified labs/advisers",
+    "P0-CONVERGENCE-20260905": "Gemini",
+    "FIELD-020": "Gemini",
+    "HW-021": "parked / no active builder",
+    "COMPLIANCE-010": "unassigned / NOT_SENT",
     "CALL-020": "paused",
     "CALL-021": "paused",
     "SOS-010": "paused",
@@ -176,9 +79,9 @@
     "ENG-008": "codex",
     "OBS-005": "codex",
     "D1-001": "codex + founder field tests",
-    "PWR-001": "codex + founder field tests",
-    "D2-001": "codex",
-    "FIELD-003": "founder outdoor run + codex postrun",
+    "PWR-001": "Gemini",
+    "D2-001": "Gemini",
+    "FIELD-003": "Gemini",
     "FIELD-010": "codex",
     "D2-002": "codex",
     "D2-003": "codex",
@@ -191,12 +94,25 @@
     "MODEL-LOC-001": "codex",
     "CALLSMS-001": "blocked until explicit hardware task",
     "PWR-002": "planned",
-    "PRIVACY-LOC-001": "planned"
+    "PRIVACY-LOC-001": "planned",
+    "FT-001B": "Gemini",
+    "FIELD-011": "Gemini",
+    "FW-005": "Director acceptance review",
+    "FW-006": "Director acceptance review",
+    "WEB-006": "Director acceptance review",
+    "WEB-004": "Director acceptance review",
+    "WEB-005": "Director acceptance review",
+    "FW-007": "Director acceptance review",
+    "OPS-003": "Director acceptance review",
+    "OPS-002": "Director acceptance review",
+    "DOC-BASE-001": "Director acceptance review",
+    "OPS-004": "parked / no active builder",
+    "OUTBOX-010": "parked / no active builder",
+    "LOC-021": "parked / no active builder",
+    "ALIGN-STATE-010": "Codex",
+    "CALL-030": "unassigned / queued",
+    "CALL-031": "unassigned / queued",
+    "BASE-010": "unassigned / queued"
   },
-  "operator_asks": [
-    "保持 4G 板断电并核对：仅该板参与；TF 已拔除且驱动禁用，CAM 开关置于 Camera 位置，OV5640 排线方向及 QMI8658A/MAX17048 的 GPIO15/16 接线正确，GPIO39-42 无外部 JTAG；随后只接 4G 板数据 USB。",
-    "一次性明确参与者、获准拍摄场景、查看者、保留截止与删除路径，并授权：使用本机私密值生成被 Git 忽略的 NO_SIM/Wi-Fi trial overlay，重建并绑定新的精确 SHA，部署本次 VPS/Web，在 COM3 只刷该具名镜像，再由现有 Web 命令执行一次 QVGA 手动测试。training_allowed=false；不开定时、不使用 SIM、不采音频、不公开或提交照片。",
-    "试验后先审查 Camera/IMU/gauge/I2C、heap/DMA/stack、UART/reset/brownout/watchdog 证据，再决定是否生成 VERIFIED；试验成功不自动晋级。随后才准备 SIM、LTE/GNSS 天线和独立电源，进入真实 LTE 单拍与恢复补传。",
-    "在具名现场证据完成前，不宣称 Camera 外测就绪、定位精度、续航、量产或任何 P0 Gate 通过。"
-  ]
+  "operator_asks": []
 }

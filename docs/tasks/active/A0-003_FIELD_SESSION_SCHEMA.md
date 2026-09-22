@@ -38,6 +38,9 @@ out_of_scope:
   - A0-005 labels beyond the bounded weak manual-event contract
   - replay, evaluation, model training, fusion or Location Belief behavior
   - marking A0-003, A0-002 or A-R0 passed without reviewed real evidence
+execution_state: queued
+owner: unassigned
+reviewed_at: 2026-09-22
 ---
 
 # Problem

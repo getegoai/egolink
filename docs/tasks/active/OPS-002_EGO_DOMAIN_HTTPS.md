@@ -47,6 +47,9 @@ out_of_scope:
   - credentials, private coordinates, certificate private keys, tokens, or VPS logs in Git
   - changes to GitLab, unrelated virtual hosts, SSH policy, or other VPS services
   - closing public port 8790 or migrating the current firmware uplink endpoint
+execution_state: acceptance_review
+owner: director
+reviewed_at: 2026-09-22
 ---
 
 # Goal

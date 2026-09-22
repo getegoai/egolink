@@ -34,6 +34,9 @@ out_of_scope:
   - a new history API, arbitrary date-range queries, route inference, or geofencing
   - plaintext credentials, private coordinates, tokens, or runtime logs in Git
   - DNS, TLS, Nginx, ports, or database restoration
+execution_state: acceptance_review
+owner: director
+reviewed_at: 2026-09-22
 ---
 
 # Goal

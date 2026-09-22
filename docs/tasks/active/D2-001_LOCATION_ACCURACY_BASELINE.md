@@ -34,6 +34,12 @@ out_of_scope:
   - safety-classification model work
   - firmware GNSS driver changes unless a later hardware task explicitly allows them
   - raw private coordinate publication outside bounded evidence
+execution_state: queued
+owner: gemini
+depends_on:
+  - P0-CONVERGENCE-20260905
+queue_reason: next real baseline follows bounded single-board recovery and route-switch acceptance; offline metric preparation may proceed
+reviewed_at: 2026-09-22
 ---
 
 This task serves D2. The current lowest active mainline demo is D2; D1 field

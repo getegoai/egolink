@@ -27,6 +27,9 @@ out_of_scope:
   - EALE-P0 algorithm/threshold changes
   - product accuracy claims
   - indoor testing (already covered; indoor is no-fix by design)
+execution_state: queued
+owner: gemini
+reviewed_at: 2026-09-22
 ---
 
 # Problem

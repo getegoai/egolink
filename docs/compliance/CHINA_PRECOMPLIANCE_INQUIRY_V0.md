@@ -1,9 +1,10 @@
 ---
 document_status: draft_not_sent
+decision_updated: 2026-09-22
 last_verified: 2026-08-23
 verified_by: codex
 source_task: COMPLIANCE-010
-concept_id: egolink-p0-architecture-20260823
+concept_id: egolink-p0-native-cellular-local-first-20260922
 ---
 
 # EgoLink China Pre-Compliance Inquiry v0
@@ -15,6 +16,12 @@ qualified China laboratory or product-classification consultant. It is not a
 legal conclusion, certification application, purchase request or product
 claim. Private contact details, quotations and credentials stay outside the
 repository.
+
+This draft incorporates
+[ADR-0016](../architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md):
+native cellular primary, optional RTC, a private Base endpoint and bounded
+cloud relay. It replaces this draft's old RTC-primary/native-reserve concept;
+no inquiry has been sent and no qualified opinion is implied.
 
 The inquiry intentionally starts before final BOM/PCB freeze. Please answer
 conditionally where applicability depends on an exact modem, antenna,
@@ -30,20 +37,25 @@ needed to close each condition.
 - Required P0 loop: Reliable Location + Ego Call + physical SOS.
 - Radios: Cat.1 LTE data and GNSS are required. Wi-Fi/BLE are optional reserves
   and must be assessed both absent and present until A0 decides.
-- Voice: microphone/speaker full-duplex Ego Call over LTE data to a controlled
-  RTC service and Guardian App. No PSTN/SIP gateway, SMS emergency dispatch or
-  public emergency-service integration in the first launch.
-- Native VoLTE: hardware migration reserve only, not a first-launch feature or
-  claim. Please identify whether merely retaining a capable module/interface
-  changes classification or test scope.
+- Voice: native cellular dialing and answering with complete microphone/speaker
+  full-duplex audio to authorized ordinary phone contacts. Exact supported
+  voice mode (including VoLTE where supported), firmware, SIM and operator
+  remain unverified; no CS fallback is assumed. LTE-data RTC to a Guardian App
+  is optional. No self-operated public PSTN/SIP gateway, SMS emergency dispatch
+  or public emergency-service integration is included in the first launch.
 - Interaction: physical SOS key, local light/haptic/audio feedback and USB-C
   charging/service.
-- Sensors: GNSS and six-axis IMU required. Camera is outside the launch SKU
-  baseline; please state the delta if a later authorized single-still camera
-  option is added.
-- Data: location, device state, SOS events and RTC session state are sent to a
-  Guardian service. Continuous raw audio/image recording is disabled by
-  default; ordinary call media is not retained by default.
+- Sensors: GNSS and six-axis IMU required. Product Camera population is not
+  frozen; please assess the concept without Camera and state the delta for an
+  authorized single-still option. Current development capture is not a product
+  SKU selection or continuous-recording feature.
+- Data: authorized location, device state, SOS and call outcome/context may be
+  viewed by Guardian roles. The product target is a user-controlled private
+  Base endpoint, with cloud reachability/signaling/relay and purpose-, access-,
+  quota- and time-bounded temporary storage. Current VPS engineering collection
+  is not a product local-first or encryption claim. Ordinary call media and
+  raw audio/image persistence are off by default; exceptional capture requires
+  purpose/event policy, consent, retention and deletion/withdrawal controls.
 - Architecture maturity: HW-020 interface baseline only. Exact MCU, modem,
   antennas, battery/charger, enclosure, applicant and manufacturer are not yet
   frozen.
@@ -62,7 +74,8 @@ required documents/samples and recommended decision timing for:
 7. ingress/waterproof claims and their interaction with acoustic openings;
 8. app/account/location/audio privacy, guardian/minor roles, consent, deletion
    and cybersecurity obligations that should affect A0 architecture;
-9. whether LTE-data RTC voice versus a native VoLTE reserve changes any item;
+9. obligations of native cellular primary voice and the deltas of optional
+   LTE-data RTC, including exact firmware/operator and audio-path assumptions;
 10. deltas caused by adding Wi-Fi/BLE or a later event-still camera.
 
 Please separate module-carried evidence from final-device obligations and state

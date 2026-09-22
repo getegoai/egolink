@@ -18,7 +18,7 @@ def make_repo(root: Path) -> None:
     (root / "docs" / "current" / "key_releases").mkdir(parents=True)
     (root / "docs" / "tasks" / "active" / "AAA-001_X.md").write_text(
         "---\nid: AAA-001\ntitle: Active thing\nstatus: active\n"
-        "priority: high\ncreated: 2026-07-01\n---\n# Body\n",
+        "execution_state: in_progress\nowner: codex\npriority: high\ncreated: 2026-07-01\n---\n# Body\n",
         encoding="utf-8",
     )
     (root / "docs" / "tasks" / "active" / "BBB-001_Y.md").write_text(
@@ -101,10 +101,36 @@ class ProgressBoardTests(unittest.TestCase):
         self.assertEqual(board["counts"]["active"], 1)
         self.assertEqual(board["counts"]["paused"], 1)
         self.assertEqual(board["counts"]["open_total"], 2)
-        for expected in ("里程碑", "进行中/暂停的任务", "最近完成",
+        for expected in ("里程碑", "开放任务（只有实施中计入 WIP）", "最近完成",
                          "等待创始人处理", "KR-001", "do a thing",
                          "planned thing"):
             self.assertIn(expected, md)
+
+    def test_open_inventory_does_not_inflate_implementation_wip(self):
+        entries = {
+            "QUEUED": ("active", "queued", "planned"),
+            "REVIEW": ("active", "acceptance_review", "acceptance_review"),
+            "PARKED": ("active", "parked", "parked"),
+            "REGRESSION": ("continuous_regression", "continuous_regression", "continuous_regression"),
+            "LEGACY": ("active", "", "planned"),
+            "BLOCKED": ("blocked", "in_progress", "paused"),
+        }
+        for task_id, (status, execution, _) in entries.items():
+            (self.root / "docs/tasks/active" / f"{task_id}.md").write_text(
+                f"---\nid: {task_id}\nstatus: {status}\nexecution_state: {execution}\n---\n",
+                encoding="utf-8",
+            )
+        board = board_mod.build_board(self.root)
+        by_id = {p["id"]: p for p in board["active_tasks"]}
+        for task_id, (_, _, expected) in entries.items():
+            self.assertEqual(by_id[task_id]["state"], expected)
+        self.assertEqual(board["counts"]["active"], 1)
+        self.assertEqual(board["counts"]["open_total"], 8)
+        self.assertEqual(board["counts"]["acceptance_review"], 1)
+        self.assertEqual(board["counts"]["continuous_regression"], 1)
+        self.assertEqual(board["counts"]["planned"], 2)
+        self.assertEqual(by_id["AAA-001"]["owner"], "codex")
+        self.assertIn("待验收: 1", board_mod.render_markdown(board))
 
     def test_key_release_scan_is_defensive(self):
         (self.root / "docs" / "current" / "key_releases" / "broken.json").write_text(
@@ -115,6 +141,20 @@ class ProgressBoardTests(unittest.TestCase):
         )
         self.assertEqual(len(releases), 1)
         self.assertEqual(releases[0]["id"], "KR-001")
+
+    def test_server_summary_distinguishes_wip_from_open_inventory(self):
+        from server.message_hub import load_progress_board
+
+        path = self.root / "board.json"
+        value = {"active_tasks": [{}, {}, {}], "counts": {"active": 1}}
+        path.write_text(json.dumps(value), encoding="utf-8")
+        summary = load_progress_board(path)["summary"]
+        self.assertEqual(summary["active_count"], 1)
+        self.assertEqual(summary["open_count"], 3)
+        for invalid in (None, True, -1, "1"):
+            value["counts"]["active"] = invalid
+            path.write_text(json.dumps(value), encoding="utf-8")
+            self.assertEqual(load_progress_board(path)["summary"]["active_count"], 3)
 
 
 if __name__ == "__main__":
