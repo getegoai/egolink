@@ -190,11 +190,24 @@ export class MapController {
     }
   }
 
-  setPoints(points) {
+  setPoints(points, options = {}) {
     this.points = (points || []).filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number');
+    this.isLiveMode = Boolean(options.isLive);
+    this.autoCenter = options.centerOnLast !== undefined ? options.centerOnLast : this.isLiveMode;
     this.playbackIndex = null;
     this.playbackMarker = null;
     this.render();
+  }
+
+  centerOnDevice(zoom = 17) {
+    if (this.points.length === 0) return;
+    const lastPt = this.points[this.points.length - 1];
+    const gcj = lastPt.isCellTower ? [lastPt.lng, lastPt.lat] : wgs84ToGcj02(lastPt.lng, lastPt.lat);
+    if (this.amapInstance && this.amapAvailable) {
+      this.amapInstance.setZoomAndCenter(zoom, gcj);
+    } else {
+      this.renderVectorCanvas();
+    }
   }
 
   setPlaybackIndex(idx) {
@@ -223,6 +236,7 @@ export class MapController {
 
     if (this.points.length === 0) return;
 
+    // Single point (e.g. 4G base station fallback or first GPS fix)
     if (this.points.length === 1) {
       const p = this.points[0];
       const gcj = p.isCellTower ? [p.lng, p.lat] : wgs84ToGcj02(p.lng, p.lat);
@@ -232,9 +246,15 @@ export class MapController {
              <span style="font-size:16px;">📡</span>
              <span>${title}</span>
            </div>`
-        : `<div style="background:#059669;color:#fff;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:bold;display:flex;align-items:center;gap:6px;box-shadow:0 4px 12px rgba(0,0,0,0.5);border:2px solid #6ee7b7;white-space:nowrap;">
-             <span style="font-size:16px;">📍</span>
-             <span>${title}</span>
+        : `<div style="position:relative;display:flex;flex-direction:column;align-items:center;pointer-events:none;">
+             <div style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:bold;white-space:nowrap;box-shadow:0 3px 12px rgba(16,185,129,0.6);border:1px solid #a7f3d0;display:flex;align-items:center;gap:5px;margin-bottom:6px;">
+               <span style="display:inline-block;width:7px;height:7px;background:#34d399;border-radius:50%;box-shadow:0 0 6px #34d399;"></span>
+               <span>🎯 ${title}</span>
+             </div>
+             <div style="position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
+               <div style="position:absolute;width:28px;height:28px;background:rgba(16,185,129,0.3);border-radius:50%;border:2px solid #10b981;"></div>
+               <div style="width:12px;height:12px;background:#10b981;border-radius:50%;border:2px solid #fff;box-shadow:0 0 8px #10b981;"></div>
+             </div>
            </div>`;
 
       const marker = new AMap.Marker({
@@ -242,12 +262,12 @@ export class MapController {
         offset: new AMap.Pixel(-16, -20),
         title,
         content: markerContent,
-        zIndex: 100
+        zIndex: 140
       });
 
       const circle = new AMap.Circle({
         center: gcj,
-        radius: p.uncertainty || 300,
+        radius: p.uncertainty || (p.isCellTower ? 300 : 15),
         fillColor: p.isCellTower ? '#3b82f6' : '#10b981',
         fillOpacity: 0.16,
         strokeColor: p.isCellTower ? '#2563eb' : '#059669',
@@ -257,11 +277,12 @@ export class MapController {
       });
 
       this.amapInstance.add([marker, circle]);
-      this.amapInstance.setZoomAndCenter(15, gcj);
+      this.amapInstance.setZoomAndCenter(p.isCellTower ? 15 : 17, gcj);
       return;
     }
 
     const path = this.points.map(p => wgs84ToGcj02(p.lng, p.lat));
+    const overlays = [];
 
     const polylineShadow = new AMap.Polyline({
       path,
@@ -283,37 +304,105 @@ export class MapController {
       showDir: true,
       zIndex: 50
     });
+    overlays.push(polylineShadow, polyline);
 
     const startPt = this.points[0];
     const startGcj = path[0];
-    const startMarker = new AMap.Marker({
-      position: startGcj,
-      offset: new AMap.Pixel(-14, -14),
-      title: `起点: ${startPt.lat.toFixed(6)}, ${startPt.lng.toFixed(6)}`,
-      content: `
-        <div style="background:#10b981;color:#fff;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;font-size:13px;font-weight:bold;border:2px solid #ffffff;box-shadow:0 3px 10px rgba(16,185,129,0.7);cursor:pointer;">
-          起
-        </div>
-      `,
-      zIndex: 110
-    });
-
     const endPt = this.points[this.points.length - 1];
     const endGcj = path[path.length - 1];
-    const endMarker = new AMap.Marker({
-      position: endGcj,
-      offset: new AMap.Pixel(-14, -14),
-      title: `终点: ${endPt.lat.toFixed(6)}, ${endPt.lng.toFixed(6)}`,
-      content: `
-        <div style="background:#ef4444;color:#fff;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;font-size:13px;font-weight:bold;border:2px solid #ffffff;box-shadow:0 0 14px rgba(239,68,68,0.9);cursor:pointer;">
-          终
-        </div>
-      `,
-      zIndex: 110
-    });
 
-    this.amapInstance.add([polylineShadow, polyline, startMarker, endMarker]);
-    this.amapInstance.setFitView([polyline, startMarker, endMarker], false, [60, 60, 60, 60]);
+    if (this.isLiveMode) {
+      // Live Tracking Mode: Emphasize current real-time device beacon
+      if (this.points.length > 2) {
+        const startMarker = new AMap.Marker({
+          position: startGcj,
+          offset: new AMap.Pixel(-12, -12),
+          title: `起点: ${startPt.lat.toFixed(6)}, ${startPt.lng.toFixed(6)}`,
+          content: `
+            <div style="background:#0284c7;color:#fff;width:24px;height:24px;border-radius:50%;text-align:center;line-height:24px;font-size:11px;font-weight:bold;border:2px solid #ffffff;box-shadow:0 2px 8px rgba(2,132,199,0.7);">
+              起
+            </div>
+          `,
+          zIndex: 110
+        });
+        overlays.push(startMarker);
+      }
+
+      const sats = endPt.satellites ? `${endPt.satellites} 颗星` : '3D Fix';
+      const spd = endPt.speed ? ` · ${(endPt.speed * 3.6).toFixed(1)} km/h` : '';
+      const liveDeviceMarker = new AMap.Marker({
+        position: endGcj,
+        offset: new AMap.Pixel(-70, -46),
+        title: `当前设备位置: ${endPt.lat.toFixed(6)}, ${endPt.lng.toFixed(6)}`,
+        content: `
+          <div style="position:relative;display:flex;flex-direction:column;align-items:center;pointer-events:none;width:140px;">
+            <div style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:bold;white-space:nowrap;box-shadow:0 3px 12px rgba(16,185,129,0.6);border:1px solid #a7f3d0;display:flex;align-items:center;gap:5px;margin-bottom:6px;">
+              <span style="display:inline-block;width:7px;height:7px;background:#34d399;border-radius:50%;box-shadow:0 0 6px #34d399;"></span>
+              <span>🎯 当前设备 (${sats}${spd})</span>
+            </div>
+            <div style="position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
+              <div style="position:absolute;width:28px;height:28px;background:rgba(16,185,129,0.3);border-radius:50%;border:2px solid #10b981;"></div>
+              <div style="width:12px;height:12px;background:#10b981;border-radius:50%;border:2px solid #fff;box-shadow:0 0 10px #10b981;"></div>
+            </div>
+          </div>
+        `,
+        zIndex: 150
+      });
+
+      const accuracyRadius = Math.max(8, endPt.uncertainty || 15);
+      const liveAccuracyCircle = new AMap.Circle({
+        center: endGcj,
+        radius: accuracyRadius,
+        fillColor: '#10b981',
+        fillOpacity: 0.14,
+        strokeColor: '#059669',
+        strokeWeight: 1.5,
+        strokeDasharray: [4, 4],
+        zIndex: 55
+      });
+      overlays.push(liveDeviceMarker, liveAccuracyCircle);
+
+      this.amapInstance.add(overlays);
+
+      if (this.autoCenter) {
+        this.amapInstance.setZoomAndCenter(17, endGcj);
+        this.autoCenter = false;
+      }
+    } else {
+      // Historical Replay Mode: Show standard Start & End markers
+      const startMarker = new AMap.Marker({
+        position: startGcj,
+        offset: new AMap.Pixel(-14, -14),
+        title: `起点: ${startPt.lat.toFixed(6)}, ${startPt.lng.toFixed(6)}`,
+        content: `
+          <div style="background:#10b981;color:#fff;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;font-size:13px;font-weight:bold;border:2px solid #ffffff;box-shadow:0 3px 10px rgba(16,185,129,0.7);cursor:pointer;">
+            起
+          </div>
+        `,
+        zIndex: 110
+      });
+
+      const endMarker = new AMap.Marker({
+        position: endGcj,
+        offset: new AMap.Pixel(-14, -14),
+        title: `终点: ${endPt.lat.toFixed(6)}, ${endPt.lng.toFixed(6)}`,
+        content: `
+          <div style="background:#ef4444;color:#fff;width:28px;height:28px;border-radius:50%;text-align:center;line-height:28px;font-size:13px;font-weight:bold;border:2px solid #ffffff;box-shadow:0 0 14px rgba(239,68,68,0.9);cursor:pointer;">
+            终
+          </div>
+        `,
+        zIndex: 110
+      });
+      overlays.push(startMarker, endMarker);
+
+      this.amapInstance.add(overlays);
+      this.amapInstance.setFitView([polyline, startMarker, endMarker], false, [60, 60, 60, 60]);
+    }
+
+    if (this.playbackIndex !== null) {
+      this.updateAMapPlaybackCursor(this.playbackIndex);
+    }
+  }
 
     if (this.playbackIndex !== null) {
       this.updateAMapPlaybackCursor(this.playbackIndex);

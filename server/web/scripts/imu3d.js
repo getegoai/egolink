@@ -310,9 +310,26 @@ export class Imu3dVisualizer {
     }
   }
 
+  setViewMode(mode) {
+    if (mode === 'front') {
+      this.cameraPitch = 0;
+      this.cameraYaw = 0;
+      this.cameraDistance = 270;
+    } else if (mode === 'top') {
+      this.cameraPitch = 85;
+      this.cameraYaw = 0;
+      this.cameraDistance = 270;
+    } else {
+      // Perspective default 3D orbit
+      this.cameraPitch = 22;
+      this.cameraYaw = 28;
+      this.cameraDistance = 270;
+    }
+  }
+
   /**
    * Updates attitude using real-time IMU sample with Rodrigues plane alignment,
-   * Zero-Velocity Update (ZUPT) drift cancellation, and 60fps AHRS Complementary Filter.
+   * Zero-Velocity Update (ZUPT) drift cancellation, and smooth critically-damped gravity tilt.
    */
   updateSample(sample) {
     if (!sample) return;
@@ -361,8 +378,8 @@ export class Imu3dVisualizer {
     const nay = ay / (rawMag || 1);
     const naz = az / (rawMag || 1);
 
-    // 4. Accelerometer Tilt angles in Aligned Space:
-    // World Up is +Y (Gravity points down along -Y, reaction points up +Y).
+    // 4. Absolute Accelerometer Tilt angles in Aligned Space:
+    // World Up is +Y (Gravity reaction points up +Y).
     // Pitch: Tilt around X axis (nose up/down along Z) -> atan2(naz, nay)
     // Roll:  Tilt around Z axis (left/right along X) -> atan2(-nax, nay)
     const pitchAcc = Math.atan2(naz, nay) * (180 / Math.PI);
@@ -377,29 +394,20 @@ export class Imu3dVisualizer {
 
     // Gyro angular rate (scale to deg/s, QMI8658 512dps full scale -> 512/32768 = 0.015625 dps/LSB)
     const gyroScale = 512.0 / 32768.0;
-    let rateX = gx * gyroScale; // Pitch rate (around X axis)
     let rateY = gy * gyroScale; // Yaw rate (around vertical Y axis)
-    let rateZ = gz * gyroScale; // Roll rate (around Z axis)
 
     // 6. Zero-Velocity Update (ZUPT) & Stationary Deadband
-    // When resting on the desk, residual gyro noise would integrate into false yaw drift.
-    // Detect stationary state and lock zero rates.
-    const gyroNorm = Math.hypot(rateX, rateY, rateZ);
+    const gyroNorm = Math.hypot(gx * gyroScale, gy * gyroScale, gz * gyroScale);
     const isStationary = gyroNorm < 1.8 && Math.abs(this.totalG - 1.0) < 0.15;
 
     if (isStationary) {
-      rateX = 0;
-      rateY = 0;
-      rateZ = 0;
-      // When stationary, anchor pitch and roll directly to accelerometer gravity
+      // Anchored strictly to gravity vector
       this.fusedPitch = pitchAcc;
       this.fusedRoll = rollAcc;
     } else {
-      // 7. AHRS Complementary Filter during dynamic motion:
-      // 95% Gyro rate integration + 5% Accelerometer gravity correction
-      const alpha = 0.95;
-      this.fusedPitch = alpha * (this.fusedPitch + rateX * dt) + (1.0 - alpha) * pitchAcc;
-      this.fusedRoll = alpha * (this.fusedRoll + rateZ * dt) + (1.0 - alpha) * rollAcc;
+      // Smooth natural attitude tracking with zero reverse flipping
+      this.fusedPitch += (pitchAcc - this.fusedPitch) * 0.35;
+      this.fusedRoll += (rollAcc - this.fusedRoll) * 0.35;
       this.fusedYaw = (this.fusedYaw + rateY * dt) % 360;
       if (this.fusedYaw < 0) this.fusedYaw += 360;
     }
@@ -408,7 +416,7 @@ export class Imu3dVisualizer {
     this.targetRoll = this.fusedRoll;
     this.targetYaw = this.fusedYaw;
 
-    // 8. Semantic Pose classification (based on aligned gravity vector)
+    // 7. Semantic Pose classification (based on aligned gravity vector)
     if (nay > 0.72) {
       this.semanticPose = '平放正面朝上 (Flat Up)';
     } else if (nay < -0.72) {
@@ -431,10 +439,18 @@ export class Imu3dVisualizer {
     const height = canvas.height || 240;
     const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
 
-    // 1. Smooth lerp for buttery animation (60fps)
+    // Shortest angular difference for 360-degree boundary crossing
+    const shortestAngleDiff = (target, current) => {
+      let diff = (target - current) % 360;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
+      return diff;
+    };
+
+    // 1. Smooth lerp for buttery animation (60fps) without 360-spin glitch
     this.pitch += (this.targetPitch - this.pitch) * 0.28;
     this.roll += (this.targetRoll - this.roll) * 0.28;
-    this.yaw += (this.targetYaw - this.yaw) * 0.28;
+    this.yaw += shortestAngleDiff(this.targetYaw, this.yaw) * 0.28;
 
     // 2. Clear canvas with Deep Tech Dark background matching reference image
     ctx.fillStyle = '#0a1122';

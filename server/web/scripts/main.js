@@ -7,8 +7,8 @@ import { renderEgoState } from './ego_state.js?v=20260922_01';
 import { api } from './api.js?v=20260918_02';
 import { state } from './state.js?v=20260918_02';
 import { ImuOscilloscope, IMU_COLORS } from './charts.js?v=20260918_02';
-import { Imu3dVisualizer } from './imu3d.js?v=20260921_04';
-import { MapController } from './map.js?v=20260918_02';
+import { Imu3dVisualizer } from './imu3d.js?v=20260922_01';
+import { MapController } from './map.js?v=20260922_01';
 
 class DevBenchApp {
   constructor() {
@@ -123,6 +123,7 @@ class DevBenchApp {
       gnssAtPre: document.getElementById('gnssAtPre'),
       gnssAtTimestamp: document.getElementById('gnssAtTimestamp'),
       trackSourceLiveBtn: document.getElementById('trackSourceLiveBtn'),
+      centerOnDeviceBtn: document.getElementById('centerOnDeviceBtn'),
       trackSourceFieldBtn: document.getElementById('trackSourceFieldBtn'),
       playbackControlBar: document.getElementById('playbackControlBar'),
       playbackPlayBtn: document.getElementById('playbackPlayBtn'),
@@ -166,6 +167,9 @@ class DevBenchApp {
       imu3dCanvas: document.getElementById('imu3dCanvas'),
       imu3dResetBtn: document.getElementById('imu3dResetBtn'),
       imu3dTareBtn: document.getElementById('imu3dTareBtn'),
+      imu3dViewFrontBtn: document.getElementById('imu3dViewFrontBtn'),
+      imu3dViewTopBtn: document.getElementById('imu3dViewTopBtn'),
+      imu3dViewPerspectiveBtn: document.getElementById('imu3dViewPerspectiveBtn'),
       imu3dPoseBadge: document.getElementById('imu3dPoseBadge'),
       valAttitudePitch: document.getElementById('valAttitudePitch'),
       valAttitudeRoll: document.getElementById('valAttitudeRoll'),
@@ -318,6 +322,11 @@ class DevBenchApp {
     if (this.dom.trackSourceLiveBtn) {
       this.dom.trackSourceLiveBtn.addEventListener('click', () => this.switchTrackMode('live'));
     }
+    if (this.dom.centerOnDeviceBtn) {
+      this.dom.centerOnDeviceBtn.addEventListener('click', () => {
+        if (this.mapController) this.mapController.centerOnDevice();
+      });
+    }
     if (this.dom.trackSourceFieldBtn) {
       this.dom.trackSourceFieldBtn.addEventListener('click', () => this.switchTrackMode('field'));
     }
@@ -424,12 +433,41 @@ class DevBenchApp {
     }
     if (this.dom.imu3dCanvas) {
       this.imu3d = new Imu3dVisualizer(this.dom.imu3dCanvas);
+      const updateViewButtons = (mode) => {
+        if (this.dom.imu3dViewFrontBtn) this.dom.imu3dViewFrontBtn.classList.toggle('btn-primary', mode === 'front');
+        if (this.dom.imu3dViewTopBtn) this.dom.imu3dViewTopBtn.classList.toggle('btn-primary', mode === 'top');
+        if (this.dom.imu3dViewPerspectiveBtn) this.dom.imu3dViewPerspectiveBtn.classList.toggle('btn-primary', mode === 'perspective');
+      };
+      if (this.dom.imu3dViewFrontBtn) {
+        this.dom.imu3dViewFrontBtn.addEventListener('click', () => {
+          if (this.imu3d) {
+            this.imu3d.setViewMode('front');
+            updateViewButtons('front');
+          }
+        });
+      }
+      if (this.dom.imu3dViewTopBtn) {
+        this.dom.imu3dViewTopBtn.addEventListener('click', () => {
+          if (this.imu3d) {
+            this.imu3d.setViewMode('top');
+            updateViewButtons('top');
+          }
+        });
+      }
+      if (this.dom.imu3dViewPerspectiveBtn) {
+        this.dom.imu3dViewPerspectiveBtn.addEventListener('click', () => {
+          if (this.imu3d) {
+            this.imu3d.setViewMode('perspective');
+            updateViewButtons('perspective');
+          }
+        });
+      }
+
       if (this.dom.imu3dResetBtn) {
         this.dom.imu3dResetBtn.addEventListener('click', () => {
           if (this.imu3d) {
-            this.imu3d.cameraYaw = 28;
-            this.imu3d.cameraPitch = 22;
-            this.imu3d.cameraDistance = 250;
+            this.imu3d.setViewMode('perspective');
+            updateViewButtons('perspective');
           }
         });
       }
@@ -953,7 +991,7 @@ class DevBenchApp {
         return;
       }
 
-      this.mapController.setPoints(points);
+      this.mapController.setPoints(points, { isLive: false });
       this.dom.mapPointCountLabel.textContent = `已绘制 ${points.length} 个外场实测轨迹点 (FW007 深圳实测)`;
       this.dom.locationStatusBadge.className = 'badge badge-ok';
       this.dom.locationStatusBadge.textContent = `外场实测轨迹 (${points.length} 点)`;
@@ -1052,11 +1090,25 @@ class DevBenchApp {
     const latestEnv = records[0]?.envelope;
     const p = latestEnv?.payload || state.collectionSummary?.sources?.find(s => s.source === 'gnss')?.latest?.envelope?.payload;
 
-    // Collect all records that have valid GPS fix coordinates
-    const fixRecords = records.filter(r => {
-      const payload = r.envelope?.payload;
-      return payload && payload.fix && typeof payload.latitude === 'number' && typeof payload.longitude === 'number';
+    // Filter records: strictly match current boot session to avoid stitching yesterday's points
+    const currentBoot = state.collectionSummary?.sources?.find(s => s.source === 'gnss')?.latest?.envelope?.boot_count
+      || state.collectionSummary?.latest_ego_state?.boot_count
+      || records[0]?.envelope?.boot_count;
+
+    let fixRecords = records.filter(r => {
+      const env = r.envelope;
+      const payload = env?.payload;
+      const bootMatch = !currentBoot || env?.boot_count === currentBoot;
+      return bootMatch && payload && payload.fix && typeof payload.latitude === 'number' && typeof payload.longitude === 'number';
     });
+
+    // If current boot has no fix points yet, fallback to recent fix records (capped to 10 points)
+    if (fixRecords.length === 0) {
+      fixRecords = records.filter(r => {
+        const payload = r.envelope?.payload;
+        return payload && payload.fix && typeof payload.latitude === 'number' && typeof payload.longitude === 'number';
+      }).slice(0, 10);
+    }
 
     // Chronological order for polyline drawing (oldest -> newest)
     const points = [...fixRecords].reverse().map(r => {
@@ -1114,12 +1166,18 @@ class DevBenchApp {
     }
 
     if (points.length > 0) {
-      this.mapController.setPoints(points);
+      this.mapController.setPoints(points, { isLive: true });
       const isLatestFix = latestEnv?.payload?.fix === true;
       if (isLatestFix) {
-        this.dom.mapPointCountLabel.textContent = `已绘制 ${points.length} 个实时 GPS Fix 轨迹点`;
+        this.dom.mapPointCountLabel.textContent = `已绘制 ${points.length} 个当前会话实时 GPS Fix 轨迹点`;
+        if (this.dom.trackSourceLiveBtn) {
+          this.dom.trackSourceLiveBtn.textContent = '🟢 单板实时定位 (3D Fix)';
+        }
       } else {
-        this.dom.mapPointCountLabel.textContent = `当前室内搜星中 · 已保留最近室外实测轨迹 (${points.length} 个 GPS 点)`;
+        this.dom.mapPointCountLabel.textContent = `当前室内搜星中 · 已保留最近有效轨迹 (${points.length} 个 GPS 点)`;
+        if (this.dom.trackSourceLiveBtn) {
+          this.dom.trackSourceLiveBtn.textContent = '🟡 单板实时定位 (搜星中)';
+        }
       }
       if (this.dom.locationExplainAlert) this.dom.locationExplainAlert.style.display = 'none';
     } else {
@@ -1134,8 +1192,11 @@ class DevBenchApp {
         operator: ltePayload?.operator === '46000' ? '中国移动' : (ltePayload?.operator || '4G'),
         name: `中国移动4G基站 (深圳龙岗小区 ${cellId})`
       };
-      this.mapController.setPoints([cellPoint]);
+      this.mapController.setPoints([cellPoint], { isLive: true, centerOnLast: true });
       this.dom.mapPointCountLabel.textContent = `当前显示: 4G基站定位参考点 (小区 ${cellId})`;
+      if (this.dom.trackSourceLiveBtn) {
+        this.dom.trackSourceLiveBtn.textContent = '📡 4G基站参考定位';
+      }
       if (this.dom.locationExplainAlert) {
         this.dom.locationExplainAlert.style.display = 'block';
         this.dom.locationExplainAlert.innerHTML = `

@@ -246,8 +246,9 @@
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
               <span class="card-title">🛰️ 轨迹地图</span>
               <div class="btn-group" style="display:flex;gap:4px;">
-                <button id="trackSourceLiveBtn" class="btn btn-sm btn-primary">🛰️ 当前硬件实时 (室内搜星/基站)</button>
-                <button id="trackSourceFieldBtn" class="btn btn-sm">🗺️ 外场实测轨迹回放 (FW007 500点)</button>
+                <button id="trackSourceLiveBtn" class="btn btn-sm btn-primary">🟢 单板实时定位</button>
+                <button id="centerOnDeviceBtn" class="btn btn-sm" title="一键将地图中心平滑聚焦至单板当前坐标">🎯 聚焦设备</button>
+                <button id="trackSourceFieldBtn" class="btn btn-sm">🗺️ 外场实测轨迹回放 (500点)</button>
               </div>
               <div class="btn-group" style="display:flex;gap:4px;">
                 <button id="mapModeAmapBtn" class="btn btn-sm btn-primary" title="高德标准路网地图，包含道路、建筑与地名">🗺️ 高德路网</button>
@@ -405,9 +406,14 @@
                 <span class="card-title">🧊 3D 设备空间姿态孪生</span>
                 <span id="imu3dPoseBadge" class="badge badge-info">检测姿态中…</span>
               </div>
-              <div style="display:flex;gap:6px;">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                <div class="btn-group" style="display:flex;gap:3px;">
+                  <button id="imu3dViewFrontBtn" class="btn btn-sm" title="正视平视视角：设备平放时在屏幕上完全水平对齐">📐 正视</button>
+                  <button id="imu3dViewTopBtn" class="btn btn-sm" title="顶视俯瞰视角：垂直俯视设备平面">🔝 顶视</button>
+                  <button id="imu3dViewPerspectiveBtn" class="btn btn-sm btn-primary" title="3D 立体透视">🧊 3D</button>
+                </div>
                 <button id="imu3dTareBtn" class="btn btn-sm" title="将当前平放姿态校准为设备水平基准零位">🎯 设备平面校准</button>
-                <button id="imu3dResetBtn" class="btn btn-sm" title="重置 3D 观察视角">🔄 复位视角</button>
+                <button id="imu3dResetBtn" class="btn btn-sm" title="重置 3D 观察视角">🔄 复位</button>
               </div>
             </div>
             <div class="oscilloscope-container">
@@ -676,6 +682,6 @@
     </div>
   </div>
 
-  <script type="module" src="/dev/static/scripts/main.js?v=20260921_04"></script>
+  <script type="module" src="/dev/static/scripts/main.js?v=20260922_01"></script>
 </body>
 </html>
