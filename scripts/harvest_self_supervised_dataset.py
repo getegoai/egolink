@@ -560,6 +560,54 @@ def harvest_dataset_from_db(
     return manifest
 
 
+def harvest_dataset_from_jsonl(
+    jsonl_path: Path,
+    output_dir: Path,
+) -> Dict[str, Any]:
+    """Ingest envelopes from raw JSONL and write dataset manifest and windows.jsonl."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    harvester = SelfSupervisedHarvester()
+    total_ingested = 0
+    with open(jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                harvester.ingest_envelope(json.loads(line))
+                total_ingested += 1
+
+    windows_path = output_dir / "windows.jsonl"
+    manifest_path = output_dir / "dataset_manifest.json"
+    total_windows = 0
+    class_distribution: Dict[str, int] = {}
+    ambiguity_counts: Dict[str, int] = {}
+
+    with open(windows_path, "w", encoding="utf-8") as f_out:
+        for record in harvester.harvest():
+            f_out.write(json.dumps(record, ensure_ascii=False) + "\n")
+            total_windows += 1
+            cname = record["pseudo_label"]["class_name"]
+            class_distribution[cname] = class_distribution.get(cname, 0) + 1
+            for reason in record["ambiguity_reasons"]:
+                ambiguity_counts[reason] = ambiguity_counts.get(reason, 0) + 1
+
+    manifest = {
+        "schema_version": HARVEST_SCHEMA_VERSION,
+        "device_id": harvester.device_id,
+        "boot_count": harvester.boot_count,
+        "session_id": harvester.session_id,
+        "source_file": str(jsonl_path.resolve()),
+        "total_envelopes_ingested": total_ingested,
+        "total_imu_samples": len(harvester.imu_samples),
+        "total_windows": total_windows,
+        "class_distribution": class_distribution,
+        "ambiguity_distribution": ambiguity_counts,
+        "privacy_gate": "PASS",
+        "redaction": "exact_coordinates_redacted",
+        "artifacts": {"windows_jsonl": str(windows_path.name)},
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    return manifest
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Harvest self-supervised multi-modal dataset for EgoLink")
     parser.add_argument("--db", type=Path, help="Path to SQLite message_hub.db")
@@ -578,48 +626,8 @@ def main() -> None:
         print(f"Class distribution: {json.dumps(manifest['class_distribution'])}")
         print(f"Manifest written to: {args.output_dir / 'dataset_manifest.json'}")
     elif args.jsonl:
-        output_dir = args.output_dir
-        output_dir.mkdir(parents=True, exist_ok=True)
-        harvester = SelfSupervisedHarvester()
-        total_ingested = 0
-        with open(args.jsonl, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    harvester.ingest_envelope(json.loads(line))
-                    total_ingested += 1
-
-        windows_path = output_dir / "windows.jsonl"
-        manifest_path = output_dir / "dataset_manifest.json"
-        total_windows = 0
-        class_distribution: Dict[str, int] = {}
-        ambiguity_counts: Dict[str, int] = {}
-
-        with open(windows_path, "w", encoding="utf-8") as f_out:
-            for record in harvester.harvest():
-                f_out.write(json.dumps(record, ensure_ascii=False) + "\n")
-                total_windows += 1
-                cname = record["pseudo_label"]["class_name"]
-                class_distribution[cname] = class_distribution.get(cname, 0) + 1
-                for reason in record["ambiguity_reasons"]:
-                    ambiguity_counts[reason] = ambiguity_counts.get(reason, 0) + 1
-
-        manifest = {
-            "schema_version": HARVEST_SCHEMA_VERSION,
-            "device_id": harvester.device_id,
-            "boot_count": harvester.boot_count,
-            "session_id": harvester.session_id,
-            "source_file": str(args.jsonl.resolve()),
-            "total_envelopes_ingested": total_ingested,
-            "total_imu_samples": len(harvester.imu_samples),
-            "total_windows": total_windows,
-            "class_distribution": class_distribution,
-            "ambiguity_distribution": ambiguity_counts,
-            "privacy_gate": "PASS",
-            "redaction": "exact_coordinates_redacted",
-            "artifacts": {"windows_jsonl": str(windows_path.name)},
-        }
-        manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"Harvest complete: {total_windows} windows extracted.")
+        manifest = harvest_dataset_from_jsonl(args.jsonl, args.output_dir)
+        print(f"Harvest complete: {manifest['total_windows']} windows extracted.")
     else:
         print("Error: Specify either --db or --jsonl", file=sys.stderr)
         sys.exit(1)

@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ego Base · AI 语义生活日记与自监督飞轮仪表盘</title>
+  <link rel="stylesheet" href="/dev/static/styles/dev_bench.css?v=20260923_01">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+  <style>
+    .diary-container {
+      max-width: 1100px;
+      margin: 24px auto;
+      padding: 0 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .hero-card {
+      background: linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95));
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-md);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      top: 0; right: 0;
+      width: 250px; height: 100%;
+      background: radial-gradient(circle at right, rgba(6,182,212,0.15), transparent 70%);
+      pointer-events: none;
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .stat-val {
+      font-family: var(--font-mono);
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .timeline-item {
+      position: relative;
+      padding-left: 32px;
+      padding-bottom: 20px;
+      border-left: 2px solid var(--border-subtle);
+    }
+    .timeline-item:last-child {
+      border-left: 2px solid transparent;
+      padding-bottom: 0;
+    }
+    .timeline-dot {
+      position: absolute;
+      left: -9px;
+      top: 0;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      border: 3px solid var(--bg-base);
+    }
+    .timeline-dot.safe { background: var(--accent-green); }
+    .timeline-dot.active { background: var(--accent-blue); }
+    .timeline-dot.transit { background: var(--accent-purple); }
+    .timeline-dot.alert { background: var(--accent-rose); }
+    .flywheel-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      background: rgba(16,185,129,0.15);
+      border: 1px solid rgba(16,185,129,0.3);
+      color: var(--accent-green);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header class="devbench-header">
+    <div class="brand-section">
+      <div class="brand-logo">
+        <span>⚡</span> EgoLink DevBench
+      </div>
+      <span class="brand-badge">Ego Base AI Station</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <a href="/dev/static/index.html" class="btn btn-sm" style="text-decoration:none;color:var(--text-primary);">🛰️ 实时设备监控</a>
+      <span class="flywheel-badge">🔄 持续学习数据飞轮：运行中</span>
+    </div>
+  </header>
+
+  <main class="diary-container">
+    
+    <!-- Hero / Guardian Peace-of-Mind Summary -->
+    <div class="hero-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+        <div>
+          <span style="font-size:12px;color:var(--accent-cyan);font-weight:600;text-transform:uppercase;">Ego Base Local Diary Synthesizer (L3)</span>
+          <h1 style="font-size:22px;font-weight:700;margin-top:4px;">每日语义生活日记 · 2026-09-23</h1>
+          <p style="color:var(--text-secondary);font-size:13px;margin-top:6px;">
+            🔒 <strong>本地优先隐私保障</strong>：全天行为由家庭基站纯本地解析合成，零原始音频、零人脸图像、零敏感高精经纬度上传外部云端。
+          </p>
+        </div>
+        <div style="text-align:right;">
+          <span class="badge badge-ok" style="font-size:14px;padding:6px 12px;">🛡️ 全天安全无忧 (ALL NORMAL)</span>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">0 跌倒告警 · 0 SOS 求救</div>
+        </div>
+      </div>
+
+      <!-- Stat Grid -->
+      <div class="stat-grid">
+        <div class="stat-card">
+          <span class="stat-label">活跃运动时长</span>
+          <span class="stat-val" style="color:var(--accent-green);">4.4 <span style="font-size:14px;color:var(--text-secondary);">分钟</span></span>
+          <span style="font-size:11px;color:var(--text-muted);">户外步行 · 跑步 · 骑行</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">通勤出行</span>
+          <span class="stat-val" style="color:var(--accent-blue);">2.1 <span style="font-size:14px;color:var(--text-secondary);">分钟</span></span>
+          <span style="font-size:11px;color:var(--text-muted);">位移里程约 1.97 公里</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">工位专注办公</span>
+          <span class="stat-val" style="color:var(--accent-amber);">4.2 <span style="font-size:14px;color:var(--text-secondary);">分钟</span></span>
+          <span style="font-size:11px;color:var(--text-muted);">桌面静止 · 连续伏案</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">底座充电休息</span>
+          <span class="stat-val" style="color:var(--accent-purple);">2.1 <span style="font-size:14px;color:var(--text-secondary);">分钟</span></span>
+          <span style="font-size:11px;color:var(--text-muted);">底座安放 · 电池维护</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Flywheel Status & Decoupled OTA Section -->
+    <div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:18px;">🔄</span>
+          <h2 style="font-size:16px;font-weight:700;">自主持续学习数据飞轮 (Autonomous Continuous Learning Flywheel)</h2>
+        </div>
+        <span class="badge badge-ok">安全回归门禁：100% 通过</span>
+      </div>
+
+      <div class="grid-stack grid-3col" style="gap:12px;">
+        <div style="background:rgba(15,23,42,0.6);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+          <div style="font-size:11px;color:var(--text-muted);">边缘挖掘黄金样本</div>
+          <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--accent-amber);margin-top:2px;">24 个</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">跑步机高动态/弱信号边缘样本</div>
+        </div>
+        <div style="background:rgba(15,23,42,0.6);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+          <div style="font-size:11px;color:var(--text-muted);">TinyML 模型演进版本</div>
+          <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--accent-cyan);margin-top:2px;">v2 (OTA 就绪)</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">模糊样本准确率 41.7% ➜ 100%</div>
+        </div>
+        <div style="background:rgba(15,23,42,0.6);padding:12px;border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+          <div style="font-size:11px;color:var(--text-muted);">解耦独立 OTA 镜像</div>
+          <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--accent-green);margin-top:2px;">5.83 KB INT8</div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">SHA-256: fed312e...d6c</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Episodic Timeline Narrative -->
+    <div style="background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-lg);padding:24px;">
+      <h2 style="font-size:16px;font-weight:700;margin-bottom:16px;">📖 分时段生活事件时间轴 (Episodic Timeline)</h2>
+
+      <div style="padding-left:8px;">
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">10:00:00 - 10:01:40</div>
+          <div style="font-weight:600;font-size:14px;color:var(--text-primary);margin-top:2px;">☕ 办公桌前专注工作 (1分40秒)</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">设备置于桌面或平稳佩戴，平均推断置信度 96.0% (20 个滑动窗口)</div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot active"></div>
+          <div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">10:01:40 - 10:02:55</div>
+          <div style="font-weight:600;font-size:14px;color:var(--accent-cyan);margin-top:2px;">🚶 户外步行活动 (1分15秒 · 约 101 米)</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">步伐节奏规整（约 1.6Hz），平均航速 1.35 m/s，推断置信度 94.0%</div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot transit"></div>
+          <div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">10:02:55 - 10:05:00</div>
+          <div style="font-weight:600;font-size:14px;color:var(--accent-purple);margin-top:2px;">🚗 乘车通勤中 (2分05秒 · 约 1.56 公里)</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">GNSS 多普勒平均地速 45 km/h，转弯离心加速度平稳，推断置信度 98.0%</div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">10:05:00 - 10:07:30</div>
+          <div style="font-weight:600;font-size:14px;color:var(--text-primary);margin-top:2px;">☕ 办公室内静止 (2分30秒)</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">室内工位办公，IMU 低动态噪声，推断置信度 97.0%</div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot active"></div>
+          <div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">10:07:30 - 10:09:10</div>
+          <div style="font-weight:600;font-size:14px;color:var(--accent-green);margin-top:2px;">🏃 运动跑步段 (1分40秒 · 约 320 米)</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">高动态步频（约 3.0Hz），垂直冲击明显，推断置信度 95.0%</div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot active"></div>
+          <div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">10:09:10 - 10:10:40</div>
+          <div style="font-weight:600;font-size:14px;color:var(--accent-blue);margin-top:2px;">🚲 骑行代步 (1分30秒 · 约 405 米)</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">路面高频微振（8Hz）伴随车把姿态微调，推断置信度 92.0%</div>
+        </div>
+
+        <div class="timeline-item">
+          <div class="timeline-dot safe"></div>
+          <div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);">10:10:40 - 10:12:45</div>
+          <div style="font-weight:600;font-size:14px;color:var(--accent-green);margin-top:2px;">🔋 回家底座充电休息 (2分05秒)</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">电量计充电握手确认，IMU 完全静止，推断置信度 99.0%</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+</body>
+</html>
