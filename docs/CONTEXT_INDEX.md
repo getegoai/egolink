@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-22
+decision_updated: 2026-09-23
 last_verified: 2026-09-09
 verified_by: founder/codex
 ---
@@ -18,6 +18,10 @@ Always load:
   every session to sense direction changes)
 - `docs/product/EGO_MASTER_CONTEXT.md` (current sales-product direction,
   system roles, first-generation requirements, and release gates)
+- `docs/architecture/adr/ADR-0017-ai-native-ego-state-flywheel.md`
+  (AI-native state estimation, self-supervised data flywheel, and decoupled model OTA)
+- `docs/architecture/AI_NATIVE_EGO_STATE_FLYWHEEL.md`
+  (system architecture and execution specification for continuous learning flywheel)
 - `docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md`
   (current product/communications/private-endpoint decision and rule-state truth)
 - `docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md`
@@ -59,7 +63,7 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 | Historical dual-board / PC Bridge architecture | `docs/architecture/SYSTEM_OVERVIEW.md`, `docs/architecture/DUAL_BOARD_PC_BRIDGE_ARCHITECTURE.md`, `docs/architecture/adr/ADR-0015-single-4g-board-camera-field-milestone.md` | `docs/hardware/双板开发架构.md`, `docs/hardware/EGOLINK_HARDWARE_PLATFORM_CONTEXT.md`, `docs/architecture/adr/`; both hardware documents are historical for the current A-line topology |
 | VPS message hub or USB-Free field testing | `docs/development/DEV_FLOW.md`, `docs/development/VPS_MESSAGE_HUB.md`, `docs/development/PROTOCOL.md`, `docs/development/FIELD_TEST.md`, `docs/architecture/adr/ADR-0001-usb-free-vps-message-hub.md` | `docs/current/ROADMAP_EGOLINK_P0.md`, `docs/development/LOCATION_ENGINE.md`, `docs/development/LTE_TRANSPORT.md` |
 | Location Engine, Sensor Policy, replay, fusion or dataset planning | `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md`, `docs/development/LOCATION_ENGINE.md`, `docs/development/LOCATION_DATASET.md`, `docs/development/LOCATION_FUSION_ALGORITHM.md`, `docs/architecture/adr/ADR-0004-p0-rule-location-and-transitional-vps-memory.md`, `shared/contracts/` | `docs/architecture/adr/ADR-0003-low-power-location-state-machine.md`, `docs/architecture/adr/ADR-0007-gnss-denied-personal-location-memory.md`, `docs/development/PROTOCOL.md`, current LOC/POLICY/REPLAY packet |
-| A-line AI, data platform, multisource localization or state understanding | `docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md`, `docs/current/EGO_LINK_AI_CURRENT_CONTEXT.md`, `docs/architecture/adr/ADR-0010-asynchronous-observation-timeline-and-store-forward.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md` | `docs/current/EGO_LINK_A_LINE_AI_CONTEXT.md`, `docs/architecture/adr/ADR-0009-ai-v0-1-belief-estimation-baseline.md`, `docs/development/UNIFIED_TIMESTAMP.md`, `docs/development/FIELD_SESSION_SCHEMA.md`, `docs/development/LOCATION_ENGINE.md`, `docs/development/LOCATION_DATASET.md`, `shared/contracts/`; Sprint 1 AI is data/replay first and non-blocking |
+| A-line AI, data platform, multisource localization or state understanding | `docs/architecture/adr/ADR-0017-ai-native-ego-state-flywheel.md`, `docs/architecture/AI_NATIVE_EGO_STATE_FLYWHEEL.md`, `docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md`, `docs/current/EGO_LINK_AI_CURRENT_CONTEXT.md`, `docs/architecture/adr/ADR-0010-asynchronous-observation-timeline-and-store-forward.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md` | `docs/current/EGO_LINK_A_LINE_AI_CONTEXT.md`, `docs/architecture/adr/ADR-0009-ai-v0-1-belief-estimation-baseline.md`, `docs/development/UNIFIED_TIMESTAMP.md`, `docs/development/FIELD_SESSION_SCHEMA.md`, `docs/development/LOCATION_ENGINE.md`, `docs/development/LOCATION_DATASET.md`, `shared/contracts/`; Sprint 1 AI is data/replay first and non-blocking |
 | Ego Call, Guardian calling, or first-launch communications | `docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md`, `docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md`, `docs/current/FIRST_LAUNCH_EXECUTION.md`, the current CALL packet | `docs/architecture/adr/ADR-0013-call020-single-usb-phase-handoff.md` (proposed only), `docs/product/EGO_MASTER_CONTEXT.md`, `docs/development/VPS_MESSAGE_HUB.md`, `shared/contracts/` |
 | Physical SOS, guardian alert, or Call/SOS orchestration | `docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md`, `docs/architecture/adr/ADR-0011-first-launch-reliable-location-ego-call-sos.md`, `docs/architecture/adr/ADR-0012-p0-productization-sprint-1.md`, `docs/current/FIRST_LAUNCH_EXECUTION.md`, `docs/safety/SAFETY_CONTRACT.md`, the named active SOS packet when present | `docs/development/PROTOCOL.md`, `docs/architecture/adr/ADR-0010-asynchronous-observation-timeline-and-store-forward.md`, `shared/contracts/` |
 | Firmware change | `firmware/AGENTS.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/BOARD_MATRIX.md` | Named firmware README only |
@@ -99,6 +103,7 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 - ADR-0008 accepts the screenless modular EgoLink Core sales-product direction
   and supersedes the conflicting V1 Pro decisions in ADR-0005/0006. Named A0
   candidates are not a production-frozen BOM until later accepted decisions.
+- ADR-0017 is the accepted architectural decision for AI-Native Ego-State Estimation and the continuous learning data flywheel. Heuristic rules serve as the initial safety and evaluation baseline; multi-modal sensor cross-supervision (GNSS velocity, cellular/Wi-Fi transitions, power state) drives automated pseudo-labeling. TinyML operates on ESP32-S3 (<=30KB INT8), while heavier sequence modeling and semantic diaries belong to Ego Base. Safety Kernel determinism is absolute and cannot be vetoed by AI. Model weights are decoupled into an independent flash partition for lightweight OTA.
 - ADR-0016 is the current accepted product decision, recording the founder's
   2026-09-19 direction and 2026-09-22 implementation instruction. Native
   cellular is the primary P0-CALL route; RTC is optional fallback. Exact

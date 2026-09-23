@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-22
+decision_updated: 2026-09-23
 last_verified: 2026-08-23
 verified_by: codex
 ---
@@ -11,7 +11,10 @@ verified_by: codex
 
 [ADR-0016](adr/ADR-0016-local-first-ego-state-cellular-primary.md) defines
 native-cellular primary calling, local-first/private ownership and parallel
-minimal Ego Base. This is a target responsibility map, not a deployment claim.
+minimal Ego Base. [ADR-0017](adr/ADR-0017-ai-native-ego-state-flywheel.md) and
+[AI_NATIVE_EGO_STATE_FLYWHEEL](AI_NATIVE_EGO_STATE_FLYWHEEL.md) define the
+AI-Native active ego-state estimation and continuous learning data flywheel.
+This is a target responsibility map, not a deployment claim.
 
 ```text
 EgoLink Core
@@ -45,6 +48,19 @@ are different facts. Exact firmware/operator/audio evidence is required; no
 CS/VoLTE support is inferred from a board name. The current board's lack of an
 accepted microphone/speaker path precludes acoustic acceptance from its driver.
 Old CALL-020/021 remain paused RTC evidence, not primary-call predecessors.
+
+## AI-Native state estimation and continuous learning flywheel
+
+[ADR-0017](adr/ADR-0017-ai-native-ego-state-flywheel.md) and
+[AI_NATIVE_EGO_STATE_FLYWHEEL](AI_NATIVE_EGO_STATE_FLYWHEEL.md) govern the transition
+from heuristic rule thresholds to self-evolving multi-modal active state estimation:
+
+- **Tier 1 (Edge TinyML, ESP32-S3)**: sub-second micro-motion primitives (stationary, walking, running, cycling, shock, fall) via INT8 1D-CNN (<=30KB, <=5ms).
+- **Tier 2 (Fusion, Edge/Base)**: macro-mobility and spatial context (in-vehicle, indoor dwell, pedestrian transit).
+- **Tier 3 (Base Semantic Storylines, Ego Base)**: retrospective 24h timeline sequence modeling and private natural language life journals.
+- **Autonomous Data Flywheel**: multi-modal cross-supervision (GNSS Doppler velocity, cellular/Wi-Fi stability, fuel gauge charging anchors) provides automated pseudo-labels without human annotation bottlenecks.
+- **Safety Kernel Invariant**: deterministic physical SOS, battery cutoff, and urgent alerts can never be vetoed, delayed, or suppressed by AI inference.
+- **OTA Decoupling**: independent `model_weights` flash partition enables rapid weight updates without touching core system firmware.
 
 ## Cloud lifecycle and present engineering path
 

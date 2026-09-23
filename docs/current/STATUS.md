@@ -1,6 +1,6 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-22
+decision_updated: 2026-09-23
 last_verified: 2026-09-23
 reviewed_at: 2026-09-23
 verified_by: founder/gemini
@@ -11,9 +11,11 @@ verified_by: founder/gemini
 ## Current outcome and ownership
 
 [ADR-0016](../architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md)
-records the 9/19 founder direction and 9/22 alignment: active ego-state estimation,
-local-first Ego Base, native cellular calling primary and RTC auxiliary. Advanced
-AI does not create a new product Gate. Gemini owns the retained single-board
+and [ADR-0017](../architecture/adr/ADR-0017-ai-native-ego-state-flywheel.md)
+record the founder's direction: active ego-state estimation, local-first Ego Base,
+native cellular calling primary, and AI-Native self-supervised continuous learning
+flywheel (Phase 1 task [AI-010](../tasks/active/AI-010_AI_NATIVE_FLYWHEEL_HARVESTER.md)).
+Advanced AI does not create a new product Gate. Gemini owns the retained single-board
 recovery/route-transition milestone and D2/FIELD-020; Codex completed
 [ALIGN-STATE-010](../tasks/done/ALIGN-STATE-010_DECISION_AND_STATE_TRUTH.md).
 The [coordination note](CODEX_GEMINI_HANDOFF_20260922.md) defines shared-file seams.

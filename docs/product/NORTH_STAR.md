@@ -1,10 +1,22 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-22
+decision_updated: 2026-09-23
 last_verified: 2026-08-23
 verified_by: codex
 owner: founder
 ---
+
+## 2026-09-23 Founder AI-Native Ego-State & Continuous Data Flywheel Update
+
+[ADR-0017](../architecture/adr/ADR-0017-ai-native-ego-state-flywheel.md) 与
+[AI_NATIVE_EGO_STATE_FLYWHEEL](../architecture/AI_NATIVE_EGO_STATE_FLYWHEEL.md)
+确立 AI 原生随身主动状态估计演进路径与自我提升数据飞轮闭环机制：
+
+1. **AI 原生与真实场景闭环**：不等待所有算法完美才发布，初代产品（MVP）以高可靠硬件进入用户真实日常生活场景；以持续积累的多模态传感器流为养料，驱动模型自我演化与端侧 AI 能力复合增长。
+2. **跨模态自监督免人工标注**：利用多传感器物理互校（GNSS 速度监督 IMU 运动，基站/Wi-Fi 监督室内驻留，充电状态校准静止基线），实现 90%+ 训练样本的无人工全自动伪标签标注。
+3. **分层协同与端侧 TinyML**：ESP32-S3 运行 $\le 30\,\text{KB}$ INT8 1D-CNN（L1 微运动），与家庭基站 Ego Base 离线全景语义大模型（L3 日间叙事）协同。
+4. **影子评估与安全底线**：新模型以影子模式（Shadow Mode）双轨验证；规则式 Safety Kernel 享有绝对最高权威，AI 永远不能推翻、延误或否决物理 SOS、低电断电保护或紧急报警。
+5. **模型分区独立 OTA**：Flash 开辟独立 `model_weights` 分区，实现几十 KB 模型权重的数秒静默 OTA，与核心系统固件解耦。
 
 ## 2026-09-22 Decision migration
 
@@ -290,6 +302,8 @@ ADR / 专项 authority（实现边界）→ roadmap / task packet（执行）。
 ACTIVE_BUILD 和 BOARD_MATRIX 反映现状；machine-readable contracts 控制协议。
 
 ## 变更记录
+
+- 2026-09-23 创始人决策：确立 AI 原生随身主动状态估计演进路径与自我提升数据飞轮闭环机制（ADR-0017 / AI_NATIVE_EGO_STATE_FLYWHEEL）。定调不追求一步到位的完美模型，以首发真实日常佩戴为基础，通过跨模态自监督自动标注、端基协同蒸馏、影子评估门禁与独立模型分区轻量 OTA，形成数据不断增长、模型不断迭代、端侧 AI 能力持续进化的自驱飞轮；重申 Safety Kernel 不可被 AI 否决的绝对安全底线。
 
 - 2026-09-22 按创始人对齐指令接入 ADR-0016；明确旧条款适用期、当前分工与远程状态核验，不新增硬件证据。
 
