@@ -32,7 +32,7 @@ Full app/ELF hashes, inherited evidence and gaps are in [ACTIVE_BUILD](ACTIVE_BU
 | Manual Camera -> LTE -> private API | [Run015, 9/16](../hardware/CAMERA_LTE_MANUAL_CLOSURE_20260916.md): matching JPEG hash | One bounded USB-powered engineering run |
 | Ordinary-upload throughput | Run017: 248/248 in 600s, final queue zero; Boot 211: 8,724 records over 7h LTE PPP upload with 0 reboot | Not 48h result |
 | Preview/export and battery timer | 9/17 preview/export; 9/18 run019 Boot142, 3 scheduled photos and a separate STOP case; [packet](../tasks/active/P0-CONVERGENCE-20260905.md) | Complete raw evidence index still needed; not a carry/representative-day or 48h result |
-| Ego-state | Boot 211 9/23: 831 live state inferences (walking: 82, running: 6, vehicle: 1, stationary: 683, indoor: 58) across 7h trip | Human-labeled ground-truth comparison |
+| Ego-state | Boot 211 9/23: 831 live state inferences (walking: 82, running: 6, vehicle: 1, stationary: 683, indoor: 58) across 7h trip; AI-Native continuous learning flywheel Phases 1-3 completed (Harvester AI-010, TinyML 1D-CNN AI-020, Dual-Track Shadow Evaluator & Safety Kernel AI-030) | Full on-device ESP-DL execution |
 | Cellular call | 9/23: Web->Cloud->Modem AT dispatch pipeline verified with ACK; SIM7670G-MNGV data-only module lack of VoLTE/audio codec confirmed on hardware | Audio-capable carrier board required for ringing phone call |
 | Ego Base | Synchronously planned private endpoint | Not implemented or deployed; current VPS storage is an engineering transition, not local-first completion |
 
