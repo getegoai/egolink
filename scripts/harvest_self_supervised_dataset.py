@@ -478,23 +478,48 @@ def harvest_dataset_from_db(
     conn = sqlite3.connect(f"file:{db_path.resolve()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
-        query = "SELECT envelope_json FROM collection_records WHERE 1=1"
-        params: List[Any] = []
-        if device_id:
-            query += " AND device_id = ?"
-            params.append(device_id)
-        if boot_count is not None:
-            query += " AND boot_count = ?"
-            params.append(boot_count)
-        query += " ORDER BY boot_count ASC, event_monotonic_ns ASC, id ASC"
-
         cursor = conn.cursor()
-        cursor.execute(query, params)
+        tables = [r[0] for r in cursor.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
         total_ingested = 0
-        for row in cursor:
-            envelope = json.loads(row["envelope_json"])
-            harvester.ingest_envelope(envelope)
-            total_ingested += 1
+
+        if "collection_records" in tables:
+            query = "SELECT envelope_json FROM collection_records WHERE 1=1"
+            params: List[Any] = []
+            if device_id:
+                query += " AND device_id = ?"
+                params.append(device_id)
+            if boot_count is not None:
+                query += " AND boot_count = ?"
+                params.append(boot_count)
+            query += " ORDER BY boot_count ASC, event_monotonic_ns ASC, id ASC"
+
+            cursor.execute(query, params)
+            for row in cursor:
+                envelope = json.loads(row["envelope_json"])
+                harvester.ingest_envelope(envelope)
+                total_ingested += 1
+        elif "raw_frames" in tables:
+            query = "SELECT raw_payload_b64 FROM raw_frames WHERE 1=1"
+            params: List[Any] = []
+            if device_id:
+                query += " AND device_id = ?"
+                params.append(device_id)
+            query += " ORDER BY id ASC"
+            cursor.execute(query, params)
+            for row in cursor:
+                try:
+                    raw_bytes = base64.b64decode(row["raw_payload_b64"])
+                    text = raw_bytes.decode("utf-8", errors="ignore")
+                    if "{" in text:
+                        start_idx = text.index("{")
+                        payload_json = json.loads(text[start_idx:])
+                        if isinstance(payload_json, dict) and "source" in payload_json:
+                            harvester.ingest_envelope(payload_json)
+                            total_ingested += 1
+                except Exception:
+                    pass
+        else:
+            raise ValueError(f"Database contains neither collection_records nor raw_frames table: {tables}")
     finally:
         conn.close()
 

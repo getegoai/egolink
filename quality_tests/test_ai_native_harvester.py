@@ -351,6 +351,58 @@ class TestAiNativeHarvester(unittest.TestCase):
             self.assertNotIn("latitude", parsed_win["cross_modal_context"])
             self.assertNotIn("longitude", parsed_win["cross_modal_context"])
 
+    def test_sqlite_raw_frames_harvest(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "message_hub_raw.db"
+            out_dir = Path(tmp_dir) / "harvested_dataset_raw"
+
+            conn = sqlite3.connect(db_path)
+            conn.execute("""
+                CREATE TABLE raw_frames (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    frame_id TEXT NOT NULL,
+                    raw_payload_b64 TEXT NOT NULL
+                );
+            """)
+
+            raw_divisor = 32768
+            ax_raw = int(1000.0 * raw_divisor / 4000.0)
+            binary_samples = bytearray()
+            for i in range(100):
+                binary_samples.extend(struct.pack("<I6h", i * 50000, 0, 0, ax_raw, 0, 0, 0))
+            b64_samples = base64.b64encode(binary_samples).decode("ascii")
+
+            env = {
+                "source": "imu",
+                "device_id": "connectivity-node-001",
+                "boot_count": 211,
+                "session_id": "col-b211",
+                "timestamp_monotonic_ns": 1_000_000_000,
+                "payload": {
+                    "encoding": "offset_us+six_i16le+base64-v1",
+                    "samples_b64": b64_samples,
+                    "sample_count": 100,
+                    "sample_record_bytes": 16,
+                    "accel_full_scale_mg": 4000,
+                    "gyro_full_scale_mdps": 512000,
+                    "raw_divisor": raw_divisor,
+                },
+            }
+            raw_payload_bytes = json.dumps(env).encode("utf-8")
+            raw_payload_b64 = base64.b64encode(raw_payload_bytes).decode("ascii")
+
+            conn.execute(
+                "INSERT INTO raw_frames (device_id, frame_id, raw_payload_b64) VALUES (?, ?, ?)",
+                ("connectivity-node-001", "frame-1", raw_payload_b64),
+            )
+            conn.commit()
+            conn.close()
+
+            manifest = harvest_dataset_from_db(db_path, out_dir, device_id="connectivity-node-001")
+            self.assertEqual(manifest["total_windows"], 1)
+            self.assertEqual(manifest["privacy_gate"], "PASS")
+
 
 if __name__ == "__main__":
     unittest.main()
