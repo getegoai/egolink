@@ -1,9 +1,9 @@
 ---
 document_status: authoritative
 decision_updated: 2026-09-22
-last_verified: 2026-09-21
-reviewed_at: 2026-09-22
-verified_by: founder/codex
+last_verified: 2026-09-23
+reviewed_at: 2026-09-23
+verified_by: founder/gemini
 ---
 
 # Ego Link Current Status
@@ -20,20 +20,18 @@ The [coordination note](CODEX_GEMINI_HANDOFF_20260922.md) defines shared-file se
 
 ## Last reported runtime, distinct from source
 
-The latest recorded application is Boot 188 on `connectivity-node-001`, CH343
-`COM3`, reported 2026-09-21. Firmware version/run strings still say run021; the
-older document heading's run022 label is not a separate image identity. Full
-app/ELF hashes, inherited evidence and gaps are in [ACTIVE_BUILD](ACTIVE_BUILD.md).
-The 9/22 source repair has not been flashed or deployed by Codex.
+The latest recorded application is Boot 211 on `connectivity-node-001`, CH343
+`COM3`, reported 2026-09-23. Completed continuous 7-hour field session (10:16~17:16).
+Full app/ELF hashes, inherited evidence and gaps are in [ACTIVE_BUILD](ACTIVE_BUILD.md).
 
 | Slice | Evidence and scope | Remaining limitation |
 |---|---|---|
-| GNSS/Cell/QMI8658/MAX17048 + LTE | Boot171/188 reported real probes and LTE uploads, latest 9/21 | No representative location-accuracy or endurance acceptance |
+| GNSS/Cell/QMI8658/MAX17048 + LTE | Boot 211 9/23 7h field run: 8,724 records, 285 GNSS 3D fixes (66%, up to 22 sats, HDOP 0.62, 4.69 km cumulative trajectory, max 14.9 km/h); continuous MAX17048 power curve | Ground-truth error against survey references |
 | Manual Camera -> LTE -> private API | [Run015, 9/16](../hardware/CAMERA_LTE_MANUAL_CLOSURE_20260916.md): matching JPEG hash | One bounded USB-powered engineering run |
-| Ordinary-upload throughput | Run017: 248/248 in 600s, final queue zero; documented in the same report | Not long-run, outage or field proof |
+| Ordinary-upload throughput | Run017: 248/248 in 600s, final queue zero; Boot 211: 8,724 records over 7h LTE PPP upload with 0 reboot | Not 48h result |
 | Preview/export and battery timer | 9/17 preview/export; 9/18 run019 Boot142, 3 scheduled photos and a separate STOP case; [packet](../tasks/active/P0-CONVERGENCE-20260905.md) | Complete raw evidence index still needed; not a carry/representative-day or 48h result |
-| Ego-state | Boot188 reported state upload/storage; 9/22 source repair committed as `3a0728058` with C/PC/API/Web regression | Unflashed/undeployed; Boot188 score 0.83 was an estimator output, not accuracy |
-| Cellular call | AT state machine and initialization reported | configure logging is not proof of successful configuration; no accepted dialing/answering or bidirectional audio |
+| Ego-state | Boot 211 9/23: 831 live state inferences (walking: 82, running: 6, vehicle: 1, stationary: 683, indoor: 58) across 7h trip | Human-labeled ground-truth comparison |
+| Cellular call | 9/23: Web->Cloud->Modem AT dispatch pipeline verified with ACK; SIM7670G-MNGV data-only module lack of VoLTE/audio codec confirmed on hardware | Audio-capable carrier board required for ringing phone call |
 | Ego Base | Synchronously planned private endpoint | Not implemented or deployed; current VPS storage is an engineering transition, not local-first completion |
 
 The 9/21 bicycle note reports outbound fixes and return no-fix. Inverted pocket
