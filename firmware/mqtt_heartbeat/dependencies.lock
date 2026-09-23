@@ -1,4 +1,14 @@
 dependencies:
+  espressif/cmake_utilities:
+    component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.1'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.5.3
   espressif/esp32-camera:
     component_hash: bc9c8a6b51df777a014fa295825b3de5069bc0300c317acff20c97cf4a10ac7d
     dependencies:
@@ -23,13 +33,103 @@ dependencies:
       registry_url: https://components.espressif.com
       type: service
     version: 1.3.1
+  espressif/iot_eth:
+    component_hash: 2375af94aa38438e1411a8158ceda74e89170aa5b5b502371acdef4151be2a05
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: '*'
+    - name: idf
+      require: private
+      version: '>=4.4'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.0
+  espressif/iot_usbh_cdc:
+    component_hash: e924a79e9b7926b38bee52234d9f90101d8926f5e560dd5edf51c395546eac87
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: '*'
+    - name: espressif/usb
+      registry_url: https://components.espressif.com
+      require: public
+      rules:
+      - if: idf_version >=6.0
+      - if: target not in ["linux"]
+      version: ^1.4.0
+    - name: idf
+      require: private
+      version: '>=5.1'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32s31
+    - esp32p4
+    version: 3.1.0
+  espressif/iot_usbh_modem:
+    component_hash: 2c9d527bef0721c2925341ee92c7244d4bc5b45c8ffe85d68e125deab7322083
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    - name: espressif/iot_eth
+      registry_url: https://components.espressif.com
+      require: private
+      version: '*'
+    - name: idf
+      require: private
+      version: '>=5.1'
+    - name: espressif/iot_usbh_cdc
+      registry_url: https://components.espressif.com
+      require: private
+      version: ^3.1
+    - name: espressif/modem_at
+      registry_url: https://components.espressif.com
+      require: private
+      version: '*'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32s31
+    - esp32p4
+    version: 2.2.0
+  espressif/modem_at:
+    component_hash: 86d8260760c5c41decd7a1d3bd3c3805c9be0174c60c502a074734b2342b406a
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: '*'
+    - name: idf
+      require: private
+      version: '>=4.4'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.1.0
   idf:
     source:
       type: idf
     version: 5.4.2
 direct_dependencies:
+- espressif/cmake_utilities
 - espressif/esp32-camera
+- espressif/iot_eth
+- espressif/iot_usbh_cdc
+- espressif/iot_usbh_modem
+- espressif/modem_at
 - idf
-manifest_hash: 9ba3c622728b1cf7a64ad6dd71bc9de3f4d325b0c2a7ff4f92ce05eeaf414811
+manifest_hash: 201b5eb5336271335e9bcdb73018255d0a48ccef180463b45c296440bb374e0b
 target: esp32s3
 version: 2.0.0

@@ -1545,7 +1545,17 @@ static esp_err_t cellular_call_at_send(
     uint32_t timeout_ms)
 {
     (void)user_ctx;
-    return sim7670_at_send_raw_bounded(cmd, resp, resp_size, timeout_ms);
+    char local_buf[128] = {0};
+    char *buf = (resp != NULL && resp_size > 0) ? resp : local_buf;
+    size_t cap = (resp != NULL && resp_size > 0) ? resp_size : sizeof(local_buf);
+    esp_err_t err = sim7670_at_send_raw_bounded(cmd, buf, cap, timeout_ms);
+    /* Strip trailing CRLF for clean log output */
+    size_t len = strlen(buf);
+    while (len > 0 && (buf[len-1] == '\r' || buf[len-1] == '\n')) {
+        buf[--len] = '\0';
+    }
+    ESP_LOGI(TAG, "CELLULAR_CALL AT: '%s' -> %s [%s]", cmd, esp_err_to_name(err), buf);
+    return err;
 }
 static void modem_task(void *unused)
 {
@@ -1746,7 +1756,7 @@ static void modem_task(void *unused)
                     s_cellular_call_status = call_stat;
                 }
                 xSemaphoreGive(s_cellular_call_mutex);
-                int64_t poll_interval_us = (s_cellular_call_status.state == SIM7670_CALL_STATE_IDLE) ? 3000000LL : 1000000LL;
+                int64_t poll_interval_us = (s_cellular_call_status.state == SIM7670_CALL_STATE_IDLE) ? 15000000LL : 1000000LL;
                 next_call_poll = now + poll_interval_us;
             }
         }

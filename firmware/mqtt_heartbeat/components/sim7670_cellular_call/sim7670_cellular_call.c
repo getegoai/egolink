@@ -82,20 +82,38 @@ esp_err_t sim7670_cellular_call_configure(
     if (ctx == NULL || !ctx->initialized) {
         return ESP_ERR_INVALID_STATE;
     }
+    /* 1. Enable Verbose Error Reporting FIRST so any subsequent error is informative */
+    (void)ctx->at_send(ctx->user_ctx, "AT+CMEE=2", NULL, 0, 2000);
+
+    /* 2. Hardware and network diagnostic probes */
+    (void)ctx->at_send(ctx->user_ctx, "ATI", NULL, 0, 2000);
+    (void)ctx->at_send(ctx->user_ctx, "AT+CGMR", NULL, 0, 2000);
+    (void)ctx->at_send(ctx->user_ctx, "AT+CPIN?", NULL, 0, 2000);
+    (void)ctx->at_send(ctx->user_ctx, "AT+COPS?", NULL, 0, 2000);
+    (void)ctx->at_send(ctx->user_ctx, "AT+CPSI?", NULL, 0, 2000);
+    (void)ctx->at_send(ctx->user_ctx, "AT+CREG?", NULL, 0, 2000);
+
+    /* 3. Hangup control / voice mode */
+    (void)ctx->at_send(ctx->user_ctx, "AT+CVHU=0", NULL, 0, 2000);
+
+    /* 4. Enable VoLTE for LTE carrier voice calling */
+    (void)ctx->at_send(ctx->user_ctx, "AT+CEVOLTE=1", NULL, 0, 2000);
+
+    /* 5. Enable Call Listing */
+    (void)ctx->at_send(ctx->user_ctx, "AT+CLCC=1", NULL, 0, 2000);
+
+    /* 6. Enable Calling Line Identification Presentation */
+    (void)ctx->at_send(ctx->user_ctx, "AT+CLIP=1", NULL, 0, 2000);
+
+    /* 7. Enable Connected Line Identification */
+    (void)ctx->at_send(ctx->user_ctx, "AT+COLP=1", NULL, 0, 2000);
+
+    /* 8. Best-effort volume level setting (may not be supported on all Cat-1 firmware) */
     char cmd[32];
     uint8_t vol = volume_percent > 100 ? 100 : volume_percent;
     (void)snprintf(cmd, sizeof(cmd), "AT+CLVL=%u", (unsigned int)vol);
-    esp_err_t err = ctx->at_send(ctx->user_ctx, cmd, NULL, 0, 2000);
-    if (err != ESP_OK) {
-        return err;
-    }
-    /* Enable Calling Line Identification Presentation */
-    err = ctx->at_send(ctx->user_ctx, "AT+CLIP=1", NULL, 0, 2000);
-    if (err != ESP_OK) {
-        return err;
-    }
-    /* Enable Connected Line Identification */
-    (void)ctx->at_send(ctx->user_ctx, "AT+COLP=1", NULL, 0, 2000);
+    (void)ctx->at_send(ctx->user_ctx, cmd, NULL, 0, 2000);
+
     return ESP_OK;
 }
 
