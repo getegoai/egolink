@@ -4,7 +4,7 @@
  */
 
 import { renderEgoState } from './ego_state.js?v=20260922_02';
-import { api } from './api.js?v=20260918_02';
+import { api } from './api.js?v=20260923_01';
 import { state } from './state.js?v=20260918_02';
 import { ImuOscilloscope, IMU_COLORS } from './charts.js?v=20260918_02';
 import { Imu3dVisualizer } from './imu3d.js?v=20260922_02';
@@ -187,7 +187,13 @@ class DevBenchApp {
       rawFramesCountLabel: document.getElementById('rawFramesCountLabel'),
       rawFramesStream: document.getElementById('rawFramesStream'),
 
-      // Tab 6: Commands
+      // Tab 6: Commands & P0-CALL
+      callStatusBadge: document.getElementById('callStatusBadge'),
+      callPhoneNumberInput: document.getElementById('callPhoneNumberInput'),
+      dialCallBtn: document.getElementById('dialCallBtn'),
+      hangupCallBtn: document.getElementById('hangupCallBtn'),
+      callFeedbackText: document.getElementById('callFeedbackText'),
+      callDurationDisplay: document.getElementById('callDurationDisplay'),
       commandTypeSelect: document.getElementById('commandTypeSelect'),
       commandPayloadInput: document.getElementById('commandPayloadInput'),
       sendCommandBtn: document.getElementById('sendCommandBtn'),
@@ -351,6 +357,10 @@ class DevBenchApp {
         this.dom.commandPayloadInput.value = '{"cmd": "capture_photo_once", "ttl_seconds": 120}';
       } else if (type === 'configure_photo_timer') {
         this.dom.commandPayloadInput.value = '{"cmd": "configure_photo_timer", "enabled": true, "interval_seconds": 60, "max_photos": 3, "config_version": "timer-v1"}';
+      } else if (type === 'cellular_call_dial') {
+        this.dom.commandPayloadInput.value = '{"cmd": "cellular_call_dial", "payload": {"phone_number": "00000000000"}}';
+      } else if (type === 'cellular_call_hangup') {
+        this.dom.commandPayloadInput.value = '{"cmd": "cellular_call_hangup", "payload": {}}';
       } else if (type === 'set_report_interval') {
         this.dom.commandPayloadInput.value = '{"cmd": "set_report_interval", "interval_s": 15}';
       } else if (type === 'query_status') {
@@ -362,6 +372,10 @@ class DevBenchApp {
 
     // Send Command
     this.dom.sendCommandBtn.addEventListener('click', () => this.sendCustomCommand());
+
+    // P0-CALL Cellular Calling
+    this.dom.dialCallBtn?.addEventListener('click', () => this.handleDialCall());
+    this.dom.hangupCallBtn?.addEventListener('click', () => this.handleHangupCall());
 
     // Field Annotation
     this.dom.saveAnnotationBtn.addEventListener('click', () => this.saveFieldAnnotation());
@@ -1498,6 +1512,55 @@ class DevBenchApp {
       this.dom.commandStatusFeedback.textContent = `下发失败: ${err.message}`;
     } finally {
       this.dom.sendCommandBtn.disabled = false;
+    }
+  }
+
+  async handleDialCall() {
+    const deviceId = state.selectedDeviceId;
+    const phoneNumber = (this.dom.callPhoneNumberInput?.value || '00000000000').trim();
+    if (!phoneNumber) {
+      if (this.dom.callFeedbackText) this.dom.callFeedbackText.textContent = '请输入有效电话号码';
+      return;
+    }
+    if (this.dom.dialCallBtn) this.dom.dialCallBtn.disabled = true;
+    if (this.dom.callFeedbackText) this.dom.callFeedbackText.textContent = `正在向单板下发拨号指令: ${phoneNumber}…`;
+    try {
+      const res = await api.dialCellularCall(deviceId, phoneNumber);
+      if (this.dom.callFeedbackText) {
+        this.dom.callFeedbackText.textContent = `拨号指令已下发 (${res.command?.cmd_id || 'OK'})，等待 SIM7670 执行 ATD${phoneNumber};`;
+      }
+      if (this.dom.hangupCallBtn) this.dom.hangupCallBtn.disabled = false;
+      if (this.dom.callStatusBadge) {
+        this.dom.callStatusBadge.className = 'badge badge-warn';
+        this.dom.callStatusBadge.textContent = '呼叫指令已排队 (QUEUED)';
+      }
+      if (this.dom.callDurationDisplay) this.dom.callDurationDisplay.textContent = `拨号: ${phoneNumber}`;
+      await this.refreshCommands();
+    } catch (err) {
+      if (this.dom.callFeedbackText) this.dom.callFeedbackText.textContent = `拨号指令失败: ${err.message}`;
+      if (this.dom.dialCallBtn) this.dom.dialCallBtn.disabled = false;
+    }
+  }
+
+  async handleHangupCall() {
+    const deviceId = state.selectedDeviceId;
+    if (this.dom.hangupCallBtn) this.dom.hangupCallBtn.disabled = true;
+    if (this.dom.callFeedbackText) this.dom.callFeedbackText.textContent = '正在向单板下发挂断指令…';
+    try {
+      const res = await api.hangupCellularCall(deviceId);
+      if (this.dom.callFeedbackText) {
+        this.dom.callFeedbackText.textContent = `挂断指令已下发 (${res.command?.cmd_id || 'OK'})，SIM7670 将执行 ATH`;
+      }
+      if (this.dom.callStatusBadge) {
+        this.dom.callStatusBadge.className = 'badge badge-idle';
+        this.dom.callStatusBadge.textContent = '空闲 (IDLE)';
+      }
+      if (this.dom.dialCallBtn) this.dom.dialCallBtn.disabled = false;
+      if (this.dom.callDurationDisplay) this.dom.callDurationDisplay.textContent = '已挂断';
+      await this.refreshCommands();
+    } catch (err) {
+      if (this.dom.callFeedbackText) this.dom.callFeedbackText.textContent = `挂断指令失败: ${err.message}`;
+      if (this.dom.hangupCallBtn) this.dom.hangupCallBtn.disabled = false;
     }
   }
 

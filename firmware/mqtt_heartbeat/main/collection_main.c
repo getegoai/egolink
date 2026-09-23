@@ -2907,6 +2907,55 @@ static bool photo_handle_timer_command(egolink_esp_p0_https_t *https,
     photo_timer_publish(&timer);return true;
 }
 
+static bool photo_handle_cellular_call_command(egolink_esp_p0_https_t *https,
+    const network_runtime_snapshot_t *route,const char *interface_name,
+    const photo_control_command_t *command,uint8_t *response,size_t response_capacity)
+{
+    photo_control_journal_t journal;
+    photo_journal_snapshot(&journal);
+    const bool duplicate = journal.phase != PHOTO_CONTROL_JOURNAL_NONE &&
+        strcmp(journal.cmd_id, command->cmd_id) == 0;
+    if (duplicate && journal.phase == PHOTO_CONTROL_JOURNAL_COMPLETE) {
+        return photo_post_command_ack(https, route, interface_name, &journal, NULL, NULL,
+            true, response, response_capacity);
+    }
+
+    bool success = false;
+    const char *status_str = "applied";
+    const char *msg_str = "cellular_call_command_applied";
+
+    if (command->kind == PHOTO_CONTROL_COMMAND_CELLULAR_DIAL) {
+        if (command->phone_number[0] != '\0') {
+            success = egolink_cellular_call_dial(command->phone_number);
+            if (success) {
+                msg_str = "cellular_call_dial_dispatched";
+            } else {
+                status_str = "error";
+                msg_str = "cellular_call_dial_dispatch_failed";
+            }
+        } else {
+            status_str = "error";
+            msg_str = "cellular_call_phone_number_missing";
+        }
+    } else if (command->kind == PHOTO_CONTROL_COMMAND_CELLULAR_HANGUP) {
+        success = egolink_cellular_call_hangup();
+        if (success) {
+            msg_str = "cellular_call_hangup_dispatched";
+        } else {
+            status_str = "error";
+            msg_str = "cellular_call_hangup_dispatch_failed";
+        }
+    }
+
+    photo_journal_fill(&journal, PHOTO_CONTROL_JOURNAL_COMPLETE, command->kind,
+        command->cmd_id, status_str, msg_str, "none");
+    if (!save_photo_journal(&journal)) return false;
+    photo_journal_publish(&journal);
+
+    return photo_post_command_ack(https, route, interface_name, &journal, NULL, NULL,
+        duplicate, response, response_capacity);
+}
+
 static bool photo_poll_and_handle_command(egolink_esp_p0_https_t *https,
     const network_runtime_snapshot_t *route,const char *interface_name,
     uint8_t *command_response,size_t command_capacity,
@@ -2936,6 +2985,11 @@ static bool photo_poll_and_handle_command(egolink_esp_p0_https_t *https,
         ESP_LOGE(TAG,"PHOTO_COMMAND parse=%s ack=false",
             photo_control_parse_result_name(parsed));
         return false;
+    }
+    if(command.kind==PHOTO_CONTROL_COMMAND_CELLULAR_DIAL||
+       command.kind==PHOTO_CONTROL_COMMAND_CELLULAR_HANGUP){
+        return photo_handle_cellular_call_command(https,route,interface_name,&command,
+            ack_response,ack_capacity);
     }
     return command.kind==PHOTO_CONTROL_COMMAND_CAPTURE_ONCE?
         photo_handle_capture_command(https,route,interface_name,&command,

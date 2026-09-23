@@ -1114,6 +1114,15 @@ class MessageHubStore:
                     "invalid_imu_capture_parameters",
                     "capture_imu_window requires sample_count=100 and interval_ms=50",
                 )
+        if cmd == "cellular_call_dial":
+            call_payload = payload.get("payload")
+            if not isinstance(call_payload, dict):
+                raise MessageHubError("invalid_call_payload", "cellular_call_dial requires payload object")
+            phone_num = call_payload.get("phone_number")
+            if not isinstance(phone_num, str) or not re.fullmatch(r"^[0-9+]{3,32}$", phone_num):
+                raise MessageHubError("invalid_phone_number", "cellular_call_dial requires valid phone_number (3-32 digits/+)")
+        elif cmd == "cellular_call_hangup":
+            pass
         db = self.connect()
         try:
             db.execute("BEGIN IMMEDIATE")

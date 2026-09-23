@@ -297,6 +297,33 @@ photo_control_parse_result_t photo_control_parse_raw_command(
     if (strcmp(cmd, "none") == 0)
         return count == 1U ? PHOTO_CONTROL_PARSE_EMPTY : PHOTO_CONTROL_PARSE_BAD_PAYLOAD;
     const char *cmd_id = lookup(values, count, "cmd_id");
+    if (strcmp(cmd, "cellular_call_dial") == 0) {
+        if (!cmd_id || strcmp(cmd_id, header_id) != 0 || !safe_id(cmd_id))
+            return PHOTO_CONTROL_PARSE_BAD_PAYLOAD;
+        const char *number = lookup(values, count, "phone_number");
+        if (!number) return PHOTO_CONTROL_PARSE_BAD_PAYLOAD;
+        size_t num_len = strlen(number);
+        if (num_len < 3 || num_len >= sizeof(out->phone_number)) return PHOTO_CONTROL_PARSE_BAD_PAYLOAD;
+        for (size_t i = (number[0] == '+' ? 1 : 0); i < num_len; ++i) {
+            if (number[i] < '0' || number[i] > '9') return PHOTO_CONTROL_PARSE_BAD_PAYLOAD;
+        }
+        const char *expiry = lookup(values, count, "expires_at_unix_ms");
+        if (expiry && !u64_text(expiry, &out->expires_at_unix_ms)) return PHOTO_CONTROL_PARSE_BAD_PAYLOAD;
+        out->kind = PHOTO_CONTROL_COMMAND_CELLULAR_DIAL;
+        memcpy(out->cmd_id, cmd_id, strlen(cmd_id) + 1U);
+        memcpy(out->phone_number, number, num_len + 1U);
+        return PHOTO_CONTROL_PARSE_OK;
+    }
+    if (strcmp(cmd, "cellular_call_hangup") == 0) {
+        if (!cmd_id || strcmp(cmd_id, header_id) != 0 || !safe_id(cmd_id))
+            return PHOTO_CONTROL_PARSE_BAD_PAYLOAD;
+        const char *expiry = lookup(values, count, "expires_at_unix_ms");
+        if (expiry && !u64_text(expiry, &out->expires_at_unix_ms)) return PHOTO_CONTROL_PARSE_BAD_PAYLOAD;
+        out->kind = PHOTO_CONTROL_COMMAND_CELLULAR_HANGUP;
+        memcpy(out->cmd_id, cmd_id, strlen(cmd_id) + 1U);
+        out->phone_number[0] = '\0';
+        return PHOTO_CONTROL_PARSE_OK;
+    }
     const char *auth = lookup(values, count, "authorization_session_id");
     const char *retention = lookup(values, count, "retention_expires_at");
     const char *training = lookup(values, count, "training_allowed");
@@ -514,7 +541,7 @@ bool photo_control_journal_encode(const photo_control_journal_t *journal,
     uint8_t out[PHOTO_CONTROL_JOURNAL_BLOB_BYTES],size_t *written)
 {
     if(!journal||!out||!written||journal->phase>PHOTO_CONTROL_JOURNAL_COMPLETE||
-       journal->kind>PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER)return false;
+       journal->kind>PHOTO_CONTROL_COMMAND_CELLULAR_HANGUP)return false;
     memset(out,0xff,PHOTO_CONTROL_JOURNAL_BLOB_BYTES);put32(out,JOURNAL_MAGIC);
     put32(out+4U,PERSIST_VERSION);put32(out+8U,(uint32_t)journal->phase);
     put32(out+12U,(uint32_t)journal->kind);size_t at=20U;
@@ -534,7 +561,7 @@ bool photo_control_journal_decode(const uint8_t *blob,size_t bytes,photo_control
        get32(blob+16U)!=photo_control_crc32(blob+20U,bytes-20U))return false;
     photo_control_journal_t value={0};value.phase=(photo_control_journal_phase_t)get32(blob+8U);
     value.kind=(photo_control_command_kind_t)get32(blob+12U);
-    if(value.phase>PHOTO_CONTROL_JOURNAL_COMPLETE||value.kind>PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER)return false;
+    if(value.phase>PHOTO_CONTROL_JOURNAL_COMPLETE||value.kind>PHOTO_CONTROL_COMMAND_CELLULAR_HANGUP)return false;
     size_t at=20U;
     if(value.phase==PHOTO_CONTROL_JOURNAL_NONE){if(bytes!=21U||blob[20U]!=0U)return false;*journal=value;return true;}
     if(!read_text(blob,bytes,&at,value.cmd_id,sizeof(value.cmd_id))||

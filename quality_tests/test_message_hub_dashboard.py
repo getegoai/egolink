@@ -3249,6 +3249,46 @@ class MessageHubDashboardTests(unittest.TestCase):
         self.assertIn('id="amapLiveMap"', html)
         self.assertIn('id="d1Link"', html)
 
+    def test_cellular_call_dial_and_hangup_command_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "test.db"
+            store = message_hub.MessageHubStore(db_path)
+            device_id = "test-device-001"
+            store.register_device({"device_id": device_id, "name": "Device 1"})
+
+            # Invalid dial payload (missing or too short)
+            with self.assertRaises(message_hub.MessageHubError):
+                store.create_command(device_id, {"cmd": "cellular_call_dial", "payload": {}})
+
+            with self.assertRaises(message_hub.MessageHubError):
+                store.create_command(device_id, {"cmd": "cellular_call_dial", "payload": {"phone_number": "12"}})
+
+            # Valid dial to authorized number
+            dial_cmd = store.create_command(
+                device_id,
+                {
+                    "cmd": "cellular_call_dial",
+                    "payload": {"phone_number": "00000000000"},
+                },
+            )
+            self.assertEqual(dial_cmd["cmd"], "cellular_call_dial")
+            self.assertEqual(dial_cmd["payload"]["phone_number"], "00000000000")
+            self.assertEqual(dial_cmd["status"], "pending")
+
+            # Valid hangup
+            hangup_cmd = store.create_command(
+                device_id,
+                {"cmd": "cellular_call_hangup", "payload": {}},
+            )
+            self.assertEqual(hangup_cmd["cmd"], "cellular_call_hangup")
+            self.assertEqual(hangup_cmd["status"], "pending")
+
+            # Poll commands
+            pending = store.poll_commands(device_id)
+            self.assertEqual(len(pending), 2)
+            self.assertEqual(pending[0]["cmd"], "cellular_call_dial")
+            self.assertEqual(pending[1]["cmd"], "cellular_call_hangup")
+
 
 if __name__ == "__main__":
     unittest.main()

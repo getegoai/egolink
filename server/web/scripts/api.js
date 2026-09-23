@@ -304,6 +304,44 @@ export class ApiClient {
     const encId = encodeURIComponent(deviceId);
     return await this.postJson(`/api/v1/devices/${encId}/commands`, commandPayload, {}, 'hub');
   }
+
+  async dialCellularCall(deviceId, phoneNumber) {
+    const encId = encodeURIComponent(deviceId);
+    const nowMs = Date.now();
+    const expiresMs = nowMs + 60 * 1000;
+    const cmdId = `call-dial-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    return await this.postJson(
+      `/api/v1/devices/${encId}/commands`,
+      {
+        cmd: 'cellular_call_dial',
+        cmd_id: cmdId,
+        expires_at_unix_ms: expiresMs,
+        payload: {
+          phone_number: String(phoneNumber).trim()
+        }
+      },
+      {},
+      'hub'
+    );
+  }
+
+  async hangupCellularCall(deviceId) {
+    const encId = encodeURIComponent(deviceId);
+    const nowMs = Date.now();
+    const expiresMs = nowMs + 30 * 1000;
+    const cmdId = `call-hangup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    return await this.postJson(
+      `/api/v1/devices/${encId}/commands`,
+      {
+        cmd: 'cellular_call_hangup',
+        cmd_id: cmdId,
+        expires_at_unix_ms: expiresMs,
+        payload: {}
+      },
+      {},
+      'hub'
+    );
+  }
 }
 
 export const api = new ApiClient();

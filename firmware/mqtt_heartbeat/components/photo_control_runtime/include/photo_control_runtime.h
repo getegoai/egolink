@@ -21,6 +21,8 @@ typedef enum {
     PHOTO_CONTROL_COMMAND_NONE = 0,
     PHOTO_CONTROL_COMMAND_CAPTURE_ONCE,
     PHOTO_CONTROL_COMMAND_CONFIGURE_TIMER,
+    PHOTO_CONTROL_COMMAND_CELLULAR_DIAL,
+    PHOTO_CONTROL_COMMAND_CELLULAR_HANGUP,
 } photo_control_command_kind_t;
 
 typedef struct {
@@ -37,6 +39,7 @@ typedef struct {
     uint32_t interval_seconds;
     uint64_t session_expires_at_unix_ms;
     uint32_t max_photos;
+    char phone_number[36];
 } photo_control_command_t;
 
 typedef enum {

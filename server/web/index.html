@@ -505,6 +505,36 @@
     <!-- Tab 6: Commands -->
     <section id="tab-commands" class="tab-pane">
       <div class="grid-stack">
+        <!-- P0-CALL Native Cellular Calling Panel -->
+        <div class="card" style="border: 1px solid var(--border-accent); background: linear-gradient(180deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);">
+          <div class="card-header">
+            <span class="card-title">📞 原生蜂窝语音通话 (P0-CALL 门禁验证)</span>
+            <span id="callStatusBadge" class="badge badge-idle">空闲 (IDLE)</span>
+          </div>
+          <div style="display:grid; gap:14px;">
+            <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+              <div class="form-group" style="flex:1; min-width:240px;">
+                <label for="callPhoneNumberInput">目标外呼电话号码 (Authorized Contact):</label>
+                <input id="callPhoneNumberInput" class="form-input" style="font-size:16px; font-weight:600; letter-spacing:1px;" value="00000000000" placeholder="例如: 00000000000">
+              </div>
+              <button id="dialCallBtn" class="btn btn-primary" style="height:38px; min-width:130px; background:#059669; border-color:#10b981;">
+                📞 拨打电话 (ATD)
+              </button>
+              <button id="hangupCallBtn" class="btn btn-danger" style="height:38px; min-width:110px;" disabled>
+                🔴 挂断 (ATH)
+              </button>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+              <div class="form-hint" id="callFeedbackText">
+                当前授权外呼目标：00000000000。点击后下发 cellular_call_dial，模组执行 ATD 呼叫。
+              </div>
+              <div id="callDurationDisplay" class="metric-sub" style="font-family:monospace; font-size:13px; color:#38bdf8;">
+                状态: 待呼叫
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="card">
           <div class="card-header">
             <span class="card-title">🎮 下发控制指令 (Downlink RPC)</span>
@@ -517,6 +547,8 @@
                 <select id="commandTypeSelect" class="form-input" style="width:240px;">
                   <option value="capture_photo_once">capture_photo_once (抓拍照片)</option>
                   <option value="configure_photo_timer">configure_photo_timer (定时拍照)</option>
+                  <option value="cellular_call_dial">cellular_call_dial (蜂窝呼叫)</option>
+                  <option value="cellular_call_hangup">cellular_call_hangup (挂断呼叫)</option>
                   <option value="set_report_interval">set_report_interval (上报周期)</option>
                   <option value="query_status">query_status (查询状态)</option>
                   <option value="custom">custom (自定义指令)</option>
@@ -683,6 +715,6 @@
     </div>
   </div>
 
-  <script type="module" src="/dev/static/scripts/main.js?v=20260922_02"></script>
+  <script type="module" src="/dev/static/scripts/main.js?v=20260923_01"></script>
 </body>
 </html>

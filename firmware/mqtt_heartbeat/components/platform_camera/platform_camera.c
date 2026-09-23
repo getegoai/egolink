@@ -233,13 +233,13 @@ platform_camera_status_t platform_camera_capture_single(
     esp_err_t init=esp_camera_init(&config);
     if(init!=ESP_OK){
         /* The upstream driver cleans most probe/config failures itself. Keep
-         * the historical smoke's explicit cleanup attempt for early cam_init
-         * failures too; do not claim cleanup success without its return. */
+         * explicit cleanup attempt, but do not deadlock when deinit returns
+         * ESP_ERR_INVALID_STATE (already cleaned by esp_camera_init failure). */
         esp_err_t cleanup=esp_camera_deinit();
-        result->driver_deinitialized=cleanup==ESP_OK;
-        if(cleanup!=ESP_OK)atomic_store(&s_lifecycle_blocked,true);
+        result->driver_deinitialized=(cleanup==ESP_OK || cleanup==ESP_ERR_INVALID_STATE);
+        if(cleanup!=ESP_OK && cleanup!=ESP_ERR_INVALID_STATE)atomic_store(&s_lifecycle_blocked,true);
         result->status=PLATFORM_CAMERA_INIT_FAILED;
-        result->reason=cleanup==ESP_OK?"esp_camera_init_failed_driver_cleaned":
+        result->reason=result->driver_deinitialized?"esp_camera_init_failed_driver_cleaned":
             "esp_camera_init_failed_cleanup_unverified";
         result->capture_completed_us=esp_timer_get_time();
         (void)platform_i2c_bus_lease_release(CAMERA_I2C_PORT);
@@ -260,8 +260,8 @@ platform_camera_status_t platform_camera_capture_single(
     if(result->status!=PLATFORM_CAMERA_OK){
         result->capture_completed_us=esp_timer_get_time();
         esp_err_t deinit=esp_camera_deinit();
-        result->driver_deinitialized=deinit==ESP_OK;
-        if(deinit!=ESP_OK)atomic_store(&s_lifecycle_blocked,true);
+        result->driver_deinitialized=(deinit==ESP_OK || deinit==ESP_ERR_INVALID_STATE);
+        if(deinit!=ESP_OK && deinit!=ESP_ERR_INVALID_STATE)atomic_store(&s_lifecycle_blocked,true);
         (void)platform_i2c_bus_lease_release(CAMERA_I2C_PORT);
         _lock_release(&s_capture_lock);return result->status;
     }
@@ -287,12 +287,12 @@ platform_camera_status_t platform_camera_capture_single(
         esp_camera_fb_return(frame);result->framebuffer_returned=true;
     }
     result->capture_completed_us=esp_timer_get_time();
-    esp_err_t deinit=esp_camera_deinit();result->driver_deinitialized=deinit==ESP_OK;
-    if(deinit!=ESP_OK&&result->status==PLATFORM_CAMERA_OK){
+    esp_err_t deinit=esp_camera_deinit();result->driver_deinitialized=(deinit==ESP_OK || deinit==ESP_ERR_INVALID_STATE);
+    if(deinit!=ESP_OK && deinit!=ESP_ERR_INVALID_STATE && result->status==PLATFORM_CAMERA_OK){
         atomic_store(&s_lifecycle_blocked,true);
         result->status=PLATFORM_CAMERA_DEINIT_FAILED;
         result->reason="esp_camera_deinit_failed_reboot_required_no_physical_power_claim";
-    }else if(deinit!=ESP_OK){
+    }else if(deinit!=ESP_OK && deinit!=ESP_ERR_INVALID_STATE){
         atomic_store(&s_lifecycle_blocked,true);
     }
     (void)platform_i2c_bus_lease_release(CAMERA_I2C_PORT);

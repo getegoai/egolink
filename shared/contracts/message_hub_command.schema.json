@@ -171,6 +171,64 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "cmd": {
+            "const": "cellular_call_dial"
+          }
+        },
+        "required": [
+          "cmd"
+        ]
+      },
+      "then": {
+        "required": [
+          "device_id",
+          "created_at",
+          "expires_at_unix_ms",
+          "payload"
+        ],
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "phone_number"
+            ],
+            "properties": {
+              "phone_number": {
+                "type": "string",
+                "pattern": "^[0-9+]{3,32}$"
+              },
+              "authorization_session_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@-]{0,127}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "cmd": {
+            "const": "cellular_call_hangup"
+          }
+        },
+        "required": [
+          "cmd"
+        ]
+      },
+      "then": {
+        "required": [
+          "device_id",
+          "created_at",
+          "expires_at_unix_ms"
+        ]
+      }
     }
   ]
 }
