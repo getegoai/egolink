@@ -1,0 +1,80 @@
+{
+  "scope": "synthetic offline probes; no fixes or hardware acceptance",
+  "input_contract_validation": "collection_observation.schema.json PASS",
+  "mixed_identity": {
+    "windows": 3,
+    "first_labeled_device": "device-A",
+    "first_labeled_boot": 1,
+    "first_window_distinct_ax_values": [
+      0.0,
+      1.1971
+    ],
+    "result": "two identities merged into one window tagged only as device-A/boot1"
+  },
+  "consent_and_lineage": {
+    "input_training_allowed": false,
+    "input_status": "mock",
+    "output_privacy_gate": "PASS",
+    "output_training_allowed": "ABSENT",
+    "output_mock_lineage": "ABSENT",
+    "output_windows": 1
+  },
+  "sample_cadence": {
+    "output_tensor_shape": [
+      100,
+      6
+    ],
+    "measured_rate_hz": 50.0,
+    "observed_span_seconds": 1.98,
+    "downstream_assumed_window_seconds": 5.0
+  },
+  "context_contract": {
+    "emitted_context": {
+      "gnss_fix": true,
+      "gnss_speed_mps": 8.0,
+      "gnss_hdop": 0.8,
+      "gnss_satellites": 12,
+      "is_charging": null,
+      "battery_mv": null,
+      "cell_id": null
+    },
+    "shadow_received_context": {}
+  },
+  "empty_input_fallback": {
+    "input_envelopes": 0,
+    "status": "SUCCESS",
+    "windows_count": 46,
+    "data_source_is_empty_file": true,
+    "synthetic_source_marker": "ABSENT",
+    "notice_in_console": true
+  },
+  "resting_rule": {
+    "rule_state": "running",
+    "priority": "info",
+    "is_critical_safety_override": false,
+    "reason": "IMU acceleration variance 21.3858 indicates high dynamic locomotion"
+  },
+  "model_failure_during_sos": "no safety result: synthetic model unavailable",
+  "always_stationary_model_gate": {
+    "gate_status": "PASSED",
+    "total_safety_vectors_tested": 15,
+    "passed_vectors": 15,
+    "recall": 1.0
+  },
+  "empty_diary": {
+    "total_monitored_hours": 0.0,
+    "total_monitored_minutes": 0.0,
+    "active_minutes": 0.0,
+    "sedentary_minutes": 0.0,
+    "rest_minutes": 0.0,
+    "transit_minutes": 0.0,
+    "transit_distance_km": 0.0,
+    "active_percentage": 0.0,
+    "safety_incident_count": 0,
+    "is_day_completely_safe": true
+  },
+  "diary_gap": {
+    "input_observed_seconds": 10,
+    "episode_duration_seconds": 3605.0
+  }
+}
