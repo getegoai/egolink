@@ -1,0 +1,26 @@
+{
+    "revision":  "C-ME-0.2",
+    "preserved_date":  "2026-10-10",
+    "source":  "Earlier image_gen outputs in this Ego Link design conversation, copied unmodified.",
+    "scope":  "Both appearance alternatives retained at user request. Dimensions, internal fit, waterproofing and wrist suitability remain unverified.",
+    "artifacts":  [
+                      {
+                          "file":  "white-red-sos.png",
+                          "original_generated_filename":  "exec-963b135d-45e6-424b-908e-e30d1f052c0e.png",
+                          "sha256":  "82527d6e0b58e44decd99ae3a141db666d2a22f228037a4693966cb34e2f5669",
+                          "bytes":  2221496,
+                          "description":  "Earlier white shell and red front SOS appearance concept.",
+                          "evidence":  "APPEARANCE_CONCEPT_NOT_FIT_OR_HARDWARE_EVIDENCE",
+                          "modified":  false
+                      },
+                      {
+                          "file":  "smoked-glass-screenless.png",
+                          "original_generated_filename":  "exec-17afb19a-52f2-48fa-883e-5b0aa046cc7d.png",
+                          "sha256":  "f1728dc6061e496a452a02e7f345708f44437c500cddd52e5c1bcf13c853828f",
+                          "bytes":  2199839,
+                          "description":  "Screenless smoked-glass appearance concept with wrist, pendant and clip views.",
+                          "evidence":  "APPEARANCE_CONCEPT_NOT_FIT_OR_HARDWARE_EVIDENCE",
+                          "modified":  false
+                      }
+                  ]
+}
