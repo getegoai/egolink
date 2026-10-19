@@ -54,3 +54,8 @@ docs/EGO_PROJECT_CONTROL_PACK_v0.3/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Java / Maven build output
+server/ego-cloud-backend/target/
+*.jar
+

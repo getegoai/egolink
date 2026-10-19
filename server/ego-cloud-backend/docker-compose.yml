@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: egocloud-mariadb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: egocloud
+      MYSQL_USER: egouser
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    command: [
+      'mariadbd',
+      '--character-set-server=utf8mb4',
+      '--collation-server=utf8mb4_unicode_ci',
+      '--max-connections=300',
+      '--innodb-buffer-pool-size=512M'
+    ]
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./src/main/resources/schema-mariadb.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "127.0.0.1:3306:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: egocloud-redis
+    restart: always
+    command: [
+      "redis-server",
+      "--appendonly", "yes",
+      "--maxmemory", "512mb",
+      "--maxmemory-policy", "noeviction"
+    ]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: egocloud-backend
+    restart: always
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_NAME: egocloud
+      DB_USER: egouser
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVER_PORT: 8080
+      COLD_DATA_DIR: /app/data/cold
+    volumes:
+      - cold_data:/app/data/cold
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  mariadb_data:
+    name: egocloud_mariadb_data
+  redis_data:
+    name: egocloud_redis_data
+  cold_data:
+    name: egocloud_cold_data

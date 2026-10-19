@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EgoLink 智能穿戴物联云平台 | 路演大屏</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background-color: #0b1120;
+            color: #f1f5f9;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .pulse-dot {
+            animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(1.15); }
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+            border-radius: 0.75rem;
+            z-index: 10;
+        }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.4); }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-slate-100">
+
+    <!-- Top Navigation Bar -->
+    <header class="glass-panel px-6 py-3.5 flex items-center justify-between border-b border-slate-800 z-50">
+        <div class="flex items-center space-x-4">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                <i data-lucide="radio" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2.5">
+                    <h1 class="text-lg font-bold tracking-tight text-white">EgoLink 智慧穿戴守护云平台</h1>
+                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                        正式环境
+                    </span>
+                </div>
+                <p class="text-xs text-slate-400">智能穿戴设备并发采集 · 毫秒级流处理 · 数字孪生监控大屏</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-6 text-sm">
+            <!-- Connection Status Badges -->
+            <div class="flex items-center space-x-3 text-xs">
+                <div class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot" id="ws-dot"></span>
+                    <span class="text-slate-300" id="ws-status">实时数据通道就绪</span>
+                </div>
+                <div class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700">
+                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
+                    <span class="text-slate-300">系统运行正常</span>
+                </div>
+            </div>
+
+            <div class="text-right border-l border-slate-800 pl-4">
+                <div class="text-sm font-semibold text-slate-200" id="live-clock">--:--:--</div>
+                <div class="text-[11px] text-slate-400">北京时间 (UTC+8)</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Stat Metrics Row -->
+    <section class="grid grid-cols-6 gap-3.5 px-6 py-3 bg-slate-900/60 border-b border-slate-800/80">
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+            <div>
+                <div class="text-xs text-slate-400 font-medium">总注册设备</div>
+                <div class="text-xl font-bold text-white mt-0.5" id="metric-total">0</div>
+            </div>
+            <div class="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                <i data-lucide="cpu" class="w-5 h-5"></i>
+            </div>
+        </div>
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+            <div>
+                <div class="text-xs text-emerald-400 font-medium">实时在线</div>
+                <div class="text-xl font-bold text-emerald-400 mt-0.5" id="metric-online">0</div>
+            </div>
+            <div class="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                <i data-lucide="wifi" class="w-5 h-5"></i>
+            </div>
+        </div>
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+            <div>
+                <div class="text-xs text-amber-400 font-medium">移动巡航中</div>
+                <div class="text-xl font-bold text-amber-400 mt-0.5" id="metric-motion">0</div>
+            </div>
+            <div class="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                <i data-lucide="navigation" class="w-5 h-5"></i>
+            </div>
+        </div>
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+            <div>
+                <div class="text-xs text-slate-400 font-medium">离线休眠</div>
+                <div class="text-xl font-bold text-slate-400 mt-0.5" id="metric-offline">0</div>
+            </div>
+            <div class="w-9 h-9 rounded-lg bg-slate-500/10 text-slate-400 flex items-center justify-center">
+                <i data-lucide="moon" class="w-5 h-5"></i>
+            </div>
+        </div>
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+            <div>
+                <div class="text-xs text-rose-400 font-medium">低电量预警</div>
+                <div class="text-xl font-bold text-rose-400 mt-0.5" id="metric-battery">0</div>
+            </div>
+            <div class="w-9 h-9 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center">
+                <i data-lucide="battery-warning" class="w-5 h-5"></i>
+            </div>
+        </div>
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between cursor-pointer hover:border-red-500/40 transition-colors" onclick="switchTab('alerts')">
+            <div>
+                <div class="text-xs text-red-400 font-medium">紧急求助 / 跌倒</div>
+                <div class="text-xl font-bold text-red-500 mt-0.5" id="metric-alerts">0</div>
+            </div>
+            <div class="w-9 h-9 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center">
+                <i data-lucide="shield-alert" class="w-5 h-5"></i>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex overflow-hidden p-4 gap-4">
+        <!-- Left: GIS Map and Digital Twin HUD (2/3 width) -->
+        <section class="flex-[2] flex flex-col gap-3 min-w-0">
+            <!-- Map Container -->
+            <div class="flex-1 glass-panel rounded-2xl relative overflow-hidden flex flex-col p-2">
+                <div class="absolute top-4 left-4 z-20 flex items-center space-x-2">
+                    <select id="device-selector" onchange="onSelectedDeviceChange()" class="bg-slate-900/90 text-slate-100 text-xs rounded-lg px-3 py-1.5 border border-slate-700 shadow-xl focus:outline-none focus:border-cyan-500">
+                        <option value="">载入设备列表中...</option>
+                    </select>
+                    <button onclick="refreshCurrentTrack()" class="px-2.5 py-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs flex items-center space-x-1 shadow-lg">
+                        <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                        <span>刷新轨迹</span>
+                    </button>
+                    <button onclick="fitMapToDevice()" class="px-2.5 py-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs flex items-center space-x-1 shadow-lg">
+                        <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
+                        <span>聚焦目标</span>
+                    </button>
+                </div>
+
+                <!-- Leaflet Map Object -->
+                <div id="map"></div>
+            </div>
+
+            <!-- Device Telemetry Digital Twin HUD -->
+            <div class="h-28 glass-panel rounded-xl px-5 py-3 flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/20 to-cyan-500/20 border border-cyan-500/30 flex items-center justify-center">
+                        <i data-lucide="watch" class="w-6 h-6 text-cyan-400"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="font-bold text-base text-white" id="hud-name">--</span>
+                            <span class="px-2 py-0.5 text-[11px] rounded bg-slate-700 text-slate-400 font-medium" id="hud-online">离线</span>
+                            <span class="px-2 py-0.5 text-[11px] rounded bg-slate-800 text-slate-400 font-mono" id="hud-model">--</span>
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1 flex items-center space-x-4">
+                            <span>调制解调器: <b class="text-slate-300" id="hud-modem">--</b></span>
+                            <span>固件: <b class="text-slate-300" id="hud-fw">--</b></span>
+                            <span>最后心跳: <b class="text-slate-300" id="hud-last-seen">--</b></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Instant Sensor Readouts -->
+                <div class="flex items-center space-x-8 text-center">
+                    <div>
+                        <div class="text-[11px] text-slate-400">电池余量</div>
+                        <div class="text-lg font-bold text-slate-300 mt-0.5" id="hud-battery">--%</div>
+                        <div class="text-[10px] text-slate-500" id="hud-voltage">--V</div>
+                    </div>
+                    <div>
+                        <div class="text-[11px] text-slate-400">蜂窝信号</div>
+                        <div class="text-lg font-bold text-slate-300 mt-0.5" id="hud-signal">--</div>
+                        <div class="text-[10px] text-slate-500">4G LTE</div>
+                    </div>
+                    <div>
+                        <div class="text-[11px] text-slate-400">即时航速</div>
+                        <div class="text-lg font-bold text-slate-300 mt-0.5" id="hud-speed">0.0 km/h</div>
+                        <div class="text-[10px] text-slate-500" id="hud-motion">待机</div>
+                    </div>
+                    <div>
+                        <div class="text-[11px] text-slate-400">今日步数</div>
+                        <div class="text-lg font-bold text-slate-300 mt-0.5" id="hud-steps">0</div>
+                        <div class="text-[10px] text-slate-500">步</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right: Fleet / Alerts / AI Diary Tabs (1/3 width) -->
+        <section class="flex-1 glass-panel rounded-2xl flex flex-col overflow-hidden min-w-[340px]">
+            <!-- Tab Headers -->
+            <div class="flex border-b border-slate-800 bg-slate-900/60 p-1.5 gap-1">
+                <button onclick="switchTab('fleet')" id="tab-btn-fleet" class="flex-1 py-2 text-xs font-semibold rounded-lg bg-slate-800 text-cyan-400 flex items-center justify-center space-x-1.5 transition-colors">
+                    <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+                    <span>设备列表</span>
+                </button>
+                <button onclick="switchTab('alerts')" id="tab-btn-alerts" class="flex-1 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 flex items-center justify-center space-x-1.5 transition-colors">
+                    <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+                    <span>告警中心</span>
+                    <span id="badge-alert-count" class="hidden px-1.5 py-0.2 text-[10px] rounded-full bg-red-500 text-white font-bold">0</span>
+                </button>
+                <button onclick="switchTab('diary')" id="tab-btn-diary" class="flex-1 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 flex items-center justify-center space-x-1.5 transition-colors">
+                    <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                    <span>AI 语义日记</span>
+                </button>
+            </div>
+
+            <!-- Tab 1: Fleet Matrix List -->
+            <div id="tab-fleet" class="flex-1 overflow-y-auto p-4 space-y-3">
+                <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+                    <span>当前接入设备列表 (<span id="fleet-count">0</span>)</span>
+                    <button onclick="fetchFleetDevices()" class="text-cyan-400 hover:underline">刷新</button>
+                </div>
+                <div id="fleet-list-container" class="space-y-2.5">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+            <!-- Tab 2: Alerts Center -->
+            <div id="tab-alerts" class="flex-1 overflow-y-auto p-4 space-y-3 hidden">
+                <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+                    <span>未解除紧急事件</span>
+                    <button onclick="fetchAlerts()" class="text-cyan-400 hover:underline">刷新</button>
+                </div>
+                <div id="alerts-list-container" class="space-y-2.5">
+                    <!-- Populated via JS -->
+                </div>
+            </div>
+
+            <!-- Tab 3: AI Diary View -->
+            <div id="tab-diary" class="flex-1 overflow-y-auto p-4 flex flex-col hidden">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                    <div>
+                        <div class="text-xs text-slate-400">AI 语义出行生活纪要</div>
+                        <div class="text-sm font-bold text-white mt-0.5" id="diary-date-label">今日日记</div>
+                    </div>
+                    <button onclick="generateDiary()" class="px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center space-x-1 shadow-lg">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                        <span>生成/更新</span>
+                    </button>
+                </div>
+
+                <!-- Diary Body -->
+                <div id="diary-content" class="mt-4 flex-1 text-xs text-slate-300 leading-relaxed space-y-3">
+                    <div class="p-3 rounded-xl bg-slate-800/40 border border-slate-700/60">
+                        <div class="font-semibold text-cyan-300 mb-1" id="diary-title">日记准备就绪</div>
+                        <div id="diary-summary" class="text-slate-400">点击上方按钮，基于今日 GNSS 轨迹与 IMU 活跃度，由 AI 飞轮自动合成结构化行程总结。</div>
+                    </div>
+                    <div id="diary-narrative" class="prose prose-invert prose-xs max-w-none text-slate-300 whitespace-pre-line"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        let map = null;
+        let deviceMarkers = {};
+        let trackPolyline = null;
+        let selectedDeviceId = 'ego-link-001';
+        let devicesCache = [];
+        let ws = null;
+
+        // Initialize Map (GCJ-02 Amap Tiles for high accuracy without offset)
+        function initMap() {
+            // Default center: Shenzhen Nanshan Tech Park / Science Park
+            map = L.map('map', {
+                center: [22.5401, 113.9345],
+                zoom: 14,
+                zoomControl: false
+            });
+
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+            // High-performance AutoNavi/Amap tile layer
+            L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                subdomains: ['1', '2', '3', '4'],
+                maxZoom: 18,
+                attribution: '© 高德地图 AutoNavi'
+            }).addTo(map);
+        }
+
+        // Live Clock
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('live-clock').innerText = now.toLocaleTimeString('zh-CN', { hour12: false });
+        }, 1000);
+
+        // Tab Switching
+        function switchTab(tabId) {
+            ['fleet', 'alerts', 'diary'].forEach(t => {
+                const tabEl = document.getElementById(`tab-${t}`);
+                const btnEl = document.getElementById(`tab-btn-${t}`);
+                if (t === tabId) {
+                    tabEl.classList.remove('hidden');
+                    btnEl.className = 'flex-1 py-2 text-xs font-semibold rounded-lg bg-slate-800 text-cyan-400 flex items-center justify-center space-x-1.5 transition-colors';
+                } else {
+                    tabEl.classList.add('hidden');
+                    btnEl.className = 'flex-1 py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-slate-200 flex items-center justify-center space-x-1.5 transition-colors';
+                }
+            });
+            if (tabId === 'alerts') fetchAlerts();
+            if (tabId === 'diary') fetchLatestDiary();
+        }
+
+        // WebSocket Setup
+        function initWebSocket() {
+            const loc = window.location;
+            const protocol = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${loc.host}/ws/dashboard`;
+
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                document.getElementById('ws-dot').className = 'w-2 h-2 rounded-full bg-emerald-400 pulse-dot';
+                document.getElementById('ws-status').innerText = 'WebSocket 实时已连接';
+            };
+
+            ws.onclose = () => {
+                document.getElementById('ws-dot').className = 'w-2 h-2 rounded-full bg-rose-500';
+                document.getElementById('ws-status').innerText = 'WebSocket 连接中断，重试中...';
+                setTimeout(initWebSocket, 3000);
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    handleRealtimeEvent(msg.event, msg.data);
+                } catch(e) {
+                    console.log('WS msg:', event.data);
+                }
+            };
+        }
+
+        function handleRealtimeEvent(eventType, data) {
+            if (eventType === 'location_live') {
+                updateLiveLocationOnMap(data);
+                fetchFleetSummary();
+            } else if (eventType === 'alert_new') {
+                showToastAlert(data);
+                fetchFleetSummary();
+                fetchAlerts();
+            } else if (eventType === 'device_status' || eventType === 'device_updated') {
+                fetchFleetDevices();
+                fetchFleetSummary();
+            }
+        }
+
+        // API Calls
+        async function fetchFleetSummary() {
+            try {
+                const res = await fetch('/api/v1/fleet/summary');
+                const d = await res.json();
+                document.getElementById('metric-total').innerText = d.totalDevices;
+                document.getElementById('metric-online').innerText = d.onlineDevices;
+                document.getElementById('metric-motion').innerText = d.inMotionDevices;
+                document.getElementById('metric-offline').innerText = d.offlineDevices;
+                document.getElementById('metric-battery').innerText = d.lowBatteryDevices;
+                document.getElementById('metric-alerts').innerText = d.activeAlerts;
+
+                const alertBadge = document.getElementById('badge-alert-count');
+                if (d.activeAlerts > 0) {
+                    alertBadge.classList.remove('hidden');
+                    alertBadge.innerText = d.activeAlerts;
+                } else {
+                    alertBadge.classList.add('hidden');
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function fetchFleetDevices() {
+            try {
+                const res = await fetch('/api/v1/fleet/devices');
+                const list = await res.json();
+                devicesCache = list;
+                document.getElementById('fleet-count').innerText = list.length;
+
+                // Update Select element
+                const selector = document.getElementById('device-selector');
+                const prevVal = selector.value || selectedDeviceId;
+                selector.innerHTML = '';
+                list.forEach(dev => {
+                    const opt = document.createElement('option');
+                    opt.value = dev.deviceId;
+                    opt.innerText = `${dev.deviceName} (${dev.isOnline ? '🟢在线' : '⚪离线'})`;
+                    selector.appendChild(opt);
+                });
+                if (prevVal && list.some(d => d.deviceId === prevVal)) {
+                    selector.value = prevVal;
+                } else if (list.length > 0) {
+                    selector.value = list[0].deviceId;
+                    selectedDeviceId = list[0].deviceId;
+                }
+
+                // Render list in Tab 1
+                const container = document.getElementById('fleet-list-container');
+                container.innerHTML = '';
+                list.forEach(dev => {
+                    const isSel = dev.deviceId === selectedDeviceId;
+                    const card = document.createElement('div');
+                    card.className = `p-3 rounded-xl border cursor-pointer transition-all ${
+                        isSel ? 'bg-cyan-950/40 border-cyan-500/50 shadow-lg' : 'bg-slate-800/40 border-slate-700/60 hover:border-slate-600'
+                    }`;
+                    card.onclick = () => selectDevice(dev.deviceId);
+                    card.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 rounded-full ${dev.isOnline ? 'bg-emerald-400 pulse-dot' : 'bg-slate-500'}"></span>
+                                <span class="font-semibold text-white text-xs">${dev.deviceName}</span>
+                            </div>
+                            <span class="text-[10px] font-mono text-slate-400">${dev.hardwareModel}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-[11px] text-slate-400 mt-2">
+                            <span>电量: <b class="${dev.batteryPct <= 20 ? 'text-rose-400' : 'text-emerald-400'}">${dev.batteryPct || '--'}%</b></span>
+                            <span>状态: <b class="text-slate-300">${dev.motionState || '待机'}</b></span>
+                            <span>信号: <b class="text-cyan-400">${dev.signalRssi || '--'} CSQ</b></span>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+
+                // Update active device HUD
+                updateActiveDeviceHUD();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function selectDevice(devId) {
+            selectedDeviceId = devId;
+            document.getElementById('device-selector').value = devId;
+            updateActiveDeviceHUD();
+            fetchFleetDevices();
+            refreshCurrentTrack();
+        }
+
+        function onSelectedDeviceChange() {
+            selectDevice(document.getElementById('device-selector').value);
+        }
+
+        function updateActiveDeviceHUD() {
+            const dev = devicesCache.find(d => d.deviceId === selectedDeviceId);
+            if (!dev) return;
+            document.getElementById('hud-name').innerText = dev.deviceName || dev.deviceId;
+            document.getElementById('hud-model').innerText = dev.hardwareModel || '--';
+            document.getElementById('hud-modem').innerText = dev.modemModel || 'SIM7670G';
+            document.getElementById('hud-fw').innerText = dev.firmwareVersion || '--';
+            document.getElementById('hud-online').innerText = dev.isOnline ? '在线' : '离线';
+            document.getElementById('hud-online').className = `px-2 py-0.5 text-[11px] rounded font-medium ${
+                dev.isOnline ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'
+            }`;
+            document.getElementById('hud-battery').innerText = dev.batteryPct != null ? `${dev.batteryPct}%` : '--%';
+            document.getElementById('hud-battery').className = `text-lg font-bold mt-0.5 ${
+                dev.batteryPct != null ? (dev.batteryPct <= 20 ? 'text-rose-400' : 'text-emerald-400') : 'text-slate-300'
+            }`;
+            document.getElementById('hud-voltage').innerText = dev.batteryVoltage ? `${dev.batteryVoltage.toFixed(2)}V` : '--V';
+            document.getElementById('hud-signal').innerText = dev.signalRssi ? `${dev.signalRssi} CSQ` : '--';
+            document.getElementById('hud-signal').className = `text-lg font-bold mt-0.5 ${dev.signalRssi ? 'text-cyan-400' : 'text-slate-300'}`;
+            document.getElementById('hud-speed').innerText = dev.lastSpeed != null ? `${dev.lastSpeed.toFixed(1)} km/h` : '0.0 km/h';
+            document.getElementById('hud-motion').innerText = dev.motionState ? dev.motionState.toUpperCase() : 'STATIONARY';
+            document.getElementById('hud-steps').innerText = (dev.todayStepCount || 0).toLocaleString();
+
+            let lastSeenStr = '--';
+            if (dev.lastSeenAt) {
+                const seenDate = new Date(dev.lastSeenAt);
+                const now = new Date();
+                const diffSec = Math.floor((now - seenDate) / 1000);
+                if (diffSec < 60) {
+                    lastSeenStr = `${diffSec} 秒前`;
+                } else if (diffSec < 3600) {
+                    lastSeenStr = `${Math.floor(diffSec / 60)} 分钟前`;
+                } else {
+                    lastSeenStr = seenDate.toLocaleTimeString();
+                }
+            }
+            document.getElementById('hud-last-seen').innerText = lastSeenStr;
+        }
+
+        // Map Track Handling
+        async function refreshCurrentTrack() {
+            if (!selectedDeviceId) return;
+            try {
+                const res = await fetch(`/api/v1/tracks/${selectedDeviceId}/latest?limit=500`);
+                const points = await res.json();
+
+                if (trackPolyline) {
+                    map.removeLayer(trackPolyline);
+                }
+
+                if (points.length === 0) return;
+
+                const latLngs = points.map(p => [p.lat, p.lon]);
+                trackPolyline = L.polyline(latLngs, {
+                    color: '#06b6d4',
+                    weight: 4,
+                    opacity: 0.85,
+                    smoothFactor: 1
+                }).addTo(map);
+
+                if (latLngs.length > 0) {
+                    map.fitBounds(trackPolyline.getBounds(), { padding: [40, 40], maxZoom: 16 });
+                }
+
+                // Add or update marker at latest point
+                const latest = points[points.length - 1];
+                updateMarker(selectedDeviceId, latest.lat, latest.lon);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function updateMarker(devId, lat, lon) {
+            if (!deviceMarkers[devId]) {
+                const customIcon = L.divIcon({
+                    className: 'custom-pin',
+                    html: `<div class="w-7 h-7 rounded-full bg-cyan-500 border-2 border-white shadow-xl flex items-center justify-center text-white"><i data-lucide="crosshair" style="width:16px;height:16px;"></i></div>`,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+                deviceMarkers[devId] = L.marker([lat, lon], { icon: customIcon }).addTo(map);
+                lucide.createIcons();
+            } else {
+                deviceMarkers[devId].setLatLng([lat, lon]);
+            }
+        }
+
+        function fitMapToDevice() {
+            if (deviceMarkers[selectedDeviceId]) {
+                map.setView(deviceMarkers[selectedDeviceId].getLatLng(), 16);
+            }
+        }
+
+        function updateLiveLocationOnMap(data) {
+            if (data.deviceId === selectedDeviceId) {
+                updateMarker(data.deviceId, data.lat, data.lon);
+                if (trackPolyline) {
+                    trackPolyline.addLatLng([data.lat, data.lon]);
+                }
+            }
+        }
+
+        // Alerts
+        async function fetchAlerts() {
+            try {
+                const res = await fetch('/api/v1/alerts');
+                const list = await res.json();
+                const container = document.getElementById('alerts-list-container');
+                container.innerHTML = '';
+
+                if (list.length === 0) {
+                    container.innerHTML = `<div class="text-center py-8 text-slate-500 text-xs">暂无未解除紧急告警，系统运行平稳</div>`;
+                    return;
+                }
+
+                list.forEach(alert => {
+                    const card = document.createElement('div');
+                    card.className = "p-3 rounded-xl bg-red-950/40 border border-red-500/40 shadow-lg space-y-2";
+                    card.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white">${alert.alertType}</span>
+                            <span class="text-[11px] text-slate-400">${new Date(alert.occurredAt).toLocaleTimeString()}</span>
+                        </div>
+                        <div class="font-bold text-white text-xs">${alert.title}</div>
+                        <div class="text-[11px] text-slate-300">${alert.description}</div>
+                        <div class="pt-1 flex justify-end">
+                            <button onclick="resolveAlert(${alert.id})" class="px-2.5 py-1 bg-red-600 hover:bg-red-500 text-white text-xs font-medium rounded-lg">确认并解除</button>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function resolveAlert(alertId) {
+            try {
+                await fetch(`/api/v1/alerts/${alertId}/resolve`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ note: "演练测试解除" })
+                });
+                fetchAlerts();
+                fetchFleetSummary();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function showToastAlert(alert) {
+            alert(`🚨【紧急警报】${alert.title}\n设备: ${alert.deviceId}\n内容: ${alert.description}`);
+        }
+
+        // AI Diary
+        async function fetchLatestDiary() {
+            if (!selectedDeviceId) return;
+            try {
+                const res = await fetch(`/api/v1/diaries/${selectedDeviceId}`);
+                if (res.ok) {
+                    const list = await res.json();
+                    if (list && list.length > 0) {
+                        // Find the first diary with distance > 0 or latest
+                        const best = list.find(d => d.totalDistanceKm > 0) || list[0];
+                        renderDiary(best);
+                    } else {
+                        document.getElementById('diary-title').innerText = '今日 AI 日记尚未生成';
+                        document.getElementById('diary-summary').innerText = '已有定位轨迹记录，点击右上角【生成/更新】按钮即可由 AI 飞轮智能提炼全天纪要。';
+                        document.getElementById('diary-narrative').innerText = '';
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function generateDiary() {
+            if (!selectedDeviceId) return;
+            try {
+                document.getElementById('diary-summary').innerText = 'AI 正在分析全天轨迹与 IMU 频段，飞轮提炼中...';
+                const res = await fetch(`/api/v1/diaries/${selectedDeviceId}/generate`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({})
+                });
+                const d = await res.json();
+                renderDiary(d);
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function renderDiary(d) {
+            document.getElementById('diary-title').innerText = d.title || '今日出行生活日记';
+            document.getElementById('diary-summary').innerText = d.summary || '';
+            document.getElementById('diary-narrative').innerText = d.narrative || '';
+        }
+
+        // Startup Bootstrap
+        window.onload = async () => {
+            initMap();
+            lucide.createIcons();
+            initWebSocket();
+            await fetchFleetDevices();
+            await fetchFleetSummary();
+            refreshCurrentTrack();
+        };
+    </script>
+</body>
+</html>

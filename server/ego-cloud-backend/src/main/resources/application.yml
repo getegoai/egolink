@@ -1,0 +1,56 @@
+server:
+  port: ${SERVER_PORT:8080}
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+
+spring:
+  application:
+    name: ego-cloud-backend
+  datasource:
+    driver-class-name: org.mariadb.jdbc.Driver
+    url: jdbc:mariadb://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:egocloud}?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
+    username: ${DB_USER:egouser}
+    password: ${DB_PASSWORD:}
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 30
+      idle-timeout: 30000
+      max-lifetime: 1800000
+      connection-timeout: 10000
+      pool-name: EgoCloudHikariPool
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          batch_size: 50
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3000ms
+
+# Ego Cloud Custom Settings
+egocloud:
+  stream:
+    telemetry-key: "ego:stream:telemetry"
+    consumer-group: "ego-telemetry-workers"
+    consumer-name: "worker-1"
+    batch-size: 50
+    poll-timeout-ms: 2000
+  storage:
+    cold-data-dir: ${COLD_DATA_DIR:/opt/ego-cloud/data/cold}
+  security:
+    device-token: ${DEVICE_AUTH_TOKEN:}
+
+logging:
+  level:
+    root: INFO
+    com.egolink.cloud: INFO
+    org.springframework.web: INFO
