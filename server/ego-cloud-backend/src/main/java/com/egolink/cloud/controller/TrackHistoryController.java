@@ -6,8 +6,10 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/tracks")
@@ -39,5 +41,18 @@ public class TrackHistoryController {
 
         List<LocationPointDto> track = trackHistoryService.getLatestLocations(deviceId, limit);
         return ResponseEntity.ok(track);
+    }
+
+    @GetMapping("/{deviceId}/dates")
+    public ResponseEntity<List<Map<String, Object>>> getAvailableDates(
+            @PathVariable("deviceId") String deviceId) {
+        return ResponseEntity.ok(trackHistoryService.getAvailableDates(deviceId));
+    }
+
+    @GetMapping("/{deviceId}/date/{date}")
+    public ResponseEntity<List<LocationPointDto>> getTrackByDate(
+            @PathVariable("deviceId") String deviceId,
+            @PathVariable("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return ResponseEntity.ok(trackHistoryService.getTrackByDate(deviceId, date));
     }
 }

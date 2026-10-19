@@ -7,8 +7,8 @@ WORKDIR /build
 COPY pom.xml .
 COPY src ./src
 
-# Build artifact without running unit tests (clean & fast)
-RUN mvn clean package -DskipTests
+# Build artifact without running unit tests (with BuildKit Maven cache)
+RUN --mount=type=cache,target=/root/.m2 mvn clean package -DskipTests
 
 # Runtime Stage
 FROM eclipse-temurin:17-jre-alpine
@@ -25,4 +25,4 @@ USER egouser
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-Xms256m", "-Xmx2048m", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Xms256m", "-Xmx2048m", "-Duser.timezone=Asia/Shanghai", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]

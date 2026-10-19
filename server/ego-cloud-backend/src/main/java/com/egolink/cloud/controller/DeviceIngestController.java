@@ -126,24 +126,113 @@ public class DeviceIngestController {
                     packet.setDeviceId(deviceId);
                     packet.setTimestamp(nowMs);
 
+                    if (root.hasNonNull("fw_version")) {
+                        String fw = root.path("fw_version").asText("");
+                        if (!fw.isBlank()) {
+                            packet.setFirmwareVersion(fw);
+                        }
+                    }
+
                     String streamId = root.path("stream_id").asText("");
                     JsonNode payload = root.path("payload");
 
-                    if ("gnss".equals(streamId) || payload.has("latitude") || payload.has("lat")) {
-                        double lat = payload.has("latitude") ? payload.path("latitude").asDouble() : payload.path("lat").asDouble();
-                        double lon = payload.has("longitude") ? payload.path("longitude").asDouble() : payload.path("lon").asDouble();
+                    if ("gnss".equals(streamId) || payload.hasNonNull("latitude") || payload.hasNonNull("lat")) {
+                        if (payload.hasNonNull("satellites")) {
+                            packet.setSatellites(payload.path("satellites").asInt(0));
+                        }
+                        if (payload.hasNonNull("hdop")) {
+                            packet.setHdop(payload.path("hdop").asDouble());
+                        }
+                        double lat = payload.hasNonNull("latitude")
+                                ? payload.path("latitude").asDouble(0.0)
+                                : payload.path("lat").asDouble(0.0);
+                        double lon = payload.hasNonNull("longitude")
+                                ? payload.path("longitude").asDouble(0.0)
+                                : payload.path("lon").asDouble(0.0);
                         if (lat != 0.0 && lon != 0.0) {
                             packet.setLatitude(lat);
                             packet.setLongitude(lon);
-                            packet.setSpeed(payload.path("speed_mps").asDouble(payload.path("speed").asDouble(0.0)));
-                            packet.setAltitude(payload.path("altitude_m").asDouble(payload.path("alt").asDouble(0.0)));
-                            packet.setSatellites(payload.path("satellites").asInt(10));
+                            if (payload.hasNonNull("speed_mps")) {
+                                double kmh = Math.round(payload.path("speed_mps").asDouble(0.0) * 3.6 * 10.0) / 10.0;
+                                packet.setSpeed(kmh);
+                            } else if (payload.hasNonNull("speed")) {
+                                packet.setSpeed(payload.path("speed").asDouble(0.0));
+                            }
+                            if (payload.hasNonNull("altitude_m")) {
+                                packet.setAltitude(payload.path("altitude_m").asDouble(0.0));
+                            } else if (payload.hasNonNull("alt")) {
+                                packet.setAltitude(payload.path("alt").asDouble(0.0));
+                            }
+                            if (payload.hasNonNull("course_deg")) {
+                                packet.setHeading(payload.path("course_deg").asDouble(0.0));
+                            } else if (payload.hasNonNull("heading")) {
+                                packet.setHeading(payload.path("heading").asDouble(0.0));
+                            }
                         }
                     } else if ("power".equals(streamId)) {
-                        packet.setBattery(payload.path("battery_soc_percent").asInt(payload.path("battery").asInt(95)));
-                        packet.setBatteryVoltage(payload.path("battery_voltage_v").asDouble(payload.path("voltage").asDouble(4.15)));
+                        if (payload.hasNonNull("fuel_gauge_soc_percent")) {
+                            packet.setBattery(payload.path("fuel_gauge_soc_percent").asInt());
+                        } else if (payload.hasNonNull("battery_soc_percent")) {
+                            packet.setBattery(payload.path("battery_soc_percent").asInt());
+                        } else if (payload.hasNonNull("battery")) {
+                            packet.setBattery(payload.path("battery").asInt());
+                        }
+                        if (payload.hasNonNull("battery_millivolt")) {
+                            double volts = Math.round(payload.path("battery_millivolt").asDouble() / 10.0) / 100.0;
+                            packet.setBatteryVoltage(volts);
+                        } else if (payload.hasNonNull("battery_voltage_v")) {
+                            packet.setBatteryVoltage(payload.path("battery_voltage_v").asDouble());
+                        } else if (payload.hasNonNull("voltage")) {
+                            packet.setBatteryVoltage(payload.path("voltage").asDouble());
+                        }
+                        if (payload.hasNonNull("charging")) {
+                            packet.setIsCharging(payload.path("charging").asBoolean());
+                        }
+                    } else if ("lte".equals(streamId)) {
+                        if (payload.hasNonNull("rat")) {
+                            String rat = payload.path("rat").asText("LTE");
+                            packet.setNetworkType("LTE".equalsIgnoreCase(rat) ? "4G LTE" : rat);
+                        }
+                        if (payload.hasNonNull("rsrp")) {
+                            packet.setRsrp(payload.path("rsrp").asInt());
+                        }
+                        Integer parsedCsq = null;
+                        if (payload.hasNonNull("csq")) {
+                            parsedCsq = payload.path("csq").asInt();
+                        } else if (payload.path("at").isArray()) {
+                            for (JsonNode atEntry : payload.path("at")) {
+                                String resp = atEntry.path("response").asText("");
+                                int csqIdx = resp.indexOf("+CSQ:");
+                                if (csqIdx >= 0) {
+                                    String after = resp.substring(csqIdx + 5).trim();
+                                    int commaIdx = after.indexOf(',');
+                                    String numStr = (commaIdx > 0 ? after.substring(0, commaIdx) : after).trim();
+                                    try {
+                                        int val = Integer.parseInt(numStr);
+                                        if (val >= 0 && val <= 31) {
+                                            parsedCsq = val;
+                                            break;
+                                        }
+                                    } catch (NumberFormatException ignored) {
+                                    }
+                                }
+                            }
+                        }
+                        if (parsedCsq == null && payload.hasNonNull("rssi")) {
+                            int rssi = payload.path("rssi").asInt();
+                            parsedCsq = Math.max(0, Math.min(31, (rssi + 113) / 2));
+                        }
+                        if (parsedCsq != null) {
+                            packet.setRssi(parsedCsq);
+                        }
                     } else if ("device".equals(streamId)) {
-                        packet.setMotionState(payload.path("spatial_mobility").asText("stationary"));
+                        JsonNode egoState = payload.has("ego_state") ? payload.path("ego_state") : payload;
+                        if (egoState.hasNonNull("spatial_mobility")) {
+                            packet.setMotionState(egoState.path("spatial_mobility").asText());
+                        }
+                        if (egoState.hasNonNull("device_wear_state")) {
+                            packet.setDeviceWearState(egoState.path("device_wear_state").asText());
+                        }
                     }
 
                     ingestionQueueService.enqueuePacket(packet);

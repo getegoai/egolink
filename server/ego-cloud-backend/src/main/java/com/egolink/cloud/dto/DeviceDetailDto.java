@@ -16,8 +16,11 @@ public class DeviceDetailDto {
     private Double batteryVoltage;
     private Boolean isCharging;
     private Integer signalRssi;
+    private Integer signalRsrp;
     private String networkType;
     private String motionState;
+    private String deviceWearState;
+    private Double motionRms;
     private Integer todayStepCount;
     private Double lastLatGcj02;
     private Double lastLonGcj02;
@@ -66,11 +69,20 @@ public class DeviceDetailDto {
     public Integer getSignalRssi() { return signalRssi; }
     public void setSignalRssi(Integer signalRssi) { this.signalRssi = signalRssi; }
 
+    public Integer getSignalRsrp() { return signalRsrp; }
+    public void setSignalRsrp(Integer signalRsrp) { this.signalRsrp = signalRsrp; }
+
     public String getNetworkType() { return networkType; }
     public void setNetworkType(String networkType) { this.networkType = networkType; }
 
     public String getMotionState() { return motionState; }
     public void setMotionState(String motionState) { this.motionState = motionState; }
+
+    public String getDeviceWearState() { return deviceWearState; }
+    public void setDeviceWearState(String deviceWearState) { this.deviceWearState = deviceWearState; }
+
+    public Double getMotionRms() { return motionRms; }
+    public void setMotionRms(Double motionRms) { this.motionRms = motionRms; }
 
     public Integer getTodayStepCount() { return todayStepCount; }
     public void setTodayStepCount(Integer todayStepCount) { this.todayStepCount = todayStepCount; }
@@ -90,3 +102,4 @@ public class DeviceDetailDto {
     public String getLastLocationTime() { return lastLocationTime; }
     public void setLastLocationTime(String lastLocationTime) { this.lastLocationTime = lastLocationTime; }
 }
+

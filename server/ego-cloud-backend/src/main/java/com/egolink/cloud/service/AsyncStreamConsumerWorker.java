@@ -155,7 +155,8 @@ public class AsyncStreamConsumerWorker {
                     Device d = new Device();
                     d.setDeviceId(id);
                     d.setDeviceName("EgoLink-" + id);
-                    d.setHardwareModel("HW021_C1_ESP32MODEL");
+                    d.setHardwareModel("ESP32-S3 + SIM7670G");
+                    d.setModemModel("SIM7670G");
                     d.setCreatedAt(LocalDateTime.now());
                     return d;
                 })
@@ -163,12 +164,18 @@ public class AsyncStreamConsumerWorker {
 
         device.setLastSeenAt(LocalDateTime.now());
         device.setIsOnline(true);
+        if (pkt.getFirmwareVersion() != null && !pkt.getFirmwareVersion().isBlank()) {
+            device.setFirmwareVersion(pkt.getFirmwareVersion());
+        }
         if (pkt.getBattery() != null) device.setBatteryPct(pkt.getBattery());
         if (pkt.getBatteryVoltage() != null) device.setBatteryVoltage(pkt.getBatteryVoltage());
         if (pkt.getIsCharging() != null) device.setIsCharging(pkt.getIsCharging());
         if (pkt.getRssi() != null) device.setSignalRssi(pkt.getRssi());
+        if (pkt.getRsrp() != null) device.setSignalRsrp(pkt.getRsrp());
         if (pkt.getNetworkType() != null) device.setNetworkType(pkt.getNetworkType());
         if (pkt.getMotionState() != null) device.setMotionState(pkt.getMotionState());
+        if (pkt.getDeviceWearState() != null) device.setDeviceWearState(pkt.getDeviceWearState());
+        if (pkt.getMotionRms() != null) device.setMotionRms(pkt.getMotionRms());
         if (pkt.getStepCount() != null) device.setTodayStepCount(pkt.getStepCount());
 
         // Check for GNSS coordinate
@@ -176,6 +183,8 @@ public class AsyncStreamConsumerWorker {
         Double lon = pkt.getLongitude();
         if (lat != null && lon != null && Math.abs(lat) > 0.001 && Math.abs(lon) > 0.001) {
             double[] gcj = GeoUtils.wgs84ToGcj02(lat, lon);
+            device.setLastLatitude(lat);
+            device.setLastLongitude(lon);
             device.setLastLatGcj02(gcj[0]);
             device.setLastLonGcj02(gcj[1]);
             device.setLastSpeed(pkt.getSpeed() != null ? pkt.getSpeed() : 0.0);

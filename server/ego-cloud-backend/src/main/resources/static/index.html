@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EgoLink 智能穿戴物联云平台 | 路演大屏</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EgoLink 智慧穿戴守护云平台 | 监控与数字孪生中心</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Leaflet CSS & JS -->
@@ -19,7 +19,7 @@
             color: #f1f5f9;
         }
         .glass-panel {
-            background: rgba(15, 23, 42, 0.75);
+            background: rgba(15, 23, 42, 0.78);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.08);
@@ -29,190 +29,238 @@
         }
         @keyframes pulse-ring {
             0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(1.15); }
+            50% { opacity: 0.4; transform: scale(1.18); }
         }
         #map {
             width: 100%;
             height: 100%;
+            min-height: 340px;
             border-radius: 0.75rem;
             z-index: 10;
+        }
+        /* Range slider styling */
+        input[type=range].playback-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(51, 65, 85, 0.8);
+            height: 6px;
+            border-radius: 999px;
+        }
+        input[type=range].playback-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #22d3ee;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 8px rgba(34, 211, 238, 0.8);
         }
         /* Custom scrollbars */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
-        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.4); }
+        ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.45); }
     </style>
 </head>
-<body class="h-screen flex flex-col overflow-hidden text-slate-100">
+<body class="min-h-screen lg:h-screen flex flex-col overflow-y-auto lg:overflow-hidden text-slate-100">
 
     <!-- Top Navigation Bar -->
-    <header class="glass-panel px-6 py-3.5 flex items-center justify-between border-b border-slate-800 z-50">
-        <div class="flex items-center space-x-4">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+    <header class="glass-panel px-4 lg:px-6 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 z-50">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 lg:w-10 lg:h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
                 <i data-lucide="radio" class="w-5 h-5 text-white"></i>
             </div>
             <div>
-                <div class="flex items-center space-x-2.5">
-                    <h1 class="text-lg font-bold tracking-tight text-white">EgoLink 智慧穿戴守护云平台</h1>
-                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                <div class="flex items-center space-x-2">
+                    <h1 class="text-base lg:text-lg font-bold tracking-tight text-white">EgoLink 智慧穿戴守护云平台</h1>
+                    <span class="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                         正式环境
                     </span>
                 </div>
-                <p class="text-xs text-slate-400">智能穿戴设备并发采集 · 毫秒级流处理 · 数字孪生监控大屏</p>
+                <p class="text-[11px] text-slate-400 hidden sm:block">智能穿戴设备 4G Cat.1 实时遥测 · 历史轨迹回放 · AI 语义行程分析</p>
             </div>
         </div>
 
-        <div class="flex items-center space-x-6 text-sm">
+        <div class="flex items-center space-x-3 lg:space-x-5 text-sm">
             <!-- Connection Status Badges -->
-            <div class="flex items-center space-x-3 text-xs">
-                <div class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700">
+            <div class="flex items-center space-x-2 text-xs">
+                <div class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700">
                     <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-dot" id="ws-dot"></span>
-                    <span class="text-slate-300" id="ws-status">实时数据通道就绪</span>
+                    <span class="text-slate-300 text-[11px]" id="ws-status">实时通道就绪</span>
                 </div>
-                <div class="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700">
+                <div class="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700">
                     <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-400"></i>
-                    <span class="text-slate-300">系统运行正常</span>
+                    <span class="text-slate-300 text-[11px]">云端流处理正常</span>
                 </div>
             </div>
 
-            <div class="text-right border-l border-slate-800 pl-4">
-                <div class="text-sm font-semibold text-slate-200" id="live-clock">--:--:--</div>
-                <div class="text-[11px] text-slate-400">北京时间 (UTC+8)</div>
+            <div class="text-right border-l border-slate-800 pl-3 lg:pl-4">
+                <div class="text-xs lg:text-sm font-semibold text-slate-200 font-mono" id="live-clock">--:--:--</div>
+                <div class="text-[10px] text-slate-400">北京时间 (UTC+8)</div>
             </div>
         </div>
     </header>
 
     <!-- Stat Metrics Row -->
-    <section class="grid grid-cols-6 gap-3.5 px-6 py-3 bg-slate-900/60 border-b border-slate-800/80">
-        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 lg:gap-3.5 px-4 lg:px-6 py-2.5 bg-slate-900/60 border-b border-slate-800/80">
+        <div class="glass-panel rounded-xl p-2.5 lg:p-3 flex items-center justify-between">
             <div>
-                <div class="text-xs text-slate-400 font-medium">总注册设备</div>
-                <div class="text-xl font-bold text-white mt-0.5" id="metric-total">0</div>
+                <div class="text-[11px] text-slate-400 font-medium">总注册设备</div>
+                <div class="text-lg lg:text-xl font-bold text-white mt-0.5" id="metric-total">0</div>
             </div>
-            <div class="w-9 h-9 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
-                <i data-lucide="cpu" class="w-5 h-5"></i>
+            <div class="w-8 h-8 lg:w-9 lg:h-9 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                <i data-lucide="cpu" class="w-4 h-4 lg:w-5 lg:h-5"></i>
             </div>
         </div>
-        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+        <div class="glass-panel rounded-xl p-2.5 lg:p-3 flex items-center justify-between">
             <div>
-                <div class="text-xs text-emerald-400 font-medium">实时在线</div>
-                <div class="text-xl font-bold text-emerald-400 mt-0.5" id="metric-online">0</div>
+                <div class="text-[11px] text-emerald-400 font-medium">实时在线</div>
+                <div class="text-lg lg:text-xl font-bold text-emerald-400 mt-0.5" id="metric-online">0</div>
             </div>
-            <div class="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-                <i data-lucide="wifi" class="w-5 h-5"></i>
+            <div class="w-8 h-8 lg:w-9 lg:h-9 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                <i data-lucide="wifi" class="w-4 h-4 lg:w-5 lg:h-5"></i>
             </div>
         </div>
-        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+        <div class="glass-panel rounded-xl p-2.5 lg:p-3 flex items-center justify-between">
             <div>
-                <div class="text-xs text-amber-400 font-medium">移动巡航中</div>
-                <div class="text-xl font-bold text-amber-400 mt-0.5" id="metric-motion">0</div>
+                <div class="text-[11px] text-amber-400 font-medium">移动巡航中</div>
+                <div class="text-lg lg:text-xl font-bold text-amber-400 mt-0.5" id="metric-motion">0</div>
             </div>
-            <div class="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
-                <i data-lucide="navigation" class="w-5 h-5"></i>
+            <div class="w-8 h-8 lg:w-9 lg:h-9 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+                <i data-lucide="navigation" class="w-4 h-4 lg:w-5 lg:h-5"></i>
             </div>
         </div>
-        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+        <div class="glass-panel rounded-xl p-2.5 lg:p-3 flex items-center justify-between">
             <div>
-                <div class="text-xs text-slate-400 font-medium">离线休眠</div>
-                <div class="text-xl font-bold text-slate-400 mt-0.5" id="metric-offline">0</div>
+                <div class="text-[11px] text-slate-400 font-medium">离线休眠</div>
+                <div class="text-lg lg:text-xl font-bold text-slate-400 mt-0.5" id="metric-offline">0</div>
             </div>
-            <div class="w-9 h-9 rounded-lg bg-slate-500/10 text-slate-400 flex items-center justify-center">
-                <i data-lucide="moon" class="w-5 h-5"></i>
+            <div class="w-8 h-8 lg:w-9 lg:h-9 rounded-lg bg-slate-500/10 text-slate-400 flex items-center justify-center">
+                <i data-lucide="moon" class="w-4 h-4 lg:w-5 lg:h-5"></i>
             </div>
         </div>
-        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+        <div class="glass-panel rounded-xl p-2.5 lg:p-3 flex items-center justify-between">
             <div>
-                <div class="text-xs text-rose-400 font-medium">低电量预警</div>
-                <div class="text-xl font-bold text-rose-400 mt-0.5" id="metric-battery">0</div>
+                <div class="text-[11px] text-rose-400 font-medium">低电量预警</div>
+                <div class="text-lg lg:text-xl font-bold text-rose-400 mt-0.5" id="metric-battery">0</div>
             </div>
-            <div class="w-9 h-9 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center">
-                <i data-lucide="battery-warning" class="w-5 h-5"></i>
+            <div class="w-8 h-8 lg:w-9 lg:h-9 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center">
+                <i data-lucide="battery-warning" class="w-4 h-4 lg:w-5 lg:h-5"></i>
             </div>
         </div>
-        <div class="glass-panel rounded-xl p-3 flex items-center justify-between cursor-pointer hover:border-red-500/40 transition-colors" onclick="switchTab('alerts')">
+        <div class="glass-panel rounded-xl p-2.5 lg:p-3 flex items-center justify-between cursor-pointer hover:border-red-500/40 transition-colors" onclick="switchTab('alerts')">
             <div>
-                <div class="text-xs text-red-400 font-medium">紧急求助 / 跌倒</div>
-                <div class="text-xl font-bold text-red-500 mt-0.5" id="metric-alerts">0</div>
+                <div class="text-[11px] text-red-400 font-medium">紧急求助 / 跌倒</div>
+                <div class="text-lg lg:text-xl font-bold text-red-500 mt-0.5" id="metric-alerts">0</div>
             </div>
-            <div class="w-9 h-9 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center">
-                <i data-lucide="shield-alert" class="w-5 h-5"></i>
+            <div class="w-8 h-8 lg:w-9 lg:h-9 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center">
+                <i data-lucide="shield-alert" class="w-4 h-4 lg:w-5 lg:h-5"></i>
             </div>
         </div>
     </section>
 
     <!-- Main Workspace -->
-    <main class="flex-1 flex overflow-hidden p-4 gap-4">
-        <!-- Left: GIS Map and Digital Twin HUD (2/3 width) -->
+    <main class="flex-1 flex flex-col lg:flex-row lg:overflow-hidden p-3 lg:p-4 gap-3 lg:gap-4">
+        <!-- Left: GIS Map, Playback Controller, and Digital Twin HUD (2/3 width on desktop) -->
         <section class="flex-[2] flex flex-col gap-3 min-w-0">
             <!-- Map Container -->
-            <div class="flex-1 glass-panel rounded-2xl relative overflow-hidden flex flex-col p-2">
-                <div class="absolute top-4 left-4 z-20 flex items-center space-x-2">
-                    <select id="device-selector" onchange="onSelectedDeviceChange()" class="bg-slate-900/90 text-slate-100 text-xs rounded-lg px-3 py-1.5 border border-slate-700 shadow-xl focus:outline-none focus:border-cyan-500">
-                        <option value="">载入设备列表中...</option>
-                    </select>
-                    <button onclick="refreshCurrentTrack()" class="px-2.5 py-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs flex items-center space-x-1 shadow-lg">
-                        <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
-                        <span>刷新轨迹</span>
-                    </button>
-                    <button onclick="fitMapToDevice()" class="px-2.5 py-1.5 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs flex items-center space-x-1 shadow-lg">
-                        <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
-                        <span>聚焦目标</span>
-                    </button>
+            <div class="flex-1 glass-panel rounded-2xl relative overflow-hidden flex flex-col p-2 min-h-[380px] sm:min-h-[440px] lg:min-h-0">
+                <!-- Top Map Controls: Device Selector + Date Selector + Action Buttons -->
+                <div class="absolute top-3.5 left-3.5 right-3.5 z-20 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+                    <div class="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+                        <select id="device-selector" onchange="onSelectedDeviceChange()" class="bg-slate-900/95 text-slate-100 text-xs rounded-lg px-2.5 py-1.5 border border-slate-700 shadow-xl focus:outline-none focus:border-cyan-500">
+                            <option value="">载入设备中...</option>
+                        </select>
+                        <select id="track-date-selector" onchange="onTrackDateChange()" class="bg-slate-900/95 text-cyan-300 text-xs font-medium rounded-lg px-2.5 py-1.5 border border-cyan-500/40 shadow-xl focus:outline-none focus:border-cyan-400">
+                            <option value="latest">📌 最近轨迹 (实时跟随)</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-1.5 pointer-events-auto">
+                        <button onclick="refreshCurrentTrack()" class="px-2.5 py-1.5 rounded-lg bg-slate-900/95 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs flex items-center space-x-1 shadow-lg">
+                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                            <span class="hidden sm:inline">刷新轨迹</span>
+                        </button>
+                        <button onclick="fitMapToTrack()" class="px-2.5 py-1.5 rounded-lg bg-slate-900/95 hover:bg-slate-800 text-slate-200 border border-slate-700 text-xs flex items-center space-x-1 shadow-lg">
+                            <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
+                            <span class="hidden sm:inline">聚焦视野</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Leaflet Map Object -->
-                <div id="map"></div>
+                <div id="map" class="flex-1"></div>
+
+                <!-- Bottom Map Overlay: Interactive Track Playback Bar -->
+                <div id="playback-bar" class="absolute bottom-3.5 left-3.5 right-14 z-20 bg-slate-900/95 backdrop-blur-md border border-slate-700/90 rounded-xl px-3 py-2 shadow-2xl flex flex-wrap items-center gap-2.5">
+                    <button id="btn-play-toggle" onclick="togglePlayback()" class="px-2.5 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center space-x-1 transition-colors shrink-0">
+                        <span id="play-btn-text">▶ 轨迹回放</span>
+                    </button>
+
+                    <button onclick="cyclePlaybackSpeed()" id="btn-play-speed" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-[11px] font-mono font-semibold shrink-0" title="切换回放倍速">
+                        1x
+                    </button>
+
+                    <input id="playback-slider" type="range" min="0" max="0" value="0" oninput="onSliderScrub(this.value)" class="playback-slider flex-1 min-w-[100px] cursor-pointer" />
+
+                    <div class="flex items-center space-x-2 text-[11px] font-mono text-slate-300 shrink-0">
+                        <span id="playback-counter" class="text-cyan-400 font-semibold">0/0</span>
+                        <span class="text-slate-600">|</span>
+                        <span id="playback-timestamp" class="text-slate-200">--:--:--</span>
+                        <span id="playback-point-meta" class="hidden sm:inline text-slate-400">(0.0 km/h)</span>
+                    </div>
+                </div>
             </div>
 
             <!-- Device Telemetry Digital Twin HUD -->
-            <div class="h-28 glass-panel rounded-xl px-5 py-3 flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/20 to-cyan-500/20 border border-cyan-500/30 flex items-center justify-center">
-                        <i data-lucide="watch" class="w-6 h-6 text-cyan-400"></i>
+            <div class="glass-panel rounded-xl px-4 lg:px-5 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+                <div class="flex items-center space-x-3.5">
+                    <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500/20 to-cyan-500/20 border border-cyan-500/30 flex items-center justify-center shrink-0">
+                        <i data-lucide="watch" class="w-5 h-5 text-cyan-400"></i>
                     </div>
-                    <div>
-                        <div class="flex items-center space-x-2">
-                            <span class="font-bold text-base text-white" id="hud-name">--</span>
+                    <div class="min-w-0">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="font-bold text-sm lg:text-base text-white truncate" id="hud-name">--</span>
                             <span class="px-2 py-0.5 text-[11px] rounded bg-slate-700 text-slate-400 font-medium" id="hud-online">离线</span>
                             <span class="px-2 py-0.5 text-[11px] rounded bg-slate-800 text-slate-400 font-mono" id="hud-model">--</span>
                         </div>
-                        <div class="text-xs text-slate-400 mt-1 flex items-center space-x-4">
-                            <span>调制解调器: <b class="text-slate-300" id="hud-modem">--</b></span>
-                            <span>固件: <b class="text-slate-300" id="hud-fw">--</b></span>
-                            <span>最后心跳: <b class="text-slate-300" id="hud-last-seen">--</b></span>
+                        <div class="text-[11px] text-slate-400 mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <span>模组: <b class="text-slate-300" id="hud-modem">--</b></span>
+                            <span>固件: <b class="text-slate-300 font-mono" id="hud-fw">--</b></span>
+                            <span>最近上报: <b class="text-cyan-300" id="hud-last-seen">--</b></span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Instant Sensor Readouts -->
-                <div class="flex items-center space-x-8 text-center">
-                    <div>
-                        <div class="text-[11px] text-slate-400">电池余量</div>
-                        <div class="text-lg font-bold text-slate-300 mt-0.5" id="hud-battery">--%</div>
-                        <div class="text-[10px] text-slate-500" id="hud-voltage">--V</div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6 text-center border-t xl:border-t-0 border-slate-800/80 pt-2.5 xl:pt-0">
+                    <div class="bg-slate-900/40 xl:bg-transparent rounded-lg p-1.5 xl:p-0">
+                        <div class="text-[11px] text-slate-400">电池电量</div>
+                        <div class="text-base lg:text-lg font-bold text-slate-300 mt-0.5" id="hud-battery">--%</div>
+                        <div class="text-[10px] text-slate-400 font-mono" id="hud-voltage">--V</div>
                     </div>
-                    <div>
+                    <div class="bg-slate-900/40 xl:bg-transparent rounded-lg p-1.5 xl:p-0">
                         <div class="text-[11px] text-slate-400">蜂窝信号</div>
-                        <div class="text-lg font-bold text-slate-300 mt-0.5" id="hud-signal">--</div>
-                        <div class="text-[10px] text-slate-500">4G LTE</div>
+                        <div class="text-base lg:text-lg font-bold text-slate-300 mt-0.5" id="hud-signal">--</div>
+                        <div class="text-[10px] text-slate-400 font-mono" id="hud-rsrp">4G LTE</div>
                     </div>
-                    <div>
+                    <div class="bg-slate-900/40 xl:bg-transparent rounded-lg p-1.5 xl:p-0">
                         <div class="text-[11px] text-slate-400">即时航速</div>
-                        <div class="text-lg font-bold text-slate-300 mt-0.5" id="hud-speed">0.0 km/h</div>
-                        <div class="text-[10px] text-slate-500" id="hud-motion">待机</div>
+                        <div class="text-base lg:text-lg font-bold text-slate-300 mt-0.5" id="hud-speed">0.0 km/h</div>
+                        <div class="text-[10px] text-slate-400" id="hud-motion">静止待机</div>
                     </div>
-                    <div>
-                        <div class="text-[11px] text-slate-400">今日步数</div>
-                        <div class="text-lg font-bold text-slate-300 mt-0.5" id="hud-steps">0</div>
-                        <div class="text-[10px] text-slate-500">步</div>
+                    <div class="bg-slate-900/40 xl:bg-transparent rounded-lg p-1.5 xl:p-0">
+                        <div class="text-[11px] text-slate-400">佩戴与状态</div>
+                        <div class="text-base lg:text-lg font-bold text-cyan-300 mt-0.5" id="hud-wear">待检</div>
+                        <div class="text-[10px] text-slate-400" id="hud-steps">姿态正常</div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- Right: Fleet / Alerts / AI Diary Tabs (1/3 width) -->
-        <section class="flex-1 glass-panel rounded-2xl flex flex-col overflow-hidden min-w-[340px]">
+        <!-- Right: Fleet / Alerts / AI Diary Tabs (1/3 width on desktop) -->
+        <section class="flex-1 glass-panel rounded-2xl flex flex-col overflow-hidden min-h-[420px] lg:min-h-0 lg:min-w-[350px] lg:max-w-[440px]">
             <!-- Tab Headers -->
             <div class="flex border-b border-slate-800 bg-slate-900/60 p-1.5 gap-1">
                 <button onclick="switchTab('fleet')" id="tab-btn-fleet" class="flex-1 py-2 text-xs font-semibold rounded-lg bg-slate-800 text-cyan-400 flex items-center justify-center space-x-1.5 transition-colors">
@@ -233,11 +281,22 @@
             <!-- Tab 1: Fleet Matrix List -->
             <div id="tab-fleet" class="flex-1 overflow-y-auto p-4 space-y-3">
                 <div class="flex items-center justify-between text-xs text-slate-400 px-1">
-                    <span>当前接入设备列表 (<span id="fleet-count">0</span>)</span>
-                    <button onclick="fetchFleetDevices()" class="text-cyan-400 hover:underline">刷新</button>
+                    <span>已接入真实设备 (<span id="fleet-count">0</span>)</span>
+                    <button onclick="fetchFleetDevices()" class="text-cyan-400 hover:underline">刷新状态</button>
                 </div>
                 <div id="fleet-list-container" class="space-y-2.5">
                     <!-- Populated via JS -->
+                </div>
+
+                <!-- Quick Historical Sessions Summary inside Tab 1 -->
+                <div class="pt-3 border-t border-slate-800/80">
+                    <div class="flex items-center justify-between text-xs text-slate-400 mb-2 px-1">
+                        <span>外场实测轨迹归档日历</span>
+                        <span class="text-[11px] text-cyan-400" id="archive-dates-count">0 天记录</span>
+                    </div>
+                    <div id="fleet-dates-list" class="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                        <!-- Populated via JS -->
+                    </div>
                 </div>
             </div>
 
@@ -256,22 +315,49 @@
             <div id="tab-diary" class="flex-1 overflow-y-auto p-4 flex flex-col hidden">
                 <div class="flex items-center justify-between pb-3 border-b border-slate-800">
                     <div>
-                        <div class="text-xs text-slate-400">AI 语义出行生活纪要</div>
-                        <div class="text-sm font-bold text-white mt-0.5" id="diary-date-label">今日日记</div>
+                        <div class="text-xs text-slate-400">AI 语义行程与生活纪要</div>
+                        <div class="text-sm font-bold text-white mt-0.5" id="diary-date-label">选择或生成实测日记</div>
                     </div>
-                    <button onclick="generateDiary()" class="px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center space-x-1 shadow-lg">
+                    <button onclick="generateDiaryForSelectedDate()" class="px-3 py-1.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center space-x-1 shadow-lg shrink-0">
                         <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-                        <span>生成/更新</span>
+                        <span>生成/更新当日纪要</span>
                     </button>
                 </div>
 
-                <!-- Diary Body -->
-                <div id="diary-content" class="mt-4 flex-1 text-xs text-slate-300 leading-relaxed space-y-3">
-                    <div class="p-3 rounded-xl bg-slate-800/40 border border-slate-700/60">
-                        <div class="font-semibold text-cyan-300 mb-1" id="diary-title">日记准备就绪</div>
-                        <div id="diary-summary" class="text-slate-400">点击上方按钮，基于今日 GNSS 轨迹与 IMU 活跃度，由 AI 飞轮自动合成结构化行程总结。</div>
+                <!-- Date Quick Switcher Pills -->
+                <div class="mt-2.5">
+                    <div class="text-[11px] text-slate-400 mb-1.5">点击日期同步切换【地图轨迹回放】与【AI 语义纪要】：</div>
+                    <div id="diary-date-pills" class="flex flex-wrap gap-1.5">
+                        <!-- Populated via JS -->
                     </div>
-                    <div id="diary-narrative" class="prose prose-invert prose-xs max-w-none text-slate-300 whitespace-pre-line"></div>
+                </div>
+
+                <!-- Diary KPI Mini Cards -->
+                <div class="grid grid-cols-3 gap-2 mt-3">
+                    <div class="p-2 rounded-xl bg-slate-800/50 border border-slate-700/60 text-center">
+                        <div class="text-[10px] text-slate-400">当日里程</div>
+                        <div class="text-sm font-bold text-cyan-400 mt-0.5" id="diary-kpi-dist">-- km</div>
+                    </div>
+                    <div class="p-2 rounded-xl bg-slate-800/50 border border-slate-700/60 text-center">
+                        <div class="text-[10px] text-slate-400">等效步数</div>
+                        <div class="text-sm font-bold text-emerald-400 mt-0.5" id="diary-kpi-steps">-- 步</div>
+                    </div>
+                    <div class="p-2 rounded-xl bg-slate-800/50 border border-slate-700/60 text-center">
+                        <div class="text-[10px] text-slate-400">活跃时长</div>
+                        <div class="text-sm font-bold text-amber-400 mt-0.5" id="diary-kpi-active">-- 分钟</div>
+                    </div>
+                </div>
+
+                <!-- Diary Body -->
+                <div id="diary-content" class="mt-3 flex-1 text-xs text-slate-300 leading-relaxed space-y-3">
+                    <div class="p-3 rounded-xl bg-slate-800/40 border border-slate-700/60">
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                            <div class="font-semibold text-cyan-300" id="diary-title">日记准备就绪</div>
+                        </div>
+                        <div id="diary-summary" class="text-slate-400 text-[11px]">正在加载外场实测行程总结...</div>
+                        <div id="diary-tags" class="flex flex-wrap gap-1.5 mt-2"></div>
+                    </div>
+                    <div id="diary-narrative" class="p-3.5 rounded-xl bg-slate-900/50 border border-slate-800 text-slate-200 space-y-2 leading-relaxed"></div>
                 </div>
             </div>
         </section>
@@ -281,23 +367,78 @@
     <script>
         let map = null;
         let deviceMarkers = {};
-        let trackPolyline = null;
+        let startMarker = null;
+        let trackPolylineBg = null;
+        let trackPolylineProgress = null;
         let selectedDeviceId = 'ego-link-001';
+        let selectedTrackDate = 'latest'; // 'latest' or 'YYYY-MM-DD'
+        let activeDiaryDate = null;       // 'YYYY-MM-DD'
+        let availableTrackDates = [];     // [{date, pointCount, startTime, endTime}]
+        let currentTrackPoints = [];
+        let playbackIndex = 0;
+        let playbackTimer = null;
+        let playbackSpeed = 1; // 1x, 4x, 10x
         let devicesCache = [];
+        let diariesCache = [];
         let ws = null;
+
+        // Format motion state into readable Chinese
+        function formatMotionState(state) {
+            if (!state) return '静止待机';
+            const s = state.toLowerCase();
+            if (s === 'stationary' || s === 'still') return '静止待机';
+            if (s === 'walking' || s === 'walk') return '步行移动';
+            if (s === 'running' || s === 'run') return '跑步运动';
+            if (s === 'moving' || s === 'in_motion' || s === 'transit' || s === 'vehicle') return '移动巡航';
+            return state;
+        }
+
+        // Format wear state into readable Chinese
+        function formatWearState(wear) {
+            if (!wear) return '在线监测';
+            const w = wear.toLowerCase();
+            if (w.includes('tabletop') || w.includes('resting')) return '桌面静置';
+            if (w.includes('worn') || w.includes('wearing') || w.includes('active')) return '佩戴中';
+            if (w.includes('carried') || w.includes('pocket')) return '随身携带';
+            return wear;
+        }
+
+        // Simple Markdown to HTML renderer for AI Diary
+        function renderMarkdownHtml(md) {
+            if (!md) return '';
+            const lines = md.split('\n');
+            let html = '';
+            for (let rawLine of lines) {
+                let line = rawLine.trim();
+                if (!line) continue;
+                // Format inline bold and code
+                line = line
+                    .replace(/\*\*(.+?)\*\*/g, '<strong class="text-cyan-300 font-semibold">$1</strong>')
+                    .replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono text-[11px]">$1</code>');
+
+                if (line.startsWith('### ')) {
+                    html += `<h4 class="text-sm font-bold text-white pb-1 border-b border-slate-800">${line.substring(4)}</h4>`;
+                } else if (line.startsWith('- ')) {
+                    html += `<div class="flex items-start space-x-2 pl-1"><span class="text-cyan-400 font-bold mt-0.5">•</span><span class="flex-1">${line.substring(2)}</span></div>`;
+                } else if (line.startsWith('> ')) {
+                    html += `<div class="p-2.5 rounded-lg bg-cyan-950/30 border-l-2 border-cyan-400 text-slate-300 text-[11px] mt-2">${line.substring(2)}</div>`;
+                } else {
+                    html += `<p>${line}</p>`;
+                }
+            }
+            return html;
+        }
 
         // Initialize Map (GCJ-02 Amap Tiles for high accuracy without offset)
         function initMap() {
-            // Default center: Shenzhen Nanshan Tech Park / Science Park
             map = L.map('map', {
-                center: [22.5401, 113.9345],
-                zoom: 14,
+                center: [22.7522, 114.2279],
+                zoom: 15,
                 zoomControl: false
             });
 
             L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-            // High-performance AutoNavi/Amap tile layer
             L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
                 subdomains: ['1', '2', '3', '4'],
                 maxZoom: 18,
@@ -325,7 +466,7 @@
                 }
             });
             if (tabId === 'alerts') fetchAlerts();
-            if (tabId === 'diary') fetchLatestDiary();
+            if (tabId === 'diary') loadDiariesAndSyncView();
         }
 
         // WebSocket Setup
@@ -338,12 +479,12 @@
 
             ws.onopen = () => {
                 document.getElementById('ws-dot').className = 'w-2 h-2 rounded-full bg-emerald-400 pulse-dot';
-                document.getElementById('ws-status').innerText = 'WebSocket 实时已连接';
+                document.getElementById('ws-status').innerText = 'WebSocket 实时在线';
             };
 
             ws.onclose = () => {
                 document.getElementById('ws-dot').className = 'w-2 h-2 rounded-full bg-rose-500';
-                document.getElementById('ws-status').innerText = 'WebSocket 连接中断，重试中...';
+                document.getElementById('ws-status').innerText = '通道重连中...';
                 setTimeout(initWebSocket, 3000);
             };
 
@@ -361,6 +502,7 @@
             if (eventType === 'location_live') {
                 updateLiveLocationOnMap(data);
                 fetchFleetSummary();
+                fetchFleetDevices();
             } else if (eventType === 'alert_new') {
                 showToastAlert(data);
                 fetchFleetSummary();
@@ -429,28 +571,105 @@
                         isSel ? 'bg-cyan-950/40 border-cyan-500/50 shadow-lg' : 'bg-slate-800/40 border-slate-700/60 hover:border-slate-600'
                     }`;
                     card.onclick = () => selectDevice(dev.deviceId);
+                    const sigStr = dev.signalRssi != null
+                        ? `${dev.signalRssi} CSQ${dev.signalRsrp != null ? ' (' + dev.signalRsrp + 'dBm)' : ''}`
+                        : (dev.signalRsrp != null ? `${dev.signalRsrp} dBm` : '--');
                     card.innerHTML = `
                         <div class="flex items-center justify-between">
                             <div class="flex items-center space-x-2">
                                 <span class="w-2 h-2 rounded-full ${dev.isOnline ? 'bg-emerald-400 pulse-dot' : 'bg-slate-500'}"></span>
                                 <span class="font-semibold text-white text-xs">${dev.deviceName}</span>
                             </div>
-                            <span class="text-[10px] font-mono text-slate-400">${dev.hardwareModel}</span>
+                            <span class="text-[10px] font-mono text-slate-400">${dev.hardwareModel || '--'}</span>
                         </div>
                         <div class="flex items-center justify-between text-[11px] text-slate-400 mt-2">
-                            <span>电量: <b class="${dev.batteryPct <= 20 ? 'text-rose-400' : 'text-emerald-400'}">${dev.batteryPct || '--'}%</b></span>
-                            <span>状态: <b class="text-slate-300">${dev.motionState || '待机'}</b></span>
-                            <span>信号: <b class="text-cyan-400">${dev.signalRssi || '--'} CSQ</b></span>
+                            <span>电量: <b class="${dev.batteryPct != null && dev.batteryPct <= 20 ? 'text-rose-400' : 'text-emerald-400'}">${dev.batteryPct != null ? dev.batteryPct + '%' : '--'}</b></span>
+                            <span>状态: <b class="text-slate-200">${formatMotionState(dev.motionState)}</b></span>
+                            <span>信号: <b class="text-cyan-400">${sigStr}</b></span>
                         </div>
                     `;
                     container.appendChild(card);
                 });
 
-                // Update active device HUD
                 updateActiveDeviceHUD();
             } catch (e) {
                 console.error(e);
             }
+        }
+
+        async function fetchAvailableTrackDates() {
+            if (!selectedDeviceId) return;
+            try {
+                const res = await fetch(`/api/v1/tracks/${selectedDeviceId}/dates`);
+                if (!res.ok) return;
+                availableTrackDates = await res.json();
+
+                // Populate Map Track Date Selector
+                const dateSel = document.getElementById('track-date-selector');
+                const prevDate = selectedTrackDate || 'latest';
+                dateSel.innerHTML = `<option value="latest">📌 最近轨迹 (实时跟随)</option>`;
+                availableTrackDates.forEach(item => {
+                    const opt = document.createElement('option');
+                    opt.value = item.date;
+                    const timeWindow = (item.startTime && item.endTime) ? ` · ${item.startTime.slice(0,5)}~${item.endTime.slice(0,5)}` : '';
+                    opt.innerText = `📅 ${item.date} (${item.pointCount}点${timeWindow})`;
+                    dateSel.appendChild(opt);
+                });
+                if (prevDate === 'latest' || availableTrackDates.some(d => d.date === prevDate)) {
+                    dateSel.value = prevDate;
+                }
+
+                // Populate Tab 1 Archive Calendar List
+                document.getElementById('archive-dates-count').innerText = `${availableTrackDates.length} 天记录`;
+                const archiveContainer = document.getElementById('fleet-dates-list');
+                archiveContainer.innerHTML = '';
+                availableTrackDates.forEach(item => {
+                    const isSelected = selectedTrackDate === item.date;
+                    const row = document.createElement('div');
+                    row.className = `px-3 py-2 rounded-lg border text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                        isSelected
+                            ? 'bg-cyan-500/20 border-cyan-500/50 text-white'
+                            : 'bg-slate-800/30 border-slate-800 hover:border-slate-700 text-slate-300'
+                    }`;
+                    row.onclick = () => selectDateAndPlay(item.date);
+                    row.innerHTML = `
+                        <div class="flex items-center space-x-2">
+                            <span class="font-mono font-semibold text-cyan-300">${item.date}</span>
+                            <span class="text-[11px] text-slate-400">${item.startTime ? item.startTime.slice(0,5) + '~' + item.endTime.slice(0,5) : ''}</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-emerald-400">${item.pointCount} 点</span>
+                            <span class="text-[11px] text-cyan-400 hover:underline">回放 ▶</span>
+                        </div>
+                    `;
+                    archiveContainer.appendChild(row);
+                });
+
+                renderDiaryDatePills();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function selectDateAndPlay(dateStr) {
+            selectedTrackDate = dateStr;
+            activeDiaryDate = dateStr;
+            const dateSel = document.getElementById('track-date-selector');
+            if (dateSel) dateSel.value = dateStr;
+            fetchAvailableTrackDates();
+            refreshCurrentTrack(true);
+            loadDiariesAndSyncView();
+        }
+
+        function onTrackDateChange() {
+            const val = document.getElementById('track-date-selector').value;
+            selectedTrackDate = val;
+            if (val !== 'latest') {
+                activeDiaryDate = val;
+            }
+            fetchAvailableTrackDates();
+            refreshCurrentTrack(false);
+            loadDiariesAndSyncView();
         }
 
         function selectDevice(devId) {
@@ -458,7 +677,8 @@
             document.getElementById('device-selector').value = devId;
             updateActiveDeviceHUD();
             fetchFleetDevices();
-            refreshCurrentTrack();
+            fetchAvailableTrackDates();
+            refreshCurrentTrack(false);
         }
 
         function onSelectedDeviceChange() {
@@ -472,97 +692,231 @@
             document.getElementById('hud-model').innerText = dev.hardwareModel || '--';
             document.getElementById('hud-modem').innerText = dev.modemModel || 'SIM7670G';
             document.getElementById('hud-fw').innerText = dev.firmwareVersion || '--';
-            document.getElementById('hud-online').innerText = dev.isOnline ? '在线' : '离线';
+            document.getElementById('hud-online').innerText = dev.isOnline ? '实时在线' : '离线';
             document.getElementById('hud-online').className = `px-2 py-0.5 text-[11px] rounded font-medium ${
-                dev.isOnline ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700 text-slate-400'
+                dev.isOnline ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-400'
             }`;
+
             document.getElementById('hud-battery').innerText = dev.batteryPct != null ? `${dev.batteryPct}%` : '--%';
-            document.getElementById('hud-battery').className = `text-lg font-bold mt-0.5 ${
+            document.getElementById('hud-battery').className = `text-base lg:text-lg font-bold mt-0.5 ${
                 dev.batteryPct != null ? (dev.batteryPct <= 20 ? 'text-rose-400' : 'text-emerald-400') : 'text-slate-300'
             }`;
-            document.getElementById('hud-voltage').innerText = dev.batteryVoltage ? `${dev.batteryVoltage.toFixed(2)}V` : '--V';
-            document.getElementById('hud-signal').innerText = dev.signalRssi ? `${dev.signalRssi} CSQ` : '--';
-            document.getElementById('hud-signal').className = `text-lg font-bold mt-0.5 ${dev.signalRssi ? 'text-cyan-400' : 'text-slate-300'}`;
+            const voltText = dev.batteryVoltage != null ? `${dev.batteryVoltage.toFixed(2)}V` : '--V';
+            document.getElementById('hud-voltage').innerText = dev.isCharging ? `${voltText} ⚡充电中` : voltText;
+
+            document.getElementById('hud-signal').innerText = dev.signalRssi != null ? `${dev.signalRssi} CSQ` : '--';
+            document.getElementById('hud-signal').className = `text-base lg:text-lg font-bold mt-0.5 ${dev.signalRssi != null ? 'text-cyan-400' : 'text-slate-300'}`;
+            document.getElementById('hud-rsrp').innerText = dev.signalRsrp != null
+                ? `${dev.signalRsrp} dBm · ${dev.networkType || '4G LTE'}`
+                : (dev.networkType || '4G LTE');
+
             document.getElementById('hud-speed').innerText = dev.lastSpeed != null ? `${dev.lastSpeed.toFixed(1)} km/h` : '0.0 km/h';
-            document.getElementById('hud-motion').innerText = dev.motionState ? dev.motionState.toUpperCase() : 'STATIONARY';
-            document.getElementById('hud-steps').innerText = (dev.todayStepCount || 0).toLocaleString();
+            document.getElementById('hud-motion').innerText = formatMotionState(dev.motionState);
+
+            document.getElementById('hud-wear').innerText = formatWearState(dev.deviceWearState);
+            document.getElementById('hud-steps').innerText = dev.todayStepCount && dev.todayStepCount > 0
+                ? `今日 ${dev.todayStepCount.toLocaleString()} 步`
+                : '传感器连续监测';
 
             let lastSeenStr = '--';
             if (dev.lastSeenAt) {
                 const seenDate = new Date(dev.lastSeenAt);
                 const now = new Date();
-                const diffSec = Math.floor((now - seenDate) / 1000);
+                const diffSec = Math.max(0, Math.floor((now - seenDate) / 1000));
                 if (diffSec < 60) {
                     lastSeenStr = `${diffSec} 秒前`;
                 } else if (diffSec < 3600) {
                     lastSeenStr = `${Math.floor(diffSec / 60)} 分钟前`;
                 } else {
-                    lastSeenStr = seenDate.toLocaleTimeString();
+                    lastSeenStr = seenDate.toLocaleString('zh-CN', { hour12: false });
                 }
             }
             document.getElementById('hud-last-seen').innerText = lastSeenStr;
         }
 
-        // Map Track Handling
-        async function refreshCurrentTrack() {
+        // Map Track & Playback Handling
+        async function refreshCurrentTrack(autoStartPlay = false) {
             if (!selectedDeviceId) return;
+            stopPlayback();
             try {
-                const res = await fetch(`/api/v1/tracks/${selectedDeviceId}/latest?limit=500`);
-                const points = await res.json();
+                const url = (selectedTrackDate && selectedTrackDate !== 'latest')
+                    ? `/api/v1/tracks/${selectedDeviceId}/date/${selectedTrackDate}`
+                    : `/api/v1/tracks/${selectedDeviceId}/latest?limit=300`;
 
-                if (trackPolyline) {
-                    map.removeLayer(trackPolyline);
+                const res = await fetch(url);
+                const points = await res.json();
+                currentTrackPoints = Array.isArray(points) ? points : [];
+
+                if (trackPolylineBg) map.removeLayer(trackPolylineBg);
+                if (trackPolylineProgress) map.removeLayer(trackPolylineProgress);
+                if (startMarker) map.removeLayer(startMarker);
+
+                const slider = document.getElementById('playback-slider');
+                if (currentTrackPoints.length === 0) {
+                    slider.max = 0;
+                    slider.value = 0;
+                    document.getElementById('playback-counter').innerText = '0/0';
+                    document.getElementById('playback-timestamp').innerText = '暂无轨迹点';
+                    document.getElementById('playback-point-meta').innerText = '';
+                    return;
                 }
 
-                if (points.length === 0) return;
+                const latLngs = currentTrackPoints.map(p => [p.lat, p.lon]);
 
-                const latLngs = points.map(p => [p.lat, p.lon]);
-                trackPolyline = L.polyline(latLngs, {
+                // Full track baseline polyline
+                trackPolylineBg = L.polyline(latLngs, {
+                    color: '#38bdf8',
+                    weight: 3,
+                    opacity: 0.35,
+                    dashArray: '6, 6'
+                }).addTo(map);
+
+                // Highlighted progress polyline
+                trackPolylineProgress = L.polyline(latLngs, {
                     color: '#06b6d4',
-                    weight: 4,
-                    opacity: 0.85,
+                    weight: 4.5,
+                    opacity: 0.92,
                     smoothFactor: 1
                 }).addTo(map);
 
-                if (latLngs.length > 0) {
-                    map.fitBounds(trackPolyline.getBounds(), { padding: [40, 40], maxZoom: 16 });
-                }
+                // Start point marker
+                const firstPt = currentTrackPoints[0];
+                const startIcon = L.divIcon({
+                    className: 'start-pin',
+                    html: `<div class="px-1.5 py-0.5 rounded-full bg-emerald-500 border-2 border-white shadow-lg text-[10px] font-bold text-slate-950 whitespace-nowrap">起点</div>`,
+                    iconSize: [36, 20],
+                    iconAnchor: [18, 10]
+                });
+                startMarker = L.marker([firstPt.lat, firstPt.lon], { icon: startIcon }).addTo(map);
 
-                // Add or update marker at latest point
-                const latest = points[points.length - 1];
-                updateMarker(selectedDeviceId, latest.lat, latest.lon);
+                // Set slider to latest point by default (or 0 if autoStartPlay)
+                slider.max = currentTrackPoints.length - 1;
+                if (autoStartPlay && currentTrackPoints.length > 1) {
+                    setPlaybackStep(0);
+                    map.fitBounds(trackPolylineBg.getBounds(), { padding: [45, 45], maxZoom: 17 });
+                    startPlayback();
+                } else {
+                    setPlaybackStep(currentTrackPoints.length - 1);
+                    map.fitBounds(trackPolylineBg.getBounds(), { padding: [45, 45], maxZoom: 17 });
+                }
             } catch (e) {
                 console.error(e);
             }
         }
 
-        function updateMarker(devId, lat, lon) {
+        function setPlaybackStep(idx) {
+            if (!currentTrackPoints || currentTrackPoints.length === 0) return;
+            playbackIndex = Math.max(0, Math.min(idx, currentTrackPoints.length - 1));
+            const pt = currentTrackPoints[playbackIndex];
+
+            const slider = document.getElementById('playback-slider');
+            slider.value = playbackIndex;
+
+            document.getElementById('playback-counter').innerText = `${playbackIndex + 1}/${currentTrackPoints.length}`;
+            const tsStr = pt.timestamp ? pt.timestamp.replace('T', ' ').slice(0, 19) : '--:--:--';
+            document.getElementById('playback-timestamp').innerText = tsStr;
+            const spd = pt.speed != null ? pt.speed.toFixed(1) : '0.0';
+            const alt = pt.altitude != null ? `${pt.altitude.toFixed(0)}m` : '';
+            document.getElementById('playback-point-meta').innerText = `(${spd} km/h${alt ? ' · 海拔' + alt : ''})`;
+
+            // Update progress polyline up to playbackIndex
+            if (trackPolylineProgress) {
+                const subLatLngs = currentTrackPoints.slice(0, playbackIndex + 1).map(p => [p.lat, p.lon]);
+                trackPolylineProgress.setLatLngs(subLatLngs);
+            }
+
+            // Move active marker
+            updateMarker(selectedDeviceId, pt.lat, pt.lon, tsStr, spd);
+        }
+
+        function onSliderScrub(val) {
+            stopPlayback();
+            setPlaybackStep(parseInt(val, 10));
+        }
+
+        function togglePlayback() {
+            if (playbackTimer) {
+                stopPlayback();
+            } else {
+                if (playbackIndex >= currentTrackPoints.length - 1) {
+                    setPlaybackStep(0);
+                }
+                startPlayback();
+            }
+        }
+
+        function startPlayback() {
+            if (!currentTrackPoints || currentTrackPoints.length <= 1) return;
+            document.getElementById('play-btn-text').innerText = '⏸ 暂停回放';
+            const intervalMs = Math.max(40, Math.floor(320 / playbackSpeed));
+            playbackTimer = setInterval(() => {
+                if (playbackIndex < currentTrackPoints.length - 1) {
+                    setPlaybackStep(playbackIndex + 1);
+                } else {
+                    stopPlayback();
+                }
+            }, intervalMs);
+        }
+
+        function stopPlayback() {
+            if (playbackTimer) {
+                clearInterval(playbackTimer);
+                playbackTimer = null;
+            }
+            const btnText = document.getElementById('play-btn-text');
+            if (btnText) btnText.innerText = '▶ 轨迹回放';
+        }
+
+        function cyclePlaybackSpeed() {
+            if (playbackSpeed === 1) playbackSpeed = 4;
+            else if (playbackSpeed === 4) playbackSpeed = 10;
+            else playbackSpeed = 1;
+            document.getElementById('btn-play-speed').innerText = `${playbackSpeed}x`;
+            if (playbackTimer) {
+                stopPlayback();
+                startPlayback();
+            }
+        }
+
+        function updateMarker(devId, lat, lon, tsLabel = '', speedLabel = '') {
             if (!deviceMarkers[devId]) {
                 const customIcon = L.divIcon({
                     className: 'custom-pin',
-                    html: `<div class="w-7 h-7 rounded-full bg-cyan-500 border-2 border-white shadow-xl flex items-center justify-center text-white"><i data-lucide="crosshair" style="width:16px;height:16px;"></i></div>`,
+                    html: `<div class="w-7 h-7 rounded-full bg-cyan-500 border-2 border-white shadow-xl flex items-center justify-center text-white"><div class="w-2.5 h-2.5 rounded-full bg-white"></div></div>`,
                     iconSize: [28, 28],
                     iconAnchor: [14, 14]
                 });
                 deviceMarkers[devId] = L.marker([lat, lon], { icon: customIcon }).addTo(map);
-                lucide.createIcons();
             } else {
                 deviceMarkers[devId].setLatLng([lat, lon]);
             }
+            if (tsLabel) {
+                deviceMarkers[devId].bindTooltip(`<b>${tsLabel}</b><br/>航速: ${speedLabel} km/h`, {
+                    direction: 'top',
+                    offset: [0, -12]
+                });
+            }
         }
 
-        function fitMapToDevice() {
-            if (deviceMarkers[selectedDeviceId]) {
+        function fitMapToTrack() {
+            if (trackPolylineBg && currentTrackPoints.length > 0) {
+                map.fitBounds(trackPolylineBg.getBounds(), { padding: [45, 45], maxZoom: 17 });
+            } else if (deviceMarkers[selectedDeviceId]) {
                 map.setView(deviceMarkers[selectedDeviceId].getLatLng(), 16);
             }
         }
 
         function updateLiveLocationOnMap(data) {
-            if (data.deviceId === selectedDeviceId) {
-                updateMarker(data.deviceId, data.lat, data.lon);
-                if (trackPolyline) {
-                    trackPolyline.addLatLng([data.lat, data.lon]);
-                }
+            if (data.deviceId === selectedDeviceId && selectedTrackDate === 'latest') {
+                currentTrackPoints.push({
+                    lat: data.lat,
+                    lon: data.lon,
+                    speed: data.speed || 0,
+                    timestamp: new Date().toISOString()
+                });
+                if (trackPolylineBg) trackPolylineBg.addLatLng([data.lat, data.lon]);
+                if (trackPolylineProgress) trackPolylineProgress.addLatLng([data.lat, data.lon]);
+                setPlaybackStep(currentTrackPoints.length - 1);
             }
         }
 
@@ -575,7 +929,7 @@
                 container.innerHTML = '';
 
                 if (list.length === 0) {
-                    container.innerHTML = `<div class="text-center py-8 text-slate-500 text-xs">暂无未解除紧急告警，系统运行平稳</div>`;
+                    container.innerHTML = `<div class="text-center py-8 text-slate-500 text-xs">暂无未解除紧急告警，设备安全运行中</div>`;
                     return;
                 }
 
@@ -585,7 +939,7 @@
                     card.innerHTML = `
                         <div class="flex items-center justify-between">
                             <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-red-500 text-white">${alert.alertType}</span>
-                            <span class="text-[11px] text-slate-400">${new Date(alert.occurredAt).toLocaleTimeString()}</span>
+                            <span class="text-[11px] text-slate-400">${new Date(alert.occurredAt).toLocaleString('zh-CN', { hour12: false })}</span>
                         </div>
                         <div class="font-bold text-white text-xs">${alert.title}</div>
                         <div class="text-[11px] text-slate-300">${alert.description}</div>
@@ -605,7 +959,7 @@
                 await fetch(`/api/v1/alerts/${alertId}/resolve`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ note: "演练测试解除" })
+                    body: JSON.stringify({ note: "控制台确认解除" })
                 });
                 fetchAlerts();
                 fetchFleetSummary();
@@ -614,52 +968,125 @@
             }
         }
 
-        function showToastAlert(alert) {
-            alert(`🚨【紧急警报】${alert.title}\n设备: ${alert.deviceId}\n内容: ${alert.description}`);
+        function showToastAlert(alertObj) {
+            alert(`🚨【紧急警报】${alertObj.title}\n设备: ${alertObj.deviceId}\n内容: ${alertObj.description}`);
         }
 
-        // AI Diary
-        async function fetchLatestDiary() {
+        // AI Diary & Date Synchronization
+        function renderDiaryDatePills() {
+            const container = document.getElementById('diary-date-pills');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const dates = availableTrackDates.map(d => d.date);
+            if (!activeDiaryDate && dates.length > 0) {
+                // Default to 2026-08-28 or first date with >10 points
+                const richDate = availableTrackDates.find(d => d.pointCount >= 10) || availableTrackDates[0];
+                activeDiaryDate = richDate.date;
+            }
+
+            availableTrackDates.slice(0, 8).forEach(item => {
+                const isAct = activeDiaryDate === item.date;
+                const btn = document.createElement('button');
+                btn.className = `px-2.5 py-1 rounded-lg text-[11px] font-mono transition-colors border ${
+                    isAct
+                        ? 'bg-cyan-500 text-slate-950 font-bold border-cyan-400 shadow'
+                        : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:border-cyan-500/50'
+                }`;
+                btn.innerText = `${item.date.slice(5)} (${item.pointCount}点)`;
+                btn.onclick = () => {
+                    activeDiaryDate = item.date;
+                    selectedTrackDate = item.date;
+                    const dateSel = document.getElementById('track-date-selector');
+                    if (dateSel) dateSel.value = item.date;
+                    renderDiaryDatePills();
+                    refreshCurrentTrack(false);
+                    showOrGenerateDiaryForDate(item.date);
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        async function loadDiariesAndSyncView() {
             if (!selectedDeviceId) return;
             try {
                 const res = await fetch(`/api/v1/diaries/${selectedDeviceId}`);
                 if (res.ok) {
-                    const list = await res.json();
-                    if (list && list.length > 0) {
-                        // Find the first diary with distance > 0 or latest
-                        const best = list.find(d => d.totalDistanceKm > 0) || list[0];
-                        renderDiary(best);
-                    } else {
-                        document.getElementById('diary-title').innerText = '今日 AI 日记尚未生成';
-                        document.getElementById('diary-summary').innerText = '已有定位轨迹记录，点击右上角【生成/更新】按钮即可由 AI 飞轮智能提炼全天纪要。';
-                        document.getElementById('diary-narrative').innerText = '';
-                    }
+                    diariesCache = await res.json();
+                }
+                renderDiaryDatePills();
+                const targetDate = (selectedTrackDate && selectedTrackDate !== 'latest')
+                    ? selectedTrackDate
+                    : (activeDiaryDate || (availableTrackDates[0] && availableTrackDates[0].date));
+                if (targetDate) {
+                    activeDiaryDate = targetDate;
+                    renderDiaryDatePills();
+                    await showOrGenerateDiaryForDate(targetDate);
                 }
             } catch (e) {
                 console.error(e);
             }
         }
 
-        async function generateDiary() {
+        async function showOrGenerateDiaryForDate(dateStr) {
+            document.getElementById('diary-date-label').innerText = `${dateStr} 实测行程纪要`;
+            const existing = diariesCache.find(d => d.diaryDate === dateStr);
+            if (existing && existing.totalDistanceKm > 0) {
+                renderDiary(existing);
+            } else {
+                await generateDiaryForSelectedDate(dateStr);
+            }
+        }
+
+        async function generateDiaryForSelectedDate(explicitDate) {
             if (!selectedDeviceId) return;
+            const targetDate = explicitDate || activeDiaryDate || (selectedTrackDate !== 'latest' ? selectedTrackDate : null);
             try {
-                document.getElementById('diary-summary').innerText = 'AI 正在分析全天轨迹与 IMU 频段，飞轮提炼中...';
+                document.getElementById('diary-summary').innerText = 'AI 正在聚合分析当日 GNSS 轨迹与运动特征...';
+                const payload = targetDate ? { date: targetDate } : {};
                 const res = await fetch(`/api/v1/diaries/${selectedDeviceId}/generate`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({})
+                    body: JSON.stringify(payload)
                 });
-                const d = await res.json();
-                renderDiary(d);
+                if (res.ok) {
+                    const d = await res.json();
+                    const idx = diariesCache.findIndex(item => item.diaryDate === d.diaryDate);
+                    if (idx >= 0) diariesCache[idx] = d;
+                    else diariesCache.unshift(d);
+                    renderDiary(d);
+                }
             } catch (e) {
                 console.error(e);
             }
         }
 
         function renderDiary(d) {
-            document.getElementById('diary-title').innerText = d.title || '今日出行生活日记';
+            document.getElementById('diary-date-label').innerText = `${d.diaryDate || ''} 实测行程纪要`;
+            document.getElementById('diary-title').innerText = d.title || '出行生活纪要';
             document.getElementById('diary-summary').innerText = d.summary || '';
-            document.getElementById('diary-narrative').innerText = d.narrative || '';
+            document.getElementById('diary-kpi-dist').innerText = `${(d.totalDistanceKm || 0).toFixed(2)} km`;
+            document.getElementById('diary-kpi-steps').innerText = `${(d.totalStepCount || 0).toLocaleString()} 步`;
+            document.getElementById('diary-kpi-active').innerText = `${d.totalActiveMinutes || 0} 分钟`;
+
+            // Render milestone tags
+            const tagsContainer = document.getElementById('diary-tags');
+            tagsContainer.innerHTML = '';
+            if (d.keyMilestonesJson) {
+                try {
+                    const tags = JSON.parse(d.keyMilestonesJson);
+                    if (Array.isArray(tags)) {
+                        tags.forEach(t => {
+                            const span = document.createElement('span');
+                            span.className = 'px-2 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-medium';
+                            span.innerText = t;
+                            tagsContainer.appendChild(span);
+                        });
+                    }
+                } catch ( ignored ) {}
+            }
+
+            document.getElementById('diary-narrative').innerHTML = renderMarkdownHtml(d.narrative || '');
         }
 
         // Startup Bootstrap
@@ -669,7 +1096,8 @@
             initWebSocket();
             await fetchFleetDevices();
             await fetchFleetSummary();
-            refreshCurrentTrack();
+            await fetchAvailableTrackDates();
+            await refreshCurrentTrack(false);
         };
     </script>
 </body>

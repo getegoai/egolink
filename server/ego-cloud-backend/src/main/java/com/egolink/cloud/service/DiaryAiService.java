@@ -50,23 +50,54 @@ public class DiaryAiService {
 
         double totalDistanceKm = 0.0;
         int maxSteps = 0;
-        int activeMinutes = 0;
+        int movingPoints = 0;
+        double maxSpeedKmh = 0.0;
+        Double minAlt = null;
+        Double maxAlt = null;
         DeviceLocation prev = null;
 
         for (DeviceLocation loc : locations) {
             if (prev != null && loc.getLatWgs84() != null && prev.getLatWgs84() != null) {
-                totalDistanceKm += calculateDistanceKm(
+                double segKm = calculateDistanceKm(
                         prev.getLatWgs84(), prev.getLonWgs84(),
                         loc.getLatWgs84(), loc.getLonWgs84()
                 );
+                // Filter unrealistic single-hop GPS drift (> 2km jump in a single sample)
+                if (segKm < 2.0) {
+                    totalDistanceKm += segKm;
+                }
             }
             if (loc.getStepCount() != null && loc.getStepCount() > maxSteps) {
                 maxSteps = loc.getStepCount();
             }
-            if (loc.getSpeed() != null && loc.getSpeed() > 1.5) {
-                activeMinutes += 1; // Approximate active time
+            if (loc.getSpeed() != null) {
+                if (loc.getSpeed() > maxSpeedKmh && loc.getSpeed() < 150.0) {
+                    maxSpeedKmh = loc.getSpeed();
+                }
+                if (loc.getSpeed() > 1.0) {
+                    movingPoints++;
+                }
+            }
+            if (loc.getAltitude() != null && loc.getAltitude() != 0.0) {
+                minAlt = (minAlt == null) ? loc.getAltitude() : Math.min(minAlt, loc.getAltitude());
+                maxAlt = (maxAlt == null) ? loc.getAltitude() : Math.max(maxAlt, loc.getAltitude());
             }
             prev = loc;
+        }
+
+        int activeMinutes = 0;
+        if (locations.size() >= 2) {
+            LocalDateTime firstTs = locations.get(0).getTimestamp();
+            LocalDateTime lastTs = locations.get(locations.size() - 1).getTimestamp();
+            long spanMinutes = Math.max(1, java.time.Duration.between(firstTs, lastTs).toMinutes());
+            activeMinutes = (int) Math.min(spanMinutes, Math.max(movingPoints / 2, Math.round(totalDistanceKm * 15)));
+            if (activeMinutes == 0 && !locations.isEmpty()) {
+                activeMinutes = (int) Math.min(spanMinutes, Math.max(1, locations.size() / 4));
+            }
+        }
+        if (maxSteps == 0 && totalDistanceKm > 0.05) {
+            // Estimate equivalent walking steps (~1300 steps per km for pedestrian segments)
+            maxSteps = (int) Math.round(Math.min(totalDistanceKm, 15.0) * 1320);
         }
 
         // Formulate narrative and highlights
@@ -74,37 +105,43 @@ public class DiaryAiService {
         String title = String.format("%s 行程与生活纪要", dateStr);
 
         StringBuilder narrative = new StringBuilder();
-        narrative.append(String.format("### 📅 %s 日记回顾\n\n", dateStr));
-        narrative.append(String.format("今日陪伴佩戴者共移动 **%.2f** 公里，记录有效定位点 **%d** 个，累计健康步数约 **%d** 步。\n\n",
-                totalDistanceKm, locations.size(), maxSteps));
+        narrative.append(String.format("### 📅 %s 实测行程与行为纪要\n\n", dateStr));
+        narrative.append(String.format("当日设备共记录有效 GNSS 轨迹点 **%d** 个，累计移动里程 **%.2f km**，活跃观测时长约 **%d 分钟**（等效步数约 **%d** 步）。\n\n",
+                locations.size(), totalDistanceKm, activeMinutes, maxSteps));
 
         if (locations.isEmpty()) {
-            narrative.append("今天设备处于待机或室内静止状态，未记录到显著室外位移轨迹。");
+            narrative.append("当日设备处于室内待机或静置充电状态，未产生室外 GNSS 轨迹点。");
         } else {
             DeviceLocation firstLoc = locations.get(0);
             DeviceLocation lastLoc = locations.get(locations.size() - 1);
-            narrative.append(String.format("- **晨间出发**：约 %s 开始记录，定位处于 (%.4f, %.4f)。\n",
-                    firstLoc.getTimestamp().toLocalTime().toString().substring(0, 5),
-                    firstLoc.getLatGcj02(), firstLoc.getLonGcj02()));
+            String startStr = firstLoc.getTimestamp().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+            String endStr = lastLoc.getTimestamp().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+            narrative.append(String.format("- **起始记录 (%s)**：切入卫星定位状态，起点坐标 GCJ-02 `(%.5f, %.5f)`。\n",
+                    startStr, firstLoc.getLatGcj02(), firstLoc.getLonGcj02()));
 
-            narrative.append(String.format("- **全天巡航**：平均移动活跃指数良好，全天活跃移动时长累计约 %d 分钟。\n",
-                    Math.max(activeMinutes, (int)(totalDistanceKm * 12))));
+            narrative.append(String.format("- **运动特征分析**：有效移动采样点 **%d** 个，峰值移动速率 **%.1f km/h**",
+                    movingPoints, maxSpeedKmh));
+            if (minAlt != null && maxAlt != null) {
+                narrative.append(String.format("，海拔区间 **%.1f m ~ %.1f m**。\n", minAlt, maxAlt));
+            } else {
+                narrative.append("。\n");
+            }
 
-            narrative.append(String.format("- **夜间收尾**：约 %s 结束主要移动，停留在 (%.4f, %.4f)。\n",
-                    lastLoc.getTimestamp().toLocalTime().toString().substring(0, 5),
-                    lastLoc.getLatGcj02(), lastLoc.getLonGcj02()));
+            narrative.append(String.format("- **收尾位置 (%s)**：完成当日轨迹采集，终点坐标 GCJ-02 `(%.5f, %.5f)`。\n",
+                    endStr, lastLoc.getLatGcj02(), lastLoc.getLonGcj02()));
         }
 
-        narrative.append("\n> **AI 飞轮洞察**：全天行为轨迹连续平稳，硬件 LTE Cat.1 与 GNSS 定位表现稳健，未发生异常长时离线。");
+        narrative.append("\n> **AI 语义洞察**：基于 `egolink.collection.v1` 连续外场采样帧聚合分析，设备 4G Cat.1 链路与 GNSS 定位收敛状态稳定，可点击左侧地图「轨迹回放」查看逐点动态还原。");
 
-        String summary = String.format("全天行程 %.2f 公里，步数 %d，轨迹点 %d 个，整体活跃健康。",
-                totalDistanceKm, maxSteps, locations.size());
+        String summary = String.format("里程 %.2f km · 轨迹点 %d 个 · 活跃 %d 分钟 · 峰值 %.1f km/h",
+                totalDistanceKm, locations.size(), activeMinutes, maxSpeedKmh);
 
         List<String> tags = new ArrayList<>();
-        if (totalDistanceKm > 5.0) tags.add("长距离移动");
-        if (maxSteps > 6000) tags.add("步数达标");
-        tags.add("Cat.1物联巡航");
-        tags.add("日常记录");
+        if (locations.size() >= 100) tags.add("高密外场采集");
+        if (totalDistanceKm >= 1.0) tags.add("户外连续移动");
+        else if (!locations.isEmpty()) tags.add("定点/短途测试");
+        tags.add("Cat.1 遥测在线");
+        tags.add("GNSS 轨迹归档");
 
         DailyDiary diary = diaryRepository.findByDeviceIdAndDiaryDate(deviceId, date)
                 .orElseGet(() -> {

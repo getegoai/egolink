@@ -71,7 +71,7 @@ public class FleetService {
             Device d = new Device();
             d.setDeviceId(deviceId);
             d.setDeviceName(name != null ? name : "EgoLink-" + deviceId);
-            d.setHardwareModel(hardwareModel != null ? hardwareModel : "HW021_C1_ESP32MODEL");
+            d.setHardwareModel(hardwareModel != null ? hardwareModel : "ESP32-S3 + SIM7670G");
             d.setCreatedAt(LocalDateTime.now());
             d.setIsOnline(false);
             return d;
@@ -109,8 +109,11 @@ public class FleetService {
         dto.setBatteryVoltage(dev.getBatteryVoltage());
         dto.setIsCharging(dev.getIsCharging());
         dto.setSignalRssi(dev.getSignalRssi());
+        dto.setSignalRsrp(dev.getSignalRsrp());
         dto.setNetworkType(dev.getNetworkType());
         dto.setMotionState(dev.getMotionState());
+        dto.setDeviceWearState(dev.getDeviceWearState());
+        dto.setMotionRms(dev.getMotionRms());
         dto.setTodayStepCount(dev.getTodayStepCount());
         dto.setLastLatGcj02(dev.getLastLatGcj02());
         dto.setLastLonGcj02(dev.getLastLonGcj02());

@@ -62,6 +62,18 @@ public class TelemetryPacketDto {
     @JsonAlias({"button", "key_event", "event"})
     private String event;
 
+    @JsonAlias({"fw_version", "firmware_version", "fw"})
+    private String firmwareVersion;
+
+    @JsonAlias({"rsrp", "signal_rsrp"})
+    private Integer rsrp;
+
+    @JsonAlias({"device_wear_state", "wear_state"})
+    private String deviceWearState;
+
+    @JsonAlias({"motion_rms"})
+    private Double motionRms;
+
     @JsonAlias({"raw_imu", "imu_batch", "imu"})
     private List<Map<String, Object>> rawImu;
 
@@ -119,6 +131,19 @@ public class TelemetryPacketDto {
     public String getEvent() { return event; }
     public void setEvent(String event) { this.event = event; }
 
+    public String getFirmwareVersion() { return firmwareVersion; }
+    public void setFirmwareVersion(String firmwareVersion) { this.firmwareVersion = firmwareVersion; }
+
+    public Integer getRsrp() { return rsrp; }
+    public void setRsrp(Integer rsrp) { this.rsrp = rsrp; }
+
+    public String getDeviceWearState() { return deviceWearState; }
+    public void setDeviceWearState(String deviceWearState) { this.deviceWearState = deviceWearState; }
+
+    public Double getMotionRms() { return motionRms; }
+    public void setMotionRms(Double motionRms) { this.motionRms = motionRms; }
+
     public List<Map<String, Object>> getRawImu() { return rawImu; }
     public void setRawImu(List<Map<String, Object>> rawImu) { this.rawImu = rawImu; }
 }
+
