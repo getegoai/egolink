@@ -1,12 +1,41 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-23
-last_verified: 2026-09-23
-reviewed_at: 2026-09-23
+decision_updated: 2026-10-22
+last_verified: 2026-10-22
+reviewed_at: 2026-10-22
 verified_by: founder/gemini
 ---
 
 # Ego Link Current Status
+
+## 2026-10-21 Custom Prototype `PCB1` Integrated P0 Runtime & Live Carrier Verification
+
+Following hardware bring-up, the live **China Mobile SIM card** and **SanDisk 64GB TF card** were inserted into `CON1` on `PCB1` (`HW021_C1_ESP32MODEL_VR00`, `ESP32-S3R8` MAC `02:00:00:00:00:02`). The firmware was upgraded with the 4MB partition table ([partitions_pcb1_4mb.csv](../../firmware/hw021_pcb1_bringup/partitions_pcb1_4mb.csv)), [ego_state_engine](../../firmware/mqtt_heartbeat/components/ego_state_engine/include/ego_state_engine.h), and [sim7670_cellular_call](../../firmware/mqtt_heartbeat/components/sim7670_cellular_call/include/sim7670_cellular_call.h), and tested live on `COM8` ([full serial log](../../reports/board_validation/pcb1_bringup_20261020/pcb1_integrated_p0_runtime_20261021.log)):
+
+- **Verified working on `PCB1` hardware (`COM8`, `2026-10-21T17:51:33+08:00` - `2026-10-22T12:26:00+08:00`)**:
+  - **4MB Partition Layout**: `factory` (`1536KB`), `ego_collection` (`1024KB`), `ego_media` (`1408KB`), and `ego_outbox` (`64KB`) partitions discovered and verified via `esp_partition_find_first()`;
+  - **Local-First TF Card Black Box Storage (`ego_blackbox`)**: In 1-bit SDMMC mode on `CON1`, cleanly formatted and mounted 64GB card (`SC64G`, `60891 MB` capacity, `60890 MB` free) to FAT32 with 32KB clusters. Automatically creates directory hierarchy (`/sdcard/ego_blackbox/sessions/`, `/sdcard/ego_blackbox/alerts/`). High-resolution sensor & inference streams (IMU 3-axis accel, RMS, sample rate, battery, LTE RSRP, GNSS, Ego-State classifications, cryptographic digests, CRC32) continuously append to JSONL session files (`sess_XXXX.jsonl`). Immediate emergency flush and dedicated alert logging to `/sdcard/ego_blackbox/alerts/events.jsonl` verified on SOS and voice call. Interactive CLI commands (`sd status`, `sd ls`, `sd cat`, `sd sync`) fully operational;
+  - **Offline Telemetry Caching & Cloud Breakpoint Resumption (`ego_outbox_sync`)**: Persistent FIFO Outbox queue on TF card (`/sdcard/ego_blackbox/outbox/queue.jsonl`) ensuring zero data loss during carrier outages. When offline (or sim-offline), telemetry automatically diverts to the outbox queue; upon reconnection, the background worker automatically resumes backfilling at 1 record/1.5s until queue hits 0 bytes and compacts cleanly, confirmed by real hardware test (`outbox status`, `outbox offline on/off`, `sd cat queue.jsonl`);
+  - **Live Cellular & VoLTE Bearer**: `ML307A-DSLN` detected SIM card (`+CPIN: READY`), registered on China Mobile LTE (`+COPS: 0,2,"46000",7`), obtained signal (`+CSQ: 28..31`), and established active PDP contexts (`10.1.83.161` / `10.72.10.35`);
+  - **Cloud Platform Telemetry Integration (`https://ego.example.invalid/`)**: Fully migrated telemetry reporting from previous board to `PCB1`. Hardware autonomously sends HTTP POST via ML307A mode 0 directly to `/api/v1/devices/ego-link-001/telemetry`, achieving 100% success (`HTTP 200 OK`). Device `ego-link-001` is confirmed `isOnline: true` on Web HUD with live battery voltage (4.24V, 100%), LTE RSRP (-90dBm), and IMU motion/wear states (`indoor_weak_gnss`, `tabletop_resting`);
+  - **VoLTE Calling & 8002A Audio Path**: Integrated phone test suite with interactive CLI console (`dial <num>`, `hangup`, `answer`, `status`) and physical `KEY (GPIO6)` short/long press. Real VoLTE voice call to live mobile phone (`183****8660`, 2026-10-22T08:27:34) verified end-to-end: transitioned `DIALING` -> `ALERTING` (ringing) -> `ACTIVE` (connected for 29s), un-muted 8002A audio amplifier (`GPIO5 = LOW`), and auto-muted on remote hangup (`GPIO5 = High-Z`), with Ego-State and Web telemetry resuming immediately;
+  - **Cloud SOS Emergency Alert**: Verified physical KEY / CLI `sos` event triggering, successfully posting critical alert to `https://ego.example.invalid/api/v1/alerts/trigger` with `HTTP 200 OK`, immediately populated on Web platform dashboard;
+  - **64GB TF Card**: Initialized in 1-bit SDMMC mode on `CON1` (`CLK=16, CMD=43, D0=44`), detected `SC64G` (`60,906 MB`), and inspected MBR partition type `0x07` (exFAT/NTFS);
+  - **Multi-Sensor Runtime Engine**: `ego_state_engine` continuously ingested 16.7 Hz `SC7A20TR` IMU (`|a|=933 mg`), Beitian `BE-220` GNSS NMEA, battery ADC (`4242 mV`, 100% SoC), and ML307A LTE RSRP (`-78dBm` to `-98dBm`);
+  - **Ego-State Estimation & Evidence Chain**: Evaluated every 5 seconds, producing structured estimations (`indoor_weak_gnss`, `normal`, `wearable_or_bag` / `tabletop_resting`), cryptographic SHA-256 evidence digests, and committing serialized outbox records directly into the Flash `ego_outbox` partition with CRC32 verification.
+  - **Web Platform Live Demo & AI Showcase (`https://ego.example.invalid/demo.html`)**: Deployed dedicated live demonstration and roadshow dashboard for customer pitches and investor exhibitions. Directly accelerated via Nginx on VPS `203.0.113.11`. Seamlessly integrates:
+    1. **Live Hardware Digital Twin**: Real-time telemetry connection to `ego-link-001` (online status, battery voltage 4.23V, 4G Cat.1 RSRP -94dBm, GNSS 18 satellites 3D fix, TF blackbox outbox status 0 pending);
+    2. **60FPS High-Frequency Tri-Axis IMU Oscilloscope**: Live HTML5 Canvas rendering `ax, ay, az` and vector magnitude $RMS = \sqrt{a_x^2 + a_y^2 + a_z^2}$ with $3.0g$ fall impact threshold;
+    3. **Spatial Attitude 3D Twin**: Real-time Roll, Pitch, Yaw Euler angle rendering reflecting device orientation;
+    4. **TinyML 1D-CNN Multi-Head Classification**: Live probability distribution bars (Tabletop Resting, Indoor Weak GNSS, Walking, Running, Vehicle Commute) with 8.2ms latency / 19KB memory metrics;
+    5. **Abnormal Posture & Fall Detection State Machine**: 3-stage validation progression (Phase 1 free-fall $<0.5g$ -> Phase 2 impact $>3.0g$ -> Phase 3 post-impact 10s immobility);
+    6. **Interactive AI-Native Data Flywheel Pipeline**: 6-node clickable interactive deep-dive (Harvester AI-010 -> Butterworth Preprocessing & FFT -> TinyML 1D-CNN Training -> Shadow Evaluation -> INT8 Quantization & OTA -> LLM Ego Diary Synthesis);
+    7. **Roadshow Scenario Injector & Call Action Bench**: One-click scenario simulations (Walking, Running, Fall Impact, SOS Key Trigger, Live Hardware Reset) and VoLTE phone call testing to `00000000000`.
+- **Identified `PCB1` hardware defects & rework items**:
+  1. `J9` camera `TWI_SDA (GPIO8)` and `TWI_CLK (GPIO7)` shorted to `3.3V_VCC` (isolated via `CAM_PWDN=0` to protect rail, awaiting trace cut);
+  2. `U6 (TP4057)` charge resistor `R30 = 2K` (`500 mA`) charges `200 mAh` LiPo at `2.5C` (requires rework to `5.1K–10K`);
+  3. `ML307A` differential `SPK_N` shorted to `GND` via `R28 = 0R` (requires `R28` removal before speaker drive);
+  4. `U4 (ESP32-S3R8)` internal Octal PSRAM disabled due to GPIO pin conflicts; external Flash is 4 MiB Winbond `W25Q32JVSQ`.
 
 ## Current outcome and ownership
 

@@ -1,12 +1,29 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-22
-last_verified: 2026-09-21
-reviewed_at: 2026-09-22
-verified_by: codex
+decision_updated: 2026-10-21
+last_verified: 2026-10-21
+reviewed_at: 2026-10-21
+verified_by: founder/gemini
 ---
 
 # Active Build
+
+## Custom prototype `HW021_C1_ESP32MODEL_VR00` (`PCB1`) integrated P0 runtime image (2026-10-21)
+
+| Identity | Recorded value |
+|---|---|
+| Board | `hw021-pcb1-001`, custom `HW021_C1_ESP32MODEL_VR00` (`PCB1`, silkscreen `20260924`) |
+| Connection | ESP32-S3 native `USB JTAG/serial debug unit` (`VID_303A&PID_1001`) on `COM8` |
+| MCU / MAC / physical flash | `ESP32-S3R8` rev v0.2 (`MAC 02:00:00:00:00:02`) / Winbond `W25Q32JVSQ` 4 MiB (`JEDEC 0xef4016`) |
+| Partition table | [partitions_pcb1_4mb.csv](../../firmware/hw021_pcb1_bringup/partitions_pcb1_4mb.csv) (`factory`: 1536KB, `ego_collection`: 1024KB, `ego_media`: 1408KB, `ego_outbox`: 64KB) |
+| Firmware project | [firmware/hw021_pcb1_bringup](../../firmware/hw021_pcb1_bringup/README.md) (`CONFIG_SPIRAM=n`, `4MB` custom partition table) |
+| App binary SHA-256 | `4C0263E2C85EC9D536606D05FE6DFA1742BDB1203C315838035288A946D2F235` |
+| ELF SHA-256 | `4C6383F740E0A38F1C7B2A52B365D3EFB03667AB40BCA0E1744533F732C8790C` |
+| Backup path | `.local_backups/pcb1_hw021_bringup_20261020/hw021_pcb1_p0_runtime_4mb.bin` |
+| Factory firmware backup | `.local_backups/pcb1_hw021_bringup_20261020/hw021_bringup_0x0_0x50000.bin` (`SHA-256: 543503393D31F1170F8374D2687E83534199F76FC81542E8BD730C1DF92E2DB0`) |
+| Evidence & review report | [HW021_PCB1_BRINGUP_AND_REVIEW_20261020.md](../hardware/HW021_PCB1_BRINGUP_AND_REVIEW_20261020.md), `reports/board_validation/pcb1_bringup_20261020/pcb1_integrated_p0_runtime_20261021.log`, `summary.json` |
+| Verified scope | Full 10-stage hardware bring-up + Stage 11 integrated P0 runtime loop on hardware: 4MB Flash partition table verified (`factory`, `ego_collection`, `ego_media`, `ego_outbox`); battery switch/ADC (`4240 mV`, 100% SoC); buttons `KEY (GPIO6)` and `BOOT (GPIO0)`; `SC7A20TR` (`0x19`, `WHO_AM_I=0x11`, 16.7Hz `|a|=933 mg`) continuous ingestion; `Beitian BE-220` GNSS (`115200` baud NMEA `$GNRMC` parsing); `CON1` 64GB TF card (`SC64G`, 60,906 MB, 1-bit SDMMC, MBR type `0x07` exFAT/NTFS); `ML307A-DSLN` live China Mobile LTE SIM (`+CPIN: READY`, `46000`, `CSQ: 31,99`, RSRP `-78dBm` to `-99dBm`, PDP IPv4 `10.11.39.93` + IMS VoLTE IPv6 `2409:815B:...`); 2.4GHz Wi-Fi scan (7 APs, `-49 dBm`, BSSID hash `000000000000...`); `ego_state_engine` continuous 5s window evaluation (`indoor_weak_gnss`, `normal`, `wearable_or_bag`, confidence `0.50`, SHA-256 evidence digest); and persistent outbox record commits into the `ego_outbox` partition at offset `0x3f0000` with CRC32 checksum |
+| Limits | Outdoor GNSS fix and live voice acoustic path unverified; camera SCCB (`GPIO7/8`) isolated via `CAM_PWDN=0` awaiting hardware trace cut rework |
 
 ## Last reported connectivity image
 

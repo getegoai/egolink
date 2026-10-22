@@ -74,6 +74,24 @@ public class TelemetryPacketDto {
     @JsonAlias({"motion_rms"})
     private Double motionRms;
 
+    @JsonAlias({"pitch", "angle_pitch"})
+    private Double pitch;
+
+    @JsonAlias({"roll", "angle_roll"})
+    private Double roll;
+
+    @JsonAlias({"yaw", "angle_yaw", "heading_deg"})
+    private Double yaw;
+
+    @JsonAlias({"ax", "ax_mg", "accel_x"})
+    private Double ax;
+
+    @JsonAlias({"ay", "ay_mg", "accel_y"})
+    private Double ay;
+
+    @JsonAlias({"az", "az_mg", "accel_z"})
+    private Double az;
+
     @JsonAlias({"raw_imu", "imu_batch", "imu"})
     private List<Map<String, Object>> rawImu;
 
@@ -142,6 +160,24 @@ public class TelemetryPacketDto {
 
     public Double getMotionRms() { return motionRms; }
     public void setMotionRms(Double motionRms) { this.motionRms = motionRms; }
+
+    public Double getPitch() { return pitch; }
+    public void setPitch(Double pitch) { this.pitch = pitch; }
+
+    public Double getRoll() { return roll; }
+    public void setRoll(Double roll) { this.roll = roll; }
+
+    public Double getYaw() { return yaw; }
+    public void setYaw(Double yaw) { this.yaw = yaw; }
+
+    public Double getAx() { return ax; }
+    public void setAx(Double ax) { this.ax = ax; }
+
+    public Double getAy() { return ay; }
+    public void setAy(Double ay) { this.ay = ay; }
+
+    public Double getAz() { return az; }
+    public void setAz(Double az) { this.az = az; }
 
     public List<Map<String, Object>> getRawImu() { return rawImu; }
     public void setRawImu(List<Map<String, Object>> rawImu) { this.rawImu = rawImu; }

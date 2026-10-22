@@ -21,6 +21,12 @@ public class DeviceDetailDto {
     private String motionState;
     private String deviceWearState;
     private Double motionRms;
+    private Double pitch;
+    private Double roll;
+    private Double yaw;
+    private Double axMg;
+    private Double ayMg;
+    private Double azMg;
     private Integer todayStepCount;
     private Double lastLatGcj02;
     private Double lastLonGcj02;
@@ -83,6 +89,24 @@ public class DeviceDetailDto {
 
     public Double getMotionRms() { return motionRms; }
     public void setMotionRms(Double motionRms) { this.motionRms = motionRms; }
+
+    public Double getPitch() { return pitch; }
+    public void setPitch(Double pitch) { this.pitch = pitch; }
+
+    public Double getRoll() { return roll; }
+    public void setRoll(Double roll) { this.roll = roll; }
+
+    public Double getYaw() { return yaw; }
+    public void setYaw(Double yaw) { this.yaw = yaw; }
+
+    public Double getAxMg() { return axMg; }
+    public void setAxMg(Double axMg) { this.axMg = axMg; }
+
+    public Double getAyMg() { return ayMg; }
+    public void setAyMg(Double ayMg) { this.ayMg = ayMg; }
+
+    public Double getAzMg() { return azMg; }
+    public void setAzMg(Double azMg) { this.azMg = azMg; }
 
     public Integer getTodayStepCount() { return todayStepCount; }
     public void setTodayStepCount(Integer todayStepCount) { this.todayStepCount = todayStepCount; }

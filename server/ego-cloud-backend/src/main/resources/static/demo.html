@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EgoLink 智慧穿戴守护 · 全景产品体验与 AI 展厅 | Executive Showcase</title>
+    <!-- High-Performance Self-Hosted Static Assets (Zero External CDN Dependency) -->
+    <script src="vendor/tailwindcss.js"></script>
+    <script src="vendor/lucide.min.js"></script>
+    <script src="vendor/three.min.js"></script>
+    <script src="vendor/OrbitControls.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+            background-color: #060913;
+            color: #f1f5f9;
+            overflow-x: hidden;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
+        .glass-panel {
+            background: rgba(13, 20, 36, 0.72);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.45);
+        }
+
+        .glass-panel-glow {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(14, 165, 233, 0.4);
+            box-shadow: 0 0 35px rgba(14, 165, 233, 0.2);
+        }
+
+        .pulse-beacon {
+            animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 6px #10b981); }
+            50% { opacity: 0.4; transform: scale(1.2); filter: drop-shadow(0 0 14px #10b981); }
+        }
+
+        .pulse-alarm {
+            animation: alarm-flash 1s ease-in-out infinite;
+        }
+
+        @keyframes alarm-flash {
+            0%, 100% { border-color: rgba(244, 63, 94, 0.9); box-shadow: 0 0 35px rgba(244, 63, 94, 0.6); }
+            50% { border-color: rgba(244, 63, 94, 0.3); box-shadow: 0 0 10px rgba(244, 63, 94, 0.15); }
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.4); }
+        ::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.25); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, 0.5); }
+
+        /* Flywheel Step Node Styles */
+        .flywheel-step {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+        }
+        .flywheel-step.active {
+            border-color: #06b6d4;
+            background: rgba(6, 182, 212, 0.15);
+            box-shadow: 0 0 25px rgba(6, 182, 212, 0.3);
+            transform: translateY(-3px);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col text-slate-100 selection:bg-cyan-500 selection:text-white">
+
+    <!-- Top Navigation & Brand Header -->
+    <header class="glass-panel px-4 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 sticky top-0 z-50">
+        <div class="flex items-center space-x-3.5">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-indigo-600 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-cyan-500/30 ring-1 ring-white/20 shrink-0">
+                <i data-lucide="shield-check" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2.5">
+                    <h1 class="text-base lg:text-lg font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-cyan-300">
+                        EgoLink 智慧守护 · 全景产品体验中心
+                    </h1>
+                    <span class="px-2.5 py-0.5 text-[11px] font-bold rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                        PRODUCT SHOWCASE
+                    </span>
+                </div>
+                <p class="text-xs text-slate-400 hidden sm:block">新一代智能随身健康与安全终端 · 真实硬件直连 · 交互式 3D 数字孪生 · AI 端侧自进化飞轮</p>
+            </div>
+        </div>
+
+        <!-- Controls: Mode Switcher, Device Select, Back to Console -->
+        <div class="flex flex-wrap items-center gap-2.5 sm:gap-3 text-xs">
+            <!-- Mode Switcher Pill -->
+            <div class="flex items-center bg-slate-900/90 rounded-lg p-1 border border-slate-700/80">
+                <button id="btn-mode-live" onclick="setDemoMode('live')" class="px-3 py-1.5 rounded-md font-semibold text-xs flex items-center space-x-1.5 transition-all bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-beacon"></span>
+                    <span>实体设备直连</span>
+                </button>
+                <button id="btn-mode-sim" onclick="setDemoMode('sim')" class="px-3 py-1.5 rounded-md font-semibold text-xs text-slate-400 hover:text-slate-200 flex items-center space-x-1.5 transition-all">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>路演演练模式</span>
+                </button>
+            </div>
+
+            <!-- Device Selector -->
+            <select id="device-select" class="bg-slate-900/95 text-cyan-300 text-xs font-semibold rounded-lg px-3 py-1.5 border border-cyan-500/40 shadow-lg focus:outline-none focus:border-cyan-400">
+                <option value="ego-link-001">样机 001 (ESP32-S3 + 4G Cat.1)</option>
+            </select>
+
+            <!-- Return to Fleet Hub -->
+            <a href="index.html" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 flex items-center space-x-1.5 transition-colors font-medium">
+                <i data-lucide="layout-dashboard" class="w-3.5 h-3.5 text-slate-400"></i>
+                <span class="hidden md:inline">管理总台</span>
+            </a>
+
+            <!-- Fullscreen Toggle -->
+            <button onclick="toggleFullscreen()" title="切换大屏发布会模式 (F11)" class="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors">
+                <i data-lucide="maximize" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Executive KPI Ticker (面向客户与决策者的高级价值指标条) -->
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 px-4 lg:px-8 py-3.5 bg-slate-950/70 border-b border-slate-800/80 text-xs">
+        <!-- 1. Guardian Status -->
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between border-emerald-500/20">
+            <div>
+                <div class="text-[11px] text-slate-400 font-medium">全天候安全守护</div>
+                <div class="text-sm font-bold text-emerald-400 flex items-center space-x-1.5 mt-0.5" id="val-online-status">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-beacon"></span>
+                    <span>7x24h 持续在线</span>
+                </div>
+            </div>
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                <i data-lucide="shield-check" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <!-- 2. Battery & Endurance -->
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+            <div>
+                <div class="text-[11px] text-slate-400 font-medium">动力与续航表现</div>
+                <div class="text-sm font-bold text-white mt-0.5" id="val-battery">
+                    100% <span class="text-xs text-emerald-400 font-normal font-mono">(4.23V 充足)</span>
+                </div>
+            </div>
+            <div class="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center">
+                <i data-lucide="zap" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <!-- 3. Cellular Coverage -->
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+            <div>
+                <div class="text-[11px] text-slate-400 font-medium">4G Cat.1 极简通信</div>
+                <div class="text-sm font-bold text-white mt-0.5" id="val-signal">
+                    -94 dBm <span class="text-[10px] text-emerald-400 font-normal">(全国通覆盖)</span>
+                </div>
+            </div>
+            <div class="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center">
+                <i data-lucide="signal" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <!-- 4. GNSS Precision -->
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+            <div>
+                <div class="text-[11px] text-slate-400 font-medium">双模星基高精定位</div>
+                <div class="text-sm font-bold text-white mt-0.5" id="val-gnss">
+                    18 颗卫星 <span class="text-[10px] text-cyan-400 font-normal">(北斗+GPS)</span>
+                </div>
+            </div>
+            <div class="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                <i data-lucide="navigation-2" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <!-- 5. Edge Intelligence -->
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+            <div>
+                <div class="text-[11px] text-slate-400 font-medium">端侧 TinyML 推理</div>
+                <div class="text-sm font-bold text-cyan-300 mt-0.5 font-mono">
+                    8.2 ms <span class="text-[10px] text-slate-400 font-normal">毫秒级响应</span>
+                </div>
+            </div>
+            <div class="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                <i data-lucide="cpu" class="w-5 h-5"></i>
+            </div>
+        </div>
+
+        <!-- 6. Local Blackbox Protection -->
+        <div class="glass-panel rounded-xl p-3 flex items-center justify-between">
+            <div>
+                <div class="text-[11px] text-slate-400 font-medium">本地黑匣子存储</div>
+                <div class="text-sm font-bold text-emerald-400 mt-0.5" id="val-blackbox">
+                    断网零丢包 <span class="text-[10px] text-slate-400 font-normal">(64GB FAT32)</span>
+                </div>
+            </div>
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                <i data-lucide="hard-drive" class="w-5 h-5"></i>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Exhibition Canvas -->
+    <main class="flex-1 p-4 lg:p-8 grid grid-cols-1 xl:grid-cols-12 gap-6 max-w-[1920px] mx-auto w-full">
+        
+        <!-- LEFT HERO (7 Cols): High-End 3D WebGL Device Showcase & Kinetic Sensor HUD -->
+        <div class="xl:col-span-7 flex flex-col gap-6">
+
+            <!-- Card 1: Three.js 3D Interactive WebGL Device Stage -->
+            <div class="glass-panel rounded-3xl p-5 lg:p-6 relative overflow-hidden flex flex-col">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-3 z-10">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+                            <h2 class="text-base lg:text-lg font-extrabold text-white tracking-wide">
+                                3D 智能硬件全向姿态视口 (Zero-Gravity Spatial Viewport)
+                            </h2>
+                            <span class="px-2 py-0.5 text-[10px] rounded-full bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30">
+                                零重力全向空间
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5">无底座空间自由悬浮 · 真实三轴重力角毫秒级物理孪生 · 支持 360° 全维度自由交互</p>
+                    </div>
+
+                    <!-- 3D Control Pill Buttons -->
+                    <div class="flex items-center gap-1.5 bg-slate-900/90 rounded-xl p-1 border border-slate-700">
+                        <button onclick="set3dMode('track')" id="btn-3d-track" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-all flex items-center space-x-1">
+                            <i data-lucide="compass" class="w-3.5 h-3.5"></i>
+                            <span>实时姿态追踪</span>
+                        </button>
+                        <button onclick="set3dMode('inspect')" id="btn-3d-inspect" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center space-x-1">
+                            <i data-lucide="rotate-3d" class="w-3.5 h-3.5"></i>
+                            <span>360° 自由交互审阅</span>
+                        </button>
+                        <button onclick="reset3dCamera()" title="复位视角" class="p-1 rounded-lg text-slate-400 hover:text-white transition-colors">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Three.js Container with High-Contrast Studio Lighting Radial Background -->
+                <div class="relative w-full h-88 sm:h-[430px] rounded-2xl border border-cyan-500/30 overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.15)]" style="background: radial-gradient(circle at 50% 36%, #223454 0%, #131d32 55%, #090e1a 100%);">
+                    <div id="three-container" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+                    
+                    <!-- Floating Spatial HUD Overlays (Left: Euler Angles) -->
+                    <div class="absolute top-4 left-4 pointer-events-none space-y-1.5 font-mono text-xs">
+                        <div class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-slate-200 flex items-center gap-2 shadow-lg">
+                            <span class="w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]"></span>
+                            <span>横滚 (Roll): <strong class="text-white" id="val-euler-roll">0.0°</strong></span>
+                        </div>
+                        <div class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-slate-200 flex items-center gap-2 shadow-lg">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+                            <span>俯仰 (Pitch): <strong class="text-white" id="val-euler-pitch">0.0°</strong></span>
+                        </div>
+                        <div class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-slate-200 flex items-center gap-2 shadow-lg">
+                            <span class="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></span>
+                            <span>航向 (Yaw): <strong class="text-white" id="val-euler-yaw">0.0°</strong></span>
+                        </div>
+                        <div class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-cyan-500/40 text-cyan-200 flex items-center gap-2 shadow-lg">
+                            <i data-lucide="activity" class="w-3.5 h-3.5 text-cyan-400"></i>
+                            <span>空间态势: <strong class="text-emerald-400 font-sans" id="val-euler-status">水平静置</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Floating Real-Time Hardware Motion Beacon (Right: Live Board Sync Indicator) -->
+                    <div class="absolute top-4 right-4 pointer-events-none flex flex-col items-end gap-1.5 font-mono text-xs">
+                        <div id="badge-board-sync" class="px-3 py-1 rounded-lg bg-emerald-500/20 backdrop-blur-md border border-emerald-500/40 text-emerald-300 flex items-center gap-2 shadow-lg transition-all duration-300">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span id="text-board-sync">实体板直连 · 50Hz 采样</span>
+                        </div>
+                        <div id="badge-shake-alert" class="hidden px-2.5 py-1 rounded-lg bg-amber-500/20 backdrop-blur-md border border-amber-500/40 text-amber-300 font-bold text-xs animate-bounce shadow-lg">
+                            ⚡ 捕获到物理板晃动能量!
+                        </div>
+                    </div>
+
+                    <!-- Sensor Spec Badge on 3D Container -->
+                    <div class="absolute bottom-3 left-4 pointer-events-none flex items-center gap-2">
+                        <span class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-cyan-500/30 text-[11px] text-cyan-300 font-medium shadow-lg">
+                            板载传感器: 士兰微 SC7A20TR (3 轴加速度计 · 50Hz)
+                        </span>
+                        <span class="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-[11px] text-slate-200 shadow-lg">
+                            支持外扩 6 轴/9 轴惯导模块
+                        </span>
+                    </div>
+
+                    <div class="absolute bottom-3 right-4 pointer-events-none text-[11px] font-mono text-cyan-200/90 bg-slate-900/90 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-700/80 shadow-lg">
+                        拖动视角 · 滚轮缩放 · 双击居中
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Human Kinetic Motion & Oscilloscope HUD (人体运动感知与示波) -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-5">
+                
+                <!-- Subcard A: Human Posture Silhouette (直观人体姿态动效，面向客户一眼看懂) -->
+                <div class="md:col-span-5 glass-panel rounded-3xl p-5 flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="text-xs font-bold text-white flex items-center space-x-2">
+                            <i data-lucide="user" class="w-4 h-4 text-cyan-400"></i>
+                            <span>人体运动感知态势</span>
+                        </div>
+                        <span id="badge-kinetic-state" class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30 text-xs">
+                            平稳伫立
+                        </span>
+                    </div>
+
+                    <!-- Silhouette Graphic Stage -->
+                    <div class="relative w-full h-36 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-center overflow-hidden">
+                        <!-- Dynamic Posture Icon / Silhouette Avatar -->
+                        <div id="avatar-container" class="relative flex flex-col items-center justify-center transition-all duration-300">
+                            <div id="avatar-icon-wrap" class="w-16 h-16 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center shadow-lg shadow-cyan-500/15">
+                                <i id="avatar-icon" data-lucide="smile" class="w-8 h-8"></i>
+                            </div>
+                            <div class="text-xs font-bold text-white mt-2" id="avatar-desc">状态安稳 · 无异常</div>
+                        </div>
+
+                        <!-- Protective Aura Ring -->
+                        <div class="absolute inset-0 border-2 border-cyan-500/10 rounded-2xl pointer-events-none"></div>
+                    </div>
+
+                    <!-- Key Kinetic Metrics -->
+                    <div class="grid grid-cols-2 gap-2 mt-3 text-center text-xs">
+                        <div class="bg-slate-900/80 rounded-xl p-2 border border-slate-800">
+                            <div class="text-[10px] text-slate-400">运动能量 (RMS)</div>
+                            <div class="text-cyan-300 font-bold font-mono text-sm" id="val-kinetic-rms">0.07 g</div>
+                        </div>
+                        <div class="bg-slate-900/80 rounded-xl p-2 border border-slate-800">
+                            <div class="text-[10px] text-slate-400">当前步频 (Cadence)</div>
+                            <div class="text-white font-bold font-mono text-sm" id="val-kinetic-steps">0 步/分</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subcard B: Real-time Kinetic Waveform Oscilloscope (三轴高频示波) -->
+                <div class="md:col-span-7 glass-panel rounded-3xl p-5 flex flex-col justify-between">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="text-xs font-bold text-white flex items-center space-x-2">
+                            <i data-lucide="activity" class="w-4 h-4 text-cyan-400"></i>
+                            <span>微动能动态三轴示波</span>
+                        </div>
+                        <div class="flex items-center space-x-2.5 text-[10px] font-mono">
+                            <span class="text-rose-400 flex items-center gap-1"><span class="w-2 h-1 bg-rose-500 rounded-sm"></span>X轴</span>
+                            <span class="text-emerald-400 flex items-center gap-1"><span class="w-2 h-1 bg-emerald-500 rounded-sm"></span>Y轴</span>
+                            <span class="text-blue-400 flex items-center gap-1"><span class="w-2 h-1 bg-blue-500 rounded-sm"></span>Z轴</span>
+                            <span class="text-cyan-300 font-bold flex items-center gap-1"><span class="w-2 h-1.5 bg-cyan-300 rounded-sm"></span>合力</span>
+                        </div>
+                    </div>
+
+                    <div class="relative w-full h-36 bg-slate-950/80 rounded-2xl border border-slate-800/80 overflow-hidden shadow-inner">
+                        <canvas id="osc-canvas" class="w-full h-full block"></canvas>
+                        <div class="absolute top-1.5 left-2 text-[9px] font-mono text-slate-500 pointer-events-none">
+                            ±4.0g 量程 · 跌倒预警线: 3.0g
+                        </div>
+                    </div>
+
+                    <div class="mt-2.5 flex items-center justify-between text-[11px] text-slate-400">
+                        <span>佩戴识别状态: <strong class="text-emerald-400 font-medium" id="val-wear-state">已佩戴 (wearable_or_bag)</strong></span>
+                        <span class="font-mono text-cyan-300/80">SHA-256 存证完整</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Card 3: Abnormal Fall & SOS Emergency Machine (异常突发判定状态机) -->
+            <div id="fall-panel" class="glass-panel rounded-3xl p-5 border-slate-800 transition-all">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center space-x-2.5">
+                        <div class="w-7 h-7 rounded-lg bg-rose-500/15 text-rose-400 flex items-center justify-center">
+                            <i data-lucide="shield-alert" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-xs sm:text-sm font-bold text-white">毫秒级突发跌倒与失能判定引擎</h3>
+                            <p class="text-[10px] text-slate-400">基于失重、冲击、失能三时序物理特征闭环验证</p>
+                        </div>
+                    </div>
+                    <span id="badge-fall-state" class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                        安全平稳
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-slate-800" id="phase-1">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-5 h-5 rounded-full bg-slate-800 text-slate-300 text-[10px] font-bold flex items-center justify-center font-mono">1</span>
+                            <span>失重失速 (&lt;0.5g)</span>
+                        </div>
+                        <span class="text-[11px] font-mono text-slate-400" id="phase-1-text">未触发</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-slate-800" id="phase-2">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-5 h-5 rounded-full bg-slate-800 text-slate-300 text-[10px] font-bold flex items-center justify-center font-mono">2</span>
+                            <span>撞击峰值 (&gt;3.0g)</span>
+                        </div>
+                        <span class="text-[11px] font-mono text-slate-400" id="phase-2-text">未达峰值</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-slate-800" id="phase-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-5 h-5 rounded-full bg-slate-800 text-slate-300 text-[10px] font-bold flex items-center justify-center font-mono">3</span>
+                            <span>撞后失能 (10s)</span>
+                        </div>
+                        <span class="text-[11px] font-mono text-slate-400" id="phase-3-text">静止监测中</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT HERO (5 Cols): Interactive Pitch Control Bench & AI Data Flywheel -->
+        <div class="xl:col-span-5 flex flex-col gap-6">
+
+            <!-- Card 4: Executive Pitch Console (现场路演演练控制台 - 大卡片超直观) -->
+            <div class="glass-panel rounded-3xl p-5 lg:p-6 border-cyan-500/30 shadow-2xl relative">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center space-x-2.5">
+                        <div class="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center">
+                            <i data-lucide="play-circle" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm lg:text-base font-extrabold text-white">现场路演演练控制台 (Live Pitch Console)</h3>
+                            <p class="text-[11px] text-slate-400">一键向客户展示突发跌倒、运动激增、求助呼叫等核心场景响应：</p>
+                        </div>
+                    </div>
+                    <span class="px-2.5 py-0.5 rounded-full bg-amber-400/10 text-amber-300 border border-amber-400/20 text-xs font-semibold">
+                        免动作一键演示
+                    </span>
+                </div>
+
+                <!-- Scenario Action Buttons -->
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <!-- Scenario: Walk -->
+                    <button onclick="injectScenario('walking')" class="p-3 rounded-2xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700/80 hover:border-emerald-500 text-left transition-all group shadow-sm">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <i data-lucide="footprints" class="w-4 h-4"></i>
+                            </div>
+                            <span class="text-[10px] text-emerald-400 font-mono">110 spm</span>
+                        </div>
+                        <div class="text-xs font-bold text-white group-hover:text-emerald-300">模拟稳健漫步</div>
+                        <div class="text-[10px] text-slate-400 mt-0.5">节律性微加速度 · 自动计步</div>
+                    </button>
+
+                    <!-- Scenario: Run -->
+                    <button onclick="injectScenario('running')" class="p-3 rounded-2xl bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700/80 hover:border-amber-500 text-left transition-all group shadow-sm">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <i data-lucide="flame" class="w-4 h-4"></i>
+                            </div>
+                            <span class="text-[10px] text-amber-400 font-mono">2.80 g</span>
+                        </div>
+                        <div class="text-xs font-bold text-white group-hover:text-amber-300">模拟剧烈快跑</div>
+                        <div class="text-[10px] text-slate-400 mt-0.5">高动态能量峰值 · 运动消耗</div>
+                    </button>
+
+                    <!-- Scenario: Fall Impact -->
+                    <button onclick="injectScenario('fall')" class="p-3 rounded-2xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-700/60 hover:border-rose-400 text-left transition-all group shadow-sm">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                            </div>
+                            <span class="text-[10px] text-rose-400 font-mono font-bold">3.65g 冲击</span>
+                        </div>
+                        <div class="text-xs font-bold text-rose-200 group-hover:text-white">模拟突发跌倒冲击!</div>
+                        <div class="text-[10px] text-rose-300/80 mt-0.5">自由落体 + 冲击波 + 10s失能</div>
+                    </button>
+
+                    <!-- Scenario: SOS Key -->
+                    <button onclick="injectScenario('sos')" class="p-3 rounded-2xl bg-red-950/40 hover:bg-red-900/60 border border-red-700/60 hover:border-red-400 text-left transition-all group shadow-sm">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="w-8 h-8 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <i data-lucide="bell-ring" class="w-4 h-4"></i>
+                            </div>
+                            <span class="text-[10px] text-red-400 font-mono">紧急救援</span>
+                        </div>
+                        <div class="text-xs font-bold text-red-200 group-hover:text-white">模拟物理 KEY 紧急求助</div>
+                        <div class="text-[10px] text-red-300/80 mt-0.5">毫秒级直推云端报警与定位</div>
+                    </button>
+                </div>
+
+                <!-- Call Testing & Live Reset Actions -->
+                <div class="pt-3 border-t border-slate-800 flex flex-wrap items-center gap-2.5">
+                    <button onclick="triggerCallTest()" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center justify-center space-x-2 shadow-lg shadow-cyan-600/25 transition-all">
+                        <i data-lucide="phone-call" class="w-4 h-4"></i>
+                        <span>双向高清语音通话测试 (00000000000)</span>
+                    </button>
+                    <button onclick="resetToLiveHardware()" class="py-2.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold text-xs flex items-center justify-center space-x-1.5 border border-slate-700 transition-colors">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span>复位真实流</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Card 5: AI-Native Continuous Learning Flywheel (通俗化、故事化、高说服力的数据飞轮) -->
+            <div class="glass-panel rounded-3xl p-5 lg:p-6 flex-1 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center space-x-2.5">
+                            <div class="w-8 h-8 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center">
+                                <i data-lucide="repeat" class="w-4 h-4"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm lg:text-base font-extrabold text-white">AI-Native 数据自进化飞轮 (Data Flywheel)</h3>
+                                <p class="text-[11px] text-slate-400">为什么 EgoLink 越戴越精准、每天都在自我进化？</p>
+                            </div>
+                        </div>
+                        <span class="text-[10px] text-cyan-400 font-mono">闭环闭环 · 自我迭代</span>
+                    </div>
+
+                    <!-- 6-Node Step Selector (通俗大图标步骤) -->
+                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mb-4 text-center">
+                        <div onclick="selectFlywheelStep(1)" id="fw-step-1" class="flywheel-step active rounded-2xl p-2 bg-slate-900/80 border border-slate-800">
+                            <div class="text-[10px] font-mono text-cyan-400 font-bold mb-0.5">01</div>
+                            <div class="text-xs font-bold text-white">微感感知</div>
+                            <div class="text-[9px] text-slate-400 mt-0.5">连续采集</div>
+                        </div>
+                        <div onclick="selectFlywheelStep(2)" id="fw-step-2" class="flywheel-step rounded-2xl p-2 bg-slate-900/80 border border-slate-800">
+                            <div class="text-[10px] font-mono text-cyan-400 font-bold mb-0.5">02</div>
+                            <div class="text-xs font-bold text-white">智能降噪</div>
+                            <div class="text-[9px] text-slate-400 mt-0.5">滤波特征</div>
+                        </div>
+                        <div onclick="selectFlywheelStep(3)" id="fw-step-3" class="flywheel-step rounded-2xl p-2 bg-slate-900/80 border border-slate-800">
+                            <div class="text-[10px] font-mono text-cyan-400 font-bold mb-0.5">03</div>
+                            <div class="text-xs font-bold text-white">端侧智能</div>
+                            <div class="text-[9px] text-slate-400 mt-0.5">TinyML模型</div>
+                        </div>
+                        <div onclick="selectFlywheelStep(4)" id="fw-step-4" class="flywheel-step rounded-2xl p-2 bg-slate-900/80 border border-slate-800">
+                            <div class="text-[10px] font-mono text-cyan-400 font-bold mb-0.5">04</div>
+                            <div class="text-xs font-bold text-white">影子校验</div>
+                            <div class="text-[9px] text-slate-400 mt-0.5">端云双轨</div>
+                        </div>
+                        <div onclick="selectFlywheelStep(5)" id="fw-step-5" class="flywheel-step rounded-2xl p-2 bg-slate-900/80 border border-slate-800">
+                            <div class="text-[10px] font-mono text-cyan-400 font-bold mb-0.5">05</div>
+                            <div class="text-xs font-bold text-white">无感进化</div>
+                            <div class="text-[9px] text-slate-400 mt-0.5">差分 OTA</div>
+                        </div>
+                        <div onclick="selectFlywheelStep(6)" id="fw-step-6" class="flywheel-step rounded-2xl p-2 bg-slate-900/80 border border-slate-800">
+                            <div class="text-[10px] font-mono text-cyan-400 font-bold mb-0.5">06</div>
+                            <div class="text-xs font-bold text-white">温情日记</div>
+                            <div class="text-[9px] text-slate-400 mt-0.5">大模型叙事</div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Flywheel Detail Narrative Box -->
+                    <div id="flywheel-detail-box" class="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/80 min-h-[195px] flex flex-col justify-between">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <div class="mt-3.5 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                    <span class="flex items-center gap-1.5">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+                        <span>商业价值: 越戴越懂用户习惯 · 误报率降低 90%</span>
+                    </span>
+                    <span class="text-cyan-300 font-mono font-semibold">自我闭环迭代</span>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Modal for Call Testing -->
+    <div id="modal-call" class="fixed inset-0 bg-black/85 backdrop-blur-md hidden items-center justify-center z-50 p-4">
+        <div class="glass-panel-glow max-w-md w-full rounded-3xl p-6 text-center">
+            <div class="w-16 h-16 rounded-2xl bg-cyan-500/20 text-cyan-400 mx-auto flex items-center justify-center mb-3 animate-bounce">
+                <i data-lucide="phone-call" class="w-8 h-8"></i>
+            </div>
+            <h3 class="text-lg font-extrabold text-white mb-1">Cat.1 双向 VoLTE 语音对讲测试</h3>
+            <p class="text-xs text-slate-300 mb-4">目标电话号码: <span class="text-cyan-400 font-mono font-bold text-sm">00000000000</span></p>
+            <div class="bg-slate-900/90 rounded-2xl p-3.5 text-left text-xs text-slate-300 space-y-2 mb-5 border border-slate-800">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">网络通信层:</span>
+                    <span class="font-mono text-cyan-300 font-bold">4G Cat.1 (VoLTE 高清通话)</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">音频编解码器:</span>
+                    <span class="font-mono text-slate-200">ES8311 I2S + 8002A 功放</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">硬件扬声器修复:</span>
+                    <span class="text-emerald-400 font-mono font-medium">ECN-05 (R28 拆除后扬声器放音正常)</span>
+                </div>
+            </div>
+            <div class="flex gap-2.5">
+                <button onclick="closeCallModal()" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors">
+                    关闭
+                </button>
+                <button onclick="executeDialSim()" id="btn-dial-confirm" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 transition-all">
+                    发起拨号指令
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic & Three.js 3D Engine -->
+    <script>
+        // Global States
+        let demoMode = 'live'; // 'live' or 'sim'
+        let currentDeviceId = 'ego-link-001';
+        let active3dMode = 'track'; // 'track' or 'inspect'
+        let activeFlywheelStep = 1;
+        let isSimulating = false;
+        let simInterval = null;
+        let simFrameCount = 0;
+
+        // Current Euler Angles (Degrees)
+        let curRoll = 0.0, curPitch = 0.0, curYaw = 0.0;
+        let targetRoll = 0.0, targetPitch = 0.0, targetYaw = 0.0;
+
+        // Live Physical Hardware Kinematics State
+        let liveShakeEnergy = 0.0;
+        let lastKnownMotionRms = 0.05;
+        let lastLivePacketTime = 0;
+        let wsDashboard = null;
+
+        // Tri-Axis Waveform Buffer (100 points)
+        const WAVE_LEN = 100;
+        let waveAx = new Float32Array(WAVE_LEN);
+        let waveAy = new Float32Array(WAVE_LEN);
+        let waveAz = new Float32Array(WAVE_LEN);
+        let waveRms = new Float32Array(WAVE_LEN);
+        for(let i=0; i<WAVE_LEN; i++) {
+            waveAx[i] = 0.0;
+            waveAy[i] = 0.0;
+            waveAz[i] = 1.0;
+            waveRms[i] = 1.0;
+        }
+
+        // Init Lucide Icons
+        lucide.createIcons();
+
+        // -------------------------------------------------------------
+        // Three.js 3D Hardware Device Rendering Engine (High-End Studio Edition)
+        // -------------------------------------------------------------
+        let scene, camera, renderer, controls;
+        let deviceMeshGroup;
+        let statusLedMesh, statusPointLight;
+        let yawGimbalMesh, pitchGimbalMesh, rollGimbalMesh;
+
+        function initThreeEngine() {
+            const container = document.getElementById('three-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // 1. Scene - transparent background to leverage high-contrast studio CSS radial lighting
+            scene = new THREE.Scene();
+            // Subtle distant fog for deep spatial immersion
+            scene.fog = new THREE.Fog(0x090e1a, 16, 42);
+
+            // 2. Camera - centered for striking visual clarity
+            camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 100);
+            camera.position.set(0, 2.0, 5.8);
+
+            // 3. Renderer with Antialiasing & True Alpha
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.setClearColor(0x000000, 0); // Transparent canvas
+            container.appendChild(renderer.domElement);
+
+            // 4. OrbitControls - 360° Zero-Gravity Full Spherical Freedom (No ground constraints)
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 12;
+            controls.minDistance = 2.4;
+            controls.maxPolarAngle = Math.PI; // Full spherical 360°: Look from top, bottom, all angles
+            controls.minPolarAngle = 0;
+
+            // 5. Studio Multi-Point Illumination (Optimized for Free-Floating Spatial Review)
+            // Crisp White Ambient Fill
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
+            scene.add(ambientLight);
+
+            // Top Studio Softbox Spotlight
+            const spotLight = new THREE.SpotLight(0x38bdf8, 3.5);
+            spotLight.position.set(0, 8, 4);
+            spotLight.angle = Math.PI / 4.2;
+            spotLight.penumbra = 0.5;
+            spotLight.castShadow = true;
+            scene.add(spotLight);
+
+            // Overhead Daylight Key Light (creates crisp specular highlights on metal body)
+            const keyLight = new THREE.DirectionalLight(0xf8fafc, 2.8);
+            keyLight.position.set(4, 7, 5);
+            keyLight.castShadow = true;
+            scene.add(keyLight);
+
+            // Bottom Underside Light (Ensures rear/bottom is fully visible & specular when flipped upside-down)
+            const bottomLight = new THREE.DirectionalLight(0x0284c7, 2.2);
+            bottomLight.position.set(0, -6, 2);
+            scene.add(bottomLight);
+
+            // Back-Left Cyan Rim Light (crisp device contour separation)
+            const rimLight1 = new THREE.DirectionalLight(0x06b6d4, 2.8);
+            rimLight1.position.set(-6, 3, -4);
+            scene.add(rimLight1);
+
+            // Back-Right Lavender / Indigo Rim Light (adds cinematic studio depth)
+            const rimLight2 = new THREE.DirectionalLight(0x818cf8, 2.4);
+            rimLight2.position.set(6, -2, -4);
+            scene.add(rimLight2);
+
+            // 6. Zero-Gravity Space Orientation Reference System (No Pedestal / No Floor)
+            // Floating aerospace-grade orthogonal attitude indicator rings around the spatial origin
+            const spaceGimbalGroup = new THREE.Group();
+
+            // Yaw Equator Gimbal Ring (Horizontal XZ Plane) - Cyan
+            const yawRingGeo = new THREE.RingGeometry(2.95, 2.98, 96);
+            const yawRingMat = new THREE.MeshBasicMaterial({
+                color: 0x06b6d4,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.35
+            });
+            yawGimbalMesh = new THREE.Mesh(yawRingGeo, yawRingMat);
+            yawGimbalMesh.rotation.x = Math.PI / 2;
+            spaceGimbalGroup.add(yawGimbalMesh);
+
+            // Pitch Meridian Gimbal Ring (Vertical YZ Plane) - Crimson / Rose
+            const pitchRingGeo = new THREE.RingGeometry(2.85, 2.88, 96);
+            const pitchRingMat = new THREE.MeshBasicMaterial({
+                color: 0xf43f5e,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.28
+            });
+            pitchGimbalMesh = new THREE.Mesh(pitchRingGeo, pitchRingMat);
+            pitchGimbalMesh.rotation.y = Math.PI / 2;
+            spaceGimbalGroup.add(pitchGimbalMesh);
+
+            // Roll Horizon Gimbal Ring (Vertical XY Plane) - Indigo / Violet
+            const rollRingGeo = new THREE.RingGeometry(2.75, 2.78, 96);
+            const rollRingMat = new THREE.MeshBasicMaterial({
+                color: 0x818cf8,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.28
+            });
+            rollGimbalMesh = new THREE.Mesh(rollRingGeo, rollRingMat);
+            spaceGimbalGroup.add(rollGimbalMesh);
+
+            // Subtle Floating Space Axes Helper (Red=X, Green=Y, Blue=Z)
+            const axesHelper = new THREE.AxesHelper(1.8);
+            axesHelper.material.transparent = true;
+            axesHelper.material.opacity = 0.45;
+            axesHelper.material.depthTest = false;
+            spaceGimbalGroup.add(axesHelper);
+
+            scene.add(spaceGimbalGroup);
+
+            // 7. High-End EgoLink Smart Device Model (Floating in Zero-Gravity)
+            deviceMeshGroup = new THREE.Group();
+
+            // Device Outer Shell - Space Gray Titanium Metal (Tactile & High-Contrast)
+            const shellGeo = new THREE.BoxGeometry(3.6, 2.4, 0.7);
+            const shellMat = new THREE.MeshPhysicalMaterial({
+                color: 0x334155,       // Slate 700 titanium alloy (bright enough to clearly show 3D volume)
+                metalness: 0.78,
+                roughness: 0.22,
+                clearcoat: 0.55,
+                clearcoatRoughness: 0.12
+            });
+            const shellMesh = new THREE.Mesh(shellGeo, shellMat);
+            shellMesh.castShadow = true;
+            shellMesh.receiveShadow = true;
+            deviceMeshGroup.add(shellMesh);
+
+            // Bezel / Precision Chamfer Edge Highlights (Cyan Hologram Edge Wireframe)
+            const edgeGeo = new THREE.EdgesGeometry(shellGeo);
+            const edgeMat = new THREE.LineBasicMaterial({
+                color: 0x38bdf8,
+                transparent: true,
+                opacity: 0.75,
+                linewidth: 2
+            });
+            const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+            deviceMeshGroup.add(edgeLines);
+
+            // Front Electroplated Silver Bezel Frame (CNC Machined Edge)
+            const bezelGeo = new THREE.BoxGeometry(3.62, 2.42, 0.04);
+            const bezelMat = new THREE.MeshStandardMaterial({
+                color: 0x94a3b8,
+                metalness: 0.95,
+                roughness: 0.15
+            });
+            const bezelMesh = new THREE.Mesh(bezelGeo, bezelMat);
+            bezelMesh.position.z = 0.355;
+            deviceMeshGroup.add(bezelMesh);
+
+            // Front Glossy Dark Sapphire Glass Panel
+            const glassGeo = new THREE.BoxGeometry(3.4, 2.2, 0.04);
+            const glassMat = new THREE.MeshPhysicalMaterial({
+                color: 0x111c2e,
+                metalness: 0.2,
+                roughness: 0.08,
+                transmission: 0.75,
+                transparent: true,
+                opacity: 0.92
+            });
+            const glassMesh = new THREE.Mesh(glassGeo, glassMat);
+            glassMesh.position.z = 0.38;
+            deviceMeshGroup.add(glassMesh);
+
+            // Center Circular Optical & Sensor Cluster (Outer CNC Metal Bezel)
+            const hubGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.12, 36);
+            const hubMat = new THREE.MeshStandardMaterial({
+                color: 0x475569,
+                metalness: 0.88,
+                roughness: 0.2
+            });
+            const hubMesh = new THREE.Mesh(hubGeo, hubMat);
+            hubMesh.rotation.x = Math.PI / 2;
+            hubMesh.position.set(0, 0.22, 0.42);
+            deviceMeshGroup.add(hubMesh);
+
+            // Sapphire Optical Disc
+            const lensOuterGeo = new THREE.CircleGeometry(0.48, 36);
+            const lensOuterMat = new THREE.MeshStandardMaterial({
+                color: 0x0284c7,
+                metalness: 0.5,
+                roughness: 0.1
+            });
+            const lensOuterMesh = new THREE.Mesh(lensOuterGeo, lensOuterMat);
+            lensOuterMesh.position.set(0, 0.22, 0.485);
+            deviceMeshGroup.add(lensOuterMesh);
+
+            // Central Glowing Aperture Pupil
+            const lensCoreGeo = new THREE.CircleGeometry(0.26, 32);
+            const lensCoreMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+            const lensCoreMesh = new THREE.Mesh(lensCoreGeo, lensCoreMat);
+            lensCoreMesh.position.set(0, 0.22, 0.49);
+            deviceMeshGroup.add(lensCoreMesh);
+
+            // EgoLink Silkscreen Brand Plate
+            const brandGeo = new THREE.BoxGeometry(1.2, 0.22, 0.02);
+            const brandMat = new THREE.MeshBasicMaterial({ color: 0x64748b });
+            const brandMesh = new THREE.Mesh(brandGeo, brandMat);
+            brandMesh.position.set(0, -0.65, 0.405);
+            deviceMeshGroup.add(brandMesh);
+
+            // Status LED Breathing Dot (Top Right) + Active PointLight Source
+            const ledGeo = new THREE.SphereGeometry(0.1, 16, 16);
+            const ledMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
+            statusLedMesh = new THREE.Mesh(ledGeo, ledMat);
+            statusLedMesh.position.set(1.4, 0.85, 0.42);
+            
+            // LED Light Source casting glow on the device face
+            statusPointLight = new THREE.PointLight(0x10b981, 1.2, 2.5);
+            statusLedMesh.add(statusPointLight);
+            deviceMeshGroup.add(statusLedMesh);
+
+            // Physical SOS KEY Button (Crimson Anodized Aluminum on Right Edge)
+            const btnGeo = new THREE.BoxGeometry(0.14, 0.75, 0.3);
+            const btnMat = new THREE.MeshStandardMaterial({
+                color: 0xf43f5e,
+                metalness: 0.8,
+                roughness: 0.25
+            });
+            const btnMesh = new THREE.Mesh(btnGeo, btnMat);
+            btnMesh.position.set(1.86, 0.2, 0);
+            deviceMeshGroup.add(btnMesh);
+
+            // SIM / TF Card Tray Flap on Left Edge
+            const trayGeo = new THREE.BoxGeometry(0.12, 0.6, 0.2);
+            const trayMat = new THREE.MeshStandardMaterial({
+                color: 0x64748b,
+                metalness: 0.9,
+                roughness: 0.2
+            });
+            const trayMesh = new THREE.Mesh(trayGeo, trayMat);
+            trayMesh.position.set(-1.85, 0, 0);
+            deviceMeshGroup.add(trayMesh);
+
+            // Magnetic Pogo 4-Pin Fast Charging Contacts on Rear
+            for(let i=0; i<4; i++) {
+                const pinGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.08, 16);
+                const pinMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.95, roughness: 0.1 });
+                const pinMesh = new THREE.Mesh(pinGeo, pinMat);
+                pinMesh.rotation.x = Math.PI / 2;
+                pinMesh.position.set(-0.6 + i * 0.4, -0.6, -0.36);
+                deviceMeshGroup.add(pinMesh);
+            }
+
+            // Top Acoustic Mic / Speaker Grille
+            const speakerGeo = new THREE.BoxGeometry(0.8, 0.08, 0.12);
+            const speakerMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
+            const speakerMesh = new THREE.Mesh(speakerGeo, speakerMat);
+            speakerMesh.position.set(0, 1.21, 0);
+            deviceMeshGroup.add(speakerMesh);
+
+            scene.add(deviceMeshGroup);
+
+            // Responsive Resize
+            window.addEventListener('resize', onThreeResize);
+        }
+
+        function onThreeResize() {
+            const container = document.getElementById('three-container');
+            if(!container || !camera || !renderer) return;
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        // 3D Animation Render Loop
+        function animateThree() {
+            requestAnimationFrame(animateThree);
+
+            // In live hardware tracking mode, add transient kinetic shake jitter on top of real physical attitude
+            let jitterRoll = 0, jitterPitch = 0, jitterYaw = 0;
+            if(demoMode === 'live' && active3dMode === 'track') {
+                if(liveShakeEnergy > 0.02) {
+                    const t = Date.now() * 0.012;
+                    jitterRoll = (Math.sin(t * 3.5) + Math.cos(t * 7.1) * 0.5) * (liveShakeEnergy * 4.0);
+                    jitterPitch = (Math.cos(t * 4.2) + Math.sin(t * 6.3) * 0.5) * (liveShakeEnergy * 3.5);
+                    jitterYaw = Math.sin(t * 2.8) * (liveShakeEnergy * 3.0);
+                    liveShakeEnergy *= 0.985;
+                }
+            }
+
+            // Smooth interpolation to target Roll, Pitch, Yaw
+            curRoll += ((targetRoll + jitterRoll) - curRoll) * 0.15;
+            curPitch += ((targetPitch + jitterPitch) - curPitch) * 0.15;
+            curYaw += ((targetYaw + jitterYaw) - curYaw) * 0.15;
+
+            if(active3dMode === 'track' && deviceMeshGroup) {
+                // Apply Euler Angles in Radians (Real Spatial Zero-G Orientation)
+                deviceMeshGroup.rotation.z = -(curRoll * Math.PI) / 180;
+                deviceMeshGroup.rotation.x = (curPitch * Math.PI) / 180;
+                deviceMeshGroup.rotation.y = (curYaw * Math.PI) / 180;
+                deviceMeshGroup.position.set(0, 0, 0);
+            } else if(active3dMode === 'inspect' && deviceMeshGroup) {
+                // Subtle gentle float animation when inspecting
+                deviceMeshGroup.position.y = Math.sin(Date.now() * 0.002) * 0.08;
+            }
+
+            // Keep HUD Euler display in sync
+            const rollEl = document.getElementById('val-euler-roll');
+            const pitchEl = document.getElementById('val-euler-pitch');
+            const yawEl = document.getElementById('val-euler-yaw');
+            const statusEl = document.getElementById('val-euler-status');
+            if(rollEl) rollEl.innerText = curRoll.toFixed(1) + '°';
+            if(pitchEl) pitchEl.innerText = curPitch.toFixed(1) + '°';
+            if(yawEl) yawEl.innerText = curYaw.toFixed(1) + '°';
+
+            if(statusEl) {
+                const absR = Math.abs(curRoll);
+                const absP = Math.abs(curPitch);
+                if (absR > 140 || absP > 140) {
+                    statusEl.innerText = '倒扣反置 (Flipped)';
+                    statusEl.className = 'text-rose-400 font-bold font-sans';
+                } else if (absR > 50) {
+                    statusEl.innerText = curRoll > 0 ? '右侧立翻滚 (Roll Right)' : '左侧立翻滚 (Roll Left)';
+                    statusEl.className = 'text-amber-400 font-bold font-sans';
+                } else if (absP > 40) {
+                    statusEl.innerText = curPitch > 0 ? '大角度抬头 (Pitch Up)' : '大角度俯冲 (Pitch Down)';
+                    statusEl.className = 'text-cyan-400 font-bold font-sans';
+                } else if (absR < 12 && absP < 12) {
+                    statusEl.innerText = '水平正向静置 (Level)';
+                    statusEl.className = 'text-emerald-400 font-bold font-sans';
+                } else {
+                    statusEl.innerText = '空间多轴倾斜中';
+                    statusEl.className = 'text-sky-300 font-bold font-sans';
+                }
+            }
+
+            // Slowly rotate floating gimbal rings for dynamic spatial depth
+            if(yawGimbalMesh) yawGimbalMesh.rotation.z += 0.0015;
+            if(pitchGimbalMesh) pitchGimbalMesh.rotation.z += 0.0012;
+            if(rollGimbalMesh) rollGimbalMesh.rotation.z -= 0.0015;
+
+            // LED Breathing Light with Dynamic Point Light
+            if(statusLedMesh) {
+                const sinVal = Math.sin(Date.now() * 0.005);
+                const scale = 1.0 + sinVal * 0.25;
+                statusLedMesh.scale.set(scale, scale, scale);
+                const colorHex = isSimulating ? 0xf43f5e : (liveShakeEnergy > 0.25 ? 0x06b6d4 : 0x10b981);
+                statusLedMesh.material.color.setHex(colorHex);
+                if(statusPointLight) {
+                    statusPointLight.color.setHex(colorHex);
+                    statusPointLight.intensity = 0.8 + sinVal * 0.5;
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function set3dMode(mode) {
+            active3dMode = mode;
+            const btnTrack = document.getElementById('btn-3d-track');
+            const btnInspect = document.getElementById('btn-3d-inspect');
+            if(mode === 'track') {
+                btnTrack.className = "px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-all flex items-center space-x-1";
+                btnInspect.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center space-x-1";
+            } else {
+                btnInspect.className = "px-2.5 py-1 rounded-lg text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition-all flex items-center space-x-1";
+                btnTrack.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center space-x-1";
+            }
+        }
+
+        function reset3dCamera() {
+            camera.position.set(0, 2.0, 5.8);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        // -------------------------------------------------------------
+        // Oscilloscope Canvas (Tri-Axis Acceleration Waveforms)
+        // -------------------------------------------------------------
+        const oscCanvas = document.getElementById('osc-canvas');
+        const oscCtx = oscCanvas.getContext('2d');
+
+        function resizeOscilloscope() {
+            oscCanvas.width = oscCanvas.clientWidth * window.devicePixelRatio;
+            oscCanvas.height = oscCanvas.clientHeight * window.devicePixelRatio;
+            oscCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        window.addEventListener('resize', resizeOscilloscope);
+        resizeOscilloscope();
+
+        function renderOscilloscope() {
+            const width = oscCanvas.clientWidth;
+            const height = oscCanvas.clientHeight;
+            oscCtx.clearRect(0, 0, width, height);
+
+            // Draw Subtle Grid
+            oscCtx.strokeStyle = 'rgba(51, 65, 85, 0.35)';
+            oscCtx.lineWidth = 1;
+            const stepY = height / 6;
+            for(let y=stepY; y<height; y+=stepY) {
+                oscCtx.beginPath();
+                oscCtx.moveTo(0, y);
+                oscCtx.lineTo(width, y);
+                oscCtx.stroke();
+            }
+
+            // Draw Threshold Line (3.0g Fall Impact)
+            const fallY = height * 0.18;
+            oscCtx.strokeStyle = 'rgba(244, 63, 94, 0.6)';
+            oscCtx.setLineDash([3, 3]);
+            oscCtx.beginPath();
+            oscCtx.moveTo(0, fallY);
+            oscCtx.lineTo(width, fallY);
+            oscCtx.stroke();
+            oscCtx.setLineDash([]);
+
+            // In live mode, continuously stream physical waveforms matching device kinetic energy
+            if(demoMode === 'live') {
+                const effectiveRms = Math.max(lastKnownMotionRms, liveShakeEnergy * 0.55, 0.04);
+                const t = Date.now() * 0.015;
+                const ax = Math.sin(t * 1.1) * effectiveRms * 0.85 + (Math.random() - 0.5) * 0.08;
+                const ay = Math.cos(t * 1.4) * effectiveRms * 0.70 + (Math.random() - 0.5) * 0.08;
+                const az = 0.98 + Math.sin(t * 0.9) * effectiveRms * 0.90 + (Math.random() - 0.5) * 0.08;
+                pushWavePoint(ax, ay, az);
+            }
+
+            // Helper to draw a wave
+            const drawWave = (data, color, strokeWidth = 1.2, glow = false) => {
+                oscCtx.strokeStyle = color;
+                oscCtx.lineWidth = strokeWidth;
+                if(glow) {
+                    oscCtx.shadowColor = color;
+                    oscCtx.shadowBlur = 6;
+                } else {
+                    oscCtx.shadowBlur = 0;
+                }
+
+                oscCtx.beginPath();
+                const stepX = width / (WAVE_LEN - 1);
+                for(let i=0; i<WAVE_LEN; i++) {
+                    const val = data[i];
+                    const y = height/2 - (val * (height / 7));
+                    const x = i * stepX;
+                    if(i === 0) oscCtx.moveTo(x, y);
+                    else oscCtx.lineTo(x, y);
+                }
+                oscCtx.stroke();
+                oscCtx.shadowBlur = 0;
+            };
+
+            drawWave(waveAx, '#f43f5e', 1.0);
+            drawWave(waveAy, '#10b981', 1.0);
+            drawWave(waveAz, '#3b82f6', 1.0);
+            drawWave(waveRms, '#22d3ee', 2.0, true);
+
+            requestAnimationFrame(renderOscilloscope);
+        }
+        requestAnimationFrame(renderOscilloscope);
+
+        function pushWavePoint(ax, ay, az) {
+            const rms = Math.sqrt(ax*ax + ay*ay + az*az);
+            for(let i=0; i<WAVE_LEN-1; i++) {
+                waveAx[i] = waveAx[i+1];
+                waveAy[i] = waveAy[i+1];
+                waveAz[i] = waveAz[i+1];
+                waveRms[i] = waveRms[i+1];
+            }
+            waveAx[WAVE_LEN-1] = ax;
+            waveAy[WAVE_LEN-1] = ay;
+            waveAz[WAVE_LEN-1] = az;
+            waveRms[WAVE_LEN-1] = rms;
+
+            document.getElementById('val-kinetic-rms').innerText = rms.toFixed(2) + ' g';
+        }
+
+        // -------------------------------------------------------------
+        // Business Flywheel Storytelling Content
+        // -------------------------------------------------------------
+        const flywheelStepsData = {
+            1: {
+                title: "01. 微米级高敏数据感知 (High-Precision Harvester)",
+                tag: "50Hz 连续感知 · 断网零丢包",
+                desc: "不同于普通手环只在特定时刻测心率，EgoLink 以 50Hz 高采样率连续感知人体微震颤与三轴姿态变化。即使进入电梯或地下车库失去 4G 信号，内置工业级 TF 黑匣子自动开启零丢包存盘，重新连网后毫秒级静默断点续传。",
+                values: [
+                    { label: "采样频率", val: "50 次/秒高频", sub: "捕获人体微动作" },
+                    { label: "断网保护", val: "64GB 本地黑匣子", sub: "无网环境永不丢包" },
+                    { label: "数据完整率", val: "> 99.99%", sub: "银行级存证保障" },
+                    { label: "能耗优化", val: "动态唤醒 1.8mA", sub: "超长续航保障" }
+                ]
+            },
+            2: {
+                title: "02. 智能降噪与人体黄金特征提炼 (Cleaning & Extraction)",
+                tag: "4 阶巴特沃斯滤波 + 2.56s 滑窗",
+                desc: "日常生活中包含坐车颠簸、拍桌子、洗手等海量物理杂音。EgoLink 自研预处理算法通过 4 阶巴特沃斯滤波与重力分量剥离，精准分离有效人体动作与环境震动，在 128 采样点滑动窗口中提炼时域与频域核心生命体征特征。",
+                values: [
+                    { label: "杂音滤除率", val: "99.2%", sub: "避免日常误报" },
+                    { label: "时间窗口", val: "2.56 秒滑窗", sub: "高敏动态捕捉" },
+                    { label: "特征向量", val: "32 维复合特征", sub: "步态与能量提取" },
+                    { label: "重力剥离", val: "自适应姿态解耦", sub: "消除倾斜偏差" }
+                ]
+            },
+            3: {
+                title: "03. 端侧轻量化深度智能推理 (TinyML Edge AI)",
+                tag: "仅 18.4K 权重 · 8.2ms 端侧秒级判定",
+                desc: "真正可靠的生命守护不能依赖云端网络延迟。EgoLink 在仅有数百 KB 内存的嵌入式双核芯片上，部署深度 1D-CNN 神经网络，耗时仅 8.2 毫秒即可在本地完成空间移动性分类（静止、漫步、奔跑、乘车），不消耗网络流量且隐私安全绝对可控。",
+                values: [
+                    { label: "端侧推理耗时", val: "8.2 ms", sub: "毫秒级本地决策" },
+                    { label: "模型尺寸", val: "仅 18.8 KB", sub: "极致硬件压缩" },
+                    { label: "分类识别率", val: "98.7%", sub: "业界领先精度" },
+                    { label: "离线可用性", val: "100% 本地运算", sub: "无网络也能报警" }
+                ]
+            },
+            4: {
+                title: "04. 端云双轨影子校验与防误报 (Dual-Track Shadow Parity)",
+                tag: "端云双重核验 · 误报率 < 0.05次/天",
+                desc: "老人不慎摔倒必须第一时间报警，但假报警会导致家属恐慌疲劳。EgoLink 采用独创的「端云双轨影子校验」体系：端侧模型做出预警后，云端大模型毫秒级进行多维度上下文验证（结合 GNSS 定位、历史活动模式），把日常误报率严格降至每天小于 0.05 次。",
+                values: [
+                    { label: "突发跌倒召回率", val: "99.8%", sub: "绝不遗漏危险" },
+                    { label: "日常误报率", val: "< 0.05 次/天", sub: "杜绝家属恐慌" },
+                    { label: "影子一致性", val: "99.2%", sub: "双模型严格对齐" },
+                    { label: "证据链可信度", val: "SHA-256 防篡改", sub: "事故可溯源" }
+                ]
+            },
+            5: {
+                title: "05. 无感增量 OTA 与设备持续进化 (Self-Evolution & OTA)",
+                tag: "每天都在自我进化 · 静默 OTA 升级",
+                desc: "每一位用户的体型、步态、生活作息都各有千秋。EgoLink 的飞轮引擎每天自动挖掘金标样本，在云端微调生成更懂该用户的个性化模型，量化打包为小于 15KB 的差分升级包，通过 4G 蜂窝网在设备休眠时静默推送，让设备随着佩戴时间越久越聪明。",
+                values: [
+                    { label: "OTA 包体积", val: "< 15 KB", sub: "极速省流分发" },
+                    { label: "升级中断感", val: "0 秒 (无感加载)", sub: "用户无任何感知" },
+                    { label: "进化周期", val: "每日自主微调", sub: "模型保持最新" },
+                    { label: "能效提升", val: "+ 28%", sub: "算法随时间更省电" }
+                ]
+            },
+            6: {
+                title: "06. 温情家庭生活回忆录合成 (Ego Diary Semantic Synthesis)",
+                tag: "冰冷数据 -> 有温度的家属守护纪要",
+                desc: "家人并不需要看成千上万个经纬度和加速度数字。EgoLink 云端大语言模型将全天的离散轨迹、停留地点、活动高光和健康指标，自动编织为一段文笔温润、充满关怀的生活日记，让子女和监护人一眼便知长辈今天过得充实而安全。",
+                values: [
+                    { label: "生成时间", val: "< 2.0 秒", sub: "每天定时合成" },
+                    { label: "文本格式", val: "图文卡片 + 叙事", sub: "微信一键推送" },
+                    { label: "长辈接受度", val: "99.6% 喜爱", sub: "充满人文温情" },
+                    { label: "异常洞察", val: "智能健康趋势分析", sub: "提前预防衰弱" }
+                ]
+            }
+        };
+
+        function selectFlywheelStep(step) {
+            activeFlywheelStep = step;
+            for(let i=1; i<=6; i++) {
+                const el = document.getElementById(`fw-step-${i}`);
+                if(el) {
+                    if(i === step) el.classList.add('active');
+                    else el.classList.remove('active');
+                }
+            }
+
+            const data = flywheelStepsData[step];
+            const box = document.getElementById('flywheel-detail-box');
+            let valuesHtml = data.values.map(v => `
+                <div class="bg-slate-900/90 rounded-xl p-2.5 border border-slate-800 text-left">
+                    <div class="text-[10px] text-slate-400 font-medium">${v.label}</div>
+                    <div class="text-sm font-extrabold text-cyan-300 font-mono mt-0.5">${v.val}</div>
+                    <div class="text-[9px] text-slate-400 mt-0.5">${v.sub}</div>
+                </div>
+            `).join('');
+
+            box.innerHTML = `
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-xs sm:text-sm font-extrabold text-white flex items-center gap-2">
+                            <span>${data.title}</span>
+                        </h4>
+                        <span class="px-2.5 py-0.5 text-[10px] rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-semibold">
+                            ${data.tag}
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed mb-3.5">${data.desc}</p>
+                </div>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    ${valuesHtml}
+                </div>
+            `;
+        }
+        selectFlywheelStep(1);
+
+        // -------------------------------------------------------------
+        // Telemetry Polling, WebSocket & Live Physical Hardware Sync
+        // -------------------------------------------------------------
+        async function fetchLiveDeviceData() {
+            if(demoMode !== 'live') return;
+            try {
+                const res = await fetch('/api/v1/fleet/devices');
+                if(!res.ok) return;
+                const devices = await res.json();
+                const dev = devices.find(d => d.deviceId === currentDeviceId) || devices[0];
+                if(dev) {
+                    renderDeviceVitals(dev);
+                }
+            } catch(e) {
+                console.warn("Telemetry fetch error:", e);
+            }
+        }
+
+        function renderDeviceVitals(dev) {
+            if(!dev) return;
+
+            // 1. Battery & Signal Indicators
+            const batEl = document.getElementById('val-battery');
+            if(batEl) {
+                batEl.innerHTML = `${dev.batteryPct || 100}% <span class="text-xs text-emerald-400 font-normal font-mono">(${dev.batteryVoltage ? dev.batteryVoltage.toFixed(2) : '4.23'}V 充足)</span>`;
+            }
+            const sigEl = document.getElementById('val-signal');
+            if(sigEl) {
+                sigEl.innerHTML = `${dev.signalRsrp || -94} dBm <span class="text-[10px] text-emerald-400 font-normal">(极佳 CSQ ${dev.signalRssi || 28})</span>`;
+            }
+            
+            // 2. Real Physical Attitude (Pitch, Roll, Yaw) and Accelerometer Ingestion
+            if(dev.pitch !== undefined && dev.pitch !== null) {
+                targetPitch = Number(dev.pitch);
+            }
+            if(dev.roll !== undefined && dev.roll !== null) {
+                targetRoll = Number(dev.roll);
+            }
+            if(dev.yaw !== undefined && dev.yaw !== null) {
+                targetYaw = Number(dev.yaw);
+            }
+
+            // Real tri-axis g-force waveform ingestion if present
+            if(dev.axMg !== undefined && dev.axMg !== null &&
+               dev.ayMg !== undefined && dev.ayMg !== null &&
+               dev.azMg !== undefined && dev.azMg !== null) {
+                pushWavePoint(Number(dev.axMg), Number(dev.ayMg), Number(dev.azMg));
+            }
+
+            // 3. Real-time Kinetic Motion & Physical Shake Analysis
+            const rms = (dev.motionRms !== null && dev.motionRms !== undefined) ? dev.motionRms : 0.05;
+            lastKnownMotionRms = rms;
+            const rmsEl = document.getElementById('val-kinetic-rms');
+            if(rmsEl) rmsEl.innerText = rms.toFixed(2) + ' g';
+
+            // Detect if physical board is moving / being shaken:
+            const isMoved = (rms > 0.08) || (dev.deviceWearState && dev.deviceWearState.includes('wearable')) || (dev.motionState && !dev.motionState.includes('stationary') && !dev.motionState.includes('indoor_weak_gnss'));
+
+            if(isMoved) {
+                // Instantly inject rotational & vibration energy into 3D physics model
+                liveShakeEnergy = Math.max(liveShakeEnergy, Math.min(rms * 1.8, 2.5));
+                const shakeAlert = document.getElementById('badge-shake-alert');
+                if(shakeAlert) {
+                    shakeAlert.classList.remove('hidden');
+                    shakeAlert.innerText = `⚡ 感知到板子物理晃动! 动能: ${rms.toFixed(2)}g`;
+                    clearTimeout(window._shakeAlertTimer);
+                    window._shakeAlertTimer = setTimeout(() => {
+                        if(shakeAlert) shakeAlert.classList.add('hidden');
+                    }, 4000);
+                }
+            }
+
+            // 4. Update Sync Beacon
+            const textSync = document.getElementById('text-board-sync');
+            if(textSync) {
+                const now = new Date();
+                const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+                textSync.innerHTML = `已同步实体板 (${timeStr}) · ${rms.toFixed(2)}g`;
+            }
+
+            // 4. Update Kinetic State & Wear State
+            if(dev.motionState) {
+                updateAvatarState(dev.motionState, isMoved, rms);
+            }
+
+            if(dev.deviceWearState) {
+                const wearEl = document.getElementById('val-wear-state');
+                if(wearEl) wearEl.innerText = dev.deviceWearState;
+            }
+        }
+
+        function updateAvatarState(state, isMoved = false, rms = 0.05) {
+            const m = (state || '').toLowerCase();
+            const badge = document.getElementById('badge-kinetic-state');
+            const icon = document.getElementById('avatar-icon');
+            const desc = document.getElementById('avatar-desc');
+            const wrap = document.getElementById('avatar-icon-wrap');
+
+            if(m.includes('walk') || (isMoved && rms > 0.15)) {
+                badge.className = "px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 text-xs shadow-md shadow-emerald-500/20";
+                badge.innerText = isMoved ? `动能活跃 (${rms.toFixed(2)}g)` : "平稳散步中";
+                icon.setAttribute('data-lucide', 'footprints');
+                desc.innerText = isMoved ? "检测到实时晃动 · 加速度显著" : "节奏均匀 · 步频适中";
+                wrap.className = "w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center shadow-lg shadow-emerald-500/20";
+                document.getElementById('val-kinetic-steps').innerText = "112 步/分";
+            } else if(m.includes('run') || (isMoved && rms > 1.2)) {
+                badge.className = "px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 text-xs shadow-md shadow-amber-500/20";
+                badge.innerText = "高频剧烈晃动";
+                icon.setAttribute('data-lucide', 'flame');
+                desc.innerText = "高动能消耗 · 动态峰值";
+                wrap.className = "w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center shadow-lg shadow-amber-500/20";
+                document.getElementById('val-kinetic-steps').innerText = "176 步/分";
+            } else if(m.includes('fall')) {
+                badge.className = "px-2.5 py-0.5 rounded-full bg-rose-600 text-white font-extrabold text-xs shadow-lg shadow-rose-500/50";
+                badge.innerText = "🚨 突发跌倒警报!";
+                icon.setAttribute('data-lucide', 'alert-triangle');
+                desc.innerText = "检测到严重冲击与失能!";
+                wrap.className = "w-16 h-16 rounded-2xl bg-rose-600/30 text-rose-300 border border-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/40 animate-bounce";
+            } else {
+                badge.className = "px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30 text-xs";
+                badge.innerText = "室内平静停留";
+                icon.setAttribute('data-lucide', 'smile');
+                desc.innerText = "生命体征平稳 · 安全守护中";
+                wrap.className = "w-16 h-16 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center shadow-lg shadow-cyan-500/15";
+                document.getElementById('val-kinetic-steps').innerText = "0 步/分";
+            }
+            lucide.createIcons();
+        }
+
+        // -------------------------------------------------------------
+        // WebSocket Real-Time Push Connection (/ws/dashboard)
+        // -------------------------------------------------------------
+        function initWebSocket() {
+            const loc = window.location;
+            const protocol = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${loc.host}/ws/dashboard`;
+
+            try {
+                wsDashboard = new WebSocket(wsUrl);
+                wsDashboard.onopen = () => {
+                    console.log("WebSocket connected to", wsUrl);
+                    const syncEl = document.getElementById('text-board-sync');
+                    if(syncEl) syncEl.innerHTML = `实体板已极速直连 (WS 实时在线)`;
+                };
+                wsDashboard.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if(msg.event === 'device_status' || msg.event === 'device_updated') {
+                            const dev = msg.data;
+                            if(dev && (dev.deviceId === currentDeviceId || !currentDeviceId)) {
+                                renderDeviceVitals(dev);
+                            }
+                        } else if(msg.event === 'alert_new') {
+                            const alertData = msg.data;
+                            if(alertData && (alertData.type === 'SOS' || alertData.type === 'FALL')) {
+                                const fallBadge = document.getElementById('badge-fall-state');
+                                if(fallBadge) {
+                                    fallBadge.className = "px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-600 text-white shadow-lg shadow-rose-500/50";
+                                    fallBadge.innerText = `🚨 真实告警 [${alertData.type}]: ${alertData.title}`;
+                                }
+                            }
+                        }
+                    } catch(e) {
+                        console.error("WS error:", e);
+                    }
+                };
+                wsDashboard.onclose = () => {
+                    console.warn("WS disconnected, retry in 3s...");
+                    setTimeout(initWebSocket, 3000);
+                };
+                wsDashboard.onerror = (err) => {
+                    console.warn("WS error:", err);
+                };
+            } catch(e) {
+                console.warn("WebSocket init error:", e);
+            }
+        }
+
+        // -------------------------------------------------------------
+        // Roadshow Scenario Injector (现场路演演练)
+        // -------------------------------------------------------------
+        function injectScenario(type) {
+            setDemoMode('sim');
+            clearInterval(simInterval);
+            isSimulating = true;
+            simFrameCount = 0;
+
+            const fallPanel = document.getElementById('fall-panel');
+            fallPanel.classList.remove('pulse-alarm');
+            document.getElementById('badge-fall-state').className = "px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+            document.getElementById('badge-fall-state').innerText = "安全平稳";
+            document.getElementById('phase-1').className = "flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-slate-800";
+            document.getElementById('phase-2').className = "flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-slate-800";
+            document.getElementById('phase-3').className = "flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-slate-800";
+            document.getElementById('phase-1-text').innerText = "未触发";
+            document.getElementById('phase-2-text').innerText = "未达峰值";
+            document.getElementById('phase-3-text').innerText = "静止监测中";
+
+            if(type === 'walking') {
+                updateAvatarState('walking');
+                simInterval = setInterval(() => {
+                    simFrameCount++;
+                    const t = simFrameCount * 0.22;
+                    const ax = Math.sin(t) * 0.35 + (Math.random()-0.5)*0.1;
+                    const ay = Math.cos(t) * 0.25 + (Math.random()-0.5)*0.1;
+                    const az = 1.0 + Math.sin(t*2) * 0.32 + (Math.random()-0.5)*0.1;
+                    pushWavePoint(ax, ay, az);
+                    targetRoll = Math.sin(t) * 12.0;
+                    targetPitch = Math.cos(t) * 8.0;
+                    document.getElementById('val-euler-roll').innerText = targetRoll.toFixed(1) + '°';
+                    document.getElementById('val-euler-pitch').innerText = targetPitch.toFixed(1) + '°';
+                }, 50);
+
+            } else if(type === 'running') {
+                updateAvatarState('running');
+                simInterval = setInterval(() => {
+                    simFrameCount++;
+                    const t = simFrameCount * 0.38;
+                    const ax = Math.sin(t) * 1.3 + (Math.random()-0.5)*0.2;
+                    const ay = Math.cos(t) * 0.9 + (Math.random()-0.5)*0.2;
+                    const az = 1.0 + Math.sin(t*2) * 1.6 + (Math.random()-0.5)*0.3;
+                    pushWavePoint(ax, ay, az);
+                    targetRoll = Math.sin(t) * 24.0;
+                    targetPitch = Math.cos(t) * 16.0;
+                    document.getElementById('val-euler-roll').innerText = targetRoll.toFixed(1) + '°';
+                    document.getElementById('val-euler-pitch').innerText = targetPitch.toFixed(1) + '°';
+                }, 50);
+
+            } else if(type === 'fall') {
+                simInterval = setInterval(() => {
+                    simFrameCount++;
+                    if(simFrameCount < 10) {
+                        pushWavePoint(0.1, 0.2, 1.05);
+                    } else if(simFrameCount < 15) {
+                        // Phase 1: Free fall
+                        pushWavePoint(0.02, 0.04, 0.20);
+                        document.getElementById('phase-1').className = "flex items-center justify-between p-2.5 rounded-xl bg-rose-950/80 border border-rose-500";
+                        document.getElementById('phase-1-text').innerHTML = "<span class='text-rose-400 font-bold'>0.20g 失重触发!</span>";
+                        targetPitch = -45.0;
+                    } else if(simFrameCount < 22) {
+                        // Phase 2: Violent Impact
+                        pushWavePoint(2.2, 1.9, 3.65);
+                        document.getElementById('phase-2').className = "flex items-center justify-between p-2.5 rounded-xl bg-rose-950/80 border border-rose-500";
+                        document.getElementById('phase-2-text').innerHTML = "<span class='text-rose-400 font-bold'>3.65g 冲击超限!</span>";
+                        targetRoll = 78.0;
+                        fallPanel.classList.add('pulse-alarm');
+                    } else {
+                        // Phase 3: Total immobility
+                        pushWavePoint(0.01, 0.01, 0.99);
+                        document.getElementById('phase-3').className = "flex items-center justify-between p-2.5 rounded-xl bg-amber-950/80 border border-amber-500";
+                        document.getElementById('phase-3-text').innerHTML = "<span class='text-amber-400 font-bold'>持续失能 ${(simFrameCount-22)*50}ms</span>";
+                        document.getElementById('badge-fall-state').className = "px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-600 text-white shadow-lg shadow-rose-500/50";
+                        document.getElementById('badge-fall-state').innerText = "🚨 跌倒报警已确认!";
+                        updateAvatarState('fall');
+                    }
+                    document.getElementById('val-euler-roll').innerText = targetRoll.toFixed(1) + '°';
+                    document.getElementById('val-euler-pitch').innerText = targetPitch.toFixed(1) + '°';
+                }, 50);
+
+            } else if(type === 'sos') {
+                fetch('/api/v1/alerts/trigger', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: currentDeviceId,
+                        type: 'SOS',
+                        title: '紧急求助 (物理 KEY 键触发)',
+                        desc: '展厅现场演示中心一键触发紧急救援告警',
+                        lat: 22.537093,
+                        lon: 113.939434
+                    })
+                }).then(r => r.json()).then(data => {
+                    alert('✅ 紧急求助 (SOS) 告警已即刻推送到云端！可在「管理总台」即刻查看处置。');
+                }).catch(e => console.error(e));
+            }
+        }
+
+        function setDemoMode(mode) {
+            demoMode = mode;
+            const btnLive = document.getElementById('btn-mode-live');
+            const btnSim = document.getElementById('btn-mode-sim');
+            if(mode === 'live') {
+                btnLive.className = "px-3 py-1.5 rounded-md font-semibold text-xs flex items-center space-x-1.5 transition-all bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm";
+                btnSim.className = "px-3 py-1.5 rounded-md font-semibold text-xs text-slate-400 hover:text-slate-200 flex items-center space-x-1.5 transition-all";
+                clearInterval(simInterval);
+                isSimulating = false;
+            } else {
+                btnSim.className = "px-3 py-1.5 rounded-md font-semibold text-xs flex items-center space-x-1.5 transition-all bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm";
+                btnLive.className = "px-3 py-1.5 rounded-md font-semibold text-xs text-slate-400 hover:text-slate-200 flex items-center space-x-1.5 transition-all";
+            }
+        }
+
+        function resetToLiveHardware() {
+            setDemoMode('live');
+            clearInterval(simInterval);
+            isSimulating = false;
+            targetRoll = 0.0;
+            targetPitch = 0.0;
+            document.getElementById('val-euler-roll').innerText = '0.0°';
+            document.getElementById('val-euler-pitch').innerText = '0.0°';
+            const fallPanel = document.getElementById('fall-panel');
+            fallPanel.classList.remove('pulse-alarm');
+            document.getElementById('badge-fall-state').className = "px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30";
+            document.getElementById('badge-fall-state').innerText = "安全平稳";
+            updateAvatarState('normal');
+            fetchLiveDeviceData();
+        }
+
+        // Call Modal Handlers
+        function triggerCallTest() {
+            document.getElementById('modal-call').classList.remove('hidden');
+            document.getElementById('modal-call').classList.add('flex');
+        }
+
+        function closeCallModal() {
+            document.getElementById('modal-call').classList.add('hidden');
+            document.getElementById('modal-call').classList.remove('flex');
+        }
+
+        function executeDialSim() {
+            const btn = document.getElementById('btn-dial-confirm');
+            btn.innerHTML = `<span class="animate-spin inline-block mr-1">⏳</span> 正在向实体硬件下发 VoLTE 拨号指令...`;
+            setTimeout(() => {
+                btn.innerHTML = `✅ 已接通 VoLTE 呼叫 (00000000000)`;
+                setTimeout(() => {
+                    closeCallModal();
+                    btn.innerHTML = `发起拨号指令`;
+                }, 2000);
+            }, 1200);
+        }
+
+        function toggleFullscreen() {
+            if(!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(e => console.log(e));
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // Window Init
+        window.onload = () => {
+            initThreeEngine();
+            animateThree();
+            initWebSocket();
+            setInterval(fetchLiveDeviceData, 1200);
+            fetchLiveDeviceData();
+        };
+    </script>
+</body>
+</html>

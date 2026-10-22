@@ -114,6 +114,12 @@ public class FleetService {
         dto.setMotionState(dev.getMotionState());
         dto.setDeviceWearState(dev.getDeviceWearState());
         dto.setMotionRms(dev.getMotionRms());
+        dto.setPitch(dev.getPitch());
+        dto.setRoll(dev.getRoll());
+        dto.setYaw(dev.getYaw());
+        dto.setAxMg(dev.getAxMg());
+        dto.setAyMg(dev.getAyMg());
+        dto.setAzMg(dev.getAzMg());
         dto.setTodayStepCount(dev.getTodayStepCount());
         dto.setLastLatGcj02(dev.getLastLatGcj02());
         dto.setLastLonGcj02(dev.getLastLonGcj02());

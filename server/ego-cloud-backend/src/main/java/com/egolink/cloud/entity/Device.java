@@ -68,6 +68,24 @@ public class Device {
     @Column(name = "motion_rms")
     private Double motionRms = 0.0;
 
+    @Column(name = "pitch")
+    private Double pitch = 0.0;
+
+    @Column(name = "roll")
+    private Double roll = 0.0;
+
+    @Column(name = "yaw")
+    private Double yaw = 0.0;
+
+    @Column(name = "ax_mg")
+    private Double axMg = 0.0;
+
+    @Column(name = "ay_mg")
+    private Double ayMg = 0.0;
+
+    @Column(name = "az_mg")
+    private Double azMg = 1000.0;
+
     @Column(name = "peak_accel")
     private Double peakAccel = 9.8;
 
@@ -193,6 +211,24 @@ public class Device {
 
     public Double getMotionRms() { return motionRms; }
     public void setMotionRms(Double motionRms) { this.motionRms = motionRms; }
+
+    public Double getPitch() { return pitch; }
+    public void setPitch(Double pitch) { this.pitch = pitch; }
+
+    public Double getRoll() { return roll; }
+    public void setRoll(Double roll) { this.roll = roll; }
+
+    public Double getYaw() { return yaw; }
+    public void setYaw(Double yaw) { this.yaw = yaw; }
+
+    public Double getAxMg() { return axMg; }
+    public void setAxMg(Double axMg) { this.axMg = axMg; }
+
+    public Double getAyMg() { return ayMg; }
+    public void setAyMg(Double ayMg) { this.ayMg = ayMg; }
+
+    public Double getAzMg() { return azMg; }
+    public void setAzMg(Double azMg) { this.azMg = azMg; }
 
     public Double getPeakAccel() { return peakAccel; }
     public void setPeakAccel(Double peakAccel) { this.peakAccel = peakAccel; }

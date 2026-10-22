@@ -176,6 +176,12 @@ public class AsyncStreamConsumerWorker {
         if (pkt.getMotionState() != null) device.setMotionState(pkt.getMotionState());
         if (pkt.getDeviceWearState() != null) device.setDeviceWearState(pkt.getDeviceWearState());
         if (pkt.getMotionRms() != null) device.setMotionRms(pkt.getMotionRms());
+        if (pkt.getPitch() != null) device.setPitch(pkt.getPitch());
+        if (pkt.getRoll() != null) device.setRoll(pkt.getRoll());
+        if (pkt.getYaw() != null) device.setYaw(pkt.getYaw());
+        if (pkt.getAx() != null) device.setAxMg(pkt.getAx());
+        if (pkt.getAy() != null) device.setAyMg(pkt.getAy());
+        if (pkt.getAz() != null) device.setAzMg(pkt.getAz());
         if (pkt.getStepCount() != null) device.setTodayStepCount(pkt.getStepCount());
 
         // Check for GNSS coordinate

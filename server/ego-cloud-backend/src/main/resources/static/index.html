@@ -4,17 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>EgoLink 智慧穿戴守护云平台 | 监控与数字孪生中心</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Leaflet CSS & JS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- High-Performance Self-Hosted Static Assets (Zero External CDN Dependency) -->
+    <script src="vendor/tailwindcss.js"></script>
+    <link rel="stylesheet" href="vendor/leaflet.css" />
+    <script src="vendor/leaflet.js"></script>
+    <script src="vendor/lucide.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
             background-color: #0b1120;
             color: #f1f5f9;
         }
@@ -84,6 +81,12 @@
         </div>
 
         <div class="flex items-center space-x-3 lg:space-x-5 text-sm">
+            <!-- Live Demo Showcase Navigation Button -->
+            <a href="demo.html" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-cyan-500/25">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                <span>✨ 现场效果演示看板</span>
+            </a>
+
             <!-- Connection Status Badges -->
             <div class="flex items-center space-x-2 text-xs">
                 <div class="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-slate-800/80 border border-slate-700">

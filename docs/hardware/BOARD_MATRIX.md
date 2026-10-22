@@ -1,20 +1,22 @@
 ---
 document_status: authoritative
-last_verified: 2026-09-16
-reviewed_at: 2026-09-22
-latest_reported_runtime: 2026-09-21
-verified_by: codex
+last_verified: 2026-10-20
+reviewed_at: 2026-10-20
+latest_reported_runtime: 2026-10-20
+verified_by: founder/gemini
 ---
 
 # Board Capability Matrix
 
 Newer 9/18-21 observations below are attributed to their dated runtime reports;
-this 9/22 alignment did not probe hardware. Exact image/boot identity belongs to
+2026-10-20 adds live `COM8` bring-up evidence for the first custom prototype PCB
+(`HW021_C1_ESP32MODEL_VR00` / `PCB1`). Exact image/boot identity belongs to
 [ACTIVE_BUILD](../current/ACTIVE_BUILD.md). MCU revision is not PCB revision.
 
 | Board | Role and hardware | Current evidence boundary |
 |---|---|---|
-| `connectivity-node-001` | Waveshare ESP32-S3-SIM7670G-4G; ESP32-S3 rev v0.2, 16 MiB physical flash; formal PCB revision unknown | Single-board A-line vehicle; last reported Boot188 on COM3, 9/21. No product capability implied by the model name. |
+| `hw021-pcb1-001` | Custom `HW021_C1_ESP32MODEL_VR00` (`PCB1`, silkscreen `20260924`); `ESP32-S3R8` rev v0.2 (`MAC 02:00:00:00:00:02`), Winbond `W25Q32JVSQ` 4 MiB flash (`0xef4016`), `ML307A-DSLN` (`ML307A-DSLN-MTSH1S00`), `SC7A20TR` (`0x19`), external `Beitian BE-220` GNSS, `TY-OV2640-75MM-V1.0` camera, `8002A` amp + mic/spk, `200mAh` LiPo | 2026-10-20 10-stage bring-up on `COM8` ([report](HW021_PCB1_BRINGUP_AND_REVIEW_20261020.md)): ADC `V_BAT=4242mV`, `SC7A20TR` 50Hz 1g PASS, `BE-220` 115200 NMEA PASS, Wi-Fi 7 APs (`-51dBm`) PASS, `ML307A-DSLN-MTSH1S00` AT + VoLTE/IMS/Audio command set (`+CAVIMS: 1`, `AT+CLCC`, `AT+VTS`, `AT+CMUT`, `AT*Audio`) PASS (no SIM inserted). Camera SCCB `GPIO7/8` blocked by schematic short to `3.3V_VCC` awaiting trace cut; `CONFIG_SPIRAM=n` required due to `GPIO26/33-37` pin assignment. |
+| `connectivity-node-001` | Waveshare ESP32-S3-SIM7670G-4G; ESP32-S3 rev v0.2, 16 MiB physical flash; formal PCB revision unknown | Single-board A-line vehicle; last reported Boot188 on COM3, 9/21 (and Boot211 9/23). No product capability implied by the model name. |
 | `wearable-node-001` | ESP32-S3-Touch-AMOLED-2.06; QMI8658 observed; no P0 onboard GNSS/cellular path | Historical CALL-010 endpoints accepted for transition, UI-001 restored; excluded from current A-line. Full duplex/product acoustics unverified. |
 | `pc-bridge` | Development Windows host | Build, review and bench tool; not product Ego Base or field runtime dependency. |
 
