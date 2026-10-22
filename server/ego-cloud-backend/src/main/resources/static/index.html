@@ -360,6 +360,15 @@
                         <div id="diary-summary" class="text-slate-400 text-[11px]">正在加载外场实测行程总结...</div>
                         <div id="diary-tags" class="flex flex-wrap gap-1.5 mt-2"></div>
                     </div>
+
+                    <!-- Timeline Milestones -->
+                    <div id="diary-timeline-section" class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 hidden">
+                        <div class="text-[11px] font-bold text-slate-300 flex items-center gap-1.5 mb-2">
+                            <i data-lucide="clock" class="w-3.5 h-3.5 text-cyan-400"></i>
+                            <span>长辈生活时光轴 (Key Milestones)</span>
+                        </div>
+                        <div id="diary-timeline-items" class="space-y-1.5"></div>
+                    </div>
                     <div id="diary-narrative" class="p-3.5 rounded-xl bg-slate-900/50 border border-slate-800 text-slate-200 space-y-2 leading-relaxed"></div>
                 </div>
             </div>
@@ -1072,24 +1081,67 @@
             document.getElementById('diary-kpi-steps').innerText = `${(d.totalStepCount || 0).toLocaleString()} 步`;
             document.getElementById('diary-kpi-active').innerText = `${d.totalActiveMinutes || 0} 分钟`;
 
-            // Render milestone tags
+            // Render milestone tags and timeline items
             const tagsContainer = document.getElementById('diary-tags');
             tagsContainer.innerHTML = '';
+            const timelineSec = document.getElementById('diary-timeline-section');
+            const timelineItems = document.getElementById('diary-timeline-items');
+            if (timelineItems) timelineItems.innerHTML = '';
+
             if (d.keyMilestonesJson) {
                 try {
-                    const tags = JSON.parse(d.keyMilestonesJson);
-                    if (Array.isArray(tags)) {
-                        tags.forEach(t => {
-                            const span = document.createElement('span');
-                            span.className = 'px-2 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-medium';
-                            span.innerText = t;
-                            tagsContainer.appendChild(span);
-                        });
+                    const parsed = JSON.parse(d.keyMilestonesJson);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        if (typeof parsed[0] === 'object' && parsed[0] !== null) {
+                            if (timelineSec) timelineSec.classList.remove('hidden');
+                            parsed.forEach(m => {
+                                // Add badge to tags
+                                if (m.badge) {
+                                    const span = document.createElement('span');
+                                    span.className = 'px-2 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-medium';
+                                    span.innerText = m.badge;
+                                    tagsContainer.appendChild(span);
+                                }
+                                // Add timeline item
+                                if (timelineItems) {
+                                    const row = document.createElement('div');
+                                    row.className = 'flex items-start space-x-2.5 p-1.5 rounded-lg bg-slate-900/40 text-xs';
+                                    row.innerHTML = `
+                                        <div class="w-6 h-6 rounded-md bg-slate-800 text-cyan-400 flex items-center justify-center shrink-0 mt-0.5">
+                                            <i data-lucide="${m.icon || 'circle'}" class="w-3.5 h-3.5"></i>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center justify-between">
+                                                <span class="font-bold text-white text-[11px]">${m.title}</span>
+                                                <span class="text-[9px] text-cyan-300 font-mono">${m.time}</span>
+                                            </div>
+                                            <div class="text-[10px] text-slate-300 mt-0.5">${m.desc}</div>
+                                        </div>
+                                    `;
+                                    timelineItems.appendChild(row);
+                                }
+                            });
+                        } else {
+                            if (timelineSec) timelineSec.classList.add('hidden');
+                            parsed.forEach(t => {
+                                const span = document.createElement('span');
+                                span.className = 'px-2 py-0.5 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-medium';
+                                span.innerText = t;
+                                tagsContainer.appendChild(span);
+                            });
+                        }
+                    } else {
+                        if (timelineSec) timelineSec.classList.add('hidden');
                     }
-                } catch ( ignored ) {}
+                } catch ( ignored ) {
+                    if (timelineSec) timelineSec.classList.add('hidden');
+                }
+            } else {
+                if (timelineSec) timelineSec.classList.add('hidden');
             }
 
             document.getElementById('diary-narrative').innerHTML = renderMarkdownHtml(d.narrative || '');
+            if (window.lucide) lucide.createIcons();
         }
 
         // Startup Bootstrap

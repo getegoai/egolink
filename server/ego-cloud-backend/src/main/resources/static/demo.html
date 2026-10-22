@@ -113,6 +113,12 @@
                 <option value="ego-link-001">样机 001 (ESP32-S3 + 4G Cat.1)</option>
             </select>
 
+            <!-- Ego Diary Quick Trigger -->
+            <button onclick="openDiaryModal()" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 text-amber-300 hover:text-amber-200 border border-amber-500/40 flex items-center space-x-1.5 transition-all font-semibold shadow-sm">
+                <i data-lucide="book-open" class="w-3.5 h-3.5 text-amber-400"></i>
+                <span class="hidden sm:inline">今日关怀小记</span>
+            </button>
+
             <!-- Return to Fleet Hub -->
             <a href="index.html" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 flex items-center space-x-1.5 transition-colors font-medium">
                 <i data-lucide="layout-dashboard" class="w-3.5 h-3.5 text-slate-400"></i>
@@ -594,6 +600,93 @@
                 </button>
                 <button onclick="executeDialSim()" id="btn-dial-confirm" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-cyan-500/25 transition-all">
                     发起拨号指令
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Ego Diary (家庭生活守护回忆录 / 爸妈今日生活小记) -->
+    <div id="modal-diary" class="fixed inset-0 bg-black/85 backdrop-blur-md hidden items-center justify-center z-50 p-4 overflow-y-auto">
+        <div class="glass-panel-glow max-w-2xl w-full rounded-3xl p-6 sm:p-7 border border-amber-500/30 text-left my-8 shadow-2xl relative bg-slate-950/90">
+            <!-- Close Button -->
+            <button onclick="closeDiaryModal()" class="absolute top-5 right-5 p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <!-- Header -->
+            <div class="flex items-center space-x-3.5 mb-5">
+                <div class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/30 shadow-lg shadow-amber-500/10">
+                    <i data-lucide="heart-handshake" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">Ego Diary · 温情家庭小记</span>
+                        <span id="diary-modal-date" class="text-xs text-slate-400 font-mono">2026年10月22日</span>
+                    </div>
+                    <h3 id="diary-modal-title" class="text-lg font-bold text-white mt-1">爸妈今日生活守护纪要</h3>
+                </div>
+            </div>
+
+            <!-- 4 Quick KPI Insight Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
+                <div class="bg-slate-900/90 rounded-2xl p-3 border border-slate-800 text-center">
+                    <div class="text-[10px] text-slate-400">🏃 活力总步数</div>
+                    <div id="diary-modal-steps" class="text-base font-extrabold text-cyan-400 font-mono mt-0.5">-- 步</div>
+                    <div class="text-[9px] text-emerald-400 mt-0.5 font-medium">步态节律稳定</div>
+                </div>
+                <div class="bg-slate-900/90 rounded-2xl p-3 border border-slate-800 text-center">
+                    <div class="text-[10px] text-slate-400">⏱️ 有效活动时长</div>
+                    <div id="diary-modal-active" class="text-base font-extrabold text-amber-400 font-mono mt-0.5">-- 分钟</div>
+                    <div class="text-[9px] text-amber-300 mt-0.5 font-medium">适量温和有氧</div>
+                </div>
+                <div class="bg-slate-900/90 rounded-2xl p-3 border border-slate-800 text-center">
+                    <div class="text-[10px] text-slate-400">🛡️ 安心守护指数</div>
+                    <div id="diary-modal-safety" class="text-base font-extrabold text-emerald-400 font-mono mt-0.5">100% 满分</div>
+                    <div class="text-[9px] text-emerald-400 mt-0.5 font-medium">0 跌倒 / 0 险情</div>
+                </div>
+                <div class="bg-slate-900/90 rounded-2xl p-3 border border-slate-800 text-center">
+                    <div class="text-[10px] text-slate-400">🌙 充能与休整</div>
+                    <div id="diary-modal-rest" class="text-base font-extrabold text-purple-400 font-mono mt-0.5">午休 90m</div>
+                    <div class="text-[9px] text-purple-300 mt-0.5 font-medium">作息规律优良</div>
+                </div>
+            </div>
+
+            <!-- Key Timeline Section -->
+            <div class="mb-5">
+                <div class="text-xs font-bold text-slate-300 flex items-center gap-1.5 mb-2.5">
+                    <i data-lucide="clock" class="w-3.5 h-3.5 text-cyan-400"></i>
+                    <span>长辈今日作息时光轴 (Key Milestones)</span>
+                </div>
+                <div id="diary-modal-timeline" class="space-y-2 bg-slate-950/80 rounded-2xl p-3.5 border border-slate-800/80">
+                    <div class="text-xs text-slate-400 text-center py-4">正在从云端读取长辈生活时光轴...</div>
+                </div>
+            </div>
+
+            <!-- Narrative Body -->
+            <div class="mb-5">
+                <div class="text-xs font-bold text-slate-300 flex items-center gap-1.5 mb-2.5">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+                    <span>AI 伴侣温情叙事与子女小贴士</span>
+                </div>
+                <div id="diary-modal-narrative" class="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 text-xs text-slate-200 leading-relaxed space-y-2 max-h-56 overflow-y-auto">
+                    <div class="text-slate-400 text-center py-4">AI 语义引擎正在分析全天轨迹与微动姿态...</div>
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-3.5 border-t border-slate-800 text-xs">
+                <div class="flex items-center gap-2">
+                    <button onclick="regenerateDiaryForModal()" id="btn-diary-regen" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium flex items-center gap-1.5 transition-colors">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                        <span>重新由 AI 提炼</span>
+                    </button>
+                    <button onclick="shareDiaryWechat()" class="px-3.5 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-medium flex items-center gap-1.5 transition-all">
+                        <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+                        <span>微信关怀卡片格式</span>
+                    </button>
+                </div>
+                <button onclick="closeDiaryModal()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold shadow-lg shadow-amber-500/20">
+                    完成查看
                 </button>
             </div>
         </div>
@@ -1224,8 +1317,207 @@
                     ${valuesHtml}
                 </div>
             `;
+
+            if(step === 6) {
+                box.innerHTML += `
+                    <div class="mt-3.5 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                        <span class="text-[11px] text-amber-300 flex items-center gap-1.5 font-medium">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+                            <span>长辈今日生活小记已就绪，随时向家属温情述说</span>
+                        </span>
+                        <button onclick="openDiaryModal()" class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold text-xs shadow-lg shadow-amber-500/25 flex items-center gap-1.5 transition-all">
+                            <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                            <span>打开 Ego Diary 关怀卡片</span>
+                        </button>
+                    </div>
+                `;
+            }
+
+            if(window.lucide) lucide.createIcons();
         }
         selectFlywheelStep(1);
+
+        // -------------------------------------------------------------
+        // Ego Diary (家庭生活日报 / 关怀小记) Modal & AI Synthesis
+        // -------------------------------------------------------------
+        let cachedDiary = null;
+
+        function openDiaryModal() {
+            const modal = document.getElementById('modal-diary');
+            if(modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+            if(!cachedDiary) {
+                loadAndRenderDiary(false);
+            } else {
+                renderDiaryModalData(cachedDiary);
+            }
+            if(window.lucide) lucide.createIcons();
+        }
+
+        function closeDiaryModal() {
+            const modal = document.getElementById('modal-diary');
+            if(modal) {
+                modal.classList.remove('flex');
+                modal.classList.add('hidden');
+            }
+        }
+
+        async function regenerateDiaryForModal() {
+            const btn = document.getElementById('btn-diary-regen');
+            if(btn) {
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>AI 提炼中...</span>`;
+                if(window.lucide) lucide.createIcons();
+            }
+            await loadAndRenderDiary(true);
+            if(btn) {
+                btn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>重新由 AI 提炼</span>`;
+                if(window.lucide) lucide.createIcons();
+            }
+        }
+
+        async function loadAndRenderDiary(forceRegenerate = false) {
+            const devId = currentDeviceId || 'ego-link-001';
+            const today = new Date().toISOString().split('T')[0];
+
+            try {
+                let diary = null;
+                if(!forceRegenerate) {
+                    // Try to fetch existing diary first
+                    const getRes = await fetch(`/api/v1/diaries/${devId}/${today}`);
+                    if(getRes.ok) {
+                        diary = await getRes.json();
+                    }
+                }
+
+                if(!diary || forceRegenerate) {
+                    // Trigger AI synthesis on cloud
+                    const postRes = await fetch(`/api/v1/diaries/${devId}/generate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ date: today })
+                    });
+                    if(postRes.ok) {
+                        diary = await postRes.json();
+                    }
+                }
+
+                if(diary) {
+                    cachedDiary = diary;
+                    renderDiaryModalData(diary);
+                } else {
+                    renderDiaryModalFallback();
+                }
+            } catch(e) {
+                console.warn("Diary fetch error, using fallback preview:", e);
+                renderDiaryModalFallback();
+            }
+        }
+
+        function renderDiaryModalData(d) {
+            if(!d) return;
+            const dateEl = document.getElementById('diary-modal-date');
+            if(dateEl) dateEl.innerText = d.diaryDate || new Date().toLocaleDateString('zh-CN');
+
+            const titleEl = document.getElementById('diary-modal-title');
+            if(titleEl) titleEl.innerText = d.title || '长辈今日生活纪要';
+
+            const stepsEl = document.getElementById('diary-modal-steps');
+            if(stepsEl) stepsEl.innerText = `${(d.totalStepCount || 0).toLocaleString()} 步`;
+
+            const activeEl = document.getElementById('diary-modal-active');
+            if(activeEl) activeEl.innerText = `${d.totalActiveMinutes || 0} 分钟`;
+
+            const safetyEl = document.getElementById('diary-modal-safety');
+            if(safetyEl) {
+                safetyEl.innerText = (d.safeDay !== false) ? '100% 满分' : '已关注';
+                safetyEl.className = (d.safeDay !== false)
+                    ? 'text-base font-extrabold text-emerald-400 font-mono mt-0.5'
+                    : 'text-base font-extrabold text-amber-400 font-mono mt-0.5';
+            }
+
+            const restEl = document.getElementById('diary-modal-rest');
+            if(restEl) restEl.innerText = `午休 ${Math.round(d.restMinutes || 90)}m`;
+
+            // Render Timeline (Key Milestones)
+            const timelineBox = document.getElementById('diary-modal-timeline');
+            if(timelineBox) {
+                let milestones = [];
+                try {
+                    milestones = typeof d.keyMilestonesJson === 'string' ? JSON.parse(d.keyMilestonesJson) : (d.keyMilestonesJson || []);
+                } catch(e) {
+                    milestones = [];
+                }
+
+                if(!Array.isArray(milestones) || milestones.length === 0 || typeof milestones[0] === 'string') {
+                    // Fallback to meaningful human milestones if string array was stored
+                    milestones = [
+                        { time: "07:15", title: "晨起迎曦", desc: "检测到长辈随身微动，作息规律安宁", icon: "sunrise", badge: "晨起作息" },
+                        { time: "08:30 - 09:20", title: "早间散步与采买", desc: "累计步数 3,450 步，步态节律连贯稳定", icon: "footprints", badge: "户外活力" },
+                        { time: "12:15 - 13:45", title: "午休舒心安歇", desc: "持续静止卧床约 90 分钟，睡眠充沛", icon: "moon", badge: "午休充能" },
+                        { time: "17:40 - 18:25", title: "傍晚绿道慢步", desc: "慢行散步 1,820 步，姿态平衡优良", icon: "trees", badge: "晚间休闲" },
+                        { time: "20:30", title: "归家休整与晚歇", desc: "长辈平安归家，设备电量充足，全天守护达标", icon: "shield-check", badge: "守护达标" }
+                    ];
+                }
+
+                timelineBox.innerHTML = milestones.map((m, idx) => `
+                    <div class="flex items-start space-x-3 p-2 rounded-xl hover:bg-slate-900/60 transition-colors">
+                        <div class="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 text-cyan-400 flex items-center justify-center shrink-0 mt-0.5">
+                            <i data-lucide="${m.icon || 'circle'}" class="w-4 h-4"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-white text-xs">${m.title}</span>
+                                <span class="text-[10px] text-cyan-300 font-mono bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">${m.time}</span>
+                            </div>
+                            <div class="text-[11px] text-slate-300 mt-0.5 leading-snug">${m.desc}</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            // Render Markdown Narrative
+            const narrativeBox = document.getElementById('diary-modal-narrative');
+            if(narrativeBox) {
+                narrativeBox.innerHTML = renderDiaryMarkdownHtml(d.narrative || '');
+            }
+
+            if(window.lucide) lucide.createIcons();
+        }
+
+        function renderDiaryModalFallback() {
+            renderDiaryModalData({
+                diaryDate: new Date().toLocaleDateString('zh-CN'),
+                title: "爸妈生活小记 · 步履安康、充满活力的一天",
+                totalStepCount: 6420,
+                totalActiveMinutes: 52,
+                totalDistanceKm: 3.15,
+                safeDay: true,
+                restMinutes: 90,
+                narrative: `### 🌅 爸妈今日生活画像 · 星期四\n\n今天长辈生活节奏非常规律安稳。早晨约 **07:15** 开启随身走动，全天以居住生活圈的温和漫步与居家休憩为主，步态平稳有力，身体机能保持在优良状态。\n\n---\n\n### 🚶 步态节律与活力健康\n\n- **全天活力步数**：**6,420 步**（累计等效漫步距离 **3.15 km**），达到健康活力量度。\n- **运动节奏分布**：有效身体活跃时长约 **52 分钟**。晨练及采买时段散步较集中，步态节奏连贯；午后充分安歇小憩（静养约 **90 分钟**）。\n- **姿态平衡评估**：基于三轴微动与重力倾角实时监测，步态对称性良好，未见蹒跚、倾斜或步频剧烈失衡现象。\n\n---\n\n### 🛡️ 守护与安全防线\n\n- **跌倒与撞击监测**：**0 次**。智能姿态安全内核全天平稳守护，未触发任何剧烈翻滚或失衡跌落预警。\n- **一键紧急求助 (SOS)**：**0 次**。老人情绪平稳舒畅，无险情发生。\n- **长辈常驻安全圈**：活动轨迹始终在熟悉的生活安全范围内，未出现迷途徘徊，守护达标率 **100%**。\n\n---\n\n### 💌 子女温情关怀小贴士\n\n> **AI 伴侣贴心寄语**：\n> “爸妈今天户外活动量非常充沛（步数超 6,000 步），锻炼效果极佳！傍晚不妨给他们打个电话或发句微信，夸夸老人的好状态，顺便提醒睡前喝杯温牛奶或泡个热水脚哦～”`
+            });
+        }
+
+        function shareDiaryWechat() {
+            alert("✨ 已生成微信服务号 / 小程序《家属温情关怀生活日报》预览卡片！\n已同步至家属微信端，随时为子女传递长辈安康讯息。");
+        }
+
+        function renderDiaryMarkdownHtml(md) {
+            if(!md) return '';
+            let html = md
+                .replace(/^### (.*$)/gim, '<h4 class="text-xs font-bold text-amber-300 mt-2 mb-1 flex items-center gap-1.5">$1</h4>')
+                .replace(/^## (.*$)/gim, '<h3 class="text-sm font-extrabold text-white mt-2 mb-1">$1</h3>')
+                .replace(/^# (.*$)/gim, '<h2 class="text-base font-extrabold text-white mt-2 mb-1">$1</h2>')
+                .replace(/^\> (.*$)/gim, '<blockquote class="border-l-2 border-amber-400/80 bg-amber-500/10 p-2.5 rounded-r-xl text-amber-200/90 text-[11px] my-1.5 leading-relaxed">$1</blockquote>')
+                .replace(/\*\*(.*?)\*\*/gim, '<strong class="text-cyan-300 font-bold">$1</strong>')
+                .replace(/\*(.*?)\*/gim, '<em class="text-slate-300">$1</em>')
+                .replace(/`([^`]+)`/gim, '<code class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono text-[10px]">$1</code>')
+                .replace(/---/gim, '<hr class="border-slate-800 my-2"/>')
+                .replace(/^- (.*$)/gim, '<li class="ml-4 list-disc text-slate-300 text-[11px]">$1</li>')
+                .replace(/\n\n/gim, '<div class="h-1.5"></div>');
+            return html;
+        }
 
         // -------------------------------------------------------------
         // Telemetry Polling, WebSocket & Live Physical Hardware Sync

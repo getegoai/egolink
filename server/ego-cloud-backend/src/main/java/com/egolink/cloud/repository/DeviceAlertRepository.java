@@ -11,6 +11,7 @@ import java.util.List;
 @Repository
 public interface DeviceAlertRepository extends JpaRepository<DeviceAlert, Long> {
     List<DeviceAlert> findByDeviceIdOrderByTimestampDesc(String deviceId);
+    List<DeviceAlert> findByDeviceIdAndTimestampBetweenOrderByTimestampAsc(String deviceId, java.time.LocalDateTime start, java.time.LocalDateTime end);
     Page<DeviceAlert> findByDeviceIdOrderByTimestampDesc(String deviceId, Pageable pageable);
     List<DeviceAlert> findByResolvedFalseOrderByTimestampDesc();
     long countByResolvedFalse();
