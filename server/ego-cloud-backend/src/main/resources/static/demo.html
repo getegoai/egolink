@@ -9,6 +9,8 @@
     <script src="vendor/lucide.min.js"></script>
     <script src="vendor/three.min.js"></script>
     <script src="vendor/OrbitControls.js"></script>
+    <link rel="stylesheet" href="vendor/leaflet.css" />
+    <script src="vendor/leaflet.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
@@ -299,6 +301,79 @@
 
                     <div class="absolute bottom-3 right-4 pointer-events-none text-[11px] font-mono text-cyan-200/90 bg-slate-900/90 backdrop-blur-md px-2.5 py-1 rounded-lg border border-slate-700/80 shadow-lg">
                         拖动视角 · 滚轮缩放 · 双击居中
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 1.5: Live GNSS High-Precision Geo-Tracking HUD (实时星基高精轨迹地图) -->
+            <div class="glass-panel rounded-3xl p-5 lg:p-6 relative overflow-hidden flex flex-col">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-3 z-10">
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                            <h2 class="text-base lg:text-lg font-extrabold text-white tracking-wide">
+                                实时星基高精轨迹地图 (Live GNSS Geo-Tracking HUD)
+                            </h2>
+                            <span id="map-fix-badge" class="px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                                GNSS 3D 定位
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5">北天 BE-220 双模定位 · 毫秒级空间位移投影 · 实时航向追踪与动态轨迹回放</p>
+                    </div>
+
+                    <!-- Map Actions -->
+                    <div class="flex items-center gap-1.5 bg-slate-900/90 rounded-xl p-1 border border-slate-700">
+                        <button onclick="centerMapOnDevice()" id="btn-map-follow" title="锁定并居中当前设备" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-all flex items-center space-x-1">
+                            <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>
+                            <span>追随设备</span>
+                        </button>
+                        <button onclick="fitMapBounds()" title="缩放至全景轨迹" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center space-x-1">
+                            <i data-lucide="scan" class="w-3.5 h-3.5"></i>
+                            <span>全景居中</span>
+                        </button>
+                        <button onclick="toggleMapLayer()" id="btn-map-layer" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center space-x-1">
+                            <i data-lucide="layers" class="w-3.5 h-3.5"></i>
+                            <span id="text-map-layer">高德矢量</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Leaflet Map Container -->
+                <div class="relative w-full h-[320px] rounded-2xl border border-emerald-500/30 overflow-hidden shadow-[0_0_40px_rgba(16,185,129,0.12)]">
+                    <div id="demo-map" class="w-full h-full"></div>
+
+                    <!-- Map Floating HUD: Coordinates & Satellites (Top-Left) -->
+                    <div class="absolute top-3 left-3 pointer-events-none space-y-1.5 font-mono text-xs z-[400]">
+                        <div class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-slate-200 flex items-center gap-2 shadow-lg">
+                            <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                            <span>当前坐标: <strong class="text-cyan-300" id="map-coord-text">22.54012, 113.93456</strong></span>
+                        </div>
+                        <div class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-slate-200 flex items-center gap-2 shadow-lg">
+                            <i data-lucide="satellite" class="w-3.5 h-3.5 text-emerald-400"></i>
+                            <span>搜星锁定: <strong class="text-emerald-400" id="map-sats-text">18 颗 (HDOP 0.8)</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Map Floating HUD: Speed & Direction (Top-Right) -->
+                    <div class="absolute top-3 right-3 pointer-events-none space-y-1.5 font-mono text-xs z-[400]">
+                        <div class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-slate-200 flex items-center gap-2 shadow-lg">
+                            <i data-lucide="gauge" class="w-3.5 h-3.5 text-amber-400"></i>
+                            <span>移动速度: <strong class="text-amber-300" id="map-speed-text">0.0 km/h</strong></span>
+                        </div>
+                        <div class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-slate-200 flex items-center gap-2 shadow-lg">
+                            <i data-lucide="route" class="w-3.5 h-3.5 text-purple-400"></i>
+                            <span>轨迹点数: <strong class="text-purple-300" id="map-pts-count">0 点</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Tag Bar -->
+                    <div class="absolute bottom-3 left-3 pointer-events-none flex items-center gap-2 z-[400]">
+                        <span class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-emerald-500/30 text-[11px] text-emerald-300 font-medium shadow-lg">
+                            卫星模块: 北天 BE-220 (115200 baud · 秒脉冲 1PPS)
+                        </span>
+                        <span class="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-[11px] text-slate-300 shadow-lg">
+                            火星坐标纠偏 (WGS-84 -> GCJ-02) 自动闭环
+                        </span>
                     </div>
                 </div>
             </div>
@@ -1608,6 +1683,13 @@
                 const wearEl = document.getElementById('val-wear-state');
                 if(wearEl) wearEl.innerText = dev.deviceWearState;
             }
+
+            // 5. Update Live Map Location
+            const mapLat = dev.lastLatGcj02 || dev.lastLatitude;
+            const mapLon = dev.lastLonGcj02 || dev.lastLongitude;
+            if(mapLat && mapLon && Math.abs(mapLat) > 0.001) {
+                updateLiveMapLocation(mapLat, mapLon, dev.lastSpeed || 0.0, dev.satellitesCount || 18, 0.8);
+            }
         }
 
         function updateAvatarState(state, isMoved = false, rms = 0.05) {
@@ -1679,6 +1761,11 @@
                                     fallBadge.className = "px-2.5 py-0.5 text-xs font-bold rounded-full bg-rose-600 text-white shadow-lg shadow-rose-500/50";
                                     fallBadge.innerText = `🚨 真实告警 [${alertData.type}]: ${alertData.title}`;
                                 }
+                            }
+                        } else if(msg.event === 'location_live') {
+                            const loc = msg.data;
+                            if(loc && loc.lat && loc.lon && (loc.deviceId === currentDeviceId || !currentDeviceId)) {
+                                updateLiveMapLocation(loc.lat, loc.lon, loc.speed || 0.0, 18, 0.8);
                             }
                         }
                     } catch(e) {
@@ -1858,10 +1945,203 @@
             }
         }
 
+        // -------------------------------------------------------------
+        // Live GNSS High-Precision Map (实时星基高精轨迹地图)
+        // -------------------------------------------------------------
+        let demoMap = null;
+        let liveMarker = null;
+        let trackPolyline = null;
+        let trackPolylineGlow = null;
+        let mapPoints = [];
+        let isFollowDevice = true;
+        let currentMapLayerIndex = 0;
+        let mapLayers = [];
+
+        function initLiveMap() {
+            const container = document.getElementById('demo-map');
+            if(!container || typeof L === 'undefined') return;
+
+            // Default center: Shenzhen Nanshan High-Tech Park
+            const defaultPos = [22.540123, 113.934567];
+            demoMap = L.map('demo-map', {
+                center: defaultPos,
+                zoom: 16,
+                zoomControl: false,
+                attributionControl: false
+            });
+
+            // Layer 0: AMap Vector (高德高精矢量瓦片 - 国内极速响应)
+            const amapVector = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                subdomains: ['1', '2', '3', '4'],
+                maxZoom: 18,
+                minZoom: 3
+            });
+
+            // Layer 1: AMap Satellite (高德高清卫星影像)
+            const amapSatellite = L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', {
+                subdomains: ['1', '2', '3', '4'],
+                maxZoom: 18,
+                minZoom: 3
+            });
+
+            // Layer 2: CartoDB Dark (夜间暗夜极客科技风底图)
+            const cartoDark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                subdomains: 'abcd',
+                maxZoom: 19,
+                minZoom: 3
+            });
+
+            mapLayers = [amapVector, amapSatellite, cartoDark];
+            mapLayers[0].addTo(demoMap);
+
+            // Custom High-Tech Pulsing Marker for Active Device
+            const pulseIcon = L.divIcon({
+                className: 'custom-pulse-marker',
+                html: `
+                    <div style="position:relative; width:28px; height:28px;">
+                        <span style="position:absolute; width:100%; height:100%; border-radius:50%; background:rgba(6,182,212,0.45); animation:ping 1.8s cubic-bezier(0,0,0.2,1) infinite;"></span>
+                        <span style="position:absolute; top:4px; left:4px; width:20px; height:20px; border-radius:50%; background:#06b6d4; border:3px solid #ffffff; box-shadow:0 0 14px #06b6d4;"></span>
+                    </div>`,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            });
+
+            liveMarker = L.marker(defaultPos, { icon: pulseIcon }).addTo(demoMap);
+            liveMarker.bindPopup('<div class="text-xs font-bold text-slate-800">EgoLink-001 (当前位置)</div>');
+
+            // Polyline with neon glow
+            trackPolylineGlow = L.polyline([], { color: '#06b6d4', weight: 8, opacity: 0.25 }).addTo(demoMap);
+            trackPolyline = L.polyline([], { color: '#22d3ee', weight: 3.5, opacity: 0.95 }).addTo(demoMap);
+
+            // Zoom control on bottom-right
+            L.control.zoom({ position: 'bottomright' }).addTo(demoMap);
+
+            // Dragging map disables auto-follow
+            demoMap.on('dragstart', () => {
+                isFollowDevice = false;
+                updateFollowButtonUI();
+            });
+
+            // Load initial track history
+            loadTrackHistory();
+        }
+
+        async function loadTrackHistory() {
+            const devId = currentDeviceId || 'ego-link-001';
+            try {
+                const res = await fetch(`/api/v1/tracks/${devId}/latest?limit=250`);
+                if(res.ok) {
+                    const data = await res.json();
+                    if(Array.isArray(data) && data.length > 0) {
+                        mapPoints = [];
+                        data.forEach(pt => {
+                            const lat = pt.latGcj02 || pt.latWgs84;
+                            const lon = pt.lonGcj02 || pt.lonWgs84;
+                            if(lat && lon && Math.abs(lat) > 0.001) {
+                                mapPoints.push([lat, lon]);
+                            }
+                        });
+
+                        if(mapPoints.length > 0) {
+                            trackPolyline.setLatLngs(mapPoints);
+                            trackPolylineGlow.setLatLngs(mapPoints);
+                            const latest = mapPoints[mapPoints.length - 1];
+                            liveMarker.setLatLng(latest);
+                            if(isFollowDevice && demoMap) {
+                                demoMap.setView(latest, 16);
+                            }
+                            const ptsCountEl = document.getElementById('map-pts-count');
+                            if(ptsCountEl) ptsCountEl.innerText = `${mapPoints.length} 点`;
+                        }
+                    }
+                }
+            } catch(e) {
+                console.warn("Track history fetch error:", e);
+            }
+        }
+
+        function updateLiveMapLocation(lat, lon, speed = 0, sats = 18, hdop = 0.8) {
+            if(!demoMap || !lat || !lon) return;
+
+            const newPos = [lat, lon];
+            if(liveMarker) liveMarker.setLatLng(newPos);
+
+            // Update Map HUD Text
+            const coordEl = document.getElementById('map-coord-text');
+            if(coordEl) coordEl.innerText = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+
+            const satsEl = document.getElementById('map-sats-text');
+            if(satsEl) satsEl.innerText = `${sats > 0 ? sats : 18} 颗 (HDOP ${hdop ? hdop.toFixed(1) : '0.8'})`;
+
+            const speedEl = document.getElementById('map-speed-text');
+            if(speedEl) speedEl.innerText = `${(speed * 3.6).toFixed(1)} km/h`;
+
+            // Append point if moved > 2 meters
+            let shouldAppend = false;
+            if(mapPoints.length === 0) {
+                shouldAppend = true;
+            } else {
+                const last = mapPoints[mapPoints.length - 1];
+                const dLat = (lat - last[0]) * 111000;
+                const dLon = (lon - last[1]) * 111000 * Math.cos(lat * Math.PI / 180);
+                const distM = Math.sqrt(dLat * dLat + dLon * dLon);
+                if(distM >= 2.0) shouldAppend = true;
+            }
+
+            if(shouldAppend) {
+                mapPoints.push(newPos);
+                if(trackPolyline) trackPolyline.addLatLng(newPos);
+                if(trackPolylineGlow) trackPolylineGlow.addLatLng(newPos);
+                const ptsCountEl = document.getElementById('map-pts-count');
+                if(ptsCountEl) ptsCountEl.innerText = `${mapPoints.length} 点`;
+            }
+
+            if(isFollowDevice) {
+                demoMap.panTo(newPos, { animate: true });
+            }
+        }
+
+        function centerMapOnDevice() {
+            isFollowDevice = true;
+            updateFollowButtonUI();
+            if(liveMarker && demoMap) {
+                demoMap.setView(liveMarker.getLatLng(), 17, { animate: true });
+            }
+        }
+
+        function fitMapBounds() {
+            if(!demoMap || mapPoints.length === 0) return;
+            isFollowDevice = false;
+            updateFollowButtonUI();
+            demoMap.fitBounds(trackPolyline.getBounds(), { padding: [40, 40] });
+        }
+
+        function updateFollowButtonUI() {
+            const btn = document.getElementById('btn-map-follow');
+            if(!btn) return;
+            if(isFollowDevice) {
+                btn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-all flex items-center space-x-1";
+            } else {
+                btn.className = "px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center space-x-1";
+            }
+        }
+
+        function toggleMapLayer() {
+            if(!demoMap || mapLayers.length < 3) return;
+            demoMap.removeLayer(mapLayers[currentMapLayerIndex]);
+            currentMapLayerIndex = (currentMapLayerIndex + 1) % mapLayers.length;
+            mapLayers[currentMapLayerIndex].addTo(demoMap);
+
+            const names = ['高德矢量', '高德卫星', '暗夜科技'];
+            const textEl = document.getElementById('text-map-layer');
+            if(textEl) textEl.innerText = names[currentMapLayerIndex];
+        }
+
         // Window Init
         window.onload = () => {
             initThreeEngine();
             animateThree();
+            initLiveMap();
             initWebSocket();
             setInterval(fetchLiveDeviceData, 1200);
             fetchLiveDeviceData();
