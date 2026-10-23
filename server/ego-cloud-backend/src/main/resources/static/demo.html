@@ -314,8 +314,8 @@
                             <h2 class="text-base lg:text-lg font-extrabold text-white tracking-wide">
                                 实时星基高精轨迹地图 (Live GNSS Geo-Tracking HUD)
                             </h2>
-                            <span id="map-fix-badge" class="px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
-                                GNSS 3D 定位
+                            <span id="map-fix-badge" class="px-2 py-0.5 text-[10px] rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                                室内搜星中 (基准预设)
                             </span>
                         </div>
                         <p class="text-xs text-slate-400 mt-0.5">北天 BE-220 双模定位 · 毫秒级空间位移投影 · 实时航向追踪与动态轨迹回放</p>
@@ -346,11 +346,11 @@
                     <div class="absolute top-3 left-3 pointer-events-none space-y-1.5 font-mono text-xs z-[400]">
                         <div class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-slate-200 flex items-center gap-2 shadow-lg">
                             <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
-                            <span>当前坐标: <strong class="text-cyan-300" id="map-coord-text">22.54012, 113.93456</strong></span>
+                            <span>当前坐标: <strong class="text-cyan-300" id="map-coord-text">22.54012, 113.93456 (室内预设)</strong></span>
                         </div>
                         <div class="px-2.5 py-1 rounded-lg bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-slate-200 flex items-center gap-2 shadow-lg">
-                            <i data-lucide="satellite" class="w-3.5 h-3.5 text-emerald-400"></i>
-                            <span>搜星锁定: <strong class="text-emerald-400" id="map-sats-text">18 颗 (HDOP 0.8)</strong></span>
+                            <i data-lucide="satellite" class="w-3.5 h-3.5 text-amber-400"></i>
+                            <span>搜星锁定: <strong class="text-amber-400" id="map-sats-text">0 颗 (室内搜星中...)</strong></span>
                         </div>
                     </div>
 
@@ -1688,7 +1688,11 @@
             const mapLat = dev.lastLatGcj02 || dev.lastLatitude;
             const mapLon = dev.lastLonGcj02 || dev.lastLongitude;
             if(mapLat && mapLon && Math.abs(mapLat) > 0.001) {
-                updateLiveMapLocation(mapLat, mapLon, dev.lastSpeed || 0.0, dev.satellitesCount || 18, 0.8);
+                const isIndoor = !!(dev.motionState && dev.motionState.toLowerCase().includes('indoor'));
+                const isFix = !isIndoor && ((dev.satellitesCount && dev.satellitesCount >= 4) || dev.gnssFix);
+                const sats = isIndoor ? 0 : (dev.satellitesCount || 0);
+                const hdop = isIndoor ? 99.9 : (dev.hdop || 1.2);
+                updateLiveMapLocation(mapLat, mapLon, dev.lastSpeed || 0.0, sats, hdop, isFix, isIndoor);
             }
         }
 
@@ -1765,7 +1769,9 @@
                         } else if(msg.event === 'location_live') {
                             const loc = msg.data;
                             if(loc && loc.lat && loc.lon && (loc.deviceId === currentDeviceId || !currentDeviceId)) {
-                                updateLiveMapLocation(loc.lat, loc.lon, loc.speed || 0.0, 18, 0.8);
+                                const isIndoor = !!(loc.motion && loc.motion.toLowerCase().includes('indoor'));
+                                const isFix = !isIndoor && (loc.sats && loc.sats >= 4);
+                                updateLiveMapLocation(loc.lat, loc.lon, loc.speed || 0.0, isIndoor ? 0 : (loc.sats || 0), isIndoor ? 99.9 : (loc.hdop || 1.2), isFix, isIndoor);
                             }
                         }
                     } catch(e) {
@@ -2052,6 +2058,23 @@
                             }
                             const ptsCountEl = document.getElementById('map-pts-count');
                             if(ptsCountEl) ptsCountEl.innerText = `${mapPoints.length} 点`;
+
+                            const lastPt = data[data.length - 1];
+                            const isIndoor = !!(lastPt && lastPt.motionState && lastPt.motionState.toLowerCase().includes('indoor'));
+                            const fixBadge = document.getElementById('map-fix-badge');
+                            if(fixBadge && isIndoor) {
+                                fixBadge.className = "px-2 py-0.5 text-[10px] rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 flex items-center gap-1";
+                                fixBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> 室内搜星中 (基准预设)`;
+                            }
+                            const satsEl = document.getElementById('map-sats-text');
+                            if(satsEl && isIndoor) {
+                                satsEl.className = "text-amber-400 font-bold font-mono";
+                                satsEl.innerText = `0 颗 (室内搜星中 · 弱信号)`;
+                            }
+                            const coordEl = document.getElementById('map-coord-text');
+                            if(coordEl && isIndoor) {
+                                coordEl.innerHTML = `${latest[0].toFixed(5)}, ${latest[1].toFixed(5)} <span class="text-[10px] text-amber-400 font-sans">(室内预设)</span>`;
+                            }
                         }
                     }
                 }
@@ -2060,27 +2083,68 @@
             }
         }
 
-        function updateLiveMapLocation(lat, lon, speed = 0, sats = 18, hdop = 0.8) {
+        function updateLiveMapLocation(lat, lon, speed = 0, sats = 0, hdop = 99.9, isFix = false, isIndoor = false) {
             if(!demoMap || !lat || !lon) return;
 
             const newPos = [lat, lon];
-            if(liveMarker) liveMarker.setLatLng(newPos);
+            if(liveMarker) {
+                liveMarker.setLatLng(newPos);
+                if(isFix) {
+                    liveMarker.bindPopup(`<b>北天 BE-220 实时 GNSS 3D 定位</b><br>卫星: ${sats} 颗 · 速度: ${(speed*3.6).toFixed(1)} km/h`);
+                } else if(isIndoor) {
+                    liveMarker.bindPopup(`<b>室内预设基准点 (搜星定位中)</b><br>信号弱 / 室内遮挡 · 建议前往室外测试`);
+                }
+            }
 
-            // Update Map HUD Text
+            // 1. Update Map Top Badge
+            const fixBadge = document.getElementById('map-fix-badge');
+            if(fixBadge) {
+                if(isFix && sats >= 4) {
+                    fixBadge.className = "px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30 flex items-center gap-1";
+                    fixBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> GNSS 3D 定位`;
+                } else if(isIndoor) {
+                    fixBadge.className = "px-2 py-0.5 text-[10px] rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 flex items-center gap-1";
+                    fixBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> 室内搜星中 (基准预设)`;
+                } else {
+                    fixBadge.className = "px-2 py-0.5 text-[10px] rounded-full bg-slate-500/20 text-slate-300 font-bold border border-slate-500/30 flex items-center gap-1";
+                    fixBadge.innerHTML = `○ 搜星捕获中...`;
+                }
+            }
+
+            // 2. Update Map HUD Coordinates Text
             const coordEl = document.getElementById('map-coord-text');
-            if(coordEl) coordEl.innerText = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+            if(coordEl) {
+                if(isIndoor) {
+                    coordEl.innerHTML = `${lat.toFixed(5)}, ${lon.toFixed(5)} <span class="text-[10px] text-amber-400 font-sans">(室内预设)</span>`;
+                } else {
+                    coordEl.innerText = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+                }
+            }
 
+            // 3. Update Map HUD Satellites Count
             const satsEl = document.getElementById('map-sats-text');
-            if(satsEl) satsEl.innerText = `${sats > 0 ? sats : 18} 颗 (HDOP ${hdop ? hdop.toFixed(1) : '0.8'})`;
+            if(satsEl) {
+                if(isFix && sats > 0) {
+                    satsEl.className = "text-emerald-400 font-bold font-mono";
+                    satsEl.innerText = `${sats} 颗 (HDOP ${hdop ? hdop.toFixed(1) : '1.0'})`;
+                } else if(isIndoor) {
+                    satsEl.className = "text-amber-400 font-bold font-mono";
+                    satsEl.innerText = `0 颗 (室内搜星中 · 弱信号)`;
+                } else {
+                    satsEl.className = "text-slate-300 font-bold font-mono";
+                    satsEl.innerText = `${sats} 颗 (搜星捕获中...)`;
+                }
+            }
 
+            // 4. Update Speed
             const speedEl = document.getElementById('map-speed-text');
             if(speedEl) speedEl.innerText = `${(speed * 3.6).toFixed(1)} km/h`;
 
-            // Append point if moved > 2 meters
+            // Append point if moved > 2 meters (only append real moves or initial)
             let shouldAppend = false;
             if(mapPoints.length === 0) {
                 shouldAppend = true;
-            } else {
+            } else if(isFix) {
                 const last = mapPoints[mapPoints.length - 1];
                 const dLat = (lat - last[0]) * 111000;
                 const dLon = (lon - last[1]) * 111000 * Math.cos(lat * Math.PI / 180);
