@@ -181,7 +181,7 @@
             <div>
                 <div class="text-[11px] text-slate-400 font-medium">双模星基高精定位</div>
                 <div class="text-sm font-bold text-white mt-0.5" id="val-gnss">
-                    18 颗卫星 <span class="text-[10px] text-cyan-400 font-normal">(北斗+GPS)</span>
+                    <span class="text-amber-400 font-bold">室内搜星中</span> <span class="text-[10px] text-slate-400 font-normal">(弱信号 · 0 颗)</span>
                 </div>
             </div>
             <div class="w-9 h-9 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
@@ -1624,6 +1624,21 @@
             if(sigEl) {
                 sigEl.innerHTML = `${dev.signalRsrp || -94} dBm <span class="text-[10px] text-emerald-400 font-normal">(极佳 CSQ ${dev.signalRssi || 28})</span>`;
             }
+
+            const gnssEl = document.getElementById('val-gnss');
+            if(gnssEl) {
+                const isIndoor = !!(dev.motionState && dev.motionState.toLowerCase().includes('indoor'));
+                const isFix = !isIndoor && ((dev.satellitesCount && dev.satellitesCount >= 4) || dev.gnssFix);
+                const sats = isIndoor ? 0 : (dev.satellitesCount || 0);
+                const hdop = isIndoor ? 99.9 : (dev.hdop || 1.2);
+                if(isFix && sats > 0) {
+                    gnssEl.innerHTML = `${sats} 颗卫星 <span class="text-[10px] text-emerald-400 font-normal">(3D 定位 · HDOP ${hdop.toFixed(1)})</span>`;
+                } else if(isIndoor) {
+                    gnssEl.innerHTML = `<span class="text-amber-400 font-bold">室内搜星中</span> <span class="text-[10px] text-slate-400 font-normal">(弱信号 · 0 颗)</span>`;
+                } else {
+                    gnssEl.innerHTML = `<span class="text-cyan-400 font-bold">搜星捕获中</span> <span class="text-[10px] text-slate-400 font-normal">(${sats} 颗)</span>`;
+                }
+            }
             
             // 2. Real Physical Attitude (Pitch, Roll, Yaw) and Accelerometer Ingestion
             if(dev.pitch !== undefined && dev.pitch !== null) {
@@ -2070,6 +2085,10 @@
                             if(satsEl && isIndoor) {
                                 satsEl.className = "text-amber-400 font-bold font-mono";
                                 satsEl.innerText = `0 颗 (室内搜星中 · 弱信号)`;
+                            }
+                            const gnssTopEl = document.getElementById('val-gnss');
+                            if(gnssTopEl && isIndoor) {
+                                gnssTopEl.innerHTML = `<span class="text-amber-400 font-bold">室内搜星中</span> <span class="text-[10px] text-slate-400 font-normal">(弱信号 · 0 颗)</span>`;
                             }
                             const coordEl = document.getElementById('map-coord-text');
                             if(coordEl && isIndoor) {
