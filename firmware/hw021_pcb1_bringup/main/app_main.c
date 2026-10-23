@@ -442,7 +442,15 @@ static esp_err_t ml307a_post_web_telemetry(
 {
     if (out_http_status) *out_http_status = 0;
 
-    int64_t epoch_ms = 1792593000000LL + esp_timer_get_time() / 1000;
+    struct timeval tv_now;
+    gettimeofday(&tv_now, NULL);
+    int64_t epoch_ms;
+    if (tv_now.tv_sec > 1700000000) {
+        epoch_ms = (int64_t)tv_now.tv_sec * 1000 + (tv_now.tv_usec / 1000);
+    } else {
+        // Base epoch for 2026-10-23
+        epoch_ms = 1792714000000LL + esp_timer_get_time() / 1000;
+    }
 
     /* Anchor coordinates (Shenzhen Nanshan Tech Park) if indoor without fix */
     double lat = gnss_fix ? gnss_lat : 22.540123;
@@ -1027,87 +1035,108 @@ static void stage10_wifi_rf_scan(void)
 }
 
 /* --- GNSS NMEA Sentence Parser --- */
-static void parse_nmea_gnrmc(const char *line, bool *fix_valid, double *lat, double *lon, float *speed_mps, float *course, char *utc_time)
+static int nmea_split_fields(char *str, char *fields[], int max_fields)
+{
+    int count = 0;
+    fields[count++] = str;
+    while (*str && count < max_fields) {
+        if (*str == ',' || *str == '*') {
+            *str = '\0';
+            fields[count++] = str + 1;
+        }
+        str++;
+    }
+    return count;
+}
+
+static void parse_nmea_gnrmc(char *line, bool *fix_valid, double *lat, double *lon, float *speed_mps, float *course, char *utc_time)
 {
     /* $GNRMC,hhmmss.ss,status,lat,N/S,lon,E/W,speed_knots,course,ddmmyy,... */
-    char buf[128];
-    strncpy(buf, line, sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+    char *fields[16];
+    int n = nmea_split_fields(line, fields, 16);
+    if (n < 10) return;
 
-    char *saveptr = NULL;
-    char *token = strtok_r(buf, ",", &saveptr);
-    int field = 0;
-
-    char status = 'V';
-    char raw_lat[16] = {0}, ns = 'N';
-    char raw_lon[16] = {0}, ew = 'E';
-    char raw_speed[16] = {0};
-    char raw_course[16] = {0};
-
-    while (token != NULL) {
-        if (field == 1 && utc_time) {
-            strncpy(utc_time, token, 15);
-        } else if (field == 2) {
-            status = token[0];
-        } else if (field == 3) {
-            strncpy(raw_lat, token, sizeof(raw_lat) - 1);
-        } else if (field == 4) {
-            ns = token[0];
-        } else if (field == 5) {
-            strncpy(raw_lon, token, sizeof(raw_lon) - 1);
-        } else if (field == 6) {
-            ew = token[0];
-        } else if (field == 7) {
-            strncpy(raw_speed, token, sizeof(raw_speed) - 1);
-        } else if (field == 8) {
-            strncpy(raw_course, token, sizeof(raw_course) - 1);
-        }
-        token = strtok_r(NULL, ",", &saveptr);
-        field++;
+    if (utc_time && strlen(fields[1]) > 0) {
+        strncpy(utc_time, fields[1], 15);
+        utc_time[15] = '\0';
     }
 
+    char status = fields[2][0];
     *fix_valid = (status == 'A');
-    if (*fix_valid && raw_lat[0] && raw_lon[0]) {
-        double lat_val = atof(raw_lat);
-        int lat_deg = (int)(lat_val / 100);
-        double lat_min = lat_val - (lat_deg * 100);
-        *lat = lat_deg + (lat_min / 60.0);
-        if (ns == 'S') *lat = -(*lat);
 
-        double lon_val = atof(raw_lon);
-        int lon_deg = (int)(lon_val / 100);
-        double lon_min = lon_val - (lon_deg * 100);
-        *lon = lon_deg + (lon_min / 60.0);
-        if (ew == 'W') *lon = -(*lon);
+    if (*fix_valid) {
+        char *raw_lat = fields[3];
+        char ns = fields[4][0];
+        char *raw_lon = fields[5];
+        char ew = fields[6][0];
 
-        if (raw_speed[0]) {
-            *speed_mps = (float)(atof(raw_speed) * 0.514444);
+        if (strlen(raw_lat) >= 4 && strlen(raw_lon) >= 5) {
+            double lat_val = atof(raw_lat);
+            int lat_deg = (int)(lat_val / 100);
+            double lat_min = lat_val - (lat_deg * 100);
+            double calculated_lat = lat_deg + (lat_min / 60.0);
+            if (ns == 'S') calculated_lat = -calculated_lat;
+            *lat = calculated_lat;
+
+            double lon_val = atof(raw_lon);
+            int lon_deg = (int)(lon_val / 100);
+            double lon_min = lon_val - (lon_deg * 100);
+            double calculated_lon = lon_deg + (lon_min / 60.0);
+            if (ew == 'W') calculated_lon = -calculated_lon;
+            *lon = calculated_lon;
         }
-        if (raw_course[0]) {
-            *course = (float)atof(raw_course);
+
+        if (strlen(fields[7]) > 0) {
+            *speed_mps = (float)(atof(fields[7]) * 0.514444);
+        }
+        if (strlen(fields[8]) > 0) {
+            *course = (float)atof(fields[8]);
+        }
+
+        /* Synchronize System RTC Clock with Live Satellite UTC */
+        char *date_str = fields[9];
+        char *time_str = fields[1];
+        if (strlen(date_str) == 6 && strlen(time_str) >= 6) {
+            int day = (date_str[0] - '0') * 10 + (date_str[1] - '0');
+            int mon = (date_str[2] - '0') * 10 + (date_str[3] - '0');
+            int yr = 2000 + (date_str[4] - '0') * 10 + (date_str[5] - '0');
+            int hr = (time_str[0] - '0') * 10 + (time_str[1] - '0');
+            int min = (time_str[2] - '0') * 10 + (time_str[3] - '0');
+            int sec = (time_str[4] - '0') * 10 + (time_str[5] - '0');
+            if (day >= 1 && day <= 31 && mon >= 1 && mon <= 12 && yr >= 2026) {
+                struct tm tm_utc = {
+                    .tm_year = yr - 1900,
+                    .tm_mon = mon - 1,
+                    .tm_mday = day,
+                    .tm_hour = hr,
+                    .tm_min = min,
+                    .tm_sec = sec
+                };
+                time_t epoch = mktime(&tm_utc);
+                if (epoch > 1700000000) {
+                    struct timeval tv = { .tv_sec = epoch, .tv_usec = 0 };
+                    settimeofday(&tv, NULL);
+                }
+            }
         }
     }
 }
 
-static void parse_nmea_gngga(const char *line, uint16_t *sats, float *hdop)
+static void parse_nmea_gngga(char *line, uint16_t *sats, float *hdop, float *alt)
 {
     /* $GNGGA,hhmmss.ss,lat,N/S,lon,E/W,quality,num_sats,hdop,alt,M,... */
-    char buf[128];
-    strncpy(buf, line, sizeof(buf) - 1);
-    buf[sizeof(buf) - 1] = '\0';
+    char *fields[16];
+    int n = nmea_split_fields(line, fields, 16);
+    if (n < 10) return;
 
-    char *saveptr = NULL;
-    char *token = strtok_r(buf, ",", &saveptr);
-    int field = 0;
-
-    while (token != NULL) {
-        if (field == 7) {
-            *sats = (uint16_t)atoi(token);
-        } else if (field == 8) {
-            *hdop = (float)atof(token);
-        }
-        token = strtok_r(NULL, ",", &saveptr);
-        field++;
+    if (strlen(fields[7]) > 0) {
+        *sats = (uint16_t)atoi(fields[7]);
+    }
+    if (strlen(fields[8]) > 0) {
+        *hdop = (float)atof(fields[8]);
+    }
+    if (alt && strlen(fields[9]) > 0) {
+        *alt = (float)atof(fields[9]);
     }
 }
 
@@ -1458,26 +1487,53 @@ static void run_integrated_p0_loop(void)
             }
         }
 
-        /* Task B: Poll GNSS UART1 */
-        uint8_t gnss_buf[256];
-        int n_gnss = uart_read_bytes(UART_NUM_1, gnss_buf, sizeof(gnss_buf) - 1, pdMS_TO_TICKS(10));
+        /* Task B: Poll GNSS UART1 with line-buffered sentence reassembly */
+        static char s_gnss_stream_buf[1024];
+        static int s_gnss_stream_len = 0;
+        static bool s_last_gnss_fix = false;
+
+        uint8_t raw_in[256];
+        int n_gnss = uart_read_bytes(UART_NUM_1, raw_in, sizeof(raw_in), pdMS_TO_TICKS(10));
         if (n_gnss > 0) {
-            gnss_buf[n_gnss] = '\0';
-            char *line = (char *)gnss_buf;
-            while ((line = strstr(line, "$G")) != NULL) {
-                char *eol = strpbrk(line, "\r\n");
-                if (eol) {
-                    *eol = '\0';
-                    if (strncmp(line, "$GNRMC", 6) == 0 || strncmp(line, "$GPRMC", 6) == 0) {
-                        parse_nmea_gnrmc(line, &gnss_fix, &gnss_lat, &gnss_lon, &gnss_speed, &gnss_course, gnss_utc);
-                    } else if (strncmp(line, "$GNGGA", 6) == 0 || strncmp(line, "$GPGGA", 6) == 0) {
-                        parse_nmea_gngga(line, &gnss_sats, &gnss_hdop);
-                    }
-                    line = eol + 1;
-                } else {
-                    break;
-                }
+            if (s_gnss_stream_len + n_gnss < sizeof(s_gnss_stream_buf) - 1) {
+                memcpy(s_gnss_stream_buf + s_gnss_stream_len, raw_in, n_gnss);
+                s_gnss_stream_len += n_gnss;
+                s_gnss_stream_buf[s_gnss_stream_len] = '\0';
+            } else {
+                s_gnss_stream_len = 0; // Prevent overflow
             }
+
+            char *line_start = s_gnss_stream_buf;
+            char *line_end = NULL;
+            while ((line_end = strpbrk(line_start, "\r\n")) != NULL) {
+                *line_end = '\0';
+                char *stmt = strstr(line_start, "$G");
+                if (stmt) {
+                    if (strncmp(stmt, "$GNRMC", 6) == 0 || strncmp(stmt, "$GPRMC", 6) == 0) {
+                        parse_nmea_gnrmc(stmt, &gnss_fix, &gnss_lat, &gnss_lon, &gnss_speed, &gnss_course, gnss_utc);
+                    } else if (strncmp(stmt, "$GNGGA", 6) == 0 || strncmp(stmt, "$GPGGA", 6) == 0) {
+                        parse_nmea_gngga(stmt, &gnss_sats, &gnss_hdop, NULL);
+                    }
+                }
+                line_start = line_end + 1;
+                while (*line_start == '\r' || *line_start == '\n') line_start++;
+            }
+
+            int remaining = s_gnss_stream_len - (line_start - s_gnss_stream_buf);
+            if (remaining > 0 && line_start > s_gnss_stream_buf) {
+                memmove(s_gnss_stream_buf, line_start, remaining);
+                s_gnss_stream_len = remaining;
+                s_gnss_stream_buf[s_gnss_stream_len] = '\0';
+            } else if (line_start >= s_gnss_stream_buf + s_gnss_stream_len) {
+                s_gnss_stream_len = 0;
+            }
+
+            if (gnss_fix && !s_last_gnss_fix) {
+                ESP_LOGI(TAG, "🎯 [GNSS 3D FIX ACQUIRED] lat=%.6f lon=%.6f sats=%u speed=%.1f hdop=%.1f",
+                         gnss_lat, gnss_lon, gnss_sats, (double)gnss_speed, (double)gnss_hdop);
+            }
+            s_last_gnss_fix = gnss_fix;
+
             ego_state_engine_feed_location(
                 &s_ego_ctx,
                 gnss_fix,
@@ -1642,8 +1698,11 @@ static void run_integrated_p0_loop(void)
             }
 
             /* 6. Append Record to SD Card Local Black Box */
+            struct timeval tv_bb;
+            gettimeofday(&tv_bb, NULL);
+            int64_t bb_ts = (tv_bb.tv_sec > 1700000000) ? ((int64_t)tv_bb.tv_sec * 1000 + tv_bb.tv_usec / 1000) : (1792714000000LL + now_ms);
             ego_blackbox_record_t bb_rec = {
-                .timestamp_ms = 1792594000000LL + now_ms,
+                .timestamp_ms = bb_ts,
                 .cycle = eval_cycle,
                 .est_id = est.estimation_id,
                 .mobility_str = ego_spatial_mobility_to_str(est.spatial_mobility),

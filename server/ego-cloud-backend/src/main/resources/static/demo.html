@@ -2035,8 +2035,8 @@
                     if(Array.isArray(data) && data.length > 0) {
                         mapPoints = [];
                         data.forEach(pt => {
-                            const lat = pt.latGcj02 || pt.latWgs84;
-                            const lon = pt.lonGcj02 || pt.lonWgs84;
+                            const lat = pt.lat || pt.latGcj02 || pt.wgsLat || pt.latWgs84;
+                            const lon = pt.lon || pt.lonGcj02 || pt.wgsLon || pt.lonWgs84;
                             if(lat && lon && Math.abs(lat) > 0.001) {
                                 mapPoints.push([lat, lon]);
                             }
