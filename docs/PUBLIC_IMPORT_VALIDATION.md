@@ -104,3 +104,14 @@ model fixtures remain available with their provenance and license scope.
 The retained historical reports describe their original conditions. Representative
 location performance, full-duplex calling, end-to-end SOS, battery operation and
 the EgoLink-to-EgoBase product loop still need their own measured validation.
+
+## Publication-memory follow-up — 2026-10-27
+
+After source-import commit `e85fa39a0d07f20b0a735d479af8e043a8235ef2` was
+published, OPEN-001 and the progress board were updated to record completion.
+The board now recognizes a task with both `status: done` and
+`execution_state: done` even when its original packet path is retained.
+`python -B -m unittest quality_tests.test_progress_board -v` passed all **8
+tests**, including the added regression case, in Python 3.12.14. Context lint
+and diff checks also passed. The 1,899-test result above belongs to the source
+import; it was not rerun or relabeled as evidence for this later memory update.

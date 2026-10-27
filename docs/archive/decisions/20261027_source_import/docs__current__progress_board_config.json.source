@@ -1,0 +1,129 @@
+{
+  "current_focus": "OPEN-001 已按用户澄清改为 EgoLabs 公开项目启动：先建立组织入口和项目定义/愿景/路线，再导入真实源码，以 Issue/PR 持续协作；已撤销教程案例首发方向。任务待执行，原硬件任务继续，运行证据见 STATUS 和 ACTIVE_BUILD。",
+  "recent_done_limit": 8,
+  "milestones": [
+    {
+      "id": "PUBLIC-DEVELOPMENT",
+      "title": "EgoLabs 公开项目与协作",
+      "tasks": [
+        {
+          "id": "OPEN-001",
+          "label": "组织入口、项目定义与真实开发主线"
+        }
+      ]
+    },
+    {
+      "id": "STATE-TRUTH",
+      "title": "状态真实性与项目对齐",
+      "tasks": [
+        {
+          "id": "ALIGN-STATE-010",
+          "label": "Codex state truth / contracts / governance"
+        }
+      ]
+    },
+    {
+      "id": "A-FIELD",
+      "title": "单板恢复与真实外场数据",
+      "tasks": [
+        {
+          "id": "P0-CONVERGENCE-20260905",
+          "label": "Gemini recovery / route transition"
+        },
+        {
+          "id": "D2-001",
+          "label": "reference metrics"
+        },
+        {
+          "id": "FIELD-020",
+          "label": "representative field dataset"
+        }
+      ]
+    },
+    {
+      "id": "LOCAL-FIRST",
+      "title": "最小用户私有终点（并行准备）",
+      "tasks": [
+        "BASE-010"
+      ]
+    },
+    {
+      "id": "NATIVE-CALL",
+      "title": "原生蜂窝主通话与 SOS",
+      "tasks": [
+        "CALL-030",
+        "HW-022",
+        "CALL-031",
+        "SOS-010"
+      ]
+    },
+    {
+      "id": "PRODUCT",
+      "title": "产品保障",
+      "tasks": [
+        "HW-021",
+        "PWR-020",
+        "COMPLIANCE-010",
+        "P0-RELEASE-010"
+      ]
+    },
+    {
+      "id": "RTC-RESERVE",
+      "title": "已暂停的 RTC 备路资产",
+      "tasks": [
+        "CALL-020",
+        "CALL-021"
+      ]
+    }
+  ],
+  "assignees": {
+    "P0-CONVERGENCE-20260905": "Gemini",
+    "FIELD-020": "Gemini",
+    "HW-021": "parked / no active builder",
+    "COMPLIANCE-010": "unassigned / NOT_SENT",
+    "CALL-020": "paused",
+    "CALL-021": "paused",
+    "SOS-010": "paused",
+    "REL-012": "codex",
+    "ENG-007": "codex",
+    "ENG-008": "codex",
+    "OBS-005": "codex",
+    "D1-001": "codex + founder field tests",
+    "PWR-001": "Gemini",
+    "D2-001": "Gemini",
+    "FIELD-003": "Gemini",
+    "FIELD-010": "codex",
+    "D2-002": "codex",
+    "D2-003": "codex",
+    "MAP-002": "codex",
+    "MAP-003": "codex",
+    "D2-004": "codex",
+    "D2-005": "codex",
+    "MAP-001": "codex",
+    "D5-001": "codex",
+    "MODEL-LOC-001": "codex",
+    "CALLSMS-001": "blocked until explicit hardware task",
+    "PWR-002": "planned",
+    "PRIVACY-LOC-001": "planned",
+    "FT-001B": "Gemini",
+    "FIELD-011": "Gemini",
+    "FW-005": "Director acceptance review",
+    "FW-006": "Director acceptance review",
+    "WEB-006": "Director acceptance review",
+    "WEB-004": "Director acceptance review",
+    "WEB-005": "Director acceptance review",
+    "FW-007": "Director acceptance review",
+    "OPS-003": "Director acceptance review",
+    "OPS-002": "Director acceptance review",
+    "DOC-BASE-001": "Director acceptance review",
+    "OPS-004": "parked / no active builder",
+    "OUTBOX-010": "parked / no active builder",
+    "LOC-021": "parked / no active builder",
+    "ALIGN-STATE-010": "Codex",
+    "CALL-030": "unassigned / queued",
+    "CALL-031": "unassigned / queued",
+    "BASE-010": "unassigned / queued",
+    "OPEN-001": "Codex"
+  },
+  "operator_asks": []
+}

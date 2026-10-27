@@ -1,15 +1,15 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-10-27 06:29 UTC
-- 分支: `a0/first-real-field-session` @ 2a84b338b fix(demo): dynamically link top vitals GNSS card to true indoor/outdoor state
-- 当前焦点: OPEN-001 已按用户澄清改为 EgoLabs 公开项目启动：先建立组织入口和项目定义/愿景/路线，再导入真实源码，以 Issue/PR 持续协作；已撤销教程案例首发方向。任务待执行，原硬件任务继续，运行证据见 STATUS 和 ACTIVE_BUILD。
-- 已完成任务总数: 163，进行中: 4，暂停: 5，待验收: 9，排队: 21，搁置: 4，持续回归: 1
+- 生成时间: 2026-10-27 07:38 UTC
+- 分支: `main` @ e85fa39 Record final import validation and original-to-public commit mapping
+- 当前焦点: OPEN-001 公开启动与源码导入已完成：Ego 原始 34 次、EgoLink 原始 471 次连续研发序列及当前源码已公开，后续以 getegoai 对应 GitHub main 为实际主线。Link → Base 最小闭环见 ego#2，原硬件任务继续；官网按用户要求以后单独更新。运行证据日期和产品 Gate 以 STATUS / ACTIVE_BUILD 为准。
+- 已完成任务总数: 164，进行中: 3，暂停: 5，待验收: 9，排队: 21，搁置: 4，持续回归: 1
 
 ## 里程碑
 
 | 里程碑 | 进度 | 任务 |
 |---|---|---|
-| PUBLIC-DEVELOPMENT EgoLabs 公开项目与协作 | 0/1 | ⏳组织入口、项目定义与真实开发主线 |
+| PUBLIC-DEVELOPMENT EgoLabs 公开项目与协作 | 1/1 | ✅组织入口、项目定义与真实开发主线 |
 | STATE-TRUTH 状态真实性与项目对齐 | 1/1 | ✅Codex state truth / contracts / governance |
 | A-FIELD 单板恢复与真实外场数据 | 0/3 | ⏳Gemini recovery / route transition 📋reference metrics 📋representative field dataset |
 | LOCAL-FIRST 最小用户私有终点（并行准备） | 0/1 | 📋BASE-010 |
@@ -53,7 +53,6 @@
 | L2-001 | Continuous IMU mobility capture, persistent spool and replay | planned | medium | - |
 | LOC-021 | Device, Message Hub and Guardian Location integration | parked | critical | unassigned |
 | MODEL-001 | Model footprint assessment | paused | high | - |
-| OPEN-001 | EgoLabs 公开项目启动与持续协作 | in_progress | high | Codex |
 | OPS-002 | Official ego.example.invalid HTTPS entry and always-visible AMap canvas | acceptance_review | high | director |
 | OPS-003 | Suppress AMap coordinate-convert access logs | acceptance_review | high | director |
 | OPS-004 | Migrate device ingress from plaintext HTTP to TLS | parked | critical | unassigned |
@@ -72,6 +71,7 @@
 
 | 任务 | 标题 | 日期 |
 |---|---|---|
+| OPEN-001 | EgoLabs 公开项目启动与持续协作 | 2026-10-27 |
 | ALIGN-STATE-010 | Align founder decisions and repair ego-state truth and contracts | 2026-09-22 |
 | D2-006 | QMI8658 external-module hardware identity probe | 2026-09-09 |
 | D2-007 | QMI8658 bounded window capture and LTE uplink | 2026-09-09 |
@@ -79,7 +79,6 @@
 | CALL-010 | Wearable audio I/O and simultaneous-loop bring-up | 2026-09-05 |
 | CALL-001 | Freeze Ego Call minimum architecture and PC loop | 2026-08-23 |
 | HW-020 | P0 A0 architecture baseline and candidate constraints | 2026-08-23 |
-| L1-000 | Restore contract-consistent green L1 engineering baseline | 2026-08-23 |
 
 ## 等待创始人处理
 

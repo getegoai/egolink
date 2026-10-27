@@ -100,8 +100,9 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
   candidates into verified demand, an applied repository license or granted patents.
   EgoLabs is the confirmed display name of https://github.com/getegoai, with getego.ai
   as its domain; company/trademark registration is not inferred. Initial project definitions,
-  vision and roadmaps are public; OPEN-001 records launch evidence and pending source imports. Then
-  develop actual source via public Issues/PRs. Tutorials are optional, not the main release.
+  vision, roadmaps, current source and continuous development history are public. OPEN-001 records
+  completed startup/import; GitHub main is the continuing development line. The Link-to-Base loop
+  is tracked separately in ego#2, and the website will be updated separately. Tutorials are optional.
   Each open project has one actual development mainline that accepts community work.
   Fast iteration is the default: publish useful small increments within authorization;
   patent research is parallel, not a general prerequisite. Only specifically retained

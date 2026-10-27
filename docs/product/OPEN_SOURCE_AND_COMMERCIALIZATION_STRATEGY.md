@@ -25,7 +25,7 @@ Ego 的长期方向是让个人拥有由自己掌控、能够持续扩展其认�
 |---|---|
 | 已确认原则 | 默认快速推进；小步公开真实研发过程；以反馈推动质量提升；专利并行且不作为开源前置；遇阻先重新界定问题、寻找替代路径；商业收入依赖实际交付 |
 | 待验证商业假设 | 官方硬件、通信及持续服务、机构管理、开发套件和培训能否形成可持续收入；每次聚焦一个购买理由 |
-| 优先许可方案，待逐项落实 | 自有软件优先 Apache-2.0，研发文档优先 CC BY 4.0；针对本次实际发布内容落实适用许可与必要权利核对，不等待全仓许可规划或全面专利研究 |
+| 本次已落实的许可 | 已公开自有软件采用 Apache-2.0，原创文档及 EgoLink 自有硬件设计采用 CC BY 4.0；模型/合成资产和第三方例外按公开仓库 LICENSE/LICENSING 明确；以后新增材料按实际内容处理 |
 | 待专业判断 | 发明候选的新颖性、创造性、权属、申请范围、目标法域与自由实施风险 |
 | 工程事实 | 以 [STATUS](../current/STATUS.md)、[ACTIVE_BUILD](../current/ACTIVE_BUILD.md) 和对应证据为准；本次未新增运行、隐私、安全或产品验收证据 |
 
@@ -66,7 +66,7 @@ GitHub 组织 slug 已确认为 `getegoai`，显示名为 EgoLabs，组织入口
 4. 重要取舍在 Issue/ADR 留下原因，阶段进展形成版本；失败、改向和未完成项保持可见。
 5. 维护者负责产品方向和合并判断，社区尚未形成时照常推进，不把有人参与作为开源成功启动的前置。
 
-**一个项目只有一条实际开发主线；公开路线描述这条主线，社区贡献进入这条主线。** 已开放模块以 GitHub 为协作主仓，内部服务可保存私有资产、历史或备份，避免同一产品长期分叉成“内部开发版”和定期筛选的公开展示版。当前只是路线决策，不擅自改变现有 remote 或开发者工作区。
+**一个项目只有一条实际开发主线；公开路线描述这条主线，社区贡献进入这条主线。** 已开放模块以 GitHub 为协作主仓，内部服务可保存私有资产、历史或备份，避免同一产品长期分叉成“内部开发版”和定期筛选的公开展示版。当前源码与连续历史已公开，后续以 getegoai/ego 和 getegoai/egolink 的 GitHub `main` 为实际主线；本地原仓库保留为来源与备份，不再作为开放模块的另一条独立主线。
 
 GitHub 的[组织主页机制](https://docs.github.com/en/organizations/collaborating-with-groups-in-organizations/customizing-your-organizations-profile)与[分支/PR 协作流程](https://docs.github.com/en/get-started/using-github/github-flow)可作为执行参考；流程按团队规模保持轻量。
 
@@ -102,7 +102,7 @@ GitHub 的[组织主页机制](https://docs.github.com/en/organizations/collabor
 
 ## 5. 许可、贡献与品牌
 
-自有软件优先考虑 Apache-2.0，研发文章、图示和教程优先考虑 CC BY 4.0。它们是待按文件范围落实的方案；本文本身不对整个仓库授予许可证，不更换上游或第三方许可。硬件设计、模型权重、数据、商标和第三方材料分别列明来源与适用条款。
+本次已公开的自有软件采用 Apache-2.0，原创文档及 EgoLink 自有硬件设计采用 CC BY 4.0；项目自生成规则/合成模型资产与第三方例外已按类别列明。具体授权以各仓库的 LICENSE/LICENSING 为准，本文不代替许可证或更换上游许可。后续新增硬件、模型、数据和第三方材料继续按实际来源和适用条款处理。
 
 不默认给全部研发文档添加 NC 限制。若确有商业保留需求，应列明具体内容与理由；软件开源和文档的限制使用须分别说明，不向 Apache 许可证叠加禁止商业使用的自定义限制。[OSI 开源定义](https://opensource.org/osd)要求允许商业使用；[CC 官方说明](https://creativecommons.org/faq/#does-my-use-violate-the-noncommercial-clause-of-the-licenses)解释了 NC 的用途判断边界。
 
@@ -148,9 +148,9 @@ GitHub 的[组织主页机制](https://docs.github.com/en/organizations/collabor
 
 ## 7. 从公开项目定义进入持续开发
 
-执行入口为 [OPEN-001](../tasks/active/OPEN-001_MINIMUM_PUBLIC_RELEASE.md)：EgoLabs 组织入口与 Ego/EgoLink 首批定义、愿景、路线已发布，现继续导入真实当前实现并开展实际开发提交；该任务记录公开链接、提交和未完成事项。
+[OPEN-001](../tasks/active/OPEN-001_MINIMUM_PUBLIC_RELEASE.md) 的公开启动与源码导入已完成：Ego [`3dfe50e`](https://github.com/getegoai/ego/commit/3dfe50e47e1c9d0b4f642bf8995a41b81b853609) 与 EgoLink [`e85fa39`](https://github.com/getegoai/egolink/commit/e85fa39a0d07f20b0a735d479af8e043a8235ef2) 保留原始 34/471 次连续研发序列并公开当前实现。后续实际开发在各 GitHub `main` 上持续进行；[ego#2](https://github.com/getegoai/ego/issues/2) 单独承接 Link → Base 最小闭环。官网按用户明确要求以后单独更新。
 
-初次迁移只检查将要上传的内容及其附带历史，移除凭据、个人数据和不能公开的具体材料。若旧历史处理成本高，可先以当前真实源码快照开始公开，并注明来源版本和时间；原历史内部保留。不得伪造过去的公开提交。暂存/筛选导出仅服务首次建立，后续直接在公开协作主线上发展。
+本次按用户选择保留连续历史，对实际凭据和隐私材料作必要净化，并保留原始到公开提交的映射及关键历史标签。首次公开日期为 2026-10-27，原始作者日期只描述真实研发时间，不宣称当时已公开。暂存/筛选导出只服务本次迁移，后续直接在公开协作主线上发展。
 
 README、许可与简短贡献说明随首批内容落实；完整教程、外部独立复现、专利盘点和整机验收均不前置。只涉及项目愿景和路线的提交，可以先于尚在整理的源码发布。
 
@@ -161,6 +161,8 @@ README、许可与简短贡献说明随首批内容落实；完整教程、外�
 > EgoLabs 正在建设由个人掌控的 AI 系统，探索持续扩展人的认知与行动能力。我们从 EgoLink 随身设备与 EgoBase 本地中枢逐步实现，并公开项目定义、路线、源码和研发过程。项目仍在早期，欢迎一起讨论、试验和贡献。
 
 ## 变更记录
+
+- 2026-10-27 源码与连续历史公开：OPEN-001 完成，Ego/EgoLink 的 GitHub main 成为后续主线；ego#2 闭环开发与官网后续更新分别处理。保留现行工程证据日期，[修改前快照](../archive/decisions/20261027_source_import/README.md)供追溯。
 
 - 2026-10-27 项目形态澄清：采用 EgoLabs 品牌与 `getego.ai` 入口，先公开愿景/定义/路线，再持续提交真实实现与接收社区 Issue/PR。取消教程案例首发的主线定位；重写 OPEN-001，并同步相关记忆与调度入口。[前版快照](../archive/decisions/20261027_egolabs_public_project/README.md)。
 

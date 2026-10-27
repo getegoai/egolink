@@ -36,6 +36,8 @@ def execution_state(fields: dict, *, in_done_directory: bool) -> str:
         return "done"
     status = fields.get("status", "").lower()
     execution = fields.get("execution_state", "").lower()
+    if status == "done" and execution == "done":
+        return "done"
     if status in ("paused", "blocked") or execution.startswith(("paused", "blocked")):
         return "paused"
     if execution == "in_progress":

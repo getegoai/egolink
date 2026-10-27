@@ -1,21 +1,21 @@
 {
-  "generated_at": "2026-10-27 06:29 UTC",
+  "generated_at": "2026-10-27 07:38 UTC",
   "git": {
-    "branch": "a0/first-real-field-session",
-    "head": "2a84b338b fix(demo): dynamically link top vitals GNSS card to true indoor/outdoor state"
+    "branch": "main",
+    "head": "e85fa39 Record final import validation and original-to-public commit mapping"
   },
-  "current_focus": "OPEN-001 已按用户澄清改为 EgoLabs 公开项目启动：先建立组织入口和项目定义/愿景/路线，再导入真实源码，以 Issue/PR 持续协作；已撤销教程案例首发方向。任务待执行，原硬件任务继续，运行证据见 STATUS 和 ACTIVE_BUILD。",
+  "current_focus": "OPEN-001 公开启动与源码导入已完成：Ego 原始 34 次、EgoLink 原始 471 次连续研发序列及当前源码已公开，后续以 getegoai 对应 GitHub main 为实际主线。Link → Base 最小闭环见 ego#2，原硬件任务继续；官网按用户要求以后单独更新。运行证据日期和产品 Gate 以 STATUS / ACTIVE_BUILD 为准。",
   "milestones": [
     {
       "id": "PUBLIC-DEVELOPMENT",
       "title": "EgoLabs 公开项目与协作",
-      "done": 0,
+      "done": 1,
       "total": 1,
       "tasks": [
         {
           "id": "OPEN-001",
           "label": "组织入口、项目定义与真实开发主线",
-          "state": "in_progress"
+          "state": "done"
         }
       ]
     },
@@ -505,18 +505,6 @@
       "path": "docs/tasks/active/MODEL-001_MODEL_FOOTPRINT_ASSESSMENT.md"
     },
     {
-      "id": "OPEN-001",
-      "title": "EgoLabs 公开项目启动与持续协作",
-      "state": "in_progress",
-      "packet_status": "active",
-      "execution_state": "in_progress",
-      "owner": "Codex",
-      "lane": "public_development",
-      "priority": "high",
-      "date": "2026-10-27",
-      "path": "docs/tasks/active/OPEN-001_MINIMUM_PUBLIC_RELEASE.md"
-    },
-    {
       "id": "OPS-002",
       "title": "Official ego.example.invalid HTTPS entry and always-visible AMap canvas",
       "state": "acceptance_review",
@@ -675,6 +663,18 @@
   ],
   "recent_done": [
     {
+      "id": "OPEN-001",
+      "title": "EgoLabs 公开项目启动与持续协作",
+      "state": "done",
+      "packet_status": "done",
+      "execution_state": "done",
+      "owner": "Codex",
+      "lane": "public_development",
+      "priority": "high",
+      "date": "2026-10-27",
+      "path": "docs/tasks/active/OPEN-001_MINIMUM_PUBLIC_RELEASE.md"
+    },
+    {
       "id": "ALIGN-STATE-010",
       "title": "Align founder decisions and repair ego-state truth and contracts",
       "state": "done",
@@ -757,18 +757,6 @@
       "priority": "critical",
       "date": "2026-08-23",
       "path": "docs/tasks/done/HW-020_PRODUCT_ARCHITECTURE_FREEZE.md"
-    },
-    {
-      "id": "L1-000",
-      "title": "Restore contract-consistent green L1 engineering baseline",
-      "state": "done",
-      "packet_status": "accepted_for_transition",
-      "execution_state": "completed",
-      "owner": "",
-      "lane": "A",
-      "priority": "critical",
-      "date": "2026-08-23",
-      "path": "docs/tasks/done/L1-000_HEAD_CONTRACT_AND_TEST_RECOVERY.md"
     }
   ],
   "operator_asks": [],
@@ -864,13 +852,13 @@
     }
   ],
   "counts": {
-    "active": 4,
+    "active": 3,
     "paused": 5,
     "planned": 21,
     "acceptance_review": 9,
     "parked": 4,
     "continuous_regression": 1,
-    "open_total": 44,
-    "done_total": 163
+    "open_total": 43,
+    "done_total": 164
   }
 }

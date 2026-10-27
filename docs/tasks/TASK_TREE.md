@@ -13,19 +13,17 @@ Runtime facts: [STATUS](../current/STATUS.md), [ACTIVE_BUILD](../current/ACTIVE_
 The active directory is inventory, not WIP. Only `execution_state: in_progress`
 counts as current implementation; a checked checklist is not acceptance.
 
-## EgoLabs 公开项目启动（2026-10-27）
+## EgoLabs 公开项目启动已完成（2026-10-27）
 
 [OPEN-001：EgoLabs 公开项目启动与持续协作](active/OPEN-001_MINIMUM_PUBLIC_RELEASE.md)
-由 Codex 推进，`in_progress`。[getegoai](https://github.com/getegoai) 组织显示名为 EgoLabs，`.github`、`ego`、`egolink` 三个 public 仓库的首批定义/路线已发布；Data Core 与 EgoLink 产品源码尚未导入。
+现为 `done`。Ego 原始 34 次、EgoLink 原始 471 次连续研发序列与当前源码已公开，固定导入提交、隐私净化映射及许可见该任务和公开仓库。
 
-- 已完成组织主页、Ego/EgoLink 定义与路线首发及贡献入口；首发提交见 OPEN-001。
-- 接下来执行 [ego#1 Data Core 导入](https://github.com/getegoai/ego/issues/1)、[ego#2 Link → Base 最小闭环](https://github.com/getegoai/ego/issues/2)、[egolink#1 真实源码导入](https://github.com/getegoai/egolink/issues/1)；EgoBase 按真实独立维护需要再拆仓。
-- [官网源码](https://github.com/getegoai/ego/tree/main/website) 已发布，但未部署至原 Netlify 站点；浏览器因当前 URL 识别失败触发访问保护并停止，本轮不再使用浏览器部署。
-- 沿现有产品结构导入真实源码与研发文档，之后以 Issue、分支、PR 和版本持续开发；社区贡献进入实际产品主线。
-- 原“没有数据为何不能显示正常”教学首发方案已被取代，教程与精选案例仅作可选补充。
-- 专利和商业验证并行，不阻塞公开定义和开发；原硬件/产品调度保持其原有日期与证据范围。
+- getegoai/ego 与 getegoai/egolink 的 GitHub `main` 是后续实际开发主线；Issue、分支和 PR 回到同一产品主线。
+- [ego#2 Link → Base 最小闭环](https://github.com/getegoai/ego/issues/2) 是后续独立开发任务；EgoBase 仍按真实维护需要再拆仓。
+- 官网本次保持不变，按用户要求以后单独更新，不作为源码导入的剩余任务。
+- 专利与商业验证并行；原硬件/产品调度保持原日期、证据范围和 Gate 状态。
 
-本轮发布结果与修改前快照见[启动记录](../archive/decisions/20261027_github_launch/README.md)；此前规划保留在[前轮迁移记录](../archive/decisions/20261027_egolabs_public_project/README.md)。
+本轮修改前快照见[导入记忆同步记录](../archive/decisions/20261027_source_import/README.md)；此前启动过程见[首发记录](../archive/decisions/20261027_github_launch/README.md)。
 
 ## Assigned work and dependencies
 

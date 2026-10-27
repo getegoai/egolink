@@ -8,6 +8,12 @@ verified_by: founder/gemini
 
 # Ego Link Current Status
 
+## 2026-10-27 Public source import — publication status only
+
+Ego [`3dfe50e`](https://github.com/getegoai/ego/commit/3dfe50e47e1c9d0b4f642bf8995a41b81b853609) and EgoLink [`e85fa39`](https://github.com/getegoai/egolink/commit/e85fa39a0d07f20b0a735d479af8e043a8235ef2) are public with their current source and continuous original development lineages (34 and 471 commits respectively; sensitive content in EgoLink history was cleaned with a commit map). OPEN-001 startup/import is complete. Development continues on the respective GitHub `main` branches; the Link-to-Base loop remains a separate [ego#2](https://github.com/getegoai/ego/issues/2) task. The website is unchanged and will be updated separately at the user's request.
+
+This paragraph records publication, not a new hardware run or a product Gate result. Existing `last_verified`, dated bench evidence, and the P0-LOC/P0-CALL/P0-SOS states below remain unchanged. Fixed import commits and migration boundaries are recorded in [OPEN-001](../tasks/active/OPEN-001_MINIMUM_PUBLIC_RELEASE.md).
+
 ## 2026-10-21 Custom Prototype `PCB1` Integrated P0 Runtime & Live Carrier Verification
 
 Following hardware bring-up, the live **China Mobile SIM card** and **SanDisk 64GB TF card** were inserted into `CON1` on `PCB1` (`HW021_C1_ESP32MODEL_VR00`, `ESP32-S3R8` MAC `02:00:00:00:00:02`). The firmware was upgraded with the 4MB partition table ([partitions_pcb1_4mb.csv](../../firmware/hw021_pcb1_bringup/partitions_pcb1_4mb.csv)), [ego_state_engine](../../firmware/mqtt_heartbeat/components/ego_state_engine/include/ego_state_engine.h), and [sim7670_cellular_call](../../firmware/mqtt_heartbeat/components/sim7670_cellular_call/include/sim7670_cellular_call.h), and tested live on `COM8` (`reports/board_validation/pcb1_bringup_20261020/pcb1_integrated_p0_runtime_20261021.log` — raw capture retained privately; not distributed in this repository):

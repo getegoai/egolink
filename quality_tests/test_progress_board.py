@@ -142,6 +142,23 @@ class ProgressBoardTests(unittest.TestCase):
         self.assertEqual(len(releases), 1)
         self.assertEqual(releases[0]["id"], "KR-001")
 
+    def test_completed_packet_keeps_its_existing_active_path(self):
+        packet = self.root / "docs/tasks/active/AAA-001_X.md"
+        packet.write_text(
+            packet.read_text(encoding="utf-8")
+            .replace("status: active", "status: done")
+            .replace("execution_state: in_progress", "execution_state: done"),
+            encoding="utf-8",
+        )
+
+        board = board_mod.build_board(self.root)
+        self.assertNotIn("AAA-001", {task["id"] for task in board["active_tasks"]})
+        completed = {task["id"]: task for task in board["recent_done"]}
+        self.assertEqual(completed["AAA-001"]["state"], "done")
+        self.assertEqual(completed["AAA-001"]["path"], "docs/tasks/active/AAA-001_X.md")
+        self.assertEqual(board["milestones"][0]["done"], 2)
+        self.assertEqual(board["counts"]["done_total"], 2)
+
     def test_server_summary_distinguishes_wip_from_open_inventory(self):
         from server.message_hub import load_progress_board
 

@@ -1,0 +1,51 @@
+{
+  "mode": "apply",
+  "ego_import_commit": "3dfe50e47e1c9d0b4f642bf8995a41b81b853609",
+  "egolink_import_commit": "e85fa39a0d07f20b0a735d479af8e043a8235ef2",
+  "archive": "docs/archive/decisions/20261027_source_import",
+  "last_verified_preserved": true,
+  "files": [
+    {
+      "path": "docs/tasks/active/OPEN-001_MINIMUM_PUBLIC_RELEASE.md",
+      "before_sha256": "1a7cb5cdce445f86021319e34b08f2133f7f109d752c8445aee32858191ac008",
+      "after_sha256": "e38ed1da6dcbc6d87c69f07e0bccc485d7f6bc2499bbc23aec2d04f5b154f03e",
+      "snapshot": "docs__tasks__active__OPEN-001_MINIMUM_PUBLIC_RELEASE.md.source"
+    },
+    {
+      "path": "docs/product/OPEN_SOURCE_AND_COMMERCIALIZATION_STRATEGY.md",
+      "before_sha256": "c96b2915aa9e77cf570636d00d0d0c6f8736e6c9edd3aaf5c7c4ab8c571aa205",
+      "after_sha256": "d7adb11f0affc435ac1d2aaf35c3a998daffacecd40263ccf93e1a5c070b49e6",
+      "snapshot": "docs__product__OPEN_SOURCE_AND_COMMERCIALIZATION_STRATEGY.md.source"
+    },
+    {
+      "path": "docs/product/NORTH_STAR.md",
+      "before_sha256": "58cf7a5a34a49292ab0b9aa4d94f3a67b3873b5d989b540290a529de243c6acc",
+      "after_sha256": "6378436ffc8de2201a727cf2428ad7fbe12bdb9d4a2ad037665ed57840c187cb",
+      "snapshot": "docs__product__NORTH_STAR.md.source"
+    },
+    {
+      "path": "docs/current/STATUS.md",
+      "before_sha256": "cfa9ab1ba874458e503a981843527ff598c97c50b9b23c49a07a3198361de0aa",
+      "after_sha256": "1f8b1a93c04d791b5e15f632406347a1714f337a90993d6611b07e0664ce7703",
+      "snapshot": "docs__current__STATUS.md.source"
+    },
+    {
+      "path": "docs/current/progress_board_config.json",
+      "before_sha256": "4cb8da05facc6cc4fb61bf15e03f2b634f33bc524f1db7345912a5ab12fb9d5e",
+      "after_sha256": "25825a8a6f83ed8427b32a3b7e24a0d069513b3054f6ce76e47eca4172773566",
+      "snapshot": "docs__current__progress_board_config.json.source"
+    },
+    {
+      "path": "docs/tasks/TASK_TREE.md",
+      "before_sha256": "d9199c7701da38c66fbd7a34427cfa90e6dec93eb2423c10aa6ff728230d1c72",
+      "after_sha256": "d15c4fc245d831dfcd7f2b800c0ce121def9d7656cf0d0efab1f691451bdc923",
+      "snapshot": "docs__tasks__TASK_TREE.md.source"
+    },
+    {
+      "path": "docs/CONTEXT_INDEX.md",
+      "before_sha256": "4ca7a35ebc1bd682439ba915772b6996b9faa1d53f23600307dca47a606a42d4",
+      "after_sha256": "1ac2c2732a601cc6a4fc07d7b922e0a8b9f26ff449e710b7cffbc6951b67d7b4",
+      "snapshot": "docs__CONTEXT_INDEX.md.source"
+    }
+  ]
+}
