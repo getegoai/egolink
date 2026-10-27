@@ -1,0 +1,129 @@
+{
+  "current_focus": "新增 OPEN-001：Codex 排队准备首个公开研发增量，主题为“没有数据，为什么不能显示正常”；专利与商业学习并行，不作为首发依赖。原硬件与产品任务继续按其任务包推进；本轮未重新验收运行状态，最新证据见 STATUS 和 ACTIVE_BUILD。",
+  "recent_done_limit": 8,
+  "milestones": [
+    {
+      "id": "PUBLIC-DEVELOPMENT",
+      "title": "最小公开研发版本",
+      "tasks": [
+        {
+          "id": "OPEN-001",
+          "label": "首个公开增量与反馈入口"
+        }
+      ]
+    },
+    {
+      "id": "STATE-TRUTH",
+      "title": "状态真实性与项目对齐",
+      "tasks": [
+        {
+          "id": "ALIGN-STATE-010",
+          "label": "Codex state truth / contracts / governance"
+        }
+      ]
+    },
+    {
+      "id": "A-FIELD",
+      "title": "单板恢复与真实外场数据",
+      "tasks": [
+        {
+          "id": "P0-CONVERGENCE-20260905",
+          "label": "Gemini recovery / route transition"
+        },
+        {
+          "id": "D2-001",
+          "label": "reference metrics"
+        },
+        {
+          "id": "FIELD-020",
+          "label": "representative field dataset"
+        }
+      ]
+    },
+    {
+      "id": "LOCAL-FIRST",
+      "title": "最小用户私有终点（并行准备）",
+      "tasks": [
+        "BASE-010"
+      ]
+    },
+    {
+      "id": "NATIVE-CALL",
+      "title": "原生蜂窝主通话与 SOS",
+      "tasks": [
+        "CALL-030",
+        "HW-022",
+        "CALL-031",
+        "SOS-010"
+      ]
+    },
+    {
+      "id": "PRODUCT",
+      "title": "产品保障",
+      "tasks": [
+        "HW-021",
+        "PWR-020",
+        "COMPLIANCE-010",
+        "P0-RELEASE-010"
+      ]
+    },
+    {
+      "id": "RTC-RESERVE",
+      "title": "已暂停的 RTC 备路资产",
+      "tasks": [
+        "CALL-020",
+        "CALL-021"
+      ]
+    }
+  ],
+  "assignees": {
+    "P0-CONVERGENCE-20260905": "Gemini",
+    "FIELD-020": "Gemini",
+    "HW-021": "parked / no active builder",
+    "COMPLIANCE-010": "unassigned / NOT_SENT",
+    "CALL-020": "paused",
+    "CALL-021": "paused",
+    "SOS-010": "paused",
+    "REL-012": "codex",
+    "ENG-007": "codex",
+    "ENG-008": "codex",
+    "OBS-005": "codex",
+    "D1-001": "codex + founder field tests",
+    "PWR-001": "Gemini",
+    "D2-001": "Gemini",
+    "FIELD-003": "Gemini",
+    "FIELD-010": "codex",
+    "D2-002": "codex",
+    "D2-003": "codex",
+    "MAP-002": "codex",
+    "MAP-003": "codex",
+    "D2-004": "codex",
+    "D2-005": "codex",
+    "MAP-001": "codex",
+    "D5-001": "codex",
+    "MODEL-LOC-001": "codex",
+    "CALLSMS-001": "blocked until explicit hardware task",
+    "PWR-002": "planned",
+    "PRIVACY-LOC-001": "planned",
+    "FT-001B": "Gemini",
+    "FIELD-011": "Gemini",
+    "FW-005": "Director acceptance review",
+    "FW-006": "Director acceptance review",
+    "WEB-006": "Director acceptance review",
+    "WEB-004": "Director acceptance review",
+    "WEB-005": "Director acceptance review",
+    "FW-007": "Director acceptance review",
+    "OPS-003": "Director acceptance review",
+    "OPS-002": "Director acceptance review",
+    "DOC-BASE-001": "Director acceptance review",
+    "OPS-004": "parked / no active builder",
+    "OUTBOX-010": "parked / no active builder",
+    "LOC-021": "parked / no active builder",
+    "ALIGN-STATE-010": "Codex",
+    "CALL-030": "unassigned / queued",
+    "CALL-031": "unassigned / queued",
+    "BASE-010": "unassigned / queued",
+    "OPEN-001": "Codex"
+  },
+  "operator_asks": []
+}

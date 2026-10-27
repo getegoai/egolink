@@ -1,0 +1,15 @@
+# EgoLink External Project
+
+EgoLink 是独立活跃仓库，本目录只登记它与 Ego 总项目的关系，不复制代码。
+
+- 本地 sibling checkout：`../egolink`
+- Remote：`https://git.example.invalid/ego/egolink.git`
+- 当前 release checkpoint：`v0.1.0 Engineering Alpha`
+- 当前主线：D2 定位精度基线、D5 定位数据飞轮、D1 链路持续回归
+- 产品职责：随身感知、定位、安全交互、低功耗本地反射和 4G 入口
+
+权威状态仍以 EgoLink 仓库中的 `docs/product/NORTH_STAR.md`、
+`docs/current/STATUS.md` 和生成进度看板为准。
+
+Ego 总项目只定义跨项目边界：EgoLink 不承担长期复杂记忆和家庭级协同；这些能力
+由未来 EgoBase 承担。两者通过版本化事件/命令契约协作。

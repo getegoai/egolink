@@ -1,7 +1,17 @@
 {
-  "current_focus": "Codex 已完成 ALIGN-STATE-010 离线修复（源码 3a0728058），未烧录或部署。Gemini 负责单板恢复、实际 Wi-Fi/LTE 切换、D2 基线与 FIELD-020。最后报告镜像仍为 Boot188；三个产品 Gate 均为 NOT_RUN。",
+  "current_focus": "OPEN-001 已按用户澄清改为 EgoLabs 公开项目启动：先建立组织入口和项目定义/愿景/路线，再导入真实源码，以 Issue/PR 持续协作；已撤销教程案例首发方向。任务待执行，原硬件任务继续，运行证据见 STATUS 和 ACTIVE_BUILD。",
   "recent_done_limit": 8,
   "milestones": [
+    {
+      "id": "PUBLIC-DEVELOPMENT",
+      "title": "EgoLabs 公开项目与协作",
+      "tasks": [
+        {
+          "id": "OPEN-001",
+          "label": "组织入口、项目定义与真实开发主线"
+        }
+      ]
+    },
     {
       "id": "STATE-TRUTH",
       "title": "状态真实性与项目对齐",
@@ -112,7 +122,8 @@
     "ALIGN-STATE-010": "Codex",
     "CALL-030": "unassigned / queued",
     "CALL-031": "unassigned / queued",
-    "BASE-010": "unassigned / queued"
+    "BASE-010": "unassigned / queued",
+    "OPEN-001": "Codex"
   },
   "operator_asks": []
 }

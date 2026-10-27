@@ -1,18 +1,19 @@
 # EgoLink 项目进度看板
 
-- 生成时间: 2026-09-22 11:03 UTC
-- 分支: `d2/state-truth-management-20260922` @ 3a0728058 fix(state): preserve evidence truth across firmware, API and Web [D2]
-- 当前焦点: Codex 已完成 ALIGN-STATE-010 离线修复（源码 3a0728058），未烧录或部署。Gemini 负责单板恢复、实际 Wi-Fi/LTE 切换、D2 基线与 FIELD-020。最后报告镜像仍为 Boot188；三个产品 Gate 均为 NOT_RUN。
-- 已完成任务总数: 163，进行中: 1，暂停: 5，待验收: 9，排队: 18，搁置: 4，持续回归: 1
+- 生成时间: 2026-10-27 06:29 UTC
+- 分支: `a0/first-real-field-session` @ 2a84b338b fix(demo): dynamically link top vitals GNSS card to true indoor/outdoor state
+- 当前焦点: OPEN-001 已按用户澄清改为 EgoLabs 公开项目启动：先建立组织入口和项目定义/愿景/路线，再导入真实源码，以 Issue/PR 持续协作；已撤销教程案例首发方向。任务待执行，原硬件任务继续，运行证据见 STATUS 和 ACTIVE_BUILD。
+- 已完成任务总数: 163，进行中: 4，暂停: 5，待验收: 9，排队: 21，搁置: 4，持续回归: 1
 
 ## 里程碑
 
 | 里程碑 | 进度 | 任务 |
 |---|---|---|
+| PUBLIC-DEVELOPMENT EgoLabs 公开项目与协作 | 0/1 | ⏳组织入口、项目定义与真实开发主线 |
 | STATE-TRUTH 状态真实性与项目对齐 | 1/1 | ✅Codex state truth / contracts / governance |
 | A-FIELD 单板恢复与真实外场数据 | 0/3 | ⏳Gemini recovery / route transition 📋reference metrics 📋representative field dataset |
 | LOCAL-FIRST 最小用户私有终点（并行准备） | 0/1 | 📋BASE-010 |
-| NATIVE-CALL 原生蜂窝主通话与 SOS | 0/4 | 📋CALL-030 📋HW-022 📋CALL-031 ⏸SOS-010 |
+| NATIVE-CALL 原生蜂窝主通话与 SOS | 0/4 | ⏳CALL-030 ⏳HW-022 📋CALL-031 ⏸SOS-010 |
 | PRODUCT 产品保障 | 0/4 | ⏸HW-021 📋PWR-020 📋COMPLIANCE-010 📋P0-RELEASE-010 |
 | RTC-RESERVE 已暂停的 RTC 备路资产 | 0/2 | ⏸CALL-020 ⏸CALL-021 |
 
@@ -25,10 +26,15 @@
 | A0-001 | IMU six-face calibration pipeline | planned | critical | unassigned |
 | A0-002 | Unified sensor timestamp and time-lineage validation | planned | critical | unassigned |
 | A0-003 | Standard Field Session schema and sealed package validation | planned | critical | unassigned |
+| AI-010 | AI-Native multi-modal self-supervised dataset harvester | planned | high | antigravity |
+| AI-020 | TinyML edge model prototype and PC simulation | planned | high | antigravity |
+| AI-030 | Dual-track shadow evaluation and safety kernel arbitration simulator | planned | high | antigravity |
+| AI-040 | Flywheel continuous fine-tuning, safety regression gate, and model packaging | planned | high | antigravity |
+| AI-050 | Ego Base local ingestion, episodic segmentation, and L3 semantic life diary | planned | high | antigravity |
 | BASE-010 | Minimum user-controlled private data endpoint | planned | high | unassigned |
 | CALL-020 | PC-bridged LTE-data RTC media PoC | paused | critical | paused |
 | CALL-021 | Embedded LTE-data RTC media | paused | critical | paused |
-| CALL-030 | Native cellular feasibility and audio interface | planned | high | unassigned |
+| CALL-030 | Native cellular feasibility and audio interface | in_progress | high | gemini |
 | CALL-031 | Native cellular primary product loop | planned | high | unassigned |
 | COMPLIANCE-010 | China P0 pre-compliance and classification | planned | critical | unassigned / NOT_SENT |
 | D2-001 | D2 location accuracy baseline and metric gate | planned | high | gemini |
@@ -43,10 +49,11 @@
 | FW-006 | Deploy the FW-005 GNSS correctness image to the connectivity node | acceptance_review | high | director |
 | FW-007 | Bounded LTE to Wi-Fi engineering failover | acceptance_review | high | director |
 | HW-021 | Exact integrated P0 prototype design and down-select | parked | critical | unassigned |
-| HW-022 | Integrated P0 prototype build and bring-up | planned | critical | - |
+| HW-022 | Integrated P0 prototype build and bring-up | in_progress | critical | - |
 | L2-001 | Continuous IMU mobility capture, persistent spool and replay | planned | medium | - |
 | LOC-021 | Device, Message Hub and Guardian Location integration | parked | critical | unassigned |
 | MODEL-001 | Model footprint assessment | paused | high | - |
+| OPEN-001 | EgoLabs 公开项目启动与持续协作 | in_progress | high | Codex |
 | OPS-002 | Official ego.example.invalid HTTPS entry and always-visible AMap canvas | acceptance_review | high | director |
 | OPS-003 | Suppress AMap coordinate-convert access logs | acceptance_review | high | director |
 | OPS-004 | Migrate device ingress from plaintext HTTP to TLS | parked | critical | unassigned |

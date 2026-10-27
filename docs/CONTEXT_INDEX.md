@@ -1,6 +1,7 @@
 ---
 document_status: authoritative
-decision_updated: 2026-09-23
+decision_updated: 2026-10-27
+reviewed_at: 2026-10-27
 last_verified: 2026-09-09
 verified_by: founder/codex
 ---
@@ -16,6 +17,8 @@ Always load:
 - `AGENTS.md`
 - `docs/product/NORTH_STAR.md` (goal + guiding principles; check its date
   every session to sense direction changes)
+- `docs/product/OPEN_SOURCE_AND_COMMERCIALIZATION_STRATEGY.md` (fast public iteration,
+  obstacle-solving principles, parallel IP work with specific boundaries and commercial hypotheses)
 - `docs/product/EGO_MASTER_CONTEXT.md` (current sales-product direction,
   system roles, first-generation requirements, and release gates)
 - `docs/architecture/adr/ADR-0017-ai-native-ego-state-flywheel.md`
@@ -49,6 +52,8 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
 
 | Task type | Required context | Optional context |
 |---|---|---|
+| Open source, commercialization, or patent disclosure | `docs/product/OPEN_SOURCE_AND_COMMERCIALIZATION_STRATEGY.md`, `docs/product/NORTH_STAR.md` | `docs/product/EGO_MASTER_CONTEXT.md`, `docs/current/STATUS.md`, `docs/current/ACTIVE_BUILD.md` when checking public capability claims |
+| EgoLabs organization, public project launch and community collaboration | `docs/tasks/active/OPEN-001_MINIMUM_PUBLIC_RELEASE.md`, `docs/product/OPEN_SOURCE_AND_COMMERCIALIZATION_STRATEGY.md` | Current product definition, roadmap and actual source for the selected repository; no tutorial-first requirement |
 | Rule-state truth, current decision alignment or Codex/Gemini ownership | `docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md`, `docs/tasks/done/ALIGN-STATE-010_DECISION_AND_STATE_TRUTH.md`, `docs/current/CODEX_GEMINI_HANDOFF_20260922.md`, affected module AGENTS | `docs/archive/decisions/20260922/README.md` (explicit migration lineage only) |
 | Native cellular primary call | `docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md`, `docs/tasks/active/CALL-030_NATIVE_CELLULAR_FEASIBILITY.md`, `docs/tasks/active/CALL-031_NATIVE_CELLULAR_PRODUCT_LOOP.md`, `docs/current/ACTIVE_BUILD.md`, `docs/hardware/BOARD_MATRIX.md` | RTC CALL-020/021 remain paused assets |
 | Minimum private Ego Base endpoint | `docs/architecture/adr/ADR-0016-local-first-ego-state-cellular-primary.md`, `docs/tasks/active/BASE-010_LOCAL_FIRST_MINIMUM.md`, `docs/architecture/SYSTEM_OVERVIEW.md` | `docs/product/PRODUCT_DEMO_PRIVACY_BOUNDARY.md`, `shared/contracts/` |
@@ -88,6 +93,26 @@ Do not load `docs/archive/`, `docs/generated/`, `reports/`, `model_artifacts/`, 
   `docs/product/NORTH_STAR.md`. Current sales-product direction, system roles,
   first-generation product requirements, and release gates are authoritative
   in `docs/product/EGO_MASTER_CONTEXT.md`, subject to accepted ADRs.
+- `docs/product/OPEN_SOURCE_AND_COMMERCIALIZATION_STRATEGY.md` is the current
+  strategy entry for accepted public-development principles, commercial experiments
+  and IP disclosure boundaries, summarized in `docs/product/NORTH_STAR.md`.
+  Its authority does not turn revenue hypotheses, preferred licenses or invention
+  candidates into verified demand, an applied repository license or granted patents.
+  EgoLabs is the confirmed display name of https://github.com/getegoai, with getego.ai
+  as its domain; company/trademark registration is not inferred. Initial project definitions,
+  vision and roadmaps are public; OPEN-001 records launch evidence and pending source imports. Then
+  develop actual source via public Issues/PRs. Tutorials are optional, not the main release.
+  Each open project has one actual development mainline that accepts community work.
+  Fast iteration is the default: publish useful small increments within authorization;
+  patent research is parallel, not a general prerequisite. Only specifically retained
+  details are isolated; invention candidates alone do not create holds. No fixed case
+  count, independent reproduction or multi-week preparation is required for a first share.
+  When blocked, revisit the goal and necessary constraints, broaden reasoning as needed,
+  then choose a small executable alternative. Match checks to the actual increment;
+  do not turn hypothetical risks into an expanding chain of prerequisites.
+  Open code alone proves neither local-first deployment nor safety isolation; check
+  dated capability evidence before public claims. This strategy changes no P0 Gate
+  or historical hardware verification date and does not itself publish a repository.
 - `docs/product/PRODUCT_CHARTER.md` and `docs/product/P0_SCOPE.md` remain
   authoritative for the current P0 development promise and validation scope;
   they do not define the final sales-product PCB, enclosure, or BOM.

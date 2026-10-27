@@ -1,0 +1,28 @@
+# EgoLink External Project
+
+EgoLink 是独立活跃仓库，本目录只登记它与 Ego 总项目的关系，不复制代码。
+
+- 本地 sibling checkout：`../egolink`
+- Remote：`https://git.example.invalid/ego/egolink.git`
+- 当前 release checkpoint：`v0.1.0 Engineering Alpha`
+- 当前主线：D2 定位精度基线、D5 定位数据飞轮、D1 链路持续回归
+- 产品职责：随身感知、定位、安全交互、低功耗本地反射和 4G 入口
+
+权威状态仍以 EgoLink 仓库中的 `docs/product/NORTH_STAR.md`、
+`docs/current/STATUS.md` 和生成进度看板为准。
+
+Ego 总项目只定义跨项目边界：EgoLink 不承担长期复杂记忆和家庭级协同；这些能力
+由未来 EgoBase 承担。两者通过版本化事件/命令契约协作。
+
+## 开源研发与商业化策略入口（2026-10-27）
+
+开源研发过程、商业化实验与知识产权披露边界，以 EgoLink 仓库的
+`docs/product/OPEN_SOURCE_AND_COMMERCIALIZATION_STRATEGY.md` 为唯一策略入口。
+本仓库仅登记，不复制策略正文。Ego 的长期 AI 影子愿景与具体设备、收费及许可方案
+分别管理；已确认原则、商业假设、许可优先方案和发明候选按该文档标明的状态推进。
+默认以最小公开增量快速获取反馈，专利有边界地并行推进，不作为开源前置。遇阻先从目标和必要约束寻找替代路径，避免不断追加前置任务。
+策略修订不改变产品验收结果，也不表示仓库已经公开或完成专利申请。
+
+在 `ego/` 与 `egolink/` 为同级检出的本地布局下，可打开
+[当前策略](../../../egolink/docs/product/OPEN_SOURCE_AND_COMMERCIALIZATION_STRATEGY.md)。
+该链接依赖同级检出，外部发布时须改用届时确定的公共入口。
