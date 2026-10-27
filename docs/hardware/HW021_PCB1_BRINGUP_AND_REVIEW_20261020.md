@@ -228,7 +228,7 @@ owners:
 
 ## 8. 2026-10-21 P0 闭环运行时与多传感器状态机实测进展
 
-在插入实体**中国移动 SIM 卡**与**SanDisk 64GB TF 卡**后，固件升级为集成分区表、状态机引擎与 VoLTE 呼叫管理的 P0 运行时镜像并在 `COM8` 实测验证通过（日志文件：[`pcb1_integrated_p0_runtime_20261021.log`](../../reports/board_validation/pcb1_bringup_20261020/pcb1_integrated_p0_runtime_20261021.log)）：
+在插入实体**中国移动 SIM 卡**与**SanDisk 64GB TF 卡**后，固件升级为集成分区表、状态机引擎与 VoLTE 呼叫管理的 P0 运行时镜像并在 `COM8` 实测验证通过（日志文件：`reports/board_validation/pcb1_bringup_20261020/pcb1_integrated_p0_runtime_20261021.log` — raw capture retained privately; not distributed in this repository）：
 
 1. **4 MiB Flash 自定义分区表验证通过**：
    - 使用 [partitions_pcb1_4mb.csv](../../firmware/hw021_pcb1_bringup/partitions_pcb1_4mb.csv)：

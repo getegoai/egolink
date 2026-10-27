@@ -1,109 +1,76 @@
-# Ego Link P0
+# EgoLink
 
-Ego Link P0 is the first engineering-alpha slice of an AI-assisted active
-safety locator. The current product-like loop is:
+**A wearable connection between personal AI and the physical world.**
 
-```text
-4G device -> LTE -> Message Hub -> Web Dashboard
-          -> bounded field evidence -> D2/D5 location data flywheel
+[中文](README.zh-CN.md) · [EgoLabs](https://github.com/getegoai) · [Project Ego](https://github.com/getegoai/ego) · [getego.ai](https://getego.ai) · [Roadmap](docs/ROADMAP.md)
+
+EgoLink combines location, motion sensing, cellular communication, and physical user controls. We are developing its hardware, firmware, backend, and tools together, starting with location, two-way cellular calling, and a physical SOS workflow.
+
+It is the wearable part of [Ego](https://github.com/getegoai/ego), our longer-term project for personal AI under the user's control. EgoBase is the user-controlled endpoint being developed for history, context, and further processing. Basic device interaction and help requests are intended to keep working when Base or AI is unavailable.
+
+## Current status
+
+**The actual firmware, backend, hardware materials, tools, and development history are now included.** This is an engineering prototype with known defects and incomplete features. Development continues here through commits, issues, and pull requests.
+
+The source baseline extends through October 23, 2026. Project records from October 21–22 report cellular registration, telemetry upload, local logging, queued upload recovery, a connected VoLTE call, and an SOS backend alert on the custom ESP32-S3 / ML307A `PCB1`.
+
+These are bounded bench results. Representative location, full-duplex calling, and end-to-end SOS product acceptance remain open. PCB1 has documented camera, charging, audio, and pin-allocation issues. Battery life, model accuracy, and a fully local data path are not established; current development includes a server-side collection path.
+
+The PCB1 firmware builds with ESP-IDF 5.4.2 during public-import preparation; no new hardware test was performed. See [import validation](docs/PUBLIC_IMPORT_VALIDATION.md) for the exact build/test environment, results, and remaining failures, and [history](docs/HISTORY.md) for the original development sequence and privacy edits.
+
+## Repository map
+
+| Path | Work |
+|---|---|
+| [firmware/hw021_pcb1_bringup/](firmware/hw021_pcb1_bringup/) | Current custom PCB1 bring-up and integrated runtime |
+| [firmware/mqtt_heartbeat/](firmware/mqtt_heartbeat/) | Retained ESP-IDF device runtime and shared components for sensing, communication, storage, and state |
+| [hardware/](hardware/) | Prototype PCB and mechanical materials, with revision-specific limitations |
+| [server/](server/) | Python telemetry/message hub, history, alerts, and web surfaces; a separate Java service under `ego-cloud-backend/` |
+| [shared/contracts/](shared/contracts/) | Versioned observation, state, event, command, and receipt schemas |
+| [pc_simulator/](pc_simulator/), [scripts/](scripts/), [quality_tests/](quality_tests/) | Host tools, replay, calibration, and verification |
+| [model_lab/](model_lab/), [model_artifacts/](model_artifacts/) | Model development and retained rule/synthetic integration artifacts; see their model cards for scope |
+
+Current engineering context starts at [CONTEXT_INDEX](docs/CONTEXT_INDEX.md). Dated status and bench records describe their own board and revision; they are not interchangeable with a new build.
+
+## Run and build
+
+Start the Python message hub from the repository root:
+
+```sh
+python scripts/run_message_hub.py --host 127.0.0.1 --port 8790
 ```
 
-The current release target is **v0.1.0 Engineering Alpha**. It is usable as an
-engineering field-test product, but it is not a mass-production claim.
+Open `http://127.0.0.1:8790`. The local hub can start without a device; live telemetry requires your configured device. The separate Java backend has its dependencies in [pom.xml](server/ego-cloud-backend/pom.xml) and requires its own service configuration.
 
-## What Works Now
+For the Java service, copy [`.env.example`](server/ego-cloud-backend/.env.example) to `.env` in that service directory and set `MYSQL_ROOT_PASSWORD`, `DB_PASSWORD`, and `DEVICE_AUTH_TOKEN` before using Compose. Both the database and backend use the same `DB_PASSWORD`. For direct Java startup, export the corresponding environment variables. Private deployment addresses, Wi-Fi credentials, device identifiers, and phone numbers in the imported history have been replaced; configure your own values locally.
 
-- 4G board periodically uploads location, LTE/cell, IMU status, power, and raw
-  POST counters to the Message Hub.
-- The Web Dashboard shows live device state, location estimate, local no-key
-  map/trajectory evidence, field-test results, and D5 data-flywheel status.
-- D1 outdoor field observations can be summarized into bounded evidence without
-  exposing raw coordinates or cell-ID lists in committed summaries.
-- D2/D5 offline tooling exists for location accuracy baselines, review packets,
-  dataset manifest gates, and field-evidence intake.
-- The AMOLED board is a sidecar display/interaction surface for field status.
-
-## Non-Claims
-
-- No production location-accuracy claim until a D2 reference-point baseline
-  reports median error, fix rate, and TTFF.
-- No real calling, SMS, emergency dispatch, or contact-notification claim.
-- No product battery-life claim until long-duration power evidence is accepted.
-- No model-performance claim. Tiny Safety assets are retained as engineering
-  scaffolding; the active model mainline is location accuracy.
-- No training use of private field data without explicit review, privacy,
-  quality, split, and founder approval gates.
-
-## Product-Like Local Run
-
-Start the local Message Hub and Web Dashboard:
+For PCB1, activate an **ESP-IDF 5.4.2** environment. From the repository root in PowerShell, build using a new generated configuration and build directory:
 
 ```powershell
-python scripts\run_message_hub.py --port 8790
+$repo = (Get-Location).Path
+python "$env:IDF_PATH/tools/idf.py" -C firmware/hw021_pcb1_bringup -B "$repo/build/pcb1" -D "SDKCONFIG=$repo/build/pcb1/sdkconfig" -D "SDKCONFIG_DEFAULTS=$repo/firmware/hw021_pcb1_bringup/sdkconfig.defaults" build
 ```
 
-Then open:
+The component manifest pins `esp32-camera` 2.1.7 and `esp_jpeg` 1.3.1. Consult the [PCB1 notes](firmware/hw021_pcb1_bringup/README.md), [board matrix](docs/hardware/BOARD_MATRIX.md), and [import validation](docs/PUBLIC_IMPORT_VALIDATION.md) before using hardware. Compiling does not verify board operation.
 
-```text
-http://127.0.0.1:8790
+Existing host checks:
+
+```sh
+python scripts/context_lint.py
+python -m unittest discover -s quality_tests -v
 ```
 
-The older PC simulator remains useful for mock safety/UI exercises, but it is
-not the primary product-like D1/D2/D5 dashboard path:
+Some tests need a host C compiler or explicitly configured integrations. The validation record distinguishes executed checks, environment errors, failures, and untested paths.
 
-```powershell
-python pc_simulator\app.py --port 8787
-```
+## Next development
 
-For a live field session, use the D1 field observer against the configured hub
-and device:
+- Resolve custom-board issues and improve independent battery-powered operation.
+- Verify complete audio/call and SOS workflows, location quality, and outage/restart recovery.
+- Connect a minimum user-controlled EgoBase storage and replay endpoint.
+- Continue through real commits, issues, and pull requests; see the [roadmap](docs/ROADMAP.md).
 
-```powershell
-python scripts\observe_d1_field_run.py --help
-```
+## Participate and license
 
-After a field run, summarize real D1 samples into D5 field evidence:
+Contribute to the actual device and software: report a problem, review a protocol, test a supported board, improve documentation, or propose code. Start with [issues](https://github.com/getegoai/egolink/issues) or [CONTRIBUTING.md](CONTRIBUTING.md).
 
-```powershell
-python scripts\summarize_location_field_evidence.py --samples reports\d1_field_observation\<run-id>\d1_field_samples.jsonl
-```
-
-When a FIELD-003 reference manifest and test-run export are available, run the
-D2 -> D5 location pipeline:
-
-```powershell
-python scripts\run_location_d2_d5_pipeline.py --input <test_run_export.json> --manifest <field_manifest.json>
-```
-
-## Development Flow
-
-Use GitHub Flow:
-
-1. `main` must stay buildable, runnable, and releaseable.
-2. Work happens on short branches such as `egolink-p0` or
-   `task/<TASK-ID>-short-name`.
-3. Merge only after validation and a clear release/readiness statement.
-4. Tag demo or engineering-alpha checkpoints with `v0.x.y`.
-
-Core context:
-
-- North star: `docs/product/NORTH_STAR.md`
-- Context router: `docs/CONTEXT_INDEX.md`
-- Current state: `docs/current/STATUS.md`
-- Active build: `docs/current/ACTIVE_BUILD.md`
-- Git/task flow: `docs/development/GIT_FLOW.md`
-- P0 walking skeleton: `docs/development/DEV_FLOW.md`
-
-## Validation
-
-For context-only changes:
-
-```powershell
-python scripts\context_lint.py
-```
-
-For behavior or release changes:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\verify.ps1
-```
+Original software, contracts, tests, and the identified project-generated synthetic model assets use **Apache-2.0**. Original prose documentation and the project's own hardware designs use **CC BY 4.0**. Third-party materials retain their licenses. See [LICENSING.md](LICENSING.md), the [Apache license](LICENSE), and [third-party notices](THIRD_PARTY_NOTICES.md) for scope.

@@ -66,6 +66,7 @@ services:
       DB_NAME: egocloud
       DB_USER: egouser
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      DEVICE_AUTH_TOKEN: ${DEVICE_AUTH_TOKEN:?Set DEVICE_AUTH_TOKEN}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       SERVER_PORT: 8080

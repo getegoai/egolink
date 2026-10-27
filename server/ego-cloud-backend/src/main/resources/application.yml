@@ -11,7 +11,7 @@ spring:
     driver-class-name: org.mariadb.jdbc.Driver
     url: jdbc:mariadb://${DB_HOST:127.0.0.1}:${DB_PORT:3306}/${DB_NAME:egocloud}?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
     username: ${DB_USER:egouser}
-    password: ${DB_PASSWORD:}
+    password: ${DB_PASSWORD}
     hikari:
       minimum-idle: 5
       maximum-pool-size: 30
@@ -47,7 +47,7 @@ egocloud:
   storage:
     cold-data-dir: ${COLD_DATA_DIR:/opt/ego-cloud/data/cold}
   security:
-    device-token: ${DEVICE_AUTH_TOKEN:}
+    device-token: ${DEVICE_AUTH_TOKEN}
 
 logging:
   level:
