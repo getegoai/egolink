@@ -56,11 +56,12 @@ python "$env:IDF_PATH/tools/idf.py" -C firmware/hw021_pcb1_bringup -B "$repo/bui
 已有主机检查：
 
 ```sh
+python -m pip install jsonschema cryptography numpy pandas
 python scripts/context_lint.py
 python -m unittest discover -s quality_tests -v
 ```
 
-部分测试需要主机 C 编译器或明确配置的集成环境。验证记录区分实际执行的检查、环境错误、失败与未测范围。
+本轮检查使用 Python 3.12。主机 C 测试需要将 `CC` 指向本机 GCC，并把其目录加入 `PATH`；部分检查还需要 ESP-IDF 或明确配置的集成环境。验证记录区分实际执行的检查、环境错误、失败与未测范围。
 
 ## 接下来
 

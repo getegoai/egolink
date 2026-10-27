@@ -23,6 +23,15 @@ The private matching policy and audit working files are outside the repository.
 Old source hash references and private snapshot checksums remain provenance;
 use the commit map for their public counterparts.
 
+All 471 source commits were checked against the final map: authors, committers,
+their timestamps and parent relationships match. The original public definition
+commit remains an ancestor. The history review covered 3,899 unique blobs and
+1,439 historical paths at the source-import merge; reviewed private values were
+absent from text, commit messages and path names. Gitleaks 8.30.1 also returned
+zero findings with external diff/text-conversion disabled and merge diffs
+included. These checks describe the reviewed inputs, not a guarantee of complete
+product security or legal clearance.
+
 ## Reproducible PCB1 build
 
 **PASS**, Windows, ESP-IDF 5.4.2, Xtensa GCC 14.2.0, CMake 3.30.2, Ninja 1.12.1.
@@ -45,12 +54,39 @@ was performed. The resulting firmware binary SHA-256 was
 
 ## Host validation
 
-Final host-suite results are being recorded during import preparation.
+**PASS with skips**: 1,899 tests reported, **1,886 passed, 13 skipped, zero
+failures and zero errors**, 326.875 seconds, exit code 0. Command:
+
+```sh
+python -B -m unittest discover -s quality_tests -v
+```
+
+Environment: Windows, Python 3.12.14, native GCC 15.2.0 through `CC` and `PATH`,
+ESP-IDF 5.4.2 through `IDF_PATH`, and a writable temporary directory. Installed
+Python dependencies included jsonschema 4.26.0, cryptography 50.0.2, NumPy 2.3.5
+and pandas 3.0.1. These are host checks, using loopback services, temporary test
+data and native executables; no device or deployed service was used. Assertions,
+timeouts and product logic were not relaxed to obtain this result.
+
+| Skipped scope | Count |
+|---|---:|
+| Specific ESP32-S3 generated configurations / compile databases unavailable | 6 |
+| Specific host execution chain unavailable (three Espressif clang/lld cases and one cross-compiled mock lifecycle without an executable host target) | 4 |
+| Explicit opt-in checks not enabled (`EGOLINK_LOC021S_BUILD_DIR`, `EGOLINK_RUN_IDF_SOS_SENDER_BUILD`) | 2 |
+| Private legacy runtime database not distributed | 1 |
+
+The retained local run log is `egolink-tests-final-312.txt`, SHA-256
+`cb87292d3a5d9b5ba868d158b98c7a0153395c41edde59bec46b3fc80aad78d5`.
+It is outside the public source tree. `python scripts/context_lint.py` and
+`git diff --check` also passed after the import changes.
 
 The earlier baseline run executed 1,879 tests and reported one TLS integration
 failure, 41 errors caused by an unavailable host C compiler, and 31 skips. These
 results were not relabeled as passing. The final run configures native GCC rather
-than the Xtensa cross-compiler and keeps the original assertions and timeouts.
+than the Xtensa cross-compiler. The earlier TLS failure did not recur in the final
+run; its original cause remains unconfirmed. An intermediate run used Python 3.14
+with Python 3.12 dependency wheels and was invalid as a product result; the final
+run above uses a consistent Python 3.12 environment.
 
 ## Runtime configuration and limits
 

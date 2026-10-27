@@ -56,11 +56,12 @@ The component manifest pins `esp32-camera` 2.1.7 and `esp_jpeg` 1.3.1. Consult t
 Existing host checks:
 
 ```sh
+python -m pip install jsonschema cryptography numpy pandas
 python scripts/context_lint.py
 python -m unittest discover -s quality_tests -v
 ```
 
-Some tests need a host C compiler or explicitly configured integrations. The validation record distinguishes executed checks, environment errors, failures, and untested paths.
+Python 3.12 was used for the import checks. Set `CC` to a native GCC executable and put its directory on `PATH` for the host C tests. Some checks need ESP-IDF or explicitly configured integrations. The validation record distinguishes executed checks, environment errors, failures, and untested paths.
 
 ## Next development
 
