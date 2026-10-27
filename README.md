@@ -1,5 +1,7 @@
 # EgoLink
 
+![EgoLink — a physical connection to personal AI, built in the open](docs/media/egolink-cover.svg)
+
 **A wearable connection between personal AI and the physical world.**
 
 [中文](README.zh-CN.md) · [EgoLabs](https://github.com/getegoai) · [Project Ego](https://github.com/getegoai/ego) · [getego.ai](https://getego.ai) · [Roadmap](docs/ROADMAP.md)
@@ -11,6 +13,11 @@ It is the wearable part of [Ego](https://github.com/getegoai/ego), our longer-te
 ## Current status
 
 **The actual firmware, backend, hardware materials, tools, and development history are now included.** This is an engineering prototype with known defects and incomplete features. Development continues here through commits, issues, and pull requests.
+
+<p align="center"><a href="docs/VISUAL_TOUR.md"><img src="hardware/PCB1/2.jpg" width="420" alt="Existing photograph of the custom PCB1 engineering prototype, showing its processor, connectors, buttons and development wiring"></a></p>
+
+*The actual PCB1 engineering prototype. Explore the [visual tour](docs/VISUAL_TOUR.md)
+for the opposite side, assembly context and downloadable project artwork.*
 
 The source baseline extends through October 23, 2026. Project records from October 21–22 report cellular registration, telemetry upload, local logging, queued upload recovery, a connected VoLTE call, and an SOS backend alert on the custom ESP32-S3 / ML307A `PCB1`.
 

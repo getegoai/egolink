@@ -1,5 +1,7 @@
 # EgoLink
 
+![EgoLink：连接物理世界与个人 AI，公开研发中](docs/media/egolink-cover.svg)
+
 **连接个人 AI 与物理世界的随身设备。**
 
 [English](README.md) · [EgoLabs](https://github.com/getegoai) · [Ego 总项目](https://github.com/getegoai/ego) · [getego.ai](https://getego.ai) · [路线](docs/ROADMAP.md)
@@ -11,6 +13,11 @@ EgoLink 结合定位、运动感知、蜂窝通信和实体交互。我们同步
 ## 当前状态
 
 **真实固件、后端、硬件资料、工具和连续研发历史已纳入本仓库。** 当前仍是存在已知缺陷和未完成功能的工程原型。后续通过这里的提交、Issue 和 PR 持续开发。
+
+<p align="center"><a href="docs/VISUAL_TOUR.md"><img src="hardware/PCB1/2.jpg" width="420" alt="现有 PCB1 工程原型实拍，展示处理器、接口、实体按键与研发接线"></a></p>
+
+*当前 PCB1 工程原型实拍。[图片导览](docs/VISUAL_TOUR.md)包含背面与装配细节、
+可直接下载的项目配图，以及下一轮补拍清单。*
 
 源码基线截至 2026 年 10 月 23 日。10 月 21–22 日记录报告了自制 ESP32-S3 / ML307A `PCB1` 上的蜂窝注册、遥测上传、本地日志、补传、VoLTE 接通及 SOS 后端告警。
 
